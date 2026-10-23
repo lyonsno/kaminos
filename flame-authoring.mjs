@@ -225,7 +225,8 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
 ];
 // Physics (soot x blackbody) is the material law (2026-10-18; the law select
 // is retired), so its calibration controls always apply.
-export function flamePropertyApplies(id,{toneMapping,physicsActive=false}) {
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false,intermediateMode}) {
+  if(id.startsWith('volume-intermediate-')&&intermediateMode!==undefined)return intermediateMode==='fields';
   if(id==='volume-physical-knee')return toneMapping==='custom';
   if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
   return !physicsActive||!physicsUnused.has(id);
@@ -363,7 +364,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   panels.get('look').append(basin);
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
-  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,
+  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();

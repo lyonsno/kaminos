@@ -287,7 +287,7 @@ test('post-correction divergence follows the effective gain and the velocity bou
   // The bound is scheme-aware since the transport slice: legacy keeps the fixed
   // clamp inside boundVelocity; non-legacy schemes bound by backtrace cells.
   assert.match(project, /boundVelocity\(correctedVelocity\)/, 'projection output goes through the shared scheme-aware velocity bound');
-  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy velocity bound is retained inside boundVelocity');
+  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy velocity bound preserves physical speed when the velocity lattice changes');
   const bound = v => Math.max(-0.34, Math.min(0.52, v));
   // One closed 1-D column of two cells: the stored component of cell 0 is the
   // flux through the shared face; both outer faces are walls.

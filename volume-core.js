@@ -3120,6 +3120,7 @@ export function resolvePressureSolverConfig(controls = {}) {
 // and a map that never settled are both bounded by the same frame limit; a
 // fresh map outranks a stale copy flag because the map owns the buffer.
 export function pressureResidualProbeDisposition({
+  independentVelocity = false,
   copyPending = false,
   mapPending = false,
   frameCount = 0,
@@ -3127,6 +3128,7 @@ export function pressureResidualProbeDisposition({
   mapStartedFrame = 0,
   limitFrames = PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES,
 } = {}) {
+  if (independentVelocity) return 'unavailable';
   if (mapPending) {
     return frameCount - mapStartedFrame > limitFrames ? 'reset-map' : 'wait';
   }
@@ -5313,8 +5315,20 @@ fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
 
 fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1));
-  let idx = u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID_Y;
-  let externalCue = clamp(oracleActivityCue[idx], 0.0, 1.0);
+  // The uploaded cue remains on the material lattice. Average the physical
+  // material block covered by this velocity cell; equal resolution is identity.
+  let ratio = u32(round(1.0 / VELOCITY_UNIT_SCALE));
+  let width = GRID * ratio;
+  let height = GRID_Y * ratio;
+  var externalCue = 0.0;
+  if (u.oracle_activity_controls2.y >= 0.5) {
+    let start = vec3<u32>(safe) * ratio;
+    for (var z=0u; z<ratio; z++) { for (var y=0u; y<ratio; y++) { for (var x=0u; x<ratio; x++) {
+      let q = start + vec3<u32>(x,y,z);
+      externalCue += clamp(oracleActivityCue[q.x + width * (q.y + height * q.z)], 0.0, 1.0);
+    } } }
+    externalCue /= f32(ratio * ratio * ratio);
+  }
   let proceduralCue = proceduralReceiverActivityCue(c);
   let externalCueEnabled = step(0.5, u.oracle_activity_controls2.y);
   return clamp(mix(proceduralCue, externalCue, externalCueEnabled), 0.0, 1.0);
@@ -11248,6 +11262,8 @@ export function createKaminosVolumePrototype({
       ...resolvePressureSolverConfig(controlsSnapshot),
       uniform: null,
       residualProbe: {
+        available: !(state.fineGrid?.materialPerVelocity > 1),
+        reason: state.fineGrid?.materialPerVelocity > 1 ? 'independent-velocity-residual-unavailable' : null,
         intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
         freshnessFrames: PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES,
         mapTimeoutMs: PRESSURE_RESIDUAL_MAP_TIMEOUT_MS,
@@ -17126,6 +17142,16 @@ export function createKaminosVolumePrototype({
       estimatedResidentBytes: (fineVelocity?.residentBytes??0) + fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength + (separatedPressure?.residentBytes ?? 0) + (separatedPressure ? uniforms.byteLength : 0),
       timing: { ...state.timing },
     };
+    if (fineVelocity || worldSmoke) {
+      // This legacy ledger does not enumerate the extra transport, transfer,
+      // wavelet or exterior passes. Never present its sum as this route's total.
+      state.simCostLedger.coverage='partial';
+      state.simCostLedger.omittedWork=['independent-velocity-and-transfer','world-and-intermediate-fields'];
+      state.simCostLedger.fullGridPassesPerFrame=null;
+      state.simCostLedger.fullGridCellVisitsPerFrame=null;
+      state.simCostLedger.fullGridPassBreakdown.total=null;
+      state.simCostLedger.estimatedResidentBytes=null;
+    }
     return state.simCostLedger;
   }
 
@@ -17274,6 +17300,11 @@ export function createKaminosVolumePrototype({
   function fineTransferInputs(){return {fluid:fluidBuffers[currentFluid],prior:fluidBuffers[1-currentFluid],front:frontBuffers[currentFront],quench:quenchBuffers[currentQuench],solid:sceneSolidTexture,reactant:reactantTextures[currentFluid],burn:burnRateTexture,lower:joinedLowerFaceTexture};}
   function prepareFineVelocity(){
     const plan=fineGridPlan({materialDims:[gridSize,gridHeight,gridSize],velocity:Number(controlsSnapshot.fineVelocity??0),pressure:Number(controlsSnapshot.finePressure??0)});
+    const previousVelocityDims=state.fineGrid?.velocityDims;
+    if(previousVelocityDims && previousVelocityDims.some((n,i)=>n!==plan.velocityDims[i])) {
+      retirePressureResidualMap('velocity-lattice-changed');
+      lastResidualPartials=null;
+    }
     state.fineGrid={...plan,dispatched:false,effective:plan.materialPerVelocity===1?'shared-material-velocity':'independent-material-velocity',step:state.simStepCount};
     if(plan.materialPerVelocity===1){fineVelocity?.destroy();fineVelocity=null;return null;}
     const reason=resolvePressureSolverConfig(controlsSnapshot).effective.solver!=='converged'?'Independent fine velocity requires converged pressure':
@@ -17346,6 +17377,7 @@ export function createKaminosVolumePrototype({
     // Runs every simulation step, before any pressure early-out, so a disabled
     // projection cannot leave a stale copy or map pending forever.
     const disposition = pressureResidualProbeDisposition({
+      independentVelocity: state.fineGrid?.materialPerVelocity > 1,
       copyPending: pressureResidualCopyPending,
       mapPending: pressureResidualMapPending,
       frameCount: state.frameCount,
@@ -17353,6 +17385,10 @@ export function createKaminosVolumePrototype({
       mapStartedFrame: pressureResidualMapStartedFrame,
     });
     switch (disposition) {
+      case 'unavailable':
+        if(state.pressureSolver?.residual || pressureResidualCopyPending || pressureResidualMapPending)retirePressureResidualMap('independent-velocity-residual-unavailable');
+        state.pressureSolver={...state.pressureSolver,residual:null,residualError:'independent-velocity-residual-unavailable'};
+        break;
       case 'drop-copy':
         // A copy that never reached a resolve is dropped, not mapped later as fresh evidence.
         pressureResidualCopyPending = false;
