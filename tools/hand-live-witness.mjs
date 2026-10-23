@@ -46,18 +46,13 @@ try {
     const session=report.live.sessionId;
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).fill('3000');
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).press('Tab');
-    await page.waitForFunction(async()=>{
-      const s=await window.kaminosWorkbenchExperiments.read();
-      return s.fingerJuice.load.requestedRate===3000&&s.fingerJuice.load.admittedRate>0&&s.fingerJuice.load.poolLimited;
-    });
+    await page.waitForFunction(()=>document.querySelector('[data-hand-water-load]')?.textContent.includes('pool limited'));
     report.smallPool=await read();
+    assert.equal(report.smallPool.fingerJuice.load.requestedRate,3000);
     assert.equal(report.smallPool.fingerJuice.load.mountedParticleCount,2400);
     await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).fill('9600');
     await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).press('Tab');
-    await page.waitForFunction(async()=>{
-      const s=await window.kaminosWorkbenchExperiments.read();
-      return !s.fingerJuice.rebuilding&&s.fingerJuice.load.mountedParticleCount===9600&&s.fingerJuice.load.admittedRate>0;
-    });
+    await page.waitForFunction(()=>/9,600 allocated \| [1-9][\d,]*\/s admitted/.test(document.querySelector('[data-hand-water-load]')?.textContent));
     report.largePool=await read();
     assert.equal(report.largePool.sessionId,session,'capacity change restarted the camera session');
     assert.equal(report.largePool.running,true);
