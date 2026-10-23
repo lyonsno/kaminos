@@ -25531,15 +25531,17 @@ function checkedSceneGroups(groups) {
   return groups.map(raw=>{
     if(!raw.id||names.has(raw.id)||!Array.isArray(raw.objectIds)||!raw.objectIds.length)throw Error('Invalid group');names.add(raw.id);
     for(const id of raw.objectIds){if(!ids.has(id)||assigned.has(id))throw Error('Invalid group member');assigned.add(id);}
+    if(raw.repetition){checkedRepetition(raw.repetition);if(raw.objectIds.some(id=>!canRepeatSceneObject(sceneObjects.find(o=>o.id===id))))throw Error('Repeated groups support static mesh objects only');}
     return {...structuredClone(raw),type:GROUP_TYPE,transform:checkedGroupPose(raw.transform||groupPivotPose(raw.objectIds))};
   });
 }
 function writeSceneGroups(groups) {
+  const checked=checkedSceneGroups(groups);
   const previous=structuredClone(sceneSelection),expanded=sceneSelectionMembers(),field=activeSceneFieldId,wasWriting=burnerGraphWriting;
   burnerGraphWriting=true;
   try {
     sceneSelection={ids:[],activeId:null};activeSceneObjectId=null;activeSceneGroupId=null;
-    setSceneGroupsFromRecords(checkedSceneGroups(groups));
+    setSceneGroupsFromRecords(checked);
     for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
     const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
     const ids=previous.ids.every(id=>valid.has(id))?previous.ids:expanded.filter(id=>valid.has(id));
@@ -26184,7 +26186,7 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
   try{
     for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);compoundRetentionTargets.set(copy,'@selection-membership');}
     for(const id of roots){
-      if(id.startsWith('@group:')){const group=sceneGroups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform)});newRoots.push('@group:'+copyId);}
+      if(id.startsWith('@group:')){const group=sceneGroups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
       else newRoots.push(copies.get(id));
     }
     setSceneSelection(newRoots,newRoots.at(-1));
