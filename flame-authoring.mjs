@@ -221,7 +221,8 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
 // is retired), so its calibration controls always apply.
 export function flamePropertyApplies(id,{toneMapping,physicsActive=false,raymarchMode,worldSmoke=false}) {
   if(raymarchMode) {
-    if(['volume-adaptive-rays','volume-occupancy-skip'].includes(id))return raymarchMode==='current';
+    if(id==='volume-adaptive-rays')return raymarchMode==='current';
+    if(id==='volume-occupancy-skip')return raymarchMode==='current'&&!worldSmoke;
     if(id==='volume-optical-tolerance')return raymarchMode==='numerical';
     if(id==='volume-flame-priority')return raymarchMode==='numerical'&&!worldSmoke;
     if(id==='volume-quadrature-jitter')return raymarchMode!=='current';

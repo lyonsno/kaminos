@@ -60,8 +60,9 @@ test('marcher-specific controls follow their actual route without changing autho
   assert.equal(flame.flamePropertyApplies('volume-quadrature-jitter',mode),true);
   assert.equal(flame.flamePropertyApplies('volume-flame-priority',{...mode,worldSmoke:false}),true);
   const old={...mode,raymarchMode:'current'};
-  for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])
-    assert.equal(flame.flamePropertyApplies(id,old),true);
+  assert.equal(flame.flamePropertyApplies('volume-adaptive-rays',old),true);
+  assert.equal(flame.flamePropertyApplies('volume-occupancy-skip',old),false);
+  assert.equal(flame.flamePropertyApplies('volume-occupancy-skip',{...old,worldSmoke:false}),true);
   for(const id of ['volume-optical-tolerance','volume-flame-priority','volume-quadrature-jitter'])
     assert.equal(flame.flamePropertyApplies(id,old),false);
   const fixed={...mode,raymarchMode:'fixed'};
