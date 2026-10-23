@@ -31,6 +31,33 @@ export async function runMovingVolumeConformance(){
    for(const key of Object.keys(expected))if(JSON.stringify(actual[key])!==JSON.stringify(expected[key]))throw Error('Retained remap mismatch '+key+' '+shift);
    rows.push({shift,actual,expected});
   }
+  const coordinateRows=[];
+  for(const parity of [0,1])for(const shift of [[1,0,0],[-1,1,0]]){
+   const phase=parity===0?13:17,shape=[dims[0],dims[1],dims[2]*2];
+   const coordinates=[0,1].map(()=>{const t=device.createTexture({size:shape,dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});owned.push(t);return t;});
+   const source=new Float32Array(n*2*4);
+   for(let coordinateSet=0;coordinateSet<2;coordinateSet++)for(let z=0;z<dims[2];z++)for(let y=0;y<dims[1];y++)for(let x=0;x<dims[0];x++){
+    const i=(x+dims[0]*(y+dims[1]*(z+coordinateSet*dims[2])))*4;
+    source.set([x+.5+coordinateSet*100,y+.5,z+.5,phase],i);
+   }
+   device.queue.writeTexture({texture:coordinates[parity]},source,{bytesPerRow:dims[0]*16,rowsPerImage:dims[1]},shape);
+   const fluid=[buffer(n*64),buffer(n*64)],front=[buffer(n*4),buffer(n*4)],quench=[buffer(n*4),buffer(n*4)],reactant=[texture(),texture()];
+   const e=device.createCommandEncoder();gpu.encode(e,{dimensions:dims,shift,fluid,front,quench,reactant,reactantFull:false,ambientOxidizer:1,coordinates:[coordinates[parity],coordinates[1-parity]],coordinatesFull:true});device.queue.submit([e.finish()]);
+   const staging=device.createBuffer({size:256*shape[1]*shape[2],usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   let actual=[];
+   try{
+    const copy=device.createCommandEncoder();copy.copyTextureToBuffer({texture:coordinates[1-parity]},{buffer:staging,bytesPerRow:256,rowsPerImage:shape[1]},shape);device.queue.submit([copy.finish()]);await staging.mapAsync(GPUMapMode.READ);
+    const padded=new Float32Array(staging.getMappedRange());for(let z=0;z<shape[2];z++)for(let y=0;y<shape[1];y++)actual.push(...padded.slice((z*shape[1]+y)*64,(z*shape[1]+y)*64+shape[0]*4));
+   }finally{staging.unmap();staging.destroy();}
+   const expected=[];
+   for(let coordinateSet=0;coordinateSet<2;coordinateSet++)for(let z=0;z<dims[2];z++)for(let y=0;y<dims[1];y++)for(let x=0;x<dims[0];x++){
+    const j=shiftedCellIndex([x,y,z],shift,dims);
+    if(j!==null)expected.push(...source.subarray((j+coordinateSet*n)*4,(j+coordinateSet*n)*4+4));
+    else expected.push(x+shift[0]+.5,y+shift[1]+.5,z+shift[2]+.5,phase);
+   }
+   if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error('Retained coordinate remap mismatch '+parity+' '+shift);
+   coordinateRows.push({parity,shift,phase,actual,expected});
+  }
   const object=new THREE.Object3D(),motion=await createMaterialMotionGpu({renderer:{backend:{device}},object});
   const fluid=buffer(n*64),gas=texture(),gasValues=new Float32Array(n*2);for(let i=0;i<n;i++)gasValues[i*2]=1;
   device.queue.writeTexture({texture:gas},gasValues,{bytesPerRow:32,rowsPerImage:3},dims);
@@ -39,6 +66,6 @@ export async function runMovingVolumeConformance(){
   const actualMotion=new Float32Array(Uint32Array.from(await read(fluid)).buffer),expectedVelocity=.1*2/3.1*(1-Math.exp(-1));
   for(let i=0;i<n;i++)if(Math.abs(actualMotion[i*16]-expectedVelocity)>1e-6||actualMotion[i*16+1]!==0||actualMotion[i*16+2]!==0)throw Error('Emitted motion does not follow material displacement');
   motion.dispose();
-  return {backend:'WebGPU',adapter:adapter.info,dimensions:dims,rows,motion:{actual:Array.from(actualMotion),expectedVelocity},status:'passed'};
+  return {backend:'WebGPU',adapter:adapter.info,dimensions:dims,rows,coordinateRows,motion:{actual:Array.from(actualMotion),expectedVelocity},status:'passed'};
  }finally{gpu?.dispose();for(const x of owned)x.destroy();device.destroy();}
 }

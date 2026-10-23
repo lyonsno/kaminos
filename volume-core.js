@@ -11976,6 +11976,7 @@ export function createKaminosVolumePrototype({
     owner.gpu.encode(encoder,{dimensions:[gridSize,gridHeight,gridSize],shift:owner.pending,
       fluid:[fluidBuffers[currentFluid],fluidBuffers[1-currentFluid]],front:[frontBuffers[currentFront],frontBuffers[1-currentFront]],
       quench:[quenchBuffers[currentQuench],quenchBuffers[1-currentQuench]],reactant:[reactantTextures[currentFluid],reactantTextures[1-currentFluid]],
+      coordinates:[waveletTextures[currentQuench],waveletTextures[1-currentQuench]],coordinatesFull:waveletSidecarFull,
       reactantFull:reactantSidecarFull,ambientOxidizer:REACTANT_MODEL.ambientOxidizer});
     currentFluid=1-currentFluid;currentFront=1-currentFront;currentQuench=1-currentQuench;
     for(const buffer of pressureBuffers)encoder.clearBuffer(buffer);owner.pending=null;
