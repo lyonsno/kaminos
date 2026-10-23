@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as optics from '../volume-world-smoke-optics.mjs';
 import {opticalSteppingConfig,resolveOpticalStepping} from '../volume-optical-native.mjs';
-import {joinedComparisonPlan,validateJoinedArm,replaceOnce,main} from '../scripts/compare-joined-optics.mjs';
+import {joinedComparisonPlan,validateJoinedArm,validateJoinedCapture,validateJoinedReactants,replaceOnce,main} from '../scripts/compare-joined-optics.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -69,4 +69,26 @@ test('failure before browser launch leaves the source failure in a durable repor
     assert.match(report.error,/script and source checkout differ/);
     assert.equal(report.arms.length,0);
   }finally{process.exitCode=previous;await fs.rm(tmp,{recursive:true,force:true});}
+});
+
+test('JOI-R1: blank beauty and stale optical identity fail; empty count pixels remain valid',()=>{
+  const arm=joinedComparisonPlan()[0],state={backend:'WebGPU:apple',simStepCount:192,error:null,
+    worldSmoke:{effective:'one-way-world-field'},opticalStepping:{effective:arm.mode,tolerance:.001,integrationDomain:'joined-fine-world'},
+    raymarchShaderSpecialization:{effective:'lean-emissive-raymarch-v0'},physicalColor:{effective:'emissive-transport-v2'},
+    controls:{raySteps:arm.steps,adaptiveRays:arm.adaptive,rayStartNoise:arm.noise,rayNoiseAnimated:false,quadratureJitter:false}};
+  const blank={ok:true,image:{width:2,height:2,rgba:Array(4).fill([0,0,0,255]).flat()}};
+  assert.throws(()=>validateJoinedCapture(blank,state,arm,192,false),/blank/);
+  validateJoinedCapture(blank,state,arm,192,true);
+  const lit={...blank,image:{...blank.image,rgba:[10,...blank.image.rgba.slice(1)]}};
+  validateJoinedCapture(lit,state,arm,192,false);
+  assert.throws(()=>validateJoinedCapture(lit,{...state,opticalStepping:{...state.opticalStepping,tolerance:.01}},arm,192,false),/wrong effective/);
+});
+
+test('JOI-R2: observed law determines required sidecar versus intentional absence',()=>{
+  const active={ok:true,grid:[2,3,2],receipt:{effective:{admitted:true,law:'reactant-v0'}},reactantBase64:'AAAA'};
+  assert.equal(validateJoinedReactants(active).present,true);
+  assert.throws(()=>validateJoinedReactants({...active,reactantBase64:null}),/required/);
+  const authored={...active,receipt:{effective:{admitted:false,law:'authored-tall-plume'}},reactantBase64:null};
+  assert.equal(validateJoinedReactants(authored).present,false);
+  for(const bad of [{...authored,ok:false},{...authored,receipt:null},{...authored,reactantBase64:undefined}])assert.throws(()=>validateJoinedReactants(bad));
 });
