@@ -2,6 +2,7 @@ export function verifyHandDemoReport(report, expectedRoot) {
   const failures = [];
   if (report.runtime?.source?.repoRoot !== expectedRoot || !report.runtime?.source?.commit) failures.push('wrong or missing source root/revision');
   if (report.input?.kind !== 'retained-camera-video' || !report.input.sha256) failures.push('missing retained input identity');
+  if (!report.playback?.verifiedBlob || report.playback.sha256 !== report.input?.sha256 || !(report.playback.byteLength > 0)) failures.push('browser playback is not bound to the retained input');
   const loaded = report.steps?.find(row => row.name === 'import')?.state;
   if (loaded?.identity?.backend !== 'webgpu-local' || loaded?.identity?.mobrecon?.backend !== 'webgpu-local' || loaded?.identity?.detector?.backend !== 'webgpu-local' || loaded?.viewerBackend !== 'webgpu') failures.push('wrong or missing effective WebGPU route');
   if (!loaded?.identity?.mobrecon?.bundleSha256 || !loaded?.identity?.detector?.bundleSha256) failures.push('missing effective model identities');
