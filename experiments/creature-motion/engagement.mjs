@@ -1,12 +1,12 @@
 // Source-specific investigation and distance-seeking motives. All positions
 // arrive through observations/events; a gap cannot reveal a hidden transform.
 export function createEngagement(){
- let current=null,lastTime=null,records=new Map(),cooldowns=new Map(),state={phase:'wandering',hold:false,destination:null};
+ let current=null,lastTime=null,previouslyObserved=new Set(),records=new Map(),cooldowns=new Map(),state={phase:'wandering',hold:false,destination:null};
  const distance=(a,b)=>Math.hypot(a[0]-b[0],a[2]-b[2]);
  const point=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
  const read=()=>structuredClone(state);
  const idle=()=>{state={phase:'wandering',hold:false,destination:null};return read();};
- function reset(){current=null;lastTime=null;records.clear();cooldowns.clear();return idle();}
+ function reset(){current=null;lastTime=null;previouslyObserved.clear();records.clear();cooldowns.clear();return idle();}
  const record=id=>{if(!records.has(id))records.set(id,{id,drive:0,aversion:0,caution:0,standOff:1,lastSeen:-Infinity,alarmAt:-Infinity,cessationAt:-Infinity,holdUntil:-Infinity,quiet:false});return records.get(id);};
  function begin(m,time){current={id:m.id,point:[...m.point],since:time,lastSeen:m.lastSeen};}
  function update({time,position,observed=[],focus=null,alarm=null,cessation=null,interrupted=false,arrived=false}){
@@ -19,9 +19,14 @@ export function createEngagement(){
   for(const seen of observed){
    if(!point(seen.point))continue;
    const m=record(seen.id);m.point=[...seen.point];m.lastSeen=time;m.approach=seen.approach!==false;m.standOff=seen.standOff??1;
-   // Mere presence cannot renew a completed event, or create a new alarm.
+   // A witnessed return or fresh observed event ends the quiet episode.
+   // Continuous unchanged presence does not replenish its fading drive.
+   if(m.quiet&&(!previouslyObserved.has(seen.id)||(seen.eventAt??-Infinity)>m.cessationAt)){
+    m.quiet=false;m.drive=Math.max(m.drive,seen.drive??1);
+   }
    if(!m.quiet&&m.drive===0)m.drive=seen.drive??1;
   }
+  previouslyObserved=new Set(observed.filter(x=>point(x.point)).map(x=>x.id));
   if(alarm&&point(alarm.point)){
    const m=record(alarm.id);
    if(alarm.since>m.alarmAt){
