@@ -151,7 +151,7 @@ function showRefinement(){
  $('refinement-stage').max=String(Math.max(0,run.samples.length-1));$('refinement-stage').value=String(Math.max(0,index));
  $('refinement-status').textContent=run.status==='running'?'Generating now':run.status==='completed'?'Completed refinement':run.status==='stopped'?'Stopped refinement':'Failed refinement';
  $('refinement-info').textContent=sample?`${(sample.t*100).toFixed(0)}% · ${sample.evaluations} evaluations · skeleton preview`:'Preparing…';
- if(sample){demo.showPartial(sample);$('now').hidden=true;}
+ if(sample){demo.showPartial(sample);$('now').hidden=true;for(const e of clips)e.chip.setAttribute('aria-pressed','false');}
 }
 $('refinement-stage').oninput=()=>{followRefinement=false;showRefinement();};
 $('refinement-run').onchange=()=>{followRefinement=false;$('refinement-stage').value='0';showRefinement();};
