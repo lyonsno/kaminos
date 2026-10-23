@@ -24,6 +24,7 @@ function checkRecipeInputs(inputs){
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
+ if(inputs.rotation_signs!==undefined&&!['dominant','tree-coherent'].includes(inputs.rotation_signs))throw Error('Unknown creature rotation-sign policy');
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander_travel!==undefined&&!['source','stance'].includes(inputs.wander_travel))throw Error('Unknown wander travel policy');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
@@ -57,11 +58,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const data=await loadSources(inputs),document=host.controls.document;
  let workspace=null,assigned=null;const sessionChoices=new Map();
  const deformation=inputs.deformation??'cpu',deformerFactory=deformation==='gpu'?await loadGpuDeformer():null;
+ const rotationSigns=inputs.rotation_signs??'dominant';
  if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
  let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
  let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
  const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
- let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs,deformation};
+ let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs,deformation,rotation_signs:rotationSigns};
  const placement=new THREE.Group();placement.name='Creature · authored placement';placement.userData.kaminosFrameContentOnly=true;
  if(inputs.transform!==undefined){
   const t=inputs.transform;
@@ -89,7 +91,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   // syncArea refreshes presentation, so guard its nested state reads.
   if(zoneProvider&&wander&&!readingZoneState){readingZoneState=true;try{syncArea();}finally{readingZoneState=false;}}
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
+  motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},rotationSigns:{requested:rotationSigns,effective:runtime.read().deformation.rotationSigns??'unverified'},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
@@ -192,7 +194,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
-  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
+  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory,rotationSigns});
   placement.add(runtime.group);
   if(inputs.attention){
    // Interests resolve from the live scene this creature stands in; the

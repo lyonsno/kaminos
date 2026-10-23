@@ -18,14 +18,24 @@ function rigidQuaternion(e){
     [(e[1]-e[4])/d,(e[8]+e[2])/d,(e[9]+e[6])/d,v];
   const norm=Math.hypot(...q);return q.map(x=>x/norm);
 }
-export function transportDualQuaternions(matrices){
+export function transportDualQuaternions(matrices,{rotationParents=null}={}){
  const real=matrices.map(rigidQuaternion),dual=matrices.map((e,i)=>multiply([0,e[12],e[13],e[14]],real[i]).map(x=>x*.5));
+ if(rotationParents!==null){
+  if(rotationParents.length!==real.length||Array.from(rotationParents).some((p,j)=>!Number.isInteger(p)||p< -1||p>=real.length||p===j))throw Error('Invalid rotation parent hierarchy');
+  const visited=new Uint8Array(real.length);
+  const align=j=>{
+   if(visited[j]===1)throw Error('Cyclic rotation parent hierarchy');if(visited[j]===2)return;visited[j]=1;
+   const p=rotationParents[j];if(p>=0){align(p);if(real[j].reduce((s,x,k)=>s+x*real[p][k],0)<0){real[j]=real[j].map(x=>-x);dual[j]=dual[j].map(x=>-x);}}
+   visited[j]=2;
+  };
+  real.forEach((_,j)=>align(j));
+ }
  return {real,dual};
 }
-export function skinTransport(rest,weights,matrices){
+export function skinTransport(rest,weights,matrices,{rotationParents=null}={}){
   const channels=matrices.length,n=rest.length/3;
   if(!Number.isInteger(n)||weights.length!==n*channels||!channels)throw Error('Incomplete transport arrays');
-  const {real,dual}=transportDualQuaternions(matrices);
+  const {real,dual}=transportDualQuaternions(matrices,{rotationParents});
   const output=new Float32Array(rest.length);
   for(let v=0;v<n;v++){
     let dominant=0,total=0;
@@ -34,7 +44,7 @@ export function skinTransport(rest,weights,matrices){
     const anchor=real[dominant],r=[0,0,0,0],d=[0,0,0,0];
     for(let j=0;j<channels;j++){
       let w=weights[v*channels+j];if(!w)continue;
-      if(real[j].reduce((s,x,k)=>s+x*anchor[k],0)<0)w=-w;
+      if(rotationParents===null&&real[j].reduce((s,x,k)=>s+x*anchor[k],0)<0)w=-w;
       for(let k=0;k<4;k++){r[k]+=w*real[j][k];d[k]+=w*dual[j][k];}
     }
     const norm=Math.hypot(...r);if(norm<1e-10)throw Error('Singular transport rotation');

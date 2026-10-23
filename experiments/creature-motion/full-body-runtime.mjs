@@ -3,9 +3,15 @@ import {registerExportGeometrySnapshot} from '../../scene-export-geometry.mjs';
 
 // The verified Mushfinger body/weights and same rigid DQ transport, with scene
 // attachment left to Hotwet's owner session. No renderer or frame loop here.
-export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,retainPoses=false,deformerFactory=null}) {
+export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,retainPoses=false,deformerFactory=null,rotationSigns='dominant'}) {
  if(typeof retainPoses!=='boolean')throw Error('Pose retention must be boolean');
+ if(!['dominant','tree-coherent'].includes(rotationSigns))throw Error('Unknown deformation rotation-sign policy');
  const rig=manifest.bones.map(b=>({name:b.name,parent:b.parent,restMatrix:b.restMatrix.flat()})),channels=[...manifest.channels];
+ const rotationParents=rotationSigns==='tree-coherent'?[-1,...channels.slice(1).map(name=>{
+  const b=rig.find(b=>b.name===name);if(!b)throw Error('Missing rotation hierarchy Bone');
+  const p=b.parent==null?0:channels.indexOf(b.parent);if(p<0)throw Error('Missing rotation hierarchy parent');return p;
+ })]:null;
+ const transport=(rest,weights,matrices)=>skinTransport(rest,weights,matrices,{rotationParents});
  let skin={manifest,rest,triangles,weights},disposed=false,skinRevision=0;
  const cleanupFailures=[];
  function validate(candidate){
@@ -36,7 +42,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
  let deformer=null,cpuKey='',cpuGeometry=null;
  const makeDeformer=(target,data)=>{
   if(!deformerFactory)return null;
-  const next=deformerFactory({geometry:target,...data,channels:channels.length});
+  const next=deformerFactory({geometry:target,...data,channels:channels.length,rotationParents});
   target.addEventListener('dispose',()=>next.dispose());return next;
  };
  deformer=makeDeformer(geometry,skin);
@@ -57,7 +63,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
    geometry.attributes.position.array.set(retained.positions);geometry.attributes.normal.array.set(retained.normals);geometry.attributes.normal.needsUpdate=true;
    geometry.boundingSphere.copy(retained.sphere);geometry.boundingBox.copy(retained.box);cacheHits++;
   }else{
-   const result=skinTransport(skin.rest,skin.weights,matrices);deformations++;
+   const result=transport(skin.rest,skin.weights,matrices);deformations++;
    geometry.attributes.position.array.set(result);geometry.computeVertexNormals();geometry.computeBoundingSphere();geometry.computeBoundingBox();
    if(retainPoses){const positions=geometry.attributes.position.array.slice(),normals=geometry.attributes.normal.array.slice();poses.set(key,{positions,normals,sphere:geometry.boundingSphere.clone(),box:geometry.boundingBox.clone()});cacheBytes+=positions.byteLength+normals.byteLength;}
   }
@@ -68,7 +74,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
  // Updating the CPU mirror does not mark GPU-owned output buffers for upload.
  function syncCpuGeometry(){
   active();if(!deformer)return geometry;if(cpuKey===cached)return cpuGeometry;
-  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(skinTransport(skin.rest,skin.weights,palette()),3));deformations++;
+  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(transport(skin.rest,skin.weights,palette()),3));deformations++;
   mirror.setIndex(new THREE.BufferAttribute(skin.triangles,1));mirror.computeVertexNormals();mirror.computeBoundingSphere();mirror.computeBoundingBox();
   geometry.boundingSphere=mirror.boundingSphere.clone();geometry.boundingBox=mirror.boundingBox.clone();
   cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=cached;return mirror;
@@ -78,7 +84,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
  function replaceSkin(candidate){
   active();validate(candidate);
   const begin=performance.now(),matrices=palette();let nextDeformer;
-  const result=deformer?candidate.rest:skinTransport(candidate.rest,candidate.weights,matrices);if(!deformer)deformations++;
+  const result=deformer?candidate.rest:transport(candidate.rest,candidate.weights,matrices);if(!deformer)deformations++;
   if(!result.every(Number.isFinite))throw Error('Exchanged skin deformation must be finite');
   const next=new THREE.BufferGeometry();
   try{
@@ -92,6 +98,6 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  update();return runtime;
 }
