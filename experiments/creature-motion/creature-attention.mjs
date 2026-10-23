@@ -152,13 +152,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    if(interruption&&time>=interruption.until){remember('settled',time,{id:interruption.id,cause:interruption.cause});interruption=null;restUntil=time+o.restSeconds;}
    if(startle&&time>=startle.until)startle=null;
-   candidates=[];perceived=[];const observations=[];
+   candidates=[];perceived=[];const observations=[],eventBearings=[];
    // Light events sensed since the last frame: alert the creature to their
    // source wherever it is (light reaches all around).
    for(const event of pendingLight.splice(0)){
+    eventBearings.push({id:event.id,point:[...event.point],score:event.strength,reason:event.cause,memorySeconds:o.lingerSeconds});
     const m=memo(event.id);m.evidence=event.evidence??null;m.urgency=Math.max(m.urgency??0,event.urgency??event.strength);m.familiarity*=.4;m.impulse=Math.max(m.impulse,event.strength);m.cause=event.cause;m.alerted=true;m.eventAt=time;m.inspected=false;
     // The light already reached the creature, so its source counts however far.
-    lightSources.set(event.id,{id:event.id,label:event.label,point:event.point,interest:event.strength,noticeRadius:Infinity,transient:true,until:time+o.impulseSeconds*3});
+    lightSources.set(event.id,{id:event.id,label:event.label,point:[...event.point],interest:event.strength,noticeRadius:Infinity,transient:true,until:time+o.impulseSeconds*3});
    }
    const listed=interests(),ids=new Set(listed.map(x=>x.id));
    for(const [id,m] of memory)if(m.track&&!ids.has(id))m.track.continuous=false;
@@ -209,15 +210,15 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if((lit||changed)&&wide.visible){m.alerted=true;m.eventAt=time;}
     // A light event can give an initial bearing outside view. Once followed,
     // actual perception owns updates; alertness cannot see hidden transforms.
-    const s=m.alerted&&!m.track&&active?sight(source.point,range,2*Math.PI):plain;
+    const s=m.alerted&&source.transient&&active?sight(source.point,range,2*Math.PI):plain;
     const observed=perceivedNow&&plain.visible;
     let pursuing=false;
     if(observed){
      const prior=m.track,elapsed=prior?time-prior.time:0;
      const velocity=prior?.continuous&&elapsed>0?source.point.map((v,i)=>(v-prior.point[i])/elapsed):[0,0,0];
-     // Reproject both positions from this eye: walking past a static object
-     // must not manufacture source motion or perpetual interest.
-     const rate=prior?.continuous&&elapsed>0?new THREE.Vector3(...prior.point).sub(headAt).angleTo(towardNow)/elapsed:0;
+     // Observed world displacement relative to current distance includes radial
+     // approach/recession. Observer travel alone leaves source velocity zero.
+     const rate=Math.hypot(...velocity)/Math.max(towardNow.length(),1e-6);
      const speed=(prior?.continuous?prior.rate:0)+(rate-(prior?.continuous?prior.rate:0))*smooth(.15,dt);
      m.track={point:[...source.point],velocity,time,rate:speed,continuous:true};
      pursuing=focus?.id===source.id&&speed>o.pursuitRate;
@@ -274,6 +275,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
     if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest',...(observed&&pursuing?{velocity:m.track.velocity,memorySeconds:o.pursuitMemorySeconds}:{})});
    }
+   // A newly sensed light change supplies its own bearing even after prior
+   // visual contact. Only this event position enters memory while out of view.
+   for(const event of eventBearings)if(!interruption&&!observations.some(x=>x.id===event.id))observations.push(event);
    // Idle looking around: a brief look at a spot beside the path ahead.
    if(o.idleScan&&!interruption){
     if(nextScan===null)nextScan=time+o.scanEvery[0]+random()*(o.scanEvery[1]-o.scanEvery[0]);
