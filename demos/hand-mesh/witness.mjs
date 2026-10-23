@@ -71,17 +71,18 @@ try {
   };
   const step = async (name, fn) => { report.phase = name; await save(); await fn(); report.steps.push({ name, state: await read() }); await save(); };
   const files = await fs.readdir(args.models);
-  const importFolder = async directory => {
+  const importFolder = async (directory, asFiles = false) => {
+    if (asFiles) await evaluate(`document.getElementById('files').removeAttribute('webkitdirectory');document.getElementById('files').value=''`);
     const { root } = await call('DOM.getDocument');
     const { nodeId } = await call('DOM.querySelector', { nodeId: root.nodeId, selector: '#files' });
-    await call('DOM.setFileInputFiles', { nodeId, files: [path.resolve(directory)] });
+    await call('DOM.setFileInputFiles', { nodeId, files: asFiles ? (await fs.readdir(directory)).map(file => path.resolve(directory, file)) : [path.resolve(directory)] });
   };
   report.url = `${args.base}${args.page || '/demos/hand-mesh/'}`;
   await call('Page.navigate', { url: report.url });
   await step('open', async () => { await wait('Boolean(window.handMeshDemo)'); await shot('before-import'); });
   report.phase = 'verify-input'; await save();
   report.playback = await evaluate('__loadHandFixture()'); await save();
-  await step('import', async () => { await importFolder(args.models); await wait('Boolean(window.handMeshDemo.read().error) || (Boolean(window.handMeshDemo.read().identity) && !window.handMeshDemo.read().loading)'); if ((await read()).error) throw Error((await read()).error); await shot('loaded'); });
+  await step('import', async () => { await importFolder(args.models); await wait('Boolean(window.handMeshDemo.read().error) || (Boolean(window.handMeshDemo.read().identity) && !window.handMeshDemo.read().loading && !window.handMeshDemo.read().importing)'); if ((await read()).error) throw Error((await read()).error); await shot('loaded'); });
   await step('live', async () => {
     // The deterministic fixture has accepted real detections at 0.18; this
     // exercises the user's confidence control without selecting a calibration.
@@ -92,12 +93,12 @@ try {
   await step('reacquire', async () => { await evaluate(`document.getElementById('threshold').value='0.18';document.getElementById('threshold').dispatchEvent(new Event('input'))`); await wait('window.handMeshDemo.read().visible'); });
   await step('mobile', async () => { await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }); await shot('mobile'); await call('Emulation.clearDeviceMetricsOverride'); });
   await step('stop', async () => { await evaluate(`document.getElementById('start').click()`); await wait(`window.handMeshDemo.read().cameraState === 'off'`); if (await evaluate(`__handWitness.tracks.some(t=>t.readyState!=='ended')`)) throw Error('tracks survive Stop'); });
-  await step('invalid-import', async () => { const invalid=path.join(out,'invalid-models');await fs.mkdir(invalid);await fs.copyFile(path.join(args.models,'mobrecon.package.json'),path.join(invalid,'mobrecon.package.json'));await importFolder(invalid); await wait(`document.getElementById('models-status').textContent.includes('missing') || document.getElementById('models-status').textContent.includes('Missing')`); if (!(await read()).identity) throw Error('invalid import discarded loaded models'); });
+  await step('invalid-import', async () => { const invalid=path.join(out,'invalid-models');await fs.mkdir(invalid);await fs.copyFile(path.join(args.models,'mobrecon.package.json'),path.join(invalid,'mobrecon.package.json'));await importFolder(invalid, true); await wait(`document.getElementById('models-status').textContent.includes('missing') || document.getElementById('models-status').textContent.includes('Missing')`); if (!(await read()).identity) throw Error('invalid import discarded loaded models'); });
   await step('corrupt-import', async () => {
     const corrupt=path.join(out,'corrupt-models');await fs.mkdir(corrupt);
     for(const file of files)await fs.copyFile(path.join(args.models,file),path.join(corrupt,file));
     const handle=await fs.open(path.join(corrupt,'mobrecon.bin'),'r+');try{const b=Buffer.alloc(1);await handle.read(b,0,1,0);b[0]^=255;await handle.write(b,0,1,0);}finally{await handle.close();}
-    await importFolder(corrupt);
+    await importFolder(corrupt, true);
     await wait(`document.getElementById('models-status').textContent.toLowerCase().includes('sha256') || document.getElementById('models-status').textContent.toLowerCase().includes('sha-256') || document.getElementById('models-status').textContent.toLowerCase().includes('digest')`);
     if (!(await read()).identity) throw Error('corrupt import discarded loaded models');
   });

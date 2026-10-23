@@ -6,7 +6,7 @@ import { readLocalModels, createModelStore } from './model-files.js';
 const $ = id => document.getElementById(id);
 const video = $('camera'), view = $('viewer'), store = createModelStore(indexedDB);
 let renderer, scene, camera, mesh, route, session;
-let stream = null, running = false, starting = false, loading = false, ticket = 0, callback, flight = null, disposed = false;
+let stream = null, running = false, starting = false, loading = false, importing = false, ticket = 0, callback, flight = null, disposed = false;
 let received = 0, misses = 0, last = null, error = null, source = null, presentation = 'camera-off';
 const status = text => { $('status').textContent = text; };
 const draw = () => { if (renderer && !disposed) renderer.render(scene, camera); };
@@ -20,7 +20,7 @@ function empty(text, state = 'camera-off') {
 function buttons() {
   $('start').disabled = !route || loading || disposed;
   $('start').textContent = running ? 'Stop camera' : starting ? 'Cancel camera' : 'Start camera';
-  $('choose').disabled = loading || disposed;
+  $('choose').disabled = loading || importing || disposed;
 }
 function frame() { camera.position.set(0, 0, 3.8); camera.lookAt(0, 0, 0); draw(); }
 function present(result) {
@@ -123,15 +123,17 @@ async function initialize() {
   $('threshold').oninput = () => { $('threshold-value').value = Number($('threshold').value).toFixed(2); };
   $('choose').onclick = () => $('files').click();
   $('files').onchange = async () => {
+    if (importing || disposed) return;
+    importing = true; buttons();
     try {
       const models = await readLocalModels($('files').files);
       await install(models, 'local-files');
       try { await store.put(models); $('models-status').textContent = 'Saved in this browser for next time. Nothing uploaded.'; }
       catch { $('models-status').textContent = 'Models loaded for this visit. Browser storage is unavailable; choose files again next time.'; }
     } catch (cause) { $('models-status').textContent = String(cause?.message ?? cause); }
-    finally { $('files').value = ''; }
+    finally { $('files').value = ''; importing = false; buttons(); }
   };
-  window.handMeshDemo = { read: () => ({ running, starting, loading, received, misses, presentation, error, source, visible: mesh.visible,
+  window.handMeshDemo = { read: () => ({ running, starting, loading, importing, received, misses, presentation, error, source, visible: mesh.visible,
     threshold: Number($('threshold').value), handedness: $('hand').value, identity: route?.identity ?? null, viewerBackend: renderer.backend.isWebGPUBackend ? 'webgpu' : 'fallback',
     lastAcquisition: last?.acquisition ?? null, lastTimings: last?.timings ?? null, cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off' }) };
   addEventListener('pagehide', () => {
