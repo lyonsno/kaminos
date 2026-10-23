@@ -92,7 +92,7 @@ export const REACTANT_CONTROL_DEFAULTS = Object.freeze({
   sootYield: REACTANT_MODEL.sootYield,
 });
 export const REACTANT_CONTROL_RANGES = Object.freeze({
-  mixingTimeSteps: Object.freeze([0.25, 30]),
+  mixingTimeSteps: Object.freeze([0.01, 30]),
   coolingTimeSteps: Object.freeze([5, 300]),
   sootYield: Object.freeze([0, 6]),
 });

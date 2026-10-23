@@ -3047,7 +3047,7 @@ function pyroFireModeValue(value) {
 }
 
 function fireLickOperatorGainFromAmount(value) {
-  const amount = clampFinite(value, 0, 5, 0);
+  const amount = clampFinite(value, 0, 10, 0);
   return amount * (0.82 + amount * 0.110);
 }
 
@@ -6768,8 +6768,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let plumeRiseScale = mix(0.82, 1.58, plumeHeight01);
   let sourceScaleCompensation = mix(1.22, 0.94, smoothstep(0.35, 1.30, fireScale));
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
-  let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 5.0);
-  let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 5.0);
+  let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 10.0);
+  let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 10.0);
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(flameTransportedDetailFrequency, mix(1.0, 1.18, plumeHeight01), flameTransportedDetailFrequency);

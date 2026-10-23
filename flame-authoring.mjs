@@ -121,12 +121,16 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
   ] },
   // Group by the material or mechanism being authored, not by implementation layer.
+  { name:'Emission & image', view:'look', open:true, fields:[
+    ['volume-physical-thermal','Glow gain'], ['volume-physical-clean','Clean reaction emission'],
+    ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
+    ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
+    ['volume-physical-ambient','Ambient fill'],
+    ] },
   { name:'Combustion', view:'look', open:true, fields:[
-    ['volume-reaction-law','Reaction law'], ['volume-reactant-mixing-time','Reaction time'],
-    ['volume-heat-release-expansion','Combustion expansion'],
-  ] },
-  { name:'Temperature & cooling', view:'look', fields:[
+    ['volume-reactant-mixing-time','Reaction time'], ['volume-heat-release-expansion','Combustion expansion'],
     ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-reactant-cooling-time','Cooling time'],
+    ['volume-reaction-law','Reaction law'],
   ] },
   { name:'Soot', view:'look', open:true, fields:[
     ['volume-reactant-soot-yield','Yield per fuel burned'],
@@ -134,12 +138,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-density','Display gain'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Scattering albedo'],
   ] },
-  { name:'Emission & image', view:'look', open:true, fields:[
-    ['volume-physical-thermal','Glow gain'], ['volume-physical-clean','Clean reaction emission'],
-    ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
-    ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-ambient','Ambient fill'],
-    ] },
   { name:'Support & reconstruction', view:'shape', fields:[
     ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
@@ -154,7 +152,7 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
     ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'], ['volume-detail-scale','Detail scale'],
+    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Carrier contour scale'],
   ] },
   { name:'Emitter & feed', scope:'emitter', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
@@ -203,7 +201,8 @@ export const FLAME_PROPERTY_GROUPS = [
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
 // Physics (soot x blackbody) is the material law (2026-10-18; the law select
 // is retired), so its calibration controls always apply.
-export function flamePropertyApplies(id,{toneMapping,physicsActive=false}) {
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false}) {
+  if(id==='volume-physical-ambient'&&sceneLighting)return false;
   if(id==='volume-physical-knee')return toneMapping==='custom';
   if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
   return !physicsActive||!physicsUnused.has(id);
@@ -227,7 +226,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -347,7 +346,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       grip.title=volumeControlTooltip(id)||label;field.title=grip.title;
     }
     if(group.scope==='emitter')section.append(runtimeStatus);
-    if(group.name==='Temperature & cooling')section.append(appearanceStatus);
+    if(group.name==='Combustion')section.append(appearanceStatus);
     if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
@@ -355,7 +354,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
   const mode=()=>({toneMapping:byId('volume-tone-mapping').value,
-    physicsActive:readAppearanceRuntime()?.effective?.render===true});
+    physicsActive:readAppearanceRuntime()?.effective?.render===true,sceneLighting:readSceneLighting()});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
     const status=flameAppearanceStatus(readAppearanceRuntime());

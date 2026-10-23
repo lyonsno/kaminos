@@ -12,8 +12,8 @@ test('soot production, removal and optics have one home',()=>{
   }
 });
 test('temperature, emission, simulation and sampling are distinct without duplicate controls',()=>{
-  for(const [id,name] of [['volume-physical-kelvin-per-heat','Temperature & cooling'],
-    ['volume-reactant-cooling-time','Temperature & cooling'],['volume-physical-thermal','Emission & image'],
+  for(const [id,name] of [['volume-physical-kelvin-per-heat','Combustion'],
+    ['volume-reactant-cooling-time','Combustion'],['volume-physical-thermal','Emission & image'],
     ['volume-resolution','Domain & simulation'],['volume-steps','Ray marching']])
     assert.deepEqual(groupFor(id).map(g=>g.name),[name]);
   assert.equal(groupFor('volume-heat-release-expansion')[0].fields.find(([id])=>id==='volume-heat-release-expansion')[1],'Combustion expansion');
