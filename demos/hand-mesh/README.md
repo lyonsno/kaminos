@@ -9,14 +9,14 @@ Serve the repository with `python3 serve.py 8501`, then open `http://127.0.0.1:8
 On macOS or Linux, paste this command into Terminal:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/lyonsno/kaminos/cc/hand-mesh-demo-1023/demos/hand-mesh/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/hand-mesh/setup.sh | bash
 ```
 
 The command installs a private Python runner if needed, downloads the pinned demo code and original model assets, verifies their SHA-256 hashes, prepares both browser packages, starts a local server and opens the demo. Review the linked model terms and type `yes` on first use. Then click **Start camera** and allow camera access. Keep the terminal open; Ctrl-C stops the server. Run the same command next time: it reuses verified model files.
 
 No Git checkout, Node, PyTorch, MLX, OpenMesh build or manual model-folder selection is needed. Preparation uses NumPy, SciPy and safetensors; browser inference uses WebGPU. The first run downloads about 156 MB of model inputs, plus the demo and Python dependencies. Model inputs and prepared packages remain on this computer under `~/.local/share/kaminos/hand-demo`. The command does not upload camera frames or models. Windows users can use the existing prepared-folder import; this shell launcher has no native Windows claim.
 
-This is the feature-branch preview command. It pins the runtime code by commit; the public Pages release is a separate publication step. The MANO-derived data and original model terms still apply; acceptance does not grant commercial or redistribution rights. Original assets download directly from the authors' published routes, rather than a Kaminos model mirror.
+The command pins its runtime code by commit. The MANO-derived data and original model terms still apply; acceptance does not grant commercial or redistribution rights. Original assets download directly from the authors' published routes, rather than a Kaminos model mirror.
 
 For a different installation folder, set `KAMINOS_HAND_HOME` on the `bash` side of the pipeline. For example, append `KAMINOS_HAND_HOME="$HOME/hand-demo" bash` in place of `bash`. For unattended preparation after reviewing terms, use `bash -s -- --accept-model-terms --prepare-only`. `--no-open` suppresses opening the browser, and `--port PORT` chooses a loopback port. Reruns preserve completed downloads and write progress or failure details to `setup-state.json`; early bootstrap failures write `bootstrap-error.txt`.
 

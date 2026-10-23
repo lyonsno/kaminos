@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "demos/hand-mesh/index.html",
-      "sha256": "c9460b106846e229d6a23b087fb9f561cc62dcf2a3b6cf836264a56f12cd6ff8"
+      "sha256": "de9f7471b3651c6350d73a90e43ca0f4340df455af2381a97b9e8362724facbf"
     },
     {
       "path": "demos/hand-mesh/main.js",
