@@ -4,6 +4,31 @@ const RETIRED_AXES = Object.freeze({
   presentationControls: 'presentationControlCount',
 });
 
+// The procedural-force switches were retired 2026-10-22: Microdetail and Shred
+// are their own switches (0 is off) and Fine breakup became Swirl jostle. A
+// switch that was off moves onto its slider as 0, so a saved basin keeps the
+// forces it had. `switches` holds the retired switch values the record carried.
+const FORCE_SWITCH_TRANSFERS = Object.freeze([
+  Object.freeze({ switchKey: 'volume-force-micro-carrier', sliderKey: 'volume-microdetail' }),
+  Object.freeze({ switchKey: 'volume-force-interface-shred', sliderKey: 'volume-interface-shred' }),
+  Object.freeze({ switchKey: 'volume-force-fine-breakup', sliderKey: 'volume-swirl-jostle' }),
+]);
+const switchOff = value => value === false || value === 'false' || value === 0 || value === '0';
+export function transferRetiredForceSwitches(switches, domControls, route = null, params = {}) {
+  const masterOff = switchOff(switches['volume-procedural-detail-forces']);
+  const zeroed = [];
+  for (const { switchKey, sliderKey } of FORCE_SWITCH_TRANSFERS) {
+    if (!(masterOff || switchOff(switches[switchKey]))) continue;
+    const entry = domControls?.[sliderKey];
+    if (!entry) continue;
+    entry.value = 0;
+    if (Object.hasOwn(entry, 'rawValue')) entry.rawValue = '0';
+    if (route && params[sliderKey]) route.searchParams.set(params[sliderKey], '0');
+    zeroed.push(sliderKey);
+  }
+  return zeroed;
+}
+
 function clone(value) {
   if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value));
@@ -92,6 +117,7 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   // stripped, so a large retirement (2026-10-18: the legacy material laws'
   // controls) does not break the bridge to later additive controls.
   let retiredDomControlsPresent = 0;
+  const retiredSwitchValues = {};
   for (const retired of retiredControls) {
     const axis = preset[retired.axis];
     const entry = axis && typeof axis === 'object' && !Array.isArray(axis) ? axis[retired.key] : undefined;
@@ -104,6 +130,7 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     if (routeValues.length !== 1 || routeValues[0] !== expectedValue) {
       throw new Error(`retired control route mismatch for ${retired.param}`);
     }
+    if (retired.axis === 'domControls') retiredSwitchValues[retired.key] = Object.hasOwn(entry, 'rawValue') ? entry.rawValue : entry.value;
     delete axis[retired.key];
     route.searchParams.delete(retired.param);
     if (retired.axis === 'domControls') retiredDomControlsPresent += 1;
@@ -165,6 +192,8 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     addedControlIds.push(control.key);
     addedRouteParams.push(control.param);
   }
+  const sliderParams = Object.fromEntries((schema.controls || []).map(control => [control.key, control.param]));
+  const zeroedByRetiredSwitches = transferRetiredForceSwitches(retiredSwitchValues, preset.domControls, route, sliderParams);
   if (addedControlIds.length) {
     preset.controlCount = Object.keys(preset.domControls).length;
     if (migrated.controlCount !== undefined) migrated.controlCount = preset.controlCount;
@@ -176,6 +205,7 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     removedRouteParams,
     addedControlIds,
     addedRouteParams,
+    zeroedByRetiredSwitches,
     applied: removedControlIds.length > 0 || addedControlIds.length > 0,
   };
 }

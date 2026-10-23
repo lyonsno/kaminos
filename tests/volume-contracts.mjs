@@ -314,7 +314,6 @@ assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'proximity', '
 assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
 assert.match(core, /const sidecarViewConsumer = presentationActive && view !== 'off'/, 'Sidecar channel debug views remain an explicit sidecar-bake consumer even when the live source remains selected');
 assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Flow isolate mode');
 for (const param of [
   'volume_pyro_flow_bite',
   'volume_pyro_flow_border',
@@ -440,14 +439,7 @@ assert.match(index, /routePyroRadianceBorder/, 'Pyro route parser accepts radian
 assert.match(index, /routePyroRadianceTeeth/, 'Pyro route parser accepts radiance teeth/bite');
 assert.match(index, /routePyroRadianceRise/, 'Pyro route parser accepts radiance rise/climb');
 assert.match(index, /routePyroRadianceFireLock/, 'Pyro route parser accepts radiance live-fire lock');
-assert.match(index, /id="volume-pyro-carrier-view"/, 'Pyro cockpit exposes a carrier isolate selector');
-assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite alone');
-assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
-assert.match(index, /Wake only/i, 'Pyro carrier isolate selector can show Wake alone');
-assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
 assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
-assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake, Radiance, and Flow isolate modes');
 assert.match(index, /id="volume-pyro-carrier-state"/, 'Volume readout exposes Pyro carrier diagnostic state');
 assert.match(index, /id="volume-canonical-content-mode-state"/, 'Volume tab exposes effective canonical content mode for smoke/fire separation');
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');
@@ -462,17 +454,14 @@ assert.match(index, /id="volume-queue-p95"/, 'Volume tab exposes GPU queue laten
 assert.match(index, /volume timing/i, 'Volume readout labels timing as route-local volume timing');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
-assert.match(index, /id="volume-density"[^>]+max="6"/, 'Density exposes enough headroom to compensate lower ray-step budgets');
+assert.match(index, /id="volume-density"[^>]+max="12"/, 'Soot display gain exposes the expanded authoring range');
 assert.match(index, /id="volume-density"[^>]+value="4\.2"/, 'smoke route defaults to denser normalized raymarch body');
-assert.match(index, /id="volume-fire"[^>]+value="1\.4"/, 'smoke route defaults to the accepted transported fire shape');
-assert.match(index, /id="volume-smoke"[^>]+value="2\.8"/, 'smoke route defaults to the latest high smoke visibility');
 assert.match(index, /id="volume-curl"[^>]+value="2\.65"/, 'smoke route defaults to the accepted curl shape');
 assert.match(index, /id="volume-microdetail"/, 'Volume tab exposes transported microdetail control');
 assert.match(index, /id="volume-interface-shred"/, 'Volume tab exposes interface shredding control');
 assert.match(index, /id="volume-fire-licks"/, 'Volume tab exposes fire-lick breakup control');
-assert.match(index, /id="volume-interface-shred"[^>]+max="5"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
-assert.match(index, /id="volume-fire-licks"[^>]+max="5"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
-assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorption control');
+assert.match(index, /id="volume-interface-shred"[^>]+max="10"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
+assert.match(index, /id="volume-fire-licks"[^>]+max="10"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
 assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
 assert.match(index, /volume_speed/, 'URL route can override speed for repeatable tall-plume flame-cutoff probes');
 assert.match(index, /params\.has\('volume_speed'\)/, 'speed route override must be an explicit route path rather than only a preset side effect');
@@ -504,8 +493,6 @@ assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale 
 assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
 assert.match(index, /volume_fire_scale/, 'URL route can override emitter scale');
 assert.match(index, /fireScale/, 'Volume controls carry emitter scale into the renderer');
-assert.match(index, /id="volume-detail-scale"/, 'Volume tab exposes fine-detail scale control');
-assert.match(index, /volume_detail_scale/, 'URL route can override fine-detail scale');
 assert.match(index, /detailScale/, 'Volume controls carry fine-detail scale into the renderer');
 assert.match(index, /id="volume-plume-height"/, 'Volume tab exposes plume height/world-rise scale control');
 assert.match(index, /volume_plume_height/, 'URL route can override plume height/world-rise scale');
@@ -649,13 +636,12 @@ assert.match(index, /id="volume-canonical-body-balance"/, 'Volume tab exposes a 
 assert.match(index, /CANONICAL_VOLUME_HIDDEN_CONTROLS/, 'canonical plume has an explicit hidden-control registry');
 assert.match(index, /CANONICAL_VOLUME_HIDDEN_SECTIONS/, 'canonical plume has an explicit hidden-section registry');
 // volume-radiance and volume-glow left this registry with the legacy material laws (2026-10-18).
+// volume-radiance, volume-glow (2026-10-18), volume-fire and volume-detail-scale (2026-10-21) left this registry when they were retired.
 for (const hiddenCanonicalControl of [
-  'volume-fire',
   'volume-microdetail',
   'volume-interface-shred',
   'volume-fire-licks',
   'volume-fire-scale',
-  'volume-detail-scale',
   'volume-wind-strength',
   'volume-wind-angle',
   'volume-wind-height',
@@ -684,7 +670,6 @@ for (const canonicalOnlyControl of [
 assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
 assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
 assert.match(index, /volume_density/, 'URL route can override plume density for visual torture witnesses');
-assert.match(index, /volume_fire'\)/, 'URL route can override fire visibility instead of silently keeping the named preset value');
 assert.match(index, /volume_smoke/, 'URL route can override smoke visibility for fire/smoke separation witnesses');
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
 assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic overlay');
@@ -723,10 +708,9 @@ assert.match(index, /volume_microdetail/, 'URL route can override transported mi
 assert.match(index, /volume_curl/, 'URL route can override curl strength for force-isolation witnesses');
 assert.match(index, /volume_interface_shred/, 'URL route can override interface shredding strength');
 assert.match(index, /volume_fire_licks/, 'URL route can override fire-lick breakup strength');
-assert.match(index, /Math\.min\(5, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
-assert.match(index, /Math\.min\(5, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
 assert.match(index, /volume_radiance/, 'URL route can override fire radiance strength');
-assert.match(index, /volume_absorption/, 'URL route can override smoke absorption strength');
 assert.match(index, /volume_glow/, 'URL route can override emissive glow strength');
 assert.match(index, /params\.has\('volume_input_radius'\)/, 'missing input-radius route param must not clamp the default to zero');
 assert.match(index, /params\.has\('volume_flow_rate'\)/, 'missing flow-rate route param must not clamp the default to zero');

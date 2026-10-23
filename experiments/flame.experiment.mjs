@@ -15,6 +15,7 @@ export default {
       setControls:patch=>{const result=flame.setControls(patch);sync();return result;},
       setPaused:value=>{const result=flame.setPaused(value);sync();return result;},
       applyBasin:async id=>{await flame.applyBasin(id);sync();return flame.read();},
+      saveBasin:input=>flame.saveBasin(input),
       select:target=>flame.select(target),frame:()=>flame.frame(),listBasins:()=>flame.listBasins(),
     };
     return {

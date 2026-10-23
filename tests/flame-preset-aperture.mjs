@@ -32,8 +32,8 @@ test('ordinary basin apply preserves uncapped legacy aperture and its receipt',(
   assert.equal(state.sourcePose.scale[0],scale);
  }
 });
-test('ordinary basin apply clamps a small radius at the scaled lower bound',()=>{
- for(const scale of [.1,1,8])assert.equal(load(0,{},undefined,scale).domControls['volume-immersed-radius'].value,.02/scale);
+test('ordinary basin apply preserves a zero aperture without reviving supply',()=>{
+ for(const scale of [.1,1,8])assert.equal(load(0,{},undefined,scale).domControls['volume-immersed-radius'].value,0);
 });
 test('automatic clamping keeps valid and portable apertures exact and rejects nonfinite or unknown spaces',()=>{
  assert.equal(load(.23).domControls['volume-immersed-radius'].value,.23);
@@ -71,7 +71,7 @@ test('legacy recovery keeps effective size at a tiny destination scale',()=>asse
 test('portable source comparison uses local coordinates and still detects aperture edits',()=>{
  const saved={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:.2,rawValue:'.2'}},rendererControls:{},presentationControls:{},sourceRadiusSpace:'simulation-v1'};
  const applied=structuredClone(saved);applied.domControls['volume-immersed-radius']={value:2,rawValue:'2'};
- const callback=html.slice(html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'),html.indexOf('    readSourceRuntime:',html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'))).trim().replace(/^readSource:/,'').replace(/,$/,'');
+ const callback=html.slice(html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'),html.indexOf('    readSourceControl:',html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'))).trim().replace(/^readSource:/,'').replace(/,$/,'');
  const context={activeVolumeSettingsPresetReceipt:{preset:saved,label:'Test'},readVolumeSettingsValues:()=>applied,volumeSettingsPresetControlValuesEqual,flamePresetForLocalControls:aperture.flamePresetForLocalControls,flamePoseToDomain:()=>({scale:[.1,.1,.1]}),flameEmitterPose:{},flameDomainTranslation:[],flameDomainScale:1};
  assert.equal(vm.runInNewContext(`(${callback})()`,context).modified,false,'successful scaled apply must not report Modified');
  assert.equal(typeof aperture.flamePresetForLocalControls,'function','local comparison projection is missing');

@@ -4,7 +4,7 @@ import * as fire from '../scene-fire-domain.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
-const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-wavelet-octave1-weight','volume-wavelet-octave2-weight','volume-pressure-resolution','volume-reactant-soot-yield'];
+const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-wavelet-octave1-weight','volume-wavelet-octave2-weight','volume-pressure-resolution','volume-reactant-soot-yield','volume-swirl-jostle'];
 test('observed pre-composition scene migrates independent soot history without altering authored values',()=>{
  const {settings}=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
  const result=fire.projectFireSettingsToSchema(settings,schema);

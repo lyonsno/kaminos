@@ -22,11 +22,12 @@ test('the contextual inspector includes current appearance, structure, motion an
 });
 
 test('field views partition controls while keeping source supply on the selected emitter',()=>{
-  assert.deepEqual(flame.FLAME_INSPECTOR_VIEWS?.map(view=>view.id),['look','shape','motion','quality']);
+  assert.deepEqual(flame.FLAME_INSPECTOR_VIEWS?.map(view=>view.id),['look','motion','quality']);
+  for(const id of ['volume-flow-kernel-strength','volume-flow-kernel-radius','volume-flow-kernel-coherence'])assert.equal(flame.FLAME_PROPERTY_GROUPS.some(group=>group.fields.some(([key])=>key===id)),false);
   for(const group of flame.FLAME_PROPERTY_GROUPS){
-    assert.ok(group.name==='Emission'||flame.FLAME_INSPECTOR_VIEWS.some(view=>view.id===group.view));
+    assert.ok(group.scope==='emitter'||flame.FLAME_INSPECTOR_VIEWS.some(view=>view.id===group.view));
   }
-  const emission=flame.FLAME_PROPERTY_GROUPS.find(group=>group.name==='Emission');
+  const emission=flame.FLAME_PROPERTY_GROUPS.find(group=>group.scope==='emitter');
   assert.ok(emission.fields.some(([id])=>id==='volume-immersed-fuel'));
 });
 
@@ -40,6 +41,10 @@ test('applicability respects source law, AgX and effective physics without chang
   assert.equal(flame.flamePropertyApplies('volume-physical-kelvin-per-heat',{...mode,physicsActive:true}),true);
   assert.equal(flame.flamePropertyApplies('volume-density',{...mode,physicsActive:true}),true);
   assert.equal(flame.flamePropertyApplies('volume-wind-gust-period',mode),true);
+  for(const id of ['volume-boundary-sidecar-source','volume-boundary-sidecar-width','volume-boundary-sidecar-blur','volume-boundary-sidecar-ridge']) {
+    assert.equal(flame.flamePropertyApplies(id,{...mode,supportActive:false}),false);
+    assert.equal(flame.flamePropertyApplies(id,{...mode,supportActive:true}),true);
+  }
   assert.deepEqual(mode,{sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false});
 });
 

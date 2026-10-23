@@ -21,6 +21,10 @@ try {
  for(const fineVelocity of [0,16]){
   const sim=createKaminosVolumePrototype({THREE:stub(),viewport:stub(),camera:stub(),controls:stub(),getControls:()=>({resolution:32,fineVelocity}),onStatus(){}});
   try {
+   assert.throws(()=>sim.setControls({fineVelocity:7}),/Fine velocity/, 'Invalid subdivision is rejected synchronously before changing runtime controls');
+   assert.equal(sim.debugState().controls.fineVelocity,fineVelocity,'Rejected input retains prior controls');
+   assert.throws(()=>sim.setControls({worldSmoke:'on',worldSmokePressure:7}),/pressure/);
+   assert.equal(sim.debugState().error,null,'Dimension rejection does not poison frame state');
    const s=sim.debugState();
    assert.equal(s.pressureSolver.residual,null);
    assert.equal(s.pressureSolver.residualProbe.available,false,'No effective grid exists before initialization');

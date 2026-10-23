@@ -1,13 +1,14 @@
 export function resolveSceneGISettings(value = {}) {
   // Noah's accepted broad-GI profile, October16; explicit scene values win.
   const settings = {mode:'combined', view:'scene', gain:5, radius:20,
-    thickness:7, slices:3, steps:3, denoise:1, resolutionScale:1, temporal:true, temporalWeight:.9};
+    thickness:7, slices:3, steps:3, denoise:1, resolutionScale:1, temporal:true, temporalRefine:true, temporalWeight:.9};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   if (!['gtao','combined'].includes(settings.mode)) throw new Error('Invalid scene GI mode');
   if (!['scene','ao','gi','incoming'].includes(settings.view)) throw new Error('Invalid scene GI view');
   for (const key of ['gain','radius','thickness','slices','steps','denoise','resolutionScale']) {
     if (!Number.isFinite(settings[key]) || settings[key] < 0) throw new Error(`Invalid scene GI ${key}`);
   }
+  if(typeof settings.temporalRefine !== 'boolean')throw new Error('Invalid scene GI temporalRefine');
   if(typeof settings.temporal !== 'boolean')throw new Error('Invalid scene GI temporal');
   if(!Number.isFinite(settings.temporalWeight)||settings.temporalWeight<0||settings.temporalWeight>=1)throw new Error('Scene GI temporalWeight must be in [0, 1)');
   for (const key of ['radius','thickness','slices','steps','resolutionScale']) {

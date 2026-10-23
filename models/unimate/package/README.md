@@ -63,6 +63,25 @@ To prepare the rig yourself, call the steps directly:
 
 Each step is exported, so you can review or edit labels in between, as upstream recommends. A rest pose authored upside down or lying down can be stood up with `turnRest(rig, 'x180')`, the same turns as UniMate's `--rest_rotation`.
 
+## Generate after editing proportions
+
+For an editor that already has a prepared bundle `{ b, a }`, refresh its rest positions while keeping the exact joint names, ordering and parent graph:
+
+```js
+import { reconditionSkeletonBundle } from '@kaminos/unimate-webgpu';
+
+const skeletonData = reconditionSkeletonBundle(sourceBundle, {
+  jointNames, parents, positions: editedJointHeads, name: 'Edited cat',
+});
+const { glb, motion, skeleton, restFrame } = await consumer.run({
+  asset: { skeletonData }, prompt: 'A cat walks forward.', seed: 1,
+});
+```
+
+Heads are XYZ arrays in the editor's local Y-up frame, facing +Z by default; pass `facing: { forward: [x, y, z] }` for another heading. Object placement stays in the editor. Geometry conditioning is rebuilt; source label embeddings and the spectral basis are retained. Changed names, ordering or topology require preparing a new bundle through `buildSkeletonBundle`. The helper produces skeleton-only conditioning: attaching or rebinding an existing skin remains the host's job.
+
+The consumer accepts the same `{ b, a, mesh? }` prepared data as the generator. A cold start uses it directly; subsequent runs reuse the loaded model. Supply one input kind: prepared data, a rigged GLB, or a stock skeleton. The generated motion and GLB use UniMate's canonical frame. `restFrame` retains the canonical transform (`yaw`, `scale`, `offset`, and column-vector `rotation`) for the host's return to the authoring frame; it does not apply that transform to playback automatically. Old captured prompts, noise, reference motions and binary digests are omitted from the refreshed bundle. Retain your source identity and the edited input alongside the generated clip when saving it.
+
 ## Requirements
 
 - **Browser:** WebGPU. Tested in Chrome on Apple Silicon.

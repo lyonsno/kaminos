@@ -1,3 +1,6 @@
+import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
+import {mountMotionWorkspace} from './motion-workspace.mjs';
+import {createEngagement} from './engagement.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
@@ -25,7 +28,7 @@ function checkRecipeInputs(inputs){
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander_travel!==undefined&&!['source','stance'].includes(inputs.wander_travel))throw Error('Unknown wander travel policy');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
- if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
+ if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.engage!==undefined&&typeof a.engage!=='boolean')throw Error('Attention engagement must be boolean');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
@@ -51,8 +54,9 @@ async function checkRecipeView(view,current){
 
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
- const choices=checkRecipeInputs(inputs);
+ const choices=[...checkRecipeInputs(inputs)];
  const data=await loadSources(inputs),document=host.controls.document;
+ let workspace=null,assigned=null;const sessionChoices=new Map();
  const deformation=inputs.deformation??'cpu',deformerFactory=deformation==='gpu'?await loadGpuDeformer():null;
  if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
  let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
@@ -71,6 +75,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
@@ -86,10 +91,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   // syncArea refreshes presentation, so guard its nested state reads.
   if(zoneProvider&&wander&&!readingZoneState){readingZoneState=true;try{syncArea();}finally{readingZoneState=false;}}
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
+  motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
-  action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+  action:{engagement:{...engagement.read(),enabled:chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
+  recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+
+
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
@@ -135,7 +142,20 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function presentWander(delta,playing){
   if(!syncArea())return read();
-  const state=wander.advance(delta);cycle=state.cycle;source.presentation.cycle=cycle;
+  let moving=delta;
+  if(attention&&chosenInputs.attention.engage===true){
+   const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
+   const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
+   const prior=engagement.read();
+   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
+   attention.setEngagement(['approaching','inspecting','cautious'].includes(intent.phase)?intent.id:null);
+   if(intent.destination){
+    const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
+    if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
+   }else if(intent.phase!=='inspecting')wander.setDestination(null);
+   if(intent.hold)moving=0;
+  }
+  const state=wander.advance(moving);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
   if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
  }
@@ -163,7 +183,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(()=>workspace?.dispose());attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -222,7 +242,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      const result=await probe.sample(points);
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;
-     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
     }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
     finally{lightBusy=false;}
    };
@@ -296,34 +316,52 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    motion:operation('motion',async input=>{
     const requestId=++motionRequest;
     const next=choices.find(c=>c.id===input?.id);if(!next)throw Error('Unknown retained motion');
-    const request={...chosenInputs,motion:next.motion,motion_sha256:next.motion_sha256,prefix:next.prefix,prefix_sha256:next.prefix_sha256};
+    const request={...chosenInputs,motion:next.motion,motion_sha256:next.motion_sha256,motion_data:next.motion_data,prefix:next.prefix,prefix_sha256:next.prefix_sha256};
     let loaded;try{loaded=await loadSources(request);}catch(error){active();if(requestId!==motionRequest)return {status:'superseded',effective:read()};throw error;}
     active();if(requestId!==motionRequest)return {status:'superseded',effective:read()};
     if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
     if(next.prompt!==undefined&&next.prompt!==loaded.motion.prompt||next.seed!==undefined&&next.seed!==loaded.motion.seed)throw Error('Motion choice prompt or seed differs from retained source');
     const nextAdapter=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:data.frame}),nextWalking=createWalkingPoseAdapter({THREE,adapter:nextAdapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
-    const prior={adapter,walking,wander,heldWander,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
+    const prior={adapter,walking,wander,heldWander,source:structuredClone(source),chosen,chosenInputs,assigned,cycle,frame:player.read().frame,status:player.read().status};
     const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
      if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
      if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
-     player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
+     player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();
     }
     catch(error){
-     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;heldWander=prior.heldWander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;heldWander=prior.heldWander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;assigned=prior.assigned;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
    }),
-   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
+   engagement:operation('engagement',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Engagement enabled must be boolean');chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,engage:input.enabled}};
+    if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
+   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);if(!input.enabled){engagement.reset();wander?.setDestination(null);}chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
     // While not playing no frame will come to clear or apply the turn: show
     // the displayed source frame again without moving time.
     if(player.read().status!=='playing'){player.represent();host.scene.refreshPresentation?.(asset);}
     return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
+  if(inputs.motion_generation){
+   const initialChoice=chosen??{id:'initial',label:data.motion.prompt??'Initial motion',motion:inputs.motion,motion_sha256:inputs.motion_sha256,motion_data:inputs.motion_data};
+   if(!chosen){choices.push(initialChoice);chosen=initialChoice;}assigned=initialChoice;
+   await sessionMotions.add(data.motion);
+   const applyRow=async(row,preview)=>{
+    if(row.skeletonKey!==skeletonMotionKey(data.motion))throw Error('Motion belongs to another skeleton');
+    let choice=choices.find(c=>c.motion_sha256===row.id);
+    if(!choice){choice={id:row.id,label:row.motion.prompt??'Session motion',motion:'session:'+row.id,motion_sha256:row.id,motion_data:row.text,prompt:row.motion.prompt,seed:row.motion.seed};choices.push(choice);sessionChoices.set(row.id,choice);}
+    const requestId=motionRequest+1,result=await operations.motion({id:choice.id,preview});
+    if(result.status==='superseded'||requestId!==motionRequest)return {status:'superseded',effective:read()};
+    operations.mode({mode:'source'});operations.replay();return read();
+   };
+   operations.previewMotion=operation('previewMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');return applyRow(row,true);});
+   operations.assignMotion=operation('assignMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');return applyRow(row,false);});
+   operations.restoreMotion=operation('restoreMotion',async()=>{return operations.motion({id:assigned.id,preview:true});});
+  }
   if(inputs.mode!==undefined&&!wander)operations.mode({mode:inputs.mode});
   if(inputs.cycle!==undefined&&!wander){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
   if(inputs.sample!==undefined&&!wander)operations.seek({frame:inputs.sample});
@@ -337,7 +375,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   }}){
    seating?.dispose();presentation?.dispose();
    presentation=mountProperties({document,read,invoke,
-    save(recipe){const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
+    save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
      const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
@@ -346,9 +384,15 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      active();await reopen(recipe);
     }});
    refresh=presentation.update;
+   if(inputs.motion_generation){
+    workspace?.dispose();workspace=mountMotionWorkspace({document,reference:data.motion,spec:inputs.motion_generation,options:inputs.motion_generation.options??{},onFrame:fn=>session.onFrame(fn),onPreview:row=>operations.previewMotion({id:row.id}),onApply:row=>operations.assignMotion({id:row.id}),onRestore:()=>operations.restoreMotion()});
+    const button=document.createElement('button');button.type='button';button.textContent='Make motion…';button.onclick=()=>workspace.open();presentation.properties.append(button);
+    const dock=document.createElement('div');dock.className='creature-motion-dock';const css=document.createElement('style');css.textContent='.creature-motion-dock>.playback-controls{position:relative}.creature-motion-dock{display:flex;flex-direction:column}';dock.append(css,workspace.node);if(presentation.playback)dock.append(presentation.playback);presentation.playback=dock;
+    operations.openMotionWorkspace=()=>workspace.open();operations.generateMotion=input=>workspace.generate(input);operations.stopMotionGeneration=()=>workspace.stop();
+   }
    if(host.controls.mountObject)seating=host.controls.mountObject({asset,relatedAssets,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
    else {root.append(presentation.properties);if(presentation.playback)root.append(presentation.playback);}
-   refresh();return {dispose(){seating?.dispose();presentation?.dispose();refresh=()=>{};}};
+   refresh();return {dispose(){workspace?.dispose();seating?.dispose();presentation?.dispose();refresh=()=>{};}};
   }};
  }catch(error){await dispose();throw error;}
 }

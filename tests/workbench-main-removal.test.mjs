@@ -20,7 +20,7 @@ function fixture(){
  const disposed=[];for(const [name,value]of Object.entries({texture,geometry,material,uniqueGeometry,uniqueMaterial}))value.addEventListener('dispose',()=>disposed.push(name));
  const edits=createSceneEdits({read:()=>pose,write(){}}),rows=[{id:'owned',type:'glb',object:owned},{id:'borrowed',type:'glb',object:borrowed}];
  const c={scene,sceneObjects:rows,sceneGroups:[],sceneSelection:{ids:[],activeId:null},activeSceneObjectId:null,activeSceneGroupId:null,currentMesh:null,transformControls:null,sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
-  FLAME_EMITTER_ID:'flame',LOCAL_LIQUID_EMITTER_TYPE:'liquid',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',RIM_LIGHT_ID:'rim',hybridSplatOverlayState:{},splatCorrectionMode:null,
+  FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'liquid',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',RIM_LIGHT_ID:'rim',hybridSplatOverlayState:{},splatCorrectionMode:null,
   sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
   pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){c.activeSceneObjectId=id;},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
  };

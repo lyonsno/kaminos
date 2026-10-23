@@ -2,6 +2,24 @@ import { normalizeBurner } from './annular-burner.mjs';
 export const COMPOSITION_SCHEMA = 'kaminos.stationary-flame-composition.v1';
 const clone = value => JSON.parse(JSON.stringify(value));
 
+export function resolveFlameLightingRoute(value) {
+  const route=new URLSearchParams(value);
+  if(route.get('volume_light_field')!=='1')return route;
+  for(const stage of ['shared_source','distributed','hybrid']) {
+    const key='volume_light_field_'+stage;
+    if(!route.has(key))route.set(key,'1');
+    if(route.get(key)!=='1')return route;
+  }
+  const defaults={points:'4',point_sampling:'all',shadow_resolution:'12',blocker_samples:'1',
+    filter_samples:'1',shadow_softness:'1',shadow_sampling:'complementary',
+    shadow_implementation:'shared',shadow_grain:'screen-animated',smoke_refinement:'1'};
+  for(const [name,value] of Object.entries(defaults)) {
+    const key='volume_light_field_hybrid_'+name;
+    if(!route.has(key))route.set(key,value);
+  }
+  return route;
+}
+
 export function normalizeComposition(value) {
   if (value == null) return null;
   if (value.schema !== COMPOSITION_SCHEMA) throw new Error('Unsupported scene composition');
@@ -17,6 +35,7 @@ export function normalizeComposition(value) {
   }
   if (value.route.volume_collision !== undefined && !['kiln', 'off'].includes(value.route.volume_collision)) throw new Error('Unsupported kiln collision setting');
   const result = clone(value);
+  result.route=Object.fromEntries(resolveFlameLightingRoute(value.route));
   if (value.burner != null) result.burner = normalizeBurner(value.burner);
   return result;
 }
@@ -65,7 +84,7 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
 
 // Scene canvases and optional editor drawing are sampled in one callback. This is a
 // picture of the visible composition, not a checkpoint of the fluid solver.
-export function captureComposedCanvases({ host, volume, editorOverlay=null, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
+export function captureComposedCanvases({ host, volume, volumeRaster=null, editorOverlay=null, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
   if (!host || !host.width || !host.height) throw new Error('Host canvas is unavailable');
   const bounds = host.getBoundingClientRect();
   if (!(bounds.width > 0 && bounds.height > 0)) throw new Error('Host canvas has no visible area');
@@ -84,7 +103,10 @@ export function captureComposedCanvases({ host, volume, editorOverlay=null, docu
       rect.width * canvas.width / bounds.width,
       rect.height * canvas.height / bounds.height);
   }
-  const layers=volume ? ['mesh','ordinary-emissive-volume'] : ['mesh'];
+  // A held full-output raster has already been rendered for the host camera
+  // and extent. Unlike a live WebGPU canvas it survives the readback await.
+  if(volumeRaster){if(!volumeRaster.width||!volumeRaster.height)throw Error('Held flame raster is unavailable');context.drawImage(volumeRaster,0,0,canvas.width,canvas.height);}
+  const layers=volume||volumeRaster ? ['mesh','ordinary-emissive-volume'] : ['mesh'];
   if(editorOverlay&&editorOverlay.style.display!=='none'&&editorOverlay.width>0&&editorOverlay.height>0){
     const rect=editorOverlay.getBoundingClientRect();
     if(rect.width>0&&rect.height>0){

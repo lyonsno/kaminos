@@ -7,7 +7,7 @@ import {FLAME_PROPERTY_GROUPS} from '../flame-authoring.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
-assert.equal(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields.filter(([id])=>id==='volume-quadrature-jitter').length,1,
+assert.equal(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Ray marching').fields.filter(([id])=>id==='volume-quadrature-jitter').length,1,
   'interior jitter must be independently selectable in Quality');
 assert.deepEqual(schema.rendererControls.find(c=>c.key==='volume-quadrature-jitter'),{
   key:'volume-quadrature-jitter',param:'volume_quadrature_jitter',tagName:'INPUT',type:'checkbox',additiveDefault:true,

@@ -1,6 +1,7 @@
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
-import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
+import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
+import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,checkedFireSourceRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
@@ -26,10 +27,7 @@ function normalizeSceneObjectRecord(record) {
   if(record.type===CAMERA_TYPE)record=checkedCameraRecord(record);
   if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
-  if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
-    throw new Error('Unsupported flame source identity');
-  }
-  if(record.type===FLAME_EMITTER_TYPE&&record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be a boolean');
+  if(record.type===FLAME_EMITTER_TYPE)record=checkedFireSourceRecord({...record,id});
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
@@ -39,6 +37,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface),...(record.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
+    ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -150,7 +149,7 @@ export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
   if (type === BURNER_BED_TYPE) return source === BURNER_BED_SOURCE;
-  if (type === FLAME_EMITTER_TYPE) return record.id === FLAME_EMITTER_ID && source === FLAME_EMITTER_SOURCE;
+  if (type === FLAME_EMITTER_TYPE){try{checkedFireSourceRecord(record);return true;}catch{return false;}}
   if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
@@ -169,7 +168,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
   const objects = authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE);
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
-  if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
+  const flameIds=new Set();for(const record of flameSources){if(flameIds.has(record.id))throw Error('Duplicate flame source identity');flameIds.add(record.id);}
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
   const flameDomainTranslation = (flameSources.length || normalizeComposition(data.composition))
     ? (data.flameDomainTranslation === undefined
@@ -207,6 +206,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
     flameDomainTranslation, flameDomainScale, flameDomainFollowSource,
+    flameSources:cloneJson(flameSources),
     flameSourcePresent: flameSources.length > 0 || (data.version < 6 && !!data.composition),
     localLiquid,
   };

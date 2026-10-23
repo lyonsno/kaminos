@@ -19,7 +19,7 @@ for(const matching of [true,false])for(const mountTransform of [true,false])for(
   if(!hasCameraSetter)delete host.setSceneCamera;
   const fields={'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
   runInNewContext(production,{
-    fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
+    outputCaptureExtent:null,recordingFrameSink:null,fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,

@@ -39,7 +39,7 @@ test('a rejected agent placement leaves no active transaction and preserves an e
 
 test('moving flame beyond analytic support keeps the authored pose and suspends injection', () => {
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=html.indexOf('function writeAuthoredFlameEmitterPose(value) {');
+  const start=html.indexOf('function writeAuthoredFlameEmitterPose(value,');
   const end=html.indexOf('window.kaminosFlameEmitterState =',start);
   assert.ok(start>0 && end>start);
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
@@ -52,7 +52,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
       if(sourceEnabled && next.position[0]>1.5)throw Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
     },
     window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'analytic-fixed'}}},
-    ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
+    primaryAuthoredFlameSource:()=>null,projectAuthoredFlameSourceControls:()=>{},syncAuthoredFlameSources:()=>{},sceneObjects:[],ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
     get flameEmitterPose(){return pose;},set flameEmitterPose(next){pose=next;},
     get flameEmitterInjectionSuspended(){return suspended;},set flameEmitterInjectionSuspended(next){suspended=next;}};
   vm.runInNewContext(html.slice(start,end)+'\nthis.writeFlame=writeAuthoredFlameEmitterPose;',context);
@@ -94,7 +94,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},rimLight:null,
+  const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),flameSourceDataTargets:new Set(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},giProxyEditTargets:new Set(),applyGiProxySetting(){},giProxySettingFor:()=>null,rimLight:null,
     authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],localLiquidDomainGuide:null,flameDomainGuide:null,
     sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},

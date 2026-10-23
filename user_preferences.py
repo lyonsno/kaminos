@@ -20,6 +20,8 @@ def validate_preferences(value):
         raise ValueError('Unsupported preferences document')
     if value.get('navigationInput') not in (None, 'trackpad', 'mouse'):
         raise ValueError('Invalid navigation preference')
+    if 'startupConfigured' in value and not isinstance(value['startupConfigured'], bool):
+        raise ValueError('Invalid startup preference state')
     defaults = value.get('sceneDefaults')
     if defaults is not None and not isinstance(defaults, dict):
         raise ValueError('Scene defaults must be a settings object')

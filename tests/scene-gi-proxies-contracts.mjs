@@ -122,3 +122,12 @@ test('GI-PROXY-04: a texture or material shared within the proxy is disposed onc
   const {root}=sceneObject(heroSource);await registry.attach(root);registry.release(root);
   assert.deepEqual(counts,{texture:1,material:1});
 });
+
+test('the registry knows whether any GI pass consumes proxies, so a setting that changes nothing on screen can say so',()=>{
+  const {registry}=world();
+  assert.deepEqual(registry.consumers(),[],'no GI pass has declared it reads proxies');
+  const release=registry.registerConsumer('ssgi-proxy-source');
+  assert.deepEqual(registry.consumers(),['ssgi-proxy-source']);
+  release();assert.deepEqual(registry.consumers(),[]);
+  assert.throws(()=>registry.registerConsumer(''),/name/);
+});

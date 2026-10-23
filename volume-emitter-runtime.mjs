@@ -179,9 +179,9 @@ export function applyVolumeEmitterFamilyRuntime({
       requested: { family: requestedFamily, sourceLaw: 'immersed-source', sourceEnabled,
         emitterPose: placement.pose, immersedRadius: Number(controls.immersedRadius ?? .2),
         immersedControls: mapped, frameId, timestampMs },
-      effective: { family: requestedFamily, sourceLaw: sourceEnabled ? 'immersed-source' : 'inactive',
-        sourceMode: sourceEnabled ? 'immersed-configured' : 'off', sourceCount: sourceEnabled ? 1 : 0,
-        coordinateSpace: sourceEnabled ? 'volume-local' : 'none', coreFlowRate: 0,
+      effective: { family: requestedFamily, sourceLaw: mapped.immersedSourceEnabled ? 'immersed-source' : 'inactive',
+        sourceMode: mapped.immersedSourceEnabled ? 'immersed-configured' : 'off', sourceCount: mapped.immersedSourceEnabled ? 1 : 0,
+        coordinateSpace: mapped.immersedSourceEnabled ? 'volume-local' : 'none', coreFlowRate: 0,
         emitterPose: placement.pose, inletProfile: 'inactive', effectiveInletVelocity: null,
         admission: 'reported-by-core-per-step',
         // An aperture the source scale takes out of range runs clamped, and says so.

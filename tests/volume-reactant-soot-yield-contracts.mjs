@@ -3,6 +3,7 @@
 // burned) is a real simulation control, not a hidden model constant.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { FLAME_PROPERTY_GROUPS } from '../flame-authoring.mjs';
 import {
   REACTANT_MODEL, REACTANT_CONTROL_DEFAULTS, REACTANT_CONTROL_RANGES,
   resolveReactantCombustionConfig, reactantCombustionUniformValues, reactantBurnStep,
@@ -32,12 +33,11 @@ const control = schema.controls.find(entry => entry.key === 'volume-reactant-soo
 assert.ok(control, 'the schema declares the soot yield control');
 assert.equal(control.param, 'volume_reactant_soot_yield');
 assert.equal(Number(control.additiveDefault), REACTANT_MODEL.sootYield, 'older basins load at the model yield');
-assert.ok(control.additiveSinceControlCount > Math.max(...schema.controls.filter(entry => entry !== control && Number.isSafeInteger(entry.additiveSinceControlCount)).map(entry => entry.additiveSinceControlCount)), 'it is the newest additive control');
+assert.equal(control.additiveSinceControlCount, 260, 'it follows the wavelet controls in the additive history');
 assert.equal(schema.controls.length, schema.controlCount);
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(index, /<input[^>]+id="volume-reactant-soot-yield"[^>]+data-volume-settings-param="volume_reactant_soot_yield"/, 'the cockpit has the slider');
 assert.match(index, /reactantSootYield: parseFloat\(document\.getElementById\('volume-reactant-soot-yield'\)\.value\)/, 'the snapshot carries it to the core');
 assert.match(index, /'volume-reactant-cooling-time',\s*'volume-reactant-soot-yield',/, 'its changes reach the core like the other reactant controls');
-const inspector = readFileSync(new URL('../flame-authoring.mjs', import.meta.url), 'utf8');
-assert.match(inspector, /\['volume-reactant-soot-yield','Soot yield'\]/, 'the flame inspector shows it in Combustion');
+assert.deepEqual(FLAME_PROPERTY_GROUPS.filter(group=>group.fields.some(([id])=>id==='volume-reactant-soot-yield')).map(group=>group.name),['Soot'], 'the flame inspector groups yield with soot removal and optics');
 console.log('reactant soot yield contracts passed');

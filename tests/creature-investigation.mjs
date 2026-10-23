@@ -1,0 +1,60 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {createWanderPath} from '../experiments/creature-motion/wander-path.mjs';
+const area={center:[0,0],radii:[8,6],yaw:0};
+const path=createWanderPath({area,position:[0,0],direction:[0,1],seed:7});
+assert.equal(typeof path.setDestination,'function','Interest needs an arriving route, not another endless wander segment');
+const before=path.read();path.setDestination([4,3]);
+assert.deepEqual(path.read().position,before.position);
+assert.deepEqual(path.read().direction,before.direction,'Choosing an interest must not snap heading');
+for(let i=0;i<200;i++){const r=path.advance(.1);assert.ok((r.position[0]/8)**2+(r.position[1]/6)**2<=1+1e-9);}
+assert.equal(path.read().status,'arrived');assert.ok(Math.hypot(path.read().position[0]-4,path.read().position[1]-3)<1e-8);
+const arrived=path.snapshot();path.advance(100);assert.deepEqual(path.snapshot(),arrived,'Arrival must consume no further walking distance');
+const restored=createWanderPath({snapshot:arrived});assert.equal(restored.read().status,'arrived');
+restored.setDestination(null);restored.advance(1);assert.notDeepEqual(restored.read().position,[4,3]);
+const outside=createWanderPath({area,position:[0,0],direction:[0,1]});outside.setDestination([100,0]);outside.advance(100);assert.ok(outside.read().position[0]<=8);assert.equal(outside.read().status,'arrived');
+const {createEngagement}=await import('../experiments/creature-motion/engagement.mjs');
+const e=createEngagement(),target={id:'brazier',point:[5,0,0],standOff:1};
+const step=(time,extra={})=>e.update({time,position:[0,0,0],observed:[target],focus:target,...extra});
+assert.equal(step(0).phase,'watching');assert.equal(step(.5).phase,'watching');assert.equal(step(1.2).phase,'approaching');
+const destination=e.read().destination;assert.ok(destination[0]<5);
+step(1.3,{observed:[],focus:null});assert.deepEqual(e.read().destination,destination,'An unseen target may retain its last place, not track a new transform');
+assert.equal(step(2,{interrupted:true}).phase,'wandering','Cessation interrupts approach');
+const alarm={id:'brazier',since:3,strength:.9,point:target.point};
+assert.equal(step(3,{alarm}).phase,'cautious');assert.equal(e.read().hold,true);
+assert.equal(step(3.2,{alarm}).phase,'cautious');assert.equal(step(4,{alarm:null}).phase,'cautious');
+step(8,{alarm:null});assert.ok(e.read().standOff>1,'Alarm must increase comfortable distance after the initial recoil');
+const inspect=createEngagement();inspect.update({time:0,position:[0,0,0],observed:[target],focus:target});inspect.update({time:2,position:[0,0,0],observed:[target],focus:target});
+assert.equal(inspect.update({time:3,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'inspecting');
+assert.equal(inspect.update({time:6,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'wandering');
+assert.equal(inspect.update({time:6.1,position:[4,0,0],observed:[target],focus:target}).phase,'wandering','Completed inspection must not immediately restart');
+console.log('Observed interest approaches, arrives, inspects and releases; alarm and cessation interrupt it');
+const standing=createWanderPath({area,position:[0,0],direction:[0,1]});
+standing.setDestination([0,0]);assert.equal(standing.read().status,'arrived');
+assert.deepEqual(createWanderPath({snapshot:standing.snapshot()}).read().position,[0,0]);
+const movingInterest=createEngagement();
+movingInterest.update({time:0,position:[0,0,0],observed:[target],focus:target});
+movingInterest.update({time:2,position:[0,0,0],observed:[target],focus:target});
+const moved={...target,point:[10,0,0]};
+assert.equal(movingInterest.update({time:3,position:[4,0,0],observed:[moved],focus:moved,arrived:true}).phase,'approaching','Arrival at an old place is not arrival at a newly observed position');
+
+const revisiting=createEngagement();
+revisiting.update({time:0,position:[0,0,0],observed:[target],focus:target});
+revisiting.update({time:2,position:[0,0,0],observed:[target],focus:target});
+assert.equal(revisiting.update({time:3,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'inspecting');
+assert.equal(revisiting.update({time:4,position:[4,0,0],observed:[moved],focus:moved}).phase,'approaching');
+assert.equal(revisiting.update({time:5.2,position:[4.2,0,0],observed:[moved],focus:moved}).phase,'approaching','The old inspection deadline cannot complete a new approach');
+
+// Small consecutive edits must invalidate inspection once pursuit resumes.
+const dragged=createEngagement();
+const observe=(time,point,position=[4,0,0])=>dragged.update({time,position,observed:[{...target,point}],focus:target});
+observe(0,target.point,[0,0,0]);
+assert.equal(observe(3,target.point).phase,'inspecting');
+for(let i=1;i<=50;i++)observe(3+i/30,[5+.03*i,0,0]);
+assert.equal(observe(5.2,[6.5,0,0]).phase,'approaching','A gradual drag cannot expire the inspection that pursuit interrupted');
+assert.equal(observe(6,[6.5,0,0],[5.5,0,0]).phase,'inspecting');
+assert.equal(observe(7.9,[6.5,0,0],[5.5,0,0]).phase,'inspecting','New arrival receives its own inspection interval');
+assert.equal(observe(8.1,[6.5,0,0],[5.5,0,0]).phase,'wandering','Renewed inspection still finishes');
+const bounded=createEngagement();
+for(const time of [0,3,5,7,9])bounded.update({time,position:[0,0,0],observed:[{...target,point:[5+time,0,0]}],focus:target});
+assert.equal(bounded.update({time:10.1,position:[0,0,0],observed:[{...target,point:[16,0,0]}],focus:target}).phase,'wandering','Moving interests retain the independent overall engagement timeout');

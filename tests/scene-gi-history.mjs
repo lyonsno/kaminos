@@ -34,12 +34,12 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const begin=html.indexOf('  function animate() {'),end=html.indexOf('\n  compositionHost =',begin);
 for(const enabled of [true,false]) {
   let remaining=45,draws=0;
-  const scope={requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
+  const scope={outputCaptureExtent:null,recordingExtent:null,document:{getElementById:()=>({textContent:''})},requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
     isSceneItemVisible:()=>true,isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
     syncAuthoredWaterFlameTransport(){},syncViewportQuality(){},syncViewportRendererSize(){},fireProxySync:null,
-    sceneGI:{needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
+    sceneGI:{historyStatus:()=>null,needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
     renderSceneFrame(){draws++;remaining--;},
   };
   for(const name of ['updateHybridSplatOverlayFrame','updateMotionAgencyFrame','updateMotionDecisionFrame','updateMotionPhraseControlFrame','updateMotionTrackFrame','updateGeneratedPoseOutputMapFrame','updateGeneratedPoseTemporalFrame','updateForgeHostStationFrame'])scope[name]=()=>false;

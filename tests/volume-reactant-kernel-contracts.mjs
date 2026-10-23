@@ -126,7 +126,7 @@ test('the authored law is untouched when the candidate is not admitted', () => {
 
 test('the cockpit carries the Reaction Law select and the two candidate controls, and saved basins load on the authored law', () => {
   assert.match(index, /<select id="volume-reaction-law" class="select-input" data-volume-settings-param="volume_reaction_law">\s*<option value="authored-tall-plume">[^<]*<\/option>\s*<option value="reactant-v0">/);
-  assert.match(index, /id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0\.25" max="30"/);
+  assert.match(index, /id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0\.01" max="30"/);
   assert.match(index, /id="volume-reactant-cooling-time" data-volume-settings-param="volume_reactant_cooling_time" min="5" max="300"/);
   assert.match(index, /reactionLaw: document\.getElementById\('volume-reaction-law'\)\.value \|\| 'authored-tall-plume',/);
   assert.match(index, /reactantMixingTime: parseFloat\(document\.getElementById\('volume-reactant-mixing-time'\)\.value\),/);

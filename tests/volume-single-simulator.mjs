@@ -53,10 +53,12 @@ context.setVolumeControlValue('volume-scene', 'bonfire_plume');
 assert.equal(select.value, 'flame', 'legacy programmatic assignment retains the effective simulator');
 assert.equal(select.dataset.volumeSceneRequest, 'bonfire_plume', 'legacy assignment preserves its requested identity');
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
-const controlsPrefix = html.slice(html.indexOf('function readVolumeControls() {'), html.indexOf('  const params =', html.indexOf('function readVolumeControls() {')));
+const controlsStart = html.indexOf('function readVolumeControls(');
+assert.ok(controlsStart > 0, 'production controls reader must exist');
+const controlsPrefix = html.slice(controlsStart, html.indexOf('  const params =', controlsStart));
 const receiptExpression = core.match(/state.volumeSceneAuthority = ([^;]+);/)[1];
 const describe = html.match(/function describeFlameSettingsProblems\([^]*?\n\}/)[0];
-Object.assign(context,{window:{},volumeSceneReceipt,volumePressureConfigForMode:()=>({})});
+Object.assign(context,{window:{},viewportDisplay:{quality:'scene'},volumeSceneReceipt,volumePressureConfigForMode:()=>({})});
 vm.runInContext(describe,context);
 for(const requested of ['canonical_plume','bonfire_plume','tall_plume','flame']){
  context.setVolumeControlValue('volume-scene',requested);

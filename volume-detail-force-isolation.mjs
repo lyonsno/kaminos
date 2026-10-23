@@ -20,23 +20,21 @@ export function fineBreakupSupportReceipt(controls = {}) {
   };
 }
 
-export function detailForceContributionMask(contributions = {}) {
-  return [
-    1,
-    contributions.micro === false ? 0 : 1,
-    contributions.shred === false ? 0 : 1,
-    contributions.fine === false ? 0 : 1,
-  ];
+// The force switches were retired 2026-10-22: micro-carrier and shred run
+// whenever their sliders are above 0; the fine term carries Swirl jostle's
+// strength (0-2, 1 = the force as it was).
+export function normalizeSwirlJostle(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(2, numeric)) : 1;
+}
+export function detailForceContributionMask(controls = {}) {
+  return [1, 1, 1, normalizeSwirlJostle(controls.swirlJostle)];
 }
 
 export function detailForceContributionReceipt(controls = {}) {
-  const requested = {
-    micro: controls.detailForceContributions?.micro !== false,
-    shred: controls.detailForceContributions?.shred !== false,
-    fine: controls.detailForceContributions?.fine !== false,
-  };
-  const requestedMask = detailForceContributionMask(requested);
-  const masterEnabled = controls.proceduralDetailForces !== false;
+  const requested = { micro: true, shred: true, fine: normalizeSwirlJostle(controls.swirlJostle) };
+  const requestedMask = detailForceContributionMask(controls);
+  const masterEnabled = true;
   const detailSuppressedByScene = true;
   const sceneGain = 1;
   return {

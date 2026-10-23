@@ -355,6 +355,7 @@ function paintPreview({ width, height, rgba }, size) {
 // Each generate button runs its own number of steps (data-steps): Full 4, Fast 3, Express 2, JANK 1.
 const GENERATE_BUTTONS = ['go-full', 'go', 'go-express', 'go-jank'];
 async function generateWithSteps(steps) {
+  for (const id of GENERATE_BUTTONS) $(id).classList.toggle('primary', Number($(id).dataset.steps) === steps);
   setRunning(true);
   let running = true;
   const previews = { painted: 0, firstAtMs: null }, startedAt = performance.now();

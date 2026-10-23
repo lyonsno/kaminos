@@ -30,3 +30,11 @@ const boundary=feature.createWanderMotion({THREE,adapter:source30,walking:walkin
 boundary.advance(2*(259/30)-9/30);
 for(let i=0;i<20;i++){assert.equal(boundary.read().frame,(250+i)%259,'Exact source-time steps skip or duplicate a source frame');if(i<19)boundary.advance(1/30);}
 console.log('Wander transports source-paced actual poses, retains elapsed cycles and respects the editable area footprint');
+
+const arriving=make({area,position:[0,0],direction:[0,1],seed:3});
+arriving.setDestination([2,2]);arriving.advance(10);
+assert.equal(arriving.read().path.status,'arrived');
+const stopped=arriving.read();arriving.advance(5);
+assert.ok(Math.abs(arriving.read().elapsed-stopped.elapsed)<1e-9,'Arrived root must hold the retained gait clock');
+assert.equal(arriving.read().frame,stopped.frame);
+arriving.setDestination(null);arriving.advance(.1);assert.ok(arriving.read().elapsed>stopped.elapsed);

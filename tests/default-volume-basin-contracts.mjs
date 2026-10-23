@@ -1,6 +1,8 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {migrateRetiredVolumeSettingsPresetDocument} from '../volume-retired-control-migration.mjs';
 
 // Bare kaminos_volume_smoke routes boot into the committed default basin
 // (Noah's cheap-blast-furnace export), applied with its exact saved values.
@@ -43,8 +45,9 @@ const setCalls = new Map();
 let sceneApplied = null;
 const context = vm.createContext({
   DEFAULT_VOLUME_SMOKE_BASIN_URL: './artifacts/default-basin/cheap-blast-furnace.json',
-  fetch: async url => ({ ok: url === './artifacts/default-basin/cheap-blast-furnace.json', json: async () => artifact, status: 200 }),
-  document: { getElementById: id => (id === 'retired-control' ? null : {}) },
+  fetch: async url => ({ ok: [ './artifacts/default-basin/cheap-blast-furnace.json', '/volume-settings-preset-schema-v2.json' ].includes(url), json: async () => url === '/volume-settings-preset-schema-v2.json' ? schema : artifact, status: 200 }),
+  migrateRetiredVolumeSettingsPresetDocument,
+  document: { getElementById: id => html.includes(`id="${id}"`) ? {} : null },
   setVolumeControlValue: (id, value) => setCalls.set(id, value),
   applyVolumeScenePreset: (scene, options) => { sceneApplied = { scene, options }; },
   window: {},
@@ -62,7 +65,8 @@ assert.equal(routeParams.getAll('volume_resolution').length, 1);
 assert.equal(routeParams.has('volume_quality_reason'), false, 'only basin control parameters are merged');
 assert.equal(sceneApplied.scene, 'tall_plume');
 assert.equal(sceneApplied.options.keepBudgetPreset, true, 'the routed ray-budget preset survives the default basin');
-for (const [id, descriptor] of Object.entries(dom)) {
+const projected = migrateRetiredVolumeSettingsPresetDocument(artifact, schema).document.preset;
+for (const [id, descriptor] of Object.entries(projected.domControls)) {
   if (id === 'volume-scene') continue;
   const expected = Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value;
   assert.deepEqual(setCalls.get(id), expected, `exact saved value for ${id}`);

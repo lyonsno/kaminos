@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import * as THREE from '../lib/three.core.js';
 import vm from 'node:vm';
 import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
+import {resolveFlameLightingRoute} from '../scene-authoring.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
 test('capture completion refreshes the visible reduced caster diagnostics once',()=>{
@@ -24,7 +25,7 @@ test('missing saved reduced caster keeps original lighting and recovery controls
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{hidden:true,value:'1',replaceChildren(){},parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
   let mounted=false;
   const context={URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
-    isFireLightFieldRoute:()=>true,renderingMode:'',readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
+    isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
     importedModule:{mountDistributedSceneRadiance(){return consumer;}},bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
     createFireShadowSettings:()=>({operations:{},sync(){},mount(){mounted=true;}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
   const start=source.indexOf('let sceneRadianceRouteTask='),end=source.indexOf('async function initKaminosVolumeRoute()',start);
@@ -39,7 +40,7 @@ test('late Add Flame passes the mounted opaque surface cache to the hybrid consu
   const cache={},elements=new Map();let options;
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{value:'1',parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
   const context={URLSearchParams,window:{__kaminosSurfaceLighting:cache},document,renderer:{},scene:{},volumePrototype:{},sharedGpu:{device:{}},
-    isFireLightFieldRoute:()=>true,renderingMode:'',readFireShadowSceneSettings:()=>({}),
+    isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({}),
     importedModule:{mountDistributedSceneRadiance(value){options=value;return {}; }},
     bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
     createFireShadowSettings:()=>({operations:{},sync(){},mount(){}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
@@ -56,7 +57,7 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
     'volume-advection-scheme':'maccormack','volume-time-step':'uniform','volume-physical-mode':'2',
   }).map(([key,value])=>[key,{value}]))};
   let applied;
-  const context={activeSceneComposition:null,volumePrototype:{},authoringBusy:false,
+  const context={activeSceneComposition:null,volumePrototype:{},authoringBusy:false,resolveFlameLightingRoute,
     assertSceneConstructionAvailable(){},firstFlameFieldState:()=>({}),loadAuthoredFlameBasin:async()=>settings,
     COMPOSITION_SCHEMA:'test',FLAME_EMITTER_ID:'flame-emitter',setActiveSceneObject(){},setInfo(){},
     scenePlacementTools:{edits:{state:()=>({}),async applySettled(id,value){applied=value;context.activeSceneComposition=value.composition;}}}};

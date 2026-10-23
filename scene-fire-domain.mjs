@@ -1,8 +1,9 @@
 // Authored fire records. The single-domain engine consumes these through an
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
+import {transferRetiredForceSwitches} from './volume-retired-control-migration.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
-import {normalizeFlameDomainTranslation,normalizeFlameDomainScale} from './scene-flame-emitter.mjs';
+import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDomain,flamePoseInDomain,immersedControlsForFlamePose,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
 export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
@@ -49,9 +50,42 @@ export function checkedFireDomainRecord(record){
  r.transform=pose;return r;
 }
 export function fireDomainFrame(record){const r=checkedFireDomainRecord(record),s=r.transform.scale[0];return {translation:[r.transform.position[0],r.transform.position[1]-s,r.transform.position[2]],scale:s,followSource:r.simulation.followSource};}
+// Source-owned descriptors retain the cockpit schema; only this adapter maps
+// them to solver control names. Pose is authoritative for centre/aim/scale.
+export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1}={}){
+ const ids=new Set();
+ return records.map(raw=>{
+  const record=checkedFireSourceRecord(raw);if(ids.has(record.id))throw Error('Duplicate flame source identity');ids.add(record.id);
+  const controls={...shared};
+  for(const [id,descriptor] of Object.entries(record.emission?.settings??{})){
+   const param=descriptor.param??(id==='emitter-assay-family'?'volume_emitter_family':id.replaceAll('-','_'));
+   if(typeof param!=='string'||fireControlOwner(param.replaceAll('_','-'))!=='source')throw Error(`Fire source parameter ${id} conflicts with source owner`);
+   const key=param.replace(/^volume_/,'').replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase());
+   const value=descriptor.rawValue??descriptor.value;
+   const numeric=descriptor.type==='range'||descriptor.type==='number';
+   controls[key]=descriptor.type==='checkbox'||typeof descriptor.value==='boolean' ? value===true||value==='true'||value==='1':descriptor.type==='select-one'||!numeric&&typeof descriptor.value==='string'&&!Number.isFinite(Number(value))?String(value):Number(value);
+   if(typeof controls[key]==='number'&&!Number.isFinite(controls[key]))throw Error(`Fire source value ${id} must be finite`);
+  }
+  const pose=flamePoseToDomain(record.transform,translation,scale);
+  const inside=flamePoseInDomain(record.transform,translation,scale,shared);
+  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false,shared)};
+ });
+}
+export function checkedFireSourceRecord(record){
+ if(record?.type!==FLAME_EMITTER_TYPE||record.source!==FLAME_EMITTER_SOURCE||typeof record.id!=='string'||!record.id.trim()||record.id===FIRE_DOMAIN_ID)throw Error('Unsupported flame source identity');
+ if(record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be a boolean');
+ const result={...clone(record),transform:normalizeFlameEmitterPose(record.transform),emissionEnabled:record.emissionEnabled!==false};
+ if(record.emission!==undefined){
+  if(record.emission?.domainId!==FIRE_DOMAIN_ID)throw Error('Invalid fire source domain reference');
+  const settings=controls(record.emission.settings,'source settings');
+  for(const id of Object.keys(settings))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
+  result.emission={...clone(record.emission),domainId:FIRE_DOMAIN_ID,settings};
+ }
+ return result;
+}
 export function authorFireObjects(objects,settings,frame){
  const domain=createFireDomainRecord({...frame,settings});
- const result=objects.filter(o=>o.type!==FIRE_DOMAIN_TYPE).map(o=>o.type==='flame-emitter'?{...clone(o),emission:{domainId:domain.id,settings:clone(domain.simulation.sourceTemplate)}}:clone(o));
+ const result=objects.filter(o=>o.type!==FIRE_DOMAIN_TYPE).map(o=>o.type==='flame-emitter'?checkedFireSourceRecord({...o,emission:o.emission??{domainId:domain.id,settings:clone(domain.simulation.sourceTemplate)}}):clone(o));
  // A template is retained only when the source is absent, so a source record is
  // the sole owner of active supply data. Re-add explicitly consumes the template.
  if(result.some(o=>o.type==='flame-emitter'))domain.simulation.sourceTemplate={};
@@ -62,14 +96,15 @@ export function readFireObjects(objects,renderSettings){
  if(domains.length!==1)throw Error('Current runtime requires one fire domain');
  const domain=checkedFireDomainRecord(domains[0]);
  const sources=objects.filter(o=>o.type==='flame-emitter');
- if(sources.length>1)throw Error('Current fire domain supports one authored source');
+ const ids=new Set();for(const source of sources){checkedFireSourceRecord(source);if(ids.has(source.id))throw Error('Duplicate flame source identity');ids.add(source.id);}
  if(sources.some(o=>o.emission?.domainId!==domain.id))throw Error('Invalid fire source domain reference');
- const supply=sources.length?controls(sources[0].emission.settings,'source settings'):domain.simulation.sourceTemplate;
+ const primary=sources.find(o=>o.id==='flame-emitter')??sources[0];
+ const supply=primary?controls(primary.emission.settings,'source settings'):domain.simulation.sourceTemplate;
  if(sources.length&&Object.keys(domain.simulation.sourceTemplate).length)throw Error('Active source has conflicting template authority');
  for(const id of Object.keys(supply))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
  const rendering=controls(renderSettings?.domControls??{},'scene rendering settings');
  for(const id of Object.keys(rendering))if(fireControlOwner(id)!=='scene')throw Error(`Fire control ${id} conflicts with scene rendering owner`);
- return {domain,frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
+ return {domain,sources:clone(sources),frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
 }
 
 // A saved fire record owns every existing value. Schema growth may only add
@@ -80,7 +115,7 @@ export function projectFireSettingsToSchema(settings,rawSchema){
  const inventory=new Set(schema.controls.map(entry=>entry.key));
  // A retired control is stripped from the record but still counts toward the inventory size its additive history is numbered by.
  const retired=new Set((schema.retiredControls||[]).filter(entry=>entry.axis==='domControls').map(entry=>entry.key));
- for(const id of Object.keys(saved))if(retired.has(id))delete saved[id];
+ const retiredSwitches={};for(const id of Object.keys(saved))if(retired.has(id)){retiredSwitches[id]=saved[id]?.value;delete saved[id];}
  for(const id of Object.keys(saved))if(!inventory.has(id))throw Error(`Unsupported authored fire control ${id}`);
  // Independent feature branches do not share an additive ordinal. Compare
  // chronology within its declared lineage, never against another branch's
@@ -100,6 +135,7 @@ export function projectFireSettingsToSchema(settings,rawSchema){
   if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=history.count||entry.additiveSinceControlCount<history.latest)throw Error(`Missing authored fire control ${entry.key}`);
   saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
  }
+ transferRetiredForceSwitches(retiredSwitches,saved);
  result.domControls=saved;
  for(const [axis,entries]of [['rendererControls',schema.rendererControls||[]],['presentationControls',schema.presentationControls||[]]]){
   const values=controls(result[axis],axis),known=new Set(entries.map(entry=>entry.key));

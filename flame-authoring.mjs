@@ -1,15 +1,18 @@
+import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
+import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
 import {volumeControlTooltip} from './volume-control-descriptions.mjs';
+import {describeVolumeSettingsSaveOutcome} from './volume-settings-preset-contract.mjs';
 
 // Standalone presets do not contain the emitter pose. Store its effective
 // aperture, not a raw slider value whose meaning depends on that missing pose.
 export function portableFlamePreset(preset, localScale) {
   const result=structuredClone(preset);
   if(result.domControls?.['volume-emitter-source-law']?.value!=='immersed-source')return result;
-  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
+  if(localScale<0||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
   const d=result.domControls['volume-immersed-radius'];
   const radius=Number(d.rawValue??d.value)*localScale;
-  if(!Number.isFinite(radius)||radius<.02-1e-12)throw Error('Effective preset aperture must be finite and at least 0.02');
+  if(!Number.isFinite(radius)||radius<0)throw Error('Effective preset aperture must be finite and nonnegative');
   if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
   if(Object.hasOwn(d,'value'))d.value=radius;
   const route=new URL(result.route);route.searchParams.set('volume_immersed_radius',String(radius));
@@ -19,8 +22,10 @@ export function flamePresetRadius(preset,localScale) {
   const d=preset.domControls['volume-immersed-radius'];const radius=Number(d.rawValue??d.value);
   if(preset.sourceRadiusSpace===undefined)return radius;
   if(preset.sourceRadiusSpace!=='simulation-v1')throw Error('Unknown preset source radius space');
-  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
-  return radius/localScale;
+  if(localScale<0||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
+  // A collapsed source has no invertible aperture space. Keep the coefficient
+  // editable while its zero pose continues to suppress injection.
+  return localScale===0?radius:radius/localScale;
 }
 // Compare a portable receipt with local controls without changing its saved
 // identity. Scene snapshots retain their own raw radius plus authored pose.
@@ -109,12 +114,12 @@ export function syncFlameRangeBounds(source,bounds) {
   reflectedRangeBounds.set(source,{requested,min,max});
 }
 export const FLAME_INSPECTOR_VIEWS = [
-  {id:'look',label:'Look'},{id:'shape',label:'Shape'},{id:'motion',label:'Motion'},{id:'quality',label:'Quality'},
+  {id:'look',label:'Material'},{id:'motion',label:'Flow'},{id:'quality',label:'Quality'},
 ];
 export const FLAME_PROPERTY_GROUPS = [
-  { name:'Quality', view:'quality', open:true, fields:[
+  { name:'Ray marching', view:'quality', open:true, fields:[
     ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
-    ['volume-resolution','Fine material width'], ['volume-fine-velocity','Fine velocity width (0 = material)'], ['volume-fine-pressure','Fine pressure width (0 = velocity / legacy choice)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Fine pressure iterations'], ['volume-steps','Ray count'],
+    ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
@@ -133,38 +138,36 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-intermediate-pressure','Pressure width'], ['volume-intermediate-iterations','Pressure iterations'],
     ['volume-intermediate-extent','Extent / fine width'],
   ] },
-  // Operator 2026-10-21: the combustion controls and Glow gain lead the first panel.
-  { name:'Combustion', view:'look', open:true, fields:[
-    ['volume-reaction-law','Reaction law'], ['volume-reactant-mixing-time','Mixing time'],
-    ['volume-reactant-cooling-time','Cooling time'], ['volume-reactant-soot-yield','Soot yield'],
-    ['volume-heat-release-expansion','Heat release'], ['volume-physical-thermal','Glow gain'],
-  ] },
-  { name:'Appearance', view:'look', open:true, fields:[
+  // Group by the material or mechanism being authored, not by implementation layer.
+  { name:'Emission & image', view:'look', open:true, fields:[
+    ['volume-physical-thermal','Glow gain'], ['volume-physical-clean','Clean reaction emission'],
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
     ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-clean','Clean flame'],
+    ['volume-physical-ambient','Ambient fill'],
     ] },
-  { name:'Smoke', view:'look', open:true, fields:[
-    ['volume-density','Soot display gain'], ['volume-physical-smoke-extinction','Extinction'],
-    ['volume-physical-smoke-albedo','Albedo'], ['volume-physical-ambient','Ambient light'],
-    ['volume-smoke','Smoke amount'],
+  { name:'Combustion', view:'look', open:true, fields:[
+    ['volume-reactant-mixing-time','Reaction time'], ['volume-heat-release-expansion','Combustion expansion'],
+    ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-reactant-cooling-time','Cooling time'],
+    ['volume-reaction-law','Reaction law'],
   ] },
-  { name:'Material', view:'look', fields:[
-    ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-physical-soot-burnout-rate','Soot burnout rate'],
-    ['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
-    ] },
-  { name:'Support & reconstruction', view:'shape', fields:[
-    ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
-    ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
+  { name:'Soot', view:'look', open:true, fields:[
+    ['volume-reactant-soot-yield','Yield per fuel burned'],
+    ['volume-physical-soot-burnout-rate','Burnout rate'], ['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
+    ['volume-density','Display gain'], ['volume-physical-smoke-extinction','Extinction'],
+    ['volume-physical-smoke-albedo','Scattering albedo'],
   ] },
-  { name:'Detail', view:'shape', fields:[
-    ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'], ['volume-detail-scale','Detail scale'],
+  { name:'Subgrid turbulence', view:'motion', fields:[
+    ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Octaves'],
+    ['volume-wavelet-strength','Detail strength'],
   ] },
-  { name:'Emission', open:true, fields:[
+  { name:'Carriers & added forces', view:'motion', fields:[
+    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
+    ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
+  ] },
+  { name:'Emitter & feed', scope:'emitter', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
     ['volume-immersed-radius','Radius'], ['volume-immersed-speed','Inlet speed'],
-    ['volume-immersed-fuel','Fuel'], ['volume-immersed-temperature','Inlet temperature'],
+    ['volume-immersed-fuel','Fuel concentration'], ['volume-immersed-temperature','Inlet heat'],
     ['volume-immersed-cap-fraction','Rate cap'], ['volume-immersed-momentum-gain','Momentum coupling'],
     ['volume-immersed-thickness','Source thickness (cells)'], ['volume-immersed-back-wall','Backing wall'],
     ['emitter-assay-family','Shape'], ['volume-flow-rate','Flow'], ['volume-input-radius','Radius'],
@@ -172,34 +175,38 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-emitter-inlet-profile','Inlet profile'], ['volume-emitter-momentum-linked','Link momentum'],
     ['volume-emitter-inlet-velocity','Inlet velocity'], ['volume-emitter-shear-width','Shear width'],
     ['volume-emitter-edge-entrainment','Edge entrainment'], ['volume-emitter-fuel-fraction','Fuel fraction'],
-    ['volume-emitter-inlet-temperature','Fuel temperature'], ['volume-emitter-aperture-pattern','Aperture'],
+    ['volume-emitter-inlet-temperature','Inlet heat'], ['volume-emitter-aperture-pattern','Aperture'],
     ['volume-emitter-aperture-count','Aperture count'], ['volume-emitter-aperture-seed','Seed'],
     ['volume-emitter-swirl','Swirl'], ['volume-emitter-line-weight','Line weight'],
     ['volume-emitter-jet-jitter','Jet jitter'], ['volume-emitter-inlet-turbulence','Inlet turbulence'],
     ['volume-emitter-inlet-turbulence-scale','Turbulence scale'], ['volume-emitter-puff','Puff strength'],
-    ['volume-emitter-puff-period','Puff period'], ['volume-fixed-source-dephase','Source dephasing'],
+    ['volume-emitter-puff-period','Puff correlation time'], ['volume-fixed-source-dephase','Source dephasing'],
   ] },
-  { name:'Motion', view:'motion', open:true, fields:[
-    ['volume-speed','Speed'], ['volume-plume-height','Plume height'],
-    ['volume-curl','Vorticity'], ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Phased sway'],
+  { name:'Flow response', view:'motion', open:true, fields:[
+    ['volume-plume-height','Plume rise shaping'], ['volume-confinement','Confinement'],
+    ['volume-curl','Curl gain'], ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Lateral excitation'],
   ] },
   { name:'Wind', view:'motion', open:true, fields:[
     ['volume-wind-model','Wind model'], ['volume-wind-strength','Wind strength'],
     ['volume-wind-angle','Wind direction'], ['volume-wind-height','Wind height'],
     ['volume-wind-gust','Gust strength'], ['volume-wind-gust-period','Gust period'], ['volume-wind-gust-veer','Gust veer'],
   ] },
-  { name:'Simulation', view:'quality', fields:[
+  { name:'Domain & simulation', view:'quality', open:true, fields:[
+    ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'],
+    ['volume-speed','Simulation speed'], ['volume-time-step','Time stepping'],
+    ['volume-pressure-solver-iterations','Solver sweeps'],
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
     ['volume-advection-scheme','Advection'],
-    ['volume-confinement','Confinement'], ['volume-time-step','Time stepping'],
     ['volume-common-gas-transport','Common gas transport'], ['volume-velocity-staggering','Velocity sampling'],
   ] },
-  { name:'Inspection', view:'quality', fields:[
+  { name:'Diagnostics', view:'quality', fields:[
     ['volume-reaction-live-view','Field view'], ['volume-boundary-sidecar-view','Structure view'],
     ['volume-grid-overlay','Grid overlay'], ['volume-flow-debug','Flow display'],
   ] },
-  { name:'Legacy appearance', view:'look', fields:[
-    ['volume-absorption','Absorption'], ] },
+  { name:'Support diagnostics', view:'quality', fields:[
+    ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
+    ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
+  ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
@@ -225,7 +232,9 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
 ];
 // Physics (soot x blackbody) is the material law (2026-10-18; the law select
 // is retired), so its calibration controls always apply.
-export function flamePropertyApplies(id,{toneMapping,physicsActive=false,intermediateMode}) {
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false,supportActive=false,intermediateMode}) {
+  if(['volume-boundary-sidecar-source','volume-boundary-sidecar-width','volume-boundary-sidecar-blur','volume-boundary-sidecar-ridge'].includes(id))return supportActive;
+  if(id==='volume-physical-ambient'&&sceneLighting)return false;
   if(id.startsWith('volume-intermediate-')&&intermediateMode!==undefined)return intermediateMode==='fields';
   if(id==='volume-physical-knee')return toneMapping==='custom';
   if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
@@ -239,6 +248,10 @@ export function flameAppearanceStatus(physics) {
 
 export function flameEmissionControlApplies(id, law) {
   if (id === 'volume-emitter-source-law') return true;
+  if (['volume-emitter-inlet-turbulence','volume-emitter-inlet-turbulence-scale',
+    'volume-emitter-puff','volume-emitter-puff-period','volume-emitter-aperture-pattern',
+    'volume-emitter-aperture-count','volume-emitter-aperture-seed','volume-emitter-line-weight',
+    'volume-emitter-jet-jitter'].includes(id)) return law==='immersed-source'||law==='inflow-boundary';
   return id.startsWith('volume-immersed-') === (law === 'immersed-source');
 }
 
@@ -246,7 +259,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readControlBounds = () => null, writeValue = (source,value) => {source.value=String(value);}, onError }) {
+export function createFlameInspector({ document, host, gridTuning, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -270,32 +283,51 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
-  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
-  panels.get('look').append(basin);
+  basin.open=false;
+  basin.innerHTML='<summary>Basins</summary><p id="flame-basin-current" class="flame-scope"></p><label for="flame-basin-label">Basin name</label><input id="flame-basin-label" type="text" placeholder="New basin name" autocomplete="off"><button type="button" class="btn" id="flame-basin-save">Save basin</button><input id="flame-basin-search" type="search" placeholder="Find a basin" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Fire basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope"></p>';
+  sharedHost.insertBefore(basin,navigation);
   const byId=id=>document.getElementById(id);
   let entries=[];
   function renderOptions() {
     const select=byId('flame-basin-select'), previous=select.value, query=byId('flame-basin-search').value.toLowerCase();
     select.replaceChildren();
     for(const entry of entries.filter(entry=>`${entry.label} ${entry.presetId}`.toLowerCase().includes(query))) {
-      const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label;select.append(option);
+      const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.reason?`${entry.label} | ${entry.reason==='held-label'?'held':'earlier'} | ${entry.presetId.slice(0,16)}`:entry.label;select.append(option);
     }
     if([...select.options].some(option=>option.value===previous))select.value=previous;
     byId('flame-basin-apply').disabled=!select.value;
   }
   const status=message=>byId('flame-basin-status').textContent=message;
   async function refresh() {
-    try {const index=await listBasins();entries=index.entries;renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
+    try {const index=await listBasins();entries=[...index.entries,...(index.earlierVersions||[])];renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
     catch(error){status(error.message);onError(error);}
   }
   byId('flame-basin-search').addEventListener('input',renderOptions);
   byId('flame-basin-refresh').onclick=refresh;
+  byId('flame-basin-save').onclick=async()=>{
+    const button=byId('flame-basin-save'),label=byId('flame-basin-label').value.trim();
+    if(button.disabled)return;
+    if(!label){status('Enter a basin name');byId('flame-basin-label').focus();return;}
+    button.disabled=true;status('Saving basin...');
+    try {
+      const result=await saveBasin({label});
+      await refresh();
+      byId('flame-basin-search').value='';renderOptions();
+      byId('flame-basin-select').value=result.effective.presetId;renderOptions();
+      const outcome=describeVolumeSettingsSaveOutcome(result);
+      status(`Saved ${result.effective.label}${outcome.text?` | ${outcome.text}`:''}`);
+    } catch(error){status(error.message);onError(error);}
+    finally{button.disabled=false;sync();}
+  };
+  byId('flame-basin-label').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void byId('flame-basin-save').onclick();}});
   byId('flame-basin-apply').onclick=async()=>{
     const button=byId('flame-basin-apply');button.disabled=true;status('Loading basin…');
     try {const applied=await applyBasin(byId('flame-basin-select').value);status(`Applied${applied?.source?.sourceSizeRecovery==='clamped-to-valid-range'?' · emitter radius clamped to valid range':''} · Undo restores the previous settings`);}
     catch(error){status(error.message);onError(error);}
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
+  const gridInspector=gridTuning?createGridTuningInspector({document,host:panels.get('quality'),...gridTuning}):null;
+  const gridControlIds=new Set(gridTuning?GRID_TUNING_FIELDS.map(f=>f[1]):[]);
   const aliases=[];
   const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
   const pressureStatus=document.createElement('p');pressureStatus.className='flame-scope';pressureStatus.id='selected-pressure-resolution-status';pressureStatus.setAttribute('role','status');
@@ -313,6 +345,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     if(group.scope){const note=document.createElement('p');note.className='flame-scope';note.textContent=group.scope;section.append(note);}
     const sectionRows=[];
     for(const [id,label] of group.fields) {
+      if(gridControlIds.has(id))continue;
       const source=byId(id);if(!source)throw Error(`Missing flame control ${id}`);
       const row=document.createElement('div');row.className='slider-row flame-property-row';row.dataset.flameControl=id;
       const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
@@ -331,46 +364,53 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
       function syncField(force=false) {
         const bounds=readControlBounds(id);
-        if(bounds)syncFlameRangeBounds(source,bounds);
+        if(bounds&&!readSourceControl(id))syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
-          field[key]=bounds?.[key]===null?'':source[key]?String(flameControlDisplayValue(id,source[key])):'';
+          const bound=bounds&&Object.hasOwn(bounds,key)?bounds[key]:source[key];
+          field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
-        if(field.type==='checkbox')field.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else field.value=String(flameControlDisplayValue(id,source.value));
+        const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
+        if(id==='volume-immersed-radius'&&field.value.trim()&&Number(field.value)<0)field.value='0';
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
+        const value=field.type==='checkbox'?(source.type==='checkbox'?field.checked:field.checked?1:0):source.tagName==='SELECT'?field.value:Number(flameControlSourceValue(id,field.value));
+        try{if(writeSourceControl(id,value)){syncVisibility();return;}}catch(error){syncField(true);onError(error);return;}
         if(field.type==='checkbox'){if(source.type==='checkbox')source.checked=field.checked;else source.value=field.checked?'1':'0';}
         else writeValue(source,flameControlSourceValue(id,field.value));
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
       });
       source.addEventListener('input',syncField);source.addEventListener('change',()=>{syncField();syncVisibility();});
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
-      const record={id,row,source,quick:!!group.quick,emission:group.name==='Emission',searchText:`${group.name} ${label} ${id}`.toLowerCase()};
+      const record={id,row,source,quick:!!group.quick,emission:group.scope==='emitter',searchText:`${group.name} ${label} ${id}`.toLowerCase()};
       rows.push(record);sectionRows.push(record);
       grip.title=volumeControlTooltip(id)||label;field.title=grip.title;
     }
-    if(group.name==='Emission')section.append(runtimeStatus);
-    if(group.name==='Quality')section.append(pressureStatus);
+    if(group.scope==='emitter')section.append(runtimeStatus);
+    if(group.name==='Domain & simulation')section.append(pressureStatus);
     if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
-    if(group.name==='Material')section.append(appearanceStatus);
-    if(group.name==='Quality')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
-    (group.quick||group.name==='Emission'?host:panels.get(group.view)).append(section);
+    if(group.name==='Combustion')section.append(appearanceStatus);
+    if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
+    (group.quick||group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
   }
-  panels.get('look').append(basin);
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
   const mode=()=>({toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
-    physicsActive:readAppearanceRuntime()?.effective?.render===true});
+    physicsActive:readAppearanceRuntime()?.effective?.render===true,sceneLighting:readSceneLighting(),
+    supportActive:byId('volume-reaction-law').value==='authored-tall-plume'||byId('volume-boundary-sidecar-view').value!=='off'
+      ||!['off','boundary_fire'].includes(byId('volume-reaction-live-view').value)
+      ||(byId('volume-raymarch-mode').value==='numerical'&&Number(byId('volume-flame-priority').value)>0)});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
     const status=flameAppearanceStatus(readAppearanceRuntime());
     appearanceStatus.hidden=status.state==='off';appearanceStatus.dataset.state=status.state;appearanceStatus.textContent=status.text;
-    const law=byId('volume-emitter-source-law').value;
+    const law=readSourceControl('volume-emitter-source-law')?.value??byId('volume-emitter-source-law').value;
     if(isSearching&&!searching)for(const item of sections)item.open=item.section.open;
     for(const item of rows){
       const retired=item.source.closest('[data-volume-ui-retired],[data-volume-retired-control-state]');
@@ -379,7 +419,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     }
     for(const item of sections){
       item.section.hidden=!item.rows.some(item=>!item.row.hidden);
-      if(!item.group.quick&&item.group.name!=='Emission'){
+      if(!item.group.quick&&item.group.scope!=='emitter'){
         if(isSearching)item.section.open=true;
         else if(searching)item.section.open=item.open;
       }
@@ -391,12 +431,14 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     tabs.hidden=isSearching;basin.hidden=isSearching;
     geometry.forEach(panel=>panel.hidden=isSearching);
     empty.hidden=!isSearching||rows.some(item=>!item.quick&&!item.emission&&!item.row.hidden);
+    if(gridInspector)gridInspector.root.hidden=isSearching&&!/grid|dimension|material|velocity|pressure|fine|intermediate|world/.test(query);
     searching=isSearching;
   }
   search.addEventListener('input',syncVisibility);
   search.addEventListener('keydown',event=>{if(event.key==='Escape'){search.value='';syncVisibility();}});
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
+    gridInspector?.sync();
     const world=readWorldRuntime();
     const overlayState=readWorldOverlay();overlay.value=overlayState.mode;overlayStatus.textContent=overlayState.summary;
     worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw} · ${world.collision==='empty-fallback'?'no collision mask':'GPU collisions (unverified occupancy)'}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
@@ -404,7 +446,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     pressureStatus.textContent=!pressure?'Pressure choice awaiting simulation step'
       : pressure.dispatched?`${pressure.pressureDims.join('×')} pressure · ${pressure.transportDims.join('×')} velocity. Material and reaction use Fine material width.`
       : `Original pressure${pressure.reason?` · ${pressure.reason}`:''}`;
-    const immersed=byId('volume-emitter-source-law').value==='immersed-source';
+    const immersed=(readSourceControl('volume-emitter-source-law')?.value??byId('volume-emitter-source-law').value)==='immersed-source';
     syncVisibility();
     runtimeStatus.hidden=!immersed;
     if(immersed) {

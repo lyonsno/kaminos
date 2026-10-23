@@ -473,3 +473,62 @@ console.log('Creatures attend, learn familiar states, interrupt on cessation, sc
  assert.equal(a.read().arrested,true,'the stride check begins immediately');
  assert.equal(a.motionSeconds(t,t+1/30),0,'locomotion consumes the interruption immediately');
 }
+
+// A slow rising target remains worth pursuing after first-sight novelty fades.
+{
+ const c=creature(),point=[0,.5,-4.8];
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'lift',point,interest:1,noticeRadius:20}]});
+ let t=run(a,c,1);
+ for(let i=0;i<300;i++){
+  point[1]+=.012;t=run(a,c,1/30,t);
+  assert.equal(a.read().focus?.id,'lift','slow observed movement sustains an acquired look');
+ }
+ assert.ok(headForward(c.bones).y>.65,'the actual head cranes above the old pitch ceiling');
+ const tracked=a.read();assert.ok(tracked.gaze.residualAngle<.15,'achieved gaze follows the lifted target');
+ t=run(a,c,15,t);assert.equal(a.read().focus,null,'settled familiar target eventually releases');
+}
+// A sensory gap predicts from observations; hidden transforms cannot steer it.
+{
+ function loss(hidden){
+  const c=creature(),point=[0,.5,-4.8];let sensed=true;
+  const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'lift',point,sensed,interest:1,noticeRadius:20}]});
+  let t=run(a,c,.5);
+  for(let i=0;i<30;i++){point[1]+=.015;t=run(a,c,1/30,t);}
+  const before=a.read().focus.point[1];sensed=false;point.splice(0,3,...hidden);t=run(a,c,.25,t);
+  const gap=a.read();assert.equal(gap.focus?.remembered,true);assert.ok(gap.focus.point[1]>before,'continue along last observed upward motion');
+  assert.ok(gap.focus.confidence<1&&gap.focus.confidence>0,'prediction loses confidence');
+  t=run(a,c,3,t);assert.equal(a.read().focus,null,'prediction expires without fresh evidence');return gap.focus.point;
+ }
+ assert.deepEqual(loss([100,100,100]),loss([-100,-100,-100]),'unobserved motion has no influence');
+}
+// F1: prior visual knowledge does not suppress a fresh sensed bearing behind us.
+{
+ const c=creature(),fire={id:'fire',point:[0,.5,-3.8],interest:1,noticeRadius:12};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[fire]});let t=0;
+ for(let i=0;i<120;i++){a.sense({time:t,source:fire,sourcePower:1,samples:[{point:[0,0,0],luminance:.1}]});t=run(a,c,.25,t);}
+ turnAway(c,Math.PI);t=run(a,c,2,t);
+ a.sense({time:t,source:{...fire,point:[...fire.point]},sourcePower:8,samples:[{point:[0,0,0],luminance:.8}]});t=run(a,c,.25,t);
+ assert.equal(a.read().focus?.id,'fire','fresh off-screen flare reacquires a known source');
+ const eventPoint=[...a.read().focus.point];fire.point=[0,.5,-100];t=run(a,c,.1,t);
+ assert.deepEqual(a.read().focus?.point,eventPoint,'event bearing cannot follow later hidden transforms');
+}
+// F2: radial movement is observed movement too, and supplies a gap prediction.
+{
+ const c=creature(),point=[0,.5,-4.8];let sensed=true;
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'away',point,sensed,interest:1,noticeRadius:20,visual:{center:point,radius:.2,provenance:'rigid-mesh-bound'}}]});
+ let t=run(a,c,1);
+ for(let i=0;i<300;i++){point[2]-=.012;t=run(a,c,1/30,t);assert.equal(a.read().focus?.id,'away','radial motion sustains pursuit');}
+ const before=a.read().focus.point[2];sensed=false;t=run(a,c,.25,t);assert.ok(a.read().focus.point[2]<before,'radial prediction uses last observed motion');
+ sensed=true;t=run(a,c,15,t);assert.equal(a.read().focus,null,'stationary target eventually releases after reacquisition');
+}
+// F3: after the initial cessation arrest, a fresh sensed bearing redirects the scan.
+for(const delay of [.05,.4]){
+ const c=creature(),fire={id:'fire',point:[.8,.5,-2.5],interest:1,active:true,restless:true},rear={id:'rear',point:[0,.5,4],interest:1,noticeRadius:12};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[fire,rear]});let t=0;
+ for(let i=0;i<120;i++){a.sense({time:t,source:rear,sourcePower:1,samples:[{point:[0,0,0],luminance:.1}]});t=run(a,c,.25,t);}
+ fire.restless=false;t=run(a,c,delay,t);assert.equal(a.read().interruption?.cause,'movement stopped');
+ a.sense({time:t,source:{...rear,point:[...rear.point]},sourcePower:8,samples:[{point:[0,0,0],luminance:.8}]});t=run(a,c,delay<.18?.05:.25,t);
+ if(delay<.18){assert.equal(a.read().focus,null,'initial arrest is retained');assert.ok(a.read().interruption);continue;}
+ assert.equal(a.read().focus?.id,'rear','fresh sensed flare redirects an eligible cessation scan');assert.equal(a.read().interruption,null);
+ const bearing=[...a.read().focus.point];rear.point=[100,100,100];t=run(a,c,.1,t);assert.deepEqual(a.read().focus?.point,bearing,'redirected event retains its captured bearing');
+}
