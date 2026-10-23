@@ -1,10 +1,11 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {checkedSelection,changeSelection} from '../scene-selection.mjs';import {createSceneEdits} from '../scene-edit-session.mjs';
 const html=readFileSync(process.env.KAMINOS_SELECTION_GROUP_SOURCE||new URL('../index.html',import.meta.url),'utf8');
 function source(a,b){const start=html.indexOf(a),end=html.indexOf(b,start);assert.ok(start>=0&&end>start);return html.slice(start,end);}
 test('a group membership write preserves the selection without cancelling its owned transaction',()=>{
- let selectionChanges=0;const context=vm.createContext({structuredClone,checkedSelection,changeSelection,
+ let selectionChanges=0;const context=sceneContext({structuredClone,checkedSelection,changeSelection,
   sceneObjects:[{id:'a',object:{}},{id:'b',object:{}}],sceneGroups:[],sceneSelection:{ids:['a','b'],activeId:'b'},activeSceneObjectId:'b',activeSceneGroupId:null,activeSceneFieldId:null,
   activeSceneComposition:null,localLiquidSetup:null,burnerGraphWriting:false,splatCorrectionMode:null,currentMesh:null,transformControls:null,authoringWorkspace:null,groupProxies:new Map(),window:{_kaminosDirty(){}},
   selectedSceneObjectEntry:()=>context.sceneObjects.find(o=>o.id===context.activeSceneObjectId),selectedSceneGroupEntry:()=>null,groupProxy:()=>({}),selectionTransformProxy:()=>({}),

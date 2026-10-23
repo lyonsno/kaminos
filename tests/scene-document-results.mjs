@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {readOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -11,7 +12,7 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 function mounted() {
   let status = '';
-  const context = vm.createContext({
+  const context = sceneContext({
     window: {}, authoringWorkspace:null,readOwnerExperimentAddress, authoringBusy: false, vantageCaptureHeld: false, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },

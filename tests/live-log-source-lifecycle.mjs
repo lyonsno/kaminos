@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -21,7 +22,7 @@ test('disabled authored emission survives serialization and source registration'
     checkedObjectCollision:()=>null,canCollideWithFire:()=>false,setActiveSceneObject(){},giProxySettingFor:()=>null,applyGiProxySetting(){},
     sceneObjectMetadataFor:object=>object.userData.kaminosSceneObject,
     sceneObjectTransformState:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),getMaterialStateForObject:()=>[]};
-  vm.createContext(context);
+  sceneContext(context);
   vm.runInContext(source.slice(source.indexOf('function registerSceneObject('),source.indexOf('window.selectSceneField='))+
     source.slice(source.indexOf('function serializeSceneObject('),source.indexOf('function readNumberControl(')),context);
   const object={userData:{}};
@@ -40,7 +41,7 @@ test('actual experiment adapter restores a removed source without starting it',a
   const host={scene:{open:async()=>session},volume:{ready:Promise.resolve(),get:()=>({setSimulationPaused(){},debugState:()=>({simGrid:32,gridHeight:{heightCells:32}})})},
     fire:{settings:()=>({source:{presetId:'saved'},domControls:{'volume-steps':{value:28},'volume-immersed-radius':{value:.1}}}),
       add:async()=>{adds++;present=true;},setVisible:value=>{visible=value;},setEnabled:value=>{enabled=value;},read:()=>({authoredPresent:present,emissionEnabled:enabled})},rendering:{gi(){},readGI:()=>({gain:10}),readFireLighting:()=>({witnessMuted:false}),muteFireLighting(){}}};
-  const context={kaminosSceneCollision:{set:value=>{collision=value;}},createLiveLogExperiment:async args=>{adapter=args.host.fire;inspect=args.host.inspection;return {dispose:async()=>{}};}};vm.createContext(context);
+  const context={kaminosSceneCollision:{set:value=>{collision=value;}},createLiveLogExperiment:async args=>{adapter=args.host.fire;inspect=args.host.inspection;return {dispose:async()=>{}};}};sceneContext(context);
   vm.runInContext(source.replace(/^import .*;\n/gm,'').replace('export default','globalThis.definition='),context);
   await context.definition.create({host,inputs:{},record(){}});
   assert.equal(collision,true,'the ordinary entry must enable the collisions used by its native witness');

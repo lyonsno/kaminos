@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildSceneDocument, planSceneRestore, isReloadableSceneObjectRecord } from '../scene-persistence-core.js';
@@ -28,7 +29,7 @@ test('a rejected agent placement leaves no active transaction and preserves an e
   const start=html.indexOf('window.kaminosSetSceneObjectTransform =');
   const source=html.slice(start,html.indexOf('window.kaminosSetSplatCorrectionDebug',start));
   const context={isSceneItemVisible:()=>true,scenePlacementTools:{edits},sceneObjects:[],LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',window:{kaminosSceneObjectDebugState:()=>[]}};
-  vm.runInNewContext(source,context);
+  runInSceneContext(source,context);
   const before=edits.state();
   assert.throws(()=>context.window.kaminosSetSceneObjectTransform('flame-emitter',{position:[99,0,0]}),/bounds/);
   assert.deepEqual(edits.state(),before,'failed source admission must roll back its own transaction');
@@ -55,7 +56,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
     primaryAuthoredFlameSource:()=>null,projectAuthoredFlameSourceControls:()=>{},syncAuthoredFlameSources:()=>{},sceneObjects:[],ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
     get flameEmitterPose(){return pose;},set flameEmitterPose(next){pose=next;},
     get flameEmitterInjectionSuspended(){return suspended;},set flameEmitterInjectionSuspended(next){suspended=next;}};
-  vm.runInNewContext(html.slice(start,end)+'\nthis.writeFlame=writeAuthoredFlameEmitterPose;',context);
+  runInSceneContext(html.slice(start,end)+'\nthis.writeFlame=writeAuthoredFlameEmitterPose;',context);
   const far={...pose,position:[2,-.76,0]};
   assert.doesNotThrow(()=>context.writeFlame(far));
   assert.equal(pose.position[0],2);
@@ -83,7 +84,7 @@ test('a legacy cluster composition reopens without placing an analytic source', 
     defaultFlameEmitterPose:()=>({position:[0,0,0]}),
     writeAuthoredFlameEmitterPose:()=>{sourceWrites++;throw Error('analytic source not mounted');},
     setAnnularBurner:()=>{}};
-  assert.doesNotThrow(()=>vm.runInNewContext(html.slice(start,end),context));
+  assert.doesNotThrow(()=>runInSceneContext(html.slice(start,end),context));
   assert.equal(sourceWrites,0);
 });
 
@@ -102,7 +103,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
     activeSceneGroupId:null,glbSourceScene:null,transformControls:null,
     document:{getElementById:()=>({classList:{remove:()=>{}}})},
     renderSceneObjectList:()=>{},updateTransformInspector:()=>{}};
-  vm.runInNewContext(html.slice(start,end)+'\nclearScene();',context);
+  runInSceneContext(html.slice(start,end)+'\nclearScene();',context);
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
 });
@@ -119,7 +120,7 @@ test('switching to cluster removes the analytic member from scene membership', (
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,localLiquidDomainGuide:null,flameDomainGuide:null,
     scenePlacementTools:{finish:()=>{},edits:{discard:()=>{}}},
     disposeObjectTree:()=>{},renderSceneObjectList:()=>{},pruneSceneGroups:()=>{},pruneSceneSelection:()=>{}};
-  vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
+  runInSceneContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
 });
@@ -137,7 +138,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
     THREE:{Vector3:class {add(){return this;}}}};
-  vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
+  runInSceneContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
   assert.equal(removed,0);
   assert.equal(updated,1);
   assert.equal(context.flameDomainGuide.visible,true);

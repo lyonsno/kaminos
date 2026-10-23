@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ const created=[];
 const c={THREE,structuredClone,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,sceneObjects:[first],assertSceneConstructionAvailable(){},localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,makeSceneObjectId:()=> 'second',
  controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[first],selectedWaterSource:()=>first,sceneObjectDisplayLabel:r=>r.label,
  createLocalLiquidEmitterSceneRecord,createLocalLiquidEmitterObject:(T,r)=>({object:{},record:r}),scene:{add(){}},registerSceneObject:(o,r)=>created.push(r),recordSceneObjectInsertion:async()=>{},syncLocalLiquidHostEmitters(){},setActiveSceneObject(){},setActiveTab(){},authoredWaterControls:null,sharedWorkbench:null,window:{_kaminosDirty(){}}};
-vm.createContext(c);vm.runInContext(actual('addAuthoredWaterDrop'),c);await c.addAuthoredWaterDrop();
+sceneContext(c);vm.runInContext(actual('addAuthoredWaterDrop'),c);await c.addAuthoredWaterDrop();
 const second=created[0];
 assert.deepEqual(second.localLiquidEmitter,first.localLiquidEmitter,'Add another water object must inherit the edited sampling and bounds, not silently introduce incompatible defaults');
 assert.deepEqual(second.transform.scale,first.transform.scale,'World particle spacing also includes source scale');
@@ -45,7 +46,7 @@ const history=createSceneEdits({read:()=>null,write(){throw Error('Unexpected po
 const q={structuredClone,THREE,sceneObjects:[row],activeSceneObjectId:row.id,LOCAL_LIQUID_EMITTER_TYPE,normalizeLocalLiquidEmitter,createLocalLiquidEmitterObject,
  localLiquidSetup:null,assertSceneConstructionAvailable(){},sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),
  serializeSceneObject:r=>({...r,object:undefined}),scenePlacementTools:{edits:history},localLiquidHost:{state:()=>({sourceIds:[row.id]})},syncLocalLiquidHostEmitters(){},authoredWaterControls:{refresh(){}},window:{_kaminosDirty(){}}};
-vm.createContext(q);
+sceneContext(q);
 const writerStart=html.indexOf('const waterSettingTargets='),writerEnd=html.indexOf('\nlet authoredWaterSimulationTarget',writerStart);
 vm.runInContext(html.match(/function updateWaterSourceGuides\(\)\{[^\n]+/)[0]+'\n'+html.slice(writerStart,writerEnd),q);
 row.object.children.find(n=>n.userData.kaminosWaterPreview).visible=false;q.updateWaterSourceGuides();
@@ -65,7 +66,7 @@ const beforeDuplicates=created.length;assert.throws(()=>c.duplicateSceneObject('
 // settings. Restoring an older scene can apply its legacy opacity to both.
 const serializer={THREE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',structuredClone,
  sceneObjectMetadataFor:o=>o.userData.kaminosSceneObject,sceneObjectTransformState:q.sceneObjectTransformState,canCollideWithFire:()=>false};
-vm.createContext(serializer);for(const name of ['getMaterialStateForObject','serializeSceneObject']){const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a);vm.runInContext(html.slice(a,b+2),serializer);}
+sceneContext(serializer);for(const name of ['getMaterialStateForObject','serializeSceneObject']){const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a);vm.runInContext(html.slice(a,b+2),serializer);}
 const savedPreview=()=>JSON.parse(JSON.stringify(serializer.serializeSceneObject(row)));
 row.object.traverse(o=>{if(o.material)o.material.opacity=.55;});const beforeDraft=savedPreview();
 row.object.children.find(o=>o.userData.kaminosWaterSourceGuide).material.opacity=.7;

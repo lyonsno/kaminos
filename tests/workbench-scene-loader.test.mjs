@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {createWorkingScene} from '../working-scene.mjs';
 
 const source=fs.readFileSync(process.env.KAMINOS_LOADER_TEST_INDEX || new URL('../index.html',import.meta.url),'utf8');
 const body=source.slice(source.indexOf('async function showGLB('),source.indexOf('// --- OBJ Inspector ---'));
@@ -12,7 +13,7 @@ function loader(){
  const loadStarted=new Promise(resolve=>{announceLoad=resolve;});
  const root={userData:{},traverse(fn){fn({isMesh:false});}};
  const clip={name:'Accepted motion'}, clips=[clip];
- const context={URL,console,workbenchViewerReady:Promise.resolve(),sceneMutationToken:1,glbFileName:'previous.glb',modelSourceUrl:null,
+ const context={URL,console,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
   shouldClearSceneForImport:options=>options.clear!==false,
   clearScene(){throw Error('Workbench append must preserve the existing scene');},
   resolveAssetArrivalMode:()=> 'append',applyAssetArrival:()=>({}),

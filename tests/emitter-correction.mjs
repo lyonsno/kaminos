@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
@@ -48,14 +49,14 @@ const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>
 test('continuous water runtime receives visible sources without deleting hidden document objects',()=>{
  const objects=['a','b'].map(id=>({id,type:'local-liquid-emitter',object:{},localLiquidEmitter:{rate:10}}));
  const context={sceneObjects:objects,localLiquidSetup:{},isSceneItemVisible:id=>id!=='a',sceneObjectTransformState:()=>pose,localLiquidRuntimeSourceState:doc=>({emitters:doc.objects})};
- vm.createContext(context);vm.runInContext(grab('localLiquidEmitterState'),context);
+ sceneContext(context);vm.runInContext(grab('localLiquidEmitterState'),context);
  assert.deepEqual(Array.from(context.localLiquidEmitterState().emitters,x=>x.id),['b']);assert.equal(objects.length,2);
 });
 test('a hidden water field submits neither solver nor water rendering work while ordinary scene keeps drawing',()=>{
  const start=html.indexOf('    if (localLiquidHost) {',html.indexOf('  function renderSceneFrame()')),end=html.indexOf('    }));',start),arm=html.slice(start,end);
  let water=0,scene=0;const context={localLiquidHost:{render:()=>water++,state:()=>({clock:{paused:false,step:0,timeSeconds:0}})},isSceneItemVisible:()=>false,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,
   authoredWaterControls:null,sharedWorkbench:null,console,localLiquidFailure:null,refreshLocalLiquidPerformance(){},setInfo(){},applySceneEmissiveCamera(){},renderPipeline:{render:()=>scene++},outlinedSceneOutput:{},outlinedCameraOutput:{},matchedCameraEffective:false};
- vm.createContext(context);vm.runInContext(arm,context);assert.equal(water,0);assert.equal(scene,1);
+ sceneContext(context);vm.runInContext(arm,context);assert.equal(water,0);assert.equal(scene,1);
 });
 
 test('screen-space ring picking survives an emitter scaled through its parent',()=>{
@@ -82,14 +83,14 @@ test('saved field visibility governs restore even when the hidden set did not ch
   let active=initiallyActive;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
   const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
   context.syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>runtime,wanted:()=>visible});
-  vm.createContext(context);await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);assert.equal(active,visible,'restore must finish with the saved visibility, independently of prior runtime activity');
+  sceneContext(context);await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);assert.equal(active,visible,'restore must finish with the saved visibility, independently of prior runtime activity');
  }
 });
 
 test('saving a deliberately hidden retained field does not require its computation to run',async()=>{
  const start=html.indexOf('async function collectSceneComposition() {'),end=html.indexOf("  if (!isFireLightFieldRoute()) throw",start);assert.ok(start>0&&end>start);
  for(const [hidden,debug,accept]of [[true,{active:false,error:null},true],[false,{active:false,error:null},false],[true,null,false],[true,{active:false,error:'device-lost'},false]]){
-  const context={volumePrototype:debug?{debugState:()=>debug}:null,activeSceneComposition:{},isFireLightFieldRoute:()=>true,isSceneItemVisible:()=>!hidden};vm.createContext(context);vm.runInContext(html.slice(start,end)+'return true;}',context);
+  const context={volumePrototype:debug?{debugState:()=>debug}:null,activeSceneComposition:{},isFireLightFieldRoute:()=>true,isSceneItemVisible:()=>!hidden};sceneContext(context);vm.runInContext(html.slice(start,end)+'return true;}',context);
   if(accept)assert.equal(await context.collectSceneComposition(),true);else await assert.rejects(context.collectSceneComposition(),/not active|device-lost/);
  }
 });

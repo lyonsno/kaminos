@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';import {createSceneCameras,cameraViewFromRecord} from '../scene-camera.mjs';import {createViewportRecording} from '../viewport-recording.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),begin=html.indexOf('  const viewportRecording=createViewportRecording('),end=html.indexOf('  const outputUI=',begin);
@@ -9,7 +10,7 @@ function fixture(){
  const sceneCameras=createSceneCameras({edits,readObjects:()=>objects,writeCameras:items=>{objects=structuredClone(items);},readViewport:readView,writeViewport:writeView,size:()=>({width:800,height:600}),makeId:()=>String(++id)});
  const a=sceneCameras.createFromView('A'),b=sceneCameras.createFromView('B',{...view,position:[10,3,4]});sceneCameras.setActive(a);sceneCameras.enter();sceneCameras.lock(true);sceneCameras.restoreFrameLayout({zoom:1.2,offset:[.1,.2]});
  const scope={createViewportRecording:options=>createViewportRecording({...options,now:()=>clock}),createRecordingSink:async()=>({add(){},finish:async n=>({blob:new Blob(['movie']),frameCount:n}),dispose(){}}),vantageBusy:()=>null,vantageCaptureHeld:false,outputCaptureExtent:null,recordingExtent:null,recordingFrameSink:null,sceneSaveBlockedByFailedRestore:false,sceneObjects:[],sceneCameras,renderer:{backend:{device:{limits:{maxTextureDimension2D:8192}}},getPixelRatio:()=>ratio,setPixelRatio:v=>{ratio=v;},domElement:{}},camera:{zoom:1,updateProjectionMatrix(){}},readAuthoredCameraView:readView,writeAuthoredCameraView:writeView,cameraViewFromRecord,viewProjection:{state:()=>({orthographic:false,auto:false}),setOrthographic(){}},activeSceneComposition:null,volumePrototype:null,readVolumeControls:()=>({}),sceneGI:{resetHistory(){}},syncViewportRendererSize(){},markDirty(){},viewportDisplay:{quality:'full'},signal:new AbortController().signal,document:{createElement:()=>({getContext:()=>({drawImage(){}})})},transformControls:null,sceneFrameCount:0,localLiquidHost:null};
- vm.createContext(scope);vm.runInContext(html.slice(begin,end)+'\nglobalThis.rec=viewportRecording;',scope);
+ sceneContext(scope);vm.runInContext(html.slice(begin,end)+'\nglobalThis.rec=viewportRecording;',scope);
  return {scope,a,b,edits,cameras:sceneCameras,objects:()=>structuredClone(objects),view:readView,navigate(){sceneCameras.beginNavigation('pan');writeView({...view,position:view.position.map((v,i)=>v+(i===0?1:0))});sceneCameras.navigationChanged();sceneCameras.endNavigation(false);},frame(value){clock+=1000;scope.recordingFrameSink(value);}};
 }
 for(const completion of ['cancel','complete','stop'])test(`borrowed B navigation cannot author locked A on ${completion}`,async()=>{

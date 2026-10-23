@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -9,7 +10,7 @@ const between = (start, end) => source.slice(source.indexOf(start), source.index
 let intensity = 1;
 const gainControl = { value: '0' };
 const geometryControl = { checked: false };
-const context = vm.createContext({
+const context = sceneContext({
   burnerRecipe: null, normalizeBurner, activeVolumeSettingsPresetReceipt: null, volumeSettingsPresetControlValuesEqual,
   volumePrototype: { debugState: () => ({ active: true }) }, activeSceneComposition: null,
   isFireLightFieldRoute: () => true, volumeCockpitLayoutReady: Promise.resolve(),
@@ -48,13 +49,13 @@ await vm.runInContext('collectSceneComposition()', context);
 assert.equal(writes, 1, 'an edited basin is written');
 assert.equal(vm.runInContext('activeSceneComposition.flame.presetId', context), 'projected');
 
-const empty = vm.createContext({ sceneObjects: [], volumePrimitives: [],
+const empty = sceneContext({ sceneObjects: [], volumePrimitives: [],
   volumePrototype: { debugState: () => ({ active: true }) }, isFireLightFieldRoute: () => false });
 vm.runInContext(between('function sceneIsEmpty()', 'function sceneSaveIsBlocked()'), empty);
 assert.equal(vm.runInContext('sceneIsEmpty()', empty), true, 'unsupported standalone basin must not save an unloadable scene');
 
 let chosenComposition;
-const selection = vm.createContext({
+const selection = sceneContext({
   withAuthoringAction: action => action(), sceneSaveIsBlocked: () => false,
   collectSceneComposition: async () => {}, buildSceneData: () => ({ composition: null, objects: [{ id: 'kiln' }] }),
   saveToServer: async data => { chosenComposition = data.composition; return true; },
@@ -68,7 +69,7 @@ assert.equal(chosenComposition.route.volume_light_field, '1');
 
 const helper = { visible: true }, emitter = { visible: true };
 let captured = false;
-const captureContext = vm.createContext({
+const captureContext = sceneContext({
   window: {}, withAuthoringAction: action => action(), sceneSaveIsBlocked: () => false,
   sceneIsEmpty: () => false, volumePrototype: { debugState: () => ({ active: true }), canvasElement: () => 'volume' },
   isFireLightFieldRoute: () => true, sceneObjects: [{ id: 'flame-emitter', object: emitter }],
@@ -97,7 +98,7 @@ const document = { getElementById(id) {
 } };
 const aoIntensity = { value: 2 };
 const aoPass = Object.fromEntries(['radius', 'scale', 'thickness', 'distanceFallOff'].map(key => [key, { value: 0.8 }]));
-const aoContext = vm.createContext({ document, aoIntensity, aoPass, window: {}, Event: class { constructor(type) { this.type = type; } },
+const aoContext = sceneContext({ document, aoIntensity, aoPass, window: {}, Event: class { constructor(type) { this.type = type; } },
   data: { postprocessing: { ao: { enabled: false, intensity: 0.25, radius: 0.1, scale: 1.1, thickness: 0.2, falloff: 0.3 } } } });
 vm.runInContext(between('// --- AO Controls ---', '// --- Backdrop ---'), aoContext);
 vm.runInContext(between('  // Apply postprocessing\n', '  // Apply backdrop\n'), aoContext);

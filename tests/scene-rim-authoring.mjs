@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -7,7 +8,7 @@ test('authored rim transforms update the saved light recipe through its owner ad
  const start=html.indexOf('function applyAuthoredScenePose('),end=html.indexOf('function validateLiveLocalLiquidEmitterPose',start);
  let applied=null;
  const entry={id:'@rim-light',type:'light',object:{}};
- const context=vm.createContext({CAMERA_TYPE:'camera',updateSelectionFeedback(){},sceneObjects:[entry],FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',RIM_LIGHT_ID:'@rim-light',
+ const context=sceneContext({CAMERA_TYPE:'camera',updateSelectionFeedback(){},sceneObjects:[entry],FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',RIM_LIGHT_ID:'@rim-light',
   restoringSceneLight:false,serializeSceneObject:e=>({id:e.id,type:e.type,source:'kaminos:scene-spot-light',light:{kind:'spot'}}),sceneLightRuntimeRecipe:r=>r,setRimLight(){},mountSceneSpotLight:record=>{applied=record.transform;},writeAuthoredRimPose:pose=>{applied=pose;},applySceneObjectTransformState(){},updateTransformInspector(){},window:{kaminosSceneObjectDebugState:()=>[entry]}});
  vm.runInContext(html.slice(start,end),context);
  vm.runInContext("applyAuthoredScenePose('@rim-light',{position:[1,2,3],rotation:[0,1,0],scale:[1,1,1]})",context);

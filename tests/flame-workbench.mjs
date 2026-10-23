@@ -6,7 +6,7 @@ import {createInvestigationRecording,investigationOperations} from '../investiga
 import definition from '../experiments/flame.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
 import {readFileSync} from 'node:fs';
-import {runInNewContext} from 'node:vm';
+import {runInSceneContext as runInNewContext} from './helpers/scene-context.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {volumeSettingsPresetControlValuesEqual} from '../volume-settings-preset-contract.mjs';
 import * as THREE from '../lib/three.core.js';

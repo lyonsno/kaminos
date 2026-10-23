@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import * as T from 'three';import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {exportCloneInWorld} from '../scene-export.mjs';import {checkedRepetition,createRepetitionView,withoutRepetitionCopies} from '../scene-repetition.mjs';
@@ -11,14 +12,14 @@ test('shared selection duplication carries the group relationship into interacti
  for(const interactive of [false,true]){
   const group={id:'ring',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition},created=[];
   const h={structuredClone,checkedRepetition,sceneSelection:{ids:['@group:ring'],activeId:'@group:ring'},sceneGroups:[group],sceneObjects:[{id:'baffle',type:'procedural-mesh'}],compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},selectedRootIds:()=>['@group:ring'],sceneSelectionMembers:()=>['baffle'],canDuplicateObject:()=>true,checkSelectionMembership:x=>x,readSelectionMembership:()=>({groups:[group],selection:{ids:['@group:ring'],activeId:'@group:ring'}}),duplicateSceneObject:()=> 'copy',makeSceneObjectId:()=> 'ring-copy',createSceneGroupForObjects:(ids,label,options)=>created.push({...options,objectIds:ids,label}),setSceneSelection(){},detachSelectionMember(){},scenePlacementTools:{start:()=>true,edits:{discard(){},recordApplied(){}}}};
-  vm.createContext(h);vm.runInContext(fn('duplicateSelectedSceneObjects'),h);h.duplicateSelectedSceneObjects({interactive});assert.equal(created.length,1);assert.equal(created[0].repetition?.count,6);assert.equal(created[0].repetition?.mode,'circle');
+  sceneContext(h);vm.runInContext(fn('duplicateSelectedSceneObjects'),h);h.duplicateSelectedSceneObjects({interactive});assert.equal(created.length,1);assert.equal(created[0].repetition?.count,6);assert.equal(created[0].repetition?.mode,'circle');
  }
 });
 
 test('ordinary attachment refuses an unsupported member before changing a repeated group or history',()=>{
  const groups=[{id:'ring',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition}],objects=[{id:'baffle',type:'procedural-mesh',object:new T.Mesh()},{id:'lamp',type:'light',object:new T.Group()}];
  const edits=createSceneEdits({read:()=>null,write(){}}),h={structuredClone,GROUP_TYPE:'group',sceneObjects:objects,checkedRepetition,canRepeatSceneObject,checkedGroupPose:checkedPose,assertSceneConstructionAvailable(){},serializeSceneGroups:()=>structuredClone(groups),scenePlacementTools:{edits}};
- vm.createContext(h);vm.runInContext(fn('checkedSceneGroups')+'\n'+fn('editSceneGroups')+'\n'+fn('attachSceneObject'),h);
+ sceneContext(h);vm.runInContext(fn('checkedSceneGroups')+'\n'+fn('editSceneGroups')+'\n'+fn('attachSceneObject'),h);
  edits.register('@scene-groups',{read:()=>({groups:structuredClone(groups)}),check:value=>({groups:h.checkedSceneGroups(value.groups)}),write:value=>groups.splice(0,groups.length,...value.groups)});
  assert.throws(()=>h.attachSceneObject('lamp','ring'),/static mesh/);assert.deepEqual(groups[0].objectIds,['baffle']);assert.equal(groups[0].repetition.count,6);assert.equal(edits.state().undoCount,0);
  h.attachSceneObject('baffle',null);assert.equal(groups.length,0,'ordinary editing still works after refusal');edits.undo();assert.equal(groups[0].repetition.count,6);
