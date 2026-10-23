@@ -147,8 +147,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
    const prior=engagement.read();
-   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
-   attention.setEngagement(['approaching','inspecting','cautious'].includes(intent.phase)?intent.id:null);
+   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,cessation:a.interruption,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
+   attention.setEngagement(['approaching','inspecting','cautious','withdrawing'].includes(intent.phase)?intent.id:null);
    if(intent.destination){
     const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
     if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);

@@ -532,3 +532,13 @@ for(const delay of [.05,.4]){
  assert.equal(a.read().focus?.id,'rear','fresh sensed flare redirects an eligible cessation scan');assert.equal(a.read().interruption,null);
  const bearing=[...a.read().focus.point];rear.point=[100,100,100];t=run(a,c,.1,t);assert.deepEqual(a.read().focus?.point,bearing,'redirected event retains its captured bearing');
 }
+
+// A witnessed cessation carries the place that was actually observed, so
+// engagement can investigate it after the attention arrest finishes.
+{
+ const c=creature(),source={id:'quiet-object',point:[.8,.5,-2.5],interest:1,active:true,restless:true};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[source]});
+ let t=run(a,c,2);source.active=false;t=run(a,c,1/30,t);
+ const loss=a.read().interruption;assert.deepEqual(loss?.point,source.point,'cessation carries a sensed position');
+ source.point=[100,100,100];t=run(a,c,.2,t);assert.deepEqual(a.read().interruption.point,loss.point,'later hidden movement cannot redirect cessation investigation');
+}
