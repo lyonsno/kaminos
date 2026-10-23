@@ -15,7 +15,7 @@ export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
 struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
-@group(0) @binding(33) var middleOptical:texture_3d<f32>;
+@group(0) @binding(34) var middleOptical:texture_3d<f32>;
 fn worldSmokeOn()->bool{return worldRender.hiEnabled.w>0.5;}
 fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
  if(worldRender.overlayControls.x<.5||!worldSmokeOn()){return m;}

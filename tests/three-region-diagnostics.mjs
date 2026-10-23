@@ -1,5 +1,10 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const runtimeSource=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+const fluidLayout=runtimeSource.split("label: 'kaminos fluid bind group layout',")[1].split("state.gpuInitStage = 'fluid-layout-created'")[0];
+const fluidBindings=[...fluidLayout.matchAll(/binding:\s*(\d+)/g)].map(m=>Number(m[1]));
+assert.equal(new Set(fluidBindings).size,fluidBindings.length,'Composed fluid layout assigns a unique binding to every resource');
 import {pressureResidualProbeDisposition} from '../volume-core.js';
 import {flamePropertyApplies} from '../flame-authoring.mjs';
 assert.equal(pressureResidualProbeDisposition({independentVelocity:true}),'unavailable','Shared-grid residual is unavailable during independent velocity');

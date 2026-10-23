@@ -12,6 +12,10 @@ fn immersedContributions(cell:vec3<f32>) -> ImmersedContributions {
   return ImmersedContributions(slab,w,min(u.immersed_source_d.y,w*u.immersed_source_d.z),min(1.0,w*u.immersed_source_d.x),u.immersed_source_c.zw,u.immersed_source_c.y*immersedDirection());
  }
  let count=u32(textureLoad(immersedSources,vec2<i32>(0),0,0).y);
+ // Coefficients and coverage are packed once on the material lattice. The
+ // velocity kernel may run at a lower resolution while sharing this texture.
+ let materialGrid=textureLoad(immersedSources,vec2<i32>(0),0,0).z;
+ let materialPerCell=materialGrid/f32(GRID);
  var slabUnion=0.0;var weight=0.0;var supply=0.0;var mixture=vec2<f32>(0.0);
  var remaining=1.0;var relaxSum=0.0;var velocity=vec3<f32>(0.0);
  for(var i=0u;i<count;i++) {
@@ -23,10 +27,11 @@ fn immersedContributions(cell:vec3<f32>) -> ImmersedContributions {
   let d=textureLoad(immersedSources,vec2<i32>(3,0),layer,0);
   let e=textureLoad(immersedSources,vec2<i32>(4,0),layer,0);
   let f=textureLoad(immersedSources,vec2<i32>(5,0),layer,0);
-  let delta=cell-a.yzw;let along=dot(delta,b.xyz);let radial=length(delta-along*b.xyz);
-  let slab=(1.0-smoothstep(c.x*0.5-0.5,c.x*0.5+0.5,abs(along)))*(1.0-smoothstep(b.w-0.5,b.w+0.5,radial));
+  let delta=cell-a.yzw/materialPerCell;let along=dot(delta,b.xyz);let radial=length(delta-along*b.xyz);
+  let thickness=c.x/materialPerCell;let radius=b.w/materialPerCell;
+  let slab=(1.0-smoothstep(thickness*0.5-0.5,thickness*0.5+0.5,abs(along)))*(1.0-smoothstep(radius-0.5,radius+0.5,radial));
   let e2=normalize(cross(e.xyz,b.xyz));
-  let uv=vec2<i32>(clamp(i32(floor(f32(GRID)*0.5+dot(delta,e.xyz))),0,i32(GRID)-1),clamp(i32(floor(f32(GRID)*0.5+dot(delta,e2))),0,i32(GRID)-1));
+  let uv=vec2<i32>(clamp(i32(floor(materialGrid*0.5+dot(delta,e.xyz)*materialPerCell)),0,i32(materialGrid)-1),clamp(i32(floor(materialGrid*0.5+dot(delta,e2)*materialPerCell)),0,i32(materialGrid)-1));
   let pattern=textureLoad(immersedSources,uv+vec2<i32>(0,1),layer,0);
   let coverage=select(1.0,pattern.x,f.x>0.5);
   let w=slab*coverage*max(0.0,1.0+e.w*pattern.y);

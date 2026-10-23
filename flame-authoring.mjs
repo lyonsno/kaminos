@@ -124,8 +124,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
-    ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Wavelet octaves'], ['volume-wavelet-strength','Wavelet strength'],
-    ['volume-wavelet-octave1-weight','Four-cell octave weight'], ['volume-wavelet-octave2-weight','Two-cell octave weight'],
   ] },
   { name:'World smoke', view:'quality', open:true, scope:'World-anchored field with one-way outward coupling. Pressure width must divide velocity width. Material resolution is independent.', fields:[
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
@@ -159,6 +157,7 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Subgrid turbulence', view:'motion', fields:[
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Octaves'],
     ['volume-wavelet-strength','Detail strength'],
+    ['volume-wavelet-octave1-weight','Four-cell octave weight'], ['volume-wavelet-octave2-weight','Two-cell octave weight'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
@@ -424,14 +423,15 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
         else if(searching)item.section.open=item.open;
       }
     }
+    const gridMatches=!!gridInspector&&(!isSearching||/grid|dimension|material|velocity|pressure|fine|intermediate|world/.test(query));
     for(const [id,panel] of panels){
-      panel.hidden=isSearching?!sections.some(item=>item.group.view===id&&!item.section.hidden):id!==activeView;
+      panel.hidden=isSearching?!(id==='quality'&&gridMatches)&&!sections.some(item=>item.group.view===id&&!item.section.hidden):id!==activeView;
       const button=tabButtons.get(id);button.setAttribute('aria-selected',String(id===activeView));button.tabIndex=id===activeView?0:-1;
     }
     tabs.hidden=isSearching;basin.hidden=isSearching;
     geometry.forEach(panel=>panel.hidden=isSearching);
-    empty.hidden=!isSearching||rows.some(item=>!item.quick&&!item.emission&&!item.row.hidden);
-    if(gridInspector)gridInspector.root.hidden=isSearching&&!/grid|dimension|material|velocity|pressure|fine|intermediate|world/.test(query);
+    empty.hidden=!isSearching||gridMatches||rows.some(item=>!item.quick&&!item.emission&&!item.row.hidden);
+    if(gridInspector)gridInspector.root.hidden=!gridMatches;
     searching=isSearching;
   }
   search.addEventListener('input',syncVisibility);

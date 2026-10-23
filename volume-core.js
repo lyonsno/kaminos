@@ -7266,7 +7266,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // value under the staggered reading. Under face forces the centred
   // increment lands on top of the relaxed value in the pass.
   if (immersedWeight > 0.0) {
-vel = mix(vel, immersedSourcesAtCell.velocity, stepBlend(immersedSourcesAtCell.relaxation));
+    vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation));
   }
   }
   if (VELOCITY_ONLY) {
@@ -12881,7 +12881,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 20, resource: (worldSmoke?.optical??worldOpticalFallback).createView() },
         { binding: 21, resource: { buffer: worldRenderUniform } },
-        { binding: 33, resource: (intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback).createView() },
+        { binding: 34, resource: (intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback).createView() },
         { binding: 16, resource: solidView },
           { binding: 28, resource: lowerFaceTexture.createView({dimension:'2d-array'}) },
           { binding: 29, resource: joinedGhostView(0) },
@@ -15008,7 +15008,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
         { binding: 20, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType:'unfilterable-float',viewDimension:'3d' } },
         { binding: 21, visibility: GPUShaderStage.FRAGMENT, buffer: {type:'uniform'} },
-        { binding: 33, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
+        { binding: 34, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
@@ -27715,7 +27715,7 @@ export function createKaminosVolumePrototype({
     validateGridControls(next) {
       const candidate={...controlsSnapshot,...next};
       // Match the runtime's existing fine-width normalization.
-      const plan=gridTuningPlan({...candidate,resolution:normalizeGridSize(candidate.resolution)},device?.limits);
+      const plan=gridTuningPlan({...candidate,resolution:normalizeGridSize(candidate.resolution)},device?.limits,{joined:state.joinedBoundary?.admitted===true});
       if(plan.fine.materialPerVelocity>1) {
         if(resolvePressureSolverConfig(candidate).effective.solver!=='converged')throw Error('Independent fine velocity requires converged pressure');
         if(candidate.emitterSourceLaw==='inflow-boundary')throw Error('Independent fine velocity does not yet admit floor inflow');

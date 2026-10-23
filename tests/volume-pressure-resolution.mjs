@@ -46,7 +46,7 @@ assert.equal(blocked.expansion[0],0.25*7/8,'solid expansion is not injected');
 console.log('face-flux units, scalar preservation and obstacle restriction passed');
 // The normal scene inspector, not just hidden Volume controls, owns the choice.
 const {FLAME_PROPERTY_GROUPS}=await import('../flame-authoring.mjs');
-assert.ok(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields.some(([id])=>id==='volume-pressure-resolution'),'normal scene Quality exposes pressure resolution');
+assert.ok(FLAME_PROPERTY_GROUPS.some(g=>g.view==='quality'&&g.fields.some(([id])=>id==='volume-pressure-resolution')),'normal scene Quality exposes pressure resolution');
 const profileModule=await import('../volume-pressure-resolution.mjs');
 assert.equal(typeof profileModule.pressureProfileWindows,'function');
 assert.deepEqual(profileModule.pressureProfileWindows([1000n,2000n,5000n,6000n]),{mainThroughProjectionUs:5,afterMainThroughProjectionUs:4});

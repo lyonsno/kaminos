@@ -13,7 +13,7 @@ export function createGridTuningInspector({document,host,read,validate,apply}) {
   for(const [key,id,label] of group.fields){
    const source=document.getElementById(id),row=document.createElement('label');row.className='slider-row';
    const text=document.createElement('span');text.className='slider-label';text.textContent=label;row.append(text);
-   const choice=['resolution','worldSmoke','worldSmokeIntermediate','fineVelocity','finePressure','worldSmokePressure'].includes(key);
+   const choice=['resolution','worldSmoke','worldSmokeFlow','worldSmokeMaterial','worldSmokeExtent','worldSmokeIntermediate','fineVelocity','finePressure','worldSmokePressure'].includes(key);
    const input=document.createElement(choice?'select':'input');input.className='transform-input';input.id=`grid-draft-${key}`;input.setAttribute('aria-label',`${group.name}: ${label}`);
    if(choice&&source.tagName==='SELECT')for(const option of source.options)input.append(option.cloneNode(true));
    if(!choice){input.type='number';input.step=key.toLowerCase().includes('extent')||key==='gridHeightRatio'?'any':'1';input.min=key.toLowerCase().includes('iterations')?'0':key==='gridHeightRatio'?'1':'2';if(key.toLowerCase().includes('extent'))input.min='1.000000001';
