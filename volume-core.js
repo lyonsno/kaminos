@@ -28,7 +28,7 @@ import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
-import { CONTINUOUS_DETAIL_WGSL, resolveContinuousDetail } from './volume-continuous-detail.mjs';
+import { CONTINUOUS_DETAIL_WGSL, resolveContinuousDetail, createContinuousDetailBasis } from './volume-continuous-detail.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
@@ -2932,19 +2932,20 @@ function lookFreezeCanPin(state) {
   return (state?.simStepCount || 0) > 0;
 }
 
-function updateRenderPhaseState(now, state, lookFreeze) {
+function updateRenderPhaseState(now, state, lookFreeze, simulationPaused = false) {
   const liveTimeMs = Number.isFinite(Number(now)) ? Number(now) : performance.now();
   const liveFrame = Number.isFinite(Number(state?.frameCount)) ? Number(state.frameCount) : 0;
-  if (lookFreeze) {
+  const pinned = lookFreeze || simulationPaused;
+  if (pinned) {
     if (typeof state.lookFreezeRenderTimeMs !== 'number' || !Number.isFinite(state.lookFreezeRenderTimeMs)) state.lookFreezeRenderTimeMs = liveTimeMs;
     if (typeof state.lookFreezeRenderFrame !== 'number' || !Number.isFinite(state.lookFreezeRenderFrame)) state.lookFreezeRenderFrame = liveFrame;
   } else {
     state.lookFreezeRenderTimeMs = null;
     state.lookFreezeRenderFrame = null;
   }
-  const renderPhaseTimeMs = lookFreeze ? state.lookFreezeRenderTimeMs : liveTimeMs;
-  const renderPhaseFrame = lookFreeze ? state.lookFreezeRenderFrame : liveFrame;
-  const renderPhaseAuthority = lookFreeze ? 'look-freeze-pinned-render-phase' : 'live-render-phase';
+  const renderPhaseTimeMs = pinned ? state.lookFreezeRenderTimeMs : liveTimeMs;
+  const renderPhaseFrame = pinned ? state.lookFreezeRenderFrame : liveFrame;
+  const renderPhaseAuthority = lookFreeze ? 'look-freeze-pinned-render-phase' : simulationPaused ? 'paused-pinned-render-phase' : 'live-render-phase';
   state.renderPhaseTimeMs = renderPhaseTimeMs;
   state.renderPhaseFrame = renderPhaseFrame;
   state.renderPhaseAuthority = renderPhaseAuthority;
@@ -11433,6 +11434,7 @@ export function createKaminosVolumePrototype({
   let adapter = null;
   let device = null;
   let rayStartNoiseTexture = null;
+  let continuousDetailBasis = null;
   let gpuInitialized = false;
   let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
@@ -12685,6 +12687,8 @@ export function createKaminosVolumePrototype({
         { binding: 31, resource: waveletRead.createView({ dimension: '3d' }) },
         { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
+        { binding: 34, resource: continuousDetailBasis.texture.createView({dimension:'3d'}) },
+        { binding: 35, resource: continuousDetailBasis.sampler },
         { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
       ],
     });
@@ -14592,6 +14596,7 @@ export function createKaminosVolumePrototype({
     rayStepTelemetry = createRayStepTelemetry(device);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
+    continuousDetailBasis = await createContinuousDetailBasis(device);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -14818,6 +14823,8 @@ export function createKaminosVolumePrototype({
         { binding: 25, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
         { binding: 26, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
         { binding: 33, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'2d-array'} },
+        { binding: 34, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'float',viewDimension:'3d'} },
+        { binding: 35, visibility: GPUShaderStage.FRAGMENT, sampler: {type:'filtering'} },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -15909,7 +15916,7 @@ export function createKaminosVolumePrototype({
       };
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
-    const { renderPhaseTimeMs } = updateRenderPhaseState(now, state, lookFreeze);
+    const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze, simulationPaused);
     uniforms.set(invViewProj.elements, 0);
     uniforms[16] = productLocalCameraPosition.x;
     uniforms[17] = productLocalCameraPosition.y;
@@ -15939,7 +15946,7 @@ export function createKaminosVolumePrototype({
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     uniforms.fill(0, 41, 47);
     uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
-      ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 32 : 0;
+      ? (controlsSnapshot.rayNoiseFrame ?? renderPhaseFrame) % 32 : 0;
     uniforms[42] = clampFinite(controlsSnapshot.flamePriority, 0, 1, 0);
     uniforms[43] = controlsSnapshot.quadratureJitter === false ? 0 : 1;
     // Reuse a retired history slot; presentation flags retain their own lanes.
@@ -16359,7 +16366,8 @@ export function createKaminosVolumePrototype({
     uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     const continuousDetail = resolveContinuousDetail(controlsSnapshot);
-    state.continuousDetail = continuousDetail;
+    state.continuousDetail = {...continuousDetail,basis:continuousDetailBasis?.receipt??null,
+      evaluation:controlsSnapshot.continuousDetailAnalytic===true?'analytic-reference':'cached-periodic-basis'};
     uniforms.set([continuousDetail.amount, continuousDetail.scale, continuousDetail.fine, Math.ceil(continuousDetail.amount)], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
@@ -20506,7 +20514,8 @@ export function createKaminosVolumePrototype({
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
       {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
     state.rayStepTelemetry=rayStepTelemetry.read();
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
+    const analyticDetail = controlsSnapshot.continuousDetailAnalytic === true;
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,CONTINUOUS_DETAIL_ANALYTIC:analyticDetail};
     state.opticalStepping = { ...optical, effective: optical.mode,
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
       flamePriorityRequested:controlsSnapshot.flamePriority??0,
@@ -20514,8 +20523,8 @@ export function createKaminosVolumePrototype({
       quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
       quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
       guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
-    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
-    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}:analyticDetail=${analyticDetail}`;
+    if ((optical.mode !== 'current'||rayStepTelemetry.active||analyticDetail) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
@@ -28462,6 +28471,7 @@ export function createKaminosVolumePrototype({
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
       rayStartNoiseTexture?.destroy();
+      continuousDetailBasis?.dispose();continuousDetailBasis=null;
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();

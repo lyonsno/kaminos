@@ -43,6 +43,7 @@ const resources = {
   reactantTextures: [{ createView: () => ({ label: 'reactant A view' }) }, { createView: () => ({ label: 'reactant B view' }) }],
   // The wavelet turbulence coordinate textures (bindings 31/32), same closure.
   waveletTextures: [{ createView: () => ({ label: 'wavelet A view' }) }, { createView: () => ({ label: 'wavelet B view' }) }],
+  continuousDetailBasis: {texture:{createView:()=>({label:'cached detail basis'})},sampler:{label:'detail sampler'}},
   // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceView: () => ({ label: 'joined lower planes view' }),
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
@@ -67,6 +68,8 @@ for (let q = 0; q < 2; q++) {
   assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
     'all fluid render resources have distinct bindings');
   assert.equal(group.entries.find(e=>e.binding===26)?.resource.buffer,resources.rayStepTelemetry.counterBuffer);
+  assert.equal(group.entries.find(e=>e.binding===34)?.resource.label,'cached detail basis');
+  assert.equal(group.entries.find(e=>e.binding===35)?.resource,resources.continuousDetailBasis.sampler);
   assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
   for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
 }

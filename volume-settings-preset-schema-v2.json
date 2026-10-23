@@ -947,6 +947,7 @@
     },
     {
       "key": "volume-render-detail",
+      "additiveFamily": "continuous-render-detail",
       "param": "volume_render_detail",
       "tagName": "INPUT",
       "type": "range",
@@ -955,6 +956,7 @@
     },
     {
       "key": "volume-render-detail-scale",
+      "additiveFamily": "continuous-render-detail",
       "param": "volume_render_detail_scale",
       "tagName": "INPUT",
       "type": "range",
@@ -963,6 +965,7 @@
     },
     {
       "key": "volume-render-detail-fine",
+      "additiveFamily": "continuous-render-detail",
       "param": "volume_render_detail_fine",
       "tagName": "INPUT",
       "type": "range",

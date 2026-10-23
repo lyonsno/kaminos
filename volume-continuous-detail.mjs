@@ -1,4 +1,32 @@
-import { waveletCurlUnit, waveletBlendWeights } from './volume-wavelet-turbulence.mjs';
+import { waveletCurlUnit, waveletBlendWeights, waveletTurbulenceWgsl } from './volume-wavelet-turbulence.mjs';
+
+export const CONTINUOUS_DETAIL_BASIS = Object.freeze({identity:'periodic-curl-64x8-rgba16float-v1',size:64,period:8});
+
+// Cache the basis, not the displaced material: ray samples still resolve subcell detail.
+export async function createContinuousDetailBasis(device) {
+  const {size,period,identity}=CONTINUOUS_DETAIL_BASIS;
+  const texture=device.createTexture({label:identity,dimension:'3d',size:[size,size,size],format:'rgba16float',
+    usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
+  try {
+    const module=device.createShaderModule({label:identity,code:waveletTurbulenceWgsl({latticePeriod:period})+/* wgsl */`
+@group(0) @binding(0) var basis: texture_storage_3d<rgba16float, write>;
+@compute @workgroup_size(4,4,4) fn build(@builtin(global_invocation_id) cell: vec3<u32>) {
+  if (any(cell >= vec3<u32>(${size}u))) { return; }
+  let p=(vec3<f32>(cell)+vec3<f32>(0.5))*${period/size};
+  textureStore(basis,vec3<i32>(cell),vec4<f32>(waveletCurlUnit(p),1.0));
+}`});
+    const info=await module.getCompilationInfo();
+    const errors=info.messages.filter(message=>message.type==='error');
+    if(errors.length)throw new Error(`Continuous detail basis WGSL: ${errors.map(m=>m.message).join('\n')}`);
+    const pipeline=await device.createComputePipelineAsync({label:identity,layout:'auto',compute:{module,entryPoint:'build'}});
+    const bindings=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:texture.createView()}]});
+    const encoder=device.createCommandEncoder({label:identity});
+    const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,bindings);
+    pass.dispatchWorkgroups(size/4,size/4,size/4);pass.end();device.queue.submit([encoder.finish()]);
+    const sampler=device.createSampler({label:identity,addressModeU:'repeat',addressModeV:'repeat',addressModeW:'repeat',minFilter:'linear',magFilter:'linear'});
+    return {texture,sampler,receipt:{...CONTINUOUS_DETAIL_BASIS,bytes:size**3*8,generation:'once-per-device',materialBaked:false},dispose(){texture.destroy();}};
+  }catch(error){texture.destroy();throw error;}
+}
 
 const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 export function resolveContinuousDetail(controls = {}) {
@@ -25,9 +53,18 @@ export function continuousDetailOffset(a, b, step, amount, scale, fineWeight = 0
 }
 
 export const CONTINUOUS_DETAIL_WGSL = /* wgsl */`
+override CONTINUOUS_DETAIL_ANALYTIC: bool = false;
+@group(0) @binding(34) var continuousDetailBasis: texture_3d<f32>;
+@group(0) @binding(35) var continuousDetailSampler: sampler;
+fn continuousDetailCurl(p: vec3<f32>) -> vec3<f32> {
+  if (CONTINUOUS_DETAIL_ANALYTIC) { return waveletCurlUnit(p); }
+  return textureSampleLevel(continuousDetailBasis, continuousDetailSampler, p / ${CONTINUOUS_DETAIL_BASIS.period.toFixed(1)}, 0.0).xyz;
+}
 fn continuousDetailNoise(coord: vec3<f32>) -> vec3<f32> {
   let p = coord / u.continuous_detail.y;
-  return waveletCurlUnit(p) + u.continuous_detail.z * waveletCurlUnit(p * 2.0 + vec3<f32>(17.1, 31.7, 11.3));
+  var n = continuousDetailCurl(p);
+  if (u.continuous_detail.z > 0.0) { n += u.continuous_detail.z * continuousDetailCurl(p * 2.0 + vec3<f32>(17.1, 31.7, 11.3)); }
+  return n;
 }
 fn continuousDetailPosition(p: vec3<f32>) -> vec3<f32> {
   if (u.continuous_detail.x <= 0.0) { return p; }

@@ -99,13 +99,14 @@ const fadeDerivative = t => 30 * t * t * (t - 1) * (t - 1);
 
 // Gradient noise with its analytic gradient. `salt` selects an independent
 // field (one per potential component).
-export function waveletGradientNoise(p, salt = 0) {
+export function waveletGradientNoise(p, salt = 0, period = 0) {
   const i = p.map(Math.floor), t = p.map((v, a) => v - i[a]);
   const f = t.map(fade), df = t.map(fadeDerivative);
   let value = 0; const gradient = [0, 0, 0];
   for (let c = 0; c < 8; c++) {
     const cx = c & 1, cy = (c >> 1) & 1, cz = (c >> 2) & 1;
-    const g = latticeGradient((i[0] + cx) >>> 0, (i[1] + cy) >>> 0, (i[2] + cz) >>> 0, salt);
+    const wrap = v => period ? ((v % period) + period) % period : v;
+    const g = latticeGradient(wrap(i[0] + cx) >>> 0, wrap(i[1] + cy) >>> 0, wrap(i[2] + cz) >>> 0, salt);
     const d = [t[0] - cx, t[1] - cy, t[2] - cz];
     const dot = g[0] * d[0] + g[1] * d[1] + g[2] * d[2];
     const wx = cx ? f[0] : 1 - f[0], wy = cy ? f[1] : 1 - f[1], wz = cz ? f[2] : 1 - f[2];
@@ -121,8 +122,8 @@ export function waveletGradientNoise(p, salt = 0) {
 
 // Curl of the three-component potential ψ_k = n_k(p + o_k) at unit frequency,
 // scaled to unit rms. Divergence-free by construction.
-export function waveletCurlUnit(p) {
-  const psi = POTENTIAL_OFFSETS.map((o, k) => waveletGradientNoise([p[0] + o[0], p[1] + o[1], p[2] + o[2]], k).gradient);
+export function waveletCurlUnit(p, period = 0) {
+  const psi = POTENTIAL_OFFSETS.map((o, k) => waveletGradientNoise([p[0] + o[0], p[1] + o[1], p[2] + o[2]], k, period).gradient);
   return [
     (psi[2][1] - psi[1][2]) / WAVELET_CURL_RMS,
     (psi[0][2] - psi[2][0]) / WAVELET_CURL_RMS,
@@ -209,7 +210,9 @@ export function velocityBandEnergies(values, dims, { stride = 16, offset = 0, oc
 
 // ---- WGSL ---------------------------------------------------------------
 
-export const WAVELET_TURBULENCE_WGSL = /* wgsl */`
+export function waveletTurbulenceWgsl({latticePeriod = 0} = {}) {
+if (!Number.isInteger(latticePeriod) || latticePeriod < 0) throw new Error('noise lattice period must be a nonnegative integer');
+return /* wgsl */`
 const WAVELET_BAND_SLOPE: f32 = -0.8333333;
 const WAVELET_BASE_WAVELENGTH_CELLS: f32 = ${WAVELET_BASE_WAVELENGTH_CELLS.toFixed(1)};
 const WAVELET_LACUNARITY: f32 = ${WAVELET_LACUNARITY.toFixed(1)};
@@ -227,7 +230,8 @@ fn waveletHash(x: u32, y: u32, z: u32, salt: u32) -> u32 {
 }
 fn waveletUnit(h: u32) -> f32 { return f32(h >> 8u) / 16777216.0 * 2.0 - 1.0; }
 fn waveletLatticeGradient(c: vec3<i32>, salt: u32) -> vec3<f32> {
-  let x = bitcast<u32>(c.x); let y = bitcast<u32>(c.y); let z = bitcast<u32>(c.z);
+  ${latticePeriod ? `let lattice = ((c % vec3<i32>(${latticePeriod})) + vec3<i32>(${latticePeriod})) % vec3<i32>(${latticePeriod});` : 'let lattice = c;'}
+  let x = bitcast<u32>(lattice.x); let y = bitcast<u32>(lattice.y); let z = bitcast<u32>(lattice.z);
   let g = vec3<f32>(waveletUnit(waveletHash(x, y, z, salt * 3u + 1u)), waveletUnit(waveletHash(x, y, z, salt * 3u + 2u)), waveletUnit(waveletHash(x, y, z, salt * 3u + 3u)));
   let len = length(g);
   return select(g / len, vec3<f32>(1.0, 0.0, 0.0), len < 1e-6);
@@ -286,3 +290,5 @@ fn waveletBlendA(step: u32, period: u32) -> f32 {
   return 1.0 - abs(2.0 * phase - 1.0);
 }
 `;
+}
+export const WAVELET_TURBULENCE_WGSL = waveletTurbulenceWgsl();

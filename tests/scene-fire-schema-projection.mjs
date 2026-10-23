@@ -5,6 +5,19 @@ import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
 const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-reactant-soot-yield','volume-swirl-jostle','volume-render-detail','volume-render-detail-scale','volume-render-detail-fine'];
+test('independently saved render detail does not imply a later force control was authored',()=>{
+ const saved=oldSettings();
+ for(const key of ['volume-render-detail','volume-render-detail-scale','volume-render-detail-fine']){
+  const e=schema.controls.find(e=>e.key===key);saved.domControls[key]={id:key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault};
+ }
+ // Observed native003-continuous-detail scene on the pre-Swirl branch.
+ saved.domControls['volume-render-detail'].value=.75;
+ const projected=fire.projectFireSettingsToSchema(saved,schema);
+ assert.equal(projected.domControls['volume-swirl-jostle'].value,1);
+ assert.equal(projected.domControls['volume-render-detail'].value,.75);
+ const holed=structuredClone(projected);delete holed.domControls['volume-render-detail-scale'];
+ assert.throws(()=>fire.projectFireSettingsToSchema(holed,schema),/Missing authored fire control volume-render-detail-scale/,'holes within the same feature history still surface');
+});
 // Native74383 restore-diagnostic-r2 observed these three declared additions
 // absent from an otherwise intact saved fire record (249 controls).
 function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}

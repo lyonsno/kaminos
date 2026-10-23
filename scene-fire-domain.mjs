@@ -118,10 +118,11 @@ export function projectFireSettingsToSchema(settings,rawSchema){
  const retiredSwitches={};for(const id of Object.keys(saved))if(retired.has(id)){retiredSwitches[id]=saved[id]?.value;delete saved[id];}
  for(const id of Object.keys(saved))if(!inventory.has(id))throw Error(`Unsupported authored fire control ${id}`);
  // A record that still carries a control introduced later cannot be missing one introduced earlier: a hole, not history.
- const latestPresent=Math.max(0,...schema.controls.filter(entry=>Number.isSafeInteger(entry.additiveSinceControlCount)&&Object.hasOwn(saved,entry.key)).map(entry=>entry.additiveSinceControlCount));
+ // Parallel features can share an epoch without having been authored together.
+ const latestPresentFor=family=>Math.max(0,...schema.controls.filter(entry=>(entry.additiveFamily??'default')===family&&Number.isSafeInteger(entry.additiveSinceControlCount)&&Object.hasOwn(saved,entry.key)).map(entry=>entry.additiveSinceControlCount));
  for(const entry of schema.controls){
   if(Object.hasOwn(saved,entry.key))continue;
-  if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count||entry.additiveSinceControlCount<latestPresent)throw Error(`Missing authored fire control ${entry.key}`);
+  if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count||entry.additiveSinceControlCount<latestPresentFor(entry.additiveFamily??'default'))throw Error(`Missing authored fire control ${entry.key}`);
   saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
  }
  transferRetiredForceSwitches(retiredSwitches,saved);

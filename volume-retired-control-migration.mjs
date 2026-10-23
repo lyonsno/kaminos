@@ -148,8 +148,8 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   const savedDomControlCount = Object.keys(preset.domControls || {}).length + retiredDomControlsPresent;
   // A record that still carries a control introduced later cannot be missing
   // one introduced earlier: that is a hole in a current record, not history.
-  const latestPresentIntroducedAt = Math.max(0, ...(schema.controls || [])
-    .filter(control => Number.isSafeInteger(Number(control.additiveSinceControlCount)) && Object.hasOwn(preset.domControls || {}, control.key))
+  const latestPresentIntroducedAt = family => Math.max(0, ...(schema.controls || [])
+    .filter(control => (control.additiveFamily ?? 'default') === family && Number.isSafeInteger(Number(control.additiveSinceControlCount)) && Object.hasOwn(preset.domControls || {}, control.key))
     .map(control => Number(control.additiveSinceControlCount)));
   for (const control of schema.controls || []) {
     const introducedAt = Number(control.additiveSinceControlCount);
@@ -161,7 +161,7 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     // every additive control introduced after it takes its declared default;
     // one introduced before it and still missing is a hole, not history.
     if (Object.hasOwn(preset.domControls, control.key)) continue;
-    if (savedDomControlCount >= introducedAt || introducedAt < latestPresentIntroducedAt) {
+    if (savedDomControlCount >= introducedAt || introducedAt < latestPresentIntroducedAt(control.additiveFamily ?? 'default')) {
       throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);
     }
     if (route.searchParams.has(control.param)) {
