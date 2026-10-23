@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +15,21 @@ setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
 
 class SetupTests(unittest.TestCase):
+    def test_interactive_terms_on_a_real_terminal_descriptor(self):
+        master, slave = os.openpty()
+        real_open = open
+        def terminal_open(path, mode='r', *args, **kwargs):
+            if path == '/dev/tty': return real_open(os.dup(slave), mode, *args, **kwargs)
+            return real_open(path, mode, *args, **kwargs)
+        try:
+            os.write(master, b'yes\n')
+            with tempfile.TemporaryDirectory() as temp, patch('builtins.open', side_effect=terminal_open):
+                setup.acknowledge_terms(Path(temp), False)
+                self.assertTrue(json.loads((Path(temp) / 'model-terms.json').read_text())['acknowledged'])
+        finally:
+            os.close(master)
+            os.close(slave)
+
     def test_crossed_packages_are_not_a_valid_cache(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

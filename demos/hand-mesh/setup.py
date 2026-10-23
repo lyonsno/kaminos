@@ -168,10 +168,10 @@ def acknowledge_terms(state_dir, accepted):
           '  https://huggingface.co/BasinShapers/wilor-mlx\n', flush=True)
     if not accepted:
         try:
-            with open('/dev/tty', 'r+') as tty:
-                tty.write('Continue under the applicable model terms? Type yes: ')
-                tty.flush()
-                accepted = tty.readline().strip().lower() == 'yes'
+            with open('/dev/tty', 'r') as terminal_input, open('/dev/tty', 'w') as terminal_output:
+                terminal_output.write('Continue under the applicable model terms? Type yes: ')
+                terminal_output.flush()
+                accepted = terminal_input.readline().strip().lower() == 'yes'
         except OSError:
             raise ValueError('Model terms need acknowledgement; rerun in a terminal or pass --accept-model-terms after reviewing them')
     if not accepted:
