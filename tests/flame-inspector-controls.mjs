@@ -22,11 +22,11 @@ test('the contextual inspector includes current appearance, structure, motion an
 });
 
 test('field views partition controls while keeping source supply on the selected emitter',()=>{
-  assert.deepEqual(flame.FLAME_INSPECTOR_VIEWS?.map(view=>view.id),['look','shape','motion','quality']);
+  assert.deepEqual(flame.FLAME_INSPECTOR_VIEWS?.map(view=>view.id),['look','motion','shape','quality']);
   for(const group of flame.FLAME_PROPERTY_GROUPS){
-    assert.ok(group.name==='Emission'||flame.FLAME_INSPECTOR_VIEWS.some(view=>view.id===group.view));
+    assert.ok(group.scope==='emitter'||flame.FLAME_INSPECTOR_VIEWS.some(view=>view.id===group.view));
   }
-  const emission=flame.FLAME_PROPERTY_GROUPS.find(group=>group.name==='Emission');
+  const emission=flame.FLAME_PROPERTY_GROUPS.find(group=>group.scope==='emitter');
   assert.ok(emission.fields.some(([id])=>id==='volume-immersed-fuel'));
 });
 

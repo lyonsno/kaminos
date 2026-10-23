@@ -7,7 +7,7 @@ import {FLAME_PROPERTY_GROUPS} from '../flame-authoring.mjs';
 import {opticalSteppingConfig,resolveOpticalStepping} from '../volume-optical-native.mjs';
 
 test('Quality exposes the marcher, continuous tolerance and optional GPU telemetry once',()=>{
-  const fields=FLAME_PROPERTY_GROUPS.find(group=>group.name==='Quality').fields;
+  const fields=FLAME_PROPERTY_GROUPS.find(group=>group.name==='Ray marching').fields;
   for(const id of ['volume-raymarch-mode','volume-optical-tolerance','volume-ray-step-telemetry'])
     assert.equal(fields.filter(([field])=>field===id).length,1,id+' has a contextual control');
 });
