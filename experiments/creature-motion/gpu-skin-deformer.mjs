@@ -1,11 +1,13 @@
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
 import {storage,Fn,wgslFn,instanceIndex,uint} from '../../lib/three.tsl.js';
 import {transportDualQuaternions} from '../../hindquarter-live-core.mjs';
-import {prepareGpuSkin} from './gpu-skin-data.mjs';
+import {prepareGpuSkin,prepareGpuPhysicalEmbedding} from './gpu-skin-data.mjs';
 
 const deform=wgslFn(`fn dense_dq(v:u32, channels:u32,
  rest:ptr<storage,array<f32>,read>, weights:ptr<storage,array<f32>,read>, dominant:ptr<storage,array<u32>,read>,
- palette:ptr<storage,array<vec4<f32>>,read>) -> vec4<f32> {
+ palette:ptr<storage,array<vec4<f32>>,read>,
+ physicalIds:ptr<storage,array<u32>,read>, physicalWeights:ptr<storage,array<f32>,read>,
+ physicalOffsets:ptr<storage,array<vec4<f32>>,read>) -> vec4<f32> {
  let anchor=(*palette)[(*dominant)[v]*2u];
  var r=vec4<f32>(0.0);var d=vec4<f32>(0.0);
  for(var j=0u;j<channels;j++){
@@ -19,7 +21,10 @@ const deform=wgslFn(`fn dense_dq(v:u32, channels:u32,
  let t=2.0*cross(r.yzw,p);
  let translation=2.0*(-d.x*r.yzw+r.x*d.yzw-cross(d.yzw,r.yzw));
  let out=p+r.x*t+cross(r.yzw,t)+translation;
- return vec4<f32>(out,1.0);
+ var extra=vec3<f32>(0.0);
+ let idsStart=arrayLength(rest)/3u+1u;
+ for(var k=(*physicalIds)[v];k<(*physicalIds)[v+1u];k++){extra+=(*physicalWeights)[k]*(*physicalOffsets)[(*physicalIds)[idsStart+k]].xyz;}
+ return vec4<f32>(out+extra,1.0);
 }`);
 const normals=wgslFn(`fn dense_normals(v:u32,
  positions:ptr<storage,array<vec4<f32>>,read_write>, triangles:ptr<storage,array<u32>,read>,
@@ -36,12 +41,16 @@ const normals=wgslFn(`fn dense_normals(v:u32,
 
 // Uses the renderer supplied by the actual object's draw, never a second device,
 // renderer or animation loop. The output buffers are also its vertex attributes.
-export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels}){
+export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,physical=null,physicalAttribute:externalPhysical=null}){
  const payload=prepareGpuSkin({rest,triangles,weights,channels});
  const attributes=[],computes=[];
  const input=(array,type)=>{const attr=new StorageBufferAttribute(array,1);attr.name='creature-'+geometry.uuid+'-input-'+attributes.length;attributes.push(attr);return storage(attr,type,array.length).toReadOnly();};
  const restNode=input(payload.rest,'float'),weightNode=input(payload.weights,'float'),dominant=input(payload.dominant,'uint');
  const triangleNode=input(payload.triangles,'uint'),offsets=input(payload.offsets,'uint'),faces=input(payload.faces,'uint');
+ const embedding=prepareGpuPhysicalEmbedding(physical,payload.vertices),{nodes}=embedding;
+ const physicalIds=input(embedding.graph,'uint'),physicalWeights=input(embedding.weights,'float'),physicalAttribute=externalPhysical??new StorageBufferAttribute(new Float32Array(nodes*4),4);if(!externalPhysical)attributes.push(physicalAttribute);
+ if(physicalAttribute.itemSize!==4||physicalAttribute.count<nodes)throw Error('Physical GPU buffer must contain every node as vec4');
+ const physicalOffsets=storage(physicalAttribute,'vec4',nodes).toReadOnly();
  const paletteAttribute=new StorageBufferAttribute(new Float32Array(channels*8),4);paletteAttribute.name='creature-'+geometry.uuid+'-palette';attributes.push(paletteAttribute);
  const palette=storage(paletteAttribute,'vec4',channels*2).toReadOnly();
  // Three pads itemSize=3 storage attributes in place. Explicit vec4 buffers
@@ -52,10 +61,18 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels}
  positionAttribute.name='creature-'+geometry.uuid+'-positions';normalAttribute.name='creature-'+geometry.uuid+'-normals';
  const positions=storage(positionAttribute,'vec4',payload.vertices),normalOutput=storage(normalAttribute,'vec4',payload.vertices);
  geometry.setAttribute('position',positionAttribute);geometry.setAttribute('normal',normalAttribute);
- computes.push(Fn(()=>{positions.element(instanceIndex).assign(deform({v:instanceIndex,channels:uint(channels),rest:restNode,weights:weightNode,dominant,palette}));})().compute(payload.vertices));
+ computes.push(Fn(()=>{positions.element(instanceIndex).assign(deform({v:instanceIndex,channels:uint(channels),rest:restNode,weights:weightNode,dominant,palette,physicalIds,physicalWeights,physicalOffsets}));})().compute(payload.vertices));
  computes.push(Fn(()=>{normalOutput.element(instanceIndex).assign(normals({v:instanceIndex,positions,triangles:triangleNode,offsets,faces}));})().compute(payload.vertices));
  let pending=true,disposed=false,dispatches=0,renderer=null;
  return {
+  setOffsets(values){
+   if(externalPhysical)throw Error('Physical offsets are GPU-owned; CPU upload forbidden');
+   if(disposed)throw Error('GPU skin is disposed');
+   if(!physical||values?.length!==nodes||!values.every(p=>p?.length===3&&p.every(Number.isFinite)))throw Error('Matching finite physical offsets required');
+   for(let i=0;i<nodes;i++)physicalAttribute.array.set(values[i],i*4);
+   physicalAttribute.needsUpdate=true;pending=true;
+  },
+  invalidate(){pending=true;},
   update(matrices){
    if(disposed)throw Error('GPU skin is disposed');
    const {real,dual}=transportDualQuaternions(matrices);
@@ -76,7 +93,7 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels}
    if(packedPositions.length!==payload.vertices*4||packedNormals.length!==payload.vertices*4)throw Error('GPU output layout differs from vec4 storage');
    return {positions:unpack(packedPositions),normals:unpack(packedNormals),packedPositions,packedNormals,layout:'vec4',backend:'webgpu-dense-dq',dispatches};
   },
-  read:()=>({backend:'webgpu-dense-dq',dispatches,pending,paletteBytes:paletteAttribute.array.byteLength,poseCacheBytes:0,allInfluences:true}),
+  read:()=>({backend:'webgpu-dense-dq',physicalBackend:externalPhysical?'webgpu-tetrahedral-local-energy':physical?'cpu-tetrahedral-local-energy':'none',physicalInterpolation:embedding.interpolation,physicalEmbeddingBytes:embedding.graph.byteLength+embedding.weights.byteLength,dispatches,pending,paletteBytes:paletteAttribute.array.byteLength,poseCacheBytes:0,allInfluences:true}),
   dispose(){if(disposed)return;disposed=true;for(const node of computes)node.dispose();/* geometry owns the two output attributes */
    if(renderer)for(const attr of attributes)renderer._attributes.delete(attr);
   },
