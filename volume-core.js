@@ -21143,7 +21143,7 @@ export function createKaminosVolumePrototype({
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       if (pressureResidualCopyPending) void resolvePressureResidualProbe();
       state.frameCount += 1;
-      if(typeof onPresentedFrame==='function')onPresentedFrame({canvas,frameCount:state.frameCount,simStepCount:state.simStepCount,width:state.width,height:state.height,backend:state.backend,effectiveRoute:state.effectiveRoute,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps});
+      if(typeof onPresentedFrame==='function')onPresentedFrame({canvas,frameCount:state.frameCount,simStepCount:state.simStepCount,width:state.width,height:state.height,backend:state.backend,effectiveRoute:state.effectiveRoute,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps,presentation:typeof sceneTransportConsumer!=='undefined'&&sceneTransportConsumer?'host-composed':'volume-canvas'});
       if (selectiveHeadLiveExactPause) {
         const exactPause = selectiveHeadLiveExactPause;
         if (state.simStepCount >= exactPause.targetSimStepCount) {
@@ -27647,7 +27647,7 @@ export function createKaminosVolumePrototype({
     },
     async holdPresentationForStill(renderControls = {}) {
       if (!state.active || !device) throw new Error('Flame renderer is inactive');
-      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed) throw new Error('Still output requires the ordinary flame canvas route');
+      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed || sceneTransportConsumer) throw new Error('Still output requires the ordinary flame canvas route');
       if (sceneLightingRebuildPending || selectiveHeadLiveExactPause || stillPresentationHeld) throw new Error('Finish the pending flame presentation change');
       const pausedBefore = selectiveHeadLiveCapturePaused, controlsBefore = controlsSnapshot;
       // Stop new admissions; an already-admitted service still owns its frame.
