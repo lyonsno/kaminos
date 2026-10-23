@@ -33,6 +33,7 @@ const resources = {
   rayStepTelemetry: {counterBuffer:buffer('ray statistics')},
   sceneSolidTextureView: { label: 'scene solid view' },
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
+  immersedCollectionTexture: { createView: options => ({ label: 'immersed collection view', ...options }) },
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },
   rayStartNoiseTexture: { createView: () => ({ label: 'stable spatial ray-start noise view' }) },
@@ -58,6 +59,7 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
+  assert.deepEqual(group.entries.find(e => e.binding === 33)?.resource, {label:'immersed collection view',dimension:'2d-array'});
   const noiseBinding = Number(RAY_START_WGSL.match(/@binding\((\d+)\) var rayStartNoise:/)?.[1]);
   assert.ok(Number.isInteger(noiseBinding), 'noise texture has a shader binding');
   assert.deepEqual(group.entries.find(e => e.binding === noiseBinding)?.resource,

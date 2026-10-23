@@ -27,7 +27,7 @@ test('restored finite setup remains an editable preview until explicit release',
 test('finite simulation selection does not expose unrelated legacy basin budget controls',()=>{
  const water={hidden:true},a=source.indexOf('function updateAuthoringPropertySelection()'),b=source.indexOf('\n}',a);
  const c={document:{getElementById:id=>id==='local-liquid-performance'?water:null,querySelectorAll:()=>[]},activeSceneFieldId:'water-field',activeSceneObjectId:null,FLAME_EMITTER_ID:'flame',authoredFlamePresent:false,
-  syncBurnerInspector(){},syncSceneDataInspector(){},localLiquidEmitterRecords:()=>[{localLiquidEmitter:{mode:'finite_drop'}}]};vm.createContext(c);vm.runInContext(source.slice(a,b+2),c);c.updateAuthoringPropertySelection();
+  flameInspector:null,syncBurnerInspector(){},syncSceneDataInspector(){},localLiquidEmitterRecords:()=>[{localLiquidEmitter:{mode:'finite_drop'}}]};vm.createContext(c);vm.runInContext(source.slice(a,b+2),c);c.updateAuthoringPropertySelection();
  assert.equal(water.hidden,true,'Finite water field must show its actual settings rather than a legacy basin budget');
 });
 

@@ -20,7 +20,7 @@ assert.deepEqual(second.localLiquidEmitter,first.localLiquidEmitter,'Add another
 assert.deepEqual(second.transform.scale,first.transform.scale,'World particle spacing also includes source scale');
 assert.notEqual(second.label,first.label,'Multiple drops need distinguishable default names');
 const can=html.match(/function canDuplicateObject\(entry\)\{[^\n]+/)[0];
-Object.assign(c,{PROCEDURAL_MESH_TYPE:'procedural-mesh',CAMERA_TYPE:'camera'});vm.runInContext(can,c);
+Object.assign(c,{FLAME_EMITTER_TYPE,PROCEDURAL_MESH_TYPE:'procedural-mesh',CAMERA_TYPE:'camera'});vm.runInContext(can,c);
 assert.equal(c.canDuplicateObject(first),true,'Water uses ordinary Duplicate like other authored objects');
 console.log('Ordinary water Add preserves compatible edited settings and water supports normal duplication');
 
