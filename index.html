@@ -12919,6 +12919,7 @@ function openFlameWorkbench() {
     readScene:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read(),collisionEnabled:window.kaminosSceneCollision.read().enabled}),
     async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
     async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    saveBasin:options=>saveVolumeSettingsPreset({label:options?.label}),
     select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
   });
 }
@@ -21810,6 +21811,7 @@ function createFlameQuickFields() {
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:(id,options)=>window.kaminosFlameAuthoring.applyBasin(id,options),
+    saveBasin:options=>saveVolumeSettingsPreset({label:options.label}),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]))} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,

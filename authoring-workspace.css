@@ -96,7 +96,9 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 #selected-flame-fields .slider-label { flex-basis:126px; }
 #selected-flame-fields .transform-input { min-width:0; width:100%; font-size:11px; }
 #selected-flame-fields input[type=checkbox] { width:auto; margin-right:auto; }
-#flame-basin-search, #flame-basin-select { box-sizing:border-box; width:100%; margin:5px 0; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
+#flame-basin-label, #flame-basin-search, #flame-basin-select { box-sizing:border-box; width:100%; min-width:0; margin:5px 0; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
+#flame-basin-browser > label { color:#aaaeb6; font-size:11px; }
+#flame-basin-save { width:100%; }
 .flame-basin-actions { display:flex; gap:6px; margin-top:6px; }
 #flame-basin-current { overflow-wrap:anywhere; }
 
