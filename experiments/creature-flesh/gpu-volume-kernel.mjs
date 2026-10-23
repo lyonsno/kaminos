@@ -12,6 +12,7 @@ struct Params { material:vec4<f32>, solve:vec4<f32>, sphere:vec4<f32>, flags:vec
 @group(0) @binding(3) var<storage,read> tets:array<vec4<u32>>;
 @group(0) @binding(4) var<storage,read> graph:array<u32>;
 @group(0) @binding(5) var<uniform> p:Params;
+@group(0) @binding(6) var<storage,read> capsules:array<vec4<f32>>;
 var<workgroup> x:array<vec4<f32>,${nodes}>;
 var<workgroup> before:array<vec4<f32>,${nodes}>;
 var<workgroup> predicted:array<vec4<f32>,${nodes}>;
@@ -54,6 +55,12 @@ fn value(i:u32,trial:vec3<f32>,hessian:bool)->Value{
  }
  if(p.sphere.w>0.0){
   let q=targets[i*2u].xyz+trial-p.sphere.xyz;let r=length(q);let depth=r-p.sphere.w;
+  if(depth<0.0){var normal=vec3<f32>(1,0,0);if(r>1e-12){normal=q/r;}out.energy+=p.solve.y*depth*depth*0.5;if(hessian){out.gradient+=p.solve.y*depth*normal;out.h+=p.solve.y*outer(normal,normal);}}
+ }
+ for(var c=0u;c<u32(p.flags.z);c++){
+  let a=capsules[c*2u];let b=capsules[c*2u+1u].xyz;let ab=b-a.xyz;let length2=dot(ab,ab);
+  let point=targets[i*2u].xyz+trial;var t=0.0;if(length2>1e-12){t=clamp(dot(point-a.xyz,ab)/length2,0.0,1.0);}
+  let q=point-(a.xyz+t*ab);let r=length(q);let depth=r-a.w;
   if(depth<0.0){var normal=vec3<f32>(1,0,0);if(r>1e-12){normal=q/r;}out.energy+=p.solve.y*depth*depth*0.5;if(hessian){out.gradient+=p.solve.y*depth*normal;out.h+=p.solve.y*outer(normal,normal);}}
  }
  return out;

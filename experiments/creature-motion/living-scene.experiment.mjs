@@ -2,6 +2,7 @@ import {createWalkingCreature} from './walking.experiment.mjs';
 import {loadFullBodySources,loadFullBodySkin} from './full-body-source.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {mountCreatureProperties} from './creature-properties.mjs';
+import {createEncounterWorld} from './encounters.mjs';
 
 function checkZone(spec){const t=spec?.transform;if(typeof spec?.id!=='string'||!spec.id.trim()||typeof spec.label!=='string'||!spec.label.trim()||t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5)throw Error('Invalid authored zone');}
 function checkPlaces(places,ids){if(!Array.isArray(places))throw Error('Creature requires zone references');const seen=new Set();for(const p of places){if(!ids.has(p?.zoneId)||seen.has(p.zoneId)||typeof p.enabled!=='boolean'||!Number.isFinite(p.preference)||p.preference<0)throw Error('Unknown/duplicate zone or invalid preference');seen.add(p.zoneId);}return structuredClone(places);}
@@ -11,6 +12,7 @@ function checkActor(spec){if(typeof spec?.id!=='string'||!spec.id.trim()||typeof
 export function validateLivingSetup(inputs){
  if(!Array.isArray(inputs?.actors))throw Error('Living scene requires explicit actors');
  if(typeof(inputs.running??false)!=='boolean'||inputs.zones!==undefined&&!Array.isArray(inputs.zones))throw Error('Invalid scene run state or zones');
+ if(inputs.encounters!==undefined&&(!inputs.encounters||typeof(inputs.encounters.avoidance??true)!=='boolean'))throw Error('Invalid encounter settings');
  const ids=new Set();for(const spec of inputs.actors){checkActor(spec);if(ids.has(spec.id))throw Error(`Duplicate actor: ${spec.id}`);ids.add(spec.id);}
  if(inputs.zones!==undefined){const zones=new Set();for(const zone of inputs.zones){checkZone(zone);if(zones.has(zone.id))throw Error('Duplicate zone');zones.add(zone.id);}for(const spec of inputs.actors)checkPlaces(spec.places??[],zones);}
 }
@@ -22,6 +24,7 @@ export async function openLivingSetup({entry,inputs,prepare=async()=>{}}){valida
 export async function createLivingScene({host,inputs={},record=()=>{}},dependencies={}) {
  validateLivingSetup(inputs);
  const actors=new Map(),pending=new Set(),sourceCache=new Map(),skinCache=new Map(),zones=new Map();
+ const encounters=inputs.encounters?createEncounterWorld(inputs.encounters):null;
  const authored=inputs.zones!==undefined;
  let running=inputs.running??false,zoneSession=null,sceneControls=null;
  if(typeof running!=='boolean'||authored&&!Array.isArray(inputs.zones))throw Error('Invalid scene run state or zones');
@@ -49,7 +52,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   const asset=await zoneSession.attach(root,{owned:true,metadata:{fileName:spec.label,label:spec.label,source:null}});const row={id:spec.id,label:spec.label,root,asset};zones.set(spec.id,row);seatZone(row);return zoneRead(row);
  }
  const serialEdit=fn=>{const operation=tail.then(()=>{active();return fn();});tail=operation.catch(()=>{});return operation;};
- function read(){active();return {schema:'kaminos.living-scene.v1',...(authored?{running,zones:[...zones.values()].map(zoneRead)}:{}),actors:[...actors.values()].map(row=>({id:row.id,label:row.label,...(authored?{active:row.active,places:structuredClone(row.places),behavior:behavior(row)}:{}),state:row.entry.read()})),recipe:{...structuredClone(inputs),...(authored?{running,zones:[...zones.values()].filter(row=>row.root.parent).map(row=>{const {hostId,mounted,...spec}=zoneRead(row);return spec;})}:{}),actors:[...actors.values()].filter(row=>row.entry.read().playback.status!=='removed').map(row=>({id:row.id,label:row.label,...(authored?{active:row.active,preview:row.preview,places:structuredClone(row.places)}:{}),creature:row.entry.read().recipe}))}};}
+ function read(){active();return {schema:'kaminos.living-scene.v1',encounters:encounters?.read()??null,...(authored?{running,zones:[...zones.values()].map(zoneRead)}:{}),actors:[...actors.values()].map(row=>({id:row.id,label:row.label,...(authored?{active:row.active,places:structuredClone(row.places),behavior:behavior(row)}:{}),state:row.entry.read()})),recipe:{...structuredClone(inputs),...(encounters?{encounters:{avoidance:encounters.read().avoidance}}:{}),...(authored?{running,zones:[...zones.values()].filter(row=>row.root.parent).map(row=>{const {hostId,mounted,...spec}=zoneRead(row);return spec;})}:{}),actors:[...actors.values()].filter(row=>row.entry.read().playback.status!=='removed').map(row=>({id:row.id,label:row.label,...(authored?{active:row.active,preview:row.preview,places:structuredClone(row.places)}:{}),creature:row.entry.read().recipe}))}};}
  async function construct(spec){
   checkActor(spec);if(pending.has(spec.id))throw Error(`Actor is being constructed: ${spec.id}`);
   const row={id:spec.id,label:spec.label,entry:null,mounted:null,active:spec.active??true,preview:spec.preview??false,places:authored?checkPlaces(spec.places??[],new Set(zones.keys())):[]};
@@ -74,7 +77,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   };
   const extra=authored?{zoneProvider:{roots:()=>liveZones(row)},mountProperties:options=>{const panel=mountCreatureProperties({...options,behaviorContext:{read:()=>({behavior:behavior(row),places:structuredClone(row.places),zones:[...zones.values()].map(zoneRead)}),setActive:active=>operations.setActive({id:row.id,active}),setPlaces:places=>operations.setPlaces({id:row.id,places}),setPreview:preview=>operations.setPreview({id:row.id,preview}),selectZone:id=>operations.selectZone({id}),addZone:()=>operations.addZone({actorId:row.id})}});row.refreshPanel=panel.update;return panel;}}:{};
   const safe=authored?{play:false,...(!creature.wander&&!row.places.some(p=>p.enabled&&p.preference>0)?{action:'preview'}:{})}:{};
-  try{row.entry=await createWalkingCreature({host:scopedHost,inputs:{...creature,...safe,label:spec.label,actor_root:'live'},record:event=>record({...event,actor:spec.id})},{...deps,...extra});active();return row;}
+  try{row.entry=await createWalkingCreature({host:scopedHost,inputs:{...creature,...safe,label:spec.label,actor_root:'live'},record:event=>record({...event,actor:spec.id})},{...deps,...extra,encounterContext:encounters?.actor(spec.id)});active();return row;}
   catch(error){await row.entry?.dispose();throw error;}finally{pending.delete(spec.id);}
  }
  function seat(row){
@@ -87,6 +90,8 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
  async function add(spec){checkActor(spec);if(actors.has(spec.id))throw Error(`Duplicate actor: ${spec.id}`);const row=await construct(spec);try{actors.set(row.id,row);seat(row);if(authored)await applyGate(row);refreshAll();return read();}catch(error){actors.delete(row.id);await row.entry.dispose();throw error;}}
  async function remove(id){const row=get(id);await row.entry.dispose();actors.delete(id);return read();}
  const operations={
+  avoidance:({enabled}={})=>{if(!encounters)throw Error('This room has no encounter settings');encounters.setAvoidance(enabled);sceneControls?.avoidance&&(sceneControls.avoidance.checked=enabled);return read();},
+  advance:async({seconds}={})=>{if(running)throw Error('Pause scene before exact encounter advance');if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative encounter time required');for(const row of actors.values())if(row.active&&!row.preview&&row.entry.read().action.kind==='wander')await row.entry.operations.advance({seconds});return read();},
   actor:async({id,operation,input}={})=>{const row=get(id);if(!Object.hasOwn(row.entry.operations,operation))throw Error(`Unknown actor operation: ${operation}`);if(authored&&operation==='action'){if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');return operations.setPreview({id,preview:input.kind==='preview'});}if(authored&&!row.preview){if(operation==='play'||operation==='pause')return operations.setActive({id,active:operation==='play'});if(['replay','seek','mode'].includes(operation))throw Error('Enter explicit motion preview before clip playback');}return row.entry.operations[operation](input);},
   setRunning:({running:value}={})=>serialEdit(async()=>{if(!authored||typeof value!=='boolean')throw Error('Scene behavior requires an explicit running flag');running=value;for(const row of actors.values()){if(!running)row.entry.operations.pause();else await applyGate(row);}refreshAll();record({kind:'living.run',running});return read();}),
   setActive:({id,active:value}={})=>serialEdit(async()=>{if(typeof value!=='boolean')throw Error('Behavior active must be boolean');const row=get(id);row.active=value;await applyGate(row);refreshAll();record({kind:'living.active',id,active:value});return read();}),
@@ -109,14 +114,18 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   select:({id}={})=>{const row=get(id),state=row.entry.read();if(state.playback.status==='removed')throw Error('Creature was removed from the scene');globalThis.window?.selectSceneObject?.(state.host.id);return state;},
  };
  const registry={read,invoke:(id,operation,input)=>operations.actor({id,operation,input}),inspect:(id,options)=>get(id).entry.inspect(options),pose:(id,options)=>get(id).entry.pose(options)};
- async function dispose(){if(disposed)return;disposed=true;await tail;sceneControls?.node.remove();for(const row of zones.values())row.seating?.dispose();const results=await Promise.allSettled([...actors.values()].map(row=>row.entry.dispose()));await zoneSession?.dispose();zones.clear();actors.clear();sourceCache.clear();skinCache.clear();if(globalThis.window?.kaminosCreatureActors===registry)delete window.kaminosCreatureActors;const failures=results.filter(r=>r.status==='rejected').map(r=>r.reason);if(failures.length)throw new AggregateError(failures,'Living scene cleanup failed');}
+ async function dispose(){if(disposed)return;disposed=true;await tail;sceneControls?.node.remove();for(const row of zones.values())row.seating?.dispose();const results=await Promise.allSettled([...actors.values()].map(row=>row.entry.dispose()));encounters?.dispose();await zoneSession?.dispose();zones.clear();actors.clear();sourceCache.clear();skinCache.clear();if(globalThis.window?.kaminosCreatureActors===registry)delete window.kaminosCreatureActors;const failures=results.filter(r=>r.status==='rejected').map(r=>r.reason);if(failures.length)throw new AggregateError(failures,'Living scene cleanup failed');}
  try{
   // Preflight identity before mounting anything, including an accidental duplicate.
   if(authored){zoneSession=await host.scene.open();for(const spec of inputs.zones)await addZone(spec);}
   for(const spec of inputs.actors)await add(spec);
   if(inputs.view){const session=await host.scene.open();try{session.setView(inputs.view);}finally{await session.dispose();}}
   if(globalThis.window)window.kaminosCreatureActors=registry;
-  return {...registry,operations,dispose,mount({root}){mountRoot=root;for(const row of actors.values())seat(row);if(authored&&!sceneControls){const document=host.controls.document,node=document.createElement('span'),button=document.createElement('button'),status=document.createElement('span');node.className='living-scene-run';node.style.cssText='display:flex;align-items:center;gap:8px';button.type='button';button.setAttribute('aria-label','Run or pause scene behavior');button.title='Run active creatures in this scene';status.style.fontSize='11px';button.onclick=async()=>{try{await operations.setRunning({running:!running});}catch(e){status.textContent=e.message;}};node.append(button,status);(document.getElementById('scene-add-menu')?.closest('nav')??root).append(node);sceneControls={node,button,status};refreshAll();}}};
+  return {...registry,operations,dispose,mount({root}){mountRoot=root;for(const row of actors.values())seat(row);if(authored&&!sceneControls){
+   const document=host.controls.document,node=document.createElement('span'),button=document.createElement('button'),status=document.createElement('span');node.className='living-scene-run';node.style.cssText='display:flex;align-items:center;gap:8px';button.type='button';button.setAttribute('aria-label','Run or pause scene behavior');button.title='Run active creatures in this scene';status.style.fontSize='11px';button.onclick=async()=>{try{await operations.setRunning({running:!running});}catch(e){status.textContent=e.message;}};node.append(button,status);
+   let avoidance=null;if(encounters){const label=document.createElement('label');label.textContent='Avoid creatures';label.style.cssText='display:flex;align-items:center;gap:5px';avoidance=document.createElement('input');avoidance.type='checkbox';avoidance.checked=encounters.read().avoidance;avoidance.setAttribute('aria-label','Avoid creatures');avoidance.onchange=()=>operations.avoidance({enabled:avoidance.checked});label.prepend(avoidance);node.append(label);}
+   (document.getElementById('scene-add-menu')?.closest('nav')??root).append(node);sceneControls={node,button,status,avoidance};refreshAll();
+  }}};
  }catch(error){await dispose();throw error;}
 }
 

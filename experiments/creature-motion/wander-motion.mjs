@@ -41,17 +41,19 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   return {cycle,frame:Math.min(adapter.frames-2,index),distance:travel==='stance'?time*transport.unitsPerSecond:cycle*sourceDistance+distances[index]+(distances[next]-distances[index])*(fractional-index)};
  }
  function read(){const t=timing();return {elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,travel:structuredClone(transport),path:path.read()};}
- function advance(delta) {
+ function advance(delta,{distanceScale=1,direction=null}={}) {
   if(!Number.isFinite(delta)||delta<0)throw Error('Wander time delta must be finite and nonnegative');
+  if(!Number.isFinite(distanceScale)||distanceScale<0||distanceScale>1)throw Error('Travel scale must be in [0,1]');
+  if(direction)path.redirect(direction);
   const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;heldFrame=null;
   const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
-  path.advance(Math.max(0,distance));
+  path.advance(Math.max(0,distance)*distanceScale);
   const consumed=path.read().distance-pathBefore;
   if(consumed<distance-1e-10){
    // Stop the retained gait at the same travelled distance as the root.
    let low=previousElapsed,high=elapsed;
    for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
-   elapsed=(low+high)/2;
+   elapsed=consumed===0?previousElapsed:(low+high)/2;
   }
   return read();
  }

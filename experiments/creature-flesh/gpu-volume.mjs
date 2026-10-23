@@ -14,7 +14,7 @@ export function createGpuFleshVolume(source,settings={}){
  if(!Number.isFinite(config.contact)||config.contact<=0||!Number.isFinite(config.damping)||config.damping<0||config.damping>1||![config.iterations,config.lineSearchTrials].every(x=>Number.isSafeInteger(x)&&x>0))throw Error('Invalid GPU solver settings');
  const attribute=new StorageBufferAttribute(new Float32Array((2*n+1)*4),4);attribute.name='physical-offsets-velocities';
  const targetAttribute=new StorageBufferAttribute(new Float32Array(n*4),4);targetAttribute.name='physical-target-points';
- let renderer,device,pipeline,bindGroup,buffers=[],disposed=false,steps=0,epoch=0,enabled=true,resetPending=true,sphere=null,lastSnapshot=null,validation,valid=false;
+ let renderer,device,pipeline,bindGroup,buffers=[],disposed=false,steps=0,epoch=0,enabled=true,resetPending=true,sphere=null,capsules=[],lastSnapshot=null,validation,valid=false;
  let targets=structuredClone(source.positions),rotations=source.positions.map(()=>[1,0,0,0]);
  const originalSigns=source.tetrahedra.map(t=>Math.sign(determinant(edgeMatrix(t.map(i=>source.positions[i])))));
  let referenceBytes;
@@ -43,25 +43,30 @@ export function createGpuFleshVolume(source,settings={}){
   const tets=buffer('flesh elements',topology.tets.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,topology.tets);
   const graph=buffer('flesh incidence and colours',topology.graph.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,topology.graph);
   const params=buffer('flesh parameters',64,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+  buffer('flesh contact capsules',Math.max(32,capsules.length*32),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);
   const module=device.createShaderModule({label:'flesh elastic volume',code:volumeKernel(topology)});
   validation=module.getCompilationInfo().then(info=>{const errors=info.messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(e=>e.message).join('\n'));valid=true;});validation.catch(()=>{});
   pipeline=device.createComputePipeline({label:'physical StVK coloured local solve',layout:'auto',compute:{module,entryPoint:'main'}});
   const state=renderer.backend.get(attribute).buffer;
-  bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[state,targetBuffer,refsBuffer,tets,graph,params].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[state,targetBuffer,refsBuffer,tets,graph,params,buffers[5]].map((buffer,binding)=>({binding,resource:{buffer}}))});
  }
  function step(dt){
   if(disposed||!device||!valid)throw Error('Physical GPU must be bound and shader-validated before stepping');
   if(!(Number.isFinite(dt)&&dt>0))throw Error('Positive finite physical timestep required');
   const targetBytes=new Float32Array(n*8);for(let i=0;i<n;i++){targetBytes.set([...targets[i],topology.mass[i]],i*8);targetBytes.set(rotations[i],i*8+4);}
   const {young,poisson,bulk,contact,damping,iterations,lineSearchTrials}=config,mu=young/(2*(1+poisson)),lambda=young*poisson/((1+poisson)*(1-2*poisson));
+  const contactBytes=new Float32Array(Math.max(8,capsules.length*8));capsules.forEach((c,i)=>{contactBytes.set([...c.a,c.radius,...c.b,0],i*8);});
+  if(buffers[5].size<contactBytes.byteLength){buffers[5].destroy();buffers[5]=device.createBuffer({label:'flesh contact capsules',size:contactBytes.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[renderer.backend.get(attribute).buffer,...buffers].map((buffer,binding)=>({binding,resource:{buffer}}))});}
+  device.queue.writeBuffer(buffers[5],0,contactBytes);
   device.queue.writeBuffer(buffers[0],0,targetBytes);device.queue.writeBuffer(buffers[1],0,referenceBytes);
-  device.queue.writeBuffer(buffers[4],0,new Float32Array([dt,damping,mu,lambda,bulk,contact,iterations,lineSearchTrials,...(sphere?.center??[0,0,0]),sphere?.radius??0,enabled?1:0,resetPending?1:0,0,0]));
+  device.queue.writeBuffer(buffers[4],0,new Float32Array([dt,damping,mu,lambda,bulk,contact,iterations,lineSearchTrials,...(sphere?.center??[0,0,0]),sphere?.radius??0,enabled?1:0,resetPending?1:0,capsules.length,0]));
   const encoder=device.createCommandEncoder({label:'physical flesh step'}),pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,bindGroup);pass.dispatchWorkgroups(1);pass.end();device.queue.submit([encoder.finish()]);
   resetPending=false;rotations=source.positions.map(()=>[1,0,0,0]);steps++;epoch++;
  }
- function read(){return{route:'webgpu-pose-conditioned-tetrahedral-local-energy-v1',backend:device?'webgpu':'unbound',nodes:n,elements:topology.elements,colours:topology.colourCount,steps,epoch,enabled,settings:config,sphere,readbackInStep:false,snapshot:lastSnapshot&&{...lastSnapshot,offsets:undefined,points:undefined,epoch:lastSnapshot.epoch,current:lastSnapshot.epoch===epoch}};}
+ function read(){return{route:'webgpu-pose-conditioned-tetrahedral-local-energy-v1',backend:device?'webgpu':'unbound',nodes:n,elements:topology.elements,colours:topology.colourCount,steps,epoch,enabled,settings:config,sphere,capsules:structuredClone(capsules),readbackInStep:false,snapshot:lastSnapshot&&{...lastSnapshot,offsets:undefined,points:undefined,epoch:lastSnapshot.epoch,current:lastSnapshot.epoch===epoch}};}
  return{attribute,targetAttribute,bind,step,read,setTargets,validate:()=>validation??Promise.reject(Error('Physical GPU has not been bound')),
   setSphere(value){if(value!==null&&(!Array.isArray(value?.center)||value.center.length!==3||!value.center.every(Number.isFinite)||!(Number.isFinite(value.radius)&&value.radius>0)))throw Error('Finite sphere and positive radius required');sphere=value&&structuredClone(value);},
+  setCapsules(value){if(!Array.isArray(value)||!value.every(c=>[c?.a,c?.b].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))&&Number.isFinite(c.radius)&&c.radius>0))throw Error('Finite capsule endpoints and positive radius required');capsules=structuredClone(value);},
   setEnabled(value){if(typeof value!=='boolean')throw Error('Boolean physical response required');enabled=value;if(!value){const zero=new Float32Array((2*n+1)*4);zero[n*8+1]=steps;if(device)device.queue.writeBuffer(renderer.backend.get(attribute).buffer,0,zero);resetPending=true;lastSnapshot=null;epoch++;}},
   reset(){resetPending=true;steps=0;lastSnapshot=null;epoch++;if(device)device.queue.writeBuffer(renderer.backend.get(attribute).buffer,0,new Float32Array((2*n+1)*4));},
   setMaterial(value){tetrahedron(source.tetrahedra[0].map(i=>source.positions[i]),{...config,...value});Object.assign(config,value);this.reset();},

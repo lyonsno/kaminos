@@ -134,7 +134,19 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
  function setArea(value) {
   const next=validateArea(value),current=sample();area=next;const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal);return read();
  }
+ function redirect(value){
+  const heading=normalized(value),current=sample(),end=pair(points[2]),reach=length(minus(end,current.position));
+  if(reach<1e-9)return read();
+  let handle=Math.min(reach*.4,Math.min(...area.radii)*.5);
+  // Preserve a convex in-area curve; outside starts keep their return route.
+  if(inside(current.position,area)){
+   const p=localPoint(current.position,area),q=localPoint(current.position.map((v,i)=>v+heading[i]),area),d=minus(q,p),a=d[0]**2+d[1]**2,b=2*(p[0]*d[0]+p[1]*d[1]),c=p[0]**2+p[1]**2-1;
+   handle=Math.min(handle,Math.max(0,(-b+Math.sqrt(Math.max(0,b*b-4*a*c)))/(2*a))*.5);
+  }
+  if(handle<1e-10)return read();
+  points=[pair(current.position),current.position.map((v,i)=>v+heading[i]*handle),end];offset=0;fallback=heading;lookup=curveTable(points,area);segments++;return read();
+ }
  function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal);return read();}
  function save() {return {schema:'kaminos.creature-wander-path.v1',...(destination?{destination:pair(destination)}:{}),...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
- return Object.freeze({read,advance,setArea,setAreas,setDestination,snapshot:save});
+ return Object.freeze({read,advance,redirect,setArea,setAreas,setDestination,snapshot:save});
 }

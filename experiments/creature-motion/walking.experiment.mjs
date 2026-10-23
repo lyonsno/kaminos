@@ -1,6 +1,7 @@
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
+import {loadCreatureFlesh,createCreatureFleshDeformer} from '../creature-flesh/creature.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
@@ -25,6 +26,7 @@ function checkRecipeInputs(inputs){
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
+ if(inputs.flesh!==undefined){if(!inputs.flesh||!Array.isArray(inputs.flesh.preparations)||inputs.flesh.enabled!==undefined&&typeof inputs.flesh.enabled!=='boolean'||inputs.flesh.interpolation!==undefined&&!['smooth','linear'].includes(inputs.flesh.interpolation)||inputs.deformation==='cpu')throw Error('Physical creature requires GPU deformation and explicit preparations');const scale=inputs.transform?.scale;if(scale&&Math.max(...scale)-Math.min(...scale)>1e-5)throw Error('Physical creature requires uniform positive scale');}
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander_travel!==undefined&&!['source','stance'].includes(inputs.wander_travel))throw Error('Unknown wander travel policy');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
@@ -52,12 +54,12 @@ async function checkRecipeView(view,current){
  try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
 }
 
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,encounterContext=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const choices=[...checkRecipeInputs(inputs)];
- const data=await loadSources(inputs),document=host.controls.document;
+ const data=await loadCreatureFlesh(inputs.flesh,await loadSources(inputs)),document=host.controls.document;
  let workspace=null,assigned=null;const sessionChoices=new Map();
- const deformation=inputs.deformation??'cpu',deformerFactory=deformation==='gpu'?await loadGpuDeformer():null;
+ const deformation=inputs.deformation??(inputs.flesh?'gpu':'cpu'),deformerFactory=inputs.flesh?createCreatureFleshDeformer(inputs.flesh):deformation==='gpu'?await loadGpuDeformer():null;
  if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
  let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
  let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
@@ -83,8 +85,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
+ let releaseEncounter=()=>{},frameStamp=0;
  let readingZoneState=false;
- const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
+ const unsubscribe=()=>{const previous=stop;stop=null;previous?.();runtime?.flesh.setRunning(false);};
  function read(){
   // Authored regions can change while all domain clocks are held. Resolve that
   // edit before publishing a state/recipe, never on a later preview or reopen.
@@ -98,7 +101,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
 
 
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
-  attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,
+  attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,flesh:runtime.flesh.read(),
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function refreshGuide(){
@@ -140,7 +143,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(!same){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
   catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}
  }
- function presentWander(delta,playing){
+ function presentWander(delta,playing,physicalSeconds=delta){
   if(!syncArea())return read();
   let moving=delta;
   if(attention&&chosenInputs.attention.engage===true){
@@ -155,24 +158,32 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    }else if(intent.phase!=='inspecting')wander.setDestination(null);
    if(intent.hold)moving=0;
   }
-  const state=wander.advance(moving);cycle=state.cycle;source.presentation.cycle=cycle;
+  let constraint;
+  if(encounterContext&&moving>0){const frame=authoredPlacement(),path=wander.read().path;frame.updateMatrixWorld(true);const direction=new THREE.Vector3(path.direction[0],0,path.direction[1]).transformDirection(frame.matrixWorld),scale=frame.getWorldScale(new THREE.Vector3()).x;
+   constraint=encounterContext.steer({time:frameStamp,seconds:physicalSeconds,direction:[direction.x,direction.z],speed:wander.read().travel.unitsPerSecond*scale});
+   const local=new THREE.Vector3(constraint.direction[0],0,constraint.direction[1]).transformDirection(frame.matrixWorld.clone().invert());constraint={...constraint,direction:[local.x,local.z]};
+  }
+  const state=wander.advance(moving,constraint);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
+  stepFlesh(physicalSeconds);
   if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
  }
  function startClock(){
   if(stop)return;
-  stop=session.onFrame(({deltaSeconds})=>{
+  runtime.flesh.setRunning(true);
+  stop=session.onFrame(({deltaSeconds,timestampMs})=>{
    if(disposed||!stop)return;
    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Walking clock requires a finite nonnegative host delta');
-   const from=clock/1000;clock+=deltaSeconds*1000*rate;
+   frameStamp=timestampMs;const from=clock/1000;clock+=deltaSeconds*1000*rate;
    const motionDelta=attention?.motionSeconds(from,clock/1000)??deltaSeconds*rate;
    motionClock+=motionDelta*1000;
    try{
     if(wander){
      if(player.read().status==='removed'){unsubscribe();return;}
-     presentWander(motionDelta,true);return;
+     presentWander(motionDelta,true,deltaSeconds);return;
     }
     if(motionDelta===0)player.represent();else player.tick(motionClock);
+    stepFlesh(deltaSeconds);
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
     else if(player.read().status!=='playing'){unsubscribe();if(player.read().status!=='removed')host.scene.refreshPresentation?.(asset);}
     refresh();
@@ -183,7 +194,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(()=>workspace?.dispose());attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -207,6 +218,20 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
    poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+ }
+ function contactState(){
+  placement.updateMatrixWorld(true);const matrix=runtime.group.matrixWorld,scale=runtime.group.getWorldScale(new THREE.Vector3());
+  if(inputs.flesh&&(!(scale.x>0)||Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5))throw Error('Physical creature requires positive uniform world scale');
+  let capsules=runtime.flesh.capsules().map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
+  if(!capsules.length){const a=runtime.bones.get('pelvis'),b=runtime.bones.get('spine-chest');if(!a||!b)return {mounted:false};capsules=[{a:a.getWorldPosition(new THREE.Vector3()).toArray(),b:b.getWorldPosition(new THREE.Vector3()).toArray(),radius:.4*scale.x}];}
+  const c=capsules[0],position=[(c.a[0]+c.b[0])*.5,(c.a[2]+c.b[2])*.5],radius=c.radius+Math.hypot(c.b[0]-c.a[0],c.b[2]-c.a[2])*.35,path=wander?.read(),frame=authoredPlacement(),dir=path?new THREE.Vector3(path.path.direction[0],0,path.path.direction[1]).transformDirection(frame.matrixWorld):new THREE.Vector3(0,0,1);
+  return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules};
+ }
+ function stepFlesh(seconds){
+  if(!inputs.flesh)return;
+  runtime.group.updateWorldMatrix(true,false);const scale=runtime.group.getWorldScale(new THREE.Vector3());if(!(scale.x>0)||Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5)throw Error('Physical creature requires positive uniform world scale');
+  const inverse=runtime.group.matrixWorld.clone().invert(),contacts=encounterContext?.contacts(frameStamp)??[];
+  runtime.flesh.setContacts(contacts.map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(inverse).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(inverse).toArray(),radius:c.radius/scale.x})));runtime.flesh.advance(seconds);session.redraw();
  }
  try{
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
@@ -251,10 +276,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   placement.name=inputs.label??'Creature';
   asset=await session.attach(placement,{owned:true,metadata:{fileName:placement.name,source:inputs.case,label:placement.name}});
   player=makePlayer();
+  if(encounterContext)releaseEncounter=encounterContext.register(contactState);
   // Keep each loaded skin with its own request so a superseded load that
   // finishes late cannot supply the muzzle profile for the applied cast.
   const loadedSkins=new Map();
-  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:async input=>{const loaded=await loadSkin(input);loadedSkins.set(input.case_sha256,loaded);return loaded;},onApplied:state=>{
+  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:async input=>{const loaded=await loadCreatureFlesh(chosenInputs.flesh,await loadSkin(input));loadedSkins.set(input.case_sha256,loaded);return loaded;},onApplied:state=>{
    const applied=loadedSkins.get(state.current.case_sha256);loadedSkins.clear();
    if(attention&&applied){attention.setProfile(deriveHeadProfile({skin:applied,frame:data.frame}));attentionSkin=applied.source.caseSha256;}
    chosenInputs={...chosenInputs,case:state.current.case,case_sha256:state.current.case_sha256};source.caseSha256=state.current.case_sha256;
@@ -305,7 +331,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
-   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false);host.scene.refreshPresentation?.(asset);return state;}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false,input.seconds);host.scene.refreshPresentation?.(asset);return state;}),
+   flesh:operation('flesh',input=>{if(!chosenInputs.flesh||typeof input?.enabled!=='boolean')throw Error('Physical creature and boolean response required');runtime.flesh.setEnabled(input.enabled);chosenInputs={...chosenInputs,flesh:{...chosenInputs.flesh,enabled:input.enabled}};session.redraw();return read();}),
+   physicalSnapshot:operation('physicalSnapshot',async()=>{if(player.read().status==='playing')throw Error('Pause the creature before capturing exact physical geometry');await runtime.flesh.snapshot();return read();}),
    rate:operation('rate',input=>{if(!Number.isFinite(input?.rate)||input.rate<=0)throw Error('Playback rate must be finite and positive');rate=input.rate;return read();}),
    skin:operation('skin',input=>{if(!skinSelection)throw Error('This creature has no registered cast choices');return skinSelection.select(input);}),
    play:operation('play',()=>{if(wander){if(!syncArea())return read();presentWander(0,true);}else player.play();if(player.read().status==='playing')startClock();return read();}),
