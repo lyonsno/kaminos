@@ -84,3 +84,11 @@ test('saved field visibility governs restore even when the hidden set did not ch
   vm.createContext(context);await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);assert.equal(active,visible,'restore must finish with the saved visibility, independently of prior runtime activity');
  }
 });
+
+test('saving a deliberately hidden retained field does not require its computation to run',async()=>{
+ const start=html.indexOf('async function collectSceneComposition() {'),end=html.indexOf("  if (!isFireLightFieldRoute()) throw",start);assert.ok(start>0&&end>start);
+ for(const [hidden,debug,accept]of [[true,{active:false,error:null},true],[false,{active:false,error:null},false],[true,null,false],[true,{active:false,error:'device-lost'},false]]){
+  const context={volumePrototype:debug?{debugState:()=>debug}:null,activeSceneComposition:{},isFireLightFieldRoute:()=>true,isSceneItemVisible:()=>!hidden};vm.createContext(context);vm.runInContext(html.slice(start,end)+'return true;}',context);
+  if(accept)assert.equal(await context.collectSceneComposition(),true);else await assert.rejects(context.collectSceneComposition(),/not active|device-lost/);
+ }
+});

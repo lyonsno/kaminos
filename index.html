@@ -25256,7 +25256,8 @@ function compositionStatus(message, failed = false) {
 async function collectSceneComposition() {
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
-  if (!debug?.active) {
+  const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
+  if (!debug?.active&&!retainedHiddenField) {
     if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
     activeSceneComposition = null;
     return;
