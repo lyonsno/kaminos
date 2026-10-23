@@ -136,7 +136,7 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
  }
  function redirect(value){
   const heading=normalized(value),current=sample(),end=pair(points[2]),reach=length(minus(end,current.position));
-  if(reach<1e-9)return read();
+  if(reach<1e-9||length(minus(heading,current.direction))<1e-12)return read();
   let handle=Math.min(reach*.4,Math.min(...area.radii)*.5);
   // Preserve a convex in-area curve; outside starts keep their return route.
   if(inside(current.position,area)){

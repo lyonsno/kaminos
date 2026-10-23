@@ -1,4 +1,4 @@
-import {createWalkingCreature} from './walking.experiment.mjs';
+import {createWalkingCreature,prepareWalkingSetup} from './walking.experiment.mjs';
 import {loadFullBodySources,loadFullBodySkin} from './full-body-source.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {mountCreatureProperties} from './creature-properties.mjs';
@@ -16,7 +16,7 @@ export function validateLivingSetup(inputs){
  const ids=new Set();for(const spec of inputs.actors){checkActor(spec);if(ids.has(spec.id))throw Error(`Duplicate actor: ${spec.id}`);ids.add(spec.id);}
  if(inputs.zones!==undefined){const zones=new Set();for(const zone of inputs.zones){checkZone(zone);if(zones.has(zone.id))throw Error('Duplicate zone');zones.add(zone.id);}for(const spec of inputs.actors)checkPlaces(spec.places??[],zones);}
 }
-export async function openLivingSetup({entry,inputs,prepare=async()=>{}}){validateLivingSetup(inputs);await prepare(inputs);return entry.open('mushfinger/living-scene',inputs);}
+export async function openLivingSetup({entry,inputs,loadSources=loadFullBodySources,prepare=async()=>{}}){validateLivingSetup(inputs);for(const actor of inputs.actors)await prepareWalkingSetup(actor.creature,{loadSources});await prepare(inputs);return entry.open('mushfinger/living-scene',inputs);}
 
 // A composition of the ordinary creature consumer, not another motion engine.
 // Shared source data is read-only; Bone palettes, bodies, controls and clocks
@@ -71,7 +71,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
    bar.style.cssText='display:grid;gap:6px';bar.append(title,duplicate,remove,error);options.properties.prepend(bar);
    const setup=document.createElement('details'),summary=document.createElement('summary'),save=document.createElement('button'),open=document.createElement('input');summary.textContent='Save / open creatures';save.textContent='Save creatures';open.type='file';open.accept='.json,application/json';open.setAttribute('aria-label','Open creatures setup');
    save.onclick=()=>call(async()=>{const recipe=read().recipe;if(authored){const ids=new Set(recipe.zones.map(z=>z.id));for(const actor of recipe.actors)checkPlaces(actor.places,ids);}const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='creatures.setup.json';link.click();URL.revokeObjectURL(url);});
-   open.onchange=()=>call(async()=>{const file=open.files?.[0];if(!file)return;const entry=globalThis.window?.kaminosWorkbenchExperiments;if(!entry?.open)throw Error('Shared creature entry is unavailable');await openLivingSetup({entry,inputs:JSON.parse(await file.text()),prepare:async setup=>{for(const actor of setup.actors)await deps.loadSources(actor.creature);}});});
+   open.onchange=()=>call(async()=>{const file=open.files?.[0];if(!file)return;const entry=globalThis.window?.kaminosWorkbenchExperiments;if(!entry?.open)throw Error('Shared creature entry is unavailable');await openLivingSetup({entry,inputs:JSON.parse(await file.text()),loadSources:deps.loadSources});});
    setup.append(summary,save,open);options.properties.append(setup);
    return host.controls.mountObject(options);
   };
@@ -91,7 +91,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
  async function remove(id){const row=get(id);await row.entry.dispose();actors.delete(id);return read();}
  const operations={
   avoidance:({enabled}={})=>{if(!encounters)throw Error('This room has no encounter settings');encounters.setAvoidance(enabled);sceneControls?.avoidance&&(sceneControls.avoidance.checked=enabled);return read();},
-  advance:async({seconds}={})=>{if(running)throw Error('Pause scene before exact encounter advance');if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative encounter time required');for(const row of actors.values())if(row.active&&!row.preview&&row.entry.read().action.kind==='wander')await row.entry.operations.advance({seconds});return read();},
+  advance:async({seconds}={})=>{if(running)throw Error('Pause scene before exact encounter advance');if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative encounter time required');const observation=encounters?.beginStep();for(const row of actors.values())if(row.active&&!row.preview&&row.entry.read().action.kind==='wander')await row.entry.operations.advance({seconds,observation});return read();},
   actor:async({id,operation,input}={})=>{const row=get(id);if(!Object.hasOwn(row.entry.operations,operation))throw Error(`Unknown actor operation: ${operation}`);if(authored&&operation==='action'){if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');return operations.setPreview({id,preview:input.kind==='preview'});}if(authored&&!row.preview){if(operation==='play'||operation==='pause')return operations.setActive({id,active:operation==='play'});if(['replay','seek','mode'].includes(operation))throw Error('Enter explicit motion preview before clip playback');}return row.entry.operations[operation](input);},
   setRunning:({running:value}={})=>serialEdit(async()=>{if(!authored||typeof value!=='boolean')throw Error('Scene behavior requires an explicit running flag');running=value;for(const row of actors.values()){if(!running)row.entry.operations.pause();else await applyGate(row);}refreshAll();record({kind:'living.run',running});return read();}),
   setActive:({id,active:value}={})=>serialEdit(async()=>{if(typeof value!=='boolean')throw Error('Behavior active must be boolean');const row=get(id);row.active=value;await applyGate(row);refreshAll();record({kind:'living.active',id,active:value});return read();}),

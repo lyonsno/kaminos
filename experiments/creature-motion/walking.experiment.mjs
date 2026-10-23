@@ -54,6 +54,16 @@ async function checkRecipeView(view,current){
  try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
 }
 
+// Validate every source consumed by construction before Open disposes the
+// current scene. The room and selected-object file controls share this path.
+export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySources}={}){
+ checkRecipeInputs(recipe);
+ const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
+ const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
+ if(recipe.wander)createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
+ return loaded;
+}
+
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,encounterContext=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const choices=[...checkRecipeInputs(inputs)];
@@ -331,7 +341,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
-   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false,input.seconds);host.scene.refreshPresentation?.(asset);return state;}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=input.observation??clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false,input.seconds);host.scene.refreshPresentation?.(asset);return state;}),
    flesh:operation('flesh',input=>{if(!chosenInputs.flesh||typeof input?.enabled!=='boolean')throw Error('Physical creature and boolean response required');runtime.flesh.setEnabled(input.enabled);chosenInputs={...chosenInputs,flesh:{...chosenInputs.flesh,enabled:input.enabled}};session.redraw();return read();}),
    physicalSnapshot:operation('physicalSnapshot',async()=>{if(player.read().status==='playing')throw Error('Pause the creature before capturing exact physical geometry');await runtime.flesh.snapshot();return read();}),
    rate:operation('rate',input=>{if(!Number.isFinite(input?.rate)||input.rate<=0)throw Error('Playback rate must be finite and positive');rate=input.rate;return read();}),
@@ -405,10 +415,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    presentation=mountProperties({document,read,invoke,
     save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
-     checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
-     const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
-     createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
-     if(recipe.wander)createWanderMotion({THREE,adapter:check,walking:createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6}),travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
+     await checkRecipeView(recipe.view,session.readView());await prepareWalkingSetup(recipe,{loadSources});
      active();await reopen(recipe);
     }});
    refresh=presentation.update;

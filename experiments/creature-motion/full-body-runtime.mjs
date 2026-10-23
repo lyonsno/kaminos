@@ -33,7 +33,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;Object.assign(marker.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'bones'});bone.add(marker);
  }
  let cached='',updates=0,lastUpdateMs=0,deformations=0,cacheHits=0,cacheBytes=0;
- let deformer=null,cpuKey='',cpuGeometry=null;
+ let deformer=null,cpuKey='',cpuGeometry=null,physicalRunning=false;
  const makeDeformer=(target,data)=>{
   if(!deformerFactory)return null;
   const next=deformerFactory({geometry:target,...data,channels:channels.length});
@@ -85,7 +85,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   try{
    next.setAttribute('position',new THREE.Float32BufferAttribute(result,3));next.setIndex(new THREE.BufferAttribute(candidate.triangles,1));
    next.computeVertexNormals();next.computeBoundingSphere();next.computeBoundingBox();
-   nextDeformer=makeDeformer(next,candidate);nextDeformer?.update(matrices);
+   nextDeformer=makeDeformer(next,candidate);nextDeformer?.setRunning?.(physicalRunning);nextDeformer?.update(matrices);
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
@@ -93,6 +93,6 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>deformer?.setRunning?.(value),setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  update();return runtime;
 }

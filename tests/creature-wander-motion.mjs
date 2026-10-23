@@ -43,3 +43,6 @@ yielding.advance(.1,{distanceScale:0});assert.equal(yielding.read().elapsed,0,'b
 yielding.advance(.1,{distanceScale:.25});assert.ok(Math.abs(yielding.read().elapsed-.025)<1e-10);assert.ok(Math.abs(yielding.read().path.distance-.25)<1e-9);
 const beforeSteer=yielding.read().path.position;yielding.advance(0,{direction:[1,0]});assert.deepEqual(yielding.read().path.position,beforeSteer,'steering cannot teleport the root');assert.ok(yielding.read().path.direction[0]>.999);
 assert.throws(()=>yielding.advance(.1,{distanceScale:NaN}),/scale/);
+const plain=make({area,position:[0,0],direction:[0,1],seed:1}),unchanged=make({snapshot:plain.snapshot()});
+for(let i=0;i<30;i++){plain.advance(.003);unchanged.advance(.003,{direction:unchanged.read().path.direction});}
+assert.deepEqual(unchanged.snapshot(),plain.snapshot(),'An unchanged steering heading must preserve curve, distance and RNG exactly');

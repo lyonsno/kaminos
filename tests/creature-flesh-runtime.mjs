@@ -10,3 +10,6 @@ assert.equal(r.syncCpuGeometry().attributes.position.array[0],.25,'held bones mu
 r.bones.get('pelvis').position.x=2;r.update();assert.equal(r.syncCpuGeometry().attributes.position.array[0],2.25,'physical residual composes with the current skeletal pose');r.dispose();
 console.log('Current-shape mirror follows physical epoch while bones are held');
 let picked=false;const live=createFullBodyRuntime({THREE,...data,deformerFactory:()=>({update(){},flush(){},dispose(){},read:()=>({backend:'local-test-double'}),raycast(){picked=true;}})});live.mesh.raycast(new THREE.Raycaster(),[]);assert.equal(picked,true,'a live GPU body can supply its selection hit shapes without a dense CPU skin solve');live.dispose();
+const playing=createFullBodyRuntime({THREE,...data,deformerFactory:()=>{let running=false;return {update(){},flush(){},dispose(){},setRunning:v=>{running=v;},read:()=>({flesh:{running}})};}});
+playing.flesh.setRunning(true);playing.replaceSkin(data);assert.equal(playing.flesh.read().running,true,'Cast replacement must preserve physical running state');
+playing.flesh.setRunning(false);playing.replaceSkin(data);assert.equal(playing.flesh.read().running,false);playing.dispose();
