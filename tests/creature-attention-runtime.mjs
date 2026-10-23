@@ -179,6 +179,26 @@ try{
    assert.ok(approach,'cessation leads to remembered approach through the real walking consumer');assert.deepEqual(approach.point,stop.point);
   }finally{await motivated.dispose();}
  }
+ // RM-1: return without a measured light/recoil event must remain investigable.
+ {
+  fire={active:true,paused:false};emitter.position.set(.8,.4,-4);scene.updateMatrixWorld(true);
+  const returning=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  try{
+   await returning.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<30;i++)tick();fire.active=false;notify();tick();tick();
+   assert.ok(returning.read().attention.interruption?.point,'return fixture witnesses cessation');
+   for(let i=0;i<1500;i++)tick();
+   const headMatrix=new THREE.Matrix4().fromArray(returning.inspect().boneWorld.find(b=>b.name==='head').matrix);
+   const forward=new THREE.Vector3(...returning.read().attention.profile.forward).transformDirection(headMatrix);
+   emitter.position.setFromMatrixPosition(headMatrix).addScaledVector(forward,2);
+   fire.active=true;notify();
+   const rows=[];for(let i=0;i<180;i++){tick();rows.push(returning.read());}
+   assert.ok(rows.some(x=>x.attention.perceived.some(s=>s.id==='flame-emitter')),'returned source is actually perceived');
+   assert.ok(rows.every(x=>!x.attention.startle),'return fixture has no recoil alarm');
+   assert.ok(rows.some(x=>x.action.engagement.phase==='approaching'),'ordinary return renews approach through the walking consumer');
+  }finally{await returning.dispose();}
+ }
  // RC-1: editing a currently inspected source restarts pursuit through the
  // real attention, live root and retained-gait consumer, without the old timer.
  for(const gradual of [false,true]){

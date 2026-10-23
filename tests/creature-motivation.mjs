@@ -37,3 +37,21 @@ isolated.step(1.3,{cessation:{...cessation,id:'other',point:[-4,0,0]},interrupte
 const other=isolated.step(2.4,{observed:[source],focus:source});
 assert.equal(other.id,source.id);assert.ok(other.motivation.aversion>.5,'source-local aversion survives another source going quiet');
 console.log('Drive and aversion change actions; cessation, gaps, familiarity and source identity remain distinct');
+
+// RM-1: an observed return can renew interest without inventing an alarm.
+const returning=createEngagement(),far={...source,point:[5,0,0]};
+const again=(time,extra={})=>returning.update({time,position:[0,0,0],observed:[far],focus:far,...extra});
+again(0);again(1.1);
+again(1.2,{observed:[],focus:null,cessation:{...cessation,since:1.2,until:2.2},interrupted:true});
+again(2.3,{observed:[],focus:null});again(12,{observed:[],focus:null});
+assert.equal(again(13).phase,'wandering','return does not bypass the completed-episode cooldown');
+assert.equal(again(25).phase,'watching','observed return renews investigation eligibility without recoil');
+assert.equal(again(26.2).phase,'approaching','returned source can be investigated again');
+const returnedDrive=returning.read().motivation.drive;
+assert.equal(again(27).motivation.drive,returnedDrive,'unchanged presence cannot accumulate investigation drive');
+const still=createEngagement();
+const stillStep=(time,extra={})=>still.update({time,position:[0,0,0],observed:[far],focus:far,...extra});
+stillStep(0);stillStep(1.2,{cessation:{...cessation,since:1.2,until:2.2},interrupted:true});
+const quiet=stillStep(2.3);assert.equal(quiet.phase,'approaching');
+assert.ok(stillStep(3).motivation.drive<quiet.motivation.drive,'continued sight of the stopped source does not restart its event');
+assert.ok(stillStep(3.1,{observed:[{...far,eventAt:3.1}]}).motivation.drive>=1,'observed renewed movement can end the cessation episode');
