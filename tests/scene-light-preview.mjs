@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -14,7 +15,7 @@ function source(start, end) {
 
 function context() {
   const scene = new THREE.Scene();
-  const state = vm.createContext({
+  const state = sceneContext({
     THREE, checkedSceneLightRecord, sceneLightRuntimeRecipe, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
     scene, sceneObjects: [], sceneGroups: [], rimLight: new THREE.SpotLight(), RIM_LIGHT_ID: '@rim-light',
     window: { _kaminosDirty() {} }, document: { getElementById: () => ({ checked: false, classList: { remove() {} } }) },

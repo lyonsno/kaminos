@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -8,7 +9,7 @@ const actual=source.slice(begin,end).replace("await import('./authored-water-hos
 function fixture(){
  let host={name:'prior',dispose(){this.disposed=true;}};const pending=[];
  const context={isSceneItemVisible:()=>true,Error,structuredClone,localLiquidGeneration:1,authoredWaterReleaseRequest:0,sceneObjects:[{id:'A',type:'water'}],LOCAL_LIQUID_EMITTER_TYPE:'water',renderer:{},scene:{},camera:{},renderPipeline:{},sharedGpu:{device:{}},localLiquidSetup:{},getLocalLiquidDisplayPolicy:()=>({}),selectionFeedback:{output:x=>x},localLiquidHost:host,localLiquidPaused:false,authoredWaterControls:null,sharedWorkbench:null,refreshLocalLiquidPerformance(){},window:{_kaminosDirty(){}},assertSceneConstructionAvailable(){},localLiquidEmitterRecords:()=>[{id:'A'}],setAuthoredWaterPreviewVisible(){},updateAuthoringPropertySelection(){},authoredWaterState:()=>({}),loadHostModule:async()=>({createAuthoredWaterHost:options=>new Promise(resolve=>pending.push({resolve,options}))})};
- vm.createContext(context);vm.runInContext(actual,context);
+ sceneContext(context);vm.runInContext(actual,context);
  const candidate=name=>({name,disposed:false,dispose(){this.disposed=true;},setPaused(){}});
  return {context,pending,candidate,call:()=>context.releaseAuthoredWater('A')};
 }

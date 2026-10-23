@@ -39,14 +39,14 @@ test('clearing resets scene history while typed water objects join chronological
   const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);
   const removeSource = html.slice(removeStart, removeEnd);
   const admissionIndex = removeSource.indexOf('scenePlacementTools.edits.assertCanRecordApplied(editId)');
-  const removalIndex = removeSource.indexOf('sceneObjects.splice(index, 1)');
+  const removalIndex = removeSource.indexOf('workingScene.forget(id)');
   assert.ok(admissionIndex >= 0 && admissionIndex < removalIndex, 'membership history admission must succeed before the scene object is removed');
   assert.match(removeSource, /catch \(error\) \{ setInfo\(error\.message\); return false; \}/, 'a rejected admission must leave a visible reason and preserve scene membership');
   const clearStart = html.indexOf('function clearScene(');
   assert.ok(clearStart >= 0, 'scene clear must remain present');
   const clearSource = html.slice(clearStart, clearStart + 2000);
   const clearSteps = ['sceneLoadRequests.invalidate()', 'scenePlacementTools?.clear()',
-    'scenePlacementTools.edits.unregister(editId)', 'sceneMembershipEditTargets.clear()', 'sceneMutationToken++'];
+    'scenePlacementTools.edits.unregister(editId)', 'sceneMembershipEditTargets.clear()', 'workingScene.invalidateArrivals()'];
   let lastClearStep = -1;
   for (const step of clearSteps) {
     const index = clearSource.indexOf(step);
@@ -58,7 +58,7 @@ test('clearing resets scene history while typed water objects join chronological
   assert.match(editTools, /const neutralPageFocus = document\.activeElement === document\.body/);
   assert.match(editTools, /modal\.awaitViewportEntry = !pointerInViewport\(lastPointer\)/);
   assert.match(editTools, /if \(modal\.awaitViewportEntry\)[\s\S]*pointerInViewport\(lastPointer\)/);
-  assert.match(html, /selection: \{ objectId: activeSceneObjectId, groupId: activeSceneGroupId \}/);
+  assert.match(html, /selection: \{ objectId: workingScene.activeObjectId, groupId: workingScene.activeGroupId \}/);
   assert.match(html, /selection\.groupId[\s\S]*setActiveSceneGroup\(selection\.groupId\)[\s\S]*selection\.objectId[\s\S]*setActiveSceneObject\(selection\.objectId\)/);
   assert.match(html, /group\.groupIndex\) \|\| group\.groupIndex < 0[\s\S]*group\.objectIds\.includes\(id\)/);
 });

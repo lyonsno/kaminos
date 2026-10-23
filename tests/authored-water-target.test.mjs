@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import {resolveAuthoredWaterSampling,normalizeAuthoredWaterSampling,describeAuthoredWaterDrop} from '../authored-water-drop.mjs';
 import {defaultLocalLiquidSetup,normalizeLocalLiquidSetup} from '../local-liquid-setup.mjs';
@@ -24,4 +25,4 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const initial=source('legacy',.6),legacyDescription=describeAuthoredWaterDrop(initial.localLiquidEmitter.drop,initial.transform,{spacing:.04,container:bounds});
 const p={count:legacyDescription.particleCount,userData:{kaminosWaterPreview:true,spacing:.04,requestedVolume:legacyDescription.requestedVolume}},row={...initial,type:'water',object:{pose:initial.transform,children:[p]}};
 const c={localLiquidSetup:{...defaultLocalLiquidSetup(),waterSampling:{spacing:.04,container:bounds}},sceneObjects:[row],LOCAL_LIQUID_EMITTER_TYPE:'water',normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,describeAuthoredWaterDrop,sceneObjectTransformState:o=>o.pose,localLiquidEmitterRecords:()=>[initial],replaceAuthoredWaterSettings(){throw Error('Unchanged legacy preview must not be rebuilt');}};
-vm.createContext(c);const a=html.indexOf('let refreshingWaterPreviews='),b=html.indexOf('\nconst waterMatchTargets=',a);vm.runInContext(html.slice(a,b),c);c.refreshAuthoredWaterSamplingPreviews();assert.equal(c.localLiquidSetup.waterSampling.particleTarget,undefined,'Partial restored membership must not silently set the global target');assert.equal(c.localLiquidSetup.waterSampling.spacing,.04);
+sceneContext(c);const a=html.indexOf('let refreshingWaterPreviews='),b=html.indexOf('\nconst waterMatchTargets=',a);vm.runInContext(html.slice(a,b),c);c.refreshAuthoredWaterSamplingPreviews();assert.equal(c.localLiquidSetup.waterSampling.particleTarget,undefined,'Partial restored membership must not silently set the global target');assert.equal(c.localLiquidSetup.waterSampling.spacing,.04);

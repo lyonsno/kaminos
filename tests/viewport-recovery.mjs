@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ test('visible emitter helper can be picked through nearer kiln geometry; hidden 
  const ctx={scenePointerNdc:new THREE.Vector2(),renderer:{domElement:{getBoundingClientRect:()=>({left:0,top:0,right:100,bottom:100,width:100,height:100})}},camera,sceneObjects:[mesh,emitter],SCENE_OBJECT_POINT_PICK_THRESHOLD:.1,
  sceneRaycaster:new THREE.Raycaster(),visibleSceneIntersections,sceneObjectRecordForDescendant:o=>[mesh,emitter].find(r=>r.object===o),isSceneItemVisible:id=>!hiddenIds.has(id),
  FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'water-emitter'};
- vm.createContext(ctx);vm.runInContext(grab('sceneHitsFromViewportPointer')+'\n'+grab('pickSceneObjectFromViewportPointer'),ctx);
+ sceneContext(ctx);vm.runInContext(grab('sceneHitsFromViewportPointer')+'\n'+grab('pickSceneObjectFromViewportPointer'),ctx);
  const pointer={clientX:50,clientY:50};
  assert.equal(ctx.sceneHitsFromViewportPointer(pointer)[0].object,mesh.object,'kiln is geometrically nearer');
  assert.equal(ctx.pickSceneObjectFromViewportPointer(pointer),emitter);

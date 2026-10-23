@@ -126,14 +126,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
       "testLastChanged": "2026-10-01 fd742f0e"
     },
-    "tests/scene-navigation-contracts.mjs": {
-      "class": "regression",
-      "owner": "modal",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth :: AssertionError: The expression evaluated to a falsy value: [== assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \\'splat\\' && entry.id !== RIM_LIGHT_ID)'))]",
-      "testLastChanged": "2026-10-01 e372f2eb"
-    },
     "tests/scene-roundtrip.mjs": {
       "class": "regression",
       "owner": "modal",

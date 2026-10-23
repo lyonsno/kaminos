@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
+import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
 const source=fs.readFileSync(process.env.KAMINOS_REMOVAL_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
@@ -19,10 +20,11 @@ function fixture(){
  const uniqueGeometry=new THREE.BoxGeometry(),uniqueMaterial=new THREE.MeshBasicMaterial();owned.add(new THREE.Mesh(uniqueGeometry,uniqueMaterial));
  const disposed=[];for(const [name,value]of Object.entries({texture,geometry,material,uniqueGeometry,uniqueMaterial}))value.addEventListener('dispose',()=>disposed.push(name));
  const edits=createSceneEdits({read:()=>pose,write(){}}),rows=[{id:'owned',type:'glb',object:owned},{id:'borrowed',type:'glb',object:borrowed}];
- const c={scene,sceneObjects:rows,sceneGroups:[],sceneSelection:{ids:[],activeId:null},activeSceneObjectId:null,activeSceneGroupId:null,currentMesh:null,transformControls:null,sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
+ const workingScene=createWorkingScene();workingScene.replaceObjects(rows);
+ const c={scene,workingScene,sceneGroups:[],sceneSelection:{ids:[],activeId:null},activeSceneObjectId:null,activeSceneGroupId:null,currentMesh:null,transformControls:null,sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
   FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'liquid',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',RIM_LIGHT_ID:'rim',hybridSplatOverlayState:{},splatCorrectionMode:null,
   sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
-  pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){c.activeSceneObjectId=id;},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
+  pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){workingScene.select(id?[id]:[],id);},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
  };
  vm.createContext(c);vm.runInContext(['membershipEditTargetId','releaseUnreferencedSceneMembershipObjects','pruneSceneSelection','removeSceneObjectInternal','disposeObjectTree'].map(actual).join('\n')+'\n'+adapter,c);
  edits.subscribe(c.releaseUnreferencedSceneMembershipObjects);
@@ -30,22 +32,22 @@ function fixture(){
 }
 function intact(f){assert.equal(f.material.map,f.texture);assert.ok(!f.disposed.some(v=>['geometry','material','texture'].includes(v)));assert.equal(f.borrowed.parent,f.c.scene);}
 test('unreferenced owner GLB releases immediately without destroying a registered comparison clone',()=>{
- const f=fixture();assert.equal(f.close(),true);assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),false,'owner without Undo references is released immediately');assert.ok(f.disposed.includes('uniqueGeometry'));assert.ok(f.disposed.includes('uniqueMaterial'));intact(f);
+ const f=fixture();assert.equal(f.close(),true);assert.equal(Boolean(f.c.workingScene.retained('owned')),false,'owner without Undo references is released immediately');assert.ok(f.disposed.includes('uniqueGeometry'));assert.ok(f.disposed.includes('uniqueMaterial'));intact(f);
  f.edits.begin('borrowed');intact(f);f.edits.cancel();intact(f);
 });
 test('history-retained owner keeps its scoped disposer through eventual release',()=>{
  const f=fixture(),id=f.c.membershipEditTargetId('owned');let present=1;
  f.edits.register(id,{allowMissing:true,check:value=>value,read:()=>present,write:value=>{present=value;}});f.edits.recordApplied(id,null,1,'Insert owner');
- assert.equal(f.close(),true);assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),true);assert.deepEqual(f.disposed,[]);
- f.edits.begin('borrowed');assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),true);f.edits.cancel();
- f.edits.undo();assert.equal(f.edits.state().redoCount,1);assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),true);intact(f);
- f.edits.redo();assert.equal(f.edits.state().undoCount,1);assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),true);intact(f);
- f.edits.clear();assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),false);assert.ok(f.disposed.includes('uniqueGeometry'));assert.ok(f.disposed.includes('uniqueMaterial'));intact(f);
+ assert.equal(f.close(),true);assert.equal(Boolean(f.c.workingScene.retained('owned')),true);assert.deepEqual(f.disposed,[]);
+ f.edits.begin('borrowed');assert.equal(Boolean(f.c.workingScene.retained('owned')),true);f.edits.cancel();
+ f.edits.undo();assert.equal(f.edits.state().redoCount,1);assert.equal(Boolean(f.c.workingScene.retained('owned')),true);intact(f);
+ f.edits.redo();assert.equal(f.edits.state().undoCount,1);assert.equal(Boolean(f.c.workingScene.retained('owned')),true);intact(f);
+ f.edits.clear();assert.equal(Boolean(f.c.workingScene.retained('owned')),false);assert.ok(f.disposed.includes('uniqueGeometry'));assert.ok(f.disposed.includes('uniqueMaterial'));intact(f);
 });
 test('owner release protects resources held by another Undo root and borrowed scene textures',()=>{
  const f=fixture(),retained=new THREE.Mesh(f.geometry,f.material),id=f.c.membershipEditTargetId('retained');let present=1;
- f.c.scene.remove(f.borrowed);f.c.sceneObjects.splice(1,1);f.c.scene.environment=f.texture;
+ f.c.scene.remove(f.borrowed);f.c.workingScene.forget('borrowed');f.c.scene.environment=f.texture;
  f.edits.register(id,{allowMissing:true,check:value=>value,read:()=>present,write:value=>{present=value;}});f.edits.recordApplied(id,null,1,'Retain other root');
- f.c.sceneMembershipRetainedObjects.set('retained',{id:'retained',type:'glb',object:retained});
- f.close();assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),false);assert.equal(f.c.sceneMembershipRetainedObjects.has('retained'),true);assert.equal(f.material.map,f.texture);assert.ok(!f.disposed.some(v=>['geometry','material','texture'].includes(v)));assert.ok(f.disposed.includes('uniqueGeometry'));
+ f.c.workingScene.retain({id:'retained',type:'glb',object:retained});
+ f.close();assert.equal(Boolean(f.c.workingScene.retained('owned')),false);assert.equal(Boolean(f.c.workingScene.retained('retained')),true);assert.equal(f.material.map,f.texture);assert.ok(!f.disposed.some(v=>['geometry','material','texture'].includes(v)));assert.ok(f.disposed.includes('uniqueGeometry'));
 });

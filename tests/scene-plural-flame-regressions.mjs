@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {checkedRepetition} from '../scene-repetition.mjs';
@@ -10,7 +11,7 @@ test('selected radius bounds follow scale without changing the shared cockpit ra
  const text=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8'),a=text.indexOf('      function syncField('),code=text.slice(a,text.indexOf('\n      }',a)+8);
  let minimum=.01;const field={type:'number'},source={type:'range',min:'.02',max:'.5',value:'.01',disabled:false};
  const h={id:'volume-immersed-radius',field,source,document:{activeElement:null},readControlBounds:()=>({min:minimum,max:null}),readSourceControl:()=>({value:.01}),syncFlameRangeBounds:()=>assert.fail('selected bounds do not belong to the shared cockpit'),flameControlDisplayValue:(_id,x)=>x};
- vm.createContext(h);vm.runInContext(code,h);h.syncField(true);assert.equal(field.min,'0.01');assert.equal(field.max,'');assert.equal(source.min,'.02');minimum=.04;h.syncField(true);assert.equal(field.min,'0.04');
+ sceneContext(h);vm.runInContext(code,h);h.syncField(true);assert.equal(field.min,'0.01');assert.equal(field.max,'');assert.equal(source.min,'.02');minimum=.04;h.syncField(true);assert.equal(field.min,'0.04');
 });
 test('actual deletion and membership Undo/Redo preserve a surviving source with different fuel',async()=>{
  const pose={position:[0,-.5,0],rotation:[0,0,0],scale:[1,1,1]},make=(id,fuel)=>({id,type:'flame-emitter',transform:pose,emissionEnabled:true,emission:{domainId:'flame-field',settings:{'volume-immersed-fuel':{value:fuel}}},object:{userData:{kaminosSceneObject:{}}}});
@@ -19,7 +20,7 @@ test('actual deletion and membership Undo/Redo preserve a surviving source with 
   clearActiveSceneObjectSelection(){},sceneObjectTransformState:()=>pose,setSceneObjectMounted(){},setFlameDomainTranslation(){},serializeSceneObject:entry=>structuredClone({...entry,object:undefined}),setSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},pruneSceneGroups(){},ensureAuthoredFlameEmitter(){},renderVolumeEmitterReceipt(){},volumePrototype:{debugState:()=>({frameCount:1})},volumeEmitterRuntimeFrame:0,routeExternalEmitters:null,
   document:{getElementById:()=>({value:'ring'})},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},emitterCompilerControls:x=>x,readVolumeControls:()=>({emitterSourceLaw:'immersed-source'}),readVolumeSettingsValues:()=>({domControls:{'volume-immersed-fuel':{value:cockpit}}}),setVolumeControlValue:(id,v)=>{if(id==='volume-immersed-fuel')cockpit=Number(v);},applyVolumeEmitterFamilyRuntime:()=>({requested:{immersedControls:{immersedCentreX:0,immersedCentreY:-.5,immersedCentreZ:0,immersedYaw:0,immersedPitch:90}},effective:{family:'ring'}}),
   syncAuthoredFlameSources:()=>published.push(h.sceneObjects.map(x=>[x.id,x.emission.settings['volume-immersed-fuel'].value]))};
- h.checkedRepetition=checkedRepetition;vm.createContext(h);vm.runInContext(fn('primaryAuthoredFlameSource')+'\n'+fn('detachSelectionMember')+'\nasync '+fn('writeSelectionMembershipUnchecked')+'\n'+fn('applyVolumeEmitterFamilyRuntimeToCockpit'),h);
+ h.checkedRepetition=checkedRepetition;sceneContext(h);vm.runInContext(fn('primaryAuthoredFlameSource')+'\n'+fn('detachSelectionMember')+'\nasync '+fn('writeSelectionMembershipUnchecked')+'\n'+fn('applyVolumeEmitterFamilyRuntimeToCockpit'),h);
  if(html.includes('function projectAuthoredFlameSourceControls('))vm.runInContext(fn('projectAuthoredFlameSourceControls'),h);
  h.applyFlameEmitterPose=p=>h.applyVolumeEmitterFamilyRuntimeToCockpit(h.readVolumeControls(),p);
  h.writeAuthoredFlameEmitterPose=()=>{if(h.projectAuthoredFlameSourceControls)h.projectAuthoredFlameSourceControls();h.applyFlameEmitterPose(pose);h.syncAuthoredFlameSources();};
@@ -33,7 +34,7 @@ test('refusing a plural restore preserves the complete current scene and usable 
  const stop=html.indexOf('  setFlameDomainTranslation(restorePlan.flameDomainTranslation',html.indexOf('async function loadSceneFile('));
  const start=html.indexOf('async function loadSceneFile(');const prefix=html.slice(start,stop)+'\n}';const mutations=[];
  const original={name:'existing',route:{}},objects=[{id:'kept'}];const h={authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneLoadRequests:{begin:()=>1,isCurrent:()=>true},currentSceneFile:'existing.json',getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,sceneSaveBlockedByFailedRestore:false,planSceneRestore:()=>({objects:[{id:'a',type:'flame-emitter'},{id:'b',type:'flame-emitter'}],composition:{name:'incoming',route:{}},flameSourcePresent:true}),assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>true,window:{kaminosViewportSettings:{set:()=>mutations.push('display')},__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},viewportDisplay:{},activeSceneComposition:original,sceneObjects:objects,FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',setAnnularBurner:()=>mutations.push('burner'),setRimLight:()=>mutations.push('rim'),setInfo(){},volumePrototype:{},requirePluralFlameSourceRuntime:()=>{throw Error('This flame runtime does not yet support multiple authored sources');}};
- vm.createContext(h);vm.runInContext(prefix,h);await assert.doesNotReject(()=>h.loadSceneFile({text:async()=>JSON.stringify({})},{mounted:true}));assert.deepEqual(mutations,[]);assert.equal(h.activeSceneComposition,original);assert.equal(h.sceneObjects,objects);assert.equal(h.currentSceneFile,'existing.json');assert.equal(h.sceneSaveBlockedByFailedRestore,false);
+ sceneContext(h);vm.runInContext(prefix,h);await assert.doesNotReject(()=>h.loadSceneFile({text:async()=>JSON.stringify({})},{mounted:true}));assert.deepEqual(mutations,[]);assert.equal(h.activeSceneComposition,original);assert.equal(h.sceneObjects,objects);assert.equal(h.currentSceneFile,'existing.json');assert.equal(h.sceneSaveBlockedByFailedRestore,false);
 });
 
 for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`membership history restores distinct source poses and active publication after ${removed.length===1?'primary':'all-source'} deletion`,async()=>{
@@ -46,7 +47,7 @@ for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`members
  h.sceneSelectionMembers=()=>selected;h.clearActiveSceneObjectSelection=()=>{selected=[];};h.setSceneSelection=(ids)=>{for(const id of selected)h.selectionRootState(id);selected=[...ids];};
  h.syncAuthoredFlameSources=()=>published.push(flameSourceInputs(h.sceneObjects.map(h.serializeSceneObject),{controls:shared}));
  h.applyAuthoredScenePose=(id,p)=>h.applySceneObjectTransformState(h.sceneObjects.find(o=>o.id===id).object,p);
- h.checkedRepetition=checkedRepetition;vm.createContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose','selectionRootState'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
+ h.checkedRepetition=checkedRepetition;sceneContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose','selectionRootState'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
  const snapshot=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),groups:[],selection:{ids:[...selected],activeId:selected.at(-1)??null},domain:[0,0,0],domainFollowSource:false});
  const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@members',{read:snapshot,write:h.writeSelectionMembershipUnchecked,check:v=>v});
  const before=snapshot(),expected=flameSourceInputs(before.objects,{controls:shared});for(const id of removed)h.detachSelectionMember(id);h.clearActiveSceneObjectSelection();edits.recordApplied('@members',before,snapshot(),'Remove sources');
@@ -74,7 +75,7 @@ for(const enabled of [true,false])test(`burner graph history restores only the s
  refreshFlameDomainPreview(){},flameDomainGuide:null,updateFlameEmitterSupportOutline(){},styleHelperLines(){},isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{emitters:true,emitterOpacity:1},
  setFlameDomainTranslation:(v,s)=>{h.flameDomainTranslation=v;h.flameDomainScale=s;},disposeObjectTree(){},setSceneObjectGroupId(){},pruneSceneGroups(){},ensureGroupTarget(){},setActiveSceneGroup(){},setActiveSceneObject(){},clearActiveSceneObjectSelection(){},renderSceneObjectList(){},updateTransformInspector(){},renderVolumeEmitterReceipt(){},setInfo(){},
  syncAuthoredFlameSources:()=>published.push(h.sceneObjects.map(o=>({id:o.id,transform:structuredClone(o.object.pose),emission:structuredClone(o.emission),emissionEnabled:o.emissionEnabled}))) };
- vm.createContext(h);for(const name of ['primaryAuthoredFlameSource','projectAuthoredFlameSourceControls','ensureAuthoredFlameEmitter','applyVolumeEmitterFamilyRuntimeToCockpit','writeAuthoredFlameEmitterPose','writeBurnerGraphUnchecked'])vm.runInContext(fn(name),h);
+ sceneContext(h);for(const name of ['primaryAuthoredFlameSource','projectAuthoredFlameSourceControls','ensureAuthoredFlameEmitter','applyVolumeEmitterFamilyRuntimeToCockpit','writeAuthoredFlameEmitterPose','writeBurnerGraphUnchecked'])vm.runInContext(fn(name),h);
  h.applyFlameEmitterPose=(p,opts)=>h.applyVolumeEmitterFamilyRuntimeToCockpit(h.readVolumeControls(),p,opts);
  const empty={objects:[],groups:[],domain:[0,0,0],domainScale:1,domainFollowSource:false},saved={...empty,objects:[source]};let current=empty;
  const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@burner-graph',{read:()=>current,check:v=>v,write:v=>{h.writeBurnerGraphUnchecked(v);current=v;}});
@@ -98,7 +99,7 @@ test('history notifications keep selected-source inspector values instead of pro
  let notify;const writes=[];
  const h={edits:{subscribe:fn=>{notify=fn;}},flameInspector:{sync:()=>{alias.value=String(selected.fuel);}},
  document:{activeElement:null,querySelectorAll:()=>[alias],getElementById:()=>primary},flameControlDisplayValue:(_id,value)=>value};
- vm.runInNewContext(code,h);notify();writes.push(alias.value);
+ runInSceneContext(code,h);notify();writes.push(alias.value);
  selected.fuel=.65;notify();writes.push(alias.value);
  selected.fuel=.8;notify();writes.push(alias.value);
  assert.deepEqual(writes,['0.8','0.65','0.8'],'begin, edit and Undo must display the selected supply');
@@ -110,7 +111,7 @@ test('shared parameter history writes let the inspector choose its selected-sour
  assert.ok(a>=0);const code=html.slice(a,html.indexOf('    const check=state=>{',a))+'write({value:.3});';
  const control={id:'volume-immersed-fuel',type:'range',value:'.2',dataset:{},dispatchEvent(){}};
  const alias={type:'number',value:'.8'};
- vm.runInNewContext(code,{control,Event,KeyboardEvent:Event,setVolumeControlValue:(_id,value)=>{control.value=String(value);},
+ runInSceneContext(code,{control,Event,KeyboardEvent:Event,setVolumeControlValue:(_id,value)=>{control.value=String(value);},
  flameInspector:{sync:()=>{alias.value='.8';}},document:{querySelectorAll:()=>[alias]},flameControlDisplayValue:(_id,value)=>value});
  assert.equal(alias.value,'.8','a primary cockpit write must not impersonate another selected source');
  assert.equal(control.value,'0.3');

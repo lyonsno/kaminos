@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';import {readFileSync} from 'node:fs';import * as THREE from '../lib/three.core.js';
 import {createSceneEdits} from '../scene-edit-session.mjs';
@@ -16,7 +17,7 @@ for(const widths of [[.0005],[.001,.001]]){
   sceneObjects:rows,localLiquidSetup:setup,localLiquidHost:null,authoredWaterControls:null,window:{_kaminosDirty(){}},scenePlacementTools:{edits:history},assertSceneConstructionAvailable(){},updateWaterSourceGuides(){},updateAuthoringPropertySelection(){inspectorRefreshes++;},
   sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),serializeSceneObject:r=>({...r,object:undefined}),localLiquidEmitterRecords:()=>rows.map(r=>({...r,transform:c.sceneObjectTransformState(r.object)})),
   syncLocalLiquidHostEmitters(){c.localLiquidSetup.waterSampling=resolveAuthoredWaterSampling(c.localLiquidEmitterRecords(),c.localLiquidSetup);}};
- vm.createContext(c);const a=html.indexOf('const waterSettingTargets='),b=html.indexOf('\nlet authoredWaterDraftPreview',a);vm.runInContext(html.slice(a,b),c);
+ sceneContext(c);const a=html.indexOf('const waterSettingTargets='),b=html.indexOf('\nlet authoredWaterDraftPreview',a);vm.runInContext(html.slice(a,b),c);
  const check=(refreshExpected=0)=>{assert.equal(inspectorRefreshes,refreshExpected,'Committed particle count must refresh the shared inspector summary');const sampling=resolveAuthoredWaterSampling(c.localLiquidEmitterRecords(),c.localLiquidSetup);for(const r of rows){const expected=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,c.sceneObjectTransformState(r.object),sampling),p=r.object.children.find(n=>n.userData.kaminosWaterPreview);assert.equal(p.count,expected.particleCount);assert.ok(Math.abs(p.userData.spacing-sampling.spacing)<1e-12);}};
  check();c.applyAuthoredWaterSettings(rows[0].id,{drop:{...rows[0].localLiquidEmitter.drop,width:.5}});assert.equal(rows[0].localLiquidEmitter.drop.width,.5);check(1);assert.equal(c.localLiquidSetup.waterSampling.particleTarget,setup.waterSampling.particleTarget);
  await history.undo();assert.equal(rows[0].localLiquidEmitter.drop.width,widths[0]);check(2);await history.redo();assert.equal(rows[0].localLiquidEmitter.drop.width,.5);check(3);

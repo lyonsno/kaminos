@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -16,7 +17,7 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
     return elements.get(id);
   } };
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = vm.createContext({ createUserPreferences:()=>({load:async()=>null}),checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
+  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
@@ -122,7 +123,7 @@ test('recipe validation preserves fine values and rejects invalid authored light
 test('rim off/on preserves its aim and fine-valued recipe', () => {
   const elements = new Map();
   const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,{ value:'',min:'0',max:'1',dataset:{},checked:false,addEventListener(){} }); return elements.get(id); } };
-  const c=vm.createContext({checkedRimRecipe,document,rimLight:null,window:{},controls:{},saveSettings(){}});
+  const c=sceneContext({checkedRimRecipe,document,rimLight:null,window:{},controls:{},saveSettings(){}});
   vm.runInContext(between('// --- Authored Rim Light ---','// --- Exposure / Intensity Controls ---'),c);
   const recipe={enabled:true,color:'#d6e5ff',intensity:123.45,azimuth:-237.89,elevation:34.56,distance:5.4321,angle:45.67,penumbra:0.1234,target:[1.234,2.345,-3.456]};
   c.setRimLight(recipe);document.getElementById('rim-enabled').checked=false;c.updateRimLight();
@@ -149,7 +150,7 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
   function outputFor(pageSource) {
     const part=(a,b)=>pageSource.slice(pageSource.indexOf(a),pageSource.indexOf(b,pageSource.indexOf(a)));
     const pass=float(10),pipeline={};
-    const c=vm.createContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
+    const c=sceneContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
       sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'})},document:{body:{dataset:{}}},prePassDepth:{},
