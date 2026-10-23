@@ -1,7 +1,9 @@
 // Same StVK + log-volume energy and PSD local Hessian as elastic.mjs. A colour
 // contains no vertices sharing an element. One workgroup owns this small body;
 // barriers separate colours, not host-side dispatches or CPU solver sweeps.
-export function volumeKernel({nodes,colourCount}){return `
+export function volumeKernel({nodes,colourCount}){
+const lanes=Math.min(256,2**Math.ceil(Math.log2(nodes)));
+return `
 const N:u32=${nodes}u;
 struct Params { material:vec4<f32>, solve:vec4<f32>, sphere:vec4<f32>, flags:vec4<f32> }
 @group(0) @binding(0) var<storage,read_write> state:array<vec4<f32>>;
@@ -56,8 +58,8 @@ fn value(i:u32,trial:vec3<f32>,hessian:bool)->Value{
  }
  return out;
 }
-@compute @workgroup_size(64) fn main(@builtin(local_invocation_index) lane:u32){
- for(var i=lane;i<N;i+=64u){
+@compute @workgroup_size(${lanes}) fn main(@builtin(local_invocation_index) lane:u32){
+ for(var i=lane;i<N;i+=${lanes}u){
   let q=targets[i*2u+1u];var offset=rotate(q,state[i].xyz);var velocity=rotate(q,state[N+i].xyz);
   if(p.flags.x==0.0||p.flags.y!=0.0||graph[i*4u+3u]!=0u){offset=vec3<f32>(0);velocity=vec3<f32>(0);}
   x[i]=vec4<f32>(offset,0);before[i]=x[i];predicted[i]=vec4<f32>(offset+p.material.x*p.material.y*velocity,0);
@@ -68,19 +70,19 @@ fn value(i:u32,trial:vec3<f32>,hessian:bool)->Value{
  // retained fraction is exported as a diagnostic, not disguised as elasticity.
  loop{
   if(lane==0u){atomicStore(&invalid,0u);}workgroupBarrier();
-  for(var e=lane;e<arrayLength(&tets);e+=64u){if(!(determinant(deformation(e,N,vec3<f32>(0)))>0.0)){atomicStore(&invalid,1u);}}
+  for(var e=lane;e<arrayLength(&tets);e+=${lanes}u){if(!(determinant(deformation(e,N,vec3<f32>(0)))>0.0)){atomicStore(&invalid,1u);}}
   workgroupBarrier();if(lane==0u){bad=atomicLoad(&invalid);}if(workgroupUniformLoad(&bad)==0u){break;}
   // At representable zero, further halving cannot repair the reference. Fail
   // explicitly rather than spinning forever on a degenerate f32 target.
   if(workgroupUniformLoad(&fraction)==0.0){if(lane==0u){state[N*2u].z=1.0;}return;}
   if(lane==0u){fraction*=0.5;}workgroupBarrier();
-  for(var i=lane;i<N;i+=64u){x[i]=before[i]*fraction;}workgroupBarrier();
+  for(var i=lane;i<N;i+=${lanes}u){x[i]=before[i]*fraction;}workgroupBarrier();
  }
- for(var i=lane;i<N;i+=64u){before[i]=x[i];predicted[i]*=fraction;}workgroupBarrier();
+ for(var i=lane;i<N;i+=${lanes}u){before[i]=x[i];predicted[i]*=fraction;}workgroupBarrier();
  if(p.flags.x!=0.0){
   for(var iteration=0u;iteration<u32(p.solve.z);iteration++){
    for(var colour=0u;colour<${colourCount}u;colour++){
-    for(var i=lane;i<N;i+=64u){
+    for(var i=lane;i<N;i+=${lanes}u){
      if(graph[i*4u+2u]!=colour||graph[i*4u+3u]!=0u){continue;}
      let v=value(i,x[i].xyz,true);let delta=-(inv(v.h)*v.gradient);var alpha=1.0;
      for(var attempt=0u;attempt<u32(p.solve.w);attempt++){
@@ -92,6 +94,6 @@ fn value(i:u32,trial:vec3<f32>,hessian:bool)->Value{
    }
   }
  }
- for(var i=lane;i<N;i+=64u){state[i]=x[i];state[N+i]=vec4<f32>((x[i].xyz-before[i].xyz)/p.material.x,0);}
+ for(var i=lane;i<N;i+=${lanes}u){state[i]=x[i];state[N+i]=vec4<f32>((x[i].xyz-before[i].xyz)/p.material.x,0);}
  if(lane==0u){state[N*2u]=vec4<f32>(fraction,state[N*2u].y+1.0,0,0);}
 }`;}
