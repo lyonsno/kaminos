@@ -10432,6 +10432,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     catch (error) { setInfo(error.message); return false; }
   }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
+  else if (!recordHistory && sceneObjects[index].type === 'experiment') scenePlacementTools?.edits.discard(entry => entry.id === id);
   const previousActiveGroupId = activeSceneGroupId;
   const wasActive = activeSceneObjectId === id;
   const [entry] = sceneObjects.splice(index, 1);

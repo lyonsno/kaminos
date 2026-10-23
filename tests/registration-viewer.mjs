@@ -22,6 +22,19 @@ assert.deepEqual(target.geometry.attributes.position.array,originalPositions,'pr
 assert.notDeepEqual(pieces[0].root.position.toArray(),pieces[1].root.position.toArray());
 for(const p of pieces)p.dispose();
 assert.equal(target.geometry.groups.length,6,'preview grouping does not mutate original groups');
+for(const flip of [1,-1]){
+ const mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial({side:T.FrontSide}));mesh.geometry.computeTangents();mesh.scale.x=flip;
+ const attributes=Object.fromEntries(Object.entries(mesh.geometry.attributes).map(([k,a])=>[k,a.array.slice()]));
+ const check=createRegistrationViewer({target:mesh,parts});check.configure({alignment:{rotation:[0,0,0]}});await check.compute();
+ const rows=check.claimPieces(),surface=rows[0].root.children.find(n=>n.isMesh),g=surface.geometry,p=g.attributes.position,n=g.attributes.normal;
+ assert.equal(surface.material.side,T.FrontSide);assert.equal(rows[0].triangles,12);
+ for(let f=0;f<p.count;f+=3){const a=new T.Vector3().fromBufferAttribute(p,f),b=new T.Vector3().fromBufferAttribute(p,f+1),c=new T.Vector3().fromBufferAttribute(p,f+2);assert.ok(b.sub(a).cross(c.sub(a)).normalize().dot(new T.Vector3().fromBufferAttribute(n,f))>.999,'baked preview front face agrees with transformed normal');}
+ const order=flip<0?[0,2,1]:[0,1,2];
+ for(let f=0;f<12;f++)for(let vtx=0;vtx<3;vtx++){const sourceIndex=mesh.geometry.index.getX(f*3+order[vtx]),dest=f*3+vtx;assert.equal(g.attributes.uv.getX(dest),mesh.geometry.attributes.uv.getX(sourceIndex));assert.equal(g.attributes.uv.getY(dest),mesh.geometry.attributes.uv.getY(sourceIndex));assert.equal(g.attributes.tangent.getW(dest),mesh.geometry.attributes.tangent.getW(sourceIndex)*flip);}
+ assert.deepEqual(g.groups,mesh.geometry.groups);
+ for(const [k,array]of Object.entries(attributes))assert.deepEqual(mesh.geometry.attributes[k].array,array,'target attributes remain untouched');
+ rows.forEach(r=>r.dispose());check.dispose();
+}
 v.configure({solo:'a',parts:{b:{visible:false}},targetOpacity:.2});
 assert.equal(v.read().summary.overlap,12,'visibility must not alter membership');
 assert.equal(original.opacity,1,'original material is untouched');

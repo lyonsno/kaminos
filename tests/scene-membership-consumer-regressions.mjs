@@ -4,6 +4,9 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
+import * as T from '../lib/three.core.js';
+import {createWorkbenchSceneHost,disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
+import registrationExperiment from '../experiments/part-claims.experiment.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const membershipStart = html.indexOf('function membershipEditTargetId(');
@@ -23,10 +26,10 @@ function makeRecord(id, object, overrides = {}) {
   };
 }
 
-function makeSceneContext({ reloadObject = () => ({}) } = {}) {
+function makeSceneContext({ reloadObject = () => ({}), liveScene = null } = {}) {
   const sceneObjects = [];
   const sceneGroups = [];
-  const scene = {
+  const scene = liveScene || {
     add(object) { object.parent = this; },
     remove(object) { if (object.parent === this) object.parent = null; },
   };
@@ -271,4 +274,30 @@ test('removing one selected member prunes it before a surviving selection is pro
  context.renderSceneObjectList=()=>{for(const id of context.sceneSelection.ids)assert.ok(sceneObjects.some(entry=>entry.id===id),`Selection projection references removed ${id}`);};
  assert.doesNotThrow(()=>vm.runInContext("removeSceneObjectInternal('copy-a',{recordHistory:false,preserveForMembershipHistory:true})",context));
  assert.deepEqual(Array.from(context.sceneSelection.ids),['copy-b']);assert.ok(sceneObjects.some(entry=>entry.id==='copy-b'));
+});
+
+test('registration preview clear, rebuild and invalidation preserve usable unrelated Undo',async()=>{
+ const savedFetch=globalThis.fetch;
+ const source={objects:[{id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],provenance:{analyticalCarrier:{parts:{base:['box']}}}};
+ globalThis.fetch=async url=>{if(url.startsWith('/api/asset-registrations'))throw Error('fixture has no storage');return {ok:true,json:async()=>source};};
+ try{for(const operation of ['clear','rebuild','invalidate']){
+  const {context,sceneObjects,scene}=makeSceneContext({liveScene:new T.Scene()}),frames=new Set();
+  const edits=createSceneEdits({read:id=>{const root=sceneObjects.find(r=>r.id===id)?.object;return root?{position:root.position.toArray(),rotation:root.rotation.toArray().slice(0,3),scale:root.scale.toArray()}:null;},write:(id,p)=>{const root=sceneObjects.find(r=>r.id===id).object;root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}});
+  context.scenePlacementTools.edits=edits;context.disposeOwnedSceneTree=disposeOwnedSceneTree;
+  const removeHook=html.match(/removeObject:handle=>(\{[\s\S]*?\n    \}),\n    redraw:/);assert.ok(removeHook,'actual Workbench removal hook');
+  const removeObject=vm.runInContext(`handle=>${removeHook[1]}`,context);
+  const registerObject=(object,options)=>{const row=makeRecord(object.uuid,object,options);sceneObjects.push(row);return row;};
+  const shared=createWorkbenchSceneHost({scene,camera:new T.PerspectiveCamera(),controls:{target:new T.Vector3(),update(){}},loadAsset:async()=>{const root=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial());scene.add(root);const row=registerObject(root,{type:'glb'});return {id:row.id,root};},registerObject,findObject:root=>sceneObjects.find(r=>r.object===root),removeObject,redraw(){},onFrame:cb=>{frames.add(cb);return()=>frames.delete(cb);}});
+  const host={scene:{...shared,objects:()=>sceneObjects,refreshPresentation(){},setTransform:async(id,p)=>edits.apply(id,p)}};
+  const experiment=await registrationExperiment.create({host,inputs:{settings:{alignment:{rotation:[0,0,0]}}},record(){}}),sourceId=experiment.read().sourceObjectId;
+  const before=sceneObjects.find(r=>r.id===sourceId).object.position.toArray();edits.apply(sourceId,{position:[.1,0,0]});
+  await experiment.operations.compute();await experiment.operations.buildPreview();const pieceId=experiment.read().preview.pieces[0].objectId;
+  edits.apply(pieceId,{position:[5,6,7]});assert.equal(edits.state().undoCount,2);
+  if(operation==='clear')await experiment.operations.clearPreview();
+  if(operation==='rebuild')await experiment.operations.buildPreview();
+  if(operation==='invalidate'){experiment.operations.configure({threshold:.6});for(const tick of frames)tick({});await new Promise(resolve=>setImmediate(resolve));}
+  assert.equal(sceneObjects.some(r=>r.id===pieceId),false);assert.equal(edits.state().undoCount,1,`${operation} retires dead preview history`);
+  await edits.undo();assert.deepEqual(sceneObjects.find(r=>r.id===sourceId).object.position.toArray(),before,`${operation} preserves earlier carrier Undo`);
+  await experiment.dispose();
+ }}finally{globalThis.fetch=savedFetch;}
 });

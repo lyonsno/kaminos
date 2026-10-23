@@ -17,6 +17,10 @@
     "capture": "operator-fit-reopened"
   },
   {
+    "evaluate": "(async()=>{const s=await window.kaminosWorkbenchExperiments.read();window.__guessBefore=structuredClone(s.joints[0]);const p=[...s.joints[0].guessPose.position];p[0]+=.01;window.kaminosSceneEdits.apply(s.joints[0].guessObjectId,{position:p});return true})()",
+    "expect": true
+  },
+  {
     "invoke": [
       "compute"
     ]
@@ -42,6 +46,10 @@
     "capture": "barrel-selected"
   },
   {
+    "evaluate": "(async()=>{const s=await window.kaminosWorkbenchExperiments.read();window.__pieceId=s.preview.pieces.find(p=>p.id==='barrel').objectId;window.__pieceBefore=window.kaminosSceneObjectDebugState().find(p=>p.id===window.__pieceId).transform;window.__targetBefore=s.targetTransform;return true})()",
+    "expect": true
+  },
+  {
     "evaluate": "(()=>{const n=document.querySelector('[data-transform-field=\"position.x\"]');n.scrollIntoView({block:'center'});const b=n.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2}})()",
     "name": "drag-start"
   },
@@ -58,6 +66,17 @@
   },
   {
     "capture": "barrel-moved"
+  },
+  {
+    "evaluate": "(async()=>{const s=await window.kaminosWorkbenchExperiments.read(),p=window.kaminosSceneObjectDebugState().find(p=>p.id===window.__pieceId);return {pieceMoved:JSON.stringify(p.transform)!==JSON.stringify(window.__pieceBefore),targetUnchanged:JSON.stringify(s.targetTransform)===JSON.stringify(window.__targetBefore)}})()",
+    "expect": {"pieceMoved":true,"targetUnchanged":true}
+  },
+  {
+    "invoke": ["clearPreview"]
+  },
+  {
+    "evaluate": "(async()=>{await window.kaminosSceneEdits.undo();const s=await window.kaminosWorkbenchExperiments.read();return {preview:s.preview,guessRestored:JSON.stringify(s.joints[0].guessPose)===JSON.stringify(window.__guessBefore.guessPose),removed:!window.kaminosSceneObjectDebugState().some(p=>p.id===window.__pieceId)}})()",
+    "expect": {"preview":null,"guessRestored":true,"removed":true}
   },
   {
     "evaluate": "(async()=>{const x=window.kaminosWorkbenchExperiments;window.__saved=await x.invoke('saveRegistration','Browser round-trip witness · October 23');await x.close();await x.open('part-claims',{sourceUrl:window.__saved.registration.recipe.sourceUrl,targetUrl:window.__saved.registration.recipe.targetUrl,registrationId:window.__saved.registration.id});const s=await x.read();return {alignmentKept:JSON.stringify(s.alignment)===JSON.stringify(window.__saved.registration.recipe.settings.alignment),guessesKept:s.joints.every(j=>JSON.stringify(j.guessPose)===JSON.stringify(window.__saved.registration.recipe.jointGuesses[j.id])),preview:s.preview}})()",

@@ -168,15 +168,16 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
      if(include){selected.push(j);row.triangles++;}
     }
     if(!selected.length)continue;
-    const geometry=new THREE.BufferGeometry();
+    const geometry=new THREE.BufferGeometry(),reflected=node.matrixWorld.determinant()<0,vertexOrder=reflected?[0,2,1]:[0,1,2];
     for(const [name,attr]of Object.entries(g.attributes)){
      if(attr.isInterleavedBufferAttribute)throw Error('Interleaved target attributes need explicit preview conversion');
      const values=new attr.array.constructor(selected.length*3*attr.itemSize);let at=0;
-     for(const j of selected)for(let v=0;v<3;v++){const vertex=index?index.getX(j+v):j+v;values.set(attr.array.subarray(vertex*attr.itemSize,(vertex+1)*attr.itemSize),at);at+=attr.itemSize;}
+     for(const j of selected)for(const v of vertexOrder){const vertex=index?index.getX(j+v):j+v;values.set(attr.array.subarray(vertex*attr.itemSize,(vertex+1)*attr.itemSize),at);at+=attr.itemSize;}
      geometry.setAttribute(name,new THREE.BufferAttribute(values,attr.itemSize,attr.normalized));
     }
     let run=null;for(let f=0;f<selected.length;f++){const group=g.groups.find(gr=>selected[f]>=gr.start&&selected[f]<gr.start+gr.count),materialIndex=group?.materialIndex??0;if(run&&run.materialIndex===materialIndex)run.count+=3;else{run={start:f*3,count:3,materialIndex};geometry.groups.push(run);}}
     geometry.applyMatrix4(node.matrixWorld);
+    if(reflected&&geometry.attributes.tangent){const tangent=geometry.attributes.tangent;for(let i=0;i<tangent.count;i++)tangent.setW(i,-tangent.getW(i));}
     const mats=(Array.isArray(original)?original:[original]).map(m=>{const copy=m.clone();if(p>=parts.length){copy.color?.set(row.color);copy.map=null;}return copy;});
     const surface=new THREE.Mesh(geometry,Array.isArray(original)?mats:mats[0]);root.add(surface);
    }
