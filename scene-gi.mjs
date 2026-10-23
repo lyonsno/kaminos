@@ -25,7 +25,17 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   effect.useScreenSpaceSampling.value = false;
   effect.giIntensity.value = 1;
   const history=new SceneGIHistory(effect.getAONode(),effect.getGINode(),depth,normal,camera);
+  const feedbackContext=context({getOutput(node,{material}) {
+    if(!sceneGIReceives(material))return node;
+    // Return reflected *unboosted* irradiance to transport. Artistic gain,
+    // tone mapping, display transforms and receiving-pass AO stay outside it.
+    const reflected=history.feedbackForSurface().mul(diffuseColor.rgb.clamp(0,1))
+      .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material));
+    return vec4(node.rgb.add(reflected),node.a);
+  }});
+  source.contextNode=feedbackContext;
   const comparison=sourceComparison?createGISourceComparison(scene,camera,source,visibleNormal,reason=>history.reset(reason),surfaceLighting):null;
+  if(comparison)comparison.source.contextNode=feedbackContext;
   if(comparison)effect.sourceOverride=comparison.inputs;
   const filters=new Map();
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
@@ -109,9 +119,10 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
           throw new Error('Received bounce is unavailable for custom fragment materials');
         }
       });
-      if(['mode','radius','thickness','slices','steps','resolutionScale','temporal','temporalRefine','gain'].some(key=>next[key]!==settings[key]))history.reset('estimator-settings');
+      if(['mode','radius','thickness','slices','steps','resolutionScale','temporal','temporalRefine','gain','bounceFeedback'].some(key=>next[key]!==settings[key]))history.reset('estimator-settings');
       settings = next;
       history.resolutionScale=next.resolutionScale;history.weight.value=next.temporalWeight;history.gain.value=next.gain;history.refine=next.temporalRefine;
+      history.feedback.value=next.bounceFeedback&&next.temporal;
       effect.useTemporalFiltering=next.temporal;
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
@@ -154,6 +165,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     },
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
       history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:64,weight:history.weight.value,...history.state()},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
+      feedback:{requested:settings.bounceFeedback,effective:history.feedback.value,source:'previous-unboosted-irradiance',checkpointBytesPerPixel:history.convergence.checkpoint?16:0,validation:'previous-depth-and-world-normal',gainApplied:false},
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1+(comparison?.read().additionalSourcePasses??0),sourceComparison:comparison?.read()??null,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
