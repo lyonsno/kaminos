@@ -9,6 +9,7 @@ import {parseArgs} from 'node:util';
 import {startProcessMemory} from './process-memory.mjs';
 import {fluidBrowserLaunch} from '../../finger-fluid-browser-launch.mjs';
 import {gitSourceIdentity} from './source-attestation.mjs';
+import {validateMetalFinishing} from './metal-remesh-finishing.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export function validateLocalGenerationConfig(c){
   if(c?.schema!=='trellis2.local-generation-config.v0')throw Error('identified TRELLIS local generation config required');
@@ -23,7 +24,9 @@ export function validateLocalGenerationConfig(c){
   for(const key of ['gpuBufferBudgetMiB','processMemoryBudgetMiB'])
     if(!Number.isSafeInteger(c[key]*1048576))throw Error('representable '+key+' required');
   if(!Number.isInteger(c.seed)||c.seed<0||c.seed>0xffffffff)throw Error('unsigned32 source seed required');
-  if(c.textureSize!==undefined&&c.textureSize!==1024)throw Error('this finishing route supports 1024 textures; requested size cannot be ignored');
+  if(c.cleanupMode==='source-metal-remesh'){
+    if(!Number.isSafeInteger(c.textureSize)||c.textureSize<1)throw Error('positive Metal texture size required');
+  }else if(c.textureSize!==undefined&&c.textureSize!==1024)throw Error('this finishing route supports 1024 textures; requested size cannot be ignored');
   if(c.preparedPackageRoot!==undefined&&(typeof c.preparedPackageRoot!=='string'||!path.isAbsolute(c.preparedPackageRoot)))
     throw Error('explicit absolute preparedPackageRoot required');
   resolveGenerationFinishing(c);
@@ -34,13 +37,18 @@ export function validateLocalGenerationConfig(c){
 // Omitted selection preserves the already exercised legacy configuration.
 export function resolveGenerationFinishing(c){
   const cleanupMode=c.cleanupMode??'reference-cleanup';
-  if(!['reference-cleanup','mlx-surface-preserving'].includes(cleanupMode))throw Error('supported cleanup mode required');
+  if(!['reference-cleanup','mlx-surface-preserving','source-metal-remesh'].includes(cleanupMode))throw Error('supported cleanup mode required');
   const separate=c.finishingSourceRoot!==undefined||c.expectedFinishingSourceCommit!==undefined;
   if(separate&&(typeof c.finishingSourceRoot!=='string'||!path.isAbsolute(c.finishingSourceRoot)||
     !/^[a-f0-9]{40}$/.test(c.expectedFinishingSourceCommit??'')))
     throw Error('paired exact finishing source root and commit required');
-  return {sourceRoot:separate?c.finishingSourceRoot:c.sourceRoot,
+  const selected={sourceRoot:separate?c.finishingSourceRoot:c.sourceRoot,
     expectedSourceCommit:separate?c.expectedFinishingSourceCommit:c.expectedSourceCommit,cleanupMode};
+  if(cleanupMode==='source-metal-remesh'){
+    selected.metalFinishing=validateMetalFinishing(c.metalFinishing);
+    selected.python=c.metalFinishing.python;selected.textureSize=c.textureSize;
+  }
+  return selected;
 }
 
 // The observer's safety callback uses this same runner. Signal before report
@@ -125,12 +133,15 @@ export async function generateImage(values){
     await phase('mesh-finishing','Cleaning the mesh, unwrapping UVs and baking textures');
     const finished=path.join(work,'finished'),glb=path.join(finished,'asset.glb');
     const finishing=resolveGenerationFinishing(c);report.requestedFinishing=finishing;
-    await runner.run([process.execPath,path.join(ownRoot,'models/trellis2/finalize-retained-generation.mjs'),
+    const finishingCommand=[process.execPath,path.join(ownRoot,'models/trellis2/finalize-retained-generation.mjs'),
       '--repo-root',ownRoot,'--expected-commit',c.expectedCommit,'--input-root',native,'--expected-native-commit',nativeCommit,
-      '--python',c.python,'--source-root',finishing.sourceRoot,'--expected-source-commit',finishing.expectedSourceCommit,
+      '--python',finishing.python??c.python,'--source-root',finishing.sourceRoot,'--expected-source-commit',finishing.expectedSourceCommit,
       '--cleanup-mode',finishing.cleanupMode,
-      '--target-faces',String(c.targetFaces),'--uv-backend','source-xatlas','--receiver','kaminos-generate','--output',glb],
-      'mesh finishing');
+      '--target-faces',String(c.targetFaces),'--uv-backend','source-xatlas','--receiver','kaminos-generate','--output',glb];
+    if(finishing.metalFinishing){const m=finishing.metalFinishing;
+      finishingCommand.push('--metal-backend-manifest',m.backendManifest,'--metal-python-path',JSON.stringify(m.pythonPath),
+        '--remesh-band',String(m.band),'--remesh-project-back',String(m.projectBack),'--texture-size',String(finishing.textureSize));}
+    await runner.run(finishingCommand,'mesh finishing');
     const f=JSON.parse(await fs.readFile(path.join(finished,'report.json'))),data=await fs.readFile(glb);
     if(f.status!=='succeeded'||f.assetArtifact?.sha256!==sha(data)||f.assetArtifact.byteLength!==data.length)
       throw Error('complete identified finished GLB required');

@@ -47,3 +47,19 @@ test('unsafe state during pre-spawn persistence prevents the next stage from lau
     persist:async()=>{record.safety={reason:'process-footprint-budget'};}});
   await assert.rejects(runner.run(['/next/child'],'next stage'),/before spawn/);assert.equal(launches,0);
 });
+test('original Metal reconstruction is an explicit finishing choice, independent of image preparation',()=>{
+  const selected={...config,cleanupMode:'source-metal-remesh',textureSize:4096,
+    finishingSourceRoot:'/metal-source',expectedFinishingSourceCommit:'c'.repeat(40),
+    metalFinishing:{python:'/metal-python',backendManifest:'/backend.json',pythonPath:['/compiled-metal'],band:1,projectBack:0}};
+  assert.equal(validateLocalGenerationConfig(selected),selected);
+  const resolved=resolveGenerationFinishing(selected);
+  assert.equal(resolved.sourceRoot,'/metal-source');
+  assert.equal(resolved.python,'/metal-python');
+  assert.equal(resolved.textureSize,4096);
+  assert.deepEqual(resolved.metalFinishing,selected.metalFinishing);
+  for(const changed of [{metalFinishing:undefined},{metalFinishing:{...selected.metalFinishing,backendManifest:'relative'}},
+    {metalFinishing:{...selected.metalFinishing,pythonPath:['relative']}},
+    {metalFinishing:{...selected.metalFinishing,projectBack:2}},
+    {metalFinishing:{...selected.metalFinishing,band:0}}])
+    assert.throws(()=>validateLocalGenerationConfig({...selected,...changed}),/Metal|metal|remesh/);
+});

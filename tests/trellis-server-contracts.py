@@ -11,6 +11,7 @@ import uuid
 import io
 import queue
 import subprocess
+import tempfile
 
 SCRIPT=Path(__file__).resolve().parents[1]/'serve.py'
 TREE=ast.parse(SCRIPT.read_text())
@@ -20,6 +21,28 @@ def function(name,namespace):
     return namespace[name]
 
 class TrellisServerContracts(unittest.TestCase):
+    def test_explicit_metal_route_admits_4k_but_does_not_relax_legacy_texture_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'manifest.json').write_text('{}')
+            (root/'models/trellis2').mkdir(parents=True)
+            (root/'models/trellis2/generate-image.mjs').write_text('')
+            executable=root/'executable';executable.touch()
+            config={'schema':'trellis2.local-generation-config.v0',
+                **{k:str(root) for k in ['repoRoot','checkpointBase','sourceRoot','queueDir']},
+                **{k:str(executable) for k in ['python','memoryPython','chrome','greenroomBin']},
+                **{k:1 for k in ['steps','targetFaces','gpuBufferBudgetMiB','processMemoryBudgetMiB']},
+                'expectedCommit':'a'*40,'expectedSourceCommit':'b'*40,'pipelineType':'512','decoderActivationStorage':'f16',
+                'seed':42,'textureSize':4096,'cleanupMode':'source-metal-remesh',
+                'metalFinishing':{'python':str(executable),'backendManifest':str(executable),'pythonPath':[str(root)],'band':1,'projectBack':0}}
+            file=root/'config.json'
+            fn=function('trellis_generation_availability',{'os':SimpleNamespace(environ={'KAMINOS_TRELLIS_CONFIG':str(file)}),'json':json,'Path':Path,'re':re,'math':__import__('math')})
+            file.write_text(json.dumps(config));self.assertEqual(fn()['status'],'available')
+            config['metalFinishing']['backendManifest']=str(root/'missing.json')
+            file.write_text(json.dumps(config));self.assertEqual(fn()['status'],'unavailable')
+            config['cleanupMode']='mlx-surface-preserving'
+            file.write_text(json.dumps(config));self.assertEqual(fn()['status'],'unavailable')
+
     def test_same_second_generation_requests_get_distinct_artifact_roots(self):
         fn=function('_default_pipeline_out_dir',{'re':re,'Path':Path,'uuid':uuid,
             'os':SimpleNamespace(getpid=lambda:42),'time':SimpleNamespace(strftime=lambda _: 'same-second'),

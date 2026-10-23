@@ -3068,9 +3068,26 @@ def trellis_generation_availability():
                 raise ValueError(f"TRELLIS setup needs {key}")
         if type(config.get("seed")) is not int or not 0 <= config["seed"] <= 0xffffffff:
             raise ValueError("TRELLIS setup needs an unsigned32 seed")
-        if config.get("textureSize", 1024) != 1024:
+        metal = config.get("cleanupMode") == "source-metal-remesh"
+        if metal:
+            options = config.get("metalFinishing")
+            if not isinstance(options, dict):
+                raise ValueError("Explicit Metal finishing configuration required")
+            for key in ["python", "backendManifest"]:
+                value = options.get(key)
+                if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_file():
+                    raise ValueError(f"Metal finishing needs {key}")
+            paths = options.get("pythonPath")
+            if not isinstance(paths, list) or any(not isinstance(p, str) or not Path(p).is_absolute() or not Path(p).is_dir() for p in paths):
+                raise ValueError("Metal finishing needs absolute pythonPath directories")
+            band, project = options.get("band"), options.get("projectBack")
+            if type(band) not in [int, float] or not 0 < band < float('inf') or type(project) not in [int, float] or not 0 <= project <= 1:
+                raise ValueError("Metal finishing needs valid band and projectBack")
+            if type(config.get("textureSize")) is not int or config["textureSize"] < 1:
+                raise ValueError("Metal finishing needs a positive textureSize")
+        elif config.get("textureSize", 1024) != 1024:
             raise ValueError("This TRELLIS finishing route uses 1K textures")
-        return {"status": "available", "message": "Queued WebGPU with local mesh finishing"}
+        return {"status": "available", "message": "Queued WebGPU with original Metal remesh finishing" if metal else "Queued WebGPU with local mesh finishing"}
     except (OSError, ValueError, TypeError) as error:
         return {"status": "unavailable", "message": str(error)}
 
