@@ -18,3 +18,9 @@ export function checkSuperMatAppWitness(r) {
   need(r.afterDestroy?.destroyed === true && r.afterDestroy?.loaded === false, 'application destruction required');
   return errors;
 }
+
+export function checkSuperMatDemoWitness(demo) {
+  const run = demo.state?.runs?.[0];
+  return demo.state?.status !== 'done' || run?.size !== 512 || !(Number.isSafeInteger(run.dutyCount) && run.dutyCount > 0) || run.cpuWorker !== true || !(Number.isSafeInteger(run.frames?.frames) && run.frames.frames > 0) || demo.state.identity?.backend !== 'webgpu-local'
+    ? ['actual demo route/output/foreground failed'] : [];
+}
