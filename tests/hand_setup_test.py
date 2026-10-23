@@ -30,6 +30,24 @@ class SetupTests(unittest.TestCase):
             os.close(master)
             os.close(slave)
 
+    def test_interactive_refusal_does_not_acquire_models(self):
+        master, slave = os.openpty()
+        real_open = open
+        def terminal_open(path, mode='r', *args, **kwargs):
+            if path == '/dev/tty': return real_open(os.dup(slave), mode, *args, **kwargs)
+            return real_open(path, mode, *args, **kwargs)
+        try:
+            os.write(master, b'no\n')
+            with tempfile.TemporaryDirectory() as temp, patch('builtins.open', side_effect=terminal_open), patch.object(setup, 'fetch_client') as acquire:
+                self.assertEqual(setup.main(['--state-dir', temp, '--revision', 'a' * 40, '--prepare-only']), 1)
+                acquire.assert_not_called()
+                self.assertFalse((Path(temp) / 'model-terms.json').exists())
+                state = json.loads((Path(temp) / 'setup-state.json').read_text())
+                self.assertEqual((state['status'], state['phase']), ('failed', 'terms'))
+        finally:
+            os.close(master)
+            os.close(slave)
+
     def test_crossed_packages_are_not_a_valid_cache(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
