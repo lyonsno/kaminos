@@ -3255,6 +3255,11 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
+import {checkedBurnable} from './scene-burning-settings.mjs';
+import {resolveBurnableTarget} from './burnable-target.mjs';
+import {createSceneBurning} from './scene-burning.mjs';
+import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
+import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
@@ -3561,6 +3566,7 @@ let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
 let volumePrototype = null;
+let sceneBurning = null;
 const syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>activeSceneComposition?volumePrototype:null,wanted:()=>isSceneItemVisible('flame-field')});
 let ownerVolumeReady = null;
 let annularBurner = null;
@@ -5025,6 +5031,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  sceneBurning?.forget(object);
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
@@ -7110,6 +7117,7 @@ function registerSceneObject(object, metadata = {}) {
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
     ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false,...(metadata.emission?{emission:structuredClone(metadata.emission)}:{})}:{}),
     giProxy:giProxySettingFor({type:metadata.type,giProxy:metadata.giProxy}),
+    burnable:checkedBurnable(metadata),
     ...(metadata.repetition?{repetition:checkedRepetition(metadata.repetition)}:{}),
   };
   object.userData.kaminosSceneObject = {
@@ -7124,6 +7132,7 @@ function registerSceneObject(object, metadata = {}) {
     image: record.image,
     generation:record.generation,
     collision:record.collision,
+    burnable:record.burnable,
     giProxy:record.giProxy?structuredClone(record.giProxy):null,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
@@ -10249,6 +10258,7 @@ function releaseUnreferencedSceneMembershipObjects() {
     if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
+      sceneBurning?.forget(entry.object);
       const disposeTree = sceneMembershipDisposers.get(entry.object) || disposeObjectTree;
       sceneMembershipDisposers.delete(entry.object);
       if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);
@@ -10330,6 +10340,7 @@ async function restoreSceneObjectMembership(snapshot) {
   applySceneObjectTransformState(object, record.transform);
   applyMaterialStateToObject(object, record.materials);
   if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
+  writeObjectBurnable(entry.id,record.burnable??null);
   sceneObjects.splice(sceneObjects.indexOf(entry), 1);
   sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
   restoreSceneObjectGroups(entry, groups);
@@ -12401,6 +12412,7 @@ function clearScene({loadRequestId = null} = {}) {
   for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();for(const id of flameSourceDataTargets)scenePlacementTools?.edits.unregister(id);flameSourceDataTargets.clear();
   for(const id of colliderEditTargets)scenePlacementTools?.edits.unregister(id);colliderEditTargets.clear();sceneColliderCollection.clear();
   for(const id of giProxyEditTargets)scenePlacementTools?.edits.unregister(id);giProxyEditTargets.clear();
+  for(const id of burnableEditTargets)scenePlacementTools?.edits.unregister(id);burnableEditTargets.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -24937,6 +24949,7 @@ function serializeSceneObject(entry) {
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
     ...(entry.giProxy?{giProxy:structuredClone(entry.giProxy)}:{}),
+    ...(entry.burnable?{burnable:structuredClone(entry.burnable)}:{}),
     ...(entry.repetition?{repetition:checkedRepetition(entry.repetition)}:{}),
   };
 }
@@ -25495,7 +25508,7 @@ function addProceduralMesh(kind,parameters={}) {
   try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   renderSceneObjectList();return id;
 }
-function cloneSceneMaterial(material){const copy=material.clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
+function cloneSceneMaterial(material){const copy=originalBurnMaterial(material).clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
 function addSceneSpotLight() {
   assertSceneConstructionAvailable();const id=makeSceneObjectId('light');
   const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
@@ -25518,6 +25531,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type==='light'){if(entry.id===RIM_LIGHT_ID)setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}
   else {
     const copy=withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
+    const burnLabels=[];copy.traverse(child=>{if(child.userData.kaminosBurnIndicator)burnLabels.push(child);});for(const label of burnLabels){label.removeFromParent();disposeObjectTree(label);}
     scene.add(copy);registerSceneObject(copy,record);
   }
   if(entry.groupId){const group=sceneGroups.find(g=>g.id===entry.groupId);group?.objectIds.push(copyId);setSceneObjectGroupId(sceneObjects.find(o=>o.id===copyId),entry.groupId);}
@@ -25587,6 +25601,28 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
 }
 const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
+const burnableEditTargets=new Set();
+function syncBurnableStatus(){
+  const output=document.getElementById('object-burnable-status');if(!output)return;
+  const state=sceneBurning?.read(activeSceneObjectId),text=state?.error??(state?.status==='waiting-for-fire'?'Waiting for fire':'');
+  if(output.textContent!==text)output.textContent=text;
+}
+function writeObjectBurnable(id,value){
+  const entry=sceneObjects.find(row=>row.id===id)||sceneMembershipRetainedObjects.get(id);
+  if(!entry)throw Error('Burnable object is absent');
+  entry.burnable=checkedBurnable(entry,value);
+  if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.burnable=structuredClone(entry.burnable);
+  void sceneBurning?.sync();syncSceneDataInspector();window._kaminosDirty?.();
+}
+function ensureObjectBurnableTarget(id){
+  const entry=resolveBurnableTarget(sceneObjects,id),target='@object-burnable:'+id;
+  if(!burnableEditTargets.has(target)){
+    scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>structuredClone((sceneObjects.find(row=>row.id===id)||sceneMembershipRetainedObjects.get(id))?.burnable??null),
+      check:value=>checkedBurnable(entry,value),write:value=>writeObjectBurnable(id,value)});
+    burnableEditTargets.add(target);
+  }
+  return target;
+}
 const giProxyEditTargets=new Set();
 // The object's GI proxy follows its render settings: on, the stored tier they choose (loaded off the frame loop);
 // off, no proxy held. The setting is the stored state; the load just follows it.
@@ -25649,6 +25685,13 @@ function syncSceneDataInspector() {
   const collisionPanel=document.getElementById('selected-collision-properties');
   if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
   const renderPanel=document.getElementById('selected-render-properties');
+  const burnPanel=document.getElementById('selected-burnable-properties');
+  if(burnPanel){
+    let supported=false;try{resolveBurnableTarget(sceneObjects,entry?.id);supported=true;}catch{}
+    burnPanel.hidden=!supported;
+    document.getElementById('object-burnable').checked=entry?.burnable?.enabled===true;
+    syncBurnableStatus();
+  }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
     if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
       if(!editing){document.getElementById('object-gi-proxy').checked=setting.enabled;detail.value=setting.selection.faces?`faces:${setting.selection.faces}`:'error';if(setting.selection.maxError!=null)error.value=String(setting.selection.maxError);}
@@ -25764,6 +25807,16 @@ function installSceneConstruction() {
   const collisionInput=document.getElementById('object-fire-collision');
   collisionInput.addEventListener('change',()=>{try{const target=ensureObjectCollisionTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview({domainId:'flame-field',enabled:collisionInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[collisionInput],edits,id:()=>ensureObjectCollisionTarget(activeSceneObjectId),label:'Set Fire & smoke obstacle',onError:error=>setInfo(error.message)}));
+  const burnPanel=document.createElement('section');burnPanel.id='selected-burnable-properties';burnPanel.hidden=true;
+  burnPanel.innerHTML='<h3>Combustion</h3><label class="slider-row"><span class="slider-label">Burnable wood</span><input id="object-burnable" type="checkbox"></label><p id="object-burnable-status" role="status"></p>';
+  collisionPanel.after(burnPanel);scenePlacementTools.addHistoryScope(burnPanel);
+  const burnInput=document.getElementById('object-burnable');
+  burnInput.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview({enabled:burnInput.checked,material:'wood'});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  authoringControlSessions.push(installSceneControlHistory({controls:[burnInput],edits,id:()=>ensureObjectBurnableTarget(activeSceneObjectId),label:'Set burnable wood',onError:error=>setInfo(error.message)}));
+  sceneBurning=createSceneBurning({objects:()=>sceneObjects,retained:()=>[...sceneMembershipRetainedObjects.values()],runtime:()=>activeSceneComposition?volumePrototype:null,
+    createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame}),
+    onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
+  workbenchSceneFrames.onFrame(()=>void sceneBurning.sync().then(syncBurnableStatus));
   // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier.
   const renderPanel=document.createElement('section');renderPanel.id='selected-render-properties';renderPanel.hidden=true;
   renderPanel.innerHTML='<h3>Render</h3><label class="slider-row"><span class="slider-label">GI proxy</span><input id="object-gi-proxy" type="checkbox"></label>'
@@ -25787,6 +25840,9 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
+    setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled,material:'wood'},'Set burnable wood');},
+    burningState:id=>sceneBurning.read(id),
+    burningSnapshot:id=>sceneBurning.snapshot(id),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
