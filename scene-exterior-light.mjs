@@ -14,10 +14,17 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,beforeRepla
       const frames={};
       for(const [name,region] of [['world',medium],['middle',medium.middle]]){
         if(!region)continue;
-        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax]);
+        // Keep cubic receiver cells and exact physical coverage. In particular,
+        // the default middle region is 3 by 5 by 3, not the fine box's 2:1 shape.
+        const dims=region.dimensions;
+        if(!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isInteger(n)&&n>0))throw Error('region material dimensions required');
+        const gcd=(a,b)=>b?gcd(b,a%b):a;
+        const widthUnit=dims[0]/dims.reduce(gcd);
+        const regionGrid=Math.ceil(grid/widthUnit)*widthUnit;
+        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid]);
         let current=regions.get(name);
         if(!current||current.key!==key){
-          const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:grid,sourceDimensions:source.dimensions,
+          const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:regionGrid,sourceDimensions:source.dimensions,
             receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid});
           beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;
         }
