@@ -96,10 +96,11 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
         await gen.useSkeleton(`${skeletonsBase}${key}/`);
       }
       if (running.stopped) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
+      const solverEvaluations=[];
       let solverProgress={evaluations:0,t:0,acceptedT:0,attemptedSteps:0,acceptedSteps:0,rejectedSteps:0};
       const progress=()=>report('running','solve',prompt,{...solverProgress});
       progress();
-      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale, onPartial: onPartial ? sample => {if(running.stopped)throw Object.assign(new Error("stopped"),{name:"AbortError"});return onPartial?.({...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? "browser T5" : "captured embedding"});} : undefined, onEvaluation:e=>{solverProgress={...solverProgress,evaluations:e.evaluations,t:Math.min(e.t,1)};progress();},onStep:step=>{solverProgress={...solverProgress,attemptedSteps:solverProgress.attemptedSteps+1,acceptedSteps:solverProgress.acceptedSteps+Number(step.accepted),rejectedSteps:solverProgress.rejectedSteps+Number(!step.accepted),acceptedT:step.accepted?Math.min(1,step.t0+step.dt):solverProgress.acceptedT};progress();} });
+      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale, onPartial: onPartial ? sample => {if(running.stopped)throw Object.assign(new Error("stopped"),{name:"AbortError"});return onPartial?.({...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? "browser T5" : "captured embedding"});} : undefined, onEvaluation:e=>{solverEvaluations.push({...e});solverProgress={...solverProgress,evaluations:e.evaluations,t:Math.min(e.t,1)};progress();},onStep:step=>{solverProgress={...solverProgress,attemptedSteps:solverProgress.attemptedSteps+1,acceptedSteps:solverProgress.acceptedSteps+Number(step.accepted),rejectedSteps:solverProgress.rejectedSteps+Number(!step.accepted),acceptedT:step.accepted?Math.min(1,step.t0+step.dt):solverProgress.acceptedT};progress();} });
       if(running.stopped)throw Object.assign(new Error('stopped'),{name:'AbortError'});
       report('running', 'bake', 'animated .glb');
       const sk = gen.skeleton;
@@ -109,7 +110,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       const out = {
         glb, motion: result.motion, skeleton: sk, restFrame: data?.restFrame ? structuredClone(data.restFrame) : null,
         rig: rig ? { names: rig.names, pruned: rig.pruned, labels: labels.clean, face: labels.face, restRotation: rig.restRotation ?? null, mesh: Boolean(data?.mesh) } : null,
-        report: { prompt, seed, solver: result.solver, solverProgress:{...solverProgress}, solverSteps:result.steps, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
+        report: { prompt, seed, solver: result.solver, solverProgress:{...solverProgress}, solverSteps:result.steps, solverEvaluations, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
       };
       state.last = { prompt, seed, skeleton: sk.name, glbBytes: glb.byteLength, evaluations: result.evaluations };
       report('done', null, `${sk.name}: ${prompt}`);
