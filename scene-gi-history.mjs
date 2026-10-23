@@ -55,7 +55,7 @@ export default class SceneGIHistory extends Node {
         const expected=previous.z.negate();
         const match=abs(surface.a.sub(expected)).lessThanEqual(max(.01,expected.mul(.002)))
           .and(dot(surface.rgb,worldNormal).greaterThan(.9));
-        If(match,()=>result.assign(this.oldGI.sample(q).rgb.max(0)));
+        If(match,()=>{result.assign(this.oldGI.sample(q).rgb.max(0));});
       });
     });
     return result;
