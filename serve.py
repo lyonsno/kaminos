@@ -3796,20 +3796,35 @@ def ingest_image_asset(filename, content):
     target = (directory / storage_name).resolve()
     if not target.is_relative_to(directory):
         raise PermissionError("Path traversal")
-    try:
-        with target.open('xb') as handle:
-            handle.write(content)
-    except FileExistsError:
-        if target.read_bytes() != content:
-            raise ValueError('image asset content identity collision')
+    if target.exists() and target.read_bytes() != content:
+        raise ValueError('image asset content identity collision')
     metadata = {'schema': 'kaminos.image-asset.v0', 'name': filename, 'sha256': f'sha256:{digest}'}
-    with tempfile.NamedTemporaryFile(mode='w', dir=directory, prefix='.image-', delete=False) as handle:
-        temporary = Path(handle.name)
-        json.dump(metadata, handle)
+    temporary_image = temporary_metadata = None
     try:
-        os.replace(temporary, target.with_name(f'.{target.name}.json'))
+        # Keep incomplete pixels hidden from Assets. Publish the image only after
+        # its full bytes and display metadata have both been written successfully.
+        with tempfile.NamedTemporaryFile(mode='wb', dir=directory, prefix='.image-', delete=False) as handle:
+            temporary_image = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with tempfile.NamedTemporaryFile(mode='w', dir=directory, prefix='.image-', delete=False) as handle:
+            temporary_metadata = Path(handle.name)
+            json.dump(metadata, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_metadata, target.with_name(f'.{target.name}.json'))
+        try:
+            # link is exclusive: concurrent saves may share an identical asset,
+            # but must never replace an existing file with different bytes.
+            os.link(temporary_image, target)
+        except FileExistsError:
+            if target.read_bytes() != content:
+                raise ValueError('image asset content identity collision')
     finally:
-        temporary.unlink(missing_ok=True)
+        for temporary in (temporary_image, temporary_metadata):
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
     entry = build_asset_entry(root, target)
     entry['sha256'] = f'sha256:{digest}'
     return entry
