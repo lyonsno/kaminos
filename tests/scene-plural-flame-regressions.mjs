@@ -86,3 +86,31 @@ for(const enabled of [true,false])test(`burner graph history restores only the s
  }
  assert.ok(published.every(records=>records.every(o=>o.id==='other')),'no intermediate publication may invent a source');
 });
+
+
+test('history notifications keep selected-source inspector values instead of projecting the primary cockpit',()=>{
+ const start=html.indexOf('  edits.subscribe(()=>{\n    flameInspector?.sync();');
+ assert.ok(start>=0,'production inspector history subscription exists');
+ const code=html.slice(start,html.indexOf('  syncRimAuthoringHandle();',start));
+ const selected={fuel:.8,enabled:false},primary={id:'volume-immersed-fuel',type:'range',value:'.2'};
+ const alias={type:'number',value:'.8',dataset:{authoringAlias:primary.id}};
+ let notify;const writes=[];
+ const h={edits:{subscribe:fn=>{notify=fn;}},flameInspector:{sync:()=>{alias.value=String(selected.fuel);}},
+ document:{activeElement:null,querySelectorAll:()=>[alias],getElementById:()=>primary},flameControlDisplayValue:(_id,value)=>value};
+ vm.runInNewContext(code,h);notify();writes.push(alias.value);
+ selected.fuel=.65;notify();writes.push(alias.value);
+ selected.fuel=.8;notify();writes.push(alias.value);
+ assert.deepEqual(writes,['0.8','0.65','0.8'],'begin, edit and Undo must display the selected supply');
+ assert.equal(primary.value,'.2','inspector refresh must leave primary supply untouched');
+});
+
+test('shared parameter history writes let the inspector choose its selected-source projection',()=>{
+ const a=html.indexOf('    const write=state=>{',html.indexOf('for(const control of collectVolumeCockpitControlElements(document))'));
+ assert.ok(a>=0);const code=html.slice(a,html.indexOf('    const check=state=>{',a))+'write({value:.3});';
+ const control={id:'volume-immersed-fuel',type:'range',value:'.2',dataset:{},dispatchEvent(){}};
+ const alias={type:'number',value:'.8'};
+ vm.runInNewContext(code,{control,Event,KeyboardEvent:Event,setVolumeControlValue:(_id,value)=>{control.value=String(value);},
+ flameInspector:{sync:()=>{alias.value='.8';}},document:{querySelectorAll:()=>[alias]},flameControlDisplayValue:(_id,value)=>value});
+ assert.equal(alias.value,'.8','a primary cockpit write must not impersonate another selected source');
+ assert.equal(control.value,'0.3');
+});

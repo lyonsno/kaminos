@@ -22263,7 +22263,7 @@ function installAuthoringParameterEditing() {
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
       if(control.dataset.volumeCommit==='confirm')control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
-      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.type==='checkbox'?control.checked:Number(control.value)>=.5;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
+      flameInspector?.sync();
     };
     const check=state=>{
       if(control.id==='emitter-assay-family'&&state.value==='cluster')throw Error('Cluster bowl is not a placeable flame; use Workbench');
@@ -22343,7 +22343,7 @@ function installAuthoringParameterEditing() {
   }
   edits.subscribe(()=>{
     flameInspector?.sync();
-    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else alias.value=String(flameControlDisplayValue(source.id,source.value));}});
+
   });
   syncRimAuthoringHandle();
 }
