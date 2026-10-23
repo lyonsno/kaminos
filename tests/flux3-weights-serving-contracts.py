@@ -15,13 +15,29 @@ assert hasattr(serve, 'FLUX3_WEIGHTS_ROOT'), 'Kaminos must accept an explicit lo
 
 with TemporaryDirectory() as directory:
     root = Path(directory) / 'flux3'
-    for part in ('te', 'dit', 'vae'):
-        (root / part).mkdir(parents=True)
-        (root / part / 'manifest.json').write_text(json.dumps({
-            'schema': 'kaminos.flux3-klein.transformer-weights.v1' if part == 'dit' else 'component',
-        }))
+    # Minimal metadata follows the observed local pack's three loader schemas.
     payload = bytes(range(256))
-    (root / 'te' / 'te-embed.bin').write_bytes(payload)
+    bundle = {'file': 'weights.bin', 'bytes': len(payload), 'tensors': [{'name': 'weight', 'shape': [128], 'offset': 0, 'bytes': 256}]}
+    manifests = {
+        'te': {'schema': 'kaminos.flux3-klein.text-encoder-weights.v1',
+               'config': {'hidden_size': 128}, 'layers': 1, 'taps': [1],
+               'bundles': {'layer00': bundle},
+               'embedding': {'file': 'te-embed.bin', 'shape': [2, 64], 'row_bytes': 128},
+               'tokenizer': {'file': 'tokenizer.json'}},
+        'dit': {'schema': 'kaminos.flux3-klein.transformer-weights.v1',
+                'config': {'num_layers': 1, 'num_single_layers': 1},
+                'bundles': {name: bundle for name in ('globals', 'txt00', 'img00', 'single00')}},
+        'vae': {'schema': 'kaminos.flux2-klein.vae-decoder-weights.v0',
+                'config': {'latent_channels': 32}, 'bundle': bundle},
+    }
+    def restore():
+        for part, manifest in manifests.items():
+            (root / part).mkdir(parents=True, exist_ok=True)
+            (root / part / 'manifest.json').write_text(json.dumps(manifest))
+            (root / part / 'weights.bin').write_bytes(payload)
+        (root / 'te' / 'te-embed.bin').write_bytes(payload)
+        (root / 'te' / 'tokenizer.json').write_text('{}')
+    restore()
     (Path(directory) / 'outside.bin').write_bytes(b'secret')
     previous = serve.FLUX3_WEIGHTS_ROOT
     serve.FLUX3_WEIGHTS_ROOT = root.resolve()
@@ -47,6 +63,25 @@ with TemporaryDirectory() as directory:
         for escape in ('/flux3-weights/../outside.bin', '/flux3-weights/%2e%2e/outside.bin'):
             response, body = get(escape)
             assert response.status == 404 and b'secret' not in body
+        # All manifests remain present while a required payload is missing/truncated.
+        for part, filename in [('te', 'tokenizer.json'), ('te', 'te-embed.bin'), ('te', 'weights.bin'), ('dit', 'weights.bin'), ('vae', 'weights.bin')]:
+            target = root / part / filename
+            target.unlink()
+            assert serve.runtime_config()['flux3']['mounted'] is False, (part, filename)
+            restore()
+            target.write_bytes(b'')
+            assert serve.runtime_config()['flux3']['mounted'] is False, (part, filename, 'empty')
+            restore()
+        for part in ('te', 'vae'):
+            for malformed in ('{}', '{broken', '[]'):
+                (root / part / 'manifest.json').write_text(malformed)
+                assert serve.runtime_config()['flux3']['mounted'] is False, (part, malformed)
+                restore()
+        # Manifest paths cannot escape the mount that serves the package.
+        bad = dict(manifests['te'], tokenizer={'file': '../outside.bin'})
+        (root / 'te' / 'manifest.json').write_text(json.dumps(bad))
+        assert serve.runtime_config()['flux3']['mounted'] is False
+        restore()
         # Existing FLUX.2 weights must not masquerade as an available FLUX.3 pack.
         (root / 'dit' / 'manifest.json').write_text(json.dumps({'schema': 'kaminos.flux2-klein.transformer-weights.v1'}))
         assert serve.runtime_config()['flux3']['mounted'] is False
