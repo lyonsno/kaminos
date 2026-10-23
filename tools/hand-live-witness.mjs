@@ -41,6 +41,37 @@ try {
     assert(report.live.fingerJuice.packet.emitters.some(e=>e.active),'fixture produced no jets');
   }
   await page.screenshot({path:out+'/desktop.png'});
+  if(report.live.fingerJuice.enabled){
+    report.phase='water_controls';save();
+    const session=report.live.sessionId;
+    await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).fill('3000');
+    await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).press('Tab');
+    await page.waitForFunction(()=>{
+      const s=window.kaminosWorkbenchExperiments.read();
+      return s.fingerJuice.load.requestedRate===3000&&s.fingerJuice.load.admittedRate>0&&s.fingerJuice.load.poolLimited;
+    });
+    report.smallPool=await read();
+    assert.equal(report.smallPool.fingerJuice.load.mountedParticleCount,2400);
+    await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).fill('9600');
+    await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).press('Tab');
+    await page.waitForFunction(()=>{
+      const s=window.kaminosWorkbenchExperiments.read();
+      return !s.fingerJuice.rebuilding&&s.fingerJuice.load.mountedParticleCount===9600&&s.fingerJuice.load.admittedRate>0;
+    });
+    report.largePool=await read();
+    assert.equal(report.largePool.sessionId,session,'capacity change restarted the camera session');
+    assert.equal(report.largePool.running,true);
+    assert.equal(report.largePool.fingerJuice.runtime.solver.particleCount,9600);
+    assert.equal(report.largePool.fingerJuice.packet.economics.requestedParticleCount,9600);
+    assert(report.largePool.fingerJuice.load.admittedRate>report.smallPool.fingerJuice.load.admittedRate*2,'larger pool did not admit more emission');
+    report.loadLabel=await page.locator('[data-hand-water-load]').textContent();
+    assert.match(report.loadLabel,/9,600 allocated/);
+    await page.screenshot({path:out+'/controls.png'});
+    await page.evaluate(async()=>{
+      await window.kaminosWorkbenchExperiments.invoke('setParticleCount',2400);
+      await window.kaminosWorkbenchExperiments.invoke('setSourceFlux',360);
+    });
+  }
   const first=await page.locator('#kaminos-host-renderer-canvas').screenshot();
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>8);
   const second=await page.locator('#kaminos-host-renderer-canvas').screenshot();

@@ -1,7 +1,7 @@
 import {Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide} from '../lib/three.core.js';
 import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
 import {openCaptureStore} from './hand-live-retention.mjs';
-import {nativeFingerPacket,idleFingerPacket} from './hand-live-fluid.mjs';
+import {nativeFingerPacket,idleFingerPacket,fingerFluidLoad} from './hand-live-fluid.mjs';
 
 export default {
   id: 'hand-live', title: 'Live MobRecon hand',
@@ -42,13 +42,18 @@ export default {
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
-    let fluid=null,fluidError=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0],sourceFlux=360;
+    let particleCount=Number(inputs.particleCount??2400),sourceFlux=Number(inputs.sourceFlux??360);
+    if(!Number.isSafeInteger(particleCount)||particleCount<1)throw Error('Invalid particle capacity');
+    if(!Number.isFinite(sourceFlux)||sourceFlux<0)throw Error('Invalid source flux');
+    let fluid=null,fluidError=null,fluidState=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0];
+    let waterChanges=Promise.resolve(),rebuilding=false,waterInitialized=false;
+    let capacityInput,fluxInput,waterStatus;
     const useFluid=operation=>{
       if(!fluid)return null;
       const owned=fluid;
       try{return operation(owned);}
       catch(cause){
-        fluid=null;fluidKey=null;fluidError=String(cause);fluidPacket=idleFingerPacket('fluid_unavailable');
+        fluid=null;fluidState=null;fluidKey=null;fluidError=String(cause);fluidPacket=idleFingerPacket('fluid_unavailable');
         try{owned.dispose();}catch(cleanup){fluidError+=`; cleanup: ${cleanup}`;}
         return null;
       }
@@ -57,25 +62,35 @@ export default {
     let handedness=inputs.handedness ?? 'right', cropX=.5, cropY=.5, cropSize=.85;
     const read = () => {
       const runtime=useFluid(live=>live.read());
+      fluidState=runtime;
       return {authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
       identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime,error:fluidError}};
+      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime,error:fluidError,rebuilding,
+        load:fingerFluidLoad(runtime,{particleCount,sourceFlux})}};
     };
     const updateFluid=()=>{
       if(!fluid)return;
       mesh.updateWorldMatrix(true,false);
-      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux}):idleFingerPacket();
-      const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters]);
+      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount}):idleFingerPacket();
+      const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters,packet.economics]);
       if(key===fluidKey)return;
       if(!useFluid(live=>{live.setPacket(packet);return true;}))return;
       fluidPacket=packet;fluidKey=key;
+      fluidState=useFluid(live=>live.read());
       if(sessionId)emit({kind:'finger_juice',epochMs:Date.now(),packet,meshMatrix:mesh.matrixWorld.toArray()}).catch(cause=>{error=String(cause);});
     };
     const sync = () => {
+      if(capacityInput&&document.activeElement!==capacityInput)capacityInput.value=particleCount;
+      if(fluxInput&&document.activeElement!==fluxInput)fluxInput.value=sourceFlux;
+      if(waterStatus){
+        const load=fingerFluidLoad(fluidState,{particleCount,sourceFlux});
+        waterStatus.textContent=rebuilding?`Allocating ${particleCount.toLocaleString()} particles...`:fluidError?`Water: ${fluidError}`:
+          `${load.mountedParticleCount?.toLocaleString()??'No'} allocated | ${load.admittedRate===null?'unverified':Math.round(load.admittedRate).toLocaleString()+'/s admitted'}${load.poolLimited?' | pool limited':''}`;
+      }
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
         `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidError??fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
@@ -152,6 +167,32 @@ export default {
       if(acquisitionControls.threshold) acquisitionControls.threshold.value=detectorThreshold;
       record({kind:'hand-live.acquisition',phase:'applied',effective:read()});return read();
     };
+    const queueWater=operation=>{
+      const task=waterChanges.then(operation);waterChanges=task.catch(()=>{});return task;
+    };
+    const mountWater=async count=>{
+      rebuilding=true;waterInitialized=true;fluidState=null;fluidKey=null;
+      const previous=fluid;fluid=null;sync();
+      try{
+        await previous?.dispose();
+        if(disposed)throw Error('experiment closed');
+        const candidate=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idleFingerPacket()});
+        if(disposed){await candidate.dispose();throw Error('experiment closed');}
+        fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
+        fluidState=useFluid(live=>live.read());
+      }catch(cause){fluidError=String(cause);throw cause;}
+      finally{rebuilding=false;sync();}
+    };
+    const setParticleCount=value=>{
+      if(!Number.isSafeInteger(value)||value<1)throw Error('Invalid particle capacity');
+      if(disposed)throw Error('experiment closed');
+      particleCount=value;sync();
+      return queueWater(async()=>{
+        if(disposed)throw Error('experiment closed');
+        if(waterInitialized||starting)await mountWater(value);
+        record({kind:'hand-live.capacity',phase:'applied',effective:read()});return read();
+      });
+    };
     frame();
     const unsubscribe=scene.onFrame(()=>{updateFluid();sync();});
     const start = async () => {
@@ -160,12 +201,8 @@ export default {
       if(flight) await flight;
       starting=true;error=null;sync();const ticket=++generation;
       try {
-        if(fingerJuice&&!fluid){
-          fluid=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:2400,densityIterations:3,showSupportGeometry:true},packet:idleFingerPacket()});
-          fluidError=null;
-          fluid.setPaused(true);
-          if(disposed||ticket!==generation){await fluid.dispose();fluid=null;return read();}
-        }
+        if(fingerJuice)await queueWater(async()=>{if(!fluid)await mountWater(particleCount);});
+        if(disposed||ticket!==generation)return read();
         const created=await api('/session',{source:'browser_camera',handedness,pixelBasis:'unmirrored_camera'});
         sessionId=created.sessionId;
         if(disposed || ticket!==generation) return read();
@@ -179,9 +216,9 @@ export default {
       finally {starting=false;sync();}
     };
     return {
-      read,operations:{start,stop,frame,setAcquisition,setSourceFlux(value){
+      read,operations:{start,stop,frame,setAcquisition,setParticleCount,setSourceFlux(value){
         if(!Number.isFinite(value)||value<0)throw Error('Invalid source flux');sourceFlux=value;updateFluid();
-        record({kind:'hand-live.flux',phase:'applied',effective:{sourceFlux}});return read();
+        sync();record({kind:'hand-live.flux',phase:'applied',effective:read()});return read();
       }},
       mount({root,document,invoke}) {
         const preview=document.createElement('div');preview.style.cssText='position:relative;overflow:hidden';
@@ -195,10 +232,15 @@ export default {
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
         if(fingerJuice){
-          const label=document.createElement('label');label.textContent='Particles / second';
-          const input=document.createElement('input');input.type='number';input.min='0';input.step='60';input.value=sourceFlux;
-          input.setAttribute('aria-label','Particles per second');input.onchange=()=>invoke('setSourceFlux',Number(input.value)).catch(cause=>{error=String(cause);sync();});
-          label.append(input);root.append(label);
+          for(const [labelText,value,min,step,operation] of [['Particle capacity',particleCount,1,2400,'setParticleCount'],['Emission / second',sourceFlux,0,60,'setSourceFlux']]){
+            const label=document.createElement('label');label.textContent=labelText;label.style.display='block';
+            const input=document.createElement('input');input.type='number';input.min=min;input.step=step;input.value=value;
+            input.style.cssText='width:100%;box-sizing:border-box';input.setAttribute('aria-label',labelText);
+            if(operation==='setParticleCount'){capacityInput=input;input.title='Changing capacity restarts the water';}else fluxInput=input;
+            input.onchange=()=>invoke(operation,Number(input.value)).catch(cause=>{fluidError=String(cause);sync();});
+            label.append(input);root.append(label);
+          }
+          waterStatus=document.createElement('output');waterStatus.dataset.handWaterLoad='';waterStatus.style.cssText='display:block;overflow-wrap:anywhere';root.append(waterStatus);
         }
         const modeSelect=document.createElement('select');modeSelect.setAttribute('aria-label','Crop mode');
         for(const [value,label] of [['detector','Automatic crop'],['manual','Manual crop']]) {
@@ -229,6 +271,7 @@ export default {
         disposed=true;unsubscribe();
         try {await stop();}
         finally {
+          await waterChanges;
           const owned=fluid;fluid=null;
           try{await owned?.dispose();}finally{captures.close();await scene.dispose();}
         }

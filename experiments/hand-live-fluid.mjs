@@ -10,7 +10,7 @@ const cosine=(a,b)=>length(a)*length(b)>1e-8?a.reduce((n,v,i)=>n+v*b[i],0)/(leng
 
 // Palm's distal-axis/full-extension v1 rule, from LERMS live-finger-fluid.ts.
 // Only placement changes: the mesh and water now share one world and camera.
-export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux=360}) {
+export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux=360,particleCount=2400}) {
   if(frame.source!=='mobrecon_densestack_spiralconv'||frame.jointBasis!=='upstream_j_reg_mano_to_mpii')throw Error('Unsupported native joint basis');
   const points=frame.meshJointsMeters;
   if(!Array.isArray(points)||points.length!==21||points.some(p=>!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)))throw Error('Invalid mesh joints');
@@ -39,11 +39,23 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
     adapter_contract:'hand-state-distal-axis-full-extension-emitters-v1',
     interaction_scope:'operator_finger_juice_experiment_not_world_registration',
     simulation_authority:reason?'invalid':'live_simulation',authority:{simulation_safe:!reason,stale:age>MAX_SAMPLE_AGE_MS,reason},
-    economics:{requestedParticleCount:2400,requestedActiveParticleBudget:720,sourceFluxParticlesPerSecond:sourceFlux,
+    economics:{requestedParticleCount:particleCount,requestedActiveParticleBudget:particleCount,sourceFluxParticlesPerSecond:sourceFlux,
       opticalDensityScale:1.7,reconstructionRadiusScale:1.6,lifetimeSeconds:6,fallbackActive:false},emitters};
 }
 
 export function idleFingerPacket(reason='no_sample') {
   return {packet_id:`native-finger-${reason}`,route_identity:NATIVE_FINGER_ROUTE,source_route:NATIVE_FINGER_ROUTE,
     simulation_authority:'invalid',authority:{simulation_safe:false,stale:false,reason},emitters:[]};
+}
+
+export function fingerFluidLoad(runtime,{particleCount,sourceFlux}) {
+  const solver=runtime?.solver,inlets=solver?.liveInlets;
+  const allocated=Number.isSafeInteger(solver?.particleCount)&&solver.particleCount>0;
+  const verified=allocated&&inlets?.poolCapacity===solver.particleCount&&
+    Number.isFinite(inlets.expectedParticleReleaseRate)&&inlets.expectedParticleReleaseRate>=0&&Array.isArray(inlets.inlets)&&
+    inlets.inlets.every(inlet=>typeof inlet.effective?.releaseSaturated==='boolean');
+  return {requestedParticleCount:particleCount,mountedParticleCount:allocated?solver.particleCount:null,
+    requestedRate:sourceFlux,admittedRate:verified?inlets.expectedParticleReleaseRate:null,
+    poolLimited:verified?inlets.inlets.some(inlet=>inlet.effective?.releaseSaturated===true):null,
+    authority:verified?'solver_release_plan':'unverified'};
 }

@@ -51,3 +51,16 @@ test('shared world transform changes jet placement and direction, not extension'
   assert.ok(Math.abs(p.emitters[1].aim_world[0]-1)<1e-10);
   assert.equal(p.emitters[1].extension,1);
 });
+test('water load reports the mounted solver allocation and admitted rate',()=>{
+  assert.equal(typeof module.fingerFluidLoad,'function','water load feedback is absent');
+  const config={particleCount:9600,sourceFlux:3000};
+  const runtime={solver:{particleCount:2400,liveInlets:{poolCapacity:2400,expectedParticleReleaseRate:274,
+    inlets:[{effective:{releaseSaturated:true}}]}}};
+  const load=module.fingerFluidLoad(runtime,config);
+  assert.equal(load.requestedParticleCount,9600);
+  assert.equal(load.mountedParticleCount,2400);
+  assert.equal(load.requestedRate,3000);assert.equal(load.admittedRate,274);assert.equal(load.poolLimited,true);
+  assert.equal(module.fingerFluidLoad(null,config).mountedParticleCount,null);
+  runtime.solver.liveInlets.poolCapacity=9600;
+  assert.equal(module.fingerFluidLoad(runtime,config).admittedRate,null,'conflicting allocations must be unverified');
+});
