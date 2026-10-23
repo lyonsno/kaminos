@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import * as authoring from '../scene-authoring.mjs';
 import {flamePropertyApplies} from '../flame-authoring.mjs';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 
 assert.equal(typeof authoring.resolveFlameLightingRoute,'function','ordinary flame routes share current lighting defaults');
 const resolve=params=>authoring.resolveFlameLightingRoute(new URLSearchParams(params));
@@ -19,4 +21,11 @@ assert.equal(new URLSearchParams(url.hash.slice(1)).get('volume_light_field_hybr
 assert.deepEqual(composition,copy,'migration does not mutate source document');
 assert.equal(flamePropertyApplies('volume-physical-ambient',{sceneLighting:true}),false,'flat ambient has no control when scene illumination owns smoke');
 assert.equal(flamePropertyApplies('volume-physical-ambient',{sceneLighting:false}),true);
+const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const predicate=source.match(/readSceneLighting:\(\)=>([^,\n]+),/)[1];
+for(const [smokeMode,visible] of [['distributed',false],['legacy',true]]) {
+  const window={__kaminosSceneRadianceSetup:{status:'mounted'},__kaminosSceneRadiance:{debugState:()=>({smokeMode})}};
+  const effective=vm.runInNewContext(predicate,{window,fireLightFieldRouteParams:()=>new URLSearchParams('volume_light_field_distributed=1')});
+  assert.equal(flamePropertyApplies('volume-physical-ambient',{sceneLighting:effective}),visible,smokeMode+' effective smoke mode governs ambient visibility');
+}
 console.log('ordinary and restored flame routes select shared scene lighting; explicit choices survive');

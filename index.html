@@ -13282,7 +13282,7 @@ document.getElementById('rendering-angular-swap').addEventListener('click',()=>{
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-receiver-spacing').addEventListener('change',refreshRenderingControls);
-document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-smoke-solver').addEventListener('change',()=>{refreshRenderingControls();flameInspector?.sync();});
 document.getElementById('rendering-surface-scattering').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-surface-gain').addEventListener('input',event=>{
   const value=Number(event.target.value);document.getElementById('rendering-surface-gain-value').textContent=`${value>=0?'+':''}${value.toFixed(2)}`;refreshRenderingControls();
@@ -21922,7 +21922,7 @@ function createFlameQuickFields() {
     writeSourceControl:(id,value)=>{if(fireControlOwner(id)!=='source'||selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE)return false;editAuthoredFlameSource(activeSceneObjectId,{[id]:value});return true;},
     readSourceRuntime:()=>{const state=volumePrototype?.debugState?.();if(state?.immersedSources?.active)return state.immersedSources.sources?.find(source=>source.id===activeSceneObjectId)?.config??null;return primaryAuthoredFlameSource()?.id===activeSceneObjectId?state?.immersedSource:null;},
     readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
-    readSceneLighting:()=>window.__kaminosSceneRadianceSetup?.status==='mounted'&&fireLightFieldRouteParams().get('volume_light_field_distributed')==='1',
+    readSceneLighting:()=>window.__kaminosSceneRadianceSetup?.status==='mounted'&&window.__kaminosSceneRadiance?.debugState().smokeMode==='distributed',
     writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE?sceneObjectTransformState(selectedSceneObjectEntry().object):flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     onError:error=>setInfo(error.message)});

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { createSceneEdits } from '../scene-edit-session.mjs';
+import { resolveFlameLightingRoute } from '../scene-authoring.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function addFirstFlameField(');
@@ -47,7 +48,7 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
     volumePrototype: coldBoot ? null : {},
     initKaminosVolumeRoute: () => { bootCalls++; return new Promise((resolve, reject) => {
       boot = { resolve: () => { context.volumePrototype = {}; resolve(); }, reject }; }); },
-    structuredClone, AbortController,
+    structuredClone, AbortController, resolveFlameLightingRoute,
     document: { createElement: type => type === 'dialog' ? dialog : {}, body: { append() {} } },
     fetch: async () => ({ ok: true, json: async () => ({ entries: [{ presetId: 'saved-immersed-basin' }] }) }),
     validateVolumeSettingsPresetIndex() {},
