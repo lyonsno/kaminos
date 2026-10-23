@@ -3,25 +3,34 @@ import {createVolumeGather} from './scene-volume-gather.mjs';
 // Separate receiver coverage; fine emission coordinates and quality never
 // change. Source-directed quadrature avoids missing the small distant flame.
 export function createExteriorSmokeLight(device,{grid=8,refinement=4,beforeReplace=()=>{}}={}){
-  let gather=null,key=null,builds=0;
+  const regions=new Map();let builds=0;
+  function remove(name){const r=regions.get(name);if(r){beforeReplace();r.gather.destroy();regions.delete(name);}}
   return {
     encode(source,{geometry,revision,worldGeometry=true,directions,gain,sourceSoftness,environment,sceneLights}){
       const medium=source.exterior;
-      if(!medium){if(gather){beforeReplace();gather.destroy();gather=null;key=null;}return null;}
-      if(medium.status!=='encoded'||medium.generation!==source.generation||medium.frame!==source.frame)throw Error('exterior transport requires same-generation world extinction');
-      const nextKey=JSON.stringify([revision,source.dimensions,medium.localMin,medium.localMax]);
-      if(!gather||key!==nextKey){
-        const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:grid,sourceDimensions:source.dimensions,
-          receiverBounds:{lo:medium.localMin,hi:medium.localMax},smokeRefinement:refinement,directions,angularPattern:'source',worldGeometry,exteriorMedium:true});
-        beforeReplace();gather?.destroy();gather=next;key=nextKey;builds++;
+      if(!medium){for(const name of regions.keys())remove(name);return null;}
+      for(const r of [medium,medium.middle])if(r&&(r.status!=='encoded'||r.generation!==source.generation||r.frame!==source.frame))throw Error('exterior transport requires same-generation region extinction');
+      if(!medium.middle)remove('middle');
+      const frames={};
+      for(const [name,region] of [['world',medium],['middle',medium.middle]]){
+        if(!region)continue;
+        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax]);
+        let current=regions.get(name);
+        if(!current||current.key!==key){
+          const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:grid,sourceDimensions:source.dimensions,
+            receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid});
+          beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;
+        }
+        const {gather}=current;
+        if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);
+        gather.setDirections(directions);
+        const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});
+        frames[name]={texture:gather.smoke,...frame,coverage:`${name}-material-bounds`,builds,
+          extinction:{generation:region.generation,method:'region-split-midpoint-trilinear',stepLength:(region.localMax[0]-region.localMin[0])/grid,fineInterval:'excluded',overlap:'camera-two-middle-material-cells'},
+          exteriorEmission:false,approximation:'coarse-receivers-and-exterior-medium; fine-source-emission-only'};
       }
-      if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);
-      gather.setDirections(directions);
-      const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});
-      return {texture:gather.smoke,...frame,coverage:'world-material-bounds',builds,
-        extinction:{generation:medium.generation,method:'coarse-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/grid,fineInterval:'excluded'},
-        exteriorEmission:false,approximation:'coarse-receivers-and-exterior-medium; fine-source-emission-only'};
+      return {...frames.world,middle:frames.middle??null};
     },
-    destroy(){gather?.destroy();gather=null;key=null;},
+    destroy(){for(const {gather} of regions.values())gather.destroy();regions.clear();},
   };
 }

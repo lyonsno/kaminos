@@ -4,13 +4,14 @@ import {readFileSync} from 'node:fs';
 import {createVolumeGather} from '../scene-volume-gather.mjs';
 import {createSceneVolumeSource} from '../scene-volume-source.mjs';
 import {exteriorSegments} from '../scene-exterior-medium.mjs';
+import {createExteriorSmokeLight} from '../scene-exterior-light.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
-const uploads=new Map();
+const uploads=new Map(),groups=[];
 const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
  queue:{writeBuffer(b,offset,data){uploads.set(b.label,new Float32Array(data));},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
- createShaderModule(){return {};},createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(){return {};},
+ createShaderModule(){return {};},createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(value){groups.push(value);return value;},
  createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 const geometry={nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:0,triangleCount:0};
 const source={status:'encoded',texture:device.createTexture(),dimensions:[4,8,4],generation:7,frame:9};
@@ -34,6 +35,25 @@ producer.encode(device.createCommandEncoder(),0,9);
 assert.equal(producer.describe().exterior?.status,'encoded','world material must publish current physical extinction, not raw soot/heat interpreted as optical depth');
 assert.equal(producer.describe().exterior.generation,producer.describe().generation);
 assert.deepEqual(producer.describe().exterior.localMin,bounds.lo);
+world.middle={texture:device.createTexture(),dimensions:[8,16,8],localMin:[-2,-2,-2],localMax:[2,6,2]};
+producer.encode(device.createCommandEncoder(),0,10);
+const middle=producer.describe().exterior.middle;
+assert.ok(middle?.texture,'independent intermediate material must publish its own extinction field');
+assert.deepEqual(middle.dimensions,[8,16,8],'intermediate detail must not be downsampled to world dimensions');
+assert.equal(middle.generation,producer.describe().generation);
+assert.deepEqual(middle.localMax,[2,6,2]);
+assert.ok(groups.some(g=>g.entries.some(e=>e.binding===33)),'intermediate material seed must bind the actual intermediate optical field');
+const lighting=createExteriorSmokeLight(device,{grid:2,refinement:1});
+const lit=lighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
+assert.deepEqual(lit.middle.smokeReconstruction.localMin,world.middle.localMin);
+assert.deepEqual(lit.middle.smokeReconstruction.localMax,world.middle.localMax);
+assert.equal(lit.middle.generation,lit.generation);
+assert.notEqual(lit.middle.texture,lit.texture,'middle lighting has independent spatial coverage');
+assert.deepEqual(lit.sourceDomain,{lo:[-1,-1,-1],hi:[1,3,1]},'three region lighting still samples the actual fine emitter bounds');
+world.middle=null;producer.encode(device.createCommandEncoder(),0,11);
+assert.equal(producer.describe().exterior.middle,null,'removing intermediate must clear its published support');
+assert.equal(lighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1}).middle,null);
+lighting.destroy();
 world=null;producer.encode(device.createCommandEncoder(),0,10);
 assert.equal(producer.describe().exterior,null,'disabled world must not retain stale lighting support');
 producer.destroy();
