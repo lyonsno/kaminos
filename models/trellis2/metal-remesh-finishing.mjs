@@ -28,6 +28,30 @@ export function identifyMetalGlb(input,provenance){
   if(!provenance?.sessionId||!/^[a-f0-9]{64}$/.test(provenance.inputManifestSha256??'')||provenance.route!==GENERATION_ROUTE)
     throw Error('identified current Metal generation provenance required');
   const doc=JSON.parse(bytes.subarray(20,end).toString('utf8'));
+  // Observed Trimesh source exports count 0–3 alignment spaces inside PNG
+  // buffer views. Keep the exact BIN (and original export), but describe only
+  // PNG bytes to the normal strict asset-admission consumer.
+  for(const image of doc.images??[]){
+    if(image.mimeType!=='image/png')continue;
+    const view=doc.bufferViews?.[image.bufferView],offset=view?.byteOffset??0;
+    if(view?.buffer!==0||!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(view.byteLength)||view.byteLength<20||end+8+offset+view.byteLength>bytes.length)
+      throw Error('complete source PNG buffer view required');
+    const png=bytes.subarray(end+8+offset,end+8+offset+view.byteLength);
+    if(!png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))throw Error('source PNG signature required');
+    let position=8,complete=false;
+    while(position+12<=png.length){
+      const size=png.readUInt32BE(position),type=png.subarray(position+4,position+8).toString('ascii');
+      if(position+12+size>png.length)throw Error('complete source PNG chunks required');
+      position+=12+size;
+      if(type==='IEND'){
+        const padding=png.length-position;
+        if(size!==0||padding>3||(padding&&png.length%4)||!png.subarray(position).every(byte=>byte===32))
+          throw Error('unexpected source PNG trailing padding');
+        view.byteLength=position;complete=true;break;
+      }
+    }
+    if(!complete)throw Error('complete source PNG IEND required');
+  }
   doc.extras={...doc.extras,trellis:{stage:'learned-geometry-and-material',provenance}};
   const json=Buffer.from(JSON.stringify(doc)),padded=Buffer.alloc(Math.ceil(json.length/4)*4,0x20);json.copy(padded);
   const header=Buffer.alloc(20);bytes.copy(header,0,0,12);

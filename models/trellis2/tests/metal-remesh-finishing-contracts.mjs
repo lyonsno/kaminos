@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {identifyMetalGlb,admitMetalReceipt} from '../metal-remesh-finishing.mjs';
 import {GENERATION_ROUTE} from '../sparse-generation-witness-checks.js';
+import {encodeTrellisTexturePNG} from '../trellis-material.js';
 const hash='a'.repeat(64),revision='b'.repeat(40),provenance={sessionId:'observed-session',inputManifestSha256:hash,route:GENERATION_ROUTE};
 function glb(){
  const raw=Buffer.from(JSON.stringify({asset:{version:'2.0'},extras:{retained:'source metadata'},buffers:[{byteLength:4}]}));
@@ -35,4 +36,26 @@ test('receipt rejects fallback, stale input/source, partial output phases and si
    r=>r.finishing.stages.pop(),r=>r.finishing.status='failed',r=>r.finishing.backend_manifest_sha256='0'.repeat(64)]){
   const r=receipt();mutate(r);assert.throws(()=>admitMetalReceipt(r,request),/Metal/);
  }
+});
+test('source PNG buffer views exclude observed Trimesh alignment spaces without changing binary bytes',async()=>{
+ let png;
+ for(let width=1;width<=4;width++){
+  const pixels=Uint8Array.from({length:width*4},(_,i)=>(i*37+11)%256);
+  const candidate=Buffer.from(await encodeTrellisTexturePNG({pixels,width,height:1}));
+  if(candidate.length%4){png=candidate;break;}
+ }
+ assert.ok(png,'fixture has actual PNG alignment padding');
+ const binary=Buffer.alloc(Math.ceil(png.length/4)*4,32);png.copy(binary);
+ const raw=Buffer.from(JSON.stringify({asset:{version:'2.0'},buffers:[{byteLength:binary.length}],
+  bufferViews:[{buffer:0,byteOffset:0,byteLength:binary.length}],images:[{mimeType:'image/png',bufferView:0}]}));
+ const json=Buffer.alloc(Math.ceil(raw.length/4)*4,32);raw.copy(json);
+ const h=Buffer.alloc(20);h.writeUInt32LE(0x46546c67);h.writeUInt32LE(2,4);h.writeUInt32LE(28+json.length+binary.length,8);
+ h.writeUInt32LE(json.length,12);h.writeUInt32LE(0x4e4f534a,16);
+ const bh=Buffer.alloc(8);bh.writeUInt32LE(binary.length);bh.writeUInt32LE(0x004e4942,4);
+ const original=Buffer.concat([h,json,bh,binary]);
+ const result=Buffer.from(identifyMetalGlb(original,provenance)),length=result.readUInt32LE(12),doc=JSON.parse(result.subarray(20,20+length));
+ assert.equal(doc.bufferViews[0].byteLength,png.length,'consumer image view ends exactly at PNG IEND, not at source padding');
+ assert.deepEqual(result.subarray(28+length),binary,'original PNG and padding bytes remain exact');
+ const bad=Buffer.from(original);bad[bad.length-1]=255;
+ assert.throws(()=>identifyMetalGlb(bad,provenance),/PNG|padding/,'non-alignment trailing data must not be hidden');
 });
