@@ -11,6 +11,7 @@ import {createSourceAtlasUnwrapper} from './source-atlas.mjs';
 import {createBrowserMeshPostprocess,MESH_POSTPROCESS_ROUTE} from './mesh-cleanup.js';
 import {createWasmXatlasUnwrapper} from './wasm-xatlas.js';
 import {gitSourceIdentity} from './source-attestation.mjs';
+import {finishWithSourceMetal,METAL_REMESH_ROUTE} from './metal-remesh-finishing.mjs';
 import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
 const args=new Map();
@@ -53,6 +54,7 @@ try{
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
   const cleanupRoutes={'reference-cleanup':'Trellis2MLX/reference-cleanup/CPU-fast-simplification',
     'mlx-surface-preserving':'Trellis2MLX/surface-preserving/CPU-fast-simplify-first',
+    'source-metal-remesh':METAL_REMESH_ROUTE,
     'browser-mlx-surface-preserving':MESH_POSTPROCESS_ROUTE};
   if(!Object.hasOwn(cleanupRoutes,cleanupMode))throw Error('supported explicit cleanup mode required');
   report.cleanupMode=cleanupMode;
@@ -118,6 +120,28 @@ try{
   const inputBytes=JSON.stringify(inputManifest,null,2)+'\n';
   await fs.writeFile(path.join(inputDir,'manifest.json'),inputBytes);
   report.rawMesh.inputManifestSha256=hash(inputBytes);
+  if(cleanupMode==='source-metal-remesh'){
+    const textureSize=Number(args.get('--texture-size'));
+    if(!Number.isSafeInteger(textureSize)||textureSize<1)throw Error('positive Metal texture size required');
+    await enter('source-metal-remesh');
+    const original=await finishWithSourceMetal({root,sourceRoot:path.resolve(args.get('--source-root')),
+      sourceCommit:args.get('--expected-source-commit'),python:path.resolve(args.get('--python')),
+      backendManifest:args.get('--metal-backend-manifest'),pythonPath:JSON.parse(args.get('--metal-python-path')??'null'),
+      band:Number(args.get('--remesh-band')),projectBack:Number(args.get('--remesh-project-back')),
+      meshInput:path.join(inputDir,'manifest.json'),materialInput:{root:path.join(native,'raw'),
+        resolution:n.result.composition.materialResolution,
+        features:{...n.rawOutputs['material.features'],file:'material.features.f32'},
+        coordinates:{...n.rawOutputs['material.coordinates'],file:'material.coordinates.i32'}},
+      gridSize:n.result.composition.geometryResolution,targetFaces,textureSize,outputDir:path.join(out,'source-metal-remesh'),
+      provenance:{nativeCommit:n.commit,sessionId:n.nativeSessionId,inputManifestSha256:n.fixtureSha256,
+        route:GENERATION_ROUTE,finishingRoute:METAL_REMESH_ROUTE,sourceCommit:args.get('--expected-source-commit')},record:report,persist});
+    report.meshPostprocess={effectiveRoute:METAL_REMESH_ROUTE,source:original.receipt.source,
+      inputFaces:report.rawMesh.faces,outputFaces:original.receipt.finishing.output.faces};
+    report.uv={backend:'source-Metal-xatlas',reportPath:path.join(out,'source-metal-remesh','finishing','report.json')};
+    report.texture={width:textureSize,height:textureSize,route:'source-Metal-original-surface-bake'};
+    await enter('finished-asset-admission');
+    await persistGenerationAsset({report,bytes:original.bytes,outputPath,write:(file,data)=>fs.writeFile(file,data),persist});
+  }else{
   const cleanupDir=path.join(out,'mesh-postprocess');await fs.mkdir(cleanupDir,{recursive:true});
   const browserPostprocess=cleanupMode==='browser-mlx-surface-preserving'?
     createBrowserMeshPostprocess({targetFaces,keepLargest:args.get('--keep-largest')==='true'}):null;
@@ -173,6 +197,7 @@ try{
   await persistGenerationAsset({report,bytes,outputPath,write:(file,data)=>fs.writeFile(file,data),persist});
   for(const [name,pixels]of [['base-color',finished.textures.baseColor],['metallic-roughness',finished.textures.metallicRoughness]])
     await fs.writeFile(path.join(out,name+'.png'),new Uint8Array(await encodeTrellisTexturePNG({pixels,width:1024,height:1024})));
+  }
   report.status='succeeded';report.phase=null;
 }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;}
 finally{report.finishedAt=new Date().toISOString();await persist();
