@@ -1,10 +1,32 @@
-// Text -> image in the Authoring workspace with FLUX.2 [klein] 4B on the Kaminos shared
+// Text -> image in the Authoring workspace with Klein on the Kaminos shared
 // device. The image is saved to the image inbox and becomes the selected source, so the
 // existing Prepare -> SF3D path turns a prompt into a mesh while the kiln keeps rendering.
 // The model lives in models/flux2-klein; this module only composes it into the host.
 
 export const KLEIN_AUTHORING_ROUTE_ID='flux2-klein.text-to-image.authoring-shared-device.v0';
 export const KLEIN_PUBLISHED_WEIGHTS='https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main';
+export const AUTHORING_IMAGE_MODELS=Object.freeze({
+  flux2:{name:'FLUX.2 [klein] 4B',routeId:KLEIN_AUTHORING_ROUTE_ID,levels:['4-bit','3-bit','2-bit']},
+  flux3:{name:'FLUX.3 Image Klein',routeId:'flux3-klein.text-to-image.authoring-shared-device.v0',levels:['4-bit']},
+});
+function imageModel(model){
+  if(!Object.hasOwn(AUTHORING_IMAGE_MODELS,model))throw Error(`Unknown image model: ${model}`);
+  return AUTHORING_IMAGE_MODELS[model];
+}
+export function authoringImageWeightRoot(config,model='flux2'){
+  imageModel(model);
+  const mounted=model==='flux3'?config?.flux3:config?.klein;
+  if(mounted?.mounted&&typeof mounted.weightsUrl==='string'&&mounted.weightsUrl.trim())return mounted.weightsUrl;
+  if(model==='flux3')throw Error('Mount local FLUX.3 weights with KAMINOS_FLUX3_WEIGHTS_ROOT before generating.');
+  return KLEIN_PUBLISHED_WEIGHTS;
+}
+export async function createAuthoringImagePipeline(device,urls,model='flux2'){
+  imageModel(model);
+  if(model==='flux3'){
+    const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');return new Flux3Pipeline(device,urls);
+  }
+  const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);
+}
 // The sizes klein's own demo offers and its README times.
 export const KLEIN_IMAGE_SIZES=[256,384,512,768,1024];
 // Transformer weight levels (models/flux2-klein package): the text encoder, decoder and tokenizer are shared,
@@ -46,9 +68,9 @@ export function sharedDeviceHostRequirements({sam=null}={}){
   return async adapter=>composeDeviceRequirements(sam?await sam(adapter):null,kleinDeviceRequirements(adapter))??{};
 }
 
-export function kleinImageName(prompt,seed){
+export function kleinImageName(prompt,seed,model='flux2'){
   const slug=String(prompt).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80).replace(/-+$/,'');
-  return `klein-${slug||'image'}-s${seed}.png`;
+  return `${model==='flux3'?'flux3-klein':'klein'}-${slug||'image'}-s${seed}.png`;
 }
 
 // The volume prototype has one foreground requester. SF3D installs its own when it loads;
@@ -150,7 +172,7 @@ const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Erro
 
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
-  createPipeline=async(device,urls)=>{const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);},
+  createPipeline=createAuthoringImagePipeline,
   encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
@@ -159,10 +181,10 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
   let pendingImage=null;
   async function savePending(){
-    const {image,provenance,text,seed}=pendingImage;
+    const {image,provenance,text,seed,model}=pendingImage;
     set({status:'saving',canStop:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
     const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
-    const file=new File([blob],kleinImageName(text,seed),{type:'image/png'});
+    const file=new File([blob],kleinImageName(text,seed,model),{type:'image/png'});
     const entry=await deliver(file,provenance);
     pendingImage=null;state.pending=null;state.results.push({...entry,provenance});
     set({status:'complete',error:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
@@ -173,21 +195,41 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   function unavailable(){
     const {sharedGpu}=context();const device=sharedGpu?.device;
     if(!device)return 'Image generation needs the Kaminos shared GPU device.';
-    if(!device.features?.has?.('shader-f16'))return 'This GPU device was created without shader-f16, which FLUX.2 klein needs.';
+    if(!device.features?.has?.('shader-f16'))return 'This GPU device was created without shader-f16, which Klein needs.';
     return blocked();
   }
-  async function load(level){
+  async function releaseLoaded(){
+    if(!loaded)return;
+    const previous=loaded;loaded=null;
+    await previous.pipeline.destroy();
+    if(!previous.app){
+      const handoff=context().handoff;if(handoff?.owner()==='klein')await handoff.release();
+      await previous.foreground?.dispose?.();await previous.session.close?.();
+    }
+  }
+  async function load(level,model){
+    const spec=imageModel(model);
     const {sharedGpu}=context();
-    const core=await kit(),device=sharedGpu.device,base=String(await weights()).replace(/\/$/,'');
+    const core=await kit(),device=sharedGpu.device,root=await weights(model);
+    if(typeof root!=='string'||!root.trim())throw Error(`No weights configured for ${spec.name}`);
+    const base=root.replace(/\/$/,'');
+    await releaseLoaded();
     const app=appHost?await appHost():null;
     const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
-    const foreground=app?null:core.createWebGpuForegroundService({routeId:KLEIN_AUTHORING_ROUTE_ID,device});
-    const pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`});
+    const foreground=app?null:core.createWebGpuForegroundService({routeId:spec.routeId,device});
+    let pipeline;
+    try{
+    pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`},model);
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
       if(abort?.signal.aborted)return;
-      set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading FLUX.2 klein weights (${part})`});
+      set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading ${spec.name} weights (${part})`});
     });
-    return {core,session,foreground,pipeline,base,app,level};
+    return {core,session,foreground,pipeline,base,app,level,model};
+    }catch(error){
+      await pipeline?.destroy();
+      if(!app){await foreground?.dispose?.();await session.close?.();}
+      throw error;
+    }
   }
   return {
     read(){
@@ -210,20 +252,22 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square'}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2'}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
+      const spec=imageModel(model);
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
       if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
+      if(!spec.levels.includes(level))throw Error('FLUX.3 currently has 4-bit weights only');
       if(!KLEIN_ASPECTS.includes(aspect))throw Error('Aspect must be square, landscape or portrait');
       const {width,height}=kleinImageDimensions(size,aspect);
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
-      set({status:'loading',error:null,canStop:true,stage:null,percent:null,progress:loaded?'Starting…':'Loading FLUX.2 klein…'});
+      set({status:'loading',error:null,canStop:true,stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
-        if(!loaded)loaded=await load(level);
+        if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
           // The pipeline destroys the current transformer before loading the next, so until this resolves no level
@@ -241,13 +285,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
         previous=handoff.owner();
         if(!app){
-          if(!handoff.has('klein'))handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
+          handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
           await handoff.activate('klein');
         }
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
-        const runId=`kaminos-klein:${crypto.randomUUID()}`;
-        frameRun=app?await app.beginRun(runId,{routeId:KLEIN_AUTHORING_ROUTE_ID}):await foreground.beginRun(runId);
-        route=await session.registerRoute({routeId:KLEIN_AUTHORING_ROUTE_ID,runtimeOptions:{runtimeLabel:'flux2-klein',foregroundOpportunities:frameRun.foregroundOpportunities}});
+        const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
+        frameRun=app?await app.beginRun(runId,{routeId:spec.routeId}):await foreground.beginRun(runId);
+        route=await session.registerRoute({routeId:spec.routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
         const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',
           onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:{progress:'Swapping weights in from the browser cache…'});},
@@ -258,8 +302,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const image=completion.output;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
-        pendingImage={image,provenance,text,seed};state.pending={name:kleinImageName(text,seed),provenance};
+        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
+        if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
+        pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
         return await savePending();
       }catch(error){
         const identity=errorIdentity(error);
@@ -279,7 +324,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
 export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
-  section.innerHTML=`<p>Text → image · FLUX.2 klein</p><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
+  section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
@@ -289,6 +334,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const meshBusy=meshBusyOption||(()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status));
   function render(){
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status);
+    byId('asset-image-model').disabled=active||!!state.pending;
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;
     byId('asset-text-stop').hidden=!state.canStop&&state.status!=='stopping';byId('asset-text-stop').disabled=!state.canStop;
@@ -297,11 +343,16 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const bar=byId('asset-text-progress');bar.hidden=!active;if(Number.isFinite(state.percent))bar.value=state.percent;else bar.removeAttribute('value');
   }
   byId('asset-reseed').onclick=reseed;
+  byId('asset-image-model').onchange=()=>{
+    const flux3=byId('asset-image-model').value==='flux3',levels=byId('asset-image-level');
+    for(const option of levels.options)option.disabled=flux3&&option.value!=='4-bit';
+    if(flux3)levels.value='4-bit';
+  };
   byId('asset-text-stop').onclick=()=>controller.stop();
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    controller.run({model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});
