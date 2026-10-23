@@ -62,6 +62,7 @@ test('failure before browser launch leaves the source failure in a durable repor
   const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'joined-optics-failure-'));
   const previous=process.exitCode;
   try{
+    await fs.mkdir(tmp+'/run');
     await main(tmp,tmp+'/run','http://127.0.0.1:1','unused.kaminos.json');
     const report=JSON.parse(await fs.readFile(tmp+'/run/report.json'));
     assert.equal(report.status,'failed');assert.equal(report.phase,'source');

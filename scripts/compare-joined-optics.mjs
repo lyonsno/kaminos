@@ -35,9 +35,10 @@ export function validateJoinedArm(state,arm,step){
 }
 
 export async function main(root,out,sourceOrigin,sceneFile){
- await fs.mkdir(path.dirname(out),{recursive:true});await fs.mkdir(out);
+ await fs.mkdir(out,{recursive:true});
  const report={status:'running',phase:'source',root,out,sourceOrigin,sceneFile,arms:[],errors:[],plan:joinedComparisonPlan(),claim:'frozen joined scene and short camera displacement; material counts are not GPU timing'};
- const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await save();
+ await fs.writeFile(out+'/report.json',JSON.stringify(report,null,2),{flag:'wx'});
+ const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
  let context,server,serverError,page;
  try{
   assert.equal(await fs.realpath(root),await fs.realpath(path.resolve(import.meta.dirname,'..')),'script and source checkout differ');
