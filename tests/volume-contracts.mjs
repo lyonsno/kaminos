@@ -462,7 +462,7 @@ assert.match(index, /id="volume-queue-p95"/, 'Volume tab exposes GPU queue laten
 assert.match(index, /volume timing/i, 'Volume readout labels timing as route-local volume timing');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
-assert.match(index, /id="volume-density"[^>]+max="6"/, 'Density exposes enough headroom to compensate lower ray-step budgets');
+assert.match(index, /id="volume-density"[^>]+max="12"/, 'Soot display gain exposes the expanded authoring range');
 assert.match(index, /id="volume-density"[^>]+value="4\.2"/, 'smoke route defaults to denser normalized raymarch body');
 assert.match(index, /id="volume-fire"[^>]+value="1\.4"/, 'smoke route defaults to the accepted transported fire shape');
 assert.match(index, /id="volume-smoke"[^>]+value="2\.8"/, 'smoke route defaults to the latest high smoke visibility');
@@ -470,8 +470,8 @@ assert.match(index, /id="volume-curl"[^>]+value="2\.65"/, 'smoke route defaults 
 assert.match(index, /id="volume-microdetail"/, 'Volume tab exposes transported microdetail control');
 assert.match(index, /id="volume-interface-shred"/, 'Volume tab exposes interface shredding control');
 assert.match(index, /id="volume-fire-licks"/, 'Volume tab exposes fire-lick breakup control');
-assert.match(index, /id="volume-interface-shred"[^>]+max="5"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
-assert.match(index, /id="volume-fire-licks"[^>]+max="5"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
+assert.match(index, /id="volume-interface-shred"[^>]+max="10"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
+assert.match(index, /id="volume-fire-licks"[^>]+max="10"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
 assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorption control');
 assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
 assert.match(index, /volume_speed/, 'URL route can override speed for repeatable tall-plume flame-cutoff probes');
@@ -723,8 +723,8 @@ assert.match(index, /volume_microdetail/, 'URL route can override transported mi
 assert.match(index, /volume_curl/, 'URL route can override curl strength for force-isolation witnesses');
 assert.match(index, /volume_interface_shred/, 'URL route can override interface shredding strength');
 assert.match(index, /volume_fire_licks/, 'URL route can override fire-lick breakup strength');
-assert.match(index, /Math\.min\(5, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
-assert.match(index, /Math\.min\(5, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
 assert.match(index, /volume_radiance/, 'URL route can override fire radiance strength');
 assert.match(index, /volume_absorption/, 'URL route can override smoke absorption strength');
 assert.match(index, /volume_glow/, 'URL route can override emissive glow strength');
