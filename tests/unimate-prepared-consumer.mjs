@@ -17,6 +17,10 @@ globalThis.__preparedConsumerTest = {
       hasTextEncoder:()=>true,
       async generate(options) {
         calls.push({ kind: 'generate', data, options });
+        options.onEvaluation?.({evaluations:6,t:.5});
+        options.onStep?.({t0:0,dt:.5,accepted:false,errorRatio:2},0);
+        options.onEvaluation?.({evaluations:12,t:.1});
+        options.onStep?.({t0:0,dt:.1,accepted:true,errorRatio:.5},1);
         await options.onPartial?.({t:.5,index:1,evaluations:8,motion:{positions:new Float32Array(12)}});
         return { motion: { frames: 2, joints: 2, positions: new Float32Array(12),
           localRotations: new Float32Array([1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]), rootTranslation: new Float32Array(6) },
@@ -40,7 +44,12 @@ try {
   const consumer = createUniMateConsumer({ device: {}, session: () => Promise.resolve(resolvedSession), beginRun() {} });
   const first = prepared('edited cat');
   first.restFrame = { yaw: 0, scale: 2, offset: [1, 3, 0], rotation: [[1,0,0],[0,1,0],[0,0,1]] };
-  const result = await consumer.run({ asset: { skeletonData: first }, prompt: 'A cat walks.' });
+  const progress=[];
+  const result = await consumer.run({ asset: { skeletonData: first }, prompt: 'A cat walks.',onProgress:s=>progress.push(s.progress) });
+  const rejected=progress.find(p=>p?.rejectedSteps===1&&p.attemptedSteps===1);
+  assert(rejected,'report rejected solver attempts while preview has not advanced');
+  assert.equal(rejected.acceptedT,0,'rejected trial time is not solved progress');
+  const accepted=progress.find(p=>p?.acceptedSteps===1);assert.equal(accepted.acceptedT,.1);assert.equal(accepted.attemptedSteps,2);assert.equal(accepted.rejectedSteps,1);
   assert.equal(calls[0].options.session,resolvedSession,'asynchronous app session is resolved before model creation');
   assert.equal(calls[0].options.skeletonData, first, 'cold start uses edited conditioning directly');
   assert.equal(calls[0].options.bundleBase, null, 'cold start has no hidden stock skeleton dependency');

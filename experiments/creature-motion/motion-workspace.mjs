@@ -23,7 +23,7 @@ export function mountMotionWorkspace({document,reference,spec,options,onPreview,
   if(disposed)return;const rows=sessionMotions.list(key),histories=sessionMotions.generations(key);cards.replaceChildren();live.replaceChildren();thumbs=[];
   const bytes=rows.reduce((n,r)=>n+r.bytes,0)+histories.reduce((n,r)=>n+(r.bytes??0),0);memory.textContent=`${rows.length} motions · ${(bytes/1048576).toFixed(1)} MB`;
   const active=histories.filter(h=>h.status==='running');live.hidden=!active.length;
-  for(const h of active){const article=el('article');article.className='motion-active';article.append(el('strong','Generating now'),el('div',h.prompt));if(h.samples.length)addPreview(article,{id:h.id,history:h,motion:h.samples.at(-1)},true);else article.append(el('small','Preparing text and model…'));live.append(article);}
+  for(const h of active){const article=el('article');article.className='motion-active';article.append(el('strong','Generating now'),el('div',h.prompt),el('small',`seed ${h.seed} · guidance ${h.solver.cfgScale}`));if(h.samples.length)addPreview(article,{id:h.id,history:h,motion:h.samples.at(-1)},true);else article.append(el('small','Preparing text and model…'));live.append(article);}
   for(const group of groupMotionTakes(rows,histories)){
    const article=el('article'),caption=el('strong',group.prompt??'Retained motion');caption.className='motion-caption';caption.title=caption.textContent;article.append(caption);
    const select=el('select');select.setAttribute('aria-label','Take for '+group.prompt);
@@ -63,12 +63,12 @@ export function mountMotionWorkspace({document,reference,spec,options,onPreview,
   if(![rtol,atol].every(v=>Number.isFinite(v)&&v>0)||!Number.isFinite(cfgScale))throw Error('Quality and guidance must be finite');
   const id=crypto.randomUUID();sessionMotions.beginGeneration({id,status:'running',skeletonKey:key,prompt:input.prompt,seed:input.seed,solver:{rtol,atol,cfgScale},samples:[]});
   pending=true;stopRequested=false;make.disabled=true;stop.disabled=false;error.textContent='';
-  try{const motion=await generateSkeletonMotion({spec,reference,prompt:input.prompt,seed:input.seed,rtol,atol,cfgScale,options,onPartial:m=>sessionMotions.appendPartial(id,m),onProgress:s=>{status.textContent=[s.phase,s.stage,s.detail,s.progress?.evaluations!==undefined?`${s.progress.evaluations} evaluations`:null].filter(Boolean).join(' · ');}});
+  try{const motion=await generateSkeletonMotion({spec,reference,prompt:input.prompt,seed:input.seed,rtol,atol,cfgScale,options,onPartial:m=>sessionMotions.appendPartial(id,m),onProgress:s=>{status.textContent=[s.phase,s.stage,s.detail,s.progress?.evaluations!==undefined?`${s.progress.evaluations} evaluations`:null,s.progress?.acceptedT!==undefined?`${(s.progress.acceptedT*100).toFixed(1)}% solved · ${s.progress.acceptedSteps} accepted · ${s.progress.rejectedSteps} retried`:null].filter(Boolean).join(' · ');}});
    const row=await sessionMotions.add(motion);sessionMotions.finishGeneration(id,'completed');status.textContent='Motion added. Its refinement history and every earlier result remain here.';return {id:row.id,skeletonKey:row.skeletonKey,generationId:id};
   }catch(e){sessionMotions.finishGeneration(id,stopRequested?'stopped':'failed',e.message);if(stopRequested){status.textContent='Stopped. Captured partials remain in the shelf and export.';return {status:'stopped',generationId:id};}error.textContent=e.message;throw e;
   }finally{pending=false;make.disabled=false;stop.disabled=true;}
  }
- function stopGeneration(){stopRequested=true;stopSkeletonMotion();}
+ function stopGeneration(){stopRequested=true;stop.disabled=true;status.textContent='Stopping · waiting for the current GPU work to settle…';stopSkeletonMotion();}
  form.onsubmit=event=>{event.preventDefault();return run(async()=>{await generate({prompt:prompt.value,seed:Number(seed.value)});if(!hold.checked)seed.value=String(Number(seed.value)+1);});};stop.onclick=stopGeneration;
  if(!spec){make.disabled=true;status.textContent='Browsing retained motions. This skeleton has no generation bundle attached.';}
  render();return {node:root,generate,stop:stopGeneration,open(){root.hidden=false;render();stopFrames??=onFrame(({timestampMs})=>draw(timestampMs));},read:()=>({open:!root.hidden,pending,preview,count:sessionMotions.list(key).length}),dispose(){disposed=true;unsubscribe();stopFrames?.();root.remove();}};
