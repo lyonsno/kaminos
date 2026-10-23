@@ -5,6 +5,7 @@ import net from 'node:net';
 import {spawn,execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {validateFineGridWitness} from './fine-grid-witness-contract.mjs';
 const [out,presetFile]=process.argv.slice(2);
 assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
@@ -18,6 +19,7 @@ try{
  report.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.source=await hashes();
  const dirs=Object.fromEntries(['home','settings','sessions','layouts','scenes','profile'].map(k=>[k,path.join(out,k)]));
  for(const d of Object.values(dirs))await fs.mkdir(d,{recursive:true});
+ await fs.mkdir(path.join(dirs.home,'.local/state/gpu-greenroom/done'),{recursive:true});
  await fs.mkdir(path.join(dirs.settings,'presets'),{recursive:true});await fs.copyFile(presetFile,path.join(dirs.settings,'presets',path.basename(presetFile)));
  report.preset={path:presetFile,sha256:createHash('sha256').update(await fs.readFile(presetFile)).digest('hex')};
  const socket=net.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));
@@ -39,6 +41,7 @@ try{
  report.fineTransfer=await page.evaluate(async()=>await(await import('/fine-grid-witness.mjs')).probeFineGrid());
  validateFineGridWitness(report.fineTransfer);await save();
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
+ report.phase='scene-create';await save();
  await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id),path.basename(presetFile,'.json'));
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
  for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':32,'volume-grid-height-ratio':2,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':12,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':12,'volume-intermediate-flow':12,'volume-intermediate-material':24,'volume-intermediate-pressure':6,'volume-intermediate-iterations':12,'volume-intermediate-extent':1.5}))await control(id,v);
@@ -53,6 +56,27 @@ try{
   if(velocity){assert.deepEqual(state.fineGrid.velocityDims,[velocity,velocity*2,velocity]);assert.equal(state.fineGrid.dispatched,true);assert.deepEqual(state.pressureResolution.pressureDims,[pressure,pressure*2,pressure]);}
   await page.screenshot({path:path.join(out,name+'.png')});
  }
+ report.phase='developed-plume';await save();
+ await control('volume-world-smoke-intermediate','fields');await control('volume-fine-velocity',16);await control('volume-fine-pressure',8);
+ await control('selected-world-smoke-overlay','bounds');
+ const developStart=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
+ await control('volume-look-freeze',0);
+ await page.waitForFunction(start=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.simStepCount>=start+180;},developStart);
+ await control('volume-look-freeze',1);
+ report.developed=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());await save();
+ await page.screenshot({path:path.join(out,'developed.png')});
+ report.phase='save';await save();
+ report.saved=await page.evaluate(()=>window.saveSceneAs({result:true,name:'three-region-fields'}));assert.equal(report.saved.ok,true);
+ const listing=await(await fetch(origin+'/api/browse?root=scenes&path=')).json();
+ const sceneName=listing.entries.find(e=>e.name==='three-region-fields.kaminos.json')?.name;assert.ok(sceneName);
+ const scene=await(await fetch(origin+'/api/read?root=scenes&path='+encodeURIComponent(sceneName))).json();
+ await fs.writeFile(path.join(out,'scene.json'),JSON.stringify(scene,null,2));
+ const expected=Object.fromEntries(['fineVelocity','finePressure','worldSmokePressure','worldSmokeIterations','intermediateFlow','intermediateMaterial','intermediatePressure','intermediateIterations','intermediateExtent','worldSmokeIntermediate'].map(k=>[k,report.developed.controls[k]]));
+ report.phase='reopen';await save();await page.goto(compositionRestoreUrl(scene.composition,sceneName,origin));
+ await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().controls?.worldSmokeIntermediate==='fields');
+ report.reopened=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());
+ for(const [key,value] of Object.entries(expected))assert.equal(report.reopened.controls[key],value,'Saved setting '+key);
+ await page.screenshot({path:path.join(out,'reopened.png')});
  assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;if(page)try{report.failureState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());await page.screenshot({path:path.join(out,'failure.png')});}catch(c){report.captureError=String(c);}process.exitCode=1;}
 finally{await browser?.close();if(server&&server.exitCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}await save();}
