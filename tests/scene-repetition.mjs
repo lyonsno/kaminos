@@ -65,3 +65,10 @@ test('mirrored analytic water support preserves the reflected surface and repeat
  const support=createSceneLiquidSupport(device,[record]);assert.equal(support.read().memberIds.length,6);support.dispose();
  const reflected=mesh();reflected.scale.set(-1,1,1);const collider=sceneLiquidCollider({...record,object:reflected});assert.ok(sceneLiquidDistance(collider,[0,0,0]).distance>=0);assert.ok(sceneLiquidDistance(collider,[0,-.7,0]).distance<0);
 });
+
+import fs from 'node:fs';import vm from 'node:vm';import {createSceneEdits} from '../scene-edit-session.mjs';
+test('an absent repetition begins, previews, cancels and undoes through the real edit ledger',()=>{
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('function ensureRepetitionTarget('),end=html.indexOf('\nfunction ',start+1),source=html.slice(start,end);
+ let settings=null;const record={id:'source'},edits=createSceneEdits({read(){throw Error('unexpected pose read');},write(){throw Error('unexpected pose write');}}),context={repetitionOwner:()=>({id:'source',record}),polyEdit:null,repetitionEditTargets:new Set(),scenePlacementTools:{edits},checkedRepetition,writeSceneRepetition:(id,value)=>{settings=value;record.repetition=value;}};vm.createContext(context);vm.runInContext(source,context);
+ const id=context.ensureRepetitionTarget('source');edits.begin(id,'Array');edits.preview({settings:config()});assert.equal(settings.count,6);edits.cancel();assert.equal(settings,null);edits.apply(id,{settings:config()});assert.equal(settings.count,6);edits.apply(id,{settings:null});assert.equal(settings,null);edits.undo();assert.equal(settings.count,6);edits.undo();assert.equal(settings,null);
+});

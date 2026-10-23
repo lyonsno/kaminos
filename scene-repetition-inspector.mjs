@@ -7,7 +7,7 @@ export function installRepetitionInspector({document,host,target,edits,editId,se
  function bind(control,key,index){
   controls.push(control);
   const update=()=>{if(control.type==='number'&&(control.value===''||!control.validity.valid))return;try{const next=read(),value=control.type==='checkbox'?control.checked:control.type==='number'?Number(control.value):control.value;if(index===undefined)next[key]=value;else next[key][index]=value;if(key==='mode'&&value==='circle'&&next.space==='world'&&Math.hypot(...next.center.map((v,i)=>v-target().frame.position[i]))<1e-8)next.center=target().suggestedCenter;
-   if(edits.state().active?.id===editId())edits.preview(checkedRepetition(next));
+   if(edits.state().active?.id===editId())edits.preview({settings:checkedRepetition(next)});
   }catch(error){onError(error);}};
   control.addEventListener('input',update);control.addEventListener('change',update);
   sessions.push(history({controls:[control],edits,id:editId,label:'Edit repetition',onError}));

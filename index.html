@@ -25783,14 +25783,14 @@ function writeSceneRepetition(id,value){
 function ensureRepetitionTarget(id){
  const owner=repetitionOwner(id),target='@repetition:'+owner.id;
  if(polyEdit?.active())throw Error('Leave Edit Mode to change repetition');
- if(!repetitionEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>checkedRepetition(repetitionOwner(owner.id).record.repetition),check:checkedRepetition,write:value=>writeSceneRepetition(owner.id,value)});repetitionEditTargets.add(target);}
+ if(!repetitionEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>({settings:checkedRepetition(repetitionOwner(owner.id).record.repetition)}),check:value=>({settings:checkedRepetition(value.settings)}),write:value=>writeSceneRepetition(owner.id,value.settings)});repetitionEditTargets.add(target);}
  return target;
 }
 function sceneRepetitionState(id){
  const owner=repetitionOwner(id);sceneRepetitionController.sync();
  return {id:owner.id,settings:checkedRepetition(owner.record.repetition),members:owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,true);return {id:entry.id,placements:[entry.object,...entry.object.children.filter(c=>c.userData.kaminosRepetitionCopy)].map(object=>({worldMatrix:object.matrixWorld.toArray(),meshes:(()=>{const meshes=[];function visit(child){if(child!==object&&child.userData.kaminosRepetitionCopy)return;if(child.isMesh)meshes.push({geometry:child.geometry.uuid,material:Array.isArray(child.material)?child.material.map(m=>m.uuid):child.material.uuid});for(const item of child.children)visit(item);}visit(object);return meshes;})()}))};})};
 }
-function setSceneRepetition(id,value){assertSceneConstructionAvailable();const target=ensureRepetitionTarget(id);return scenePlacementTools.edits.apply(target,checkedRepetition(value),'Edit repetition');}
+function setSceneRepetition(id,value){assertSceneConstructionAvailable();const target=ensureRepetitionTarget(id);return scenePlacementTools.edits.apply(target,{settings:checkedRepetition(value)},'Edit repetition');}
 function addSceneArray(mode){const target=repetitionInspectorTarget();if(!target)throw Error('Select a static mesh or mesh group');const settings={...(checkedRepetition(target.settings)||repetitionDefaults()),mode};if(mode==='circle'&&settings.space==='world'&&new THREE.Vector3(...settings.center).distanceTo(new THREE.Vector3(...target.frame.position))<1e-8)settings.center=target.suggestedCenter;return setSceneRepetition(target.id,settings);}
 async function makeSceneRepetitionReal(id){
  assertSceneConstructionAvailable();const owner=repetitionOwner(id);
