@@ -260,14 +260,14 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     const select=byId('flame-basin-select'), previous=select.value, query=byId('flame-basin-search').value.toLowerCase();
     select.replaceChildren();
     for(const entry of entries.filter(entry=>`${entry.label} ${entry.presetId}`.toLowerCase().includes(query))) {
-      const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label;select.append(option);
+      const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.reason?`${entry.label} | ${entry.reason==='held-label'?'held':'earlier'} | ${entry.presetId.slice(0,16)}`:entry.label;select.append(option);
     }
     if([...select.options].some(option=>option.value===previous))select.value=previous;
     byId('flame-basin-apply').disabled=!select.value;
   }
   const status=message=>byId('flame-basin-status').textContent=message;
   async function refresh() {
-    try {const index=await listBasins();entries=index.entries;renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
+    try {const index=await listBasins();entries=[...index.entries,...(index.earlierVersions||[])];renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
     catch(error){status(error.message);onError(error);}
   }
   byId('flame-basin-search').addEventListener('input',renderOptions);
