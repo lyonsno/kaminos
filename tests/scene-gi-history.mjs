@@ -46,3 +46,22 @@ for(const enabled of [true,false]) {
   runInNewContext(html.slice(begin,end)+';for(let tick=0;tick<90;tick++)animate();',scope);
   assert.equal(draws,enabled?45:4,'ordinary RAF must settle enabled history and preserve disabled idle behavior');
 }
+
+// Ordinary material MRTs also contain live history uniforms and textures.
+// Exercise the observer shipped by the browser bundle without needing a GPU.
+const bundle=readFileSync(new URL('../lib/three.webgpu.js',import.meta.url),'utf8');
+const observerStart=bundle.indexOf('class NodeMaterialObserver {');
+const observerEnd=bundle.indexOf('\n// Pre-compiled RegExp',observerStart);
+const Observer=runInNewContext(bundle.slice(observerStart,observerEnd)+';NodeMaterialObserver',{
+  refreshUniforms:[],_materialCache:new WeakMap(),_geometryCache:new WeakMap(),_lightsCache:new WeakMap(),
+});
+for(const hasMRT of [false,true]) {
+  const observer=new Observer({material:{},object:{},context:{},renderer:{getMRT:()=>hasMRT?{has:()=>false}:null}});
+  // Two previously initialized ordinary objects share this compiled program.
+  observer.firstInitialization=()=>false;observer.equals=()=>true;observer.getLights=()=>[];
+  const object={object:{},bundle:null,lightsNode:{}};
+  const frame={renderId:1,renderer:{getMRT:()=>hasMRT?{has:()=>false}:null}};
+  assert.equal(observer.needsRefresh(object,frame),true);
+  assert.equal(observer.needsRefresh(object,frame),hasMRT,
+    'each MRT receiver must refresh external uniforms even when its material is unchanged');
+}
