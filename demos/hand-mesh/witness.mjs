@@ -97,7 +97,7 @@ try {
   await step('invalid-import', async () => { const invalid=path.join(out,'invalid-models');await fs.mkdir(invalid);await fs.copyFile(path.join(args.models,'mobrecon.package.json'),path.join(invalid,'mobrecon.package.json'));await importFolder(invalid, true); await wait(`document.getElementById('models-status').textContent.includes('missing') || document.getElementById('models-status').textContent.includes('Missing')`); if (!(await read()).identity) throw Error('invalid import discarded loaded models'); });
   await step('corrupt-import', async () => {
     const corrupt=path.join(out,'corrupt-models');await fs.mkdir(corrupt);
-    for(const file of files)await fs.copyFile(path.join(args.models,file),path.join(corrupt,file));
+    for(const file of files)await fs.copyFile(path.join(args.models,file),path.join(corrupt,file),fs.constants.COPYFILE_FICLONE);
     const handle=await fs.open(path.join(corrupt,'mobrecon.bin'),'r+');try{const b=Buffer.alloc(1);await handle.read(b,0,1,0);b[0]^=255;await handle.write(b,0,1,0);}finally{await handle.close();}
     await importFolder(corrupt, true);
     await wait(`document.getElementById('models-status').textContent.toLowerCase().includes('sha256') || document.getElementById('models-status').textContent.toLowerCase().includes('sha-256') || document.getElementById('models-status').textContent.toLowerCase().includes('digest')`);
