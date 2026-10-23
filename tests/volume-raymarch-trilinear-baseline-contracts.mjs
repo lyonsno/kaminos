@@ -15,7 +15,12 @@ const rayOrigin = raymarch.slice(0, raymarch.indexOf('var trans ='));
 const traversalStart = raymarch.indexOf('let flowKernelReconstructionActive');
 const traversalEnd = raymarch.indexOf('let state = reconstructed.velocityDensity', traversalStart);
 assert.ok(traversalStart >= 0 && traversalEnd > traversalStart, 'reconstruction/admission boundary is discoverable');
-const traversal = raymarch.slice(traversalStart, traversalEnd);
+assert.match(raymarch,/var materialP = p;\s*if \(!fullGridCapture && !opticalTrace\) \{ materialP = continuousDetailPosition\(p\); \}/,'only the explicit detail lookup may change the reconstruction position');
+const detail=readFileSync(new URL('../volume-continuous-detail.mjs',import.meta.url),'utf8');
+assert.match(detail,/if \(u\.continuous_detail\.x <= 0\.0\) \{ return p; \}/,'detail zero returns the original physical position');
+// The optional detail lookup is identity at zero; the baseline authority below
+// still forbids hidden filtering and extra skips in that same live branch.
+const traversal = raymarch.slice(traversalStart, traversalEnd).replace(/\bmaterialP\b/g,'p');
 
 assert.doesNotMatch(rayOrigin, /bonfireSpatialRayDephase|hash31\s*\(/, 'ray origin has no Bonfire-only per-pixel hash texture');
 assert.match(
@@ -74,8 +79,8 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
-const baselineAdmission = supportAdmission.replace('!opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
-assert.match(supportAdmission, /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
+const baselineAdmission = supportAdmission.replace(' && u.continuous_detail.x <= 0.0','').replace('!opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
+assert.match(supportAdmission, /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001 && u\.continuous_detail\.x <= 0\.0\)/,
   'only explicit comparison/capture modes bypass production support admission');
 assert.match(
   baselineAdmission,
@@ -133,13 +138,13 @@ const falseClosureMutations = [
     'hidden filter on raw zero route',
     source => source
       .replace('fn sampleWorldFlowReconstructionRaw(', 'fn hiddenRawFilter(p: vec3<f32>, center: FlowReconstructionSample) -> FlowReconstructionSample { return mixFlowReconstructionSample(center, sampleWorldFlowReconstructionRaw(p + vec3<f32>(0.01)), sampleWorldFlowReconstructionRaw(p - vec3<f32>(0.01)), 0.5); }\n\nfn sampleWorldFlowReconstructionRaw(')
-      .replace('      reconstructed = sampleWorldFlowReconstructionRaw(p);', '      reconstructed = sampleWorldFlowReconstructionRaw(p);\n      reconstructed = hiddenRawFilter(p, reconstructed);'),
+      .replace('      reconstructed = sampleWorldFlowReconstructionRaw(materialP);', '      reconstructed = sampleWorldFlowReconstructionRaw(materialP);\n      reconstructed = hiddenRawFilter(materialP, reconstructed);'),
     /raw zero route must contain one direct trilinear assignment and no filtering/,
   ],
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
+      .replace('    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && u.continuous_detail.x <= 0.0) {', '    if (false) {\n    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && u.continuous_detail.x <= 0.0) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],
