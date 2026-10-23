@@ -65,3 +65,22 @@ export function decodeMaterialInputs(words) {
   if(!Object.values(result).every(Number.isFinite))throw new Error('Nonfinite material GPU input');
   return result;
 }
+
+
+// Reference magnitude retained from the nominal three-pass, 60 Hz, h=.185 setup.
+export const PBF_MATERIAL_REFERENCE=Object.freeze({dt:1/60,supportRadius:.185,densityIterations:3,dragRetention:.991});
+/** For fixed normalized neighbors, density gradients scale as 1/h. Preserve
+ * n * delta_rep / dt², not a fixed positional kick at every pressure pass.
+ * This defines a reference acceleration, not a physical surface tension. */
+export function resolvePBFMaterialScale(mode,{dt,supportRadius,densityIterations,particleRepulsionStrength}) {
+ if(!['legacy','reference_acceleration'].includes(mode))throw new RangeError('Unknown PBF material scaling mode');
+ if(!Number.isFinite(dt)||dt<=0||!Number.isFinite(supportRadius)||supportRadius<=0)throw new RangeError('Material timestep and support radius must be positive and finite');
+ if(!Number.isSafeInteger(densityIterations)||densityIterations<1)throw new RangeError('Material density passes must be a positive integer');
+ if(!Number.isFinite(particleRepulsionStrength)||particleRepulsionStrength<0)throw new RangeError('Material repulsion strength must be finite and nonnegative');
+ const ref=PBF_MATERIAL_REFERENCE;
+ const repulsionScale=mode==='legacy'?1:(dt/ref.dt)**2*(supportRadius/ref.supportRadius)*(ref.densityIterations/densityIterations);
+ const repulsionCoefficient=PBF_REPULSION_COEFFICIENT*particleRepulsionStrength*repulsionScale;
+ const dragRetention=mode==='legacy'?ref.dragRetention:Math.exp(Math.log(ref.dragRetention)*dt/ref.dt);
+ if(!Number.isFinite(repulsionScale)||repulsionScale<=0||!Number.isFinite(Math.fround(repulsionCoefficient))||(particleRepulsionStrength>0&&Math.fround(repulsionCoefficient)===0))throw new RangeError('Scaled material repulsion cannot be represented in WebGPU f32');
+ return {mode,dt,supportRadius,densityIterations,repulsionScale,repulsionCoefficient,dragRetention,reference:ref};
+}
