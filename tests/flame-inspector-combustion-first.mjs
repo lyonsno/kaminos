@@ -1,19 +1,20 @@
 // kaminos-test: node
 // Operator 2026-10-22: first panel groups combustion, temperature, soot and
-// emission by phenomenon, keeping combustion first and Glow gain accessible.
+// emission by phenomenon. October23: emission first, combined combustion/thermal.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FLAME_INSPECTOR_VIEWS, FLAME_PROPERTY_GROUPS } from '../flame-authoring.mjs';
 
 const first = FLAME_INSPECTOR_VIEWS[0].id;
 const firstGroups = FLAME_PROPERTY_GROUPS.filter(group => group.view === first);
-const combustion = firstGroups[0];
-assert.equal(combustion?.name, 'Combustion', 'Combustion is the first group on the first panel');
+assert.equal(firstGroups[0]?.name,'Emission & image','image controls lead the Material panel');
+const combustion = firstGroups.find(group=>group.name==='Combustion');
 assert.equal(combustion.open, true, 'and starts open');
 const ids = combustion.fields.map(([id]) => id);
-for (const id of ['volume-reaction-law', 'volume-reactant-mixing-time', 'volume-heat-release-expansion']) {
+for (const id of ['volume-reaction-law', 'volume-reactant-mixing-time', 'volume-heat-release-expansion','volume-physical-kelvin-per-heat','volume-reactant-cooling-time']) {
   assert.ok(ids.includes(id), `${id} is in Combustion on the first panel`);
 }
+assert.equal(ids.at(-1),'volume-reaction-law','infrequent law selector follows thermal settings');
 const everywhere = FLAME_PROPERTY_GROUPS.flatMap(group => group.fields.map(([id]) => id));
 for (const id of ids) assert.equal(everywhere.filter(other => other === id).length, 1, `${id} appears once in the inspector`);
 const emission=firstGroups.find(group=>group.name==='Emission & image');

@@ -1429,7 +1429,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
         <span class="slider-label" id="volume-physical-thermal-label">Glow gain</span>
-        <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
+        <input type="range" id="volume-physical-thermal" min="0" max="40" step="any" value="1">
         <span class="slider-val" id="volume-physical-thermal-val">1</span>
       </div>
       <div class="slider-row">
@@ -1844,7 +1844,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Soot display gain</span>
-      <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
+      <input type="range" id="volume-density" min="0.35" max="12" step="0.05" value="4.2">
       <span class="slider-val" id="volume-density-val">4.20</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="reaction-volume">
@@ -1874,12 +1874,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
       <span class="slider-label">Shred</span>
-      <input type="range" id="volume-interface-shred" min="0" max="5" step="0.05" value="2.5">
+      <input type="range" id="volume-interface-shred" min="0" max="10" step="0.05" value="2.5">
       <span class="slider-val" id="volume-interface-shred-val">2.50</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="branch-threshold">
       <span class="slider-label">Fire Licks</span>
-      <input type="range" id="volume-fire-licks" min="0" max="5" step="0.05" value="1.65">
+      <input type="range" id="volume-fire-licks" min="0" max="10" step="0.05" value="1.65">
       <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="projection-pass-gate">
@@ -2171,7 +2171,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box. Fire Licks and Interface Shred are not drawn; under Authored, Fire Licks also speeds the authored burn. Inflow or immersed source and shared gas transport (Common gas transport, or MacCormack) only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
-      <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.25" max="30" step="any" value="3">
+      <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.01" max="30" step="any" value="3">
       <span class="slider-val" id="volume-reactant-mixing-time-val">3.0</span>
     </div>
     <span class="slider-help">Reactant candidate: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
@@ -3065,7 +3065,7 @@ function fireLightFieldRouteParams() {
   for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
     if (key.startsWith('volume_light_field')) merged.set(key, value);
   }
-  return merged;
+  return resolveFlameLightingRoute(merged);
 }
 
 function isFireLightFieldRoute(params = fireLightFieldRouteParams()) {
@@ -3186,7 +3186,7 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
-import { COMPOSITION_SCHEMA, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
+import { COMPOSITION_SCHEMA, resolveFlameLightingRoute, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
@@ -17029,7 +17029,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
   { key: 'physicalSmokeAlbedo', id: 'volume-physical-smoke-albedo', param: 'volume_physical_smoke_albedo', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalAmbient', id: 'volume-physical-ambient', param: 'volume_physical_ambient', min: 0, max: 1, continuous: true, decimals: 3 },
-  { key: 'physicalThermalStrength', id: 'volume-physical-thermal', param: 'volume_physical_thermal', min: 0, max: 20, continuous: true, decimals: 2 },
+  { key: 'physicalThermalStrength', id: 'volume-physical-thermal', param: 'volume_physical_thermal', min: 0, max: 40, continuous: true, decimals: 2 },
   { key: 'physicalCleanStrength', id: 'volume-physical-clean', param: 'volume_physical_clean', min: 0, max: 5, continuous: true, decimals: 3 },
   { key: 'physicalExposureEV', id: 'volume-physical-exposure', param: 'volume_physical_exposure', min: -8, max: 8, continuous: true, decimals: 2 },
   { key: 'physicalHighlightKnee', id: 'volume-physical-knee', param: 'volume_physical_knee', min: 0.1, max: 0.95, continuous: true, decimals: 2 },
@@ -19575,6 +19575,7 @@ async function mountSceneRadianceRoute(params) {
       }
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
+      flameInspector?.sync();
       if(hybrid){
         const settings=createFireShadowSettings({document,applyInitial:false,session:{onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),dispose(){}}});
         const panel=document.getElementById('rendering-fire-shadows');panel.hidden=false;
@@ -19774,7 +19775,7 @@ async function initKaminosVolumeRoute() {
   }
   const routeDensity = Number(params.get('volume_density'));
   if (params.has('volume_density') && Number.isFinite(routeDensity)) {
-    document.getElementById('volume-density').value = String(Math.max(0.35, Math.min(6, routeDensity)));
+    document.getElementById('volume-density').value = String(Math.max(0.35, Math.min(12, routeDensity)));
   }
   const routeFire = Number(params.get('volume_fire'));
   if (params.has('volume_fire') && Number.isFinite(routeFire)) {
@@ -19802,11 +19803,11 @@ async function initKaminosVolumeRoute() {
   }
   const routeInterfaceShred = Number(params.get('volume_interface_shred'));
   if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
-    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(5, routeInterfaceShred)));
+    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(10, routeInterfaceShred)));
   }
   const routeFireLicks = Number(params.get('volume_fire_licks'));
   if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
-    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(5, routeFireLicks)));
+    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(10, routeFireLicks)));
   }
   const routeRadiance = Number(params.get('volume_radiance'));
   const routeAbsorption = Number(params.get('volume_absorption'));
@@ -21828,6 +21829,7 @@ function createFlameQuickFields() {
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]))} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
+    readSceneLighting:()=>window.__kaminosSceneRadianceSetup?.status==='mounted'&&fireLightFieldRouteParams().get('volume_light_field_distributed')==='1',
     writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     onError:error=>setInfo(error.message)});
@@ -22079,18 +22081,7 @@ async function addFirstFlameField(presetId,{signal}={}) {
   if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
   if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
   if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
-  const route={volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'};
-  // Emissive basins export the same raw emission that the flame displays.
-  // Preserve older non-emissive recipes on their existing receiving path;
-  // opting into lighting must not silently recolor a saved flame.
-  Object.assign(route,{
-    volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',
-    volume_light_field_hybrid_points:'4',volume_light_field_hybrid_point_sampling:'all',
-    volume_light_field_hybrid_shadow_resolution:'12',volume_light_field_hybrid_blocker_samples:'1',
-    volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_shadow_softness:'1',
-    volume_light_field_hybrid_shadow_sampling:'complementary',volume_light_field_hybrid_shadow_implementation:'shared',
-    volume_light_field_hybrid_shadow_grain:'screen-animated',volume_light_field_hybrid_smoke_refinement:'1',
-  });
+  const route=Object.fromEntries(resolveFlameLightingRoute({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'}));
   const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
   await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');

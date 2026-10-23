@@ -2,6 +2,24 @@ import { normalizeBurner } from './annular-burner.mjs';
 export const COMPOSITION_SCHEMA = 'kaminos.stationary-flame-composition.v1';
 const clone = value => JSON.parse(JSON.stringify(value));
 
+export function resolveFlameLightingRoute(value) {
+  const route=new URLSearchParams(value);
+  if(route.get('volume_light_field')!=='1')return route;
+  for(const stage of ['shared_source','distributed','hybrid']) {
+    const key='volume_light_field_'+stage;
+    if(!route.has(key))route.set(key,'1');
+    if(route.get(key)!=='1')return route;
+  }
+  const defaults={points:'4',point_sampling:'all',shadow_resolution:'12',blocker_samples:'1',
+    filter_samples:'1',shadow_softness:'1',shadow_sampling:'complementary',
+    shadow_implementation:'shared',shadow_grain:'screen-animated',smoke_refinement:'1'};
+  for(const [name,value] of Object.entries(defaults)) {
+    const key='volume_light_field_hybrid_'+name;
+    if(!route.has(key))route.set(key,value);
+  }
+  return route;
+}
+
 export function normalizeComposition(value) {
   if (value == null) return null;
   if (value.schema !== COMPOSITION_SCHEMA) throw new Error('Unsupported scene composition');
@@ -17,6 +35,7 @@ export function normalizeComposition(value) {
   }
   if (value.route.volume_collision !== undefined && !['kiln', 'off'].includes(value.route.volume_collision)) throw new Error('Unsupported kiln collision setting');
   const result = clone(value);
+  result.route=Object.fromEntries(resolveFlameLightingRoute(value.route));
   if (value.burner != null) result.burner = normalizeBurner(value.burner);
   return result;
 }
