@@ -6,8 +6,8 @@ import {createWalkingCreature} from '../experiments/creature-motion/walking.expe
 // The joined walking creature: attention follows the cast that is actually
 // applied, and switching attention off while paused clears the turn at once.
 class Element {
- constructor(){this.children=[];this.style={};this.value='0';this.checked=true;}
- append(...nodes){this.children.push(...nodes);} prepend(...nodes){this.children.unshift(...nodes);} setAttribute(){} remove(){} dispatchEvent(){}
+ constructor(){this.children=[];this.style={};this.dataset={};this.value='0';this.checked=true;}
+ append(...nodes){this.children.push(...nodes);} prepend(...nodes){this.children.unshift(...nodes);} setAttribute(k,v){this[k]=v;} remove(){} dispatchEvent(){}
 }
 const document={createElement:()=>new Element(),getElementById:()=>null};
 const names=['pelvis','spine-chest','neck','head','head-end'],parentIndex=[-1,0,1,2,3];
@@ -37,6 +37,18 @@ const inputs={blend_frames:0,radius:4,case:'case-c',case_sha256:'c'.repeat(64),c
 const oldWindow=globalThis.window;globalThis.window={};
 try{
  const creature=await createWalkingCreature({host,inputs},dependencies);
+ const nodes=n=>[n,...n.children.flatMap(nodes)],panelRoot=new Element();
+ const controls=creature.mount({root:panelRoot,invoke:(name,input)=>creature.operations[name](input),reopen:async()=>{}});
+ const curiosity=nodes(panelRoot).find(n=>n['aria-label']==='Creature curiosity');assert.ok(curiosity,'creature inspector exposes curiosity');
+ curiosity.value='2.5';await curiosity.onchange();
+ assert.equal(creature.read().attention.behavior.curiosity,2.5,'properties use the live behavior operation');
+ assert.equal(creature.read().recipe.attention.behavior.curiosity,2.5,'authored multiplier is saved');
+ const priorSettings=creature.read().attention.behavior;
+ assert.throws(()=>creature.operations.behavior({aversion:-1}),/nonnegative/);
+ assert.deepEqual(creature.read().attention.behavior,priorSettings,'invalid updates are atomic');
+ assert.throws(()=>creature.operations.behavior({recoveryTime:0}),/positive/);
+ const savedRecipe=JSON.parse(JSON.stringify(creature.read().recipe));controls.dispose();
+ creature.operations.behavior({curiosity:1});
  const profileOf=()=>creature.read().attention.profile.forward;
  // R1: the older request finishes last but is superseded; attention must use
  // the cast that was actually applied to the body.
@@ -65,6 +77,9 @@ try{
  assert.ok(q.angleTo(new THREE.Quaternion())<1e-9,'head returns to the unmodified source orientation');
  assert.ok((creature.inspect??window.kaminosWalkingCreature)().vertices.some((v,i)=>Math.abs(v-turnedVertices[i])>1e-6),'the deformed body follows');
  await creature.dispose();
+ const reopened=await createWalkingCreature({host,inputs:savedRecipe},dependencies);
+ assert.deepEqual(reopened.read().attention.behavior,priorSettings,'serialized setup restores behavior multipliers');await reopened.dispose();
+ await assert.rejects(createWalkingCreature({host,inputs:{...inputs,attention:{...inputs.attention,behavior:{recoveryTime:0}}}},dependencies),/positive/);
 
  // Attention may hold locomotion without pausing the creature's observation
  // clock. Exercise the real walking consumer, source adapter and flame bridge.

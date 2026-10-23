@@ -1,3 +1,4 @@
+import {behaviorSettings} from './behavior-settings.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
@@ -22,6 +23,7 @@ function checkAuthoredTransform(t){
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.attention)behaviorSettings(inputs.attention.behavior);
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
@@ -75,7 +77,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
- const engagement=createEngagement();
+ const engagement=createEngagement({behavior:inputs.attention?.behavior});
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
@@ -220,7 +222,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(inputs.attention.flame)Promise.resolve(globalThis.window?.kaminosFlameWorkbench?.open?.()).then(workbench=>{if(workbench&&!disposed)flames=flameInterests({THREE,root:sceneRoot,workbench,interest:inputs.attention.flame.interest??1.5});}).catch(error=>record({kind:'attention.flame',phase:'unavailable',error:error.message}));
    attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:()=>[...props(),...(flames?.read()??[])],
     // Each creature's idle glances replay identically but differ from its neighbours'.
-    options:{document,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
+    options:{document,behavior:inputs.attention.behavior,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
    if(inputs.attention.enabled===false)attention.setEnabled(false);
    // Light sense: while moving, sample the fire's light at a ring of ground
@@ -336,6 +338,13 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
+   }),
+   behavior:operation('behavior',input=>{
+    if(!attention)throw Error('This creature has no attention setup');
+    const next=behaviorSettings({...attention.read().behavior,...input});
+    attention.setBehavior(next);engagement.setBehavior(next);
+    chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,behavior:next}};
+    host.scene.refreshPresentation?.(asset);return read();
    }),
    engagement:operation('engagement',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Engagement enabled must be boolean');chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,engage:input.enabled}};
     if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
