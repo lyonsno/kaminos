@@ -43,6 +43,18 @@ let effectiveUrl = null;
 let effectiveServerRoots = null;
 let browserVersion = null;
 
+// Resource Timing's finite default buffer can fill with startup modules before
+// an asset loads. Observe every delivered entry instead of raising that cap.
+function installAssetResourceHistory() {
+  const names = [];
+  window.__kaminosWitnessResourceNames = names;
+  const observer = new PerformanceObserver(list => {
+    for (const entry of list.getEntries()) names.push(entry.name);
+  });
+  observer.observe({ type: 'resource', buffered: true });
+  window.__kaminosWitnessResourceObserver = observer;
+}
+
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
 }
@@ -244,7 +256,7 @@ async function runMeshAssetLinkScenario(ws) {
       if (!object || object.type !== 'glb' || object.source !== state.effectiveUrl) {
         throw new Error('mesh asset link did not register the loaded GLB as a scene object: ' + JSON.stringify({ state, object, objects: evidence.objects }));
       }
-      const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
+      const resourceNames = [...new Set([...(window.__kaminosWitnessResourceNames || []), ...performance.getEntriesByType('resource').map(entry => entry.name)])];
       const requestedResource = resourceNames.find(name => {
         const resourceUrl = new URL(name, location.href);
         const resourceKeys = [...resourceUrl.searchParams.keys()].sort();
@@ -2018,7 +2030,7 @@ async function runDirectAssetLinkScenario(ws, config) {
       if (!object || object.type !== config.objectType || object.source !== state.effectiveUrl) {
         throw new Error(config.wrongRegistration + ': ' + JSON.stringify({ state, object, objects: evidence.objects }));
       }
-      const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
+      const resourceNames = [...new Set([...(window.__kaminosWitnessResourceNames || []), ...performance.getEntriesByType('resource').map(entry => entry.name)])];
       const requestedResource = resourceNames.find(name => {
         const resourceUrl = new URL(name, location.href);
         const resourceKeys = [...resourceUrl.searchParams.keys()].sort();
@@ -7247,6 +7259,7 @@ try {
   await waitForWebSocketOpen(ws);
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
+  await wsRequest(ws, 'Page.addScriptToEvaluateOnNewDocument', { source: '(' + installAssetResourceHistory.toString() + ')()' });
   await wsRequest(ws, 'Page.bringToFront');
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
   // Observe the fire's effective ray steps once a second for the live budget.
