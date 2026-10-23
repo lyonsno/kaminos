@@ -25635,8 +25635,9 @@ function repetitionInspectorTarget(){
  return {id:owner.id,label:owner.record.label||owner.id,settings:owner.record.repetition,frame:owner.frame,editId:'@repetition:'+owner.id,parent,suggestedCenter:[owner.frame.position[0]-width*2,owner.frame.position[1],owner.frame.position[2]],effectiveCount:owner.entries[0].object.children.filter(o=>o.userData.kaminosRepetitionCopy).length+1};
 }
 function writeSceneRepetition(id,value){
- const owner=repetitionOwner(id);owner.record.repetition=checkedRepetition(value);
- if(!owner.group)owner.record.object.userData.kaminosSceneObject.repetition=owner.record.repetition;
+ const owner=repetitionOwner(id),repetition=checkedRepetition(value);
+ if(owner.group)workingScene.updateGroup(owner.group.id,{repetition});
+ else{owner.record.repetition=repetition;owner.record.object.userData.kaminosSceneObject.repetition=repetition;}
  sceneRepetitionController.sync();sceneRepetitionInspector?.sync();updateSelectionFeedback();window._kaminosDirty?.();
 }
 function ensureRepetitionTarget(id){
@@ -25658,7 +25659,7 @@ async function makeSceneRepetitionReal(id){
  const plans=owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,false);return {id:entry.id,world:entry.object.matrixWorld.clone(),deltas:sceneRepetitionController.matrices(entry)};});
  if(plans.every(plan=>plan.deltas.length===1))return [];
  try{
-  if(owner.group)repetitionOwner(owner.id).record.repetition=null;
+  if(owner.group)workingScene.updateGroup(owner.group.id,{repetition:null});
   for(const entry of owner.entries){entry.repetition=null;entry.object.userData.kaminosSceneObject.repetition=null;sceneRepetitionController.clear(entry.object);}
   for(const plan of plans)for(const delta of plan.deltas.slice(1)){
    const copy=duplicateSceneObject(plan.id,{deferRecord:true}),world=delta.clone().multiply(plan.world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();world.decompose(position,rotation,scale);const euler=new THREE.Euler().setFromQuaternion(rotation);
