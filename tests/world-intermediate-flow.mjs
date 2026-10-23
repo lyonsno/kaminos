@@ -57,7 +57,7 @@ test('flow envelope borrows gas without initializing, dispatching, or destroying
   assert.ok(borrowed.buffers.every(b=>!writes.includes(b)));
   const encoder={beginComputePass(){return {setPipeline(p){passes.push(p.compute.entryPoint);},setBindGroup(_i,g){assert.equal(g.entries.find(e=>e.binding===4).resource.buffer,borrowed.buffers[1]);},dispatchWorkgroups(){},end(){}};}};
   field.encode(encoder,{fineBuffer:{},reactionTexture:{createView:()=>({})},fineDims:[16,32,16],transform:{translate:[0,0,0],scale:1},time:{dtScale:1,backtraceScale:1},materialIndex:1,iterations:2});
-  assert.deepEqual(passes,['transportFlow','pressure','pressure','project']);
+  assert.deepEqual(passes,['transportFlow','restrictPressure','pressure','pressure','project']);
   field.destroy();
   assert.ok([...borrowed.buffers,borrowed.optical].every(r=>!r.destroyed));
   assert.ok(allocations.filter(r=>!r.label.startsWith('borrowed')).every(r=>r.destroyed));

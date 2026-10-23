@@ -114,7 +114,7 @@ export const FLAME_INSPECTOR_VIEWS = [
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', view:'quality', open:true, fields:[
     ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
-    ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
+    ['volume-resolution','Fine material width'], ['volume-fine-velocity','Fine velocity width (0 = material)'], ['volume-fine-pressure','Fine pressure width (0 = velocity / legacy choice)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Fine pressure iterations'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
@@ -122,10 +122,16 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Wavelet octaves'], ['volume-wavelet-strength','Wavelet strength'],
     ['volume-wavelet-octave1-weight','Four-cell octave weight'], ['volume-wavelet-octave2-weight','Two-cell octave weight'],
   ] },
-  { name:'World smoke', view:'quality', open:true, scope:'One-way, world-anchored field. Changing its dimensions resets only this field; fine pressure stays independent. Material width must be ≥ flow width.', fields:[
+  { name:'World smoke', view:'quality', open:true, scope:'World-anchored field with one-way outward coupling. Pressure width must divide velocity width. Material resolution is independent.', fields:[
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
+    ['volume-world-smoke-pressure','Pressure width (0 = flow)'], ['volume-world-smoke-iterations','Pressure iterations'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
-    ['volume-world-smoke-intermediate','Intermediate flow (experimental)'],
+  ] },
+  { name:'Intermediate region', view:'quality', open:true, scope:'Independent material and velocity mode uses its own material field. Width changes preserve the physical extent. Pressure width must divide velocity width.', fields:[
+    ['volume-world-smoke-intermediate','Mode'],
+    ['volume-intermediate-flow','Velocity width'], ['volume-intermediate-material','Material width'],
+    ['volume-intermediate-pressure','Pressure width'], ['volume-intermediate-iterations','Pressure iterations'],
+    ['volume-intermediate-extent','Extent / fine width'],
   ] },
   // Operator 2026-10-21: the combustion controls and Glow gain lead the first panel.
   { name:'Combustion', view:'look', open:true, fields:[
@@ -394,8 +400,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     const overlayState=readWorldOverlay();overlay.value=overlayState.mode;overlayStatus.textContent=overlayState.summary;
     worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw} · ${world.collision==='empty-fallback'?'no collision mask':'GPU collisions (unverified occupancy)'}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
     const pressure=readPressureRuntime();
-    pressureStatus.textContent=!pressure||pressure.requested!==byId('volume-pressure-resolution').value?'Pressure choice awaiting simulation step'
-      : pressure.dispatched?`${pressure.pressureDims.join('×')} pressure · ${pressure.materialDims.join('×')} material. Transport and reaction remain fine.`
+    pressureStatus.textContent=!pressure?'Pressure choice awaiting simulation step'
+      : pressure.dispatched?`${pressure.pressureDims.join('×')} pressure · ${pressure.transportDims.join('×')} velocity. Material and reaction use Fine material width.`
       : `Original pressure${pressure.reason?` · ${pressure.reason}`:''}`;
     const immersed=byId('volume-emitter-source-law').value==='immersed-source';
     syncVisibility();

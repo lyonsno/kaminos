@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {worldSmokePlan,worldSmokeMapping} from '../volume-world-smoke.mjs';
+import {resolveWorldRegions} from '../volume-region-controls.mjs';
 import {pressureResolutionPlan} from '../volume-pressure-resolution.mjs';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 function grab(name){const start=source.indexOf(`  function ${name}(`);return start<0?'':source.slice(start,source.indexOf('\n  }',start)+4);}
@@ -14,9 +15,9 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const ctx={intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
     controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
-    encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,
+    encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,prepareFineVelocity(){return null;},
     state:{reactantCombustion:{effective:{admitted:true}},simStepCount:1},gridSize:32,gridHeight:64,
-    device:{queue:{writeBuffer(){}}},createWorldSmoke,worldSmokePlan,worldSmokeMapping,productTransform:anchor,
+    device:{queue:{writeBuffer(){}}},createWorldSmoke,resolveWorldRegions,worldSmokeMapping,productTransform:anchor,
     createGpuSceneSolidProducer:()=>({destroy(){}}),getSceneCollision:()=>null,
     rebuildFluidBindGroups(){ctx.group={texture:ctx.worldSmoke.optical};},fluidBindGroup:()=>ctx.group,
     fluidBuffers:[{},{}],reactantTextures:[{},{}],currentFluid:0,currentFront:0,currentQuench:0,
@@ -35,10 +36,10 @@ test('world resize never destroys a texture referenced by the pending fine frame
 });
 test('separated pressure rebinds the current world optical allocation',()=>{
   let optical={destroyed:false};const bound=[];
-  const owner={key:'32:64:32:2',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
+  const owner={key:'32:64:32:2:material',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
   const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
     separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
-    sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},
+    sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
     nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,
     createFluidRenderBindGroup:()=>({texture:ctx.worldSmoke.optical}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
     beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};

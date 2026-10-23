@@ -1,0 +1,127 @@
+export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
+ if(!Array.isArray(materialDims)||materialDims.length!==3||materialDims.some(n=>!Number.isInteger(n)||n<2))throw Error('Invalid fine material dimensions');
+ velocity=Number(velocity);pressure=Number(pressure);
+ if(velocity===0)velocity=materialDims[0];if(pressure===0)pressure=velocity;
+ const materialPerVelocity=materialDims[0]/velocity,velocityPerPressure=velocity/pressure;
+ if(!Number.isInteger(velocity)||velocity<2||!Number.isInteger(materialPerVelocity)||materialPerVelocity<1||materialDims.some(n=>n%materialPerVelocity))throw Error('Fine velocity must be an integral subdivision of material dimensions');
+ const velocityDims=materialDims.map(n=>n/materialPerVelocity);
+ if(!Number.isInteger(pressure)||pressure<2||!Number.isInteger(velocityPerPressure)||velocityPerPressure<1||velocityDims.some(n=>n%velocityPerPressure))throw Error('Fine pressure must be an integral subdivision of velocity dimensions');
+ return {materialDims:[...materialDims],velocityDims,pressureDims:velocityDims.map(n=>n/velocityPerPressure),materialPerVelocity,velocityPerPressure};
+}
+
+// The velocity lattice owns its history. Scalar restriction never replaces
+// that history with a filtered copy of its material-grid interpolation.
+export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
+struct Shape { material:vec4<u32>, velocity:vec4<u32> };
+@group(0) @binding(0) var<uniform> s:Shape;
+@group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
+@group(0) @binding(2) var<storage,read_write> coarse:array<vec4<f32>>;
+@group(0) @binding(3) var<storage,read> coarseAfter:array<vec4<f32>>;
+@group(0) @binding(4) var<storage,read> fineFront:array<f32>;
+@group(0) @binding(5) var<storage,read_write> coarseFront:array<f32>;
+@group(0) @binding(6) var<storage,read> fineQuench:array<u32>;
+@group(0) @binding(7) var<storage,read_write> coarseQuench:array<u32>;
+@group(0) @binding(8) var fineSolid:texture_3d<u32>;
+@group(0) @binding(9) var coarseSolid:texture_storage_3d<r32uint,write>;
+@group(0) @binding(10) var fineReactant:texture_3d<f32>;
+@group(0) @binding(11) var coarseReactant:texture_storage_3d<rg32float,write>;
+@group(0) @binding(12) var fineBurn:texture_storage_3d<r32float,read_write>;
+@group(0) @binding(13) var coarseBurn:texture_storage_3d<r32float,read_write>;
+@group(0) @binding(14) var fineLower:texture_storage_2d_array<r32float,write>;
+@group(0) @binding(15) var coarseLower:texture_2d_array<f32>;
+@group(0) @binding(16) var<storage,read> finePrior:array<vec4<f32>>;
+fn idx(p:vec3<u32>,d:vec3<u32>)->u32{return p.x+d.x*(p.y+d.y*p.z);}
+fn solid(p:vec3<i32>)->bool{return textureDimensions(fineSolid).x==s.material.x&&all(p>=vec3<i32>(0))&&all(p<vec3<i32>(s.material.xyz))&&textureLoad(fineSolid,p,0).x!=0u;}
+@compute @workgroup_size(4,4,4)
+fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
+ if(any(c>=s.velocity.xyz)){return;}
+ let ci=idx(c,s.velocity.xyz);let r=s.material.w;let weight=1.0/f32(r*r*r);
+ var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
+ for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
+  let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz);let blocked=solid(vec3<i32>(p));
+  a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;
+  front+=fineFront[fi]*weight;wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
+  if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
+  if(s.velocity.w==1u){for(var axis=0u;axis<3u;axis++){var next=vec3<i32>(p);next[axis]++;if(o[axis]==r-1u&&!blocked&&!solid(next)){vel[axis]+=fine[fi*4u][axis]*weight;}}}
+ }}}
+ if(s.velocity.w==1u){coarse[ci*4u]=vec4<f32>(vel,0.0);}
+ coarse[ci*4u+1u]=a;coarse[ci*4u+2u]=b;coarse[ci*4u+3u]=d;
+ coarseFront[ci]=front;coarseQuench[ci]=u32(wet+0.5);
+ if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react);
+}
+// Analytic emitters act on the material lattice. Transfer only their velocity
+// increment, preserving the independently evolved coarse velocity history.
+@compute @workgroup_size(4,4,4)
+fn injectMomentum(@builtin(global_invocation_id) c:vec3<u32>){
+ if(any(c>=s.velocity.xyz)){return;}let r=s.material.w;var v=vec3<f32>(0.0);
+ for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
+  let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz)*4u;
+  for(var a=0u;a<3u;a++){var next=vec3<i32>(p);next[a]++;
+   if(o[a]==r-1u&&!solid(vec3<i32>(p))&&!solid(next)){v[a]+=(fine[fi][a]-finePrior[fi][a])/f32(r*r*r);}}
+ }}}
+ let ci=idx(c,s.velocity.xyz)*4u;coarse[ci]=vec4<f32>(coarse[ci].xyz+v,coarse[ci].w);
+}
+@compute @workgroup_size(4,4,4)
+fn restrictBurn(@builtin(global_invocation_id) c:vec3<u32>){
+ if(any(c>=s.velocity.xyz)){return;}let r=s.material.w;var v=0.0;
+ for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){v+=textureLoad(fineBurn,vec3<i32>(c*r+vec3<u32>(x,y,z))).x;}}}
+ textureStore(coarseBurn,vec3<i32>(c),vec4<f32>(v/f32(r*r*r),0.0,0.0,0.0));
+}
+fn face(c:vec3<i32>,axis:u32)->f32{
+ let p=clamp(c,vec3<i32>(0),vec3<i32>(s.velocity.xyz)-1);
+ if(c[axis]<0){return textureLoad(coarseLower,vec2<i32>(p[(axis+1u)%3u],p[(axis+2u)%3u]),i32(axis),0).x;}
+ return coarseAfter[idx(vec3<u32>(p),s.velocity.xyz)*4u][axis];
+}
+fn sampleFace(p:vec3<f32>,axis:u32)->f32{
+ let lo=vec3<i32>(floor(p));let t=fract(p);var v=0.0;
+ for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){let o=vec3<i32>(x,y,z);let w=select(vec3<f32>(1.0)-t,t,o==vec3<i32>(1));v+=face(lo+o,axis)*w.x*w.y*w.z;}}}return v;
+}
+@compute @workgroup_size(4,4,4)
+fn prolongVelocity(@builtin(global_invocation_id) c:vec3<u32>){
+ if(any(c>=s.material.xyz)){return;}let fi=idx(c,s.material.xyz)*4u;let r=f32(s.material.w);var v=vec3<f32>(0.0);
+ for(var axis=0u;axis<3u;axis++){
+  var offset=vec3<f32>(0.5);offset[axis]=1.0;var p=(vec3<f32>(c)+offset)/r-offset;
+  v[axis]=sampleFace(p,axis)*r;var next=vec3<i32>(c);next[axis]++;
+  if(solid(vec3<i32>(c))||solid(next)){v[axis]=0.0;}
+  if(c[axis]==0u){p[axis]=-1.0;textureStore(fineLower,vec2<i32>(i32(c[(axis+1u)%3u]),i32(c[(axis+2u)%3u])),i32(axis),vec4<f32>(select(sampleFace(p,axis)*r,0.0,solid(vec3<i32>(c)))));}
+ }
+ fine[fi]=vec4<f32>(v,fine[fi].w);
+}
+`;
+
+export function createFineVelocityGrid(device,plan,uniformBytes) {
+ const owned=[],d=plan.velocityDims,n=d.reduce((a,b)=>a*b,1);
+ const buffer=(label,size,usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC)=>{const b=device.createBuffer({label:'fine velocity '+label,size,usage});owned.push(b);return b;};
+ const texture=(label,format,size=d,dimension='3d')=>{const t=device.createTexture({label:'fine velocity '+label,format,size,dimension,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});owned.push(t);return t;};
+ const fluid=[0,1].map(i=>buffer('history '+i,n*64)),front=[0,1].map(i=>buffer('front '+i,n*4)),quench=[0,1].map(i=>buffer('quench '+i,(n+5)*4));
+ const reactant=[0,1].map(i=>texture('reactant '+i,'rg32float')),wavelet=[0,1].map(i=>texture('wavelet '+i,'rgba32float',[d[0],d[1],d[2]*2]));
+ const lattice=new Float32Array(n*8);let at=0;
+ for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
+ for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);
+ const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
+ const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
+ const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
+ device.queue.writeBuffer(shape,0,new Uint32Array([...plan.materialDims,plan.materialPerVelocity,...d,0]));
+ device.queue.writeBuffer(seedShape,0,new Uint32Array([...plan.materialDims,plan.materialPerVelocity,...d,1]));
+ const module=device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL});
+ const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint}})]));
+ let current=0,seed=true,bindings,prior=[];
+ function prepare(f) {
+  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current];
+  if(bindings&&resources.every((v,i)=>v===prior[i]))return;
+  prior=resources;
+  const bs=[shape,f.fluid,fluid[current],fluid[current],f.front,front[0],f.quench,quench[0]];
+  const entries=bs.map((b,binding)=>({binding,resource:{buffer:b}}));
+  [f.solid,solid,f.reactant,reactant[0],f.burn,burn].forEach((t,i)=>entries.push({binding:8+i,resource:t.createView()}));
+  entries.push({binding:14,resource:f.lower.createView({dimension:'2d-array'})},{binding:15,resource:lower.createView({dimension:'2d-array'})});
+  entries.push({binding:16,resource:{buffer:f.prior??f.fluid}});
+  const used={injectMomentum:[0,1,2,8,16],restrictScalars:[0,1,2,4,5,6,7,8,9,10,11],restrictBurn:[0,12,13],prolongVelocity:[0,1,3,8,14,15]};
+  bindings=Object.fromEntries(Object.entries(used).map(([k,ids])=>[k,device.createBindGroup({layout:pipelines[k].getBindGroupLayout(0),entries:entries.filter(e=>ids.includes(e.binding))})]));
+  bindings.seed=device.createBindGroup({layout:pipelines.restrictScalars.getBindGroupLayout(0),entries:entries.filter(e=>used.restrictScalars.includes(e.binding)).map(e=>e.binding===0?{binding:0,resource:{buffer:seedShape}}:e)});
+ }
+ function encode(encoder,kind,timestampWrites){if(!bindings)throw Error('Fine velocity transfer not prepared');const p=encoder.beginComputePass({label:'fine '+kind,...(timestampWrites?{timestampWrites}:{})});p.setPipeline(pipelines[kind]);p.setBindGroup(0,kind==='restrictScalars'&&seed?bindings.seed:bindings[kind]);p.dispatchWorkgroups(...(kind==='prolongVelocity'?plan.materialDims:d).map(n=>Math.ceil(n/4)));p.end();if(kind==='restrictScalars')seed=false;}
+ return {plan,fluid,front,quench,reactant,wavelet,solid,burn,force,lower,uniform,predictor,prepare,encode,
+  get current(){return current;},flip(){current=1-current;bindings=null;},destroy(){owned.forEach(r=>r.destroy());},
+  residentBytes:n*(128+8+8+16+64+4+4+36+64)+40+side*side*12+uniformBytes+64};
+}

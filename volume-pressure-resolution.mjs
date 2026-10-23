@@ -10,17 +10,18 @@ export function worldProfileWindows(t) {
   return {flowUs:Number(t[1]-t[0])/1000,materialUs:Number(t[3]-t[2])/1000};
 }
 
-export function pressureResolutionPlan({ dims, mode = 'off', solver = 'converged', inflow = false, joined = false } = {}) {
+export function pressureResolutionPlan({ dims, mode = 'off', width = 0, solver = 'converged', inflow = false, joined = false } = {}) {
   if (!Array.isArray(dims) || dims.length !== 3 || !dims.every(n => Number.isInteger(n) && n > 0)) throw Error('Invalid material dimensions');
-  const divisor = mode === 'half' ? 2 : 1;
-  const reason = !['off', 'equal', 'half'].includes(mode) ? 'unknown-mode'
-    : mode === 'off' ? null
+  const requested=width?'explicit':mode;
+  const divisor = width ? dims[0]/width : mode === 'half' ? 2 : 1;
+  const reason = !width && !['off', 'equal', 'half'].includes(mode) ? 'unknown-mode'
+    : requested === 'off' ? null
     : solver !== 'converged' ? 'requires-converged-pressure'
     : inflow ? 'floor-inflow-not-yet-restricted'
     : joined ? 'joined-boundary-not-supported'
-    : dims.some(n => n % divisor) ? 'nonintegral-pressure-dimensions' : null;
-  const effective = reason ? 'off' : mode;
-  return { requested: mode, effective, materialDims: [...dims], pressureDims: dims.map(n => n / (effective === 'off' ? 1 : divisor)), divisor: effective === 'off' ? 1 : divisor, reason };
+    : !Number.isInteger(divisor)||divisor<1||dims.some(n => n % divisor) ? 'nonintegral-pressure-dimensions' : null;
+  const effective = reason ? 'off' : requested;
+  return { requested, requestedWidth:width, effective, materialDims: [...dims], pressureDims: dims.map(n => n / (effective === 'off' ? 1 : divisor)), divisor: effective === 'off' ? 1 : divisor, reason };
 }
 
 // Cell-average scalars and upper-face velocities have different restriction
@@ -122,7 +123,7 @@ fn prolong(@builtin(global_invocation_id) c:vec3<u32>) {
   }
   // Only velocity changes: fine reaction, render carriers and all sidecars
   // retain their freshly computed values and buffer identity.
-  if(shape.bounds.x<0.5) { velocity=clamp(velocity,vec3<f32>(-0.34),vec3<f32>(0.52)); }
+  if(shape.bounds.x<0.5) { velocity=clamp(velocity,vec3<f32>(-0.34*shape.bounds.w),vec3<f32>(0.52*shape.bounds.w)); }
   else {
     velocity=clamp(velocity,vec3<f32>(-64.0),vec3<f32>(64.0));
     let magnitude=length(velocity);
@@ -156,11 +157,11 @@ export function createPressureTransfer(device, plan) {
   const module=device.createShaderModule({label:'material-pressure transfer',code:PRESSURE_TRANSFER_WGSL});
   const pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module,entryPoint:kind==='restrict'?'restrictField':kind}})]));
   let bindings=null, prior=[];
-  function prepare({fluid,solidTexture,burnTexture,openTop,nonLegacy,maxSpeed,fineLower,openBoundary=false}) {
+  function prepare({fluid,solidTexture,burnTexture,openTop,nonLegacy,maxSpeed,fineLower,openBoundary=false,velocityScale=1}) {
     if(openBoundary&&!fineLower)throw Error('Open pressure transfer requires fine lower-face texture');
     fineLower??=closedLower;
     const values=new ArrayBuffer(48);new Uint32Array(values).set([...plan.materialDims,plan.divisor,...plan.pressureDims,openTop?1:0]);
-    new Float32Array(values).set([nonLegacy?1:0,maxSpeed,openBoundary?1:0,0],8);device.queue.writeBuffer(params,0,values);
+    new Float32Array(values).set([nonLegacy?1:0,maxSpeed,openBoundary?1:0,velocityScale],8);device.queue.writeBuffer(params,0,values);
     const current=[fluid,solidTexture,burnTexture,fineLower];
     if(current.every((v,i)=>v===prior[i]) && bindings) return;
     prior=current;
