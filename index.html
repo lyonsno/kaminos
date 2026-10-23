@@ -26866,7 +26866,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   }
   if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
     setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
-    await volumePrototype?.setActive?.(true);
+    await volumePrototype?.setActive?.(!activeSceneComposition||isSceneItemVisible('flame-field'));
+    if(activeSceneComposition)await syncAuthoredFireActivity();
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   } else {
     await volumePrototype?.setActive?.(false);
