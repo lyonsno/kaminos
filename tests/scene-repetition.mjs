@@ -2,7 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
-import {checkedRepetition,repetitionMatrices,createRepetitionView} from '../scene-repetition.mjs';
+import {checkedRepetition,repetitionMatrices,createRepetitionView,withoutRepetitionCopies} from '../scene-repetition.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import {createSceneColliderCollection} from '../scene-collider.mjs';
 import {collectStaticSceneGeometry} from '../scene-light-geometry.mjs';
@@ -11,6 +11,11 @@ const config=(patch={})=>({schema:'kaminos.repetition.v1',mode:'circle',count:6,
 const point=(m,p)=>new T.Vector3(...p).applyMatrix4(m).toArray();
 const near=(a,b)=>a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<1e-7,`${a} != ${b}`));
 const mesh=()=>{const m=new T.Mesh(new T.BoxGeometry(.2,.6,.1),new T.MeshStandardMaterial());m.castShadow=true;return m;};
+test('inspecting an unrepeated object never adds an undefined child',()=>{
+ const root=mesh(),errors=[],original=console.error;console.error=(...args)=>errors.push(args);
+ try{assert.equal(withoutRepetitionCopies(root,()=>42),42);}finally{console.error=original;}
+ assert.deepEqual(errors,[]);assert.equal(root.children.length,0);
+});
 test('six circular placements include one source, preserve radius, and omit duplicate full-circle endpoint',()=>{
  const matrices=repetitionMatrices(config(),pose([2,0,0]));assert.equal(matrices.length,6);near(point(matrices[0],[2,0,0]),[2,0,0]);near(point(matrices[3],[2,0,0]),[-2,0,0]);
  assert.equal(new Set(matrices.map(m=>point(m,[2,0,0]).map(n=>n.toFixed(5)).join(','))).size,6);
