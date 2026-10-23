@@ -19,13 +19,13 @@ else
   hand_uv="$hand_state_dir/tools/uv"
 fi
 hand_phase=setup-download
-curl -fLSs "https://raw.githubusercontent.com/lyonsno/kaminos/8b0414a69cfebe4ca88b735684220dbfea48b84c/demos/hand-mesh/setup.py" -o "$hand_state_dir/setup.py.download"
+curl -fLSs "https://raw.githubusercontent.com/lyonsno/kaminos/9bf48d25930c846afe1f40f8de76673e06e30644/demos/hand-mesh/setup.py" -o "$hand_state_dir/setup.py.download"
 if command -v shasum >/dev/null 2>&1; then
   hand_digest="$(shasum -a 256 "$hand_state_dir/setup.py.download")"
 else
   hand_digest="$(sha256sum "$hand_state_dir/setup.py.download")"
 fi
-case "$hand_digest" in '15779bda49bd7bfe5039ee1db99ac4a7d304d06e6e3efbe8e5adf7697ea75e50 '*) ;; *) echo 'Setup source checksum differs; download retained for inspection.' >&2; exit 1;; esac
+case "$hand_digest" in '3ada9e522077d7ab103f15398cc8b30ad47517f4241b339ce9a5749b8feed80e '*) ;; *) echo 'Setup source checksum differs; download retained for inspection.' >&2; exit 1;; esac
 mv "$hand_state_dir/setup.py.download" "$hand_state_dir/setup.py"
 hand_phase=python-and-demo
-"$hand_uv" run --python 3.12 --script "$hand_state_dir/setup.py" --state-dir "$hand_state_dir" --revision 8b0414a69cfebe4ca88b735684220dbfea48b84c "$@"
+"$hand_uv" run --python 3.12 --script "$hand_state_dir/setup.py" --state-dir "$hand_state_dir" --revision 9bf48d25930c846afe1f40f8de76673e06e30644 "$@"
