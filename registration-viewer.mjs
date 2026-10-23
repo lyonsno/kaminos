@@ -141,10 +141,11 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
       scores[face*parts.length+p]=Math.exp(-distance/state.falloff);
      }
      // Yield only; never sample or truncate the target surface.
-     if(face%2048===0){progress=face/count;onChange(read());await new Promise(resolve=>setTimeout(resolve,0));if(reconcileAvailability())return read();}
+     if(face%2048===0){progress=face/count;onChange(read());await new Promise(resolve=>setTimeout(resolve,0));if(disposed||token!==generation)return read();if(reconcileAvailability()){apply();return read();}}
     }
    }
-   if(reconcileAvailability()||token!==generation||disposed)return read();
+   if(token!==generation||disposed)return read();
+   if(reconcileAvailability()){apply();return read();}
    if(signature()!==startSignature){invalidate();apply();return read();}
    if(mesh){diagnostic.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(new Float32Array(count*12),4));

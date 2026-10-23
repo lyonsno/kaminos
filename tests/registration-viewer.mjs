@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
 import {createRegistrationViewer,sourceParts} from '../registration-viewer.mjs';
+import {mountRegistrationControls} from '../registration-controls.mjs';
 const primitive={id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}};
 const parts=sourceParts({objects:[primitive],provenance:{analyticalCarrier:{parts:{a:['box'],b:['box']}}}});
 const target=new T.Mesh(new T.BoxGeometry(1,1,1),new T.MeshStandardMaterial());const original=target.material;
@@ -32,4 +33,29 @@ assert.equal(moved.bounds.isLineSegments,true,'source bounds have visible geomet
 moved.ghost.scale.x=0;
 await assert.rejects(moved.compute(),/nondegenerate source scale/,'collapsed native geometry cannot produce apparently valid claims');
 moved.dispose();
+// Minimal DOM adapter exercises publication into the actual control module;
+// it is not a browser/layout or native-number-drag witness.
+class Element{
+ constructor(tag){this.tag=tag;this.style={};this.attrs={};this.children=[];this.textContent='';}
+ append(...nodes){this.children.push(...nodes);}
+ replaceChildren(...nodes){this.children=nodes;}
+ setAttribute(k,v){this.attrs[k]=v;}
+ removeAttribute(k){delete this.attrs[k];}
+ addEventListener(){}
+ set href(value){this.attrs.href=value;}
+ get href(){return this.attrs.href;}
+}
+for(const missing of ['source','target']){
+ let reason=null,panel;const nodes=[],published=[];
+ const document={activeElement:null,createElement:tag=>{const node=new Element(tag);nodes.push(node);return node;}};
+ const live=createRegistrationViewer({target:new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()),parts,
+  unavailableReason:()=>reason,onChange:s=>{published.push(s.status);panel?.sync();}});
+ panel=mountRegistrationControls({root:new Element('div'),document,read:()=>({...live.read(),joints:[]}),invoke:()=>{},retain:()=>reason?null:'http://retained.example',controls:{installNumberDrag:()=>({stop(){}})}});
+ const pending=live.compute();reason=missing+' was removed';await pending;live.refresh();
+ assert.equal(published.at(-1),live.read().status,'yield-time removal publishes its terminal state');
+ assert.match(nodes.find(n=>n.attrs.role==='status').textContent,/unavailable/);
+ assert.equal(nodes.find(n=>n.textContent==='Compute claims').disabled,false,'controls no longer report active computation');
+ assert.equal(nodes.find(n=>n.tag==='a').href,undefined,'unavailable comparison removes stale retain link');
+ assert.equal(live.diagnostic.visible,false);panel.dispose();live.dispose();
+}
 console.log('registration viewer: full overlapping claims, isolation, invalidation, cancellation and restoration pass');
