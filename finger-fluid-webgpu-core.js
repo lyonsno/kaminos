@@ -4,7 +4,7 @@ import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
 import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-playground.mjs';
 import {readIPBFDampingRecordWords} from './finger-fluid-ipbf-damping-evidence.mjs';
-import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
+import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, resolvePBFMaterialScale} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
@@ -13362,6 +13362,7 @@ export async function createWebGPUFingerFluidSolver({
   diagnosticPopulation = null,
   diagnosticBox = null,
   viscosityScaling = 'legacy',
+  materialScaling = 'legacy',
   akinciSupportRadius = null,
   densityCellRejection = false,
   particleRepulsionStrength = 1,
@@ -13408,6 +13409,8 @@ export async function createWebGPUFingerFluidSolver({
   const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
   const safeDiagnosticBox=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
   const finitePBF=!!safeDiagnosticBox&&!useIPBF;
+  if(!['legacy','reference_acceleration'].includes(materialScaling))throw new RangeError('Unknown PBF material scaling mode');
+  if(materialScaling!=='legacy'&&(!finitePBF||adaptiveDensity))throw new RangeError('Reference material scaling requires uniform finite PBF');
   if(finitePBF&&(!diagnosticPopulation||reducedDynamics||adaptiveDensity||truthScene!=='multi_regime_playground'||![KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,SCENE_LIQUID_SUPPORT_ROUTE].includes(supportContactRoute)))throw new RangeError('Finite PBF requires uniform assembled water and analytic box or authored primitive support');
   if(!finitePBF){
     if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||(hostFrameComposition&&presentationMode!==KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE)||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone or shared local presentation');
@@ -14875,7 +14878,7 @@ export async function createWebGPUFingerFluidSolver({
     return { ...analyticCarrierRouteEvidence };
   }
 
-  let effectiveSimulationDt=null;
+  let effectiveSimulationDt=null,lastMaterialScale=null;
   function writeSimulationParams(dt) {
     effectiveSimulationDt=Math.fround(dt);
     const live=materialControlState?.read().requested;
@@ -14890,6 +14893,7 @@ export async function createWebGPUFingerFluidSolver({
       safeDensityIterations=effective.densityIterations;safeCapillaryStrength=effective.capillaryStrength;
       device.queue.writeBuffer(ipbfControlBuffer,0,packet);
     }
+    lastMaterialScale=resolvePBFMaterialScale(materialScaling,{dt,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale,densityIterations:safeDensityIterations,particleRepulsionStrength:live?.particleRepulsionStrength??0});
     const buffer = new ArrayBuffer(224);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
@@ -14907,7 +14911,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(72, 0.012, true);
     view.setFloat32(76, 0.22, true);
     view.setFloat32(80, -9.2, true);
-    view.setFloat32(84, 0.991, true);
+    view.setFloat32(84, lastMaterialScale.dragRetention, true);
     view.setFloat32(88, 0.07, true);
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
@@ -14941,7 +14945,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(192, liveInletGeneration, true);
     view.setUint32(196, liveInletReleaseEpochFrame, true);
     // Reserved ABI word .z carries the numerical coefficient, read via WGSL bitcast.
-    view.setFloat32(200, PBF_REPULSION_COEFFICIENT * (live?.particleRepulsionStrength ?? 0), true);
+    view.setFloat32(200, lastMaterialScale.repulsionCoefficient, true);
     lastViscosityScale=viscosityScale(viscosityScaling,dt,safeKernelRadius*safeUniformParticleRadiusScale);
     view.setFloat32(204,lastViscosityScale,true);
     view.setFloat32(208, safeUniformParticleVolumeScale, true);
@@ -16505,6 +16509,7 @@ export async function createWebGPUFingerFluidSolver({
       available: true,
       diagnosticBox: safeDiagnosticBox,
       simulatedTimeSeconds,lastStepSeconds,
+      materialScaling:lastMaterialScale?{...lastMaterialScale,dragRetention:Math.fround(lastMaterialScale.dragRetention),repulsionCoefficient:Math.fround(lastMaterialScale.repulsionCoefficient)}:null,
       viscosityScaling:{mode:viscosityScaling,factor:lastViscosityScale,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale},
       diagnosticDynamics:{requested:diagnosticDynamics,effective:safeDiagnosticDynamics,neighborSmoothing:!reducedDynamics,vorticityConfinement:!reducedDynamics,speedClipping:!reducedDynamics,boundaryVelocityResponse:true,population:diagnosticPopulation?{schema:diagnosticPopulation.schema,fixture:diagnosticPopulation.fixture,refinement:diagnosticPopulation.refinement,source:diagnosticPopulation.source,particleCount:safeBaseParticleCount,particleVolume:ipbfParticleVolume,representedVolume:safeBaseParticleCount*ipbfParticleVolume}:null},
       liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
