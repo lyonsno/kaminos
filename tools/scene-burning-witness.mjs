@@ -26,7 +26,7 @@ try{
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring&&window.__kaminosVolumeEmitterReceipt&&window.__kaminosVolumePrototype?.debugState().active));
   report.phase='resident-coverage';await save();
   report.coverage=await guard(page.evaluate(async()=>{const {runResidentLightFixture}=await import('/tools/resident-light-fixture.mjs');return runResidentLightFixture();}));await save();
-  page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().error).then(async handle=>fail(await handle.jsonValue())).catch(()=>{});
+  page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error).then(async handle=>fail(await handle.jsonValue())).catch(()=>{});
   report.phase='ordinary-objects';await save();
   report.ids=await guard(page.evaluate(async()=>{
     const api=window.kaminosSceneAuthoring,runtime=window.__kaminosVolumePrototype;
@@ -69,6 +69,26 @@ try{
   report.phase='undo-disable';await save();await page.evaluate(()=>window.kaminosSceneEdits.undo());
   await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident',report.ids[0]));
   const restored=await sample('undo');assert.equal(restored[1].state.state.fields[0].steps,after[1].state.state.fields[0].steps);
+  report.phase='membership';await save();
+  await page.evaluate(ids=>{window.selectSceneObject(ids[0]);window.kaminosSelection.remove();},report.ids);
+  await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='off',report.ids[0]));
+  assert.equal((await advance(30)).ok,true);const removed=await sample('removed');
+  assert.equal(removed[1].state.state.fields[0].steps,restored[1].state.state.fields[0].steps+30);
+  await page.evaluate(()=>window.kaminosSceneEdits.undo());
+  await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident',report.ids[0]));
+  const putBack=await sample('restored-membership');assert.equal(putBack[0].state.state.fields[0].steps,restored[0].state.state.fields[0].steps);
+  report.phase='save-reopen';await save();
+  report.saved=await guard(page.evaluate(async name=>{
+    window.kaminosSceneEdits.apply('@flame-source-enabled',{enabled:false},'Switch source off');
+    return window.saveSceneAs({name,result:true});
+  },'scene-burning-'+path.basename(out)));
+  await save();assert.equal(report.saved.ok,true);
+  assert.equal(report.saved.document.objects.filter(x=>x.burnable?.enabled).length,2);
+  await guard(page.goto(report.saved.url));
+  await guard(page.waitForFunction(ids=>window.kaminosSceneAuthoring&&ids.every(id=>window.kaminosSceneAuthoring.burningState(id).enabled),report.ids));
+  report.reopened=await page.evaluate(ids=>({objects:ids.map(id=>window.kaminosSceneAuthoring.burningState(id)),scene:window.kaminosSceneAuthoring.read()}),report.ids);await save();
+  assert.ok(report.reopened.objects.every(row=>row.enabled));
+  const sources=report.reopened.scene.objects.filter(row=>row.type==='flame-emitter');assert.ok(sources.length);assert.ok(sources.every(row=>row.emissionEnabled===false));
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'mobile.png')});
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
