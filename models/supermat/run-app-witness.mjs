@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { packSuperMatModule } from '../../scripts/pack-supermat-module.mjs';
 import { launchChrome, startServer, sourceIdentity } from '../flux2-klein/cdp-harness.mjs';
-import { checkSuperMatAppWitness } from './app-witness-checks.mjs';
+import { checkSuperMatAppWitness, checkSuperMatDemoWitness } from './app-witness-checks.mjs';
 const args = process.argv.slice(2), opt = name => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
 const repo = path.resolve(import.meta.dirname, '../..');
 const out = path.resolve(opt('--out'));
@@ -101,8 +101,8 @@ try {
   await terminal("['done','error'].includes(window.__supermatDemo.status)");
   demo.state = await browser.evaluate('window.__supermatDemo');
   await screenshot('demo.png'); await captureMaps('demo');
-  const run = demo.state.runs[0];
-  if (demo.state.status !== 'done' || run?.size !== 512 || run.dutyCount < 1 || run.cpuWorker !== true || run.frames?.frames < 1 || demo.state.identity?.backend !== 'webgpu-local') throw Error('actual demo route/output/foreground failed');
+  const demoProblems = checkSuperMatDemoWitness(demo);
+  if (demoProblems.length) throw Error(demoProblems.join('; '));
   report.phase = 'passed';
 } catch (error) { report.error = String(error.stack ?? error); }
 finally {
