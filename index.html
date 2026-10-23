@@ -3307,7 +3307,7 @@ import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
-import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut,syncSceneHelperVisibility} from './viewport-display-settings.mjs';
@@ -27472,7 +27472,7 @@ function setupAuthoringAssets(){
     appHost:appGpuHost,
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
-    weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
+    weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
     deliver:async file=>{const entry=await authoringAssets.upload(file);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
     blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
