@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import {createEngagement} from '../experiments/creature-motion/engagement.mjs';
 const source={id:'source',point:[2,0,0],standOff:1,approach:true};
-function response(strength){
- const e=createEngagement(),alarm={id:source.id,point:[...source.point],since:0,strength,familiarity:0};
+function response(strength,behavior={}){
+ const e=createEngagement({behavior}),alarm={id:source.id,point:[...source.point],since:0,strength,familiarity:0};
  const step=(time,extra={})=>e.update({time,position:[0,0,0],observed:[source],focus:source,...extra});
  step(0,{alarm});const state=step(1.2);return {e,step,state};
 }
@@ -55,3 +55,6 @@ stillStep(0);stillStep(1.2,{cessation:{...cessation,since:1.2,until:2.2},interru
 const quiet=stillStep(2.3);assert.equal(quiet.phase,'approaching');
 assert.ok(stillStep(3).motivation.drive<quiet.motivation.drive,'continued sight of the stopped source does not restart its event');
 assert.ok(stillStep(3.1,{observed:[{...far,eventAt:3.1}]}).motivation.drive>=1,'observed renewed movement can end the cessation episode');
+
+assert.equal(response(.95,{aversion:0}).state.phase,'approaching','aversion control changes the choice while preserving the sensory alarm');
+assert.equal(response(.95,{curiosity:3}).state.phase,'inspecting','strong curiosity can outweigh aversion');

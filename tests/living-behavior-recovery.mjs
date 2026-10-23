@@ -4,6 +4,12 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import * as api from '../experiments/creature-motion/living-scene.experiment.mjs';
 import {installOwnerExperimentEntry} from '../owner-experiment-entry.mjs';
+test('invalid behavior rejects file Open before replacing the room',async()=>{
+ const f=fixture();let opened=false;
+ f.setup.actors[0].creature.attention={interests:[],behavior:{curiosity:-1}};
+ await assert.rejects(api.openLivingSetup({entry:{open(){opened=true;}},inputs:f.setup}),/nonnegative/);
+ assert.equal(opened,false);
+});
 class Element{constructor(){this.children=[];this.style={};this.nodes=new Map();}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}addEventListener(){}replaceChildren(...x){this.children=x;}querySelector(key){if(!this.nodes.has(key))this.nodes.set(key,new Element());return this.nodes.get(key);}}
 function fixture(){const scene=new THREE.Scene(),callbacks=new Set(),document={createElement:()=>new Element(),getElementById:()=>null};let serial=0;
  const host={controls:{document},scene:{refreshPresentation(){},async open(){const owned=new Set(),stops=new Set();return {async attach(root){owned.add(root);scene.add(root);return {id:'object-'+(++serial),root};},onFrame(fn){callbacks.add(fn);const stop=()=>callbacks.delete(fn);stops.add(stop);return stop;},redraw(){},readView:()=>({}),setView(){},async dispose(){for(const stop of stops)stop();for(const root of owned)root.removeFromParent();}};}}};

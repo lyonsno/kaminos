@@ -1,4 +1,5 @@
 import {createWalkingCreature} from './walking.experiment.mjs';
+import {behaviorSettings} from './behavior-settings.mjs';
 import {loadFullBodySources,loadFullBodySkin} from './full-body-source.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {mountCreatureProperties} from './creature-properties.mjs';
@@ -10,6 +11,8 @@ function checkActor(spec){if(typeof spec?.id!=='string'||!spec.id.trim()||typeof
 // reference must be rejected before the shared entry disposes the current room.
 export function validateLivingSetup(inputs){
  if(!Array.isArray(inputs?.actors))throw Error('Living scene requires explicit actors');
+ behaviorSettings(inputs.attention?.behavior);
+ for(const spec of inputs.actors)behaviorSettings(spec?.creature?.attention?.behavior);
  if(typeof(inputs.running??false)!=='boolean'||inputs.zones!==undefined&&!Array.isArray(inputs.zones))throw Error('Invalid scene run state or zones');
  const ids=new Set();for(const spec of inputs.actors){checkActor(spec);if(ids.has(spec.id))throw Error(`Duplicate actor: ${spec.id}`);ids.add(spec.id);}
  if(inputs.zones!==undefined){const zones=new Set();for(const zone of inputs.zones){checkZone(zone);if(zones.has(zone.id))throw Error('Duplicate zone');zones.add(zone.id);}for(const spec of inputs.actors)checkPlaces(spec.places??[],zones);}

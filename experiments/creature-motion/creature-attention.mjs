@@ -1,3 +1,4 @@
+import {behaviorSettings} from './behavior-settings.mjs';
 import {createVisualDisturbance} from './visual-disturbance.mjs';
 import {createAttentionPolicy} from './attention-policy.mjs';
 import {createSignalFamiliarity} from './signal-familiarity.mjs';
@@ -66,6 +67,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   familiarSeconds:180,interruptSeconds:.65,investigateSeconds:1.8,stillSeconds:.18,lossRate:.3,
   lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:1.15,comfortablePitch:.55,neckShare:.4,craningNeckShare:.75,pursuitRate:.015,pursuitMemorySeconds:1.5,reach:1.35,...options};
+ let behavior=behaviorSettings(options.behavior);
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare,comfortablePitch:Math.min(o.comfortablePitch,o.maxPitch),craningNeckShare:Math.max(o.neckShare,o.craningNeckShare)});
  let look=lookFor(profile);
@@ -74,7 +76,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const patches=new Map();
  const visualTrackers=new Map(),visualSources=new Map();
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
- let interruption=null,powerDropArmed=true,startle=null,onset=null,previousPower=null;
+ let interruption=null,powerDropArmed=true,startle=null,urgentBearing=null,onset=null,previousPower=null;
  const localLevels=new Map();
  let gazeLocal=null,gaze=null,perceived=[],engagementId=null;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
@@ -114,20 +116,28 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(cause==='light faded'&&states.get(id)?.previous==='off')return;
   if(interruption?.id===id&&time-interruption.since<o.glanceSeconds)return;
   const surprise=1-familiarity;
-  interruption={id,point:point?[...point]:null,cause,familiarity,surprise,since:time,until:time+o.interruptSeconds+o.investigateSeconds*surprise,evidence};
-  startle=null;onset=null;
+  interruption={id,point:point?[...point]:null,cause,familiarity,surprise,since:time,until:time+(o.interruptSeconds+o.investigateSeconds*surprise)*behavior.recoveryTime,evidence};
+  startle=null;urgentBearing=null;onset=null;
   policy.reset();focus=null;why=null;scan=null;nextScan=null;
   const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
   remember('interrupt',time,structuredClone(interruption));
  }
  function recoilAmount(response,time){
   if(!response)return 0;
-  const elapsed=time-response.since,attack=.09,release=Math.max(.01,response.until-response.since-attack);
+  const elapsed=time-response.since,attack=Math.min(.09,(response.until-response.since)/4),release=response.until-response.since-attack;
   return elapsed<attack?response.initialStrength+(response.strength-response.initialStrength)*Math.sin(Math.max(0,elapsed)/attack*Math.PI/2):response.strength*Math.pow(Math.max(0,1-(elapsed-attack)/release),2);
  }
  function recoil({id,point,strength,familiarity,evidence},time){
-  const duration=.4+strength*(.9-.6*familiarity);
-  startle={id,point:[...point],initialStrength:recoilAmount(startle,time),strength,familiarity,since:time,until:time+duration,holdUntil:time+.15+.3*strength,evidence};
+  const stimulusStrength=strength;
+  strength=behavior.startleResponse===0?0:1-Math.pow(1-strength,behavior.startleResponse);
+  const duration=(.4+strength*(.9-.6*familiarity))*behavior.recoveryTime;
+  startle={id,point:[...point],initialStrength:recoilAmount(startle,time),strength,stimulusStrength,familiarity,since:time,until:time+duration,holdUntil:time+(strength>0?.15+.3*strength:0)*behavior.recoveryTime,evidence};
+  // A sensed bodily alarm also owns the next look, even during another
+  // source's minimum dwell. Keep its observed bearing, never a hidden update.
+  if(stimulusStrength>o.startle){
+  urgentBearing={id,point:[...point],score:stimulusStrength,reason:'sudden change',memorySeconds:o.lingerSeconds};
+  const m=memo(id);m.urgency=Math.max(m.urgency??0,stimulusStrength);m.eventAt=time;m.alerted=true;m.inspected=false;
+  }
   remember('startle',time,structuredClone(startle));
  }
  const motionSeconds=(from,to)=>{
@@ -291,8 +301,13 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      if(score>0&&time-scan.started<o.scanSeconds+o.minDwellSeconds)observations.push({id:scan.id,point:scan.point,score,reason:'looking around'});else scan=null;
     }
    }
+   // Cessation may be discovered after other sources queued observations.
+   // Apply its initial arrest to the whole frame, independent of source order.
+   if(interruption&&time-interruption.since<o.stillSeconds)observations.length=0;
    if(interruption&&observations.length){remember('resolved',time,{id:interruption.id,cause:interruption.cause,resolvedBy:observations[0].id});interruption=null;}
-   const previous=focus;focus=policy.update({time,observations}).focus;
+   const previous=focus;
+   if(urgentBearing&&(!interruption||time-interruption.since>=o.stillSeconds)){interruption=null;policy.reset();focus=policy.update({time,observations:[urgentBearing]}).focus;urgentBearing=null;}
+   else focus=policy.update({time,observations}).focus;
    if(focus&&focus.id!==previous?.id){
     const c=candidates.find(x=>x.id===focus.id);
     why={cause:focus.reason,id:focus.id,label:c?.label??focus.id,since:time,familiarity:c?.familiarity??null,competitors:candidates.filter(x=>x.id!==focus.id&&x.score>0).map(x=>({id:x.id,label:x.label,cause:x.cause,score:x.score}))};
@@ -446,16 +461,16 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
-  return {gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {behavior:{...behavior},gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;urgentBearing=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
- return Object.freeze({modify,sense,read,motionSeconds,setEngagement:id=>{engagementId=id;},setEnabled,setProfile,reticle,dispose});
+ return Object.freeze({modify,sense,read,motionSeconds,setBehavior:value=>{behavior=behaviorSettings(value);return read();},setEngagement:id=>{engagementId=id;},setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that
