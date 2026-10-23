@@ -14,7 +14,7 @@ export function wanderAreaInPlacement({THREE,areaRoot,placement}) {
 
 // The owner supplies elapsed active time. This adapter creates no clock, makes
 // no new joint motion and leaves source vertical action/local Bone poses intact.
-export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source'}={}) {
+export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,pathReverse=false,travel='source'}={}) {
  if(typeof sourceKey!=='string'||!sourceKey)throw Error('Wander requires explicit motion/bind source identity');
  if(!Number.isInteger(adapter?.frames)||adapter.frames<2||!(adapter.fps>0))throw Error('Wander requires a retained multi-frame pose source');
  const poses=Array.from({length:adapter.frames},(_,i)=>adapter.frame(i));
@@ -34,7 +34,13 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   if((snapshot.travel??'source')!==travel)throw Error('Wander snapshot travel policy differs from requested travel');
   if(snapshot.phase!==undefined&&!Number.isFinite(snapshot.phase)||snapshot.reverse!==undefined&&typeof snapshot.reverse!=='boolean')throw Error('Wander snapshot has invalid reverse phase');
   elapsed=snapshot.elapsed;phase=snapshot.phase??elapsed;reverse=snapshot.reverse??false;heldFrame=snapshot.heldFrame;path=createWanderPath({snapshot:snapshot.path});
- } else path=pathSnapshot?createWanderPath({snapshot:pathSnapshot}):createWanderPath({area,position,direction,seed});
+ } else {
+  if(typeof pathReverse!=='boolean')throw Error('Restored path reverse state must be a boolean');
+  path=pathSnapshot?createWanderPath({snapshot:pathSnapshot}):createWanderPath({area,position,direction,seed});
+  // A new retained clip resets its phase, but the existing travel tangent
+  // still has the same relationship to the body's facing direction.
+  reverse=pathSnapshot?pathReverse:false;
+ }
  function timing(time=phase) {
   const sourceFrames=time*adapter.fps,nearest=Math.round(sourceFrames);
   const stableFrames=Math.abs(sourceFrames-nearest)<=16*Number.EPSILON*Math.max(1,sourceFrames)?nearest:sourceFrames;
