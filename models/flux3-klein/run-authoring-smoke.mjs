@@ -28,6 +28,11 @@ export function validateFlux3AuthoringResult(r){
   assert.ok(Array.isArray(r.frames.compute)&&r.frames.compute.length>0,'actual denoising stage observations exist');
   assert.ok(r.frames.compute.every(s=>s.finishedAt>s.startedAt&&s.startedAt>=interval.startedAt&&s.finishedAt<=interval.finishedAt),'compute intervals belong to this inference');
   assert.ok(r.frames.compute.some(s=>s.after>s.before),'foreground frames complete during transformer computation');
+  assert.ok(r.load?.finishedAt>r.load?.startedAt,'completed cold load interval');
+  assert.equal(r.load.stats.cacheWeights,false,'local weights bypass browser caching');
+  assert.equal(r.load.stats.cachedBytes,0,'fresh local file reads');
+  assert.ok(r.load.stats.downloadedBytes>0,'weight bytes were actually read');
+  assert.deepEqual(r.load.cacheWrites,[],'no duplicate weight cache writes');
   assert.deepEqual(r.gpuErrors,[]);
   return r;
 }
@@ -75,6 +80,15 @@ async function main(){
     // This wrapper preserves the production method and its caller; no synthetic work is substituted.
     await browser.evaluate(`(async()=>{const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');
       const {Flux3Transformer}=await import('./models/flux3-klein/flux3-transformer.js');
+      const cacheWrites=[];const put=Cache.prototype.put;
+      Cache.prototype.put=function(key,...args){const url=typeof key==='string'?key:key.url;
+        if(url.includes('/flux3-weights/'))cacheWrites.push({url,startedAt:performance.now()});return put.call(this,key,...args);};
+      const load=Flux3Pipeline.prototype.load;
+      Flux3Pipeline.prototype.load=async function(...args){
+        const interval=window.flux3SmokeLoad={startedAt:performance.now(),cacheWrites};
+        try{return await load.apply(this,args);}
+        finally{interval.finishedAt=performance.now();interval.stats=this.loadStats;interval.timings={...this.timings};}
+      };
       const forward=Flux3Transformer.prototype.forward;
       Flux3Transformer.prototype.forward=async function(...args){
         const active=window.flux3SmokeInference;
@@ -112,10 +126,10 @@ async function main(){
       const bitmap=await createImageBitmap(blob),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);
       const pixels=ctx.getImageData(0,0,bitmap.width,bitmap.height).data,colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
       const data=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});
-      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0,inference:window.flux3SmokeInference,compute:window.flux3SmokeCompute},gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
+      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0,inference:window.flux3SmokeInference,compute:window.flux3SmokeCompute},load:window.flux3SmokeLoad,gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
     const bytes=Buffer.from(saved.data,'base64');await fs.writeFile(path.join(out,'generated.png'),bytes);
     report.provenance=readPngProvenance(bytes);report.output={...saved.output,sha256:createHash('sha256').update(bytes).digest('hex')};
-    report.entry=saved.entry;report.selected=saved.selected;report.frames=saved.frames;report.gpuErrors=saved.gpuErrors;
+    report.entry=saved.entry;report.selected=saved.selected;report.frames=saved.frames;report.gpuErrors=saved.gpuErrors;report.load=saved.load;
     validateFlux3AuthoringResult(report);
     assert.equal(report.selected?.kind,'image','the saved image is selected for the mesh input');
     assert.equal(report.selected.source,report.entry.source,'mesh input uses this generated image');
@@ -126,7 +140,10 @@ async function main(){
   }catch(error){report.failurePhase=report.phase;report.error=String(error.stack||error);process.exitCode=1;}
   finally{
     try{
-      if(browser)await browser.close();
+      if(browser){
+        if(!report.load)report.load=await browser.evaluate('window.flux3SmokeLoad??null').catch(()=>null);
+        await browser.close();
+      }
       else if(report.ownedBrowserPid&&!report.browserExit)process.kill(report.ownedBrowserPid,'SIGTERM');
     }catch(error){report.cleanupError=String(error);report.ok=false;process.exitCode=1;}
     report.finishedAt=new Date().toISOString();await write();

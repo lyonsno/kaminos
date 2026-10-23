@@ -5,6 +5,7 @@ import {validateFlux3AuthoringResult as validate,waitForAuthoringGpuHost} from '
 const good=()=>({runtime:{flux3:{mounted:true,modelRoot:'/local/pack'}},expectedModelRoot:'/local/pack',
  manifest:{source:{repo:'base',revision:'rev'},sampling:{shift:3,steps:4},lora:{sha256:'adapter'}},
  provenance:{route:'flux3-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.3 Image Klein',weights:'/flux3-weights',transformer:'/flux3-weights/dit',width:512,height:512,source:{repo:'base',revision:'rev'},sampling:{shift:3,steps:4},lora:{sha256:'adapter'}},
+ load:{startedAt:1,finishedAt:90,stats:{cacheWeights:false,cachedBytes:0,downloadedBytes:100},cacheWrites:[]},
  expectedSize:512,output:{width:512,height:512,bytes:3000,distinctRgb:100},frames:{before:1,after:20,inference:{before:5,after:15,startedAt:100,finishedAt:200},compute:[{before:7,after:10,startedAt:125,finishedAt:175} ]},gpuErrors:[]});
 test('the smoke admits a retained FLUX.3 image from the requested local route',()=>{assert.doesNotThrow(()=>validate(good()));});
 test('fallback model, wrong mount and substituted sampling cannot pass as FLUX.3 evidence',()=>{
@@ -32,4 +33,10 @@ test('frames before or after inference cannot certify rendering during computati
 test('embedding retrieval frames cannot certify foreground progress during denoising',()=>{
  const r=good();r.frames.inference={before:10,after:11,startedAt:100,finishedAt:200};
  r.frames.compute=[{before:11,after:11,startedAt:125,finishedAt:175}];assert.throws(()=>validate(r));
+});
+
+test('cold-load evidence rejects missing timing, cache fallback, and actual cache writes',()=>{
+ for(const mutate of [r=>delete r.load,r=>r.load.finishedAt=r.load.startedAt,r=>r.load.stats.cacheWeights=true,r=>r.load.stats.cachedBytes=1,r=>r.load.cacheWrites.push({url:'/flux3-weights/te/weight.bin'}),r=>delete r.load.stats]){
+  const r=good();mutate(r);assert.throws(()=>validate(r));
+ }
 });
