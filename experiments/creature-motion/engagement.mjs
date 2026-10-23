@@ -59,7 +59,8 @@ export function createEngagement({behavior:initialBehavior}={}){
   if(current){
    const m=records.get(current.id),seen=observed.find(x=>x.id===current.id);
    if(seen){if(distance(seen.point,current.point)>.1){arrived=false;delete current.inspectAt;}current.point=[...seen.point];current.lastSeen=time;}
-   if((time-current.lastSeen>2&&!(time<m.rememberUntil))||time-current.since>10*behavior.recoveryTime||m.drive<.15&&m.aversion<.15){
+   const wary=!m.quiet&&(m.aversion+m.caution)*behavior.aversion>.15;
+   if((time-current.lastSeen>2&&!(time<m.rememberUntil))||!wary&&time-current.since>10*behavior.recoveryTime||m.drive<.15&&m.aversion<.15){
     cooldowns.set(current.id,time+12);current=null;return idle();
    }
   }
@@ -68,10 +69,19 @@ export function createEngagement({behavior:initialBehavior}={}){
   if(!current)return idle();
   const m=records.get(current.id),drive=m.drive*behavior.curiosity,aversion=m.aversion*behavior.aversion,caution=m.caution*behavior.aversion,motivation={drive,aversion,caution,remembered:!observed.some(x=>x.id===m.id)};
   const standOff=m.standOff+aversion+.5*caution,d=distance(position,current.point);
-  const emit=(phase,hold,destination=null)=>{state={phase,id:m.id,hold,destination,point:[...current.point],standOff,motivation};return read();};
+  // Fear and interest may cancel approach without canceling the need to watch.
+  // The watch carries only observed coordinates and its real observation time.
+  const concern=aversion+caution,watch=!m.quiet&&concern>.15?{id:m.id,point:[...current.point],strength:concern/(1+concern),lastObservedAt:current.lastSeen,until:Math.max(current.lastSeen+2,m.rememberUntil??-Infinity),remembered:motivation.remembered}:null;
+  const emit=(phase,hold,destination=null)=>{
+   const shortfall=Math.max(0,(standOff-d)/standOff);
+   const pace=phase==='withdrawing'?1+2*aversion/(1+aversion)*shortfall:phase==='approaching'?1/(1+.75*caution):1;
+   state={phase,id:m.id,hold,destination,point:[...current.point],standOff,motivation,watch,pace};return read();
+  };
   if(time<m.holdUntil)return emit('cautious',true);
   const balance=drive-aversion-.5*caution;
-  if(aversion>drive+.1&&d<standOff-.1){
+  if(current.retreating&&(balance>.25||d>=standOff-.03))current.retreating=false;
+  if(aversion>drive+.1&&d<standOff-.1)current.retreating=true;
+  if(current.retreating){
    delete current.inspectAt;
    // The existing locomotion consumer owns the route and zone boundaries.
    // At a coincident point choose a deterministic escape bearing.
@@ -82,7 +92,7 @@ export function createEngagement({behavior:initialBehavior}={}){
   if(time-current.since<1&&!m.quiet)return emit('watching',false);
   if(arrived||d<=standOff+.1){
    current.inspectAt??=time;
-   if(time-current.inspectAt>=2){cooldowns.set(current.id,time+12);m.drive=0;current=null;return idle();}
+   if(!watch&&time-current.inspectAt>=2){cooldowns.set(current.id,time+12);m.drive=0;current=null;return idle();}
    return emit('inspecting',true);
   }
   delete current.inspectAt;
