@@ -280,3 +280,15 @@ function makeObservation(overrides = {}) {
 }
 
 console.log('attention policy: selection, dwell, switching, ties, memory, expiry, invalidation, snapshot/replay, isolation, non-aliasing, and transactional validation all hold');
+
+{
+ const p=createAttentionPolicy({defaultMemorySeconds:2});
+ p.update({time:0,observations:[makeObservation({point:[1,2,3],velocity:[0,2,0]})]});
+ const snap=p.snapshot(),clone=createAttentionPolicy();clone.restore(snap);
+ const gap=p.update({time:.5,observations:[]}).focus;
+ assert.ok(gap.point[1]>2&&gap.point[1]<3,'prediction continues but slows');
+ assert.equal(gap.confidence,.75);
+ assert.deepEqual(clone.update({time:.5,observations:[]}).focus,gap,'predicted track replays exactly');
+ const before=p.snapshot();assert.throws(()=>p.update({time:1,observations:[makeObservation({velocity:[NaN,0,0]})]}));assert.deepEqual(p.snapshot(),before);
+ assert.equal(p.update({time:2,observations:[]}).focus,null);
+}

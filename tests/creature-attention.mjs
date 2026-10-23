@@ -473,3 +473,31 @@ console.log('Creatures attend, learn familiar states, interrupt on cessation, sc
  assert.equal(a.read().arrested,true,'the stride check begins immediately');
  assert.equal(a.motionSeconds(t,t+1/30),0,'locomotion consumes the interruption immediately');
 }
+
+// A slow rising target remains worth pursuing after first-sight novelty fades.
+{
+ const c=creature(),point=[0,.5,-4.8];
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'lift',point,interest:1,noticeRadius:20}]});
+ let t=run(a,c,1);
+ for(let i=0;i<300;i++){
+  point[1]+=.012;t=run(a,c,1/30,t);
+  assert.equal(a.read().focus?.id,'lift','slow observed movement sustains an acquired look');
+ }
+ assert.ok(headForward(c.bones).y>.65,'the actual head cranes above the old pitch ceiling');
+ const tracked=a.read();assert.ok(tracked.gaze.residualAngle<.15,'achieved gaze follows the lifted target');
+ t=run(a,c,15,t);assert.equal(a.read().focus,null,'settled familiar target eventually releases');
+}
+// A sensory gap predicts from observations; hidden transforms cannot steer it.
+{
+ function loss(hidden){
+  const c=creature(),point=[0,.5,-4.8];let sensed=true;
+  const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'lift',point,sensed,interest:1,noticeRadius:20}]});
+  let t=run(a,c,.5);
+  for(let i=0;i<30;i++){point[1]+=.015;t=run(a,c,1/30,t);}
+  const before=a.read().focus.point[1];sensed=false;point.splice(0,3,...hidden);t=run(a,c,.25,t);
+  const gap=a.read();assert.equal(gap.focus?.remembered,true);assert.ok(gap.focus.point[1]>before,'continue along last observed upward motion');
+  assert.ok(gap.focus.confidence<1&&gap.focus.confidence>0,'prediction loses confidence');
+  t=run(a,c,3,t);assert.equal(a.read().focus,null,'prediction expires without fresh evidence');return gap.focus.point;
+ }
+ assert.deepEqual(loss([100,100,100]),loss([-100,-100,-100]),'unobserved motion has no influence');
+}
