@@ -12906,7 +12906,8 @@ function matchAuthoredWaterSetup(referenceId){
 let authoredWaterSimulationTarget=false;
 function editAuthoredWaterSimulation(patch){
  assertSceneConstructionAvailable();if(!localLiquidSetup)throw Error('Add water first');
- if(Object.keys(patch).some(key=>!['densityIterations','waterSampling'].includes(key)))throw Error('Water simulation edits require shared density or sampling settings');
+ if(Object.keys(patch).some(key=>!['densityIterations','waterSampling','simulationStepSeconds'].includes(key)))throw Error('Water simulation edits require shared density, sampling or physics timestep settings');
+ if(Object.hasOwn(patch,'simulationStepSeconds')&&!localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop'))throw Error('Physics timestep editing requires a finite water drop');
  const target='@authored-water-simulation';
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
