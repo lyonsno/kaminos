@@ -56,3 +56,12 @@ test('a hidden water field submits neither solver nor water rendering work while
   authoredWaterControls:null,sharedWorkbench:null,console,localLiquidFailure:null,refreshLocalLiquidPerformance(){},setInfo(){},applySceneEmissiveCamera(){},renderPipeline:{render:()=>scene++},outlinedSceneOutput:{},outlinedCameraOutput:{},matchedCameraEffective:false};
  vm.createContext(context);vm.runInContext(arm,context);assert.equal(water,0);assert.equal(scene,1);
 });
+
+test('screen-space ring picking survives an emitter scaled through its parent',()=>{
+ const camera=new THREE.PerspectiveCamera(40,1,.01,100);camera.position.z=2;camera.updateMatrixWorld();
+ const root=new THREE.Group();root.scale.setScalar(.22);root.userData.kaminosEditorHelper=true;
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(.5,.0025,4,32),new THREE.MeshBasicMaterial());root.add(ring);root.updateMatrixWorld(true);
+ const point=new THREE.Vector3(.11,0,0).project(camera);point.x+=6/1000;
+ const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);
+ assert.ok(visibleSceneIntersections({raycaster,roots:[root],camera,viewport:{width:1000,height:1000}}).some(h=>h.object===ring),'parent scale must not shrink the screen pixel aperture');
+});

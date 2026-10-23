@@ -21,11 +21,12 @@ export function visibleSceneIntersections({raycaster,roots,camera,viewport,lineP
   let editor=false;for(let owner=node;owner;owner=owner.parent)if(owner.userData.kaminosEditorHelper){editor=true;break;}
   const helper=node.isMesh&&editor&&(node.material?.wireframe||node.geometry?.type==='TorusGeometry');
   if(node.isLine||helper){
-   const target=helper?pickingLines(node):node;if(helper)target.matrixWorld.copy(node.matrixWorld);
+   const target=helper?pickingLines(node):node;if(helper){target.matrixWorld.copy(node.matrixWorld);target.scale.setFromMatrixScale(node.matrixWorld);}
    const geometry=target.geometry;if(!geometry.boundingSphere)geometry.computeBoundingSphere();
    const sphere=geometry.boundingSphere.clone().applyMatrix4(node.matrixWorld);
    const depth=Math.max(camera.near,sphere.center.clone().applyMatrix4(camera.matrixWorldInverse).z*-1+sphere.radius);
    raycaster.params.Line.threshold=camera.isOrthographicCamera?linePixels*(camera.top-camera.bottom)/(camera.zoom*viewport.height):linePixels*2*depth*Math.tan(camera.fov*Math.PI/360)/(camera.zoom*viewport.height);
+   if(!helper){const e=node.matrixWorld.elements,worldScale=(Math.hypot(e[0],e[1],e[2])+Math.hypot(e[4],e[5],e[6])+Math.hypot(e[8],e[9],e[10]))/3,localScale=(node.scale.x+node.scale.y+node.scale.z)/3;if(worldScale>0)raycaster.params.Line.threshold*=Math.abs(localScale)/worldScale;}
    for(const hit of raycaster.intersectObject(target,false)){
     const p=hit.point.clone().project(camera),q=raycaster.ray.closestPointToPoint(hit.point,hit.point.clone()).project(camera);
     if(p.z>=-1&&p.z<=1&&Math.hypot((p.x-q.x)*viewport.width/2,(p.y-q.y)*viewport.height/2)<=linePixels)hits.push({...hit,object:node});
