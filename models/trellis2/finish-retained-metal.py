@@ -59,6 +59,11 @@ def main():
         coords = read_array(Path(material['root']), material['coordinates'], 'i32', 3)
         if len(attrs) != len(coords) or a.grid_size != material['resolution']:
             raise ValueError('matching complete material grid required')
+        # Raw decoder channels are centered; source texture.npz contains the
+        # affine-decoded appearance. Match trellis-material.js's separate F32
+        # multiply/add boundaries for all six channels, without clipping.
+        attrs = attrs * np.float32(.5) + np.float32(.5)
+        report['appearanceTransform'] = 'all six raw decoded F32 channels * F32(0.5) + F32(0.5); unclipped'
         checkpoints = out/'checkpoints'
         checkpoints.mkdir(exist_ok=False)
         np.savez_compressed(checkpoints/'mesh_raw.npz', vertices=vertices, faces=faces)
