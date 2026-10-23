@@ -11,7 +11,13 @@ export function verifyHandDemoReport(report, expectedRoot) {
   const miss = report.steps?.find(row => row.name === 'miss')?.state;
   if (!(miss?.misses > 0 && miss.presentation === 'no-hand' && !miss.visible && miss.lastTimings?.mobreconMs === 0)) failures.push('miss did not skip reconstruction');
   for (const name of ['reacquire', 'stop', 'reload', 'restart', 'cancel-pending', 'invalid-import', 'corrupt-import', 'camera-failure', 'mobile']) if (!report.steps?.some(row => row.name === name)) failures.push(`missing step ${name}`);
-  if (report.steps?.find(row => row.name === 'reload')?.state?.source !== 'browser-storage') failures.push('models were not restored from browser storage');
+  const expectedSource = report.setup ? 'local-server' : 'browser-storage';
+  if (report.steps?.find(row => row.name === 'reload')?.state?.source !== expectedSource) failures.push(`models were not restored from ${expectedSource}`);
+  if (report.setup) {
+    if (!['prepared', 'serving'].includes(report.setup.status) || report.setup.revision !== report.runtime?.source?.commit || report.runtime?.source?.kind !== 'verified-client-download' || !report.setup.client?.manifest?.sha256 || report.setup.client.manifest.sha256 !== report.runtime.source.manifestSha256) failures.push('setup/runtime source identity mismatch');
+    if (loaded?.source !== 'local-server') failures.push('setup did not automatically load its own prepared models');
+    if (report.setup.modelBundles?.['mobrecon.bin'] !== loaded?.identity?.mobrecon?.bundleSha256 || report.setup.modelBundles?.['hand-detector.bin'] !== loaded?.identity?.detector?.bundleSha256) failures.push('setup/browser model identity mismatch');
+  }
   const stopped = report.steps?.find(row => row.name === 'stop')?.state;
   if (stopped?.running || stopped?.cameraState !== 'off' || stopped?.visible) failures.push('camera/mesh not stopped');
   if (report.errors?.length || report.error) failures.push('browser/witness errors');

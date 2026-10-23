@@ -7,7 +7,7 @@ import { launchChrome } from '../../models/supermat/chrome-cdp.mjs';
 import { verifyHandDemoReport } from './witness-checks.js';
 import { verifyVideoResponse } from './witness-input.js';
 
-const { values: args } = parseArgs({ options: Object.fromEntries(['out', 'base', 'chrome', 'models', 'fixture', 'fixture-file', 'expected-root', 'page'].map(key => [key, { type: 'string' }])) });
+const { values: args } = parseArgs({ options: Object.fromEntries(['out', 'base', 'chrome', 'models', 'fixture', 'fixture-file', 'expected-root', 'page', 'setup-state-file'].map(key => [key, { type: 'string' }])) });
 if (!args.out) throw Error('--out required');
 const out = path.resolve(args.out); await fs.mkdir(out, { recursive: true });
 const report = { status: 'failed', phase: 'setup', steps: [], errors: [], requested: args };
@@ -17,6 +17,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
   for (const key of ['base', 'chrome', 'models', 'fixture', 'fixture-file', 'expected-root']) if (!args[key]) throw Error(`--${key} required`);
   report.runtime = await fetch(`${args.base}/api/runtime-config`).then(r => r.json());
+  if (args['setup-state-file']) report.setup = JSON.parse(await fs.readFile(args['setup-state-file'], 'utf8'));
   if (report.runtime.source?.repoRoot !== args['expected-root']) throw Error('served root differs from expected root');
   report.input = { kind: 'retained-camera-video', file: path.resolve(args['fixture-file']), sha256: createHash('sha256').update(await fs.readFile(args['fixture-file'])).digest('hex') };
   report.phase = 'browser'; await save();
@@ -82,7 +83,7 @@ try {
   await step('open', async () => { await wait('Boolean(window.handMeshDemo)'); await shot('before-import'); });
   report.phase = 'verify-input'; await save();
   report.playback = await evaluate('__loadHandFixture()'); await save();
-  await step('import', async () => { await importFolder(args.models); await wait('Boolean(window.handMeshDemo.read().error) || (Boolean(window.handMeshDemo.read().identity) && !window.handMeshDemo.read().loading && !window.handMeshDemo.read().importing)'); if ((await read()).error) throw Error((await read()).error); await shot('loaded'); });
+  await step('import', async () => { if (!report.setup) await importFolder(args.models); await wait('Boolean(window.handMeshDemo.read().error) || (Boolean(window.handMeshDemo.read().identity) && !window.handMeshDemo.read().loading && !window.handMeshDemo.read().importing)'); if ((await read()).error) throw Error((await read()).error); await shot('loaded'); });
   await step('live', async () => {
     // The deterministic fixture has accepted real detections at 0.18; this
     // exercises the user's confidence control without selecting a calibration.
@@ -102,7 +103,7 @@ try {
     await wait(`document.getElementById('models-status').textContent.toLowerCase().includes('sha256') || document.getElementById('models-status').textContent.toLowerCase().includes('sha-256') || document.getElementById('models-status').textContent.toLowerCase().includes('digest')`);
     if (!(await read()).identity) throw Error('corrupt import discarded loaded models');
   });
-  await step('reload', async () => { await call('Page.reload'); await wait(`window.handMeshDemo?.read().source === 'browser-storage' && !window.handMeshDemo.read().loading`); });
+  await step('reload', async () => { await call('Page.reload'); await wait(`window.handMeshDemo?.read().source === '${report.setup ? 'local-server' : 'browser-storage'}' && !window.handMeshDemo.read().loading`); });
   await step('camera-failure', async () => { await evaluate(`__handWitness.failCamera=true;document.getElementById('start').click()`); await wait(`Boolean(window.handMeshDemo.read().error)`); const r=await read(); if(r.running || r.cameraState!=='off')throw Error('camera failure left camera running'); await evaluate('__handWitness.failCamera=false'); });
   await step('cancel-pending', async () => {
     await evaluate(`__handWitness.delayCamera=true;document.getElementById('start').click()`); await wait('window.handMeshDemo.read().starting');
