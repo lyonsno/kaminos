@@ -142,6 +142,43 @@ try{
  }finally{await onsetWalker?.dispose();globalThis.setInterval=savedTimers.set;globalThis.clearInterval=savedTimers.clear;delete window.kaminosFireLightProbe;}
 
  }
+ // Motivation reaches the actual path consumer through native source state
+ // and sampled illumination, without directly injecting engagement intent.
+ for(const [luminance,expectRetreat] of [[.004,false],[.2,true]]){
+  let motivated,poll;const saved={set:globalThis.setInterval,clear:globalThis.clearInterval};
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance}))})};
+   motivated=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+   await motivated.operations.action({kind:'wander'});
+   const states=[],tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});states.push(motivated.read().action.engagement);};
+   for(let i=0;i<6;i++)tick();fire.active=true;notify();for(let i=0;i<6;i++)tick();await poll();
+   for(let i=0;i<110;i++)tick();
+   assert.equal(states.some(x=>x.phase==='withdrawing'),expectRetreat,'sampled magnitude changes the actual walking intention');
+   if(expectRetreat){
+    const retreat=states.find(x=>x.phase==='withdrawing');assert.ok(retreat.destination&&retreat.motivation.aversion>retreat.motivation.drive);
+
+   }
+  }finally{await motivated?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
+ }
+ // A cessation observed while looking supplies a remembered approach even
+ // after the source is moved while off; no hidden transform enters the path.
+ {
+  let motivated;fire={active:true,paused:false};emitter.position.set(.8,.4,-4);scene.updateMatrixWorld(true);
+  motivated=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  try{
+   await motivated.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<30;i++)tick();fire.active=false;notify();tick();tick();
+   const stop=motivated.read().attention.interruption;assert.ok(stop?.point,'actual walking perception witnesses cessation');
+   const atStop=motivated.read().action.motion.path.position;emitter.position.set(100,100,100);scene.updateMatrixWorld(true);
+   for(let i=0;i<10;i++)tick();assert.deepEqual(motivated.read().action.motion.path.position,atStop,'initial arrest holds the path');
+   const rows=[];for(let i=0;i<240;i++){tick();rows.push(motivated.read().action.engagement);}
+   const approach=rows.find(x=>x.phase==='approaching'&&x.motivation?.remembered);
+   assert.ok(approach,'cessation leads to remembered approach through the real walking consumer');assert.deepEqual(approach.point,stop.point);
+  }finally{await motivated.dispose();}
+ }
  // RC-1: editing a currently inspected source restarts pursuit through the
  // real attention, live root and retained-gait consumer, without the old timer.
  for(const gradual of [false,true]){

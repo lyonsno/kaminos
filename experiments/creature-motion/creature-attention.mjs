@@ -109,12 +109,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const worldPosition=bone=>new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
  const remember=(kind,time,extra)=>{const event={kind,time,...extra};history.push(event);if(history.length>32)history.shift();try{o.onEvent(event);}catch{}};
  const memo=id=>{if(!memory.has(id))memory.set(id,{familiarity:0,everSeen:false,seen:false,last:null,impulse:0,cause:null});return memory.get(id);};
- function interrupt({id,cause,familiarity,evidence},time){
+ function interrupt({id,point,cause,familiarity,evidence},time){
   // One perceived cessation may arrive through source state and light power.
   if(cause==='light faded'&&states.get(id)?.previous==='off')return;
   if(interruption?.id===id&&time-interruption.since<o.glanceSeconds)return;
   const surprise=1-familiarity;
-  interruption={id,cause,familiarity,surprise,since:time,until:time+o.interruptSeconds+o.investigateSeconds*surprise,evidence};
+  interruption={id,point:point?[...point]:null,cause,familiarity,surprise,since:time,until:time+o.interruptSeconds+o.investigateSeconds*surprise,evidence};
   startle=null;onset=null;
   policy.reset();focus=null;why=null;scan=null;nextScan=null;
   const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
@@ -191,8 +191,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      if(source.sensed!==false&&(sight(source.point,range).visible||watched)){
       const state=!active?'off':source.restless?'moving':'still',learned=known.memory.observe({time,value:state});
       known.familiarity=learned.familiarity;
-      if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
-      else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
+      if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,point:m.track?.point,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
+      else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,point:source.point,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='still'&&state==='moving'){m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.familiarity*=.4;m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='movement resumed';}
       if(known.previous==='off'&&state!=='off')onset={id:source.id,since:time,observedOver:dt,familiarity:learned.familiarity};
       if(state==='off'&&onset?.id===source.id)onset=null;
@@ -413,7 +413,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    // Keep the evidence of a sharp fall while the short average catches up;
    // a slow downward drift never accumulates that rate by merely lasting.
    light.lossSpeed=Math.max(fallRate,(light.lossSpeed??0)*Math.exp(-dt/(2*o.glanceSeconds)));
-   if(surge<-o.flareAt&&light.lossSpeed>o.lossRate&&powerDropArmed&&source){interrupt({id:source.id,cause:'light faded',familiarity:learned.familiarity,evidence:{power:sourcePower,now:light.powerNow,usual:light.powerUsual,fallRate,recentFallRate:light.lossSpeed}},time);powerDropArmed=false;}
+   if(surge<-o.flareAt&&light.lossSpeed>o.lossRate&&powerDropArmed&&source){interrupt({id:source.id,point:memory.get(source.id)?.track?.point,cause:'light faded',familiarity:learned.familiarity,evidence:{power:sourcePower,now:light.powerNow,usual:light.powerUsual,fallRate,recentFallRate:light.lossSpeed}},time);powerDropArmed=false;}
    if(surge>-o.flareAt*.5)powerDropArmed=true;
    // How fast the light is rising, per second: a sudden jump is more urgent.
    light.rise=dt>0?Math.max(0,(surge-(light.lastSurge??surge))/dt):0;light.lastSurge=surge;
