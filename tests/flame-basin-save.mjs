@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+assert.match(source,/basin\.open=false/, 'basin library starts collapsed so Material controls remain visible');
 const handler=source.slice(source.indexOf('  const byId=id=>document.getElementById(id);',source.indexOf('export function createFlameInspector')),source.indexOf('  const aliases=[];'));
 class Select {
   options=[];selected='';

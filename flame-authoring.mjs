@@ -251,7 +251,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
-  basin.open=true;
+  basin.open=false;
   basin.innerHTML='<summary>Basins</summary><p id="flame-basin-current" class="flame-scope"></p><label for="flame-basin-label">Basin name</label><input id="flame-basin-label" type="text" placeholder="New basin name" autocomplete="off"><button type="button" class="btn" id="flame-basin-save">Save basin</button><input id="flame-basin-search" type="search" placeholder="Find a basin" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Fire basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope"></p>';
   sharedHost.insertBefore(basin,navigation);
   const byId=id=>document.getElementById(id);
