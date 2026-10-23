@@ -7,6 +7,11 @@ const turn=encounterSteering(a,[b],{seconds:.1});assert.ok(turn.direction[1]<0,'
 const control=encounterSteering(a,[b],{seconds:.1,avoidance:false});assert.deepEqual(control.direction,[1,0]);
 const overlap=encounterSteering(a,[{...b,position:[.8,0]}],{seconds:.1,avoidance:false});assert.equal(overlap.touching,true);assert.equal(overlap.distanceScale,0,'contact still stops further forward penetration when anticipation is off');
 const high={...b,position:[.8,0],capsules:[{a:[.8,3,0],b:[.8,4,0],radius:.2}]},low={...a,capsules:[{a:[0,0,0],b:[0,1,0],radius:.2}]};assert.equal(encounterSteering(low,[high],{seconds:.1,avoidance:false}).touching,false,'overlapping planning discs are not physical contact between separated bodies');
+const softA={...a,capsules:[{a:[0,0,0],b:[0,1,0],radius:1}],nodes:[[.4,.5,0],[-.4,.5,0]]},softB={...b,position:[1.5,0],capsules:[{a:[1.5,0,0],b:[1.5,1,0],radius:1}],nodes:[[1.1,.5,0],[1.9,.5,0]]};
+assert.equal(encounterSteering(softA,[softB],{seconds:.1,avoidance:false}).touching,false,'An enclosing proxy overlap must not brake before any material contact node reaches the other collider');
+const pressed={...softB,position:[1.2,0],capsules:[{a:[1.2,0,0],b:[1.2,1,0],radius:1}],nodes:[[.8,.5,0],[1.6,.5,0]]};
+assert.equal(encounterSteering(softA,[pressed],{seconds:.1,avoidance:false}).touching,true,'Contact braking must agree with the GPU node/capsule penetration law');
+assert.equal(encounterSteering(pressed,[softA],{seconds:.1,avoidance:false}).touching,true,'Either actor sees the same material engagement');
 const world=createEncounterWorld();let x=0;const stop=world.actor('a').register(()=>({mounted:true,...a,position:[x,0],capsules:[]}));world.actor('b').register(()=>({mounted:true,...b,capsules:[]}));world.actor('a').steer({time:1,seconds:.1,direction:[1,0],speed:1});x=99;assert.equal(world.actor('b').steer({time:1,seconds:.1,direction:[-1,0],speed:1}).neighbours,1,'one frame uses one snapshot');stop();assert.equal(world.read().actors,1);world.dispose();assert.throws(()=>encounterSteering(a,[],{seconds:NaN}),/time/);
 for(const order of [['a','b'],['b','a']]){
  const room=createEncounterWorld();let shifted=false;

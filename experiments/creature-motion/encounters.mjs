@@ -6,6 +6,11 @@ export function capsuleGap(one,two){
  if(a<=1e-12){t=e>1e-12?clamp(f/e):0;}else{const c=dot3(d1,r);if(e<=1e-12)s=clamp(-c/a);else{const b=dot3(d1,d2),denom=a*e-b*b;s=denom>1e-12?clamp((b*f-c*e)/denom):0;t=(b*s+f)/e;if(t<0){t=0;s=clamp(-c/a);}else if(t>1){t=1;s=clamp((b-c)/a);}}}
  return Math.hypot(...r.map((v,i)=>v+s*d1[i]-t*d2[i]))-one.radius-two.radius;
 }
+export function materialContactGap(one,two){
+ const gaps=[];
+ for(const [body,obstacle]of [[one,two],[two,one]])for(const point of body.nodes??[])for(const capsule of obstacle.capsules??[])gaps.push(capsuleGap({a:point,b:point,radius:0},capsule));
+ return gaps.length?Math.min(...gaps):one.capsules?.length&&two.capsules?.length?Math.min(...one.capsules.flatMap(a=>two.capsules.map(b=>capsuleGap(a,b)))):Math.hypot(...one.position.map((v,i)=>v-two.position[i]))-one.radius-two.radius;
+}
 export function encounterSteering(self,others,{seconds,avoidance=true}={}){
  if(!Number.isFinite(seconds)||seconds<0)throw Error('Encounter time must be finite and nonnegative');
  const original=unit(self.direction),force=[...original],right=[original[1],-original[0]];let scale=1,touching=false,neighbours=0;
@@ -13,7 +18,7 @@ export function encounterSteering(self,others,{seconds,avoidance=true}={}){
   if(other.id===self.id)continue;
   const delta=other.position.map((v,i)=>v-self.position[i]),distance=Math.hypot(...delta),radius=self.radius+other.radius;
   const relative=other.direction.map((v,i)=>v*other.speed-original[i]*self.speed),r2=dot(relative,relative),approach=r2>1e-12?Math.max(0,Math.min(1.5,-dot(delta,relative)/r2)):0;
-  const closest=delta.map((v,i)=>v+relative[i]*approach),miss=Math.hypot(...closest),gap=self.capsules?.length&&other.capsules?.length?Math.min(...self.capsules.flatMap(a=>other.capsules.map(b=>capsuleGap(a,b)))):distance-radius,overlap=gap<0;
+  const closest=delta.map((v,i)=>v+relative[i]*approach),miss=Math.hypot(...closest),gap=materialContactGap(self,other),overlap=gap<0;
   if(!overlap&&(!avoidance||miss>=radius*1.2||dot(delta,original)<0))continue;
   neighbours++;touching||=overlap;
   const away=distance>1e-9?delta.map(v=>-v/distance):(self.id<other.id?[1,0]:[-1,0]);

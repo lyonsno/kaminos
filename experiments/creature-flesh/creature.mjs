@@ -4,6 +4,14 @@ import {createGpuFleshVolume} from './gpu-volume.mjs';
 import {prepareSmoothFleshEmbedding} from './embedding.mjs';
 import {addFleshOffsets,torsoNodeWeights} from './torso.mjs';
 import {skinTransport,transportDualQuaternions} from '../../hindquarter-live-core.mjs';
+import {prepareGpuPhysicalEmbedding} from '../creature-motion/gpu-skin-data.mjs';
+
+const smoothEmbeddings=new WeakMap();
+function embeddingFor(prepared,interpolation){
+ if(interpolation!=='smooth')return prepared;
+ if(!smoothEmbeddings.has(prepared))smoothEmbeddings.set(prepared,prepareSmoothFleshEmbedding(prepared));
+ return smoothEmbeddings.get(prepared);
+}
 
 export async function loadCreatureFlesh(spec,data){
  if(!spec)return data;
@@ -13,6 +21,12 @@ export async function loadCreatureFlesh(spec,data){
  const bytes=await response.arrayBuffer(),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
  if(digest!==source.sha256)throw Error('Physical preparation hash mismatch');
  const p=JSON.parse(new TextDecoder().decode(bytes));if(p.schema!=='kaminos.creature-flesh.torso-proxy.v0'||p.source.caseSha256!==data.source.caseSha256||p.source.vertices!==data.manifest.vertices||p.source.channels!==data.manifest.channels.length)throw Error('Physical preparation differs from the actual cast');
+ // Open must exercise the same lattice, transfer and volume admission as
+ // construction before the shared entry releases its current working room.
+ const embedding=embeddingFor(p,spec.interpolation??'smooth');prepareGpuPhysicalEmbedding(embedding,data.manifest.vertices);
+ torsoNodeWeights(p,data.manifest.channels);
+ const profile=p.construction?.profile;if(!Array.isArray(profile)||profile.length!==p.construction.sections||!profile.every(s=>Array.isArray(s.radius)&&s.radius.length===2&&s.radius.every(v=>Number.isFinite(v)&&v>0)))throw Error('Complete finite torso section profile required');
+ const volume=createGpuFleshVolume(p);volume.dispose();
  return {...data,fleshPrepared:p};
 }
 
@@ -22,7 +36,7 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
  if(typeof enabled!=='boolean'||!['linear','smooth'].includes(interpolation))throw Error('Invalid creature flesh settings');
  return args=>{
   const prepared=args.fleshPrepared;if(!prepared)throw Error('Physical creature requires its verified preparation');
-  const embedding=interpolation==='smooth'?prepareSmoothFleshEmbedding(prepared):prepared,volume=createGpuFleshVolume(prepared),skin=createGpuSkinDeformer({...args,physical:embedding,physicalAttribute:volume.attribute});
+  const embedding=embeddingFor(prepared,interpolation),volume=createGpuFleshVolume(prepared),skin=createGpuSkinDeformer({...args,physical:embedding,physicalAttribute:volume.attribute});
   volume.setEnabled(enabled);
   const nodeRest=Float32Array.from(prepared.positions.flat()),weights=torsoNodeWeights(prepared,args.manifest.channels),C=args.channels;
   let running=false,validated=false,validationStarted=false,error=null,accumulator=0,palette=null,currentRotations=null,lastRotations=null,pending=null,snapshotEpoch=-1,snapshotPose='',poseKey='',offsets=prepared.positions.map(()=>[0,0,0]),disposed=false;
@@ -46,6 +60,7 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
    setRunning(value){if(typeof value!=='boolean')throw Error('Boolean flesh run state required');running=value;},
    setEnabled(value){if(typeof value!=='boolean')throw Error('Boolean flesh response required');enabled=value;volume.setEnabled(value);skin.invalidate();},
    setContacts:contacts=>volume.setCapsules(contacts),
+   contactNodes:()=>volume.targets().filter((_,i)=>!prepared.pinned[i]),
    capsules(){const p=volume.targets(),c=prepared.construction.crossSection,s=prepared.construction.sections,m=(c-1)/2,centers=[],radii=[];for(let k=0;k<s;k++){const center=p[(k*c+m)*c+m];centers.push(center);radii.push(Math.max(...[p[(k*c+m)*c],p[(k*c+m)*c+c-1],p[(k*c)*c+m],p[(k*c+c-1)*c+m]].map(q=>Math.hypot(...q.map((v,a)=>v-center[a])))));}return [{a:centers[1],b:centers[s-2],radius:radii[Math.floor(s/2)]}];},
    snapshot,mirrorKey:()=>volume.read().epoch+':'+poseKey,
    cpuPositions(base){if(volume.read().steps>0&&!current())throw Error('Pause the creature for an exact physical snapshot/export');return addFleshOffsets(base,embedding,offsets);},

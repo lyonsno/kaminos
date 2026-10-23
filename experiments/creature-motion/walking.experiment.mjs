@@ -235,7 +235,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   let capsules=runtime.flesh.capsules().map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
   if(!capsules.length){const a=runtime.bones.get('pelvis'),b=runtime.bones.get('spine-chest');if(!a||!b)return {mounted:false};capsules=[{a:a.getWorldPosition(new THREE.Vector3()).toArray(),b:b.getWorldPosition(new THREE.Vector3()).toArray(),radius:.4*scale.x}];}
   const c=capsules[0],position=[(c.a[0]+c.b[0])*.5,(c.a[2]+c.b[2])*.5],radius=c.radius+Math.hypot(c.b[0]-c.a[0],c.b[2]-c.a[2])*.35,path=wander?.read(),frame=authoredPlacement(),dir=path?new THREE.Vector3(path.path.direction[0],0,path.path.direction[1]).transformDirection(frame.matrixWorld):new THREE.Vector3(0,0,1);
-  return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules};
+  const nodes=runtime.flesh.contactNodes().map(p=>new THREE.Vector3(...p).applyMatrix4(matrix).toArray());
+  return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules,nodes};
  }
  function stepFlesh(seconds){
   if(!inputs.flesh)return;
