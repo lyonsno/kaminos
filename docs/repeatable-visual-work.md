@@ -46,6 +46,50 @@ Feature code chooses operations, settling or holding, effective-state assertions
 
 Opening verifies the served checkout, requested stores when supplied, requested scene route, and each saved object's ID, type, source and pose. Retention checks the actual server document against the save response and checks PNG extent and pixel variation. Feature assertions and human inspection establish whether the pictured behavior answers the comparison question.
 
+## Borrow process lifetime for an existing witness
+
+`withVisualWorkSession(options, exercise)` from `visual-work-session.mjs`
+owns an independent headless browser and optionally an isolated application
+server. The callback gets an unopened `page`, its `context`, the effective
+`origin`, an abort `signal` and mutable diagnostic `receipt`. Install early
+instrumentation there, then call the version of `visualWork()` belonging to the
+application under test, or use the page directly. The caller chooses viewport,
+domain operations, capture route and retained outputs.
+
+```js
+await withVisualWorkSession({
+  chromium, executablePath, repoRoot, sceneStore, basinStore, out,
+  contextOptions: { viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 },
+}, async ({ page, origin }) => {
+  await page.addInitScript(installFeatureProbe);
+  return visualWork({ page, origin, repoRoot, sceneStore, basinStore,
+    sceneFile, out, exercise: compareFeature });
+});
+```
+
+Omit `origin` to start the selected checkout's `serve.py`; optional `python`,
+`assets` and `generatedMeshes` choose its interpreter/mounts. Supply `origin`
+to borrow a running host, whose lifetime stays with its owner. The owned server
+verifies served source and uses private runtime settings with caller-selected
+persistent stores. Browser profiles are private to each invocation.
+
+`session.json` records effective executable, source/server identity, lifecycle
+phase, failure/cancellation and cleanup. `completed` means the callback returned
+and owned resources closed; the callback's retained observations establish its
+feature result. Exceptions propagate after cleanup. SIGINT/SIGTERM and an optional
+external `signal` cancel the session; browser operations unblock as the owned
+context closes. Other callback work uses the supplied signal cooperatively.
+
+`examples/visual-work/held-water-legacy.mjs` is the concrete historical
+consumer: `--repo` selects the application checkout, `--source` the retained
+Hotwet water-scatter evidence directory, and `--out`, `--browser`,
+`--playwright` select new evidence and independent automation. It copies the
+source scene/settings into new stores, preserves the original pre-load shader
+probe and four held-state views, then starts a separate clean session for
+uninstrumented authored reopen. Its shader selector targets the historical
+water-scatter implementation. The helper itself imports process/identity code
+and leaves rendering and scene capabilities with the selected application.
+
 ## Save results from the mounted editor
 
 `await window.saveScene({result:true})`, `saveSceneAs({result:true})` and `captureComposition({result:true})` return `{ok:true, filename, url, document}` for their own invocation. The document contains the JSON submitted to the normal save endpoint, including capture pixels when requested. Failures return `{ok:false, error}`. Existing calls with no options retain their boolean result. Human buttons and scripted calls use the same save operations.
