@@ -23,7 +23,7 @@ export function authoringImageWeightRoot(config,model='flux2'){
 export async function createAuthoringImagePipeline(device,urls,model='flux2'){
   imageModel(model);
   if(model==='flux3'){
-    const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');return new Flux3Pipeline(device,urls);
+    const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');return new Flux3Pipeline(device,{...urls,cacheWeights:false});
   }
   const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);
 }
