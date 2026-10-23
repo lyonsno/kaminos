@@ -1,5 +1,5 @@
 import { DataUtils } from 'three/webgpu';
-import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
+import { Fn, pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
@@ -25,17 +25,18 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   effect.useScreenSpaceSampling.value = false;
   effect.giIntensity.value = 1;
   const history=new SceneGIHistory(effect.getAONode(),effect.getGINode(),depth,normal,camera);
-  const feedbackContext=context({getOutput(node,{material}) {
-    if(!sceneGIReceives(material))return node;
+  const feedbackOutput=Fn(([],{material})=>{
+    if(!sceneGIReceives(material))return output;
     // Return reflected *unboosted* irradiance to transport. Artistic gain,
     // tone mapping, display transforms and receiving-pass AO stay outside it.
     const reflected=history.feedbackForSurface().mul(diffuseColor.rgb.clamp(0,1))
       .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material));
-    return vec4(node.rgb.add(reflected),node.a);
-  }});
-  source.contextNode=feedbackContext;
+    return vec4(output.rgb.add(reflected),output.a);
+  })();
+  // MRT reads its explicit output node; getOutput alone is superseded by MRT.
+  source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
   const comparison=sourceComparison?createGISourceComparison(scene,camera,source,visibleNormal,reason=>history.reset(reason),surfaceLighting):null;
-  if(comparison)comparison.source.contextNode=feedbackContext;
+  if(comparison)comparison.source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
   if(comparison)effect.sourceOverride=comparison.inputs;
   const filters=new Map();
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
