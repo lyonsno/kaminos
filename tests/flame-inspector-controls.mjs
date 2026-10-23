@@ -51,6 +51,26 @@ test('binary numerical sources become checkboxes without converting continuous a
   assert.equal(flame.flamePropertyInputType({type:'color'}),'color');
 });
 
+test('marcher-specific controls follow their actual route without changing authored values',()=>{
+  const mode={toneMapping:'agx',raymarchMode:'numerical',worldSmoke:true};
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-flame-priority'])
+    assert.equal(flame.flamePropertyApplies(id,mode),false,id+' is ineffective on the joined numerical path');
+  assert.equal(flame.flamePropertyApplies('volume-optical-tolerance',mode),true);
+  assert.equal(flame.flamePropertyApplies('volume-steps',mode),true);
+  assert.equal(flame.flamePropertyApplies('volume-quadrature-jitter',mode),true);
+  assert.equal(flame.flamePropertyApplies('volume-flame-priority',{...mode,worldSmoke:false}),true);
+  const old={...mode,raymarchMode:'current'};
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])
+    assert.equal(flame.flamePropertyApplies(id,old),true);
+  for(const id of ['volume-optical-tolerance','volume-flame-priority','volume-quadrature-jitter'])
+    assert.equal(flame.flamePropertyApplies(id,old),false);
+  const fixed={...mode,raymarchMode:'fixed'};
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-flame-priority','volume-optical-tolerance'])
+    assert.equal(flame.flamePropertyApplies(id,fixed),false);
+  assert.equal(flame.flamePropertyApplies('volume-quadrature-jitter',fixed),true);
+  assert.deepEqual(mode,{toneMapping:'agx',raymarchMode:'numerical',worldSmoke:true});
+});
+
 test('physics material status cannot promote a requested or stale mode into effective rendering',()=>{
   assert.equal(typeof flame.flameAppearanceStatus,'function');
   assert.equal(flame.flameAppearanceStatus(null).state,'pending');

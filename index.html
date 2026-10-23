@@ -18908,7 +18908,7 @@ function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
   for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])document.getElementById(id).disabled=c.raymarchMode!=='current';
-  document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
+  document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical'||c.worldSmoke==='on';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
