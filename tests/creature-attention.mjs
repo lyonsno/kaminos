@@ -501,3 +501,23 @@ console.log('Creatures attend, learn familiar states, interrupt on cessation, sc
  }
  assert.deepEqual(loss([100,100,100]),loss([-100,-100,-100]),'unobserved motion has no influence');
 }
+// F1: prior visual knowledge does not suppress a fresh sensed bearing behind us.
+{
+ const c=creature(),fire={id:'fire',point:[0,.5,-3.8],interest:1,noticeRadius:12};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[fire]});let t=0;
+ for(let i=0;i<120;i++){a.sense({time:t,source:fire,sourcePower:1,samples:[{point:[0,0,0],luminance:.1}]});t=run(a,c,.25,t);}
+ turnAway(c,Math.PI);t=run(a,c,2,t);
+ a.sense({time:t,source:{...fire,point:[...fire.point]},sourcePower:8,samples:[{point:[0,0,0],luminance:.8}]});t=run(a,c,.25,t);
+ assert.equal(a.read().focus?.id,'fire','fresh off-screen flare reacquires a known source');
+ const eventPoint=[...a.read().focus.point];fire.point=[0,.5,-100];t=run(a,c,.1,t);
+ assert.deepEqual(a.read().focus?.point,eventPoint,'event bearing cannot follow later hidden transforms');
+}
+// F2: radial movement is observed movement too, and supplies a gap prediction.
+{
+ const c=creature(),point=[0,.5,-4.8];let sensed=true;
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'away',point,sensed,interest:1,noticeRadius:20,visual:{center:point,radius:.2,provenance:'rigid-mesh-bound'}}]});
+ let t=run(a,c,1);
+ for(let i=0;i<300;i++){point[2]-=.012;t=run(a,c,1/30,t);assert.equal(a.read().focus?.id,'away','radial motion sustains pursuit');}
+ const before=a.read().focus.point[2];sensed=false;t=run(a,c,.25,t);assert.ok(a.read().focus.point[2]<before,'radial prediction uses last observed motion');
+ sensed=true;t=run(a,c,15,t);assert.equal(a.read().focus,null,'stationary target eventually releases after reacquisition');
+}
