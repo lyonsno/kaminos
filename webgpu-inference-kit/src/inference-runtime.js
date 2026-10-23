@@ -244,7 +244,7 @@ export function createCooperativeYield(input = {}) {
   };
 }
 
-export function createWebGpuResourceCaches(device) {
+export function createWebGpuResourceCaches(device, { asyncPipelines = false } = {}) {
   if (!device || typeof device !== 'object') throw new Error('device must be an object');
 
   const shaderModules = new Map();
@@ -271,14 +271,19 @@ export function createWebGpuResourceCaches(device) {
     getComputePipeline(label, descriptor) {
       if (!isNonEmptyString(label)) throw new Error('compute pipeline label must be a non-empty string');
       if (!descriptor || typeof descriptor !== 'object') throw new Error('compute pipeline descriptor must be an object');
-      if (typeof device.createComputePipeline !== 'function') throw new Error('device.createComputePipeline must be available');
+      const method = asyncPipelines ? 'createComputePipelineAsync' : 'createComputePipeline';
+      if (typeof device[method] !== 'function') throw new Error(`device.${method} must be available`);
 
       const key = `${label}\u0000${pipelineDescriptorKey(descriptor, getObjectId)}`;
       if (!computePipelines.has(key)) {
-        computePipelines.set(key, device.createComputePipeline({
+        const pipeline = device[method]({
           ...descriptor,
           label,
-        }));
+        });
+        // Construction can prepare several kernels before their first dispatch. Retain
+        // the original rejection for its consumer without an early unhandled rejection.
+        if (asyncPipelines) pipeline.catch(() => {});
+        computePipelines.set(key, pipeline);
       }
       return computePipelines.get(key);
     },
@@ -286,6 +291,10 @@ export function createWebGpuResourceCaches(device) {
     clear() {
       shaderModules.clear();
       computePipelines.clear();
+    },
+
+    settlePipelines() {
+      return Promise.allSettled([...computePipelines.values()]);
     },
 
     sizes() {
@@ -540,7 +549,9 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   if (!queue || typeof queue !== 'object') throw new Error('queue must be available on input or device.queue');
 
   const backendIdentity = normalizeBackendIdentity(input, context);
-  const resourceCaches = input.resourceCaches || createWebGpuResourceCaches(device);
+  const resourceCaches = input.resourceCaches || createWebGpuResourceCaches(device, {
+    asyncPipelines: input.asyncComputePipelines === true,
+  });
   const stagedProfile = createStagedSubmitProfile({
     route: input.routeId,
     timingSource: input.timingSource || 'host-stage-timer',
@@ -870,6 +881,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return resourceCaches.getComputePipeline(label, descriptor);
     },
 
+    settleComputePipelines() {
+      return resourceCaches.settlePipelines?.() ?? Promise.resolve([]);
+    },
+
     createBuffer(descriptor) {
       if (disposalReport) throw new Error('runtime is disposed');
       const buffer = createBuffer(device, descriptor);
@@ -1087,6 +1102,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       if (!kernelDefinition || typeof kernelDefinition !== 'object') {
         throw new Error('kernelDefinition must be an object');
       }
+      // Optional asynchronous cache preparation completes before command admission.
+      // Existing immediate pipelines keep their synchronous value and call order.
+      const pipeline = typeof kernelDefinition.pipeline?.then === 'function'
+        ? await kernelDefinition.pipeline : kernelDefinition.pipeline;
       const preparedCommandDuty = options.submit === false
         ? null
         : await runtime.prepareCommandDutyAtBoundary({
@@ -1188,7 +1207,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
                 label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
                 ...(gpuTiming ? { timestampWrites: gpuTiming.timestampWrites } : {}),
               });
-              pass.setPipeline(kernelDefinition.pipeline);
+              pass.setPipeline(pipeline);
               pass.setBindGroup(0, kernelDefinition.bindGroup);
               pass.dispatchWorkgroups(...dispatch);
               pass.end();

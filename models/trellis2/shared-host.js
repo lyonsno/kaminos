@@ -86,6 +86,9 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
       throwIfStopped(signal);
       const state={runId,status:'starting',error:null};active=state;
       let frameRun,route;
+      // Async compilation prevents first use of a new kernel from synchronously
+      // blocking the page on Metal shader compilation. Other model routes keep
+      // their existing cache mode.
       try{
         frameRun=await(application?appGpu.beginRun(runId,{routeId:GENERATION_ROUTE}):foreground.beginRun(runId));
         if(application&&(frameRun?.routeId!==GENERATION_ROUTE||typeof frameRun.withForeground!=='function'||
@@ -93,6 +96,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
           throw Error('application foreground run must carry the actual TRELLIS model route identity');
         const opportunities=frameRun.foregroundOpportunities;
         route=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{
+          asyncComputePipelines:true,
           kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:{...opportunities,
             async serviceAtBoundary(boundary){
               const report=await opportunities.serviceAtBoundary(boundary);
@@ -128,6 +132,10 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
       const runtime=Object.freeze({...route.runtime,
         async runKernel(kernel,options={}){
           throwIfStopped(signal);
+          if(typeof kernel.pipeline?.then==='function'){
+            await frameRun.withForeground('trellis-pipeline-compilation',()=>kernel.pipeline);
+            throwIfStopped(signal);
+          }
           const dispatch=options.dispatch;
           // Runtime resolves dispatch after servicing foreground work and
           // immediately before encoding: Stop can arrive during that service.
@@ -172,6 +180,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
           finishing=(async()=>{
             try{
               await route.drain();
+              await route.runtime.settleComputePipelines();
               await Promise.allSettled([...pendingReads]);
               const report=await frameRun.finish();
               await queue.onSubmittedWorkDone();
