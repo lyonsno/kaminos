@@ -94,6 +94,7 @@ try {
   await step('reacquire', async () => { await evaluate(`document.getElementById('threshold').value='0.18';document.getElementById('threshold').dispatchEvent(new Event('input'))`); await wait('window.handMeshDemo.read().visible'); });
   await step('mobile', async () => { await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }); await shot('mobile'); await call('Emulation.clearDeviceMetricsOverride'); });
   await step('stop', async () => { await evaluate(`document.getElementById('start').click()`); await wait(`window.handMeshDemo.read().cameraState === 'off'`); if (await evaluate(`__handWitness.tracks.some(t=>t.readyState!=='ended')`)) throw Error('tracks survive Stop'); });
+  if (!report.setup) {
   await step('invalid-import', async () => { const invalid=path.join(out,'invalid-models');await fs.mkdir(invalid);await fs.copyFile(path.join(args.models,'mobrecon.package.json'),path.join(invalid,'mobrecon.package.json'));await importFolder(invalid, true); await wait(`document.getElementById('models-status').textContent.includes('missing') || document.getElementById('models-status').textContent.includes('Missing')`); if (!(await read()).identity) throw Error('invalid import discarded loaded models'); });
   await step('corrupt-import', async () => {
     const corrupt=path.join(out,'corrupt-models');await fs.mkdir(corrupt);
@@ -103,6 +104,7 @@ try {
     await wait(`document.getElementById('models-status').textContent.toLowerCase().includes('sha256') || document.getElementById('models-status').textContent.toLowerCase().includes('sha-256') || document.getElementById('models-status').textContent.toLowerCase().includes('digest')`);
     if (!(await read()).identity) throw Error('corrupt import discarded loaded models');
   });
+  }
   await step('reload', async () => { await call('Page.reload'); await wait(`window.handMeshDemo?.read().source === '${report.setup ? 'local-server' : 'browser-storage'}' && !window.handMeshDemo.read().loading`); });
   await step('camera-failure', async () => { await evaluate(`__handWitness.failCamera=true;document.getElementById('start').click()`); await wait(`Boolean(window.handMeshDemo.read().error)`); const r=await read(); if(r.running || r.cameraState!=='off')throw Error('camera failure left camera running'); await evaluate('__handWitness.failCamera=false'); });
   await step('cancel-pending', async () => {
@@ -118,7 +120,15 @@ try {
   if (evaluate) report.failureState = await evaluate(`({state:window.handMeshDemo?.read(),status:document.getElementById('status')?.textContent,models:document.getElementById('models-status')?.textContent,errors:window.__handWitness?.errors})`).catch(String);
   if (call) { const result = await call('Page.captureScreenshot', { format: 'png' }).catch(() => null); if (result) await fs.writeFile(path.join(out, 'failure.png'), Buffer.from(result.data,'base64')); }
 } finally {
-  await browser?.close();
+  // Persist the primary failure before cleanup can itself fail.
+  await save();
+  try { await browser?.close(); }
+  catch (cause) {
+    report.cleanup = { firstError: String(cause), recovered: false };
+    if (browser.child.exitCode === null && browser.child.signalCode === null) await new Promise(resolve => browser.child.once('exit', resolve));
+    try { await browser.close(); report.cleanup.recovered = true; }
+    catch (error) { report.error ??= `Browser cleanup failed: ${error}`; }
+  }
   report.browserClosed = !!browser && (browser.child.exitCode !== null || browser.child.signalCode !== null);
   report.failures = verifyHandDemoReport(report, args['expected-root']);
   if (!report.failures.length) { report.status = 'passed'; report.phase = 'complete'; }

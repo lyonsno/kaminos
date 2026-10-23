@@ -10,7 +10,9 @@ export function verifyHandDemoReport(report, expectedRoot) {
   if (!(live?.received > 0 && live.running && live.visible)) failures.push('no displayed live mesh');
   const miss = report.steps?.find(row => row.name === 'miss')?.state;
   if (!(miss?.misses > 0 && miss.presentation === 'no-hand' && !miss.visible && miss.lastTimings?.mobreconMs === 0)) failures.push('miss did not skip reconstruction');
-  for (const name of ['reacquire', 'stop', 'reload', 'restart', 'cancel-pending', 'invalid-import', 'corrupt-import', 'camera-failure', 'mobile']) if (!report.steps?.some(row => row.name === name)) failures.push(`missing step ${name}`);
+  const required = ['reacquire', 'stop', 'reload', 'restart', 'cancel-pending', 'camera-failure', 'mobile'];
+  if (!report.setup) required.push('invalid-import', 'corrupt-import');
+  for (const name of required) if (!report.steps?.some(row => row.name === name)) failures.push(`missing step ${name}`);
   const expectedSource = report.setup ? 'local-server' : 'browser-storage';
   if (report.steps?.find(row => row.name === 'reload')?.state?.source !== expectedSource) failures.push(`models were not restored from ${expectedSource}`);
   if (report.setup) {
