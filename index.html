@@ -3428,7 +3428,8 @@ let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
   if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemVisible(id))){transformControls.detach();return;}
-  if(selectionTransforms&&sceneSelection.ids.length&&!sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
+  const directEmitter=sceneSelection.ids.length===1&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE;
+  if(selectionTransforms&&sceneSelection.ids.length&&!sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat'&&!directEmitter)target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;

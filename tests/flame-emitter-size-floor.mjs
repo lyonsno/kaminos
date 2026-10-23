@@ -36,3 +36,11 @@ test('a collapsed source reopens and portable preset display remains finite',()=
  const saved=portableFlamePreset(preset,0);assert.equal(saved.domControls['volume-immersed-radius'].value,0);
  assert.equal(flamePresetForLocalControls(saved,0).domControls['volume-immersed-radius'].value,0);
 });
+
+import {readFileSync} from 'node:fs';import vm from 'node:vm';
+test('one emitter gizmo uses its provider pose target through zero instead of a group frame',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('function attachViewportGizmo('),code=html.slice(start,html.indexOf('\n}',start)+2);
+ const source={type:'flame-emitter',object:{}},proxy={},helper={};let attached;
+ const c={window:{},sceneSelection:{ids:['source']},selectionTransforms:{},splatCorrectionMode:null,FLAME_EMITTER_TYPE:'flame-emitter',selectedSceneObjectEntry:()=>source,selectionTransformProxy:()=>proxy,viewportGizmosVisible:true,transformControls:{attach:o=>{attached=o;},getHelper:()=>helper}};
+ vm.runInNewContext(code+';attachViewportGizmo(selectedSceneObjectEntry().object);',c);assert.equal(attached,source.object,'a single emitter must reach its own clamping pose provider, not invertible group-frame math');
+});

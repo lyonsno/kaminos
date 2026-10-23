@@ -1,6 +1,6 @@
 // Ordinary visible scene geometry wins by depth. Lines use a screen-sized
 // aperture, not Three's default one-world-unit invisible selection tube.
-import {BufferGeometry,Float32BufferAttribute,LineSegments,LineBasicMaterial} from './lib/three.core.js';
+import {BufferGeometry,Float32BufferAttribute,LineSegments,LineBasicMaterial,Vector3} from './lib/three.core.js';
 export function visibleSceneIntersections({raycaster,roots,camera,viewport,linePixels=6}) {
  if(!(viewport?.width>0&&viewport?.height>0)||!(linePixels>0))throw Error('Picking requires an actual viewport');
  const hits=[],seen=new Set(),prior=raycaster.params.Line.threshold;
@@ -11,9 +11,10 @@ export function visibleSceneIntersections({raycaster,roots,camera,viewport,lineP
    // Raycast the same centerline used by the visible expanded helper. Its
    // original torus/mesh is thinner than the screen-space line when zoomed out.
    const start=wide.geometry.getAttribute('instanceStart'),end=wide.geometry.getAttribute('instanceEnd'),positions=[];
-   for(let i=0;i<start.count;i++)positions.push(start.getX(i),start.getY(i),start.getZ(i),end.getX(i),end.getY(i),end.getZ(i));
+   const point=new Vector3();
+   for(let i=0;i<start.count;i++)for(const attribute of [start,end])positions.push(...point.set(attribute.getX(i),attribute.getY(i),attribute.getZ(i)).applyMatrix4(node.matrixWorld).toArray());
    const geometry=new BufferGeometry().setAttribute('position',new Float32BufferAttribute(positions,3));
-   const material=new LineBasicMaterial(),line=new LineSegments(geometry,material);line.matrixWorld.copy(node.matrixWorld);
+   const material=new LineBasicMaterial(),line=new LineSegments(geometry,material);
    try{pickLine(line,Math.max(linePixels,wide.material.linewidth/2),node);}finally{geometry.dispose();material.dispose();}
   }
   if(node.isLine)pickLine(node,linePixels,node);

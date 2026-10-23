@@ -24,11 +24,13 @@ test('widened emitter rings own their visible screen footprint before the field'
  const {createFlameEmitterHandle}=await import('../scene-flame-emitter.mjs');
  const {styleHelperLines}=await import('../scene-helper-lines.mjs');
  const THREE=await import('../lib/three.core.js');
- const emitter=createFlameEmitterHandle(THREE);styleHelperLines(emitter,{width:8,opacity:1});emitter.updateMatrixWorld(true);
+ for(const scale of [1,.1,.01]){
+ const emitter=createFlameEmitterHandle(THREE);emitter.scale.setScalar(scale);styleHelperLines(emitter,{width:8,opacity:1});emitter.updateMatrixWorld(true);
  const camera=new THREE.PerspectiveCamera(45,1,.1,100);camera.position.set(0,0,3);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
  const viewport={left:0,top:0,width:1000,height:1000},raycaster=new THREE.Raycaster();
- const edge=new THREE.Vector3(.085,0,0).project(camera);const edgeX=(edge.x+1)*500;
+ const edge=new THREE.Vector3(.085*scale,0,0).project(camera);const edgeX=(edge.x+1)*500;
  const pick=offset=>{raycaster.setFromCamera(new THREE.Vector2((edgeX+offset)/500-1,0),camera);return api.visibleSceneIntersections({raycaster,roots:[emitter],camera,viewport});};
  assert.ok(pick(3).length,'a point on the eight-pixel visible ring must hit its emitter');
  assert.equal(pick(15).length,0,'the helper must not claim the surrounding empty volume');
+ }
 });
