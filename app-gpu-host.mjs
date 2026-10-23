@@ -13,7 +13,13 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
   const foreground=kit.createWebGpuForegroundService({routeId:APP_FOREGROUND_ROUTE_ID,device,queue});
   // The frame owner's frames are requested through the app service; inside a model run
   // they wait for the run's duty boundaries, outside one they are served at once.
-  const requester=request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))});
+  const requester=request=>foreground.request({...request,run:async service=>{
+    // Returning from submit does not drain the GPU. Let earlier work finish before
+    // the renderer uploads uniforms, so foreground turns cannot build queue pressure.
+    await queue.onSubmittedWorkDone();
+    if(service.signal.aborted)return;
+    return host.runForegroundFrame(()=>request.run(service));
+  }});
   let session=null,installedOn=null;const unsettled=new Set();
   async function ensureFrames(){
     const owner=frameOwner();

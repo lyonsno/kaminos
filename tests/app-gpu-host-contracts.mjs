@@ -59,3 +59,28 @@ test('the host keeps a ledger of runs whose settlement is unresolved: a settled 
  const b=await app.beginRun('klein:1',{routeId:'flux2-klein'});await b.finish();
  assert.deepEqual(app.unsettledRuns(),['u2net:1'],'a settled run leaves the ledger');
 });
+
+
+test('foreground drawing waits for prior GPU work at idle and model boundaries',async()=>{
+ for(const active of [false,true]){
+  const f=fixture();let drain,entered;const waiting=new Promise(r=>entered=r),gpu=new Promise(r=>drain=r);let drawn=0;
+  f.device.queue.onSubmittedWorkDone=()=>{entered();return gpu;};
+  const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:f.kit,frameOwner:()=>f.owner});
+  const run=active?await app.beginRun('trellis:drain',{routeId:'trellis2'}):null;
+  const frame=app.requester({requestId:'scene:1',run:()=>{drawn++;return {drawn:true};}});
+  const boundary=run?.foregroundOpportunities.serviceAtBoundary({invocationId:'trellis:drain',boundaryId:'next',dutyId:'kernel',phase:'shape',position:'before-encode'});
+  await new Promise(r=>setImmediate(r));
+  assert.equal(drawn,0,'queue pressure must settle before renderer uploads');
+  await waiting;drain();
+  assert.equal((await frame.completion).status,'completed');assert.equal(drawn,1);
+  await boundary;await run?.finish();
+ }
+});
+
+test('GPU completion failure is returned as failed foreground without drawing',async()=>{
+ const f=fixture();let drawn=0;f.device.queue.onSubmittedWorkDone=async()=>{throw Error('device lost during drain');};
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:f.kit,frameOwner:()=>f.owner});
+ const frame=app.requester({requestId:'scene:lost',run:()=>{drawn++;}});
+ const receipt=await frame.completion;assert.equal(receipt.status,'failed-before-submission');
+ assert.match(receipt.failure.error.message,/device lost during drain/);assert.equal(drawn,0);
+});
