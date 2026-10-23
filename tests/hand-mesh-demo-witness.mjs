@@ -16,6 +16,8 @@ served.setup = { status: 'prepared', revision: 'source-revision', client: { mani
 served.runtime.source.kind = 'verified-client-download'; served.runtime.source.manifestSha256 = 'manifest';
 served.steps[0].state.source = 'local-server'; served.steps[4].state.source = 'local-server';
 assert.deepEqual(verifyHandDemoReport(served, root), [], 'prepared-server reload must exercise automatic model loading');
+served.steps = served.steps.filter(row => !['invalid-import', 'corrupt-import'].includes(row.name));
+assert.deepEqual(verifyHandDemoReport(served, root), [], 'automatic-server smoke does not claim a manual folder import');
 for (const mutate of [r => r.steps[0].state.source = 'browser-storage', r => r.setup.revision = 'wrong', r => r.setup.status = 'failed', r => r.runtime.source.kind = 'checkout', r => r.setup.modelBundles['mobrecon.bin'] = 'other']) {
   const bad = structuredClone(served); mutate(bad); assert.ok(verifyHandDemoReport(bad, root).length);
 }
