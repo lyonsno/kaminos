@@ -76,3 +76,19 @@ function tuned(behavior){const c=animal({behavior});c.step();c.sample(0);c.fire.
 const normal=tuned({}),subdued=tuned({startleResponse:.25}),slow=tuned({recoveryTime:2});
 assert.ok(subdued.a.read().startle.strength<normal.a.read().startle.strength*.5,'response multiplier shapes bodily amplitude');
 assert.ok(slow.a.read().startle.until-slow.time()>normal.a.read().startle.until-normal.time(),'recovery multiplier changes settling time');
+// RC-1: body expression cannot determine whether a stronger signal is sensed.
+const escalated=[];
+for(const startleResponse of [0,.25,1,4]){
+ const c=animal({behavior:{startleResponse}});c.step();c.sample(0);
+ c.fire.active=true;c.fire.restless=true;c.step(.1);c.sample(.01);c.step(.1);c.sample(.4);
+ assert.equal(c.a.read().startle.since,c.time(),'a stronger measured rise remains eligible at every response gain');
+ escalated.push(c.a.read().startle.stimulusStrength);
+}
+assert.ok(escalated.every(x=>Math.abs(x-escalated[0])<1e-12),'raw stimulus identity is independent of expression');
+const admitted=[];
+for(const startleResponse of [0,1,4]){
+ const c=animal({behavior:{startleResponse}});c.step();c.sample(0);c.fire.active=true;c.fire.restless=true;c.step(.1);c.sample(.4);
+ c.seconds(.5);c.sample(1);
+ admitted.push(c.a.read().history.filter(x=>x.kind==='startle').length);
+}
+assert.deepEqual(admitted,[1,1,1],'ending a quiet body expression cannot prematurely discard the sensory response');
