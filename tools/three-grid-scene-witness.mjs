@@ -32,6 +32,7 @@ try{
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
  browser=await chromium.launchPersistentContext(dirs.profile,{executablePath:report.executable,headless:true,viewport:{width:1100,height:800},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  browser.setDefaultTimeout(0);browser.setDefaultNavigationTimeout(0);page=await browser.newPage();
+ page.on('response',r=>{if(r.status()>=400)report.errors.push(`HTTP ${r.status()} ${r.url()}`);});
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=authoring');
  report.phase='fine-transfer';await save();
@@ -40,7 +41,7 @@ try{
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
  await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id),path.basename(presetFile,'.json'));
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
- for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':32,'volume-grid-height-ratio':2,'volume-render-scale':.5,'volume-steps':8,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':12,'volume-intermediate-flow':12,'volume-intermediate-material':24,'volume-intermediate-pressure':6,'volume-intermediate-iterations':12,'volume-intermediate-extent':1.5}))await control(id,v);
+ for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':32,'volume-grid-height-ratio':2,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':12,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':12,'volume-intermediate-flow':12,'volume-intermediate-material':24,'volume-intermediate-pressure':6,'volume-intermediate-iterations':12,'volume-intermediate-extent':1.5}))await control(id,v);
  await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[10,6,13],target:[0,3,0]});});
  for(const [name,middle,velocity,pressure] of [['middle','fields',0,0],['all-three','fields',16,8],['pressure-quarter','fields',16,4],['baseline','off',0,0]]){
   report.phase=name;await save();await control('volume-look-freeze',1);await control('volume-world-smoke-intermediate',middle);await control('volume-fine-velocity',velocity);await control('volume-fine-pressure',pressure);

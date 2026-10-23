@@ -2841,16 +2841,17 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   effective.masked = { cells: maskedCells, weight: maskedWeight, weightShare: weights.sum > 0 ? maskedWeight / weights.sum : 0 };
   return { identity: IMMERSED_SOURCE_IDENTITY, requested, effective };
 }
-export function immersedSourceUniformValues(config) {
+export function immersedSourceUniformValues(config, { materialPerVelocity = 1 } = {}) {
+  if (!Number.isInteger(materialPerVelocity) || materialPerVelocity < 1) throw Error("Invalid immersed source lattice ratio");
   const e = config?.effective;
   if (!e?.admitted) return new Array(IMMERSED_SOURCE_UNIFORM_FLOATS).fill(0);
   return [
-    1, e.centreCells[0], e.centreCells[1], e.centreCells[2],
-    e.direction[0], e.direction[1], e.direction[2], e.radiusCells,
-    e.thickness, e.speed, e.fuel, e.temperature,
+    1, ...e.centreCells.map(v => v / materialPerVelocity),
+    e.direction[0], e.direction[1], e.direction[2], e.radiusCells / materialPerVelocity,
+    e.thickness / materialPerVelocity, e.speed, e.fuel, e.temperature,
     e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
     e.basis.e1[0], e.basis.e1[1], e.basis.e1[2], e.inletDynamics?.turbulence ?? 0,
-    e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, 0, 0, 0,
+    e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, materialPerVelocity, 0, 0,
   ];
 }
 // CPU model of the immersed momentum relaxation as the kernel completes it
@@ -5280,7 +5281,10 @@ fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
   let n = immersedDirection();
   let e1 = u.immersed_source_e.xyz;
   let e2 = normalize(cross(e1, n));
-  let slabCell = vec2<i32>(clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e1))), 0, i32(GRID) - 1), clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e2))), 0, i32(GRID) - 1));
+  let materialPerVelocity = max(1.0, u.immersed_source_f.y);
+  let patternWidth = i32(round(f32(GRID) * materialPerVelocity));
+  let patternCentre = f32(patternWidth) * 0.5;
+  let slabCell = vec2<i32>(clamp(i32(floor(patternCentre + dot(d, e1) * materialPerVelocity)), 0, patternWidth - 1), clamp(i32(floor(patternCentre + dot(d, e2) * materialPerVelocity)), 0, patternWidth - 1));
   var coverage = 1.0;
   if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
   var perturbation = 0.0;
@@ -7112,8 +7116,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p));
   let confinementMode = u.reserved_source_extension_0.y;
   let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
-  if (!MATERIAL_ONLY) {
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
+  if (!MATERIAL_ONLY) {
   let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);
   var oracleActivityCurl = vec3<f32>(0.0);
   if (oracleActivityCue > 0.0005 && oracleActivityCurlGain > 0.0005) {
@@ -17285,7 +17289,9 @@ export function createKaminosVolumePrototype({
       fineVelocity.predictGroup=device.createBindGroup({layout:transportPredictBindGroupLayout,entries:[{binding:1,resource:{buffer:fineVelocity.predictor}},{binding:2,resource:emptyGasSourceTexture.createView()}]});
     }
     if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
-    const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];device.queue.writeBuffer(fineVelocity.uniform,0,u);
+    const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];
+    u.set(immersedSourceUniformValues(state.immersedSource,plan),IMMERSED_SOURCE_UNIFORM_OFFSET);
+    device.queue.writeBuffer(fineVelocity.uniform,0,u);
     state.fineGrid.residentBytes=fineVelocity.residentBytes;
     return fineVelocity;
   }
