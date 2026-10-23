@@ -82,10 +82,12 @@ try{
   await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident',copy));
   assert.equal((await advance(10)).ok,true);
   report.duplicate=await page.evaluate(id=>window.kaminosSceneAuthoring.burningState(id),copy);assert.ok(report.duplicate.state.fields[0].steps>=10);
+  await page.evaluate(({copy,id})=>{window.kaminosSetSceneObjectTransform(copy,{position:[.7,-.3,0]});window.selectSceneObject(id);},{copy,id:report.ids[1]});
   const editingBefore=await sample('before-material-edit');
   await page.evaluate(id=>window.kaminosSceneAuthoring.setMaterial(id,{color:'#ff0000',roughness:.2,metalness:.8}),report.ids[1]);
   await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.materials.every(m=>m.color==='ff0000'&&m.roughness===.2&&m.metalness===.8),report.ids[1]));
   const edited=await sample('material-edited');assert.equal(edited[1].state.state.fields[0].steps,editingBefore[1].state.state.fields[0].steps);
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.screenshot({path:path.join(out,'material-edited.png')});
   await page.evaluate(()=>window.kaminosSceneEdits.undo());
   await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.materials.every(m=>m.color==='92979c'&&m.roughness===.55&&m.metalness===.05),report.ids[1]));
