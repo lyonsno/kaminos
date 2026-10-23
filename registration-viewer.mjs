@@ -72,7 +72,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   for(const [original,mat]of materialCopies){mat.opacity=original.opacity*state.targetOpacity;mat.transparent=original.transparent||state.targetOpacity<1;mat.depthWrite=state.targetOpacity<1?false:original.depthWrite;mat.needsUpdate=true;}
   diagnostic.visible=Boolean(field&&state.claims);redraw();onChange(read());
  }
- function read(){return {schema:'kaminos.registration-view.v1',...structuredClone(state),status,progress,summary:summary&&structuredClone(summary),method:'independent primitive-solid distance at every target triangle centroid; score exp(-outsideDistance/falloff); not semantic registration',partsSource:parts.map(p=>({id:p.id,primitiveIds:p.primitives.map(o=>o.id)}))};}
+ function read(){return {schema:'kaminos.registration-view.v1',...structuredClone(state),status,progress,claimRevision:field?`${generation}:${state.threshold}`:null,summary:summary&&structuredClone(summary),method:'independent primitive-solid distance at every target triangle centroid; score exp(-outsideDistance/falloff); not semantic registration',partsSource:parts.map(p=>({id:p.id,primitiveIds:p.primitives.map(o=>o.id)}))};}
  function check(){if(disposed)throw Error('Registration viewer disposed');}
  function configure(patch){
   check();adoptNativePose();const next=structuredClone(state);
@@ -155,5 +155,39 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
  }
  const refresh=()=>{if(disposed)return;const before=status;if(reconcileAvailability()){if(status!==before){redraw();onChange(read());}return;}if(adoptNativePose()){apply();}else if(field&&signature()!==computedSignature){invalidate();apply();}else if(status!==before){redraw();onChange(read());}};
  function dispose(){if(disposed)return;disposed=true;generation++;for(const {node,original}of targetMaterials)node.material=original;target.visible=originalTargetVisible;for(const m of materialCopies.values())m.dispose();ghost.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});if(mesh){mesh.geometry.dispose();mesh.material.dispose();}ghost.removeFromParent();diagnostic.removeFromParent();}
- apply();return {ghost,bounds,diagnostic,read,configure,fitBounds,compute,refresh,dispose};
+ function claimPieces(){
+  check();refresh();if(!field)throw Error('Compute current claims before building pieces');
+  const rows=[...parts.map(p=>({id:p.id,label:p.label,color:state.parts[p.id].color})),{id:'contested',label:'Contested · duplicated in claimants',color:'#ff39e8'},{id:'unclaimed',label:'Unclaimed',color:'#ff783b'}];
+  const classifications=Array.from({length:field.count},(_,f)=>classifyClaims(field.scores.subarray(f*parts.length,(f+1)*parts.length),state.threshold));
+  for(let p=0;p<rows.length;p++){
+   const row=rows[p],root=new THREE.Group();row.root=root;root.name=row.label;row.triangles=0;let face=0;
+   for(const {node,original}of targetMaterials){
+    const g=node.geometry,index=g.index,selected=[];const count=index?index.count:g.attributes.position.count;
+    for(let j=0;j<count;j+=3,face++){
+     const c=classifications[face],include=p<parts.length?c.owners.includes(p):p===parts.length?c.kind==='overlap':c.kind==='unclaimed';
+     if(include){selected.push(j);row.triangles++;}
+    }
+    if(!selected.length)continue;
+    const geometry=new THREE.BufferGeometry();
+    for(const [name,attr]of Object.entries(g.attributes)){
+     if(attr.isInterleavedBufferAttribute)throw Error('Interleaved target attributes need explicit preview conversion');
+     const values=new attr.array.constructor(selected.length*3*attr.itemSize);let at=0;
+     for(const j of selected)for(let v=0;v<3;v++){const vertex=index?index.getX(j+v):j+v;values.set(attr.array.subarray(vertex*attr.itemSize,(vertex+1)*attr.itemSize),at);at+=attr.itemSize;}
+     geometry.setAttribute(name,new THREE.BufferAttribute(values,attr.itemSize,attr.normalized));
+    }
+    let run=null;for(let f=0;f<selected.length;f++){const group=g.groups.find(gr=>selected[f]>=gr.start&&selected[f]<gr.start+gr.count),materialIndex=group?.materialIndex??0;if(run&&run.materialIndex===materialIndex)run.count+=3;else{run={start:f*3,count:3,materialIndex};geometry.groups.push(run);}}
+    geometry.applyMatrix4(node.matrixWorld);
+    const mats=(Array.isArray(original)?original:[original]).map(m=>{const copy=m.clone();if(p>=parts.length){copy.color?.set(row.color);copy.map=null;}return copy;});
+    const surface=new THREE.Mesh(geometry,Array.isArray(original)?mats:mats[0]);root.add(surface);
+   }
+   if(row.triangles){
+    const box=new THREE.Box3().setFromObject(root),center=box.getCenter(new THREE.Vector3());
+    for(const child of root.children)child.geometry.translate(-center.x,-center.y,-center.z);
+    root.position.copy(center);const localBox=box.translate(center.clone().negate());const guide=new THREE.Box3Helper(localBox,row.color);guide.material.depthTest=false;guide.renderOrder=25;root.add(guide);
+   }
+   row.dispose=()=>root.traverse(n=>{n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m?.dispose();});
+  }
+  return rows;
+ }
+ apply();return {ghost,bounds,diagnostic,read,configure,fitBounds,compute,claimPieces,refresh,dispose};
 }

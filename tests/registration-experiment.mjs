@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
 import definition from '../experiments/part-claims.experiment.mjs';
 const source={objects:[{id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],provenance:{analyticalCarrier:{parts:{base:['box']}}}};
-const oldFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,json:async()=>source});
+const oldFetch=globalThis.fetch;const savedRecords=[];const identity={source:{sha256:'source'},target:{sha256:'target'}};
+globalThis.fetch=async(url,options)=>({ok:true,json:async()=>{
+ if(!url.startsWith('/api/asset-registrations'))return source;
+ if(options?.method==='POST'){const body=JSON.parse(options.body),record={schema:'kaminos.asset-registration.v1',id:String(savedRecords.length),...body};savedRecords.push(record);return {registration:record};}
+ const id=new URL(url,'http://local').searchParams.get('id');return id?{identity,registration:savedRecords.find(r=>r.id===id)}:{identity,registrations:savedRecords.map(r=>({id:r.id,name:r.name,compatible:true}))};
+}});
 source.actuators=[{id:'drive',axis:[1,0,0],hinge:[0,1,0],baseMount:[0,0,0],movingMount:[0,1,1]}];
 let target,view={position:[2,2,2],target:[0,0,0]},refreshes=0,transformCalls=0;const attachments=[],registrations=new Map();
 const host={scene:{objects:()=>[...registrations.values()],setTransform:async(id,p)=>{transformCalls++;const root=registrations.get(id).object;root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);},refreshPresentation:()=>{refreshes++;},open:async()=>({
@@ -15,6 +20,10 @@ try{
  const firstGuess=attachments.find(a=>a.id===first.read().joints[0].guessObjectId).root;
  firstGuess.position.set(7,8,9);firstGuess.rotation.set(0,.7,0);firstGuess.scale.set(2,3,4);
  target.position.set(3,4,5);target.rotation.z=.4;target.scale.setScalar(2);
+ const oldLocation=globalThis.location;globalThis.location={href:'http://127.0.0.1:8342/'};
+ const save=await first.operations.saveRegistration('Operator fit');
+ assert.equal(save.registration.name,'Operator fit');assert.deepEqual(savedRecords[0].recipe.jointGuesses[first.read().joints[0].id].position,[7,8,9]);
+ globalThis.location=oldLocation;
  const recipe=first.operations.recipe();await first.dispose();
  const second=await definition.create({host,inputs:recipe,record(){}});
  assert.deepEqual(target.position.toArray(),[3,4,5],'reopen preserves edited target placement');

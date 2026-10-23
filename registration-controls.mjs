@@ -45,6 +45,19 @@ export function mountRegistrationControls({root,document,invoke,read,retain,cont
  for(const [value,text]of [['claims','Selected claims · part colors'],['overlap','Contested · magenta'],['residual','Unclaimed · orange']]){const o=el('option',text,select);o.value=value;}
  select.addEventListener('change',()=>call('configure',{mode:select.value,claims:true}));listeners.push(s=>{select.value=s.mode;});
  el('p','Overlap and residual counts always include every part, even hidden ones.',claims);
+ const preview=section('Inspect proposed pieces');
+ el('p','Build separate, selectable textured claims. Contested faces belong to every claimant and also appear in magenta at their original location; unclaimed faces stay orange. Move pieces with their native gizmos. Changing the fit or threshold clears this preview. These are uncapped surface proposals, not permanent cuts.',preview);
+ const build=button(preview,'Build exploded preview',()=>call('buildPreview'));
+ button(preview,'Clear piece preview',()=>call('clearPreview'));
+ const pieceButtons=el('div',null,preview);let pieceSignature='';
+ listeners.push(s=>{build.disabled=s.status!=='computed';const signature=JSON.stringify(s.preview?.pieces||[]);if(signature!==pieceSignature){pieceSignature=signature;pieceButtons.replaceChildren();for(const p of s.preview?.pieces||[]){const b=button(pieceButtons,`${p.label} · ${p.triangles.toLocaleString()} faces`,()=>call('selectPiece',p.id));b.disabled=!p.available;}}});
+ const saves=section('Asset registrations');
+ const name=el('input',null,saves);name.type='text';name.className='input';name.value='Arm correspondence';name.setAttribute('aria-label','Registration name');
+ const save=button(saves,'Save registration to asset',()=>call('saveRegistration',name.value));
+ const saved=el('select',null,saves);saved.className='select-input';saved.setAttribute('aria-label','Saved registration');
+ const open=button(saves,'Reopen saved registration',()=>call('savedURL',saved.value).then(url=>{if(url)globalThis.location.assign(url);}));
+ const savedStatus=el('p',null,saves);let catalogSignature='';
+ listeners.push(s=>{const r=s.registration;save.disabled=!r?.available||s.status.startsWith('unavailable:');const signature=JSON.stringify(r?.entries||[]);if(signature!==catalogSignature){catalogSignature=signature;const chosen=saved.value;saved.replaceChildren();for(const entry of r?.entries||[]){const o=el('option',`${entry.name} · ${entry.createdAt}${entry.compatible?'':' · input changed'}`,saved);o.value=entry.id;o.disabled=!entry.compatible;}if([...saved.children].some(o=>o.value===chosen))saved.value=chosen;else if(r?.lastSaved)saved.value=r.lastSaved.id;}open.disabled=!saved.value;savedStatus.textContent=r?.error?`Storage unavailable: ${r.error}`:r?.lastSaved?`Saved to this asset: ${r.lastSaved.name}`:'Each save keeps a named version beside this asset. Reopening verifies the source and mesh bytes.';});
  const link=el('a','Retain this view as a reopen link');link.style.display='block';link.style.margin='12px 0';
  function sync(){const s=read();for(const {input,get,type}of inputs){if(document.activeElement===input)continue;if(type==='checkbox')input.checked=get(s);else input.value=get(s);}for(const f of listeners)f(s);
   const c=s.summary;status.textContent=`${s.status}${s.status==='computing'?` · ${Math.round(s.progress*100)}%`:''}${c?`\n${c.triangles.toLocaleString()} triangles · ${c.single.toLocaleString()} single\n${c.overlap.toLocaleString()} contested · ${c.unclaimed.toLocaleString()} unclaimed`:''}`;

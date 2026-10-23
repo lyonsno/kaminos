@@ -3971,6 +3971,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
             self.send_json(report)
+        elif parsed.path == "/api/asset-registrations":
+            self.handle_asset_registrations()
         elif parsed.path == "/api/preferences":
             self.handle_preferences()
         elif parsed.path == "/api/runtime-config":
@@ -4058,7 +4060,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/preferences':
+        if parsed.path == '/api/asset-registrations':
+            self.handle_asset_registrations(write=True)
+        elif parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
@@ -4110,6 +4114,26 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             notes_http().handle(self, "POST", self.path)
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_asset_registrations(self, write=False):
+        if not self._vantage_allowed():
+            return self.send_json({'error':'Registration access requires this server’s local origin'},403)
+        from registration_store import save, catalog
+        roots=[{'id':key,'path':value} for key,value in BROWSE_ROOTS.items()]
+        try:
+            if write:
+                if (self.headers.get('Content-Type') or '').split(';')[0].strip().lower()!='application/json':
+                    return self.send_json({'error':'Send application/json'},415)
+                request=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
+                if not isinstance(request,dict):raise ValueError('Expected registration object')
+                result={'registration':save(roots,request)}
+            else:
+                query=parse_qs(urlparse(self.path).query)
+                result=catalog(roots,query.get('sourceUrl',[''])[0],query.get('targetUrl',[''])[0],query.get('id',[None])[0])
+            self.send_json(result)
+        except FileNotFoundError as error:self.send_json({'error':str(error)},404)
+        except (ValueError,TypeError,KeyError,PermissionError) as error:self.send_json({'error':str(error)},400)
+        except OSError as error:self.send_json({'error':str(error)},500)
 
     def handle_preferences(self, write=False):
         if write and not self._vantage_allowed():

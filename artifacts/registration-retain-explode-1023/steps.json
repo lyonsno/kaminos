@@ -1,0 +1,76 @@
+[
+  {
+    "read": "loaded"
+  },
+  {
+    "evaluate": "(async()=>{const s=await window.kaminosWorkbenchExperiments.read();return {saved:s.registration.lastSaved.id,position:s.alignment.position}})()",
+    "expect": {
+      "saved": "298a9b2daa2f432a8f9d5d4125e08a9f",
+      "position": [
+        -0.021488315463368546,
+        0.11031383460332309,
+        0.00015198439359653216
+      ]
+    }
+  },
+  {
+    "capture": "operator-fit-reopened"
+  },
+  {
+    "invoke": [
+      "compute"
+    ]
+  },
+  {
+    "invoke": [
+      "buildPreview"
+    ]
+  },
+  {
+    "read": "pieces"
+  },
+  {
+    "capture": "exploded"
+  },
+  {
+    "invoke": [
+      "selectPiece",
+      "barrel"
+    ]
+  },
+  {
+    "capture": "barrel-selected"
+  },
+  {
+    "evaluate": "(()=>{const n=document.querySelector('[data-transform-field=\"position.x\"]');n.scrollIntoView({block:'center'});const b=n.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2}})()",
+    "name": "drag-start"
+  },
+  {
+    "evaluate": "(()=>{const b=document.querySelector('[data-transform-field=\"position.x\"]').getBoundingClientRect();return {x:b.x+b.width/2+40,y:b.y+b.height/2}})()",
+    "name": "drag-end"
+  },
+  {
+    "drag": {
+      "from": "drag-start",
+      "to": "drag-end",
+      "button": "left"
+    }
+  },
+  {
+    "capture": "barrel-moved"
+  },
+  {
+    "evaluate": "(async()=>{const x=window.kaminosWorkbenchExperiments;window.__saved=await x.invoke('saveRegistration','Browser round-trip witness · October 23');await x.close();await x.open('part-claims',{sourceUrl:window.__saved.registration.recipe.sourceUrl,targetUrl:window.__saved.registration.recipe.targetUrl,registrationId:window.__saved.registration.id});const s=await x.read();return {alignmentKept:JSON.stringify(s.alignment)===JSON.stringify(window.__saved.registration.recipe.settings.alignment),guessesKept:s.joints.every(j=>JSON.stringify(j.guessPose)===JSON.stringify(window.__saved.registration.recipe.jointGuesses[j.id])),preview:s.preview}})()",
+    "expect": {
+      "alignmentKept": true,
+      "guessesKept": true,
+      "preview": null
+    }
+  },
+  {
+    "capture": "saved-reopened"
+  },
+  {
+    "read": "final"
+  }
+]
