@@ -46,16 +46,16 @@ try {
     const session=report.live.sessionId;
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).fill('3000');
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).press('Tab');
-    await page.waitForFunction(()=>{
-      const s=window.kaminosWorkbenchExperiments.read();
+    await page.waitForFunction(async()=>{
+      const s=await window.kaminosWorkbenchExperiments.read();
       return s.fingerJuice.load.requestedRate===3000&&s.fingerJuice.load.admittedRate>0&&s.fingerJuice.load.poolLimited;
     });
     report.smallPool=await read();
     assert.equal(report.smallPool.fingerJuice.load.mountedParticleCount,2400);
     await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).fill('9600');
     await page.getByRole('spinbutton',{name:'Particle capacity',exact:true}).press('Tab');
-    await page.waitForFunction(()=>{
-      const s=window.kaminosWorkbenchExperiments.read();
+    await page.waitForFunction(async()=>{
+      const s=await window.kaminosWorkbenchExperiments.read();
       return !s.fingerJuice.rebuilding&&s.fingerJuice.load.mountedParticleCount===9600&&s.fingerJuice.load.admittedRate>0;
     });
     report.largePool=await read();
