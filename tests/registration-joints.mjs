@@ -13,5 +13,7 @@ assert.ok(new T.Vector3(...actual.center).distanceTo(guess.position)<1e-10);
 assert.ok(new T.Vector3(...actual.axis).dot(new T.Vector3(0,0,1).applyQuaternion(guess.quaternion))>1-1e-10);
 assert.deepEqual(pose.scale,before,'snap preserves authored source scale');
 assert.equal(guess.children.some(n=>n.isMesh),true,'guess has pickable geometry, not just a line');
+guess.scale.z=0;assert.throws(()=>snapSourceJoint(source,joints[0],guess),/guess axis/,'collapsed guess cannot silently become a center-only snap');
+guess.scale.set(2,3,-4);const signed=snapSourceJoint(source,joints[0],guess);assert.ok(signed.position.every(Number.isFinite),'valid signed and nonuniform guess remains supported');
 assert.throws(()=>sourceJoints({actuators:[{id:'bad',hinge:[0,0,0],axis:[0,0,0],baseMount:[0,0,0],movingMount:[0,1,0]}]}),/axis/);
 console.log('joint centers, axes, selectable markers and rigid joint snap pass');

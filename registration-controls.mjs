@@ -35,7 +35,7 @@ export function mountRegistrationControls({root,document,invoke,read,retain,cont
  button(align,'Fit bounds',()=>call('fitBounds'));button(align,'Frame comparison',()=>call('frame'));
  const joints=section('Joint correspondence');
  el('p','Select an orange guess, place its center and axis on the generated joint, then use “Snap source joint here” in its inspector. A single match preserves scale and does not solve twist around the axis.',joints);
- for(const joint of read().joints||[])button(joints,`Place ${joint.label}`,()=>call('selectJoint',joint.id));
+ for(const joint of read().joints||[]){const b=button(joints,`Place ${joint.label}`,()=>call('selectJoint',joint.id));listeners.push(s=>{const present=s.joints.find(j=>j.id===joint.id)?.available;b.disabled=!present;b.textContent=present?`Place ${joint.label}`:`${joint.label} · unavailable`;});}
  const claims=section('Geometric claim proposal');
  el('p','Each part claims independently by distance to its primitive solids. No forced winner. Every triangle is evaluated at its centroid.',claims);
  field(claims,'Falloff distance','number',s=>s.falloff,v=>call('configure',{falloff:v}),{min:.000001,step:.005});
@@ -48,7 +48,7 @@ export function mountRegistrationControls({root,document,invoke,read,retain,cont
  const link=el('a','Retain this view as a reopen link');link.style.display='block';link.style.margin='12px 0';
  function sync(){const s=read();for(const {input,get,type}of inputs){if(document.activeElement===input)continue;if(type==='checkbox')input.checked=get(s);else input.value=get(s);}for(const f of listeners)f(s);
   const c=s.summary;status.textContent=`${s.status}${s.status==='computing'?` · ${Math.round(s.progress*100)}%`:''}${c?`\n${c.triangles.toLocaleString()} triangles · ${c.single.toLocaleString()} single\n${c.overlap.toLocaleString()} contested · ${c.unclaimed.toLocaleString()} unclaimed`:''}`;
-  link.href=retain();
+  const retained=retain();if(retained){link.href=retained;link.textContent='Retain this view as a reopen link';}else{link.removeAttribute('href');link.textContent='Restore source and target before retaining this comparison';}
  }
- link.addEventListener('click',()=>{link.href=retain();});sync();return {sync,dispose:()=>{for(const s of scrubs)s?.stop?.();root.replaceChildren();}};
+ link.addEventListener('click',event=>{const retained=retain();if(retained)link.href=retained;else event.preventDefault();});sync();return {sync,dispose:()=>{for(const s of scrubs)s?.stop?.();root.replaceChildren();}};
 }

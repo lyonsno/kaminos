@@ -16,6 +16,7 @@ export function snapSourceJoint(source,joint,guess){
  if(source.scale.toArray().some(n=>!Number.isFinite(n)||n===0))throw Error('Joint snap requires nondegenerate source scale');
  source.updateWorldMatrix(true,false);guess.updateWorldMatrix(true,false);
  const from=jointWorldFrame(source,joint),to=guess.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,0,1).transformDirection(guess.matrixWorld);
+ if(!axis.toArray().every(Number.isFinite)||axis.lengthSq()===0)throw Error('Invalid target guess axis; restore its scale with the native gizmo');
  const delta=new T.Quaternion().setFromUnitVectors(new T.Vector3(...from.axis),axis),rotation=delta.multiply(source.quaternion.clone());
  const local=vector(joint.center,'center').multiply(source.scale).applyQuaternion(rotation);
  return {position:to.sub(local).toArray(),rotation:new T.Euler().setFromQuaternion(rotation).toArray().slice(0,3),scale:source.scale.toArray()};

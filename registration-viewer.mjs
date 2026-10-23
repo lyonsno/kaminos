@@ -26,7 +26,7 @@ export function sourceParts(scene) {
 }
 
 /** No DOM, renderer or application singleton. Owns only its diagnostic resources. */
-export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()=>{}}) {
+export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()=>{},unavailableReason=()=>null}) {
  const ghost=new THREE.Group();ghost.name='Registration reference';
  const diagnostic=new THREE.Group();diagnostic.name='Independent part claims';
  const layers=parts.map(p=>{
@@ -61,8 +61,10 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   return JSON.stringify([ghost.matrixWorld.elements,surfaces]);
  };
  function invalidate(){generation++;field=null;summary=null;computedSignature=null;status='not computed';progress=0;diagnostic.visible=false;}
+ function reconcileAvailability(){const reason=unavailableReason();if(reason){const next='unavailable: '+reason;if(status!==next||field){invalidate();status=next;}return reason;}if(status.startsWith('unavailable:'))invalidate();return null;}
  function adoptNativePose(){const a={position:ghost.position.toArray(),rotation:ghost.rotation.toArray().slice(0,3),scale:ghost.scale.toArray()};if(JSON.stringify(a)!==JSON.stringify(state.alignment)){Object.assign(state.alignment,a);invalidate();return true;}return false;}
  function apply(){
+  reconcileAvailability();
   const a=state.alignment;ghost.position.fromArray(a.position);ghost.rotation.set(...a.rotation);ghost.scale.fromArray(a.scale);
   bounds.visible=state.bounds;
   for(const p of layers){p.root.visible=state.reference&&active(p.id);for(const {mesh:m}of p.nodes){m.material.color.set(state.parts[p.id].color);m.material.opacity=state.referenceOpacity;m.material.wireframe=state.wireframe;m.material.depthTest=!state.xray;m.renderOrder=state.xray?20:1;}}
@@ -93,6 +95,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
  }
  function fitBounds(){
   check(); // Coarse similarity proposal, not an optimized registration.
+  if(reconcileAvailability())throw Error(status);
   configure({alignment:{position:[0,0,0],scale:1}});ghost.updateMatrixWorld(true);target.updateWorldMatrix(true,true);
   const alignedBox=sourceBox.clone().applyMatrix4(ghost.matrixWorld),targetBox=new THREE.Box3().setFromObject(target),s=alignedBox.getSize(new THREE.Vector3()),t=targetBox.getSize(new THREE.Vector3());
   const scale=Math.max(t.x,t.y,t.z)/Math.max(s.x,s.y,s.z);
@@ -115,7 +118,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   mesh.geometry.attributes.color.needsUpdate=true;summary={triangles:field.count,...counts,perPart};apply();
  }
  async function compute(){
-  check();adoptNativePose();invalidate();const token=generation;status='computing';progress=0;apply();const startSignature=signature();
+  check();if(reconcileAvailability())throw Error(status);adoptNativePose();invalidate();const token=generation;status='computing';progress=0;apply();const startSignature=signature();
   try{
   if(ghost.scale.toArray().some(n=>!Number.isFinite(n)||n===0))throw Error('Claim computation requires nondegenerate source scale; restore it with the native gizmo');
   const current=[];target.traverse(n=>{if(n.isMesh)current.push(n);});
@@ -138,10 +141,10 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
       scores[face*parts.length+p]=Math.exp(-distance/state.falloff);
      }
      // Yield only; never sample or truncate the target surface.
-     if(face%2048===0){progress=face/count;onChange(read());await new Promise(resolve=>setTimeout(resolve,0));}
+     if(face%2048===0){progress=face/count;onChange(read());await new Promise(resolve=>setTimeout(resolve,0));if(reconcileAvailability())return read();}
     }
    }
-   if(token!==generation||disposed)return read();
+   if(reconcileAvailability()||token!==generation||disposed)return read();
    if(signature()!==startSignature){invalidate();apply();return read();}
    if(mesh){diagnostic.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(new Float32Array(count*12),4));
@@ -149,7 +152,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
    mesh.renderOrder=5;diagnostic.add(mesh);field={count,scores};computedSignature=startSignature;status='computed';progress=1;state.claims=true;paint();return read();
   }catch(error){if(token===generation){invalidate();status='failed: '+error.message;apply();}throw error;}
  }
- const refresh=()=>{if(adoptNativePose()){apply();}else if(field&&signature()!==computedSignature){invalidate();apply();}};
+ const refresh=()=>{if(disposed)return;const before=status;if(reconcileAvailability()){if(status!==before){redraw();onChange(read());}return;}if(adoptNativePose()){apply();}else if(field&&signature()!==computedSignature){invalidate();apply();}else if(status!==before){redraw();onChange(read());}};
  function dispose(){if(disposed)return;disposed=true;generation++;for(const {node,original}of targetMaterials)node.material=original;target.visible=originalTargetVisible;for(const m of materialCopies.values())m.dispose();ghost.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});if(mesh){mesh.geometry.dispose();mesh.material.dispose();}ghost.removeFromParent();diagnostic.removeFromParent();}
  apply();return {ghost,bounds,diagnostic,read,configure,fitBounds,compute,refresh,dispose};
 }
