@@ -17,7 +17,7 @@ try{
   const rows=[],foot=[];for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++){rows.push(x*.1,y*.1,0,0,0,1,.8,.3,.1,0,.5,1);foot.push(1,0,0,.06,0,1,0,.06);}
   let splat=createDeferredSurfaceSplats(new Float32Array(rows),{count:81,stride:12,radius:.03},new Float32Array(foot));scene.add(splat.root);splat.set({mode:'opaque'});
   const target=new T.RenderTarget(256,256);renderer.setRenderTarget(target);
-  const sample=async()=>{renderer.render(scene,camera);return Array.from(await renderer.readRenderTargetPixelsAsync(target,128,128,1,1));};
+  const sample=async()=>{await new Promise(resolve=>renderer.setAnimationLoop(()=>{renderer.render(scene,camera);renderer.setAnimationLoop(null);resolve();}));return Array.from(await renderer.readRenderTargetPixelsAsync(target,128,128,1,1));};
   const bright=await sample(),surface=await splat.inspectSurface(128,128);light.intensity=0;const dark=await sample();light.intensity=8;
   const occluder=new T.Mesh(new T.PlaneGeometry(.3,.3),new T.MeshBasicNodeMaterial({color:0x00ff00}));occluder.position.z=.2;scene.add(occluder);const front=await sample();occluder.position.z=-.2;const behind=await sample();scene.remove(occluder);
   renderer.setRenderTarget(null);renderer.render(scene,camera);const image=renderer.domElement.toDataURL();
