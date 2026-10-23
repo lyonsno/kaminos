@@ -1,0 +1,24 @@
+import {Matrix4} from './lib/three.core.js';
+import {checkedRepetition,createRepetitionView,repetitionMatrices,isRepetitionCopy} from './scene-repetition.mjs';
+export function canRepeatSceneObject(entry){
+ if(!entry?.object||!['glb','pbr','procedural-mesh'].includes(entry.type))return false;
+ let valid=true;function inspect(node){if(isRepetitionCopy(node))return;if(node.isSkinnedMesh||node.isInstancedMesh||node.morphTargetInfluences?.length)valid=false;for(const c of node.children)inspect(c);}inspect(entry.object);return valid;
+}
+export function createSceneRepetitionController({objects,groups,readPose}){
+ const view=createRepetitionView(),mounted=new Map();
+ const groupFor=entry=>groups().find(g=>g.objectIds.includes(entry.id));
+ function matrices(entry){const group=groupFor(entry),outer=group?.repetition?repetitionMatrices(group.repetition,group.transform):[new Matrix4()],own=repetitionMatrices(entry.repetition,readPose(entry.object));return outer.flatMap(g=>own.map(m=>g.clone().multiply(m)));}
+ function sync(){
+  const current=new Set(objects().map(o=>o.object));for(const root of mounted.keys())if(!current.has(root)){view.clear(root);mounted.delete(root);}
+  for(const entry of objects()){
+   const group=groupFor(entry),own=checkedRepetition(entry.repetition),inherited=checkedRepetition(group?.repetition);
+   if(!own&&!inherited){if(mounted.has(entry.object)){view.clear(entry.object);mounted.delete(entry.object);}continue;}
+   const pose=readPose(entry.object),key=JSON.stringify([own,inherited,pose,group?.transform,entry.source,entry.geometry,entry.surface,entry.object.uuid]);
+   if(mounted.get(entry.object)===key)continue;
+   if(!canRepeatSceneObject(entry))throw Error('Repetition supports static mesh objects and mesh groups');
+   const outer=inherited?repetitionMatrices(inherited,group.transform):[new Matrix4()];view.sync(entry.object,own,pose,{outer});mounted.set(entry.object,key);
+  }
+ }
+ function clear(root){view.clear(root);mounted.delete(root);}
+ return {sync,clear,matrices,groupFor,clearAll(){for(const root of mounted.keys())view.clear(root);mounted.clear();}};
+}

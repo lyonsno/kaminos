@@ -52,7 +52,7 @@ export function checkedFireDomainRecord(record){
 export function fireDomainFrame(record){const r=checkedFireDomainRecord(record),s=r.transform.scale[0];return {translation:[r.transform.position[0],r.transform.position[1]-s,r.transform.position[2]],scale:s,followSource:r.simulation.followSource};}
 // Source-owned descriptors retain the cockpit schema; only this adapter maps
 // them to solver control names. Pose is authoritative for centre/aim/scale.
-export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1}={}){
+export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1,visible=()=>true}={}){
  const ids=new Set();
  return records.map(raw=>{
   const record=checkedFireSourceRecord(raw);if(ids.has(record.id))throw Error('Duplicate flame source identity');ids.add(record.id);
@@ -68,7 +68,7 @@ export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0
   }
   const pose=flamePoseToDomain(record.transform,translation,scale);
   const inside=flamePoseInDomain(record.transform,translation,scale,shared);
-  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false,shared)};
+  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false&&visible(record.id),shared)};
  });
 }
 export function checkedFireSourceRecord(record){

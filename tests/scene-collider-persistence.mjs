@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
+import {buildSceneDocument,planSceneRestore,SCENE_VERSION} from '../scene-persistence-core.js';
 import {createFireDomainRecord} from '../scene-fire-domain.mjs';
 const settings={domControls:{'volume-resolution':{value:32}},rendererControls:{},presentationControls:{}};
 const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+ 'a'.repeat(64),stationary:true},lightGainStops:0,route:{volume_light_field:'1',volume_collision:'kiln'}};
@@ -25,7 +25,7 @@ test('legacy kiln collision becomes object membership, while a current explicit 
  assert.deepEqual(planSceneRestore(legacy).objects[0].collision,{domainId:'flame-field',enabled:true});
  const current=buildSceneDocument({objects:[{...wall(),id:'kiln',collision:null}],fireSettings:settings,composition});
  assert.equal(planSceneRestore(current).objects[0].collision,null);
- assert.throws(()=>planSceneRestore({...current,version:current.version+1}),/newer authoring client/);
+ assert.throws(()=>planSceneRestore({...current,version:SCENE_VERSION+1}),/newer authoring client/);
 });
 
 test('the observed version-8 kiln recipe restores its implicit fire domain before adopting collision membership',()=>{

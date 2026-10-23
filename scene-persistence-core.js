@@ -1,3 +1,4 @@
+import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
@@ -14,7 +15,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 10;
+export const SCENE_VERSION = 11;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -38,6 +39,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
+    ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -77,6 +79,7 @@ function normalizeSceneGroupRecord(record) {
     label: record.label ?? id,
     objectIds,
     type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
+    ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
     source: record.source ?? null,
     createdAt: record.createdAt ?? null,
   };
@@ -259,7 +262,7 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: fireSettings ? SCENE_VERSION : 8,
+    version: sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

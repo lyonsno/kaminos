@@ -1,17 +1,17 @@
-import {Vector3,Euler,Quaternion} from './lib/three.core.js';
+import {Vector3,Euler,Quaternion,Matrix4} from './lib/three.core.js';
 import {checkedGeometry} from './scene-geometry.mjs';
 export const SCENE_LIQUID_SUPPORT_ROUTE='kaminos/fluid/authored-primitive-support-v0';
 export function sceneLiquidCollider(record) {
  if(record?.type!=='procedural-mesh'||record.waterCollision===false||!['plane','sphere','bowl'].includes(record.geometry?.kind))return null;
  const {kind,parameters:p}=checkedGeometry(record.geometry);
- let position,scale,rotation;
- if(record.object){record.object.updateWorldMatrix(true,false);
-  // Viewport hiding masks Object3D.visible during submission; collision is authored separately.
-  position=new Vector3();scale=new Vector3();rotation=new Quaternion();record.object.matrixWorld.decompose(position,rotation,scale);
- }else{position=new Vector3(...record.transform.position);scale=new Vector3(...record.transform.scale);rotation=new Quaternion().setFromEuler(new Euler(...record.transform.rotation));}
- if(!(scale.x>0)||[scale.y,scale.z].some(v=>Math.abs(v-scale.x)>1e-6*scale.x))throw Error(`Water collider ${record.id} requires positive uniform scale`);
- const axes=[[1,0,0],[0,1,0],[0,0,1]].map(a=>new Vector3(...a).applyQuaternion(rotation).toArray());
- return {id:record.id,kind,parameters:p,position:position.toArray(),scale:scale.x,axes};
+ let world;
+ if(record.object){record.object.updateWorldMatrix(true,false);world=record.object.matrixWorld;}
+ else world=new Matrix4().compose(new Vector3(...record.transform.position),new Quaternion().setFromEuler(new Euler(...record.transform.rotation)),new Vector3(...record.transform.scale));
+ const e=world.elements,scale=[0,4,8].map(i=>Math.hypot(e[i],e[i+1],e[i+2]));
+ if(!(scale[0]>0)||scale.some(v=>Math.abs(v-scale[0])>1e-6*scale[0]))throw Error(`Water collider ${record.id} requires nonzero uniform scale`);
+ const position=new Vector3().setFromMatrixPosition(world),axes=[0,4,8].map((start,i)=>[e[start]/scale[i],e[start+1]/scale[i],e[start+2]/scale[i]]);
+ if(Math.abs(new Vector3(...axes[0]).dot(new Vector3(...axes[1])))>1e-6||Math.abs(new Vector3(...axes[0]).dot(new Vector3(...axes[2])))>1e-6||Math.abs(new Vector3(...axes[1]).dot(new Vector3(...axes[2])))>1e-6)throw Error(`Water collider ${record.id} has a sheared frame`);
+ return {id:record.id,kind,parameters:p,position:position.toArray(),scale:scale[0],axes};
 }
 export function sceneLiquidDistance(c,world) {
  const v=world.map((x,i)=>(x-c.position[i])/c.scale),q=c.axes.map(a=>a.reduce((s,x,i)=>s+x*v[i],0));
@@ -39,7 +39,7 @@ export function createSceneLiquidSupport(device,records=[]) {
  const paramsBuffer=device.createBuffer({label:SCENE_LIQUID_SUPPORT_ROUTE,size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  function update(records){
   if(disposed)throw Error('Scene water support disposed');
-  const colliders=records.map(sceneLiquidCollider).filter(Boolean),next=JSON.stringify(colliders);if(next===key)return false;
+  const colliders=records.flatMap(record=>[record,...(record.object?.children??[]).filter(object=>object.userData.kaminosRepetitionCopy).map((object,i)=>({...record,id:record.id+'@repetition:'+i,object}))]).map(sceneLiquidCollider).filter(Boolean),next=JSON.stringify(colliders);if(next===key)return false;
   const height=Math.max(1,colliders.length);if(height>device.limits.maxTextureDimension2D)throw Error('Scene water colliders exceed the device texture extent');
   const data=packSceneLiquidColliders(colliders);
   if(!texture||texture.height!==height){const previous=texture;texture=device.createTexture({label:SCENE_LIQUID_SUPPORT_ROUTE,size:[5,height,1],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});view=texture.createView({dimension:'2d-array'});previous?.destroy();}
