@@ -3,7 +3,7 @@ import {storage,Fn,wgslFn,instanceIndex,uint} from '../../lib/three.tsl.js';
 import {transportDualQuaternions} from '../../hindquarter-live-core.mjs';
 import {prepareGpuSkin} from './gpu-skin-data.mjs';
 
-const deform=wgslFn(`fn dense_dq(v:u32, channels:u32, coherent:u32,
+const deform=wgslFn(`fn dense_dq(v:u32, channels:u32, treeSigns:u32,
  rest:ptr<storage,array<f32>,read>, weights:ptr<storage,array<f32>,read>, dominant:ptr<storage,array<u32>,read>,
  palette:ptr<storage,array<vec4<f32>>,read>) -> vec4<f32> {
  let anchor=(*palette)[(*dominant)[v]*2u];
@@ -11,7 +11,7 @@ const deform=wgslFn(`fn dense_dq(v:u32, channels:u32, coherent:u32,
  for(var j=0u;j<channels;j++){
   var w=(*weights)[v*channels+j];
   if(w==0.0){continue;}
-  let q=(*palette)[j*2u];if(coherent==0u && dot(q,anchor)<0.0){w=-w;}
+  let q=(*palette)[j*2u];if(treeSigns==0u && dot(q,anchor)<0.0){w=-w;}
   r+=w*q;d+=w*(*palette)[j*2u+1u];
  }
  let magnitude=length(r);r/=magnitude;d/=magnitude;d-=r*dot(r,d);
@@ -54,7 +54,7 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,
  positionAttribute.name='creature-'+geometry.uuid+'-positions';normalAttribute.name='creature-'+geometry.uuid+'-normals';
  const positions=storage(positionAttribute,'vec4',payload.vertices),normalOutput=storage(normalAttribute,'vec4',payload.vertices);
  geometry.setAttribute('position',positionAttribute);geometry.setAttribute('normal',normalAttribute);
- computes.push(Fn(()=>{positions.element(instanceIndex).assign(deform({v:instanceIndex,channels:uint(channels),coherent:uint(rotationParents===null?0:1),rest:restNode,weights:weightNode,dominant,palette}));})().compute(payload.vertices));
+ computes.push(Fn(()=>{positions.element(instanceIndex).assign(deform({v:instanceIndex,channels:uint(channels),treeSigns:uint(rotationParents===null?0:1),rest:restNode,weights:weightNode,dominant,palette}));})().compute(payload.vertices));
  computes.push(Fn(()=>{normalOutput.element(instanceIndex).assign(normals({v:instanceIndex,positions,triangles:triangleNode,offsets,faces}));})().compute(payload.vertices));
  let pending=true,disposed=false,dispatches=0,renderer=null;
  return {
