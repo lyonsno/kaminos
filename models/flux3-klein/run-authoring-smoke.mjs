@@ -25,6 +25,9 @@ export function validateFlux3AuthoringResult(r){
   assert.ok(r.output.bytes>0&&r.output.distinctRgb>1,'a retained nonblank image');
   const interval=r.frames.inference;
   assert.ok(interval&&interval.finishedAt>interval.startedAt&&interval.after>interval.before,'foreground frames advance during actual pipeline inference');
+  assert.ok(Array.isArray(r.frames.compute)&&r.frames.compute.length>0,'actual denoising stage observations exist');
+  assert.ok(r.frames.compute.every(s=>s.finishedAt>s.startedAt&&s.startedAt>=interval.startedAt&&s.finishedAt<=interval.finishedAt),'compute intervals belong to this inference');
+  assert.ok(r.frames.compute.some(s=>s.after>s.before),'foreground frames complete during transformer computation');
   assert.deepEqual(r.gpuErrors,[]);
   return r;
 }
@@ -71,10 +74,21 @@ async function main(){
     // Observe the actual pipeline promise, excluding weight loading and PNG persistence.
     // This wrapper preserves the production method and its caller; no synthetic work is substituted.
     await browser.evaluate(`(async()=>{const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');
+      const {Flux3Transformer}=await import('./models/flux3-klein/flux3-transformer.js');
+      const forward=Flux3Transformer.prototype.forward;
+      Flux3Transformer.prototype.forward=async function(...args){
+        const active=window.flux3SmokeInference;
+        // Precompile also invokes forward(); it cannot count as generation evidence.
+        if(!active||active.finishedAt!==undefined)return forward.apply(this,args);
+        const stage={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
+        window.flux3SmokeCompute.push(stage);
+        try{return await forward.apply(this,args);}
+        finally{stage.after=window.kaminosAppFrameSource()?.completedFrames??0;stage.finishedAt=performance.now();}
+      };
       const original=Flux3Pipeline.prototype.generate;
       Flux3Pipeline.prototype.generate=async function(options){
         const interval={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
-        window.flux3SmokeInference=interval;
+        window.flux3SmokeInference=interval;window.flux3SmokeCompute=[];
         try{return await original.call(this,options);}
         finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();}
       };
@@ -98,7 +112,7 @@ async function main(){
       const bitmap=await createImageBitmap(blob),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);
       const pixels=ctx.getImageData(0,0,bitmap.width,bitmap.height).data,colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
       const data=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});
-      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0,inference:window.flux3SmokeInference},gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
+      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0,inference:window.flux3SmokeInference,compute:window.flux3SmokeCompute},gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
     const bytes=Buffer.from(saved.data,'base64');await fs.writeFile(path.join(out,'generated.png'),bytes);
     report.provenance=readPngProvenance(bytes);report.output={...saved.output,sha256:createHash('sha256').update(bytes).digest('hex')};
     report.entry=saved.entry;report.selected=saved.selected;report.frames=saved.frames;report.gpuErrors=saved.gpuErrors;
