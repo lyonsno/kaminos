@@ -58,3 +58,29 @@ test('the real TRELLIS bridge opts in without replacing session-owned caches and
  assert.deepEqual(f.events,['async','foreground'],'no model command after Stop during preparation');
  assert.equal((await run.finish()).status,'released');await bridge.dispose();session.close();
 });
+
+
+test('cleanup serves new frames until every unused compilation settles, after Stop or failure',async()=>{
+ const {createTrellisSharedHost}=await import('../models/trellis2/shared-host.js');
+ const {createWebGpuInferenceSession,createWebGpuForegroundService}=await import('../webgpu-inference-kit/src/core.js');
+ for(const outcome of ['stop','failure'])for(const remaining of ['resolve','reject']){
+  const f=fixture(),compilations=[];f.device.createComputePipelineAsync=()=>new Promise((resolve,reject)=>compilations.push({resolve,reject}));
+  const session=await createWebGpuInferenceSession({sessionId:'cleanup-'+outcome+remaining,device:f.device,adapterName:'fake native',deviceOwnership:'borrowed'});
+  const foreground=createWebGpuForegroundService({routeId:'app',device:f.device,queue:f.device.queue});
+  const bridge=await createTrellisSharedHost({appGpu:{device:f.device,queue:f.device.queue,session,beginRun:(id,options)=>foreground.beginRun(id,options)}}),abort=new AbortController();
+  const run=await bridge.beginRun({runId:'cleanup-'+outcome+remaining,signal:abort.signal});
+  const first=run.route.runtime.getComputePipeline('first',descriptor());run.route.runtime.getComputePipeline('later-unused',descriptor());
+  const job=run.route.enqueue({jobId:'compile',execute:invocation=>run.route.runtime.runKernel({name:'first',pipeline:first,bindGroup:{},bindings:[]},{dispatch:[1],schedulerInvocation:invocation})});
+  await new Promise(yes=>setImmediate(yes));
+  if(outcome==='stop'){abort.abort(new DOMException('operator Stop','AbortError'));compilations[0].resolve(f.pipeline);}else compilations[0].reject(Error('compile failed'));
+  const terminal=await job.completion;assert.equal(terminal.status,'failed');
+  let released=false;const finishing=run.finish().then(result=>{released=true;return result;});await new Promise(yes=>setImmediate(yes));
+  const frame=foreground.request({requestId:'during-cleanup',run:()=>{f.events.push('cleanup-frame');return {status:'submitted'};}});
+  await new Promise(yes=>setImmediate(yes));
+  const servedBeforeSettlement=f.events.includes('cleanup-frame'),releasedBeforeSettlement=released;
+  if(remaining==='resolve')compilations[1].resolve(f.pipeline);else compilations[1].reject(Error('unused compile failed'));
+  await frame.completion;assert.equal((await finishing).status,'released');await bridge.dispose();session.close();
+  assert.equal(servedBeforeSettlement,true,outcome+'/'+remaining+': frames continue while cleanup waits');
+  assert.equal(releasedBeforeSettlement,false,'no early resource release');assert.deepEqual(f.events,['cleanup-frame'],'no model encoding after Stop/failure');
+ }
+});

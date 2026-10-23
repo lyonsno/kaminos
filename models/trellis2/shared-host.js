@@ -180,7 +180,9 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
           finishing=(async()=>{
             try{
               await route.drain();
-              await route.runtime.settleComputePipelines();
+              // Cleanup must keep serving the scene after Stop too. Use the
+              // underlying frame run: the public wrapper rejects an aborted signal.
+              await frameRun.withForeground('trellis-pipeline-cleanup',()=>route.runtime.settleComputePipelines());
               await Promise.allSettled([...pendingReads]);
               const report=await frameRun.finish();
               await queue.onSubmittedWorkDone();
