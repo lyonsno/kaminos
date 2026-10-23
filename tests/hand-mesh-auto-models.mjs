@@ -14,7 +14,16 @@ const fetcher = async url => {
 };
 const models = await inputs.readServedModels('/__hand-models/', 'http://127.0.0.1:8501/demos/hand-mesh/', fetcher);
 assert.equal(models.mobrecon.bundle.size, 4);
-assert.deepEqual(calls.map(x => new URL(x).pathname).sort(), ['/__hand-models/detector.bin', '/__hand-models/detector.package.json', '/__hand-models/mobrecon.bin', '/__hand-models/mobrecon.package.json']);
+// Chrome153 on this machine successfully reads the complete model responses
+// as ArrayBuffers while response.blob() fails under disk pressure. Retained
+// live conformance: scratch/hand-setup/fetch-probe.json.
+const withoutBlobSpooling = await inputs.readServedModels('/__hand-models/', 'http://127.0.0.1:8501/', async url => {
+  const response = await fetcher(url);
+  response.blob = async () => { throw new TypeError('Failed to fetch'); };
+  return response;
+});
+assert.equal(withoutBlobSpooling.detector.bundle.size, 4);
+assert.deepEqual([...new Set(calls.map(x => new URL(x).pathname))].sort(), ['/__hand-models/detector.bin', '/__hand-models/detector.package.json', '/__hand-models/mobrecon.bin', '/__hand-models/mobrecon.package.json']);
 await assert.rejects(inputs.readServedModels('https://elsewhere.invalid/', 'http://127.0.0.1:8501/', fetcher), /same origin/);
 await assert.rejects(inputs.readServedModels('/missing/', 'http://127.0.0.1:8501/', async () => new Response('missing', { status: 404 })), /404/);
 await assert.rejects(inputs.readServedModels('/broken/', 'http://127.0.0.1:8501/', async () => new Response(JSON.stringify({ resources: [{ file: '../outside.bin' }] }))), /local bundle/);

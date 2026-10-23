@@ -8,7 +8,7 @@ export async function readServedModels(base, pageUrl = location.href, fetcher = 
   const get = async name => {
     const response = await fetcher(new URL(name, root));
     if (!response.ok) throw new Error(`Prepared model download failed: ${name} (HTTP ${response.status})`);
-    return new File([await response.blob()], name);
+    return new File([await response.arrayBuffer()], name);
   };
   const files = [];
   for (const kind of Object.keys(kinds)) {
