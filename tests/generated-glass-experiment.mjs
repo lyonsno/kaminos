@@ -10,11 +10,12 @@ test('detail switching preserves optics and source identity; full triangles load
  const source=new Float32Array([0,0,0,0,0,1,1,.5,0,0,.3,.2, .01,0,0,0,0,1,0,0,1,0,.3,1, 0,.01,0,0,0,1,0,1,0,0,.3,1]);
  const sourceMeta={ok:true,count:3,sourceCount:3,stride:12,radius:.01,gridSize:512,sourceHashes:{raw:'raw-hash',material:'material-hash'},triangles:{file:'triangles.u32',count:1},dataSHA256:hash(source.buffer)};
  const coarse=source.slice(),coarseMeta={...sourceMeta,radius:.04,reduction:{factor:4},sourceDataSHA256:sourceMeta.dataSHA256};delete coarseMeta.triangles;
+ const footprints=new Float32Array([1,0,0,.01,0,1,0,.01,1,0,0,.01,0,1,0,.01,1,0,0,.01,0,1,0,.01]);coarseMeta.footprints={file:'footprints.f32',stride:8,sha256:hash(footprints.buffer)};
  let corrupt=false,releaseTriangles,readTriangles;
  const trianglesStarted=new Promise(resolve=>{readTriangles=resolve;});
  globalThis.fetch=async url=>{calls.push(url);const meta=url.startsWith('/raw/')?sourceMeta:coarseMeta;
   if(url.endsWith('.json'))return {ok:true,json:async()=>({...meta,...(corrupt?{sourceDataSHA256:'wrong'}:{})})};
-  return {ok:true,arrayBuffer:async()=>{if(url.endsWith('.u32')){readTriangles();return new Promise(resolve=>{releaseTriangles=()=>resolve(new Uint32Array([0,1,2]).buffer);});}return coarse.buffer.slice(0);}};
+  return {ok:true,arrayBuffer:async()=>{if(url.endsWith('.u32')){readTriangles();return new Promise(resolve=>{releaseTriangles=()=>resolve(new Uint32Array([0,1,2]).buffer);});}return (url.endsWith('footprints.f32')?footprints:coarse).buffer.slice(0);}};
  };
  const asset=new Group();asset.add(new Mesh(new BoxGeometry(),new MeshStandardMaterial({map:new Texture()})));
  const session={loadAsset:async()=>({root:asset,id:'source'}),attach:async root=>{roots.push(root);return {root,id:String(roots.length)};},setView:v=>v,redraw(){},dispose:async()=>{}};
@@ -27,6 +28,8 @@ test('detail switching preserves optics and source identity; full triangles load
   corrupt=true;await assert.rejects(()=>c.operations.setSurfelFactor(4),/source mismatch/);assert.equal(c.read().factor,1);corrupt=false;
   await c.operations.setSurfelFactor(4);assert.equal(c.read().factor,4);assert.equal(roots.filter(r=>r.name==='TRELLIS surfels').length,1);
   await assert.rejects(()=>c.operations.setSurfelFactor(3),/Unavailable/);assert.equal(c.read().factor,4);
+  await c.operations.setRepresentation('splats');assert.equal(c.read().splats.route,'deferred-surface-splats');assert.equal(c.read().splats.count,3);assert.equal(c.read().splats.ior,1.7);
+  await c.operations.setRepresentation('surfels');assert.equal(c.read().surfels.ior,1.7);
   const pending=c.operations.setRepresentation('rawMesh');await trianglesStarted;
   await c.operations.setRepresentation('mesh');releaseTriangles();await pending;
   assert.equal(c.read().representation,'mesh','a deferred raw load must not replace the latest selection');
