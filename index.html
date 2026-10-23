@@ -2912,6 +2912,7 @@ import {
   volumeSettingsPresetControlValuesEqual,
   volumeSettingsPresetLabelReuseBlock,
 } from './volume-settings-preset-contract.mjs';
+import { migrateRetiredVolumeSettingsPresetDocument } from './volume-retired-control-migration.mjs';
 import {
   collectVolumeCockpitControlElements,
   initializeVolumeCockpitLayout,
@@ -5266,6 +5267,9 @@ function requirePluralFlameSourceRuntime(){
   if(readVolumeControls().emitterSourceLaw!=='immersed-source')throw Error('Multiple scene sources require the immersed source law');
 }
 function syncAuthoredFlameSources(){
+  // Standalone basin previews use the control-driven source. Only an authored
+  // scene owns a source collection, including its authoritative empty state.
+  if(!isFireLightFieldRoute()&&!activeSceneComposition)return;
   const records=authoredFlameSourceRecords();
   authoredFlamePresent=records.length>0;
   if(records.length>1){requirePluralFlameSourceRuntime();if(records.some(record=>record.emission.settings['volume-emitter-source-law']?.value!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');flameDomainFollowSource=false;}
@@ -17109,7 +17113,7 @@ function applyVolumeScenePreset(scene, options = {}) {
 
 // Applies the committed default basin with its exact saved values (unlike the
 // in-code operator presets, which round numbers). Controls added to the page
-// after the export keep their page defaults, as a server schema projection does.
+// after the export receive their schema defaults, as named presets do.
 // The semantic flame basin (fire-boot.mjs) is applied the same way as the default
 // smoke basin, on routes that ask for fire without a named recipe.
 function applySemanticFlameBasin(routeParams, basin) { return applyDefaultVolumeSmokeBasin(routeParams, basin); }
@@ -17117,13 +17121,17 @@ async function applyDefaultVolumeSmokeBasin(routeParams, url = DEFAULT_VOLUME_SM
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
   const artifact = await response.json();
-  const preset = artifact?.preset;
+  const savedPreset = artifact?.preset;
   if (artifact?.identity !== 'kaminos-volume-settings-preset-artifact-v2'
     || !/^vsp-[0-9a-f]{64}$/.test(String(artifact?.presetId || ''))
     || artifact.contentHash !== `sha256:${artifact.presetId.slice(4)}`
-    || !preset?.domControls) {
+    || !savedPreset?.domControls) {
     throw new Error('default volume basin artifact identity is invalid');
   }
+  const schemaResponse = await fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' });
+  if (!schemaResponse.ok) throw new Error(`default volume basin schema unavailable: ${schemaResponse.status}`);
+  const schema = await schemaResponse.json();
+  const preset = migrateRetiredVolumeSettingsPresetDocument(artifact, schema).document.preset;
   // A basin is its route: parameters the page reads with hard fallbacks (such
   // as emitter family) take the basin's value unless the URL sets them.
   const basinParams = new Set(['domControls', 'rendererControls', 'presentationControls']
