@@ -76,7 +76,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const patches=new Map();
  const visualTrackers=new Map(),visualSources=new Map();
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
- let interruption=null,powerDropArmed=true,startle=null,urgentBearing=null,onset=null,previousPower=null;
+ let interruption=null,powerDropArmed=true,startle=null,sensoryAlarm=null,urgentBearing=null,onset=null,previousPower=null;
  const localLevels=new Map();
  let gazeLocal=null,gaze=null,perceived=[],engagementId=null;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
@@ -117,7 +117,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(interruption?.id===id&&time-interruption.since<o.glanceSeconds)return;
   const surprise=1-familiarity;
   interruption={id,point:point?[...point]:null,cause,familiarity,surprise,since:time,until:time+(o.interruptSeconds+o.investigateSeconds*surprise)*behavior.recoveryTime,evidence};
-  startle=null;urgentBearing=null;onset=null;
+  startle=null;sensoryAlarm=null;urgentBearing=null;onset=null;
   policy.reset();focus=null;why=null;scan=null;nextScan=null;
   const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
   remember('interrupt',time,structuredClone(interruption));
@@ -129,9 +129,11 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  }
  function recoil({id,point,strength,familiarity,evidence},time){
   const stimulusStrength=strength;
+  const initialStimulusStrength=stimulusAmount(sensoryAlarm,time),stimulusUntil=time+(.4+strength*(.9-.6*familiarity))*behavior.recoveryTime;
   strength=behavior.startleResponse===0?0:1-Math.pow(1-strength,behavior.startleResponse);
   const duration=(.4+strength*(.9-.6*familiarity))*behavior.recoveryTime;
-  startle={id,point:[...point],initialStrength:recoilAmount(startle,time),strength,stimulusStrength,familiarity,since:time,until:time+duration,holdUntil:time+(strength>0?.15+.3*strength:0)*behavior.recoveryTime,evidence};
+  startle={id,point:[...point],initialStrength:recoilAmount(startle,time),strength,stimulusStrength,initialStimulusStrength,stimulusUntil,familiarity,since:time,until:time+duration,holdUntil:time+(strength>0?.15+.3*strength:0)*behavior.recoveryTime,evidence};
+  sensoryAlarm={since:time,stimulusStrength,initialStimulusStrength,stimulusUntil};
   // A sensed bodily alarm also owns the next look, even during another
   // source's minimum dwell. Keep its observed bearing, never a hidden update.
   if(stimulusStrength>o.startle){
@@ -139,6 +141,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const m=memo(id);m.urgency=Math.max(m.urgency??0,stimulusStrength);m.eventAt=time;m.alerted=true;m.inspected=false;
   }
   remember('startle',time,structuredClone(startle));
+ }
+ function stimulusAmount(response,time){
+  return response?recoilAmount({...response,strength:response.stimulusStrength,initialStrength:response.initialStimulusStrength,until:response.stimulusUntil},time):0;
  }
  const motionSeconds=(from,to)=>{
   if(!enabled)return Math.max(0,to-from);
@@ -244,7 +249,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
       m.evidence=visualEvent;m.impulse=Math.max(m.impulse,significance*visualEvent.strength*2);m.urgency=Math.max(m.urgency??0,visualEvent.strength*2);
       m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='visual change';
       remember('visual-change',time,{id:source.id,...visualEvent});
-      if(visualEvent.strength>.35&&visualEvent.strength>recoilAmount(startle,time))recoil({id:source.id,point:source.point,strength:visualEvent.strength,familiarity:m.familiarity,evidence:visualEvent},time);
+      if(visualEvent.strength>.35&&visualEvent.strength>stimulusAmount(sensoryAlarm,time))recoil({id:source.id,point:source.point,strength:visualEvent.strength,familiarity:m.familiarity,evidence:visualEvent},time);
      }
     }else visualTrackers.delete(source.id);
 
@@ -387,7 +392,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const riseSeconds=litOnset?Math.max(dt,time-onset.since+onset.observedOver):dt;
   if(source&&known?.previous!=='off'&&contrast>.7&&(litOnset||sourceRise>.5)&&riseSeconds>0){
    const rate=contrast/riseSeconds,strength=(1-Math.exp(-(contrast-.7)/2))*rate/(rate+2);
-   if(rate>1&&strength>recoilAmount(startle,time)){
+   if(rate>1&&strength>stimulusAmount(sensoryAlarm,time)){
     const familiarity=litOnset?onset.familiarity:known?.familiarity??0;
     recoil({id:source.id,point:source.point,strength,familiarity,evidence:{kind:litOnset?'observed-onset':'measured-rise',local,contrast,sourceRise,dt,riseSeconds,sourcePower}},time);
    }
@@ -466,7 +471,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;urgentBearing=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;sensoryAlarm=null;urgentBearing=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
