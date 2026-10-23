@@ -6,8 +6,8 @@ import vm from 'node:vm';
 import {FLAME_PROPERTY_GROUPS} from '../flame-authoring.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const a=html.indexOf(`function ${name}(`);assert.ok(a>=0);return html.slice(a,html.indexOf('\n}',a)+2);};
-test('quality controls present grid, rays, adaptive and screen percentage together without duplicate aliases',()=>{
- const group=FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality');assert.ok(group,'quality belongs beside the simulation grid');
+test('quality tab contains simulation and sampling in distinct groups without duplicate aliases',()=>{
+ const group={fields:FLAME_PROPERTY_GROUPS.filter(g=>g.view==='quality').flatMap(g=>g.fields)};
  for(const id of ['volume-resolution','volume-grid-height-ratio','volume-pressure-solver-iterations','volume-steps','volume-adaptive-rays','volume-render-scale'])assert.ok(group.fields.some(([field])=>field===id));
  for(const id of ['volume-resolution','volume-pressure-solver-iterations'])assert.equal(FLAME_PROPERTY_GROUPS.flatMap(g=>g.fields).filter(([field])=>field===id).length,1);
 });
@@ -54,4 +54,4 @@ test('scaled radius bounds use the observed native range representation so legal
  assert.equal(source.min,observed.get(String(bounds.min)),'unbounded upper radius still normalizes its finite lower endpoint');
 });
 
-test('the authoring quality panel exposes the landed grid-height control',()=>{assert.ok(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields.some(([id])=>id==='volume-grid-height-ratio'),'height editing belongs in the authoring field inspector');});
+test('the authoring quality panel exposes the landed grid-height control',()=>{assert.ok(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Domain & simulation').fields.some(([id])=>id==='volume-grid-height-ratio'),'height editing belongs in the authoring field inspector');});

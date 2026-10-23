@@ -9,7 +9,7 @@ import {OPTICAL_STEPPING_WGSL} from '../volume-optical-native.mjs';
 import {RAY_START_WGSL} from '../volume-ray-start.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 test('Quality offers saved animation and flame guidance, preserving older basins',()=>{
- const fields=FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields;
+ const fields=FLAME_PROPERTY_GROUPS.find(g=>g.name==='Ray marching').fields;
  const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
  for(const [id,value] of [['volume-ray-noise-animated',true],['volume-quadrature-jitter',true],['volume-flame-priority',0]]){
   assert.equal(fields.filter(([key])=>key===id).length,1,id);

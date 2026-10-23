@@ -36,6 +36,21 @@ function fixture() {
     ordinaryInput(value){settings.domControls['volume-flow-rate'].value=value;runtime.controls.flowRate=value;notify();}};
 }
 
+test('basin saving is an agent-callable source operation and does not apply settings',async()=>{
+  const f=fixture(),calls=[];
+  f.options.saveBasin=async input=>{calls.push(input);return {ok:true,effective:{presetId:'saved-copy',label:input.label}};};
+  const api=createFlameWorkbench(f.options),before=api.read();
+  const instance=await openExperiment(definition,{host:{flame:{open:async()=>api}}});
+  const receipt=await instance.invoke('saveBasin',{label:'My flame'});
+  assert.equal(receipt.effective.presetId,'saved-copy');
+  assert.deepEqual(calls,[{label:'My flame'}]);assert.deepEqual(api.read(),before);
+  assert.equal(f.history.length,0);
+  f.options.saveBasin=async()=>{throw Error('store unavailable');};
+  const failed=await openExperiment(definition,{host:{flame:{open:async()=>createFlameWorkbench(f.options)}}});
+  await assert.rejects(failed.invoke('saveBasin',{label:'Try again'}),/store unavailable/);
+  await instance.dispose();await failed.dispose();
+});
+
 test('the adapter edits the existing transaction without restarting or disposing its flame',async()=>{
   const f=fixture(),api=createFlameWorkbench(f.options);
   const original=api.read();assert.equal(original.clock.simStepCount,19);

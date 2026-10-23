@@ -1,5 +1,5 @@
 export function createFlameWorkbench({readSettings,applySettings,readRuntime,readScene,readView,
-  applyBasin,listBasins,select,frame,subscribe}) {
+  applyBasin,saveBasin,listBasins,select,frame,subscribe}) {
   const read=()=>{
     const runtime=readRuntime(),settings=readSettings();
     return {active:runtime?.active===true,paused:Number(settings.domControls['volume-look-freeze']?.value)>=0.5,
@@ -20,7 +20,7 @@ export function createFlameWorkbench({readSettings,applySettings,readRuntime,rea
     }
     applySettings(next,'Edit Flame Workbench controls');return read();
   }
-  return Object.freeze({read,setControls,applyBasin,listBasins,select,frame,subscribe,
+  return Object.freeze({read,setControls,applyBasin,saveBasin,listBasins,select,frame,subscribe,
     setPaused(paused){if(typeof paused!=='boolean')throw Error('Pause requires a Boolean');return setControls({'volume-look-freeze':paused?1:0});},
   });
 }
