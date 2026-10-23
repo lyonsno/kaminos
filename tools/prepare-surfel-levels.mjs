@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {reduceSurfelRows} from '../surfel-field-reduction.mjs';
+import {fitSurfaceFootprints} from '../surface-splat-footprints.mjs';
 const [source,output,...requested]=process.argv.slice(2);
 if(!source||!output||!requested.length)throw Error('Usage: node tools/prepare-surfel-levels.mjs SOURCE_DIR OUTPUT_DIR FACTOR...');
 fs.mkdirSync(output,{recursive:true});
@@ -16,7 +17,8 @@ try{
   const result=reduceSurfelRows(data,meta,factor),dir=path.join(output,`factor-${factor}`);fs.mkdirSync(dir,{recursive:true});
   const reduced=Buffer.from(result.data.buffer),parents=Buffer.from(result.parent.buffer);
   fs.writeFileSync(path.join(dir,'surfels.f32'),reduced);fs.writeFileSync(path.join(dir,'parent.u32'),parents);
-  const metadata={...result.meta,ok:true,phase:'done',dataSHA256:hash(reduced),parentSHA256:hash(parents),sourceDataSHA256:report.sourceSHA256};
+  const footprints=Buffer.from(fitSurfaceFootprints(data,result.data,result.parent,meta.radius).buffer);fs.writeFileSync(path.join(dir,'footprints.f32'),footprints);
+  const metadata={...result.meta,ok:true,phase:'done',dataSHA256:hash(reduced),parentSHA256:hash(parents),sourceDataSHA256:report.sourceSHA256,footprints:{file:'footprints.f32',stride:8,sha256:hash(footprints),layout:'tangent-u.xyz,sigma-u,tangent-v.xyz,sigma-v',supportSigma:3}};
   fs.writeFileSync(path.join(dir,'report.json'),JSON.stringify(metadata,null,2));
   report.levels.push({factor,count:metadata.count,sourceCount:meta.count,dataSHA256:metadata.dataSHA256,path:dir});
  }
