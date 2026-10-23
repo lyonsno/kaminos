@@ -521,3 +521,14 @@ console.log('Creatures attend, learn familiar states, interrupt on cessation, sc
  const before=a.read().focus.point[2];sensed=false;t=run(a,c,.25,t);assert.ok(a.read().focus.point[2]<before,'radial prediction uses last observed motion');
  sensed=true;t=run(a,c,15,t);assert.equal(a.read().focus,null,'stationary target eventually releases after reacquisition');
 }
+// F3: after the initial cessation arrest, a fresh sensed bearing redirects the scan.
+for(const delay of [.05,.4]){
+ const c=creature(),fire={id:'fire',point:[.8,.5,-2.5],interest:1,active:true,restless:true},rear={id:'rear',point:[0,.5,4],interest:1,noticeRadius:12};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[fire,rear]});let t=0;
+ for(let i=0;i<120;i++){a.sense({time:t,source:rear,sourcePower:1,samples:[{point:[0,0,0],luminance:.1}]});t=run(a,c,.25,t);}
+ fire.restless=false;t=run(a,c,delay,t);assert.equal(a.read().interruption?.cause,'movement stopped');
+ a.sense({time:t,source:{...rear,point:[...rear.point]},sourcePower:8,samples:[{point:[0,0,0],luminance:.8}]});t=run(a,c,delay<.18?.05:.25,t);
+ if(delay<.18){assert.equal(a.read().focus,null,'initial arrest is retained');assert.ok(a.read().interruption);continue;}
+ assert.equal(a.read().focus?.id,'rear','fresh sensed flare redirects an eligible cessation scan');assert.equal(a.read().interruption,null);
+ const bearing=[...a.read().focus.point];rear.point=[100,100,100];t=run(a,c,.1,t);assert.deepEqual(a.read().focus?.point,bearing,'redirected event retains its captured bearing');
+}
