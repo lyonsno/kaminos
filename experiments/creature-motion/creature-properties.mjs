@@ -1,3 +1,4 @@
+import {behaviorControls} from './behavior-settings.mjs';
 import {mountPlaybackControls} from '../../playback-controls.mjs';
 
 export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null}) {
@@ -23,6 +24,11 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
  const attentionNow=el('p'),attentionRecent=el('ol');attentionNow.style.cssText='margin:0';attentionRecent.style.cssText='margin:0;padding-left:18px;color:#a5b7bd;font-size:11px';
  const engageLabel=el('label'),engageToggle=el('input');engageToggle.type='checkbox';engageToggle.setAttribute('aria-label','Investigate interests');engageLabel.style.cssText='display:flex;gap:6px;align-items:center';engageLabel.append(engageToggle,el('span','Investigate interests'));engageToggle.onchange=()=>call('engagement',{enabled:engageToggle.checked});
  attentionBox.append(attentionLabel,engageLabel,attentionNow,attentionRecent);properties.append(attentionBox);
+ const tuning=el('details'),tuningBody=el('div'),tuningInputs=new Map();tuning.append(el('summary','Reactions & motivation'),tuningBody);attentionBox.append(tuning);
+ for(const {key,label,description} of behaviorControls){
+  const row=el('label',label+' ×'),input=el('input');input.type='number';input.min=key==='recoveryTime'?'0.01':'0';input.step='any';input.title=description;input.setAttribute('aria-label','Creature '+label.toLowerCase());
+  input.onchange=()=>call('behavior',{[key]:input.value.trim()===''?NaN:Number(input.value)});row.append(input);tuningBody.append(row);tuningInputs.set(key,input);
+ }
  attentionToggle.onchange=()=>call('attention',{enabled:attentionToggle.checked});
  const advanced=el('details'),advancedBody=el('div');advanced.append(el('summary','Deformation & source'),advancedBody);properties.append(advanced);
  const attachment=select('Attachment',[],advancedBody),identity=el('p');identity.className='creature-identity';advancedBody.append(identity);
@@ -82,6 +88,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
   travel.hidden=r.mode!=='path';travel.textContent=r.pathGuide?`Radius ${r.pathGuide.radius} · ${r.pathGuide.sourceDistance.toFixed(3)} scene units per cycle · source-paced travel`:'';
   const a=r.attention;attentionBox.hidden=!a;
   if(a){
+   for(const [key,input] of tuningInputs)if(document.activeElement!==input)input.value=String(a.behavior?.[key]??1);
    attentionToggle.checked=a.enabled;engageToggle.checked=r.action.engagement?.enabled===true;engageToggle.disabled=!a.enabled;
    attentionNow.textContent=!a.enabled?'Off':a.interruption?`Stopped to check · ${a.interruption.cause}`:a.startle?'Startled · recovering':a.why?`Looking at ${a.why.label} · ${a.why.cause}`:'Not looking at anything in particular';
    const looks=a.history.filter(e=>e.kind==='look').slice(-5).reverse(),key=looks.map(e=>e.time).join('|');
