@@ -5,8 +5,18 @@ export function prepareGpuVolume(source,{density=1}={}){
  const {positions,tetrahedra,pinned}=source,nodes=positions.length;
  const incident=positions.map(()=>[]),neighbours=positions.map(()=>new Set()),mass=new Float32Array(nodes),colours=new Uint32Array(nodes);
  tetrahedra.forEach((t,e)=>{const m=tetrahedron(t.map(i=>positions[i])).volume*density/4;t.forEach((i,k)=>{mass[i]+=m;incident[i].push([e,k]);t.forEach(j=>{if(j!==i)neighbours[i].add(j);});});});
- let colourCount=0;
- for(let i=0;i<nodes;i++){const used=new Set([...neighbours[i]].filter(j=>j<i).map(j=>colours[j]));let c=0;while(used.has(c))c++;colours[i]=c;colourCount=Math.max(colourCount,c+1);}
+ // Saturation-first colouring reduces sequential barriers without putting two
+ // incident vertices in the same phase. Degree then source index break ties.
+ const assigned=new Set();let colourCount=0;
+ for(let count=0;count<nodes;count++){
+  let vertex=-1,saturation=-1,degree=-1;
+  for(let i=0;i<nodes;i++)if(!assigned.has(i)){
+   const used=new Set([...neighbours[i]].filter(j=>assigned.has(j)).map(j=>colours[j]));
+   if(used.size>saturation||(used.size===saturation&&neighbours[i].size>degree)){vertex=i;saturation=used.size;degree=neighbours[i].size;}
+  }
+  const used=new Set([...neighbours[vertex]].filter(j=>assigned.has(j)).map(j=>colours[j]));let c=0;while(used.has(c))c++;
+  colours[vertex]=c;assigned.add(vertex);colourCount=Math.max(colourCount,c+1);
+ }
  const graph=new Uint32Array(nodes*4+tetrahedra.length*8);let cursor=0;
  for(let i=0;i<nodes;i++){graph.set([cursor,incident[i].length,colours[i],pinned[i]?1:0],i*4);for(const pair of incident[i]){graph.set(pair,nodes*4+cursor*2);cursor++;}}
  return{nodes,elements:tetrahedra.length,colourCount,graph,mass,tets:Uint32Array.from(tetrahedra.flat())};
