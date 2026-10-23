@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
-import vm from 'node:vm';
+import { existsSync } from 'node:fs';
 
-const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const helper = new URL('../scene-ao-depth.mjs', import.meta.url);
 const configureMaterialSideAODepth = existsSync(helper)
   ? (await import(helper)).configureMaterialSideAODepth : undefined;
@@ -52,13 +50,8 @@ const node = {
     computeCalls++;
   },
 };
-const start = source.indexOf('  aoPass = aoCompute(');
-const end = source.indexOf('  const aoResolved', start);
-assert.ok(start >= 0 && end > start);
-vm.runInNewContext(source.slice(start, end), {
-  aoPass: null, aoCompute: () => node, depthTexNode: {}, normalTexNode: {},
-  scene, camera, depthRT, depthMaterial, configureMaterialSideAODepth, THREE: { RendererUtils },
-});
+assert.ok(configureMaterialSideAODepth);
+configureMaterialSideAODepth(node,{scene,camera,depthRT,depthMaterial},RendererUtils);
 node.updateBefore({ renderer });
 assert.deepEqual(draws.map(draw => draw.side), [2, 0, 1, 2],
   'AO depth must use the visible source material side, including mixed material groups');
@@ -83,3 +76,14 @@ assert.equal(scene.overrideMaterial, originalOverride);
 assert.equal(renderer.callback, originalCallback);
 assert.equal(renderer.target, 'original-target');
 console.log('scene AO material-side depth contracts passed');
+
+renderer.fail=false;
+const surfaceDepth={side:2,name:'resolved surface depth'};
+const beforeRender=renderer.render;
+renderer.render=function(activeScene,activeCamera){this.callback({userData:{kaminosAODepthMaterial:surfaceDepth}},activeScene,activeCamera,{},materials[0],{}, {},{},'depth');};
+const beforeDraw=renderer.renderObject;let usedOverride;
+renderer.renderObject=function(...args){usedOverride=args[1].overrideMaterial;};
+node.updateBefore({renderer});
+assert.equal(usedOverride,surfaceDepth,'a reconstructed surface must supply its actual pixel depth instead of fullscreen quad depth');
+assert.equal(scene.overrideMaterial,originalOverride);assert.equal(depthMaterial.side,0);
+renderer.render=beforeRender;renderer.renderObject=beforeDraw;
