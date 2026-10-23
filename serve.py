@@ -3778,7 +3778,7 @@ def ingest_splat_asset(filename, content):
 
 def ingest_image_asset(filename, content):
     if Path(filename).name != filename or '/' in filename or '\\' in filename:
-        raise PermissionError("Path traversal")
+        raise ValueError("Path traversal")
     if Path(filename).suffix.lower() not in IMAGE_EXTENSIONS:
         raise ValueError("image must be PNG, JPEG, or WebP")
     if not content:
@@ -3789,13 +3789,13 @@ def ingest_image_asset(filename, content):
     digest = hashlib.sha256(content).hexdigest()
     directory = (root_path / digest).resolve()
     if not directory.is_relative_to(root_path):
-        raise PermissionError("Path traversal")
+        raise ValueError("Path traversal")
     directory.mkdir(exist_ok=True)
     # Keep the complete display name in metadata, independent of filesystem name limits.
     storage_name = hashlib.sha256(filename.encode('utf-8')).hexdigest() + Path(filename).suffix.lower()
     target = (directory / storage_name).resolve()
     if not target.is_relative_to(directory):
-        raise PermissionError("Path traversal")
+        raise ValueError("Path traversal")
     if target.exists() and target.read_bytes() != content:
         raise ValueError('image asset content identity collision')
     metadata = {'schema': 'kaminos.image-asset.v0', 'name': filename, 'sha256': f'sha256:{digest}'}
@@ -5099,7 +5099,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             if len(content) != length:
                 raise ValueError('incomplete image body')
             entry = ingest_image_asset(params.get('name', [''])[0], content)
-        except (ValueError, PermissionError) as error:
+        except ValueError as error:
             self.send_json({'error': str(error)}, 400)
             return
         except OSError as error:

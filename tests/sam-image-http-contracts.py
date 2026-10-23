@@ -6,6 +6,8 @@ from threading import Thread
 import unittest
 import resource
 import signal
+import errno
+from unittest.mock import patch
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -83,6 +85,25 @@ class ImageHttpContracts(unittest.TestCase):
         self.assertEqual(entry['name'], name)
         with urlopen(self.base + entry['source']) as response:
             self.assertEqual(response.read(), body)
+
+    def test_filesystem_permission_failure_is_persistence_error_and_retry_keeps_pixels(self):
+        body = b'permission-failure-original-pixels'
+        before = {row['source'] for row in serve.list_asset_entries(kind='image')}
+        with patch.object(serve.os, 'link', side_effect=PermissionError(errno.EPERM, 'publication denied')):
+            with self.assertRaises(HTTPError) as failed:
+                self.ingest('permission.png', body)
+            self.assertEqual(failed.exception.code, 500, 'filesystem failure is not a bad upload')
+            self.assertEqual(json.load(failed.exception)['phase'], 'image-persistence')
+        self.assertEqual({row['source'] for row in serve.list_asset_entries(kind='image')}, before)
+        entry = self.ingest('permission.png', body)
+        with urlopen(self.base + entry['source']) as response:
+            self.assertEqual(response.read(), body)
+
+    def test_unsafe_image_names_remain_invalid_requests(self):
+        for name in ['../escaped.png', '/escaped.png', 'nested\\image.png']:
+            with self.subTest(name=name), self.assertRaises(HTTPError) as failed:
+                self.ingest(name, b'pixels')
+            self.assertEqual(failed.exception.code, 400)
 
     def test_webp_binary_transport(self):
         # Transport bytes, not a WebP decode fixture; live browser decode is separate.
