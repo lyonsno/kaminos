@@ -57,6 +57,43 @@ test('owner failure closes only owned browser and preserves exact failure phase'
   assert.match(receipt.failure, /held step changed/);
 });
 
+for (const value of [null, undefined, false, 0, '']) {
+  test(`falsy owner exception ${JSON.stringify(value)} still rejects after cleanup`, async t => {
+    const f = await fixture(t);
+    await assert.rejects(withVisualWorkSession(f.options, async () => { throw value; }), e => e === value);
+    assert.equal(f.state.closes, 1);
+    const receipt = await f.receipt();
+    assert.equal(receipt.status, 'failed');
+    assert.equal(receipt.failure, String(value));
+  });
+}
+
+for (const reason of [null, false, 0, '']) {
+  test(`falsy cancellation ${JSON.stringify(reason)} cannot return success`, async t => {
+    const controller = new AbortController();
+    const f = await fixture(t, { signal: controller.signal });
+    await assert.rejects(withVisualWorkSession(f.options, async () => {
+      controller.abort(reason);
+      return 'late success';
+    }), e => e === reason);
+    assert.equal(f.state.closes, 1);
+    const receipt = await f.receipt();
+    assert.equal(receipt.status, 'cancelled');
+    assert.equal(receipt.failure, String(reason));
+  });
+}
+
+test('cleanup failure preserves a falsy original exception', async t => {
+  const f = await fixture(t);
+  f.context.close = async () => { f.state.closes++; throw new Error('browser close failed'); };
+  await assert.rejects(withVisualWorkSession(f.options, async () => { throw null; }), e => e === null);
+  assert.equal(f.state.closes, 1);
+  const receipt = await f.receipt();
+  assert.equal(receipt.status, 'failed');
+  assert.equal(receipt.failure, 'null');
+  assert.match(receipt.cleanupErrors.join(' '), /browser close failed/);
+});
+
 test('cancelled callback cannot become completed even when it returns normally', async t => {
   const controller = new AbortController();
   const f = await fixture(t, { signal: controller.signal });

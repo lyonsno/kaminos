@@ -22,7 +22,7 @@ export async function withVisualWorkSession(options, exercise) {
   const onTerm = () => interrupted('SIGTERM'), onInt = () => interrupted('SIGINT');
   process.on('SIGTERM', onTerm);
   process.on('SIGINT', onInt);
-  let context, server, closing, result, failure;
+  let context, server, closing, result, failure, failed = false;
   const close = () => closing ??= (async () => {
     try {
       if (context) { await context.close(); receipt.browserClosed = true; }
@@ -75,6 +75,7 @@ export async function withVisualWorkSession(options, exercise) {
     signal.throwIfAborted();
     receipt.status = 'completed';
   } catch (error) {
+    failed = true;
     failure = signal.aborted ? signal.reason : error;
     receipt.status = signal.aborted ? 'cancelled' : 'failed';
     receipt.failure = failure?.stack || String(failure);
@@ -83,18 +84,23 @@ export async function withVisualWorkSession(options, exercise) {
     process.off('SIGTERM', onTerm);
     process.off('SIGINT', onInt);
     signal.removeEventListener('abort', onAbort);
-    if (signal.aborted && !failure) {
+    if (signal.aborted && !failed) {
+      failed = true;
       failure = signal.reason;
       receipt.status = 'cancelled';
       receipt.failure = failure?.stack || String(failure);
     }
     if (receipt.cleanupErrors.length) {
       receipt.status = 'failed';
-      failure ||= new Error(receipt.cleanupErrors.join('; '));
+      if (!failed) {
+        failed = true;
+        failure = new Error(receipt.cleanupErrors.join('; '));
+        receipt.failure = failure.stack;
+      }
     }
     receipt.finishedAt = new Date().toISOString();
     await write();
   }
-  if (failure) throw failure;
+  if (failed) throw failure;
   return result;
 }
