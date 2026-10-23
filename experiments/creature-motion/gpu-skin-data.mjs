@@ -16,3 +16,13 @@ export function prepareGpuSkin({rest,triangles,weights,channels}){
  for(let f=0;f<triangles.length/3;f++)for(let c=0;c<3;c++)faces[cursor[triangles[f*3+c]]++]=f;
  return {rest:rest.slice(),triangles:triangles.slice(),weights:weights.slice(),dominant,offsets,faces,vertices:n,channels};
 }
+
+// Row offsets and node IDs share one binding, keeping the skin kernel within
+// the existing storage-buffer budget. Empty rows have no physical influence.
+export function prepareGpuPhysicalEmbedding(physical,vertices){
+ const nodes=physical?.positions?.length??1,ids=physical?.bindings??[],weights=physical?.bindingWeights??[];
+ const rows=physical?.bindingOffsets??Uint32Array.from({length:vertices+1},(_,i)=>physical?i*4:0),signed=physical?.interpolation==='tricubic-grid';
+ if(!Number.isSafeInteger(nodes)||nodes<1||ids.length!==weights.length||!ids.every(i=>Number.isSafeInteger(i)&&i>=0&&i<nodes)||!weights.every(w=>Number.isFinite(w)&&(signed||w>=0))||rows.length!==vertices+1||rows[0]!==0||rows[vertices]!==ids.length||!rows.every((x,i)=>Number.isSafeInteger(x)&&x>=0&&(i===0||x>=rows[i-1])))throw Error('Complete finite physical embedding required');
+ const graph=new Uint32Array(rows.length+Math.max(1,ids.length));graph.set(rows);graph.set(ids,rows.length);
+ return {nodes,graph,weights:weights.length?Float32Array.from(weights):new Float32Array(1),interpolation:physical?.interpolation??'linear-tetrahedral'};
+}
