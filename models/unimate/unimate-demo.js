@@ -428,7 +428,7 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     view.target = [restFrame[0], 0.35 * sk.size, restFrame[2]];
   }
   // skin: per-frame skinning matrices for the mesh (T x J x 16), or null (the mesh then rests).
-  function showMotion(motion, fps = 30, skin = null) { view.motion = motion; view.fps = fps; view.startedAt = performance.now(); view.playing = true; if (mesh) mesh.skin = skin; }
+  function showMotion(motion, fps = 30, skin = null, preserveClock = false) { view.motion = motion; view.fps = fps; if (!preserveClock) view.startedAt = performance.now(); view.playing = true; if (mesh) mesh.skin = skin; }
   function showRest() { view.motion = null; if (sk) sk.jointFrame.set(sk.restFrame); if (mesh) mesh.skin = null; }
   function frameIndex(time) {
     const T = view.motion.frames;
@@ -563,11 +563,12 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   const scene = await createSkeletonScene({ device, canvas, foreground });
 
   const demo = { device, scene: scene.state, bundle: null, parameterCount: null, forwardFlops: null,
-    hasTextEncoder: () => false, showClip, showGenerationSkeleton, setGenerationMesh, showBones: on => { scene.showBones.forced = on; scene.showBones.on = on || !scene.hasMesh; }, showRest: () => scene.showRest(),
+    hasTextEncoder: () => false, showPartial, showClip, showGenerationSkeleton, setGenerationMesh, showBones: on => { scene.showBones.forced = on; scene.showBones.on = on || !scene.hasMesh; }, showRest: () => scene.showRest(),
     setPlaying: on => scene.setPlaying(on), seek: f => scene.seek(f), view: scene.view, loadModel };
   let generationSkeleton = null;
 
   function showClip(clip) {
+    demo.partialSkeleton=null;
     const { skeleton } = clip, J = skeleton.parents.length;
     const p = clip.positions;
     scene.setSkeleton({ parents: skeleton.parents, jointNames: skeleton.jointNames, size: motionSize(p, clip.frames, J),
@@ -578,9 +579,21 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     // A clip of the generation skeleton (one generated here) shows its mesh too.
     if (clip.mesh && generationMesh) { scene.setMeshVisible(true); scene.showMotion({ frames: clip.frames, positions: p }, clip.fps ?? 30, clip.mesh); }
   }
+  function showPartial(sample) {
+    const {parents,jointNames,rest,fps}=sample.skeleton;
+    // Historical partials use their captured skeleton, never the currently chosen rig.
+    if (demo.partialSkeleton !== sample.skeleton) {
+      scene.setSkeleton({parents,jointNames,rest});
+      demo.partialSkeleton=sample.skeleton;
+    }
+    scene.setMeshVisible(false);
+    scene.showMotion(sample.motion,fps,null,true);
+    generationSkeletonShown=false;
+  }
   let generationSkeletonShown = false;
   function showGenerationSkeleton() {
     if (!generationSkeleton || generationSkeletonShown) return;
+    demo.partialSkeleton=null;
     scene.setSkeleton(generationSkeleton);
     scene.showRest();
     scene.setMeshVisible(Boolean(generationMesh));
@@ -612,6 +625,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
         const result = await gen.generate(options);
         result.frameStats = frameStats(scene.state.gaps);
         const { parents, rest, fps } = gen.skeleton;
+        demo.partialSkeleton=null;
         scene.setSkeleton({ ...generationSkeleton, size: motionSize(result.motion.positions, result.motion.frames, parents.length) });
         generationSkeletonShown = true;
         result.skin = generationMesh ? skinMatrices(result.motion, parents, rest) : null;

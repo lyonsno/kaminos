@@ -55,3 +55,16 @@ export function createMotionCollection(){
 }
 // Page-session ownership: closing an inspector/experiment never discards takes.
 export const sessionMotions=createMotionCollection();
+
+// Group only identical prompt text on the same verified skeleton. Legacy archives
+// lacked a result link: matching settings alone is insufficient, so match final geometry.
+export function groupMotionTakes(rows,histories){
+ const groups=new Map(),claimed=new Set();
+ const group=(key,prompt)=>{const id=JSON.stringify([key,prompt]);if(!groups.has(id))groups.set(id,{id,prompt,takes:[]});return groups.get(id);};
+ const matches=(h,r)=>{const m=r.motion,last=h.samples.at(-1),solver=m.consumerReport?.solver;
+  return h.status==='completed'&&h.skeletonKey===r.skeletonKey&&h.prompt===m.prompt&&h.seed===m.seed&&last?.refinement.t===1&&
+   ['rtol','atol','cfgScale'].every(k=>solver?.[k]===h.solver[k])&&['positions','localRotations'].every(k=>last[k]?.length===m[k]?.length&&last[k].every((v,i)=>v===m[k][i]));};
+ for(const row of rows){const history=histories.find(h=>!claimed.has(h.id)&&matches(h,row));if(history)claimed.add(history.id);group(row.skeletonKey,row.motion.prompt).takes.push({...row,history});}
+ for(const history of histories)if(history.status!=='running'&&!claimed.has(history.id))group(history.skeletonKey,history.prompt).takes.push({id:history.id,history,motion:history.samples.at(-1)??null});
+ return [...groups.values()];
+}
