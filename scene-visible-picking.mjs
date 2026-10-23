@@ -18,7 +18,8 @@ export function visibleSceneIntersections({raycaster,roots,camera,viewport,lineP
  const hits=[],seen=new Set(),prior=raycaster.params.Line.threshold;
  function visit(node){
   if(!node.visible||seen.has(node))return;seen.add(node);
-  const helper=node.isMesh&&node.userData.kaminosEditorHelper&&(node.material?.wireframe||node.geometry?.type==='TorusGeometry');
+  let editor=false;for(let owner=node;owner;owner=owner.parent)if(owner.userData.kaminosEditorHelper){editor=true;break;}
+  const helper=node.isMesh&&editor&&(node.material?.wireframe||node.geometry?.type==='TorusGeometry');
   if(node.isLine||helper){
    const target=helper?pickingLines(node):node;if(helper)target.matrixWorld.copy(node.matrixWorld);
    const geometry=target.geometry;if(!geometry.boundingSphere)geometry.computeBoundingSphere();

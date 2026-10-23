@@ -3567,12 +3567,13 @@ window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
  set(patch={}) {
   const next=checkedViewportDisplay({...viewportDisplay,...patch});
+  const visibilityChanged=JSON.stringify(next.hiddenIds)!==JSON.stringify(viewportDisplay.hiddenIds);
   if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
   if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
   document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
   if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
-  syncEditorHelperVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
+  syncEditorHelperVisibility();if(visibilityChanged)syncSceneSimulationVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
  },
 };
 
@@ -4032,7 +4033,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
     if(host.state().mode==='finite_drop'){localLiquidPaused=true;setAuthoredWaterPreviewVisible(false);}
     else if(sceneViewerPaused!==null)localLiquidPaused=sceneViewerPaused;
-    host.setPaused(localLiquidPaused);
+    host.setPaused(localLiquidPaused||!isSceneItemVisible('water-field'));
   },
 });
 let sceneGroups = [];
@@ -11784,7 +11785,7 @@ async function initScene() {
       return null;
   };
   window.kaminosSceneVisibility=installSceneVisibility({document,viewport:viewportEl,outliner:document.getElementById('authoring-hierarchy'),edits:scenePlacementTools.edits,scene:sceneVisibilityContext,
-    readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncEditorHelperVisibility();},
+    readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncSceneSimulationVisibility();syncEditorHelperVisibility();},
     selection:()=>{const value=readSceneSelection();return {ids:value.ids,activeId:value.activeId};},setSelection:restoreVisibilitySelection,
     blocked:()=>polyEdit?.active()?'Leave Edit Mode to hide objects':sceneCommandBlocked(),changed:()=>{syncEditorHelperVisibility();renderSceneObjectList();updateSelectionFeedback();markDirty();},onError:error=>setInfo(error.message)});
   window.kaminosCommandSearch=installCommandSearch({document,viewport:viewportEl,button:document.getElementById('authoring-search'),
@@ -22276,7 +22277,7 @@ function writeFirstFlameFieldStateUnchecked(value) {
   if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
   renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
-    if(value.composition&&activeSceneComposition)await volumePrototype.setActive(isSceneItemVisible('flame-field'));
+    if(value.composition&&activeSceneComposition){await volumePrototype.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
     if(!activeSceneComposition)volumePrototype.setActive(false);
   });
   window.__kaminosFirstFlameMount=mounting;
@@ -25911,12 +25912,7 @@ function pickWaterDomainFromViewportPointer(event){
   if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
   return pointerHitsBoxOutline(localLiquidDomainGuide.box,camera,{x:event.clientX,y:event.clientY},renderer.domElement.getBoundingClientRect());
 }
-function syncEditorHelperVisibility(){
-  syncWaterDomainGuide();
-  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
-  for(const [id,{marker,light}] of sceneSpotLights)marker.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide){flameDomainGuide.visible= isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
-  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
+function syncSceneSimulationVisibility(){
   if(volumePrototype&&authoredFlamePresent){
     syncAuthoredFlameSources();
     if(readVolumeControls().emitterSourceLaw!=='immersed-source')applyFlameEmitterPose?.(flameEmitterPose);
@@ -25924,6 +25920,13 @@ function syncEditorHelperVisibility(){
   syncAuthoredFireActivity().catch(error=>setInfo(`Fire activity: ${error.message}`));
   syncLocalLiquidHostEmitters();
   if(localLiquidHost){const paused=localLiquidPaused||!isSceneItemVisible('water-field');if(localLiquidHost.paused!==paused)localLiquidHost.setPaused(paused);}
+}
+function syncEditorHelperVisibility(){
+  syncWaterDomainGuide();
+  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
+  for(const [id,{marker,light}] of sceneSpotLights)marker.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
+  if(flameDomainGuide){flameDomainGuide.visible= isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
+  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}

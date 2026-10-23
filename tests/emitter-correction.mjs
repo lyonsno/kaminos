@@ -23,12 +23,12 @@ test('hiding one source stops its contribution independently of Emit gas and lea
 });
 test('the drawn wide emitter ring has a screen-sized picking aperture',()=>{
  const camera=new THREE.PerspectiveCamera(40,1,.01,100);camera.position.z=10;camera.updateMatrixWorld();
- const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0025,4,32),new THREE.MeshBasicMaterial({wireframe:true}));ring.userData.kaminosEditorHelper=true;ring.updateMatrixWorld();
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0025,4,32),new THREE.MeshBasicMaterial({wireframe:true}));const group=new THREE.Group();group.userData.kaminosEditorHelper=true;group.add(ring);group.updateMatrixWorld(true);
  const point=new THREE.Vector3(1,0,0).project(camera);point.x+=6/1000; // three pixels outside the centreline
  const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);
- const hits=visibleSceneIntersections({raycaster,roots:[ring],camera,viewport:{width:1000,height:1000}});
+ const hits=visibleSceneIntersections({raycaster,roots:[group],camera,viewport:{width:1000,height:1000}});
  assert.ok(hits.some(h=>h.object===ring),'a visible ring pixel must retain emitter identity before smoke picking');
- ring.visible=false;assert.equal(visibleSceneIntersections({raycaster,roots:[ring],camera,viewport:{width:1000,height:1000}}).length,0);
+ ring.visible=false;assert.equal(visibleSceneIntersections({raycaster,roots:[group],camera,viewport:{width:1000,height:1000}}).length,0);
 });
 test('hidden simulation cancels pending activation and showing reuses its runtime',async()=>{
  const module=await import('../scene-simulation-activity.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;});
