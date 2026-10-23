@@ -1,11 +1,13 @@
 // A pure neck/head aim correction over an existing animated pose. The caller
 // supplies the rig's actual Bone names and head-local forward/up directions;
 // this module claims no anatomy and performs no runtime Bone mutation.
-export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxYaw,maxPitch,neckShare}) {
+export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxYaw,maxPitch,neckShare,comfortablePitch=maxPitch,craningNeckShare=neckShare}) {
  const fail=message=>{throw Error(message);};
  if(!Number.isFinite(maxYaw)||maxYaw<0)fail('maxYaw must be a finite nonnegative radian limit');
  if(!Number.isFinite(maxPitch)||maxPitch<0)fail('maxPitch must be a finite nonnegative radian limit');
  if(!Number.isFinite(neckShare)||neckShare<0||neckShare>1)fail('neckShare must be a blend fraction between 0 and 1');
+ if(!Number.isFinite(comfortablePitch)||comfortablePitch<0||comfortablePitch>maxPitch)fail('comfortablePitch must be within the pitch budget');
+ if(!Number.isFinite(craningNeckShare)||craningNeckShare<neckShare||craningNeckShare>1)fail('craningNeckShare must be between neckShare and 1');
  const specs=new Map((rigFrame?.bones??[]).map(b=>[b.name,b]));
  if(!specs.has(neck))fail(`rigFrame has no Bone named "${neck}" for neck`);
  if(!specs.has(head))fail(`rigFrame has no Bone named "${head}" for head`);
@@ -124,11 +126,13 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   // Near a target the neck can sweep the head past it. When the request is
   // reachable head-only, give the neck the largest share (up to neckShare)
   // that still lets the head finish the aim; beyond reach, keep neckShare.
-  let solution=distribute(neckShare);
-  if(!solution.reaches&&neckShare>0&&fullYaw===yaw&&fullPitch===pitch&&distribute(0).reaches){
-   let lo=0,hi=neckShare;
+  const stretch=maxPitch>comfortablePitch?Math.max(0,Math.min(1,(Math.abs(pitch)-comfortablePitch)/(maxPitch-comfortablePitch))):0;
+  let effectiveShare=neckShare+(craningNeckShare-neckShare)*stretch*stretch*(3-2*stretch);
+  let solution=distribute(effectiveShare);
+  if(!solution.reaches&&effectiveShare>0&&fullYaw===yaw&&fullPitch===pitch&&distribute(0).reaches){
+   let lo=0,hi=effectiveShare;
    for(let i=0;i<24;i++){const mid=(lo+hi)/2;if(distribute(mid).reaches)lo=mid;else hi=mid;}
-   solution=distribute(lo);
+   effectiveShare=lo;solution=distribute(lo);
   }
   const {neckFull,headFull}=solution;
 
@@ -151,6 +155,8 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   return {
    pose:{...pose,bones},
    applied:true,
+   neckShare:effectiveShare,
+   residualAngle:forwardLocal.clone().applyQuaternion(decompose(worldOf(head).toArray()).q).angleTo(targetInPose.clone().sub(new THREE.Vector3().setFromMatrixPosition(worldOf(head)))),
    reason:null,
    requestedYaw:yaw,
    requestedPitch:pitch,
