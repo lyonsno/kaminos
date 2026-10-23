@@ -19,7 +19,7 @@ import { LATENT_PREVIEW_FIT, LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from 
 async function fetchNamed(url, init) {
   try { return await fetch(url, init); } catch (error) { throw new Error(`${url}: ${error?.message ?? error}`, { cause: error }); }
 }
-async function getJson(url) { const r = await fetchNamed(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
+async function getJson(url, cacheWeights = true) { const r = await fetchNamed(url, cacheWeights ? undefined : { cache: 'no-store' }); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 
 // Weight files are immutable per manifest digest, so they are cached in the browser Cache API
 // under URL + sha256: a second visit loads from disk with no network. Downloads stream so the
@@ -70,7 +70,9 @@ async function inflatedBody(response, onChunk) {
 }
 
 async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, onBytes = () => {} } = {}, stats) {
-  const cache = await openWeightCache();
+  const cacheWeights = stats.cacheWeights !== false;
+  const requestOptions = cacheWeights ? undefined : { cache: 'no-store' };
+  const cache = cacheWeights ? await openWeightCache() : null;
   const key = sha256 ? `${url}#sha256=${sha256}` : url;
   const hit = cache ? await cache.match(key).catch(() => null) : null;
   if (hit) {
@@ -83,11 +85,11 @@ async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, o
   }
   let received = 0;
   const count = n => { received += n; onBytes(n); };
-  let response = canGunzip && gzip ? await fetch(url.replace(/[^/]+$/, gzip.file)).catch(() => null) : null;
+  let response = canGunzip && gzip ? await fetch(url.replace(/[^/]+$/, gzip.file), requestOptions).catch(() => null) : null;
   let body;
   if (response?.ok) body = await inflatedBody(response, count);
   else {
-    response = await fetchNamed(url);
+    response = await fetchNamed(url, requestOptions);
     if (!response.ok) throw new Error(`${url}: ${response.status}`);
     body = await inflatedBody(response, count);
   }
@@ -151,13 +153,15 @@ export class KleinPipeline {
   // about 2.6 GB at 512 instead of 4 GB, at the cost of those reloads. A re-roll swaps nothing.
   // Weights: the hosted copy by default; weightsBase and level choose another base or jank level
   // (see klein-weights.js), and explicit textEncoderUrl / transformerUrl / vaeUrl roots override both.
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all' } = {}) {
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all', cacheWeights = true } = {}) {
     const defaults = kleinWeightUrls({ base: weightsBase, level });
     this.device = device;
     this.urls = { textEncoderUrl: textEncoderUrl ?? defaults.textEncoderUrl, transformerUrl: transformerUrl ?? defaults.transformerUrl,
       vaeUrl: vaeUrl ?? defaults.vaeUrl };
     this.kernels = { gemmVersion, sharedType, vaeActType };
     this.residency = residency;
+    // Local packages already live on disk: opt out of both CacheStorage and HTTP cache copies.
+    this.cacheWeights = cacheWeights;
     this.timings = {}; this.residentBytes = {};
     // One duty scheduler for all three components so a cooperative run has a single
     // fence chain and FLOP budget from the first text-encoder layer to the last VAE stage.
@@ -169,13 +173,13 @@ export class KleinPipeline {
     this.assertUsable();
     const { textEncoderUrl: te, transformerUrl: dit, vaeUrl: vae } = this.urls;
     const t0 = performance.now();
-    this.teManifest = await getJson(`${te}/manifest.json`);
-    this.ditManifest = await getJson(`${dit}/manifest.json`);
-    this.vaeManifest = await getJson(`${vae}/manifest.json`);
+    this.teManifest = await getJson(`${te}/manifest.json`, this.cacheWeights);
+    this.ditManifest = await getJson(`${dit}/manifest.json`, this.cacheWeights);
+    this.vaeManifest = await getJson(`${vae}/manifest.json`, this.cacheWeights);
     const bundleBytes = m => Object.values(m.bundles ?? {}).reduce((sum, b) => sum + transferBytes(b), 0);
     const totalBytes = bundleBytes(this.teManifest) + bundleBytes(this.ditManifest) + transferBytes(this.vaeManifest.bundle)
       + (transferBytes(this.teManifest.tokenizer) ?? 0);
-    const stats = this.loadStats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    const stats = this.loadStats = { cacheWeights: this.cacheWeights, totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
     let loadedBytes = 0;
     const progress = (part, name) => onProgress(part, name, { loadedBytes, totalBytes });
     const fetchBundle = (root, part) => (file, bundle) => getWeightBytes(`${root}/${file}`,
@@ -217,9 +221,9 @@ export class KleinPipeline {
   // onProgress(part, name, { loadedBytes, totalBytes }) as for load(); returns the load stats.
   async loadTransformer(url, onProgress = () => {}) {
     this.assertUsable();
-    const manifest = await getJson(`${url}/manifest.json`);
+    const manifest = await getJson(`${url}/manifest.json`, this.cacheWeights);
     const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
-    const stats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    const stats = { cacheWeights: this.cacheWeights, totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
     this.transformer?.destroy(); this.transformer = null; this.residentBytes.transformer = 0;
     // Lean residency never holds the text encoder and a transformer together.
     if (this.residency === 'lean' && this.textEncoder?.weightsResident) { this.textEncoder.unloadWeights(); this.residentBytes.textEncoder = 0; }
@@ -320,7 +324,7 @@ export class KleinPipeline {
     await this.sched.flush(`swap.${which}`);
     if (other?.weightsResident) { other.unloadWeights(); this.residentBytes[which === 'textEncoder' ? 'transformer' : 'textEncoder'] = 0; }
     const root = which === 'textEncoder' ? this.urls.textEncoderUrl : this.urls.transformerUrl;
-    const stats = { cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    const stats = { cacheWeights: this.cacheWeights, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
     const fetchFrom = fetchBundle ?? ((file, bundle) => getWeightBytes(`${root}/${file}`, { sha256: bundle.sha256, bytes: bundle.bytes, gzip: bundle.gzip }, stats));
     let bytes = 0;
     const upload = () => model.loadBundles(fetchFrom, (n, b) => { bytes += b; });
@@ -380,7 +384,7 @@ export class KleinPipeline {
   async fetchEmbeddingRows(ids) {
     const { textEncoderUrl: te } = this.urls; const { file, row_bytes: rb } = this.teManifest.embedding;
     return new Map(await Promise.all(ids.map(async id => {
-      const r = await fetchNamed(`${te}/${file}`, { headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
+      const r = await fetchNamed(`${te}/${file}`, { cache: this.cacheWeights ? 'default' : 'no-store', headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
       if (r.status !== 206) throw new Error(`embedding range request returned ${r.status}`);
       const b = await r.arrayBuffer(); if (b.byteLength !== rb) throw new Error('short embedding row');
       return [id, b];

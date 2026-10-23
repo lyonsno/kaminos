@@ -51,6 +51,8 @@ KAMINOS_FLUX3_WEIGHTS_ROOT=/path/to/local/package python3 serve.py 8090
 Choose FLUX.3, enter a prompt and generate. The transformer manifest selects the sampling
 recipe: the merged four-step LoRA pack uses four steps and the distilled pack uses sixteen.
 The current pack is 4-bit; FLUX.2's 3-bit and 2-bit choices are unavailable for FLUX.3.
+The local FLUX.3 route reads the mounted files without making another multi-gigabyte copy in browser CacheStorage or the HTTP cache. Hosted Klein keeps its browser cache.
+
 Switching models releases the previous pipeline before loading the next one. The output
 is saved in Source images and selected for the existing image-to-mesh flow. Its PNG carries
 the effective model, route, weight source, sampling recipe and merged-adapter metadata.
