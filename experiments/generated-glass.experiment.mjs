@@ -8,7 +8,7 @@ export default {
  id:'generated-glass',title:'Generated glass',
  async create({host,inputs,record}){
   if(!inputs.url)throw Error('Choose a textured mesh URL');
-  const session=await host.scene.open();let asset,glass,frame,surfels,rawMesh,fieldMeta,reference,representation='mesh',levelRequest=0,disposed=false;
+  const session=await host.scene.open();let asset,glass,frame,surfels,rawMesh,fieldMeta,reference,representation='mesh',levelRequest=0,representationRequest=0,disposed=false;
   const surfelHolder=new Group(),rawHolder=new Group();surfelHolder.name='TRELLIS surfels';rawHolder.name='Raw triangles';
   const levels=inputs.surfelBase?[{factor:1,base:inputs.surfelBase},...(inputs.surfelLevels??[])]:[];
   if(levels.some((l,i)=>!Number.isSafeInteger(l.factor)||l.factor<1||!l.base||levels.findIndex(v=>v.factor===l.factor)!==i))throw Error('Invalid surfel levels');
@@ -34,7 +34,7 @@ export default {
     if(inputs.material){surfels.set(inputs.material);rawMesh?.set(inputs.material);}
    }
    const box=new Box3().setFromObject(asset.root),center=box.getCenter(new Vector3()),size=box.getSize(new Vector3());
-   reference=createReferenceBottle();reference.root.scale.setScalar(size.y*.32);reference.root.position.set(box.min.x-size.x*.25,box.min.y,center.z+size.z*.25);
+   reference=createReferenceBottle();reference.root.scale.setScalar(size.y*.32);reference.root.position.set(box.min.x-size.x*.18,box.min.y,center.z+size.z*.25);
    await session.attach(reference.root,{owned:true,metadata:{label:reference.root.name,source:'fixture:smooth-hollow-bottle',type:'experiment'}});reference.set(glass.read());
    // An opaque striped card makes displacement and tint visible behind the bottles.
    const card=new Group();card.name='Glass backdrop';
@@ -44,8 +44,8 @@ export default {
    }
    await session.attach(card,{owned:true,metadata:{label:card.name,source:'fixture:glass-backdrop',type:'experiment'}});
    frame=(detail=false)=>{
-    const target=detail?new Vector3(box.min.x,box.min.y+size.y*.16,center.z+size.z*.25):center.clone().add(new Vector3(-size.x*.15,0,0));
-    return session.setView({position:[target.x,target.y+(detail?0:.12),detail?target.z+size.y*.6:box.max.z+size.y*1.6],target:target.toArray()});
+    const target=detail?new Vector3(box.min.x+size.x*.02,box.min.y+size.y*.17,center.z+size.z*.25):center.clone().add(new Vector3(-size.x*.15,0,0));
+    return session.setView({position:[target.x,target.y+(detail?0:.12),detail?target.z+size.y*.8:box.max.z+size.y*1.6],target:target.toArray()});
    };
    frame(inputs.closeup===true);
   }catch(error){rawMesh?.dispose();surfels?.dispose();reference?.dispose();glass?.dispose();await session.dispose();throw error;}
@@ -55,7 +55,8 @@ export default {
    frameBottle(){const view=frame(true);record({kind:'generated-glass.frame-bottle',view});return view;},
    frameWhole(){return frame(false);},
    async setRepresentation(value){if(!surfels||!['mesh','surfels',...(fieldMeta.triangles?['rawMesh']:[])].includes(value))throw Error('Unavailable representation');
-    if(value==='rawMesh'&&!rawMesh){const {data,meta}=await load(inputs.surfelBase),response=await fetch(inputs.surfelBase+meta.triangles.file);if(!response.ok)throw Error('Raw triangles unavailable');if(disposed)return;rawMesh=createRawFieldMesh(data,new Uint32Array(await response.arrayBuffer()),meta);rawMesh.set(glass.read());rawHolder.add(rawMesh.root);}
+    const request=++representationRequest;
+    if(value==='rawMesh'&&!rawMesh){const {data,meta}=await load(inputs.surfelBase),response=await fetch(inputs.surfelBase+meta.triangles.file);if(!response.ok)throw Error('Raw triangles unavailable');const triangles=new Uint32Array(await response.arrayBuffer());if(disposed||request!==representationRequest)return;rawMesh=createRawFieldMesh(data,triangles,meta);rawMesh.set(glass.read());rawHolder.add(rawMesh.root);}
     representation=value;asset.root.visible=value==='mesh';surfelHolder.visible=value==='surfels';rawHolder.visible=value==='rawMesh';session.redraw();sync();record({kind:'generated-glass.representation',value});return read();},
    async setSurfelFactor(value){if(await loadLevel(value)){session.redraw();sync();record({kind:'generated-glass.surfel-factor',factor,count:surfels.read().count});}return read();},
    setMaterial(patch){glass.set(patch);surfels?.set(patch);rawMesh?.set(patch);reference.set(patch);session.redraw();sync();const effective=read();record({kind:'generated-glass.material',requested:patch,effective});return effective;},
@@ -88,6 +89,6 @@ export default {
     const button=document.createElement('button');button.textContent=label;button.onclick=()=>invoke(operation).catch(e=>{status.textContent=e.message;});root.append(button);
    }
    root.append(status);sync=()=>{const s=read();mode.value=s.mode;if(representationSelect)representationSelect.value=representation;if(reconstruction){reconstruction.value=s.surfels.reconstruction?s.surfels.reconstructionScope:'off';reconstruction.disabled=representation!=='surfels';density.value=factor;density.disabled=representation!=='surfels';countLabel.textContent=`${s.surfels.count.toLocaleString()} surfels / ${s.surfels.sourceCount.toLocaleString()} source samples`;}for(const k of Object.keys(fields))fields[k].value=s[k];};sync();
-  },async dispose(){disposed=true;levelRequest++;rawMesh?.dispose();surfels?.dispose();reference?.dispose();glass.dispose();await session.dispose();}};
+  },async dispose(){disposed=true;levelRequest++;representationRequest++;rawMesh?.dispose();surfels?.dispose();reference?.dispose();glass.dispose();await session.dispose();}};
  }
 };
