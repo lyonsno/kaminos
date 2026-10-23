@@ -38,7 +38,32 @@ Present: text-to-image end to end. On an M4 Max a 512 × 512 image takes about 2
   The manifest records the recipe (shift 3, 4 steps; 2-3 also work), which `Flux3Pipeline` follows.
   Same size as the distilled pack (2.83 GB); a 512 image takes 4 transformer steps instead of 16.
 
-Not yet: hosted weights and a public page.
+## Use in Kaminos
+
+The Generate tab's Image step offers **FLUX.3 Image Klein (local)** alongside FLUX.2.
+Mount an existing local weight package with `te/`, `dit/` and `vae/` directories, each
+containing its manifest and packed files:
+
+```sh
+KAMINOS_FLUX3_WEIGHTS_ROOT=/path/to/local/package python3 serve.py 8090
+```
+
+Choose FLUX.3, enter a prompt and generate. The transformer manifest selects the sampling
+recipe: the merged four-step LoRA pack uses four steps and the distilled pack uses sixteen.
+The current pack is 4-bit; FLUX.2's 3-bit and 2-bit choices are unavailable for FLUX.3.
+Switching models releases the previous pipeline before loading the next one. The output
+is saved in Source images and selected for the existing image-to-mesh flow. Its PNG carries
+the effective model, route, weight source, sampling recipe and merged-adapter metadata.
+
+The server reports the mount under `flux3` in `/api/runtime-config` and serves it at
+`/flux3-weights/`, including the text encoder's byte-range reads. A missing, incomplete or
+FLUX.2 transformer package is unavailable; the app does not substitute hosted FLUX.2 weights
+for a FLUX.3 request. Choose the server's bind address and network access deliberately, as
+for other locally mounted models.
+
+FLUX.3 weights retain the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein/blob/main/LICENSE.md).
+Local application integration does not change those terms. This port has no public FLUX.3
+weight host or standalone public demo.
 
     python pack-flux3-transformer.py --model-dir <snapshot> --out <weights>
     python export-flux3-reference.py --model-dir <snapshot> --out <ref> --prompt-file <txt>
