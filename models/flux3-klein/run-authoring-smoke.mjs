@@ -28,6 +28,10 @@ export function validateFlux3AuthoringResult(r){
   return r;
 }
 
+export async function waitForAuthoringGpuHost({read,wait}){
+  for(;;){const host=await read();if(host)return host;await wait();}
+}
+
 async function main(){
   const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
@@ -54,9 +58,11 @@ async function main(){
     await browser.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
     report.url=`${v.origin}/index.html?workspace=authoring`;
     await browser.navigate(report.url,'!!window.kaminosAssets?.images && !!document.getElementById("asset-image-model")');
-    report.device=await browser.evaluate(`(async()=>{const host=await window.kaminosAppGpu();if(!host)throw Error('No app GPU host');
+    report.phase='gpu-host';await write();
+    report.device=await waitForAuthoringGpuHost({read:()=>browser.evaluate(`(async()=>{const host=await window.kaminosAppGpu();if(!host)return null;
       window.flux3SmokeGpuErrors=[];host.device.addEventListener('uncapturederror',e=>window.flux3SmokeGpuErrors.push(e.error.message));
-      return {features:[...host.device.features],adapter:{vendor:host.adapter.info.vendor,architecture:host.adapter.info.architecture,device:host.adapter.info.device,description:host.adapter.info.description}};})()`);
+      return {features:[...host.device.features],adapter:{vendor:host.adapter.info.vendor,architecture:host.adapter.info.architecture,device:host.adapter.info.device,description:host.adapter.info.description}};})()`),
+      wait:async()=>{if(report.console.some(line=>line.startsWith('exception:')))throw Error('Page failed while constructing its GPU host');await write();await new Promise(resolve=>setTimeout(resolve,1000));}});
     assert.ok(report.device.features.includes('shader-f16'));
     report.prompt='A copper kettle with a round handle, isolated on a plain white background, studio product photo';
     report.seed=7006;report.expectedSize=Number(v.size);

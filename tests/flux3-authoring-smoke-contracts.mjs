@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateFlux3AuthoringResult as validate} from '../models/flux3-klein/run-authoring-smoke.mjs';
+import {validateFlux3AuthoringResult as validate,waitForAuthoringGpuHost} from '../models/flux3-klein/run-authoring-smoke.mjs';
 const good=()=>({runtime:{flux3:{mounted:true,modelRoot:'/local/pack'}},expectedModelRoot:'/local/pack',
  manifest:{source:{repo:'base',revision:'rev'},sampling:{shift:3,steps:4},lora:{sha256:'adapter'}},
  provenance:{route:'flux3-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.3 Image Klein',weights:'/flux3-weights',transformer:'/flux3-weights/dit',width:512,height:512,source:{repo:'base',revision:'rev'},sampling:{shift:3,steps:4},lora:{sha256:'adapter'}},
@@ -16,4 +16,9 @@ test('blank, missing, partial output and absent foreground progression cannot pa
  for(const mutate of [r=>r.output=null,r=>r.output.distinctRgb=1,r=>r.output.bytes=0,r=>r.output.width=256,r=>r.frames.after=r.frames.before,r=>delete r.provenance]){
   const r=good();mutate(r);assert.throws(()=>validate(r));
  }
+});
+test('controls can exist before the shared GPU host; the smoke waits for the actual host',async()=>{
+ let reads=0,waits=0;const host={features:['shader-f16']};
+ const actual=await waitForAuthoringGpuHost({read:async()=>++reads<3?null:host,wait:async()=>{waits++;}});
+ assert.equal(actual,host);assert.equal(waits,2);
 });
