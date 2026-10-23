@@ -6117,6 +6117,7 @@ function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
   if (!ids.length) return null;
   const id = String(metadata.id || makeSceneObjectId('group'));
   const previous = workingScene.groups.find(group=>group.id===id);
+  if(checkedRepetition(metadata.repetition??previous?.repetition)&&ids.some(member=>workingScene.find(member)?.burnable?.enabled))throw Error('Burnable wood requires independent objects; disable burning before repetition');
   const members = [...new Set([...(previous?.objectIds||[]),...ids])];
   const group = {
     id, label:label||previous?.label||`Group ${workingScene.groups.length+1}`,
@@ -25005,15 +25006,18 @@ function syncBurnableStatus(){
 function writeObjectBurnable(id,value){
   const entry=workingScene.objects.find(row=>row.id===id)||workingScene.retained(id);
   if(!entry)throw Error('Burnable object is absent');
-  entry.burnable=checkedBurnable(entry,value);
+  const next=checkedBurnable(entry,value);
+  if(next?.enabled){resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}
+  entry.burnable=next;
   if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.burnable=structuredClone(entry.burnable);
   void sceneBurning?.sync();syncSceneDataInspector();window._kaminosDirty?.();
 }
 function ensureObjectBurnableTarget(id){
-  const entry=resolveBurnableTarget(workingScene.objects,id),target='@object-burnable:'+id;
+  const entry=workingScene.find(id),target='@object-burnable:'+id;
+  if(!entry)throw Error('Burnable object is absent');
   if(!burnableEditTargets.has(target)){
     scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>structuredClone((workingScene.objects.find(row=>row.id===id)||workingScene.retained(id))?.burnable??null),
-      check:value=>checkedBurnable(entry,value),write:value=>writeObjectBurnable(id,value)});
+      check:value=>{const current=workingScene.find(id)||workingScene.retained(id),next=checkedBurnable(current,value);if(next?.enabled){resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}return next;},write:value=>writeObjectBurnable(id,value)});
     burnableEditTargets.add(target);
   }
   return target;
@@ -25112,6 +25116,7 @@ function repetitionOwner(id){
  const groupId=id?.startsWith('@group:')?id.slice(7):id,group=workingScene.groups.find(g=>g.id===groupId);
  const record=group||workingScene.objects.find(o=>o.id===id);if(!record)throw Error('Select a mesh or mesh group for repetition');
  const entries=group?group.objectIds.map(id=>workingScene.objects.find(o=>o.id===id)):[record];
+ if(entries.some(entry=>entry?.burnable?.enabled))throw Error('Burnable wood requires independent objects; disable burning before repetition');
  if(!entries.length||entries.some(entry=>!canRepeatSceneObject(entry)))throw Error('Repetition supports static mesh objects and mesh groups');
  return {id:group?'@group:'+group.id:record.id,record,entries,frame:group?.transform||sceneObjectTransformState(record.object),group};
 }

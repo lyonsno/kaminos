@@ -43,7 +43,7 @@ try{
   assert.deepEqual(report.effective.gi,{steps:4,slices:3});
   assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.consumer,'kaminos.scene-burning.v1');
   report.sources=[];
-  for(const name of ['index.html','authoring-workspace.mjs','scene-burning.mjs','scene-burn-body.mjs','scene-burning-settings.mjs','scene-repetition.mjs','scene-persistence-core.js','live-log-indicator.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','live-log-heat-gpu.mjs','live-log-gas-source.mjs']){
+  for(const name of ['index.html','authoring-workspace.mjs','scene-burning.mjs','scene-burn-body.mjs','scene-burning-settings.mjs','scene-repetition.mjs','scene-repetition-controller.mjs','scene-radiance.mjs','burn-table-material.mjs','scene-persistence-core.js','live-log-indicator.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','live-log-heat-gpu.mjs','live-log-gas-source.mjs']){
     const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.equal(response.ok(),true);
     const served=await response.body(),hash=bytes=>createHash('sha256').update(bytes).digest('hex');assert.equal(hash(local),hash(served));report.sources.push({name,sha256:hash(local)});
   }
@@ -77,6 +77,31 @@ try{
   await page.evaluate(()=>window.kaminosSceneEdits.undo());
   await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident',report.ids[0]));
   const putBack=await sample('restored-membership');assert.equal(putBack[0].state.state.fields[0].steps,restored[0].state.state.fields[0].steps);
+  report.phase='ordinary-editing';await save();
+  const copy=await guard(page.evaluate(id=>{window.selectSceneObject(id);return window.kaminosSceneAuthoring.duplicate(id);},report.ids[1]));
+  await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident',copy));
+  assert.equal((await advance(10)).ok,true);
+  report.duplicate=await page.evaluate(id=>window.kaminosSceneAuthoring.burningState(id),copy);assert.ok(report.duplicate.state.fields[0].steps>=10);
+  const editingBefore=await sample('before-material-edit');
+  await page.evaluate(id=>window.kaminosSceneAuthoring.setMaterial(id,{color:'#ff0000',roughness:.2,metalness:.8}),report.ids[1]);
+  await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.materials.every(m=>m.color==='ff0000'&&m.roughness===.2&&m.metalness===.8),report.ids[1]));
+  const edited=await sample('material-edited');assert.equal(edited[1].state.state.fields[0].steps,editingBefore[1].state.state.fields[0].steps);
+  await page.screenshot({path:path.join(out,'material-edited.png')});
+  await page.evaluate(()=>window.kaminosSceneEdits.undo());
+  await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.materials.every(m=>m.color==='92979c'&&m.roughness===.55&&m.metalness===.05),report.ids[1]));
+  report.repetition=await page.evaluate(({ids,copy})=>{
+    const api=window.kaminosSceneAuthoring,settings={mode:'line',count:2},refuse=operation=>{try{operation();return null;}catch(error){return error.message;}};
+    const objectError=refuse(()=>api.setRepetition(ids[0],settings));
+    const group=api.group([ids[0],copy],'Independent burnables');
+    const groupError=refuse(()=>api.setRepetition('@group:'+group,settings));
+    api.setBurnable(ids[1],false);api.setRepetition(ids[1],settings);
+    const enableError=refuse(()=>api.setBurnable(ids[1],true));
+    api.setBurnable(ids[1],false);api.setRepetition(ids[1],null);api.setBurnable(ids[1],true);
+    window.selectSceneObject(copy);window.kaminosSelection.remove();
+    return {objectError,groupError,enableError};
+  },{ids:report.ids,copy});
+  assert.ok(Object.values(report.repetition).every(Boolean),'Unsupported linked repetition is rejected before changing the scene');
+  await guard(page.waitForFunction(ids=>ids.every(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident'),report.ids));
   report.phase='save-reopen';await save();
   report.saved=await guard(page.evaluate(async name=>{
     window.kaminosSceneEdits.apply('@flame-source-enabled',{enabled:false},'Switch source off');
