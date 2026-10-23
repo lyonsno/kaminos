@@ -7,7 +7,7 @@ export function createSurfelGlass(data,meta){
  if(meta.stride!==12||!Number.isInteger(meta.count)||meta.count<1||data.length!==meta.count*12||!data.every(Number.isFinite)||!(meta.radius>0))throw Error('Invalid surfel field payload');
  const root=new Group();root.name='Raw TRELLIS surfels';
  const populations=[[],[]];for(let i=0;i<meta.count;i++)populations[data[i*12+11]<.98?1:0].push(i);
- const materials=[];let state={mode:'glass',ior:1.45,thickness:.06,reconstruction:true};
+ const materials=[];let state={mode:'glass',ior:1.45,thickness:.06,reconstruction:true,reconstructionScope:'glass'};
  for(let p=0;p<2;p++){
   const ids=populations[p];if(!ids.length)continue;
   const geometry=new CircleGeometry(meta.radius,8),material=new MeshPhysicalNodeMaterial({side:DoubleSide});
@@ -27,31 +27,37 @@ export function createSurfelGlass(data,meta){
   mesh.userData.transmissive=p===1;mesh.userData.sourceRows=ids;
   mesh.computeBoundingBox();mesh.computeBoundingSphere();root.add(mesh);materials.push({material,transmissive:p===1});
  }
- const surface=createSurfelSurface(root.children,meta.radius);
- let footprint=1;
- for(const mesh of root.children)mesh.onBeforeRender=(...args)=>{if(state.reconstruction)surface.prepare(...args);};
+ let surface,surfaceScope;
+ const reconstructs=mesh=>state.reconstruction&&(state.reconstructionScope==='all'||mesh.userData.transmissive);
  function apply(){
-  const nextFootprint=state.reconstruction?1.5:1;
-  if(nextFootprint!==footprint){for(const mesh of root.children){mesh.geometry.scale(nextFootprint/footprint,nextFootprint/footprint,1);mesh.computeBoundingBox();mesh.computeBoundingSphere();}footprint=nextFootprint;surface.invalidate();}
-  for(const {material,transmissive} of materials){
-  material.colorNode=state.reconstruction?surface.color:vec4(attribute('surfelColor','vec3'),1);
-  material.normalNode=state.reconstruction?surface.normal:null;
-  material.maskNode=state.reconstruction?surface.mask:null;
-  material.metalnessNode=state.reconstruction?surface.metallic:attribute('surfelMetallic','float');
-  material.roughnessNode=state.reconstruction?surface.roughness:attribute('surfelRoughness','float');
-  const opacity=state.reconstruction?surface.opacity:attribute('surfelOpacity','float');
+  const changed=surfaceScope!==state.reconstructionScope;
+  if(changed){surface?.dispose();surface=undefined;surfaceScope=state.reconstructionScope;}
+  for(const mesh of root.children){const previous=mesh.userData.footprintScale??1,next=reconstructs(mesh)?1.5:1;
+   if(previous!==next){mesh.geometry.scale(next/previous,next/previous,1);mesh.computeBoundingBox();mesh.computeBoundingSphere();surface?.invalidate();}mesh.userData.footprintScale=next;
+  }
+  if(!surface){const meshes=root.children.filter(m=>state.reconstructionScope==='all'||m.userData.transmissive);if(meshes.length)surface=createSurfelSurface(meshes,meta.radius);}
+  for(let p=0;p<materials.length;p++){
+  const {material,transmissive}=materials[p],mesh=root.children[p],reconstruct=reconstructs(mesh);
+  mesh.onBeforeRender=reconstruct?(...args)=>surface.prepare(...args):()=>{};
+  material.colorNode=reconstruct?surface.color:vec4(attribute('surfelColor','vec3'),1);
+  material.normalNode=reconstruct?surface.normal:null;
+  material.maskNode=reconstruct?surface.mask:null;
+  material.metalnessNode=reconstruct?surface.metallic:attribute('surfelMetallic','float');
+  material.roughnessNode=reconstruct?surface.roughness:attribute('surfelRoughness','float');
+  const opacity=reconstruct?surface.opacity:attribute('surfelOpacity','float');
   // Reconstructed opacity belongs to the wall, not the source-row population.
-  material.transmission=state.mode==='glass'&&(state.reconstruction||transmissive)?1:0;
+  material.transmission=state.mode==='glass'&&(reconstruct||transmissive)?1:0;
   material.transmissionNode=material.transmission?opacity.oneMinus():null;
   material.opacityNode=state.mode==='opacity'?opacity:null;
   material.alphaHash=state.mode==='opacity';material.ior=state.ior;material.thickness=state.thickness;material.needsUpdate=true;
   material.lights=state.mode!=='normals';
-  if(!material.lights)material.colorNode=vec4((state.reconstruction?surface.normal:normalView).normalize().mul(.5).add(.5),1);
+  if(!material.lights)material.colorNode=vec4((reconstruct?surface.normal:normalView).normalize().mul(.5).add(.5),1);
   if(state.mode==='plain'){material.colorNode=vec4(vec3(.5),1);material.metalnessNode=null;material.roughnessNode=null;material.metalness=0;material.roughness=.8;}
  }}apply();
- return {root,inspectSurface:(x,y)=>surface.inspect(x,y),read:()=>({...state,count:meta.count,route:'oriented-raw-field-surfels',radius:meta.radius,footprintScale:footprint,surface:surface.read()}),set(patch){
+ return {root,inspectSurface:(x,y)=>{if(!surface)throw Error('No glass surface');return surface.inspect(x,y);},read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,reduction:meta.reduction??{factor:1},route:'oriented-raw-field-surfels',radius:meta.radius,footprintScale:state.reconstruction?1.5:1,surface:surface?.read()??null}),set(patch){
   const next={...state,...patch};if(!['glass','opaque','opacity','plain','normals'].includes(next.mode)||!Number.isFinite(next.ior)||next.ior<1||next.ior>2.5||!Number.isFinite(next.thickness)||next.thickness<0||next.thickness>1)throw Error('Invalid surfel optics');
   if(typeof next.reconstruction!=='boolean')throw Error('Invalid surface reconstruction');
+  if(!['glass','all'].includes(next.reconstructionScope))throw Error('Invalid reconstruction scope');
   state=next;apply();return this.read();
- },dispose(){surface.dispose();for(const mesh of root.children){mesh.geometry.dispose();mesh.material.dispose();}}};
+ },dispose(){surface?.dispose();for(const mesh of root.children){mesh.geometry.dispose();mesh.material.dispose();}}};
 }
