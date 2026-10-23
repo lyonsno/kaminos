@@ -14,10 +14,11 @@ assert.deepEqual(schema.rendererControls.find(c=>c.key==='volume-quadrature-jitt
 });
 const writes=core.match(/uniforms\[41\][\s\S]*?uniforms\[43\][^;]*;/)?.[0];
 assert.ok(writes,'interior jitter needs its own GPU flag, not the animation phase');
-for(const rayNoiseAnimated of [false,true])for(const quadratureJitter of [false,true]){
+for(const rayNoiseAnimated of [false,true])for(const quadratureJitter of [false,true])for(const rayNoiseFrame of [undefined,0,39]){
   const uniforms=[];
-  vm.runInNewContext(writes,{uniforms,state:{frameCount:7},controlsSnapshot:{rayStartNoise:true,rayNoiseAnimated,quadratureJitter},clampFinite:()=>0});
-  assert.equal(uniforms[41],rayNoiseAnimated?7:0);
+  vm.runInNewContext(writes,{uniforms,state:{frameCount:107},renderPhaseFrame:13,controlsSnapshot:{rayStartNoise:true,rayNoiseAnimated,quadratureJitter,rayNoiseFrame},clampFinite:()=>0});
+  assert.equal(uniforms[41],rayNoiseAnimated?(rayNoiseFrame??13)%32:0,
+    'animated noise uses the held render phase or explicit override, not the advancing frame count');
   assert.equal(uniforms[43],quadratureJitter?1:0);
 }
 assert.match(core,/u\.occupancy_controls\.w > 0\.5/,'interior GPU branch must consume the independent flag');
