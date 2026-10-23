@@ -150,7 +150,7 @@ try{
   assert.deepEqual(onsetWalker.pose({bones:['pelvis']}).bones,pose.bones.slice(0,1),'root does not slide during recoil');
   assert.notDeepEqual(onsetWalker.pose({bones:['spine-chest']}).bones,pose.bones.slice(1),'chest expresses the pulse while stride is held');
   advance(3);assert.equal(onsetWalker.read().attention.startle,null);
-  if(engage){assert.equal(onsetWalker.read().action.engagement.phase,'cautious','strong native light bridge onset extends caution beyond recoil');advance(5);}
+  if(engage){assert.ok(['cautious','withdrawing'].includes(onsetWalker.read().action.engagement.phase),'strong native light bridge onset keeps a protective response beyond recoil');advance(5);}
   assert.ok(onsetWalker.read().action.motion.elapsed>before.action.motion.elapsed,'autonomous walking resumes');
   if(engage){onsetWalker.operations.pause();onsetWalker.operations.engagement({enabled:false});assert.equal(onsetWalker.read().action.engagement.phase,'wandering');assert.equal(onsetWalker.read().action.motion.path.status,'wandering');assert.equal(onsetWalker.read().recipe.attention.engage,false);}
 
@@ -167,12 +167,16 @@ try{
    window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance}))})};
    motivated=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
    await motivated.operations.action({kind:'wander'});
-   const states=[],tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});states.push(motivated.read().action.engagement);};
+   const states=[],joined=[],tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});const r=motivated.read();states.push(r.action.engagement);joined.push(r);};
    for(let i=0;i<6;i++)tick();fire.active=true;notify();for(let i=0;i<6;i++)tick();await poll();
    for(let i=0;i<110;i++)tick();
    assert.equal(states.some(x=>x.phase==='withdrawing'),expectRetreat,'sampled magnitude changes the actual walking intention');
    if(expectRetreat){
     const retreat=states.find(x=>x.phase==='withdrawing');assert.ok(retreat.destination&&retreat.motivation.aversion>retreat.motivation.drive);
+    const withdrawing=joined.filter(r=>r.action.engagement.phase==='withdrawing');
+    assert.ok(withdrawing.every(r=>r.action.motion.reverse),'actual withdrawal selects backward retained steps');
+    assert.ok(withdrawing.filter(r=>r.attention.perceived.some(p=>p.id==='flame-emitter')).length>withdrawing.length*.9,'actual body and gaze retain visual contact during retreat');
+    assert.ok(withdrawing.every(r=>r.action.engagement.pace>1),'withdrawal consumes urgent gait pace');
 
    }
   }finally{await motivated?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}

@@ -150,13 +150,23 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
    const prior=engagement.read();
    const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,cessation:a.interruption,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
-   attention.setEngagement(['approaching','inspecting','cautious','withdrawing'].includes(intent.phase)?intent.id:null);
+   attention.setEngagement(['approaching','inspecting','cautious','withdrawing'].includes(intent.phase)?intent:null);
+   const backward=wander.read().reverse;
+   let retreatBackward=false;
+   if(intent.phase==='withdrawing'){
+    const target=frame.worldToLocal(new THREE.Vector3(...intent.point)),dx=target.x-path.position[0],dz=target.z-path.position[1],d=Math.hypot(dx,dz);
+    const facing=d>0?(dx*path.direction[0]+dz*path.direction[1])*(backward?-1:1)/d:1;
+    retreatBackward=facing>(backward?-.2:.2);
+   }
+   // Reverse both retained pose phase and travel, preserving body orientation.
+   // A threat already behind the body still permits ordinary forward escape.
+   wander.setReverse(retreatBackward);
    if(intent.destination){
     const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
     if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
    }else if(intent.phase!=='inspecting')wander.setDestination(null);
-   if(intent.hold)moving=0;
-  }
+   if(intent.hold)moving=0;else moving*=intent.pace??1;
+  }else wander.setReverse(false);
   const state=wander.advance(moving);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
   if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
@@ -347,8 +357,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     host.scene.refreshPresentation?.(asset);return read();
    }),
    engagement:operation('engagement',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Engagement enabled must be boolean');chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,engage:input.enabled}};
-    if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
-   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);if(!input.enabled){engagement.reset();wander?.setDestination(null);}chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
+    if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setReverse(false);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
+   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);if(!input.enabled){engagement.reset();wander?.setReverse(false);wander?.setDestination(null);}chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
     // While not playing no frame will come to clear or apply the turn: show
     // the displayed source frame again without moving time.
     if(player.read().status!=='playing'){player.represent();host.scene.refreshPresentation?.(asset);}

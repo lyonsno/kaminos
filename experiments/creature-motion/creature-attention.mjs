@@ -79,6 +79,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  let interruption=null,powerDropArmed=true,startle=null,sensoryAlarm=null,urgentBearing=null,onset=null,previousPower=null;
  const localLevels=new Map();
  let gazeLocal=null,gaze=null,perceived=[],engagementId=null;
+ let watchIntent=null,watchCheck=null,watchNext=null,watchDiversion=null;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -310,9 +311,28 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    // Apply its initial arrest to the whole frame, independent of source order.
    if(interruption&&time-interruption.since<o.stillSeconds)observations.length=0;
    if(interruption&&observations.length){remember('resolved',time,{id:interruption.id,cause:interruption.cause,resolvedBy:observations[0].id});interruption=null;}
-   const previous=focus;
+   const previous=focus,alarmRedirect=urgentBearing;
    if(urgentBearing&&(!interruption||time-interruption.since>=o.stillSeconds)){interruption=null;policy.reset();focus=policy.update({time,observations:[urgentBearing]}).focus;urgentBearing=null;}
    else focus=policy.update({time,observations}).focus;
+   if(watchIntent&&time<watchIntent.until&&!interruption){
+    const seen=perceived.find(x=>x.id===watchIntent.id),lastObservedAt=seen?time:watchIntent.lastObservedAt;
+    const watched={id:watchIntent.id,point:[...(seen?.point??watchIntent.point)],reason:seen?'keeping watch':'looking back',remembered:!seen,confidence:seen?1:Math.max(0,(watchIntent.until-time)/Math.max(1e-9,watchIntent.until-lastObservedAt)),lastObservedAt,expiresAt:watchIntent.until,acquiredAt:previous?.id===watchIntent.id?previous.acquiredAt:time};
+    // A fresh competing event borrows gaze briefly; the continuing concern
+    // remains available to return to instead of competing as new novelty.
+    const fresh=alarmRedirect??observations.find(x=>x.id!==watchIntent.id&&memory.get(x.id)?.eventAt===time&&x.score>.3);
+    if(fresh&&fresh.id!==watchIntent.id){watchDiversion={...fresh,point:[...fresh.point],since:time,until:time+.45};watchCheck=null;}
+    if(alarmRedirect?.id===watchIntent.id){watchDiversion=null;watchCheck=null;watchNext=time+2.5+random()*2;}
+    if(watchDiversion&&time>=watchDiversion.until)watchDiversion=null;
+    if(watchNext===null)watchNext=time+2.5+random()*2;
+    if(watchCheck&&time>=watchCheck.until){watchCheck=null;watchNext=time+2.5+random()*2;}
+    if(!watchDiversion&&!watchCheck&&seen&&time>=watchNext){
+     const side=random()<.5?-1:1,dir=body.clone().applyAxisAngle(new THREE.Vector3(0,1,0),side*.85);
+     const point=headAt.clone().addScaledVector(dir,o.scanDistance);point.y-=.35;
+     watchCheck={id:`watch-check-${++scans}`,point:point.toArray(),since:time,until:time+.25};
+    }
+    const aside=watchDiversion??watchCheck;
+    focus=aside?{id:aside.id,point:[...aside.point],reason:watchDiversion?aside.reason:'checking surroundings',remembered:time>aside.since,confidence:1,lastObservedAt:aside.since,expiresAt:aside.until,acquiredAt:aside.since}:watched;
+   }else{watchCheck=null;watchNext=null;watchDiversion=null;}
    if(focus&&focus.id!==previous?.id){
     const c=candidates.find(x=>x.id===focus.id);
     why={cause:focus.reason,id:focus.id,label:c?.label??focus.id,since:time,familiarity:c?.familiarity??null,competitors:candidates.filter(x=>x.id!==focus.id&&x.score>0).map(x=>({id:x.id,label:x.label,cause:x.cause,score:x.score}))};
@@ -466,16 +486,22 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
-  return {behavior:{...behavior},gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {behavior:{...behavior},watch:watchIntent?{...structuredClone(watchIntent),checking:Boolean(watchCheck),diverted:Boolean(watchDiversion)}:null,gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;sensoryAlarm=null;urgentBearing=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];setEngagement(null);policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;sensoryAlarm=null;urgentBearing=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
- return Object.freeze({modify,sense,read,motionSeconds,setBehavior:value=>{behavior=behaviorSettings(value);return read();},setEngagement:id=>{engagementId=id;},setEnabled,setProfile,reticle,dispose});
+ function setEngagement(intent){
+  const next=typeof intent==='object'?intent?.watch??null:null;
+  if(next&&(typeof next.id!=='string'||!next.id||!Array.isArray(next.point)||next.point.length!==3||!next.point.every(Number.isFinite)||![next.strength,next.lastObservedAt,next.until].every(Number.isFinite)||next.strength<=0||next.until<next.lastObservedAt))throw Error('Watch intent requires an observed point, strength and finite lifetime');
+  if(next?.id!==watchIntent?.id){watchCheck=null;watchNext=null;watchDiversion=null;}
+  watchIntent=next?structuredClone(next):null;engagementId=typeof intent==='string'?intent:intent?.id??null;
+ }
+ return Object.freeze({modify,sense,read,motionSeconds,setBehavior:value=>{behavior=behaviorSettings(value);return read();},setEngagement,setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that
