@@ -13,9 +13,10 @@ export function defaultFlameEmitterPose() {
 export function normalizeFlameEmitterPose(value = defaultFlameEmitterPose()) {
   const pose = checkedPose(value);
   const scale = pose.scale[0];
-  if (!(scale > 0) || pose.scale.some(v => Math.abs(v - scale) > 1e-10 * scale)) {
-    throw new Error('Flame source requires positive uniform scale; use S without an axis');
+  if (pose.scale.some(v => Math.abs(v - scale) > 1e-10 * Math.abs(scale))) {
+    throw new Error('Flame source requires uniform scale; use S without an axis');
   }
+  pose.scale.fill(Math.max(0, scale));
   return pose;
 }
 
@@ -96,8 +97,8 @@ export function flameEmitterFrame(value) {
 }
 
 export function immersedRadiusBounds(value) {
-  const scale = flameEmitterFrame(value).scale;
-  return { min: 0.02 / scale, max: null };
+  flameEmitterFrame(value);
+  return { min: 0, max: null };
 }
 
 // Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
@@ -118,13 +119,13 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
   return { ...controls, immersedCentreX: frame.origin[0], immersedCentreY: frame.origin[1],
     immersedCentreZ: frame.origin[2], immersedYaw: yaw,
     immersedPitch: Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI,
-    immersedRadius: Math.max(0.02, radius), immersedSourceEnabled: sourceEnabled };
+    immersedRadius: Math.max(0.02, radius), immersedSourceEnabled: sourceEnabled && radius > 0 };
 }
 
 // Only the positive numerical floor is adjusted; the aperture has no upper cap.
 export function immersedRadiusClamp(controls, value) {
   const radius = Number(controls.immersedRadius ?? 0.2) * flameEmitterFrame(value).scale;
-  if (!Number.isFinite(radius) || radius >= 0.02 - 1e-12) return null;
+  if (!Number.isFinite(radius) || radius === 0 || radius >= 0.02 - 1e-12) return null;
   return { requested: radius, applied: Math.max(0.02, radius) };
 }
 

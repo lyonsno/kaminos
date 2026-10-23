@@ -66,7 +66,7 @@ test('actual water provider rejects a nonuniform batch before its mesh sibling m
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const a=html.indexOf('function checkSelectionRoot('),b=html.indexOf('function selectionTransformProxy(',a);
  const context=vm.createContext({sceneObjects:[{id:'mesh',type:'glb'},record],sceneGroups:[],checkedGroupPose,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE:'flame-emitter',normalizeLocalLiquidEmitter});vm.runInContext(html.slice(a,b),context);
  const edits=createSceneEdits({read:()=>null,write(){}}),target=createSelectionTransformTarget({edits,selection:()=>({ids:['mesh','water'],activeId:'water'}),groups:()=>[],preferences:()=>({pivot:'median',orientation:'world'}),read:id=>structuredClone(states[id]),write:(id,value)=>{writes.push(id);states[id]=value;},check:context.checkSelectionRoot});
- assert.throws(()=>target.apply({scale:[2,1,1]}),/positive uniform scale/);assert.deepEqual(states.mesh.position,[0,0,0]);assert.deepEqual(states.water.scale,[1,1,1]);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,0);
+ assert.throws(()=>target.apply({scale:[2,1,1]}),/uniform scale/);assert.deepEqual(states.mesh.position,[0,0,0]);assert.deepEqual(states.water.scale,[1,1,1]);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,0);
 });
 
 test('World-axis scale follows world axes for an orthogonally rotated object',()=>{

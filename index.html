@@ -1745,7 +1745,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Direction the source blows above or below horizontal: 90 is straight up, 0 sideways.</span>
     <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
       <span class="slider-label">Source radius</span>
-      <input type="range" id="volume-immersed-radius" data-volume-settings-param="volume_immersed_radius" min="0.02" max="0.5" step="any" value="0.2">
+      <input type="range" id="volume-immersed-radius" data-volume-settings-param="volume_immersed_radius" min="0" max="0.5" step="any" value="0.2">
       <span class="slider-val" id="volume-immersed-radius-val">0.2</span>
     </div>
     <span class="slider-help">Disc radius in domain units (0.2 of the half-domain is 6.4 cells on a 64 grid).</span>
@@ -5361,7 +5361,8 @@ function editAuthoredFlameSource(id,patch){
     if(control.tagName==='SELECT'){if(![...control.options].some(option=>option.value===String(raw)))throw Error('Unsupported flame source option');}
     else if(control.type==='checkbox'){if(typeof raw!=='boolean')throw Error('Flame source flag must be boolean');}
     else if(!Number.isFinite(Number(raw)))throw Error('Flame source value must be finite');
-    const descriptor=value.emission.settings[key];descriptor.value=raw;if(Object.hasOwn(descriptor,'rawValue'))descriptor.rawValue=typeof raw==='boolean'?raw:String(raw);
+    const effective=key==='volume-immersed-radius'?Math.max(0,Number(raw)):raw;
+    const descriptor=value.emission.settings[key];descriptor.value=effective;if(Object.hasOwn(descriptor,'rawValue'))descriptor.rawValue=typeof effective==='boolean'?effective:String(effective);
   }
   const active=scenePlacementTools.edits.state().active;
   if(active?.id===target)scenePlacementTools.edits.preview(value);
@@ -5374,6 +5375,7 @@ function acceptedFlameDomainPose() {
 }
 function checkedFlameDomainPose(value) {
   const pose=normalizeFlameEmitterPose(value);
+  if(pose.scale[0]===0)throw Error('Flame domain scale must be positive and finite');
   if(pose.rotation.some(value=>value!==0))throw Error('The simulation box stays aligned with world axes; use Move or uniform Scale');
   return pose;
 }
