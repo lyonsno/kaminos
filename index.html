@@ -3326,6 +3326,7 @@ import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import {createSceneSimulationActivity} from './scene-simulation-activity.mjs';
 import { installCommandSearch } from './scene-command-search.mjs';
 import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
@@ -3567,12 +3568,13 @@ window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
  set(patch={}) {
   const next=checkedViewportDisplay({...viewportDisplay,...patch});
+  const visibilityChanged=JSON.stringify(next.hiddenIds)!==JSON.stringify(viewportDisplay.hiddenIds);
   if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
   if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
   document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
   if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
-  syncEditorHelperVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
+  syncEditorHelperVisibility();if(visibilityChanged)syncSceneSimulationVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
  },
 };
 
@@ -3608,6 +3610,7 @@ let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
 let volumePrototype = null;
+const syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>activeSceneComposition?volumePrototype:null,wanted:()=>isSceneItemVisible('flame-field')});
 let ownerVolumeReady = null;
 let annularBurner = null;
 let burnerRecipe = null;
@@ -4031,7 +4034,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
     if(host.state().mode==='finite_drop'){localLiquidPaused=true;setAuthoredWaterPreviewVisible(false);}
     else if(sceneViewerPaused!==null)localLiquidPaused=sceneViewerPaused;
-    host.setPaused(localLiquidPaused);
+    host.setPaused(localLiquidPaused||!isSceneItemVisible('water-field'));
   },
 });
 let sceneGroups = [];
@@ -5325,7 +5328,7 @@ function syncAuthoredFlameSources(){
   if(records.length>1){requirePluralFlameSourceRuntime();if(records.some(record=>record.emission.settings['volume-emitter-source-law']?.value!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');flameDomainFollowSource=false;}
   if(typeof volumePrototype?.setImmersedSources==='function'){
     const immersed=records.every(record=>(record.emission.settings['volume-emitter-source-law']?.rawValue??record.emission.settings['volume-emitter-source-law']?.value??readVolumeControls().emitterSourceLaw)==='immersed-source');
-    const inputs=immersed?flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale}):[];
+    const inputs=immersed?flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale,visible:isSceneItemVisible}):[];
     volumePrototype.setImmersedSources(inputs);
   }
   window._kaminosDirty?.();
@@ -6907,7 +6910,7 @@ function localLiquidEmitterRecords() {
 
 function localLiquidEmitterState() {
   if (!localLiquidSetup) return {emitters:[]};
-  return localLiquidRuntimeSourceState({ objects: sceneObjects.map(entry => ({
+  return localLiquidRuntimeSourceState({ objects: sceneObjects.filter(entry=>isSceneItemVisible(entry.id)).map(entry => ({
     id: entry.id,
     type: entry.type,
     source: entry.source,
@@ -11790,7 +11793,7 @@ async function initScene() {
       return null;
   };
   window.kaminosSceneVisibility=installSceneVisibility({document,viewport:viewportEl,outliner:document.getElementById('authoring-hierarchy'),edits:scenePlacementTools.edits,scene:sceneVisibilityContext,
-    readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncEditorHelperVisibility();},
+    readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncSceneSimulationVisibility();syncEditorHelperVisibility();},
     selection:()=>{const value=readSceneSelection();return {ids:value.ids,activeId:value.activeId};},setSelection:restoreVisibilitySelection,
     blocked:()=>polyEdit?.active()?'Leave Edit Mode to hide objects':sceneCommandBlocked(),changed:()=>{syncEditorHelperVisibility();renderSceneObjectList();updateSelectionFeedback();markDirty();},onError:error=>setInfo(error.message)});
   window.kaminosCommandSearch=installCommandSearch({document,viewport:viewportEl,button:document.getElementById('authoring-search'),
@@ -11962,7 +11965,10 @@ async function initScene() {
     // wire materials.
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
-        try { localLiquidHost.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
+        if(!isSceneItemVisible('water-field')) {
+          applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
+          renderPipeline.render();
+        } else try { localLiquidHost.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=localLiquidHost.state(),clock=state.clock??{paused:localLiquidHost.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
@@ -13023,7 +13029,8 @@ async function releaseAuthoredWater(id){
  const generation=localLiquidGeneration,request=++authoredWaterReleaseRequest;
  let published=false;
  const isCurrent=()=>generation===localLiquidGeneration&&(published||request===authoredWaterReleaseRequest);
- const emitters=localLiquidEmitterRecords(),setup=structuredClone(localLiquidSetup);
+ const emitters=localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),setup=structuredClone(localLiquidSetup);
+ if(!emitters.length)throw Error('Show a water emitter before releasing water');
  const {createAuthoredWaterHost}=await import('./authored-water-host.mjs');
  if(!isCurrent())throw Error('Water release superseded or scene changed');
  const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
@@ -20373,7 +20380,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && primaryAuthoredFlameSource()?.emissionEnabled!==false && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && primaryAuthoredFlameSource()?.emissionEnabled!==false && isSceneItemVisible(primaryAuthoredFlameSource()?.id) && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -22278,7 +22285,7 @@ function writeFirstFlameFieldStateUnchecked(value) {
   if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
   renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
-    if(value.composition&&activeSceneComposition)await volumePrototype.setActive(true);
+    if(value.composition&&activeSceneComposition){await volumePrototype.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
     if(!activeSceneComposition)volumePrototype.setActive(false);
   });
   window.__kaminosFirstFlameMount=mounting;
@@ -25257,7 +25264,8 @@ function compositionStatus(message, failed = false) {
 async function collectSceneComposition() {
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
-  if (!debug?.active) {
+  const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
+  if (!debug?.active&&!retainedHiddenField) {
     if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
     activeSceneComposition = null;
     return;
@@ -25912,6 +25920,15 @@ function syncWaterDomainGuide(){
 function pickWaterDomainFromViewportPointer(event){
   if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
   return pointerHitsBoxOutline(localLiquidDomainGuide.box,camera,{x:event.clientX,y:event.clientY},renderer.domElement.getBoundingClientRect());
+}
+function syncSceneSimulationVisibility(){
+  if(volumePrototype&&authoredFlamePresent){
+    syncAuthoredFlameSources();
+    if(readVolumeControls().emitterSourceLaw!=='immersed-source')applyFlameEmitterPose?.(flameEmitterPose);
+  }
+  syncAuthoredFireActivity().catch(error=>setInfo(`Fire activity: ${error.message}`));
+  syncLocalLiquidHostEmitters();
+  if(localLiquidHost){const paused=localLiquidPaused||!isSceneItemVisible('water-field');if(localLiquidHost.paused!==paused)localLiquidHost.setPaused(paused);}
 }
 function syncEditorHelperVisibility(){
   syncWaterDomainGuide();
@@ -26858,7 +26875,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   }
   if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
     setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
-    await volumePrototype?.setActive?.(true);
+    await volumePrototype?.setActive?.(!activeSceneComposition||isSceneItemVisible('flame-field'));
+    if(activeSceneComposition)await syncAuthoredFireActivity();
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   } else {
     await volumePrototype?.setActive?.(false);

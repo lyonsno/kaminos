@@ -31,7 +31,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  const host={render(){if(mode==='failure')throw Error('frame rejected');step=12;},state:()=>mode==='continuous'?{solver:{stepCount:step,simulatedTimeSeconds:step/240}}:{mode,clock:{paused:false,step,timeSeconds:step/240}},dispose(){present=false;}};
  // Keep the controls' read layer bound to the same current runtime.
  f.setRuntime({paused:false,step:0,particleCount:4096});
- const c={outputCaptureExtent:null,recordingFrameSink:null,matchedCameraEffective:false,ordinarySceneTransportFrame:null,applySceneEmissiveCamera(){},outlinedSceneOutput:{},outlinedCameraOutput:{},sceneEmissiveCamera:null,document:{getElementById:()=>({checked:false})},localLiquidHost:host,localLiquidFailure:null,console:{error(){}},String,authoredWaterControls:{refreshStatus(){f.setRuntime(present?{paused:false,step,particleCount:4096}:null);f.controls.refreshStatus();}},sharedWorkbench:{update(value){footer=value;}},refreshLocalLiquidPerformance(){},renderPipeline:{render(){}},setInfo(){}};
+ const c={isSceneItemVisible:()=>true,outputCaptureExtent:null,recordingFrameSink:null,matchedCameraEffective:false,ordinarySceneTransportFrame:null,applySceneEmissiveCamera(){},outlinedSceneOutput:{},outlinedCameraOutput:{},sceneEmissiveCamera:null,document:{getElementById:()=>({checked:false})},localLiquidHost:host,localLiquidFailure:null,console:{error(){}},String,authoredWaterControls:{refreshStatus(){f.setRuntime(present?{paused:false,step,particleCount:4096}:null);f.controls.refreshStatus();}},sharedWorkbench:{update(value){footer=value;}},refreshLocalLiquidPerformance(){},renderPipeline:{render(){}},setInfo(){}};
  vm.createContext(c);vm.runInContext(arm,c);
  if(mode==='failure'){assert.equal(footer?.status,'Stopped','Footer must retire failed runtime state');assert.equal(c.localLiquidHost,null);assert.equal(f.input('[data-pause]').textContent,'Play','Host loss offers a fresh start from retained sources');assert.doesNotMatch(f.input('[data-state]').textContent,/Playing/);}
  else {assert.match(f.input('[data-state]').textContent,/tick 12/,'Both supported source modes publish the effective clock');assert.match(footer?.clock??'',/tick 12/,'Footer agrees for both supported water modes');}
@@ -67,7 +67,7 @@ for(const mode of ['continuous','finite_drop','failure']){
   assert.equal(c.window.kaminosWaterSources.read().runtime.paused,paused);
   assert.match(f.input('[data-state]').textContent,new RegExp(`${paused?'Paused':'Playing'} · tick ${step}`));
   assert.equal(f.input('[data-pause]').textContent,paused?'Play':'Pause');
-  const drawContext={...c,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,console,sharedWorkbench:{update(value){drawContext.footer=value;}},renderPipeline:{render(){}},setInfo(){}};
+  const drawContext={...c,isSceneItemVisible:()=>true,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,console,sharedWorkbench:{update(value){drawContext.footer=value;}},renderPipeline:{render(){}},setInfo(){}};
   vm.createContext(drawContext);vm.runInContext(arm,drawContext);
   assert.equal(drawContext.footer.status,paused?'Paused':'Playing','Footer and panel agree on playback');
  };
