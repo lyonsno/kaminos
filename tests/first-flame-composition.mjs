@@ -1,4 +1,5 @@
 // kaminos-test: node
+import { createWorkingScene } from '../working-scene.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -77,7 +78,7 @@ test('first-field writes await lighting synchronization before resuming, includi
   const events=[],location={href:'http://localhost/#authoring=1'};
   const context={isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},URL,URLSearchParams,structuredClone,location,history:{state:null,replaceState(a,b,url){location.href=String(url);}},
     volumePrototype:{setActive:async value=>events.push(['active',value]),setSceneCompositionPresentation(){}},
-    activeSceneComposition:null,authoredFlamePresent:false,activeSceneFieldId:null,
+    activeSceneComposition:null,authoredFlamePresent:false,workingScene:createWorkingScene(),
     writeFlameSettingsState(){},ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
     fireLightFieldRouteParams:()=>new URLSearchParams(),window:{},async syncSceneRadianceRoute(){await Promise.resolve();events.push(['lighting',!!context.activeSceneComposition]);}};
   const start=source.indexOf('function writeFirstFlameFieldStateUnchecked('),end=source.indexOf('async function addFirstFlameField',start);
