@@ -2442,10 +2442,12 @@ SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().res
 # The browser caches weights per origin, so serving the staged package locally spares each
 # Kaminos port a 3 GB download from the published repository.
 KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
+# FLUX.3 stays a local package; no hosted-weight fallback is configured.
+FLUX3_WEIGHTS_ROOT = Path(os.environ['KAMINOS_FLUX3_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_FLUX3_WEIGHTS_ROOT') else None
 # A local TRELLIS 2 checkpoint package (manifest.json plus tensor files), served at
 # /trellis-checkpoints/ for TRELLIS in the page.
 TRELLIS_CHECKPOINT_ROOT = Path(os.environ['KAMINOS_TRELLIS_CHECKPOINT_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_TRELLIS_CHECKPOINT_ROOT') else None
-MOUNTED_PACKAGES = {'/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
+MOUNTED_PACKAGES = {'/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/flux3-weights/': lambda: FLUX3_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2527,6 +2529,16 @@ PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 
+def flux3_weights_mounted():
+    if not FLUX3_WEIGHTS_ROOT or not all((FLUX3_WEIGHTS_ROOT / part / 'manifest.json').is_file() for part in ('te', 'dit', 'vae')):
+        return False
+    try:
+        manifest = json.loads((FLUX3_WEIGHTS_ROOT / 'dit' / 'manifest.json').read_text())
+        return isinstance(manifest, dict) and manifest.get('schema') == 'kaminos.flux3-klein.transformer-weights.v1'
+    except (OSError, ValueError):
+        return False
+
+
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -2547,6 +2559,11 @@ def runtime_config():
             "modelRoot": str(KLEIN_WEIGHTS_ROOT),
             "mounted": all((KLEIN_WEIGHTS_ROOT / part / "manifest.json").is_file() for part in ("te", "dit", "vae")),
         } if KLEIN_WEIGHTS_ROOT else None,
+        "flux3": {
+            "weightsUrl": "/flux3-weights",
+            "modelRoot": str(FLUX3_WEIGHTS_ROOT),
+            "mounted": flux3_weights_mounted(),
+        } if FLUX3_WEIGHTS_ROOT else None,
         "trellisPage": {
             "checkpointUrl": "/trellis-checkpoints",
             "modelRoot": str(TRELLIS_CHECKPOINT_ROOT),

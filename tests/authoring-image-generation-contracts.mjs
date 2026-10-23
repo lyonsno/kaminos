@@ -68,7 +68,8 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0}={}){
+ let loadFailures=loadFails;
  let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
  const log=[],delivered=[],prototype=prototypeDouble(),host={setForegroundServiceActive:value=>log.push(`active:${value}`),runForegroundFrame:run=>run()};
@@ -78,9 +79,12 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0}=
  const service=createKleinAuthoringImageGeneration({
   context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
-  weights:async()=>'/klein-weights',
-  createPipeline:(givenDevice,urls)=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push(urls);assert.deepEqual({...urls,transformerUrl:undefined},{textEncoderUrl:'/klein-weights/te',transformerUrl:undefined,vaeUrl:'/klein-weights/vae'});
-   return{load:async progress=>{loads++;progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
+  weights:modelWeights|| (async()=>'/klein-weights'),
+  createPipeline:(givenDevice,urls,model='flux2')=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push({...urls,model});
+   const root=model==='flux3'?'/flux3-weights':'/klein-weights';assert.deepEqual({...urls,transformerUrl:undefined},{textEncoderUrl:`${root}/te`,transformerUrl:undefined,vaeUrl:`${root}/vae`});
+   return{sampling:model==='flux3'?{shift:3,steps:4}:undefined,ditManifest:model==='flux3'?{source:{repo:'black-forest-labs/flux-3-image-klein-base',revision:'observed-revision'},lora:{sha256:'observed-adapter-hash'}}:undefined,
+    destroy:async()=>log.push(`destroy:${model}`),
+    load:async progress=>{loads++;log.push(`load:${model}`);if(loadFailures-->0)throw Error('local weight load failed');progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
     loadTransformer:async(url,progress)=>{swaps.push(url);if(swapFailures-->0)throw Error('bundle download failed');progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
     generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
@@ -105,6 +109,52 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  await h.service.run({prompt:'A clay teapot',seed:7,size:512});
  assert.equal(h.loads(),1,'weights load once per page and stay for the next prompt');
  assert.equal(h.service.read().status,'complete');assert.equal(h.service.read().results.length,2);
+});
+
+test('FLUX.3 uses its pipeline and local weights and saves the effective model recipe in the PNG',async()=>{
+ const h=harness({modelWeights:async model=>model==='flux3'?'/flux3-weights':'/klein-weights'});
+ await h.service.run({model:'flux3',prompt:'a copper kettle',seed:9});
+ assert.equal(h.pipelines[0].model,'flux3','a FLUX.3 request must not silently use KleinPipeline');
+ assert.equal(h.pipelines[0].transformerUrl,'/flux3-weights/dit');
+ const p=h.delivered[0].provenance;
+ assert.equal(p.model,'FLUX.3 Image Klein');assert.equal(p.route,'flux3-klein.text-to-image.authoring-shared-device.v0');
+ assert.equal(p.weights,'/flux3-weights');assert.deepEqual(p.sampling,{shift:3,steps:4});
+ assert.deepEqual(p.source,{repo:'black-forest-labs/flux-3-image-klein-base',revision:'observed-revision'});
+ assert.deepEqual(p.lora,{sha256:'observed-adapter-hash'});
+ assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),p);
+ assert.ok(h.log.includes(`route:${p.route}`),'the runtime route must agree with the saved image');
+ await h.service.run({model:'flux3',prompt:'a copper kettle',seed:10});assert.equal(h.loads(),1);
+ await h.service.run({model:'flux2',prompt:'a copper kettle',seed:11});
+ assert.ok(h.log.indexOf('destroy:flux3')<h.log.indexOf('load:flux2'),'release the previous model before loading another');
+ assert.equal(h.delivered.at(-1).provenance.model,'FLUX.2 [klein] 4B');
+});
+
+test('FLUX.3 cannot silently substitute published FLUX.2 weights or an unsupported quantization',async()=>{
+ assert.equal(typeof module.authoringImageWeightRoot,'function','the app needs a model-aware runtime-config resolver');
+ assert.equal(module.authoringImageWeightRoot({klein:{mounted:true,weightsUrl:'/local-2'}},'flux2'),'/local-2');
+ assert.equal(module.authoringImageWeightRoot({},'flux2'),module.KLEIN_PUBLISHED_WEIGHTS);
+ assert.throws(()=>module.authoringImageWeightRoot({klein:{mounted:true,weightsUrl:'/local-2'}},'flux3'),/local FLUX.3 weights/i);
+ assert.throws(()=>module.authoringImageWeightRoot({flux3:{mounted:false,weightsUrl:'/wrong'}},'flux3'),/local FLUX.3 weights/i);
+ assert.equal(module.authoringImageWeightRoot({flux3:{mounted:true,weightsUrl:'/local-3'}},'flux3'),'/local-3');
+ const h=harness();
+ await assert.rejects(h.service.run({model:'flux3',prompt:'kettle',seed:1,level:'3-bit'}),/FLUX.3.*4-bit/);
+ await assert.rejects(h.service.run({model:'typo',prompt:'kettle',seed:1}),/Unknown image model/);
+ assert.equal(h.loads(),0);
+});
+
+test('the actual pipeline factory selects Flux3Pipeline for FLUX.3',async()=>{
+ assert.equal(typeof module.createAuthoringImagePipeline,'function','the app needs an actual FLUX.3 constructor path');
+ const {Flux3Pipeline}=await import('../models/flux3-klein/flux3-pipeline.js');
+ const p=await module.createAuthoringImagePipeline({queue:{}},{textEncoderUrl:'/te',transformerUrl:'/dit',vaeUrl:'/vae'},'flux3');
+ assert.ok(p instanceof Flux3Pipeline);assert.deepEqual(p.urls,{textEncoderUrl:'/te',transformerUrl:'/dit',vaeUrl:'/vae'});
+});
+
+test('a failed model load releases its partial pipeline and can be retried',async()=>{
+ const h=harness({modelWeights:async model=>model==='flux3'?'/flux3-weights':'/klein-weights',loadFails:1});
+ await assert.rejects(h.service.run({model:'flux3',prompt:'kettle',seed:1}),/local weight load failed/);
+ assert.ok(h.log.includes('destroy:flux3'),'a failed load must not strand model GPU buffers');
+ await h.service.run({model:'flux3',prompt:'kettle',seed:1});
+ assert.equal(h.loads(),2);assert.equal(h.delivered.length,1);
 });
 
 test('progress reports weight bytes and denoising steps, never an invented whole-run percentage',async()=>{
