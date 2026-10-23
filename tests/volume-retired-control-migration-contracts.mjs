@@ -170,7 +170,10 @@ assert.ok(legacySolverCount < 212 && legacySolverCount > legacyTransportCount, '
 legacySolverArtifact.controlCount = legacySolverCount;
 legacySolverArtifact.preset.controlCount = legacySolverCount;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
-assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
+const renderingDetailControls=['volume-render-detail','volume-render-detail-scale','volume-render-detail-fine'].map(key=>schema.controls.find(control=>control.key===key));
+assert.deepEqual(renderingDetailControls.map(control=>control.additiveDefault),[0,2,.35]);
+assert.deepEqual(renderingDetailControls.map(control=>control.additiveSinceControlCount),[261,262,263]);
+assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, [...flameDoctorControls,...renderingDetailControls].map(control => control.key));
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
 assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');

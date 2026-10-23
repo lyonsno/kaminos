@@ -51,6 +51,7 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const cellI = cell;
   const sceneClipCharacteristic = (_cell, target) => target;
   const waveletOn = () => false;
+  const waveletCoordinatesOn = () => false;
   // transport_controls.x = 0 selects the legacy scheme, so this exercises the
   // first-order branch that the common-gas switch routes.
   const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}, transport_controls:{x:0}};

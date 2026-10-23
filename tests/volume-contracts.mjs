@@ -305,7 +305,7 @@ const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S
 assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
 const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
 assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/mix');
-assert.match(bakedOnlyBranch[1], /sampleWorldFlowReconstructedSidecar\(p, reconstructed\)/, 'Baked sidecar mode lazily consumes the shared reconstructed baked-structure sample');
+assert.match(bakedOnlyBranch[1], /sampleWorldFlowReconstructedSidecar\(materialP, reconstructed\)/, 'Baked sidecar mode lazily consumes the shared reconstructed baked-structure sample at the material lookup');
 assert.doesNotMatch(bakedOnlyBranch[1], /liveBoundarySupportAt/, 'Baked sidecar mode must not pay the live seven-tap boundary support path per ray step');
 assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSample\.x, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path');
 assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debug state reports the effective boundary structure source');

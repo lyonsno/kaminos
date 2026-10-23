@@ -36,7 +36,7 @@ function assertOccupancyRidgeContract(source) {
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001 && u\.continuous_detail\.x <= 0\.0\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -45,7 +45,7 @@ function assertOccupancyRidgeContract(source) {
 
   assert.match(
     raymarch,
-    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*directSupport = raymarchNeighborhoodSupport\(neighborhood\);[\s\S]*directSupport = directCellOpticalSupport\(p\);/,
+    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*directSupport = raymarchNeighborhoodSupport\(neighborhood\);[\s\S]*directSupport = directCellOpticalSupport\(materialP\);/,
     'occupancy strength is available at the conservative empty-cell decision',
   );
   assert.match(
