@@ -13,6 +13,20 @@ function embeddingFor(prepared,interpolation){
  return smoothEmbeddings.get(prepared);
 }
 
+// Only the small authored material lattice is evaluated here. No renderer,
+// physical stepping or dense-skin deformation is needed to refuse a bad Open.
+export function validateCreatureFleshPoses(data,poses){
+ const prepared=data.fleshPrepared;if(!prepared)return;
+ const {channels,bones}=data.manifest,rest=Float32Array.from(prepared.positions.flat()),weights=torsoNodeWeights(prepared,channels),volume=createGpuFleshVolume(prepared);
+ const inverse=new Map(bones.map(b=>[b.name,new THREE.Matrix4().set(...b.restMatrix.flat()).invert()]));
+ try{for(const pose of poses){
+  const local=new Map(pose.bones.map(b=>[b.name,b])),world=new Map();
+  const at=name=>{if(!world.has(name)){const b=local.get(name);if(!b)throw Error('Physical pose differs from the given bone inventory');const m=new THREE.Matrix4().fromArray(b.localMatrix);if(b.parent)m.premultiply(at(b.parent));world.set(name,m);}return world.get(name);};
+  const palette=[new THREE.Matrix4().toArray(),...channels.slice(1).map(name=>at(name).clone().multiply(inverse.get(name)).toArray())],points=skinTransport(rest,weights,palette);
+  volume.setTargets(Array.from({length:prepared.positions.length},(_,i)=>Array.from(points.subarray(i*3,i*3+3))));
+ }}finally{volume.dispose();}
+}
+
 export async function loadCreatureFlesh(spec,data){
  if(!spec)return data;
  const source=spec.preparations?.find(p=>p.case_sha256===data.source.caseSha256);

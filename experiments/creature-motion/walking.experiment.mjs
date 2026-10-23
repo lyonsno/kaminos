@@ -1,7 +1,7 @@
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
-import {loadCreatureFlesh,createCreatureFleshDeformer} from '../creature-flesh/creature.mjs';
+import {loadCreatureFlesh,createCreatureFleshDeformer,validateCreatureFleshPoses} from '../creature-flesh/creature.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
@@ -60,7 +60,8 @@ export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySource
  checkRecipeInputs(recipe);
  const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
  const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
- if(recipe.wander)createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
+ const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
+ validateCreatureFleshPoses(loaded,[check.frame(0),wander?wander.frame(wander.read().frame):walking.frame(recipe.sample??0,{mode:recipe.action==='wander'?'cycle':recipe.mode??'source',cycle:recipe.cycle??0})]);
  return loaded;
 }
 
