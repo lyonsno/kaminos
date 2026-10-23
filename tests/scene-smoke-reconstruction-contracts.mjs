@@ -75,5 +75,7 @@ assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'
 const exterior={generation:2,frame:3,smokeReconstruction:{...r,localMin:[-3,-3,-3],localMax:[3,9,3]}};
 assert.throws(()=>bindings.update({...frame,generation:1,frame:3,exterior}),/same-generation/);
 assert.doesNotThrow(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior}));
+const intermediate={...exterior,smokeReconstruction:{...exterior.smokeReconstruction,localMin:[-2,-2,-2],localMax:[2,6,2],coarseDimensions:[8,16,8]}};
+assert.throws(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior:{...exterior,middle:{...intermediate,generation:1}}}),/same-generation/,'stale middle lighting must fail instead of silently presenting');
 bindings.destroy();
 console.log(`smoke reconstruction bins preserve ${segmentCount} reference segments, uncapped candidates and binding lifetime`);

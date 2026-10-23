@@ -20854,7 +20854,9 @@ export function createKaminosVolumePrototype({
       worldRenderUniform,getWorldSmoke:()=>{
         if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')return null;
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax};
+        const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
+        const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
       },
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);

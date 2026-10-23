@@ -41,9 +41,10 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,receiverBounds=null,exteriorMedium=false}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8}) {
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   lightingDirections(directions); // Validate before allocating shared resources.
+  if(!Number.isFinite(exteriorIntegrationGrid)||exteriorIntegrationGrid<=0)throw Error('positive finite exterior integration grid required');
   const domain=sceneSourceDomain(sourceDimensions),bounds=receiverBounds??domain;
   if(![bounds.lo,bounds.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||bounds.hi.some((v,a)=>v<=bounds.lo[a]))throw Error('finite ordered receiver bounds required');
   const receiverPitch=(bounds.hi[0]-bounds.lo[0])/volumeGrid;
@@ -78,7 +79,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let geometryTransforms=geometry.matrices;
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const params=buffer('distributed transport parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
-  const exteriorParams=exteriorMedium?buffer('exterior medium bounds and step',new Float32Array(8),GPUBufferUsage.UNIFORM):null;
+  const exteriorParams=exteriorMedium?buffer('exterior medium bounds and step',new Float32Array(16),GPUBufferUsage.UNIFORM):null;
   const environmentParams=buffer('smoke environment parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
   const sceneLightParams=buffer('smoke scene-light parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
   let sceneLightBuffer=buffer('actual smoke scene lights',new Float32Array(16),GPUBufferUsage.STORAGE,[]);
@@ -163,9 +164,15 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0,surfaceScattering=false,environment=null,sceneLights}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
       const exterior=exteriorMedium?field.exterior:null;
-      if(exteriorMedium&&(!exterior?.texture||exterior.status!=='encoded'||exterior.generation!==field.generation||exterior.frame!==field.frame))throw Error('exterior transport requires same-generation world extinction');
-      if(exterior)device.queue.writeBuffer(exteriorParams,0,new Float32Array([...exterior.localMin,receiverPitch,...exterior.localMax,0]));
-      const exteriorEntries=exterior?[{binding:18,resource:exterior.texture.createView()},{binding:19,resource:{buffer:exteriorParams}}]:[];
+      const middle=exterior?.middle;
+      for(const region of [exterior,middle])if(region&&(!region.texture||region.status!=='encoded'||region.generation!==field.generation||region.frame!==field.frame))throw Error('exterior transport requires same-generation region extinction');
+      // Preserve the coarse exterior quadrature budget in each region. Splitting
+      // at the middle box prevents a world-sized step skipping the whole middle.
+      const pitch=r=>(r.localMax[0]-r.localMin[0])/(r.dimensions?.[0]??volumeGrid);
+      const regionStep=r=>(r.localMax[0]-r.localMin[0])/exteriorIntegrationGrid;
+      if(exteriorMedium)device.queue.writeBuffer(exteriorParams,0,new Float32Array(exterior?
+        [...exterior.localMin,regionStep(exterior),...exterior.localMax,1,...(middle?[...middle.localMin,regionStep(middle),...middle.localMax,2*pitch(middle)]:Array(8).fill(0))]:Array(16).fill(0)));
+      const exteriorEntries=exteriorMedium?[{binding:18,resource:(exterior?.texture??field.texture).createView()},{binding:19,resource:{buffer:exteriorParams}},{binding:20,resource:(middle?.texture??field.texture).createView()}]:[];
       if(environment&&!environment.texture?.createView)throw Error('smoke environment requires a native GPU texture');
       const environmentTexture=environment?.texture??darkEnvironment;
       const punctual=packSceneSmokeLights(sceneLights);
@@ -210,7 +217,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;
       device.queue.writeBuffer(params,0,new Float32Array([gain,stepLength,smokeEnabled||surfaceScattering?total:receivers.length,directions]));
       device.queue.writeBuffer(environmentParams,0,new Float32Array([environment?1:0,directions,0,0]));
-      if(state.sourceTexture!==lightingTexture||state.environmentTexture!==environmentTexture||state.sceneLightBuffer!==sceneLightBuffer||state.exteriorTexture!==exterior?.texture) {
+      if(state.sourceTexture!==lightingTexture||state.environmentTexture!==environmentTexture||state.sceneLightBuffer!==sceneLightBuffer||state.exteriorTexture!==exterior?.texture||state.middleTexture!==middle?.texture) {
         const entries=[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
           {binding:4,resource:{buffer:state.distances}},{binding:5,resource:lightingTexture.createView()},
@@ -218,7 +225,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
           {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries(),...exteriorEntries];
         const gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries});
         const volumeGroup=device.createBindGroup({layout:state.gatherVolume.getBindGroupLayout(0),entries});
-        Object.assign(state,{sourceTexture:lightingTexture,environmentTexture,sceneLightBuffer,gatherGroup,volumeGroup,exteriorTexture:exterior?.texture});
+        Object.assign(state,{sourceTexture:lightingTexture,environmentTexture,sceneLightBuffer,gatherGroup,volumeGroup,exteriorTexture:exterior?.texture,middleTexture:middle?.texture});
       }
       if(environment&&(smokeEnabled||surfaceScattering)&&state.environmentCache&&!state.environmentCacheBuilt){
         const pass=encoder.beginComputePass({label:'cache environment visibility'});
