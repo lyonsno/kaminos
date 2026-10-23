@@ -65,3 +65,11 @@ test('screen-space ring picking survives an emitter scaled through its parent',(
  const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);
  assert.ok(visibleSceneIntersections({raycaster,roots:[root],camera,viewport:{width:1000,height:1000}}).some(h=>h.object===ring),'parent scale must not shrink the screen pixel aperture');
 });
+
+test('removing the field while its show is pending cannot revive the retired runtime',async()=>{
+ const {createSceneSimulationActivity}=await import('../scene-simulation-activity.mjs');
+ let current,resolveBoot,active=false;const runtime={isActive:()=>active,setActive:async value=>{if(value)await new Promise(r=>resolveBoot=r);active=value;}};current=runtime;
+ const sync=createSceneSimulationActivity({prototype:()=>current,wanted:()=>Boolean(current)});
+ const pending=sync();current=null;await runtime.setActive(false);await sync();resolveBoot();await pending;
+ assert.equal(active,false);
+});

@@ -75,7 +75,7 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
 
 test('first-field writes await lighting synchronization before resuming, including undo',async()=>{
   const events=[],location={href:'http://localhost/#authoring=1'};
-  const context={URL,URLSearchParams,structuredClone,location,history:{state:null,replaceState(a,b,url){location.href=String(url);}},
+  const context={isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},URL,URLSearchParams,structuredClone,location,history:{state:null,replaceState(a,b,url){location.href=String(url);}},
     volumePrototype:{setActive:async value=>events.push(['active',value]),setSceneCompositionPresentation(){}},
     activeSceneComposition:null,authoredFlamePresent:false,activeSceneFieldId:null,
     writeFlameSettingsState(){},ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
