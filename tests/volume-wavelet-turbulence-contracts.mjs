@@ -179,7 +179,7 @@ test('kernel: the closure fills the deficit of the transported sub band at the f
   assert.match(pre, /for \(var dz = -1; dz <= 1; dz = dz \+ 1\)/); assert.match(pre, /if \(!sceneSolidAt\(nc\)\)/); assert.match(pre, /waveletPlaneStore\(c, 3,/);
   const pre2 = core.slice(core.indexOf('fn csWaveletLowPass2('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass2(')));
   assert.match(pre2, /waveletLowPassLoad\(c \+ vec3<i32>\(dx, dy, dz\)\)/); assert.match(pre2, /waveletPlaneStore\(c, 6,/);
-  assert.match(core, /const planes = waveletSidecarFull \? 9 : 3;/);
+  assert.match(core, /const planes = waveletForcePlanes \? 9 : 3;/);
 });
 
 test('estimator calibration: the pinned gains match the filters on unit curl fields (band 0.40 at eight cells, 0.13 at four; detail high-pass 0.50 / 0.65)', () => {
@@ -254,5 +254,7 @@ test('cockpit: the two wavelet controls exist, are in the control table, and the
   assert.match(index, /\{ key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves'/);
   // The live capture of 2026-10-16 found the sliders moving while the kernel stayed at gain 0:
   // the snapshot builder filtered the table to keys starting with `physical`.
-  assert.match(index, /REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS\.filter\(field => field\.key\.startsWith\('physical'\) \|\| field\.key\.startsWith\('wavelet'\)\)/, 'the snapshot builder forwards the wavelet keys');
+  const filter = index.match(/REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS\.filter\((field => [^\n]+?)\)\.map/)[1];
+  const admitted = new Function(`return (${filter})`)();
+  for (const key of ['waveletTurbulence', 'waveletOctaves', 'waveletStrength']) assert.equal(admitted({key}), true, `${key} reaches the renderer`);
 });

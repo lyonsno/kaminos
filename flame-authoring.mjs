@@ -138,6 +138,10 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-density','Display gain'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Scattering albedo'],
   ] },
+  { name:'Flow-carried material detail', view:'look', open:true, fields:[
+    ['volume-render-detail','Displacement (cells)'], ['volume-render-detail-scale','Noise scale (cells)'],
+    ['volume-render-detail-fine','Fine noise weight'],
+  ] },
   { name:'Subgrid turbulence', view:'motion', fields:[
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Octaves'],
     ['volume-wavelet-strength','Detail strength'],
