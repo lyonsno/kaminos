@@ -1,7 +1,7 @@
 import { WebGPURenderer, Scene, PerspectiveCamera, Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide } from '../../lib/three.webgpu.js';
 import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
 import { createBrowserHandMeshRoute } from '../../models/mobrecon/hand-mesh-route.js';
-import { readLocalModels, createModelStore } from './model-files.js';
+import { readLocalModels, readServedModels, createModelStore } from './model-files.js';
 
 const $ = id => document.getElementById(id);
 const video = $('camera'), view = $('viewer'), store = createModelStore(indexedDB);
@@ -99,7 +99,7 @@ async function install(models, origin) {
     $('frame').disabled = false;
     $('setup-title').textContent = 'Your models are loaded.';
     status('Models loaded. Start the camera when you’re set.');
-    $('models-status').textContent = origin === 'browser-storage' ? 'Restored from this browser. Nothing downloaded.' : 'Loaded from your files. Nothing uploaded.';
+    $('models-status').textContent = origin === 'local-server' ? 'Loaded from the setup command on this computer.' : origin === 'browser-storage' ? 'Restored from this browser. Nothing downloaded.' : 'Loaded from your files. Nothing uploaded.';
     error = null;
   } catch (cause) {
     nextRoute?.release(); await nextSession?.close();
@@ -119,6 +119,10 @@ async function initialize() {
   const resize = () => { const { width, height } = view.getBoundingClientRect(); renderer.setSize(width, height); camera.aspect = width / height; camera.updateProjectionMatrix(); draw(); };
   const observer = new ResizeObserver(resize); observer.observe(view); frame(); resize();
   $('frame').onclick = frame;
+  $('copy-command').onclick = async () => {
+    try { await navigator.clipboard.writeText($('setup-command').textContent); $('copy-command').textContent = 'Copied'; }
+    catch { $('copy-command').textContent = 'Select and copy the command'; }
+  };
   $('start').onclick = () => { (running || starting ? stop() : start()).catch(cause => status(String(cause))); };
   $('threshold').oninput = () => { $('threshold-value').value = Number($('threshold').value).toFixed(2); };
   $('choose').onclick = () => $('files').click();
@@ -143,7 +147,15 @@ async function initialize() {
     observer.disconnect();
     Promise.resolve(flight).catch(() => {}).finally(async () => { route?.release(); await session?.close(); mesh.geometry.dispose(); mesh.material.dispose(); renderer.dispose(); });
   }, { once: true });
-  try { const cached = await store.get(); if (cached) await install(cached, 'browser-storage'); else status('Choose your model folder to begin.'); }
+  const servedModels = new URL(location.href).searchParams.get('models');
+  if (servedModels !== null) {
+    importing = true; buttons(); status('Loading the models prepared on this computer…');
+    try { await install(await readServedModels(servedModels), 'local-server'); }
+    catch (cause) { error = String(cause?.message ?? cause); status(`Setup models unavailable: ${error}`); $('models-status').textContent = 'Keep the setup terminal open, then reload this page.'; }
+    finally { importing = false; buttons(); }
+    return;
+  }
+  try { const cached = await store.get(); if (cached) await install(cached, 'browser-storage'); else status('Run the setup command or choose a prepared model folder.'); }
   catch (cause) { status('Choose your model folder to begin.'); $('models-status').textContent = `Stored models unavailable: ${cause.message}`; }
 }
 initialize().catch(cause => { error = String(cause?.message ?? cause); status(error); $('choose').disabled = true; });

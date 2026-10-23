@@ -6,29 +6,29 @@ Serve the repository with `python3 serve.py 8501`, then open `http://127.0.0.1:8
 
 ## Model setup
 
-The first version imports model files once and saves them in this browser's IndexedDB. Later visits restore those files without another download or file selection. Browser storage is specific to this origin and profile; clearing site data removes it. Private browsing or storage quotas may prevent saving; the current visit still works.
-
-This local import path is provisional. An automatic public model download has not been authorized for the MANO-derived package. The demo does not upload model files or camera frames, contact an inference server, or proxy restricted assets through another host.
-
-Prepare the two packages using the existing model packers and your own source/assets:
+On macOS or Linux, paste this command into Terminal:
 
 ```sh
-python models/mobrecon/pack-weights.py --help
-python models/wilor-hand-detector/pack-weights.py --help
+curl -fsSL https://raw.githubusercontent.com/lyonsno/kaminos/cc/hand-mesh-demo-1023/demos/hand-mesh/setup.sh | bash
 ```
 
-MobRecon's packer needs the pinned HandMesh source at `3c87e958d4855f890e3884ec94bcfc0f99422c3d`, its DenseStack+SpiralConv checkpoint and `template/transform.pkl`. The detector packer needs the WiLoR-MLX hand detector weights. The packers' imports require the corresponding source environments (PyTorch/OpenCV/OpenMesh for MobRecon, MLX for the detector). These are preparation dependencies, not browser runtime dependencies. See [HandMesh setup](https://github.com/SeanChenxy/HandMesh) and [WiLoR-MLX](https://github.com/lyonsno/wilor-mlx). Follow the applicable asset terms; public source availability is not redistribution permission.
+The command installs a private Python runner if needed, downloads the pinned demo code and original model assets, verifies their SHA-256 hashes, prepares both browser packages, starts a local server and opens the demo. Review the linked model terms and type `yes` on first use. Then click **Start camera** and allow camera access. Keep the terminal open; Ctrl-C stops the server. Run the same command next time: it reuses verified model files.
 
-Once both package directories exist, this lightweight command verifies their hashes and copies four files into one new folder. It performs no inference or download:
+No Git checkout, Node, PyTorch, MLX, OpenMesh build or manual model-folder selection is needed. Preparation uses NumPy, SciPy and safetensors; browser inference uses WebGPU. The first run downloads about 156 MB of model inputs, plus the demo and Python dependencies. Model inputs and prepared packages remain on this computer under `~/.local/share/kaminos/hand-demo`. The command does not upload camera frames or models. Windows users can use the existing prepared-folder import; this shell launcher has no native Windows claim.
+
+This is the feature-branch preview command. It pins the runtime code by commit; the public Pages release is a separate publication step. The MANO-derived data and original model terms still apply; acceptance does not grant commercial or redistribution rights. Original assets download directly from the authors' published routes, rather than a Kaminos model mirror.
+
+For a different installation folder, set `KAMINOS_HAND_HOME` on the `bash` side of the pipeline. For example, append `KAMINOS_HAND_HOME="$HOME/hand-demo" bash` in place of `bash`. For unattended preparation after reviewing terms, use `bash -s -- --accept-model-terms --prepare-only`. `--no-open` suppresses opening the browser, and `--port PORT` chooses a loopback port. Reruns preserve completed downloads and write progress or failure details to `setup-state.json`; early bootstrap failures write `bootstrap-error.txt`.
+
+### Existing packages
+
+You can still use **Use existing model folder** with `mobrecon.package.json`, `mobrecon.bin`, `detector.package.json` and `hand-detector.bin`. The browser verifies bundle hashes and saves accepted file imports in IndexedDB for this origin/profile. Clearing site data removes that browser cache. A failed import does not replace an already working model. The local-server launcher loads directly from disk and needs no IndexedDB copy.
+
+Existing packer outputs can be assembled with:
 
 ```sh
-node demos/hand-mesh/prepare-local-models.mjs \
-  --mobrecon /path/to/mobrecon/package \
-  --detector /path/to/detector/package \
-  --out /path/to/hand-models
+node demos/hand-mesh/prepare-local-models.mjs --mobrecon /path/to/mobrecon/package --detector /path/to/detector/package --out /path/to/hand-models
 ```
-
-Click **Choose model folder** and select that folder. The browser verifies the complete bundle hashes through the inference kit before accepting the models. Failed imports do not replace an already loaded model or stored package. Click **Start camera**. The camera can be stopped and restarted without reloading models.
 
 ## Detection
 
