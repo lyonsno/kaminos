@@ -5,7 +5,7 @@ import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[],drags=new Map();
  const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
- for(const name of ['width','samples','rate','radius','strength','passes','target'])numbers.push(input('[data-'+name+']'));
+ for(const name of ['width','samples','rate','radius','strength','passes','target','step-frequency'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
  input('[data-simulation]').querySelectorAll=section.querySelectorAll.bind(section);
@@ -82,4 +82,21 @@ test('Shared spacing previews during a drag without changing source amount or hi
 
 test('SWC-1 pending water edit respects Undo on another scene target',async()=>{
  const f=historyFixture();let other=0;f.history.register('@other',{read:()=>({value:other}),check:v=>v,write:v=>{other=v.value;}});f.history.apply('@other',{value:1},'Other');f.draftWidth(.75);await f.history.undo();await f.settle();assert.equal(f.api.read().selected.settings.drop.width,.5);assert.equal(f.history.state().redoCount,1);await f.history.redo();assert.equal(other,1);
+});
+
+// The timestep uses the same accepted edit/history path, not playback rate.
+test('Finite physics ticks edit is undoable, preserves the current run, and invalid drafts block Replay',async()=>{
+ const {normalizeLocalLiquidSetup,defaultLocalLiquidSetup}=await import('../local-liquid-setup.mjs');
+ const f=sharedFixture(),read=f.api.read,edit=f.api.editSimulation;
+ f.api.read=()=>({...read(),sources:[{id:'A',mode:'finite_drop'}]});
+ f.api.editSimulation=patch=>{normalizeLocalLiquidSetup({...defaultLocalLiquidSetup(),...read().simulation.settings,...patch});return edit(patch);};
+ f.setRuntime({paused:true,step:12,particleCount:1000,materialScaling:{mode:'legacy',dt:1/240}});f.controls.refresh();
+ assert.equal(Number(f.input('[data-step-frequency]').value),240);assert.equal(f.input('[data-timestep]').hidden,false);
+ f.input('[data-step-frequency]').value=120;f.input('[data-step-frequency]').listeners.input();await f.settle();
+ assert.equal(f.api.read().simulation.settings.simulationStepSeconds,1/120);assert.equal(f.api.read().runtime.materialScaling.dt,1/240,'A saved edit must not change the in-flight physics');
+ assert.match(f.input('[data-timestep-summary]').textContent,/120 ticks\/s.*8.3333 ms.*Current run: 240 ticks\/s/);
+ await f.history.undo();assert.equal(Number(f.input('[data-step-frequency]').value),240);await f.history.redo();assert.equal(Number(f.input('[data-step-frequency]').value),120);
+ let releases=0;f.api.release=()=>releases++;f.input('[data-step-frequency]').value='';f.input('[data-step-frequency]').listeners.input();await f.settle();await f.input('[data-release]').onclick();assert.equal(releases,0);assert.equal(f.api.read().simulation.settings.simulationStepSeconds,1/120);assert.match(f.input('[data-simulation-error]').textContent,/Complete/);
+ f.input('[data-step-frequency]').value=0;f.input('[data-step-frequency]').listeners.input();await f.settle();assert.match(f.input('[data-simulation-error]').textContent,/timestep/);
+ f.input('[data-step-frequency]').value=240;f.input('[data-step-frequency]').listeners.input();await f.settle();await f.input('[data-release]').onclick();assert.equal(releases,1);
 });
