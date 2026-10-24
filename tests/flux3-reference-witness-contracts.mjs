@@ -20,3 +20,16 @@ test('FLUX2 reference witness refuses a different model oracle',()=>{
  const r=good();r.model='flux2';r.oracle.model='flux3';
  assert.throws(()=>validate(r),/model/);
 });
+
+test('separate global groups must match, while omitted groups inherit the block group',()=>{
+ const r=good();r.model=r.oracle.model='flux2';r.weights.source.repo='black-forest-labs/FLUX.2-klein-4B';
+ r.weights.globals_format=r.oracle.weights.globals_format='i4';
+ r.weights.group=r.oracle.weights.group=128;
+ r.weights.globals_group=64;r.oracle.weights.globals_group=128;
+ assert.throws(()=>validate(r),/quantization/);
+ delete r.oracle.weights.globals_group;
+ assert.throws(()=>validate(r),/quantization/);
+ r.oracle.weights.globals_group=64;assert.doesNotThrow(()=>validate(r));
+ delete r.weights.globals_group;assert.throws(()=>validate(r),/quantization/);
+ r.oracle.weights.globals_group=128;assert.doesNotThrow(()=>validate(r));
+});

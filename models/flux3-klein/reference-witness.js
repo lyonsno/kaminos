@@ -15,6 +15,7 @@ export function validateReferenceWitness(r){
  if(model==='flux2'&&r.weights?.source?.repo!=='black-forest-labs/FLUX.2-klein-4B')throw Error('Reference model weights mismatch');
  if((model==='flux3'&&r.weights?.mode!=='text-and-image')||r.weights?.source?.revision!==r.oracle?.sourceRevision||r.weights?.lora?.sha256!==r.oracle?.loraSha256)throw Error('Reference route/source mismatch');
  for(const key of ['format','globals_format','group'])if(r.weights[key]!==r.oracle.weights?.[key]||r.weights[key]===undefined)throw Error('Reference quantization mismatch');
+ if((r.weights.globals_group??r.weights.group)!==(r.oracle.weights.globals_group??r.oracle.weights.group))throw Error('Reference global quantization mismatch');
  for(const name of ['encoder-f32','encoder-f16','transformer'])if(!r.checks?.[name]?.pass)throw Error(`Reference parity failed: ${name}`);
  if(!(r.oracle.referenceEffectL2>1e-3))throw Error('Unproved reference effect');
 }
