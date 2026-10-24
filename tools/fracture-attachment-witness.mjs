@@ -15,7 +15,8 @@ const assert=(ok,message)=>{if(!ok)throw Error(message);};let context;save();
 try{
  let object={name:'kiln',triangles:102327,sha256:'0825ee134ba3161412257d01ec5461d95344844d27ce500cc4805aed6ce9e75f'};
  if(objectSpec){report.phase='object-identity';save();object=JSON.parse(fs.readFileSync(objectSpec,'utf8'));assert(typeof object.name==='string'&&Number.isInteger(object.triangles)&&object.triangles>0&&/^[a-f0-9]{64}$/.test(object.sha256)&&typeof object.source==='string','Invalid object identity: name, positive triangle count, SHA256 and source required');}
- report.object=object;report.phase='source-identification';save();
+ report.phase='object-identity';const click=object.click??[.5,.52];assert(Array.isArray(click)&&click.length===2&&click.every(v=>Number.isFinite(v)&&v>=0&&v<=1),'Invalid fixture click: two viewport fractions required');
+ report.object=object;report.fixtureClick=click;report.phase='source-identification';save();
  commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();report.sourceCommit=commit;report.phase='launch';save();
  const {chromium}=await import(playwright);
  context=await chromium.launchPersistentContext(path.join(out,'profile'),{headless:true,executablePath:executable,viewport:{width:1440,height:1100},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});
@@ -52,7 +53,7 @@ try{
  await invoke('resetLocal');await invoke('select',-1);await invoke('frame');
  // A real canvas click, through the same selection route as the human.
  const rect=await page.locator('#viewport').boundingBox();assert(rect,'Viewport missing');
- await page.mouse.click(rect.x+rect.width*.5,rect.y+rect.height*.52);report.clicked=await read();assert(report.clicked.selected>=0,'Canvas click did not select a surface piece');await capture('clicked');
+ report.clickPoint={x:rect.x+rect.width*click[0],y:rect.y+rect.height*click[1],viewport:rect};await page.mouse.click(report.clickPoint.x,report.clickPoint.y);report.clicked=await read();assert(report.clicked.selected>=0,'Canvas click did not select a surface piece');await capture('clicked');
  report.phase='control-history';save();
  await invoke('detail',Math.min(1,report.initial.hierarchy.maxDepth));await invoke('select',-1);report.beforeBrowsing=await invoke('export');
  const deepest=report.initial.hierarchy.nodes.reduce((a,b)=>b.depth>a.depth?b:a);
