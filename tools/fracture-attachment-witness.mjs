@@ -18,6 +18,7 @@ try{
  commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();report.sourceCommit=commit;report.phase='launch';save();
  const {chromium}=await import(playwright);
  context=await chromium.launchPersistentContext(path.join(out,'profile'),{headless:true,executablePath:executable,viewport:{width:1440,height:1100},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});
+ context.setDefaultTimeout(0);context.setDefaultNavigationTimeout(0);
  const page=context.pages()[0];page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>report.console.push({type:m.type(),text:m.text()}));
  await page.goto(url,{waitUntil:'domcontentloaded'});report.phase='loading';save();
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='fracture-shape');
