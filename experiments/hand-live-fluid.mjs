@@ -44,8 +44,8 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
       opticalDensityScale:1.7,reconstructionRadiusScale:1.6,lifetimeSeconds:6,fallbackActive:false},emitters};
 }
 
-export function idleFingerPacket(reason='no_sample') {
-  return {packet_id:`native-finger-${reason}`,route_identity:NATIVE_FINGER_ROUTE,source_route:NATIVE_FINGER_ROUTE,
+export function idleFingerPacket(reason='no_sample',route=NATIVE_FINGER_ROUTE) {
+  return {packet_id:`${route}-${reason}`,route_identity:route,source_route:route,
     simulation_authority:'invalid',authority:{simulation_safe:false,stale:false,reason},emitters:[]};
 }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Matrix4} from '../lib/three.core.js';
 import {liveMeshFrame} from '../experiments/hand-live-contract.mjs';
-import {nativeFingerPacket} from '../experiments/hand-live-fluid.mjs';
+import {nativeFingerPacket,idleFingerPacket} from '../experiments/hand-live-fluid.mjs';
 const adapter=await import('../experiments/hand-browser-contract.mjs').catch(error=>{
   if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};
 });
@@ -45,4 +45,7 @@ test('browser envelope passes display validation with distinct route and action 
   assert.throws(()=>liveMeshFrame(nativeMasquerade,capture,frame.identity),/authority/);
   p.identity={...identity,backend:'pytorch'};
   assert.throws(()=>adapter.browserHandFrame(p,capture,regressor,'regressor-sha'),/route/);
+});
+test('idle browser water never claims the native route',()=>{
+  assert.equal(idleFingerPacket('no_sample','mobrecon-browser-mesh-finger-juice-v1').route_identity,'mobrecon-browser-mesh-finger-juice-v1');
 });

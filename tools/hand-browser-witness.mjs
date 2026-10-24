@@ -5,7 +5,7 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 const {values:a}=parseArgs({options:Object.fromEntries(['url','fixture','fixture-sha','output','browser','playwright'].map(k=>[k,{type:'string'}]))});
 const out=resolve(a.output);mkdirSync(out,{recursive:true});
-const report={status:'failed',phase:'browser_launch',input:'retained_camera_not_operator_live',url:a.url,fixture:a.fixture,fixtureSha256:a['fixture-sha'],browser:a.browser,errors:[]};
+const report={status:'failed',phase:'browser_launch',input:'retained_camera_not_operator_live',url:a.url,fixture:a.fixture,fixtureSha256:a['fixture-sha'],browser:a.browser,errors:[],consoleErrors:[]};
 const save=()=>writeFileSync(out+'/report.json',JSON.stringify(report,null,2));save();let context;
 try{
   const {chromium}=await import(pathToFileURL(resolve(a.playwright)));
@@ -13,6 +13,7 @@ try{
     viewport:{width:1600,height:1000},recordVideo:{dir:out+'/video',size:{width:1600,height:1000}},
     args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   const page=await context.newPage();page.on('pageerror',error=>report.errors.push(String(error)));
+  page.on('console',message=>{if(message.type()==='error')report.consoleErrors.push(message.text());});
   await page.addInitScript(({fixture,sha})=>{
     navigator.mediaDevices.getUserMedia=async()=>{
       const {verifyVideoResponse}=await import('/demos/hand-mesh/witness-input.js');
@@ -32,6 +33,8 @@ try{
   await page.getByRole('button',{name:'Start camera',exact:true}).click();
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=5);
   report.phase='shared_water';report.live=await read();save();
+  await page.screenshot({path:out+'/initial-scene.png'});
+  report.water=await page.evaluate(()=>window.kaminosLocalLiquidState());save();
   assert.equal(report.live.visible,true);assert.equal(report.live.fingerJuice.runtime.failure,null);
   assert.equal(report.live.fingerJuice.packet.route_identity,'mobrecon-browser-mesh-finger-juice-v1');
   assert.equal(report.live.fingerJuice.packet.source_identity.backend,'webgpu-local');

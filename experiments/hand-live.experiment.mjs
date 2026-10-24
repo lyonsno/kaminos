@@ -9,8 +9,11 @@ export default {
     const document = host.controls.document;
     const fingerJuice=inputs.fingerJuice===true;
     const browser=inputs.backend==='webgpu';
+    const idlePacket=reason=>idleFingerPacket(reason,browser?'mobrecon-browser-mesh-finger-juice-v1':undefined);
     if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
     const browserBackend=browser?await (await import('./hand-browser-backend.mjs')).openBrowserHandBackend({host,inputs}):null;
+    let scene,captures;
+    try {
     const endpoint = new URL(inputs.endpoint ?? 'http://127.0.0.1:8791');
     if (endpoint.hostname !== '127.0.0.1' || endpoint.protocol !== 'http:') throw Error('local diagnostic endpoint required');
     let apiTail=Promise.resolve();
@@ -32,8 +35,8 @@ export default {
         health.interactionAuthority !== false || health.faces?.length !== 1538) throw Error('unexpected native route');
     let acquisitionMode=inputs.acquisitionMode ?? 'manual', cropPadding=Number(inputs.cropPadding ?? 1.4), detectorThreshold=Number(inputs.detectorThreshold ?? .18);
     if (!['manual','detector'].includes(acquisitionMode) || (acquisitionMode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
-    const scene = await host.scene.open();
-    const captures = await openCaptureStore(browserBackend?.retain);
+    scene = await host.scene.open();
+    captures = await openCaptureStore(browserBackend?.retain);
     const geometry = new BufferGeometry();
     geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
     geometry.setIndex(health.faces.flat());
@@ -49,7 +52,7 @@ export default {
     let particleCount=Number(inputs.particleCount??2400),sourceFlux=Number(inputs.sourceFlux??360);
     if(!Number.isSafeInteger(particleCount)||particleCount<1)throw Error('Invalid particle capacity');
     if(!Number.isFinite(sourceFlux)||sourceFlux<0)throw Error('Invalid source flux');
-    let fluid=null,fluidError=null,fluidState=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0];
+    let fluid=null,fluidError=null,fluidState=null,fluidPacket=idlePacket(),fluidKey=null,displayCenter=[0,0,0];
     let waterChanges=Promise.resolve(),rebuilding=false,waterInitialized=false;
     let capacityInput,fluxInput,waterStatus;
     const useFluid=operation=>{
@@ -57,7 +60,7 @@ export default {
       const owned=fluid;
       try{return operation(owned);}
       catch(cause){
-        fluid=null;fluidState=null;fluidKey=null;fluidError=String(cause);fluidPacket=idleFingerPacket('fluid_unavailable');
+        fluid=null;fluidState=null;fluidKey=null;fluidError=String(cause);fluidPacket=idlePacket('fluid_unavailable');
         try{owned.dispose();}catch(cleanup){fluidError+=`; cleanup: ${cleanup}`;}
         return null;
       }
@@ -79,7 +82,7 @@ export default {
     const updateFluid=()=>{
       if(!fluid)return;
       mesh.updateWorldMatrix(true,false);
-      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount}):idleFingerPacket();
+      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount}):idlePacket();
       const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters,packet.economics]);
       if(key===fluidKey)return;
       if(!useFluid(live=>{live.setPacket(packet);return true;}))return;
@@ -112,6 +115,7 @@ export default {
       stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;
       updateFluid();useFluid(live=>live.setPaused(true));sync();
       if (flight) await flight.catch(()=>{});
+      await browserBackend?.stopRecording();
       if (sessionId) await emit({kind:'stop',epochMs:Date.now(),lastCaptureId:last?.captureId ?? null});
       record({kind:'hand-live.stop',phase:'applied',effective:read()});return read();
     };
@@ -122,6 +126,7 @@ export default {
           error=String(cause); running=false; stream?.getTracks().forEach(track=>track.stop());stream=null; sync();
           updateFluid();useFluid(live=>live.setPaused(true));
           if(sessionId) await emit({kind:'failure',error,epochMs:Date.now(),submission:lastSubmission}).catch(()=>{});
+          await browserBackend?.stopRecording().catch(cause=>{error+=`; ${cause}`;sync();});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
     };
@@ -180,7 +185,7 @@ export default {
       try{
         await previous?.dispose();
         if(disposed)throw Error('experiment closed');
-        const candidate=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idleFingerPacket()});
+        const candidate=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idlePacket()});
         if(disposed){await candidate.dispose();throw Error('experiment closed');}
         fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
         fluidState=useFluid(live=>live.read());
@@ -214,9 +219,11 @@ export default {
         if(disposed || ticket!==generation){acquired.getTracks().forEach(t=>t.stop());return read();}
         stream=acquired;video.srcObject=stream;await video.play();
         if(disposed || ticket!==generation){stream?.getTracks().forEach(t=>t.stop());return read();}
+        await browserBackend?.startRecording(sessionId);
+        if(disposed || ticket!==generation){await browserBackend?.stopRecording();return read();}
         running=true;last=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();useFluid(live=>live.setPaused(false));scene.redraw();schedule(ticket);
         record({kind:'hand-live.start',phase:'applied',effective:read()});return read();
-      } catch(cause) {error=String(cause);stream?.getTracks().forEach(t=>t.stop());stream=null;throw cause;}
+      } catch(cause) {error=String(cause);stream?.getTracks().forEach(t=>t.stop());stream=null;await browserBackend?.stopRecording();throw cause;}
       finally {starting=false;sync();}
     };
     return {
@@ -281,5 +288,10 @@ export default {
         }
       },
     };
+    } catch(cause) {
+      captures?.close();
+      try{await scene?.dispose();}finally{await browserBackend?.close();}
+      throw cause;
+    }
   },
 };

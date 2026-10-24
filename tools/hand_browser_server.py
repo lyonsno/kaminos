@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 import threading
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).resolve().parents[1]
 REGRESSOR_SHA = '8de28f843240f88c836cd45104ae3203b0e8660180202ec8c44f926da42624bf'
@@ -81,6 +81,22 @@ def main():
                 super().do_GET()
 
             def do_POST(self):
+                if urlparse(self.path).path == '/api/hand-video':
+                    if self.headers.get('Origin') != f'http://127.0.0.1:{args.port}':
+                        return self.send_json({'error': 'Origin mismatch'}, 403)
+                    try:
+                        query = parse_qs(urlparse(self.path).query)
+                        session, part = query['session'][0], query['part'][0]
+                        if not re.fullmatch(r'[A-Za-z0-9_-]+', session) or not part.isdecimal():
+                            raise ValueError('Invalid hand video identity')
+                        directory = args.output / session / 'rendered'
+                        directory.mkdir(parents=True, exist_ok=True)
+                        with (directory / f'{int(part):08d}.webm').open('xb') as stream:
+                            stream.write(self.rfile.read(int(self.headers['Content-Length'])))
+                        self.send_json({'retained': True})
+                    except Exception as error:
+                        self.send_json({'error': str(error)}, 400)
+                    return
                 if urlparse(self.path).path != '/api/hand-record':
                     return super().do_POST()
                 if self.headers.get('Origin') != f'http://127.0.0.1:{args.port}':
