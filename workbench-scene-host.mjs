@@ -51,7 +51,7 @@ function vector(value,name){
  return [...value];
 }
 
-export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,resourceConsumers=()=>[scene]}) {
+export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,onPick,resourceConsumers=()=>[scene]}) {
  const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
  const setView=view=>{
   const next={...readView(),...view};
@@ -88,6 +88,6 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
    try{const row=registerObject(root,{type:'experiment',...(options.metadata||{})});redraw();return {id:row.id,root,owned:true,clips:options.clips||[],source:row.source};}
    catch(error){scene.remove(root);throw error;}
   },
-  remove:handle=>{if(!handle.presentation)return removeObject(handle);handle.root.removeFromParent();disposeOwnedSceneTree(handle.root,resourceConsumers(),[scene.environment,scene.background]);redraw();},readView,setView,redraw,onFrame,
+  remove:handle=>{if(!handle.presentation)return removeObject(handle);handle.root.removeFromParent();disposeOwnedSceneTree(handle.root,resourceConsumers(),[scene.environment,scene.background]);redraw();},readView,setView,redraw,onFrame,onPick,
  })});
 }
