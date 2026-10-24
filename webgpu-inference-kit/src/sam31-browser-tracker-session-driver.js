@@ -80,12 +80,12 @@ export function createSam31BrowserTrackerPackageAuthority(packageRuntime) {
   };
 }
 
-async function sha256Bytes(values) {
+export async function sha256Bytes(values) {
   const digest = await crypto.subtle.digest('SHA-256', values.buffer.slice(values.byteOffset, values.byteOffset + values.byteLength));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-async function sha256Text(value) {
+export async function sha256Text(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
@@ -115,7 +115,7 @@ function finiteRatio(numerator, denominator) {
 function entryMap(entries) { return Object.fromEntries(entries.map(entry => [entry.role, entry])); }
 function scopedArtifactId(value, invocationTag) { return `${value}:${invocationTag}`; }
 
-async function loadDecoderWeights(manifest, loadFloat32) {
+export async function loadDecoderWeights(manifest, loadFloat32) {
   const weights = {};
   for (const entry of manifest.weights) {
     const key = entry.group === 'decoder' ? entry.localKey : `${entry.group}.${entry.localKey}`;
@@ -124,7 +124,7 @@ async function loadDecoderWeights(manifest, loadFloat32) {
   return weights;
 }
 
-async function loadInteractivePointerWeights(manifest, loadFloat32) {
+export async function loadInteractivePointerWeights(manifest, loadFloat32) {
   const weights = {};
   for (const entry of manifest.weights) {
     weights[`${entry.group}.${entry.localKey}`] = await loadFloat32(entry);
@@ -132,7 +132,7 @@ async function loadInteractivePointerWeights(manifest, loadFloat32) {
   return weights;
 }
 
-async function loadMemoryWeights(manifest, loadFloat32) {
+export async function loadMemoryWeights(manifest, loadFloat32) {
   const byRole = entryMap(manifest.weights);
   const weight = role => loadFloat32(byRole[role]);
   const conv = async (prefix, { stride = 1, padding = 0, activation = null, groups = 1 } = {}) => {
@@ -161,7 +161,7 @@ async function loadMemoryWeights(manifest, loadFloat32) {
   return result;
 }
 
-async function loadAttentionWeights(manifest, loadFloat32) {
+export async function loadAttentionWeights(manifest, loadFloat32) {
   const byRole = entryMap(manifest.attentionWeights);
   const weight = role => loadFloat32(byRole[role]);
   const projection = async (prefix, inChannels, outChannels) => ({ weight: await weight(`${prefix}-weight`), bias: await weight(`${prefix}-bias`), inChannels, outChannels });
@@ -211,7 +211,7 @@ export function deriveSam31BrowserTrackerExecutionContracts({
   });
 }
 
-async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
+export async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-multiplex-mask-decoder-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
@@ -243,7 +243,7 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
   return { result, route, requestId: request.requestId, parity, diagnostics, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
-async function maskConditioningInvocation({ inputs, expected, manifest, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag }) {
+export async function maskConditioningInvocation({ inputs, expected, manifest, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MaskConditioningPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-mask-conditioning-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
@@ -282,7 +282,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
   return { result, route, requestId: request.requestId, parity, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
-async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
+export async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31InteractivePointerPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-interactive-pointer-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);

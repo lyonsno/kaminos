@@ -178,7 +178,8 @@ function selectClosestConditioningFrames(frameIndex, conditioningFrames, maximum
 
 export function createSam31TemporalMemoryBankPlan(input = {}) {
   const frameIndex = Number.isInteger(input.frameIndex) ? input.frameIndex : (() => { throw new Error('frameIndex must be an integer'); })();
-  const numFrames = positiveInteger(input.numFrames, 'numFrames');
+  const numFrames = input.numFrames === null ? null : positiveInteger(input.numFrames, 'numFrames');
+  if (numFrames === null && input.trackInReverse === true) throw new Error('a live stream cannot track in reverse');
   const frameTokenCount = positiveInteger(input.frameTokenCount, 'frameTokenCount');
   const multiplexCount = positiveInteger(input.multiplexCount, 'multiplexCount');
   const numMaskmem = positiveInteger(input.numMaskmem, 'numMaskmem');
@@ -211,7 +212,8 @@ export function createSam31TemporalMemoryBankPlan(input = {}) {
       ? (temporal <= 0 || temporal >= numMaskmem ? numMaskmem - 1 : numMaskmem - temporal - 1)
       : numMaskmem - (frame.isSelectedConditioningFrame ? 0 : temporal) - 1;
   }
-  const maxPointerFrames = Math.min(numFrames, maxObjectPointerFrames);
+  // Unknown-length streams retain the model's trained pointer time scale.
+  const maxPointerFrames = numFrames === null ? maxObjectPointerFrames : Math.min(numFrames, maxObjectPointerFrames);
   const pointerFrames = [];
   for (const frame of selection.selected) {
     if (input.onlyObjectPointersInPastForEval === true && (input.trackInReverse === true ? frame < frameIndex : frame > frameIndex)) continue;
@@ -223,7 +225,7 @@ export function createSam31TemporalMemoryBankPlan(input = {}) {
   }
   for (let difference = 1; difference < maxPointerFrames; difference += 1) {
     const frame = frameIndex + (input.trackInReverse === true ? difference : -difference);
-    if (frame < 0 || frame >= numFrames) break;
+    if (frame < 0 || (numFrames !== null && frame >= numFrames)) break;
     if (nonConditioningSet.has(frame) || unselectedSet.has(frame)) pointerFrames.push({ frameIndex: frame, relativePosition: difference, isSelectedConditioningFrame: false });
   }
   if (spatialFrames.length === 0) throw new Error('the temporal memory plan selected no spatial frames');
