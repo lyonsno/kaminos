@@ -9,7 +9,7 @@ import { createWebGPUFingerFluidSolver } from '../finger-fluid-webgpu-core.js';
 // CPU command-encoding witness only. This spy does not execute WGSL or claim
 // numerical/GPU parity. The real factory, step, and readback paths run unchanged.
 async function solverSpy(options = {}) {
-  const dispatches = [], copies = [], maps = [], writes = [], computePasses = [];
+  const dispatches = [], copies = [], maps = [], writes = [], computePasses = [], shaders = [];
   const gpuFlags = new Proxy({}, { get: () => 1 });
   const previous = new Map(['GPUBufferUsage', 'GPUShaderStage', 'GPUTextureUsage',
     'GPUMapMode', 'navigator', 'fetch'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -34,7 +34,7 @@ async function solverSpy(options = {}) {
       label, size, mapState: 'unmapped', destroy() {},
       async mapAsync() { maps.push(label); throw new Error('intentional readback rejection'); },
     }),
-    createShaderModule: descriptor => descriptor,
+    createShaderModule: descriptor => { shaders.push(descriptor); return descriptor; },
     createBindGroupLayout: descriptor => descriptor,
     createPipelineLayout: descriptor => descriptor,
     createBindGroup: descriptor => descriptor,
@@ -78,7 +78,7 @@ async function solverSpy(options = {}) {
     });
     assert.equal(solver.available, true, JSON.stringify(solver));
     writes.length = 0;
-    return { solver, dispatches, copies, maps, writes, computePasses, close() { solver.destroy(); restore(); } };
+    return { solver, dispatches, copies, maps, writes, computePasses, shaders, close() { solver.destroy(); restore(); } };
   } catch (error) { restore(); throw error; }
 }
 
@@ -211,4 +211,36 @@ test('bench URL selects the requested diagnostics mode and rejects misspellings'
   assert.equal(configFromRoute(new URLSearchParams()).effectiveEnergyDiagnosticsMode, 'every_step');
   assert.throws(() => configFromRoute(new URLSearchParams('finger_fluid_energy_diagnostics=')), /energy diagnostics mode/);
   assert.throws(() => configFromRoute(new URLSearchParams('finger_fluid_energy_diagnostics=disable')), /energy diagnostics mode/);
+});
+
+// Encoding evidence for boundary selection; native wall-pressure-1024 executes
+// these same shader functions on WebGPU and preserves particle/uniform readback.
+test('finite scene colliders retain pressure density when the optional container is off', async () => {
+  const {createAuthoredWaterDrop} = await import('../authored-water-drop.mjs');
+  const {SCENE_LIQUID_SUPPORT_ROUTE} = await import('../scene-liquid-support.mjs');
+  const drop = createAuthoredWaterDrop({width:.5,samplesPerUnit:32,container:null},
+    {position:[0,.5,0],rotation:[0,0,0],scale:[1,1,1]});
+  const plane = {id:'floor',type:'procedural-mesh',geometry:{kind:'plane',parameters:{width:12,depth:8}},
+    transform:{position:[0,-.85,0],rotation:[0,0,0],scale:[1,1,1]}};
+  for (const [sceneSupport, container] of [[true,false],[false,false],[false,true],[true,true]]) {
+    const run = await solverSpy({particleCount:drop.population.particleCount,
+      diagnosticPopulation:drop.population,diagnosticBox:{...drop.box,collisions:container},
+      ...(sceneSupport?{supportContactRoute:SCENE_LIQUID_SUPPORT_ROUTE,sceneColliders:[plane]}:{})});
+    try {
+      const module=run.shaders.find(s=>s.label==='wgsl-pbf-linked-cell-fluid-v0');
+      assert.ok(module,'Actual compute module must be captured');
+      const boundary=module.code.match(/fn analytic_boundary_density_support[\s\S]*?\n}\n/)[0];
+      if(sceneSupport && !container){
+        assert.ok(boundary.includes('supportSignedDistanceFrame(position, particleRadius)'),
+          'Authored floor must contribute pressure density even with container off');
+        assert.ok(boundary.includes(`let particleRadius = ${drop.box.collisionRadius};`),
+          'Pressure and collision use the same finite particle radius');
+        assert.ok(boundary.includes('boundary_missing_fraction(terrainDistance, kernelRadius)'));
+      } else if(container) {
+        assert.ok(boundary.includes('let n5=vec3<f32>'), 'Six enabled container faces retain their density support');
+      } else {
+        assert.ok(boundary.includes('return vec4<f32>(0);'),'No collider and no container contribute zero wall density');
+      }
+    } finally {run.close();}
+  }
 });
