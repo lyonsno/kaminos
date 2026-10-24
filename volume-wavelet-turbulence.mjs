@@ -12,8 +12,10 @@
 // This module owns the law: the resolver and uniform packing, a CPU reference
 // of the noise, the curl field and the band weights for the contracts, and the
 // WGSL helpers the fine kernel includes. The kernel owns where the correction
-// enters (a band-limited velocity relaxation before projection) and the
-// advected-coordinate storage.
+// enters: shared grids relax velocity before projection; independent velocity
+// grids carry coordinates and band energy for finer material characteristics.
+// The latter adds no fine velocity or pressure solve and has no direct velocity
+// feedback. Its material mixing still affects subsequent resolved buoyancy.
 //
 // No trigonometric authorship: the noise is hash-based gradient noise with a
 // quintic fade and analytic derivatives, so the curl is exact, not a stencil.
@@ -23,6 +25,12 @@ export const WAVELET_BAND_SLOPE = -5 / 6;
 // Wavelength of the first synthesised octave, in cells. The resolved mid band
 // the kernel measures sits at roughly 4–8 cells; the synthesised band fills
 // 4 cells downward, one octave per step of 2.
+// Convert a velocity-cell amplitude to material cells, then continue the
+// spectral slope down to the smaller physical wavelength.
+export function materialTurbulenceScale(materialPerVelocity) {
+  if(!(materialPerVelocity>=1))throw Error('Invalid material/velocity ratio');
+  return materialPerVelocity**(1+WAVELET_BAND_SLOPE);
+}
 export const WAVELET_BASE_WAVELENGTH_CELLS = 4;
 export const WAVELET_LACUNARITY = 2;
 // Advected noise coordinates distort; each coordinate set is reset to the

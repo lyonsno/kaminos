@@ -174,7 +174,7 @@ test('kernel: the closure fills the deficit of the transported sub band at the f
   assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* max\(fillTo - carried, 0\.0\) \* detail;/, 'one-sided fill along the pattern; the fold restores the per-step blend');
   assert.match(body, /waveletBlendA\(u32\(u\.wavelet_turbulence\.w\), WAVELET_COHERENCE_PERIOD_STEPS\)/);
   assert.doesNotMatch(body, /readSlot\(/, 'no destination-cell old-field term');
-  assert.match(core, /if \(waveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
+  assert.match(core, /if \(waveletOn\(\) && !VELOCITY_ONLY\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
   const pre = core.slice(core.indexOf('fn csWaveletLowPass('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass(')));
   assert.match(pre, /for \(var dz = -1; dz <= 1; dz = dz \+ 1\)/); assert.match(pre, /if \(!sceneSolidAt\(nc\)\)/); assert.match(pre, /waveletPlaneStore\(c, 3,/);
   const pre2 = core.slice(core.indexOf('fn csWaveletLowPass2('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass2(')));

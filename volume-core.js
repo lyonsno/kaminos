@@ -4141,6 +4141,32 @@ fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>,
   return blend / max(timeStep, 1e-6) * max(fillTo - carried, 0.0) * detail;
 }
 
+// Coarse carried coordinates and resolved-band amplitude are reused at the
+// material lattice. Synthesis changes the shared scalar characteristic, never
+// the stored coarse velocity or its pressure RHS. Both transport passes use it.
+fn materialTransportVelocity(cell:vec3<f32>,resolved:vec3<f32>)->vec3<f32>{
+ if(!MATERIAL_ONLY||!waveletOn()){return resolved;}
+ let atlas=vec3<i32>(textureDimensions(waveletCoordSrc));
+ let dims=vec3<i32>(atlas.xy,atlas.z/2);
+ let ratio=f32(GRID)/f32(dims.x);
+ let p=cell/ratio-.5;let base=vec3<i32>(floor(p));let f=fract(p);
+ var a=vec4<f32>(0);var b=vec4<f32>(0);
+ for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
+  let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),dims-1);
+  let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));let weight=w.x*w.y*w.z;
+  a+=textureLoad(waveletCoordSrc,c,0)*weight;
+  b+=textureLoad(waveletCoordSrc,c+vec3<i32>(0,0,dims.z),0)*weight;
+ }}}
+ let amplitude=a.w*pow(ratio,1.0+WAVELET_BAND_SLOPE);
+ if(amplitude<=0.0){return resolved;}
+ let blend=waveletBlendA(u32(u.wavelet_turbulence.w),WAVELET_COHERENCE_PERIOD_STEPS);
+ let octaves=clamp(u32(u.wavelet_turbulence.y),1u,2u);
+ var detail=vec3<f32>(0);
+ if(blend>0.0){detail+=blend*waveletDetailWeighted(a.xyz*ratio,octaves,u.wavelet_octave_weights.xy);}
+ if(blend<1.0){detail+=(1.0-blend)*waveletDetailWeighted(b.xyz*ratio,octaves,u.wavelet_octave_weights.xy);}
+ return resolved+detail*amplitude*u.wavelet_turbulence.x*u.wavelet_turbulence.z;
+}
+
 // Pre-pass 1: L1 for every cell, dispatched before the step while the closure is on.
 @compute @workgroup_size(4, 4, 4)
 fn csWaveletLowPass(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -6771,7 +6797,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
-  let advectVelocity = vec3<f32>(centreVelocity.x * 1.0, centreVelocity.y, centreVelocity.z * 1.0);
+  let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
@@ -6807,7 +6833,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
     forceDeltaStore(cellI, vec3<f32>(0.0));
-    if (waveletOn()) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
+    if (waveletOn() && !MATERIAL_ONLY) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
@@ -6862,7 +6888,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLayerRiseDirection = 1.0;
   let microdetailRiseDirection = 1.0;
   let centreVelocity = centreVelocityAt(cellI);
-  let advectVelocity = vec3<f32>(centreVelocity.x * 1.0, centreVelocity.y, centreVelocity.z * 1.0);
+  let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   var waveletCoordA = cell;
@@ -6872,8 +6898,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let wPhase = u32(u.wavelet_turbulence.w) % WAVELET_COHERENCE_PERIOD_STEPS;
     waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
     waveletCoordB = select(waveletCoordSample(backCell, 1), cell, wPhase == WAVELET_COHERENCE_PERIOD_STEPS / 2u);
-    waveletCoordStore(cellI, 0, waveletCoordA);
-    waveletCoordStore(cellI, 1, waveletCoordB);
+    if(VELOCITY_ONLY){
+      let foot=vec3<i32>(clampCell(vec3<i32>(floor(backCell))));
+      let band=waveletLevel2Box(foot,2)-waveletLevel2Box(foot,4);
+      let amplitude=waveletTargetAmplitude(.5*dot(band,band));
+      textureStore(waveletCoordDst,cellI,vec4<f32>(waveletCoordA,amplitude));
+      textureStore(waveletCoordDst,cellI+vec3<i32>(0,0,i32(GRID)),vec4<f32>(waveletCoordB,amplitude));
+    }else{
+      waveletCoordStore(cellI, 0, waveletCoordA);
+      waveletCoordStore(cellI, 1, waveletCoordB);
+    }
   }
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
@@ -7211,7 +7245,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Wavelet turbulence: velocity-derived, so it stays on the stored value
   // under the staggered reading (like confinement); the fold below scales it
   // by the time step with every other increment.
-  if (waveletOn()) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
+  if (waveletOn() && !VELOCITY_ONLY) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
   vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + detailForce * VELOCITY_UNIT_SCALE;
@@ -11583,7 +11617,7 @@ export function createKaminosVolumePrototype({
   let computePipeline = null;
   let separatedPressure = null;
   let fineVelocity = null;
-  let materialOnlyPipeline = null;
+  let materialOnlyPipeline = null, materialOnlyPredictPipeline = null;
   let separatedPressureProjectPipeline = null;
   let faceForcesPipeline = null;
   let waveletLowPassPipeline = null;
@@ -11664,7 +11698,7 @@ export function createKaminosVolumePrototype({
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    const input={fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics};
+    const input={fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;
@@ -12691,7 +12725,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
-    fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null;
+    fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null; materialOnlyPredictPipeline=null;
     retireIntermediateFlow();
     worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;
     if(worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));
@@ -14037,7 +14071,7 @@ export function createKaminosVolumePrototype({
       return buffer;
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
-    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted));
+    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted) && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)<gridSize));
     prepareImmersedCollectionTexture();
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
@@ -16578,7 +16612,7 @@ export function createKaminosVolumePrototype({
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     uniforms.set(waveletOctaveUniformValues(waveletTurbulence), WAVELET_TURBULENCE_UNIFORM_OFFSET + 4);
-    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
+    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)<gridSize))) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();
@@ -17311,13 +17345,20 @@ export function createKaminosVolumePrototype({
       gpuThermalConsumer.prepareSource(encoder,thermalGpuFrame());
     }
     if(velocityOwner)encodeFineVelocity(encoder,velocityOwner,transportConfig,options.timestampWrites);
+    const materialGroup=velocityOwner?createFluidRenderBindGroup({label:'fine material with coarse-carried turbulence',
+      fluidRead:fluidBuffers[currentFluid],fluidWrite:fluidBuffers[1-currentFluid],
+      frontRead:frontBuffers[currentFront],frontWrite:frontBuffers[1-currentFront],
+      reactantRead:reactantTextures[currentFluid],reactantWrite:reactantTextures[1-currentFluid],
+      quenchRead:quenchBuffers[currentQuench],quenchWrite:quenchBuffers[1-currentQuench],
+      waveletRead:velocityOwner.wavelet[velocityOwner.current],waveletWrite:waveletTextures[1-currentQuench],
+      captureRows:nonRidgeOpticalCaptureRowBuffer}):fluidBindGroup();
     if (transportConfig.effective.predictorPass) {
       if (!transportPredictPipeline || !transportPredictBindGroup) {
         throw new Error('transport predictor pipeline unavailable');
       }
       const predictor = encoder.beginComputePass({ label: 'kaminos transport predictor pass' });
-      predictor.setPipeline(transportPredictPipeline);
-      predictor.setBindGroup(0, fluidBindGroup());
+      predictor.setPipeline(velocityOwner?materialOnlyPredictPipeline:transportPredictPipeline);
+      predictor.setBindGroup(0, materialGroup);
       predictor.setBindGroup(3, transportPredictBindGroup);
       const predictorWorkgroups = Math.ceil(gridSize / 4);
       predictor.dispatchWorkgroups(predictorWorkgroups, Math.ceil(gridHeight / 4), predictorWorkgroups);
@@ -17343,7 +17384,7 @@ export function createKaminosVolumePrototype({
         : options.timestampWrites } : {}),
     });
     pass.setPipeline(velocityOwner ? materialOnlyPipeline : computePipeline);
-    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(0, materialGroup);
     pass.setBindGroup(3, transportPredictBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
     const workgroupsY = Math.ceil(gridHeight / 4);
@@ -17414,11 +17455,16 @@ export function createKaminosVolumePrototype({
       fineVelocity.pipelines=Object.fromEntries(['cs','csFaceForces','csTransportPredict','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
       fineVelocity.predictGroup=device.createBindGroup({layout:transportPredictBindGroupLayout,entries:[{binding:1,resource:{buffer:fineVelocity.predictor}},{binding:2,resource:emptyGasSourceTexture.createView()}]});
     }
+    const turbulent=!!state.waveletTurbulence?.effective?.admitted;
+    if(turbulent&&!fineVelocity.waveletActive)fineVelocity.resetWavelet();
+    fineVelocity.waveletActive=turbulent;
     if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
+    if(!materialOnlyPredictPipeline)materialOnlyPredictPipeline=device.createComputePipeline({label:'fine material turbulence predictor',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'csTransportPredict',constants:{MATERIAL_ONLY:true}}});
     const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];
     u.set(immersedSourceUniformValues(state.immersedSource,plan),IMMERSED_SOURCE_UNIFORM_OFFSET);
     device.queue.writeBuffer(fineVelocity.uniform,0,u);
     state.fineGrid.residentBytes=fineVelocity.residentBytes;
+    state.fineGrid.turbulence={placement:'material-characteristic',coordinateDims:plan.velocityDims,detailDims:plan.materialDims,velocityFeedback:false,active:!!state.waveletTurbulence?.effective?.admitted};
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){

@@ -98,7 +98,8 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
  const reactant=[0,1].map(i=>texture('reactant '+i,'rg32float')),wavelet=[0,1].map(i=>texture('wavelet '+i,'rgba32float',[d[0],d[1],d[2]*2]));
  const lattice=new Float32Array(n*8);let at=0;
  for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
- for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);
+ const resetWavelet=()=>{for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);};
+ resetWavelet();
  const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
  const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
  const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
@@ -121,7 +122,7 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
   bindings.seed=device.createBindGroup({layout:pipelines.restrictScalars.getBindGroupLayout(0),entries:entries.filter(e=>used.restrictScalars.includes(e.binding)).map(e=>e.binding===0?{binding:0,resource:{buffer:seedShape}}:e)});
  }
  function encode(encoder,kind,timestampWrites){if(!bindings)throw Error('Fine velocity transfer not prepared');const p=encoder.beginComputePass({label:'fine '+kind,...(timestampWrites?{timestampWrites}:{})});p.setPipeline(pipelines[kind]);p.setBindGroup(0,kind==='restrictScalars'&&seed?bindings.seed:bindings[kind]);p.dispatchWorkgroups(...(kind==='prolongVelocity'?plan.materialDims:d).map(n=>Math.ceil(n/4)));p.end();if(kind==='restrictScalars')seed=false;}
- return {plan,fluid,front,quench,reactant,wavelet,solid,burn,force,lower,uniform,predictor,prepare,encode,
+ return {plan,fluid,front,quench,reactant,wavelet,solid,burn,force,lower,uniform,predictor,prepare,encode,resetWavelet,
   get current(){return current;},flip(){current=1-current;bindings=null;},destroy(){owned.forEach(r=>r.destroy());},
   residentBytes:n*(128+8+8+16+64+4+4+36+64)+40+side*side*12+uniformBytes+64};
 }

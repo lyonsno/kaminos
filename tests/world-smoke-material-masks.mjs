@@ -20,10 +20,10 @@ test('world collision receives current remaining-material masks, including their
     device:{queue:{writeBuffer(){}}},worldRenderUniform:{},uniforms:[],Float32Array};
   vm.createContext(ctx);vm.runInContext(body,ctx);
   const plan={flowDims:[4,8,4],min:[-1,-1,-1],max:[1,3,1]};
-  ctx.encodeWorldSmoke({},plan);
+  ctx.encodeWorldSmoke({},{world:plan});
   assert.equal(calls[0][3]?.materialMasks,masks,'world uses the same live material-mask snapshot as fine collision');
-  masks=[];ctx.encodeWorldSmoke({},plan);
+  masks=[];ctx.encodeWorldSmoke({},{world:plan});
   assert.equal(calls[1][3]?.materialMasks,masks,'removed masks must not remain cached');
-  ctx.gpuThermalConsumer=null;ctx.encodeWorldSmoke({},plan);
+  ctx.gpuThermalConsumer=null;ctx.encodeWorldSmoke({},{world:plan});
   assert.equal(calls[2][3]?.materialMasks.length,0,'ordinary unburned obstacles remain supported');
 });

@@ -1,3 +1,4 @@
+import { THERMAL_MOMENTS_WGSL } from './volume-thermal-moments.mjs';
 // Geometry comes from the dispatched field, never pending inspector choices.
 export function worldSmokeOverlayGeometry(s) {
  if(s?.effective!=='one-way-world-field'||!s.min||!s.max||!s.anchor||!s.fineTransform||!s.fineDims)return null;
@@ -12,6 +13,7 @@ export function worldSmokeOverlayGeometry(s) {
 }
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
+${THERMAL_MOMENTS_WGSL}
 struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
@@ -25,18 +27,25 @@ fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
  return EmissiveMaterial(color*(sigma+dot(m.emission,vec3<f32>(.2126,.7152,.0722))),sigma,0.0);
 }
 fn worldInsideFine(p:vec3<f32>)->bool{return all(p>=vec3<f32>(-1))&&all(p<=vec3<f32>(1,2.0*f32(GRID_Y)/f32(GRID)-1.0,1));}
-fn regionSmokeSample(field:texture_3d<f32>,p:vec3<f32>,loPitch:vec4<f32>)->vec4<f32>{
- let dims=vec3<i32>(textureDimensions(field));let q=(p-loPitch.xyz)/loPitch.w-.5;
+fn regionSmokeSample(field:texture_3d<f32>,p:vec3<f32>,loPitch:vec4<f32>,layer:i32)->vec4<f32>{
+ let atlas=vec3<i32>(textureDimensions(field));let dims=vec3<i32>(atlas.xy,atlas.z/2);let q=(p-loPitch.xyz)/loPitch.w-.5;
  let base=vec3<i32>(floor(q));let f=fract(q);var value=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
  let c=base+vec3<i32>(x,y,z);if(any(c<vec3<i32>(0))||any(c>=dims)){continue;}
- let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));value+=textureLoad(field,c,0)*w.x*w.y*w.z;
+ let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));value+=textureLoad(field,c+vec3<i32>(0,0,layer*dims.z),0)*w.x*w.y*w.z;
  }}}return value;
 }
-fn worldSmokeSample(p:vec3<f32>)->vec4<f32>{return regionSmokeSample(worldOptical,p,worldRender.loPitch);}
-fn regionSmokeMaterial(raw:vec4<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
+fn worldSmokeSample(p:vec3<f32>)->vec4<f32>{return regionSmokeSample(worldOptical,p,worldRender.loPitch,0);}
+fn regionSmokeMaterial(raw:vec4<f32>,moments:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  var r:FlowReconstructionSample;r.material=vec4<f32>(raw.xyz,0);r.freshBurn=raw.w;
- var medium=emissiveMaterial(r,fireVisible,smokeVisible);medium.emission*=fireVisible;return medium;
+ var medium=emissiveMaterial(r,fireVisible,smokeVisible);
+ if(u.emissive_physics.x>.5){
+   let q=thermalQuadrature(max(raw.x,0.0),moments);
+   let mixture=mix(thermalRadiance(physicsSootKelvin(q.x,u.emissive_physics.y)),thermalRadiance(physicsSootKelvin(q.y,u.emissive_physics.y)),q.z);
+   let absorbing=max(raw.x,0.0)*max(u.viewport_steps_density.w,0.0)*u.emissive_material.x*(1.0-clamp(u.emissive_material.y,0.0,1.0));
+   medium.emission+=absorbing*(mixture-thermalRadiance(physicsSootKelvin(max(raw.y,0.0),u.emissive_physics.y)))*u.physical_fire.w;
+ }
+ medium.emission=max(medium.emission,vec3<f32>(0))*fireVisible;return medium;
 }
 fn middleSmokeWeight(p:vec3<f32>)->f32{
  if(worldRender.middleHiEnabled.w<.5){return 0.0;}
@@ -44,9 +53,9 @@ fn middleSmokeWeight(p:vec3<f32>)->f32{
  return smoothstep(0.0,2.0*worldRender.middleLoPitch.w,min(d.x,min(d.y,d.z)));
 }
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- let far=regionSmokeMaterial(worldSmokeSample(p),smokeVisible,fireVisible);
+ let far=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);
  let weight=middleSmokeWeight(p);if(weight<=0.0){return far;}
- let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch),smokeVisible,fireVisible);
+ let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
  return EmissiveMaterial(mix(far.emission,middle.emission,weight),mix(far.absorption,middle.absorption,weight),mix(far.scattering,middle.scattering,weight));
 }
 fn worldMinimumMaterialPitch()->f32{
