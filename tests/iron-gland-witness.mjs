@@ -5,6 +5,13 @@ const api = await import('../experiments/iron-gland/witness-checks.mjs').catch(e
   if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
   return {};
 });
+
+test('a caught inference error fails the miss wait rather than waiting forever', () => {
+  assert.equal(typeof api.missObserved,'function');
+  assert.throws(()=>api.missObserved({frameCount:3,interaction:{visible:false},lastAcquisition:{source:'wilor_yolo_detector_bbox_only'},error:'injected inference failure',running:false}),/injected inference failure/);
+  assert.equal(api.missObserved({frameCount:1,interaction:{visible:false},lastAcquisition:{source:'no_detection'},error:null}),true);
+  assert.equal(api.missObserved({frameCount:0,interaction:{visible:false},lastAcquisition:null,error:null}),false);
+});
 const frame = () => ({ identity: { routeId: 'kaminos.browser-hand-mesh.webgpu-local.v0', backend: 'webgpu-local' },
   running: true, error: null, frameCount: 3, cameraVisible: true, interaction: { visible: true, anchor: [.5, .5], span: .2 },
   threshold: .18, lastAcquisition: { source: 'wilor_yolo_detector_bbox_only', fallback: false, threshold: .18 },
