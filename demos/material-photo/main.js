@@ -15,7 +15,7 @@ const $=id=>document.getElementById(id), params=new URLSearchParams(location.sea
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
 const displayCutouts=new WeakMap();
-const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
+const state=window.__materialPhoto={status:'loading-image',error:null,renderError:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
 const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
@@ -30,9 +30,12 @@ let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
 const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
-function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function status(text,error=false){
+  if(state.renderError){state.status='error';state.error=state.renderError;text=`Rendering stopped: ${state.renderError}. Reload to recover.`;error=true;}
+  $('status').textContent=text;$('status').classList.toggle('error',error);
+}
 function provenance(text){$('provenance').textContent=text;}
-function runButton(){ $('run').disabled=!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status); }
+function runButton(){ $('run').disabled=!GENERATION_AVAILABLE||!!state.renderError||active||!image||['loading-image','restoring'].includes(state.status); }
 $('generation-controls').hidden=!GENERATION_AVAILABLE;
 $('local-generation').hidden=GENERATION_AVAILABLE;
 $('file').disabled=!GENERATION_AVAILABLE;
@@ -161,13 +164,13 @@ async function setup(){
     gpu=await requestBrowserWebGpuDevice(navigator.gpu,await superMatDeviceOptions(navigator.gpu,{adapterName:'material-photograph'}));
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
     foreground=createWebGpuForegroundService({device:gpu.device,routeId:'material-photograph:foreground'});
-    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device,{foreground,onError:fail});
+    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device,{foreground,onError:failRendering});
     await viewer.applyPreset(DEFAULT_PRESET);
     applyImageGlow();
     gpu.device.addEventListener('uncapturederror',event=>{
-      (state.gpuErrors??=[]).push(event.error.message);fail(event.error);
+      (state.gpuErrors??=[]).push(event.error.message);failRendering(event.error);
     });
-    gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
+    gpu.device.lost.then(info=>{if(info.reason!=='destroyed')failRendering(Error(`WebGPU device lost: ${info.message}`));});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
   })().catch(async error=>{
     for(const cleanup of [()=>viewer?.dispose(),()=>foreground?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
@@ -225,7 +228,7 @@ async function restoreCached(ticket=++imageTicket){
   }else{provenance('Your cached depth');status(exampleError?'Example unavailable; depth restored; materials not yet computed at this resolution':'Depth restored; materials not yet computed at this resolution',exampleError);}
 }
 async function infer(){
-  if(!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status))return;
+  if(!GENERATION_AVAILABLE||state.renderError||active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
   const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
   const retainDisplay=!!viewer?.maps;
@@ -389,6 +392,7 @@ $('preset-file').onchange=async()=>{
   $('preset-file').value='';
 };
 function fail(error){state.status='error';state.error=error.message;status(error.message,true);runButton();}
+function failRendering(error){state.renderError??=error.message;fail(error);}
 async function changeEnvironment(name){
   if(!viewer)return false;
   const ticket=++environmentTicket;

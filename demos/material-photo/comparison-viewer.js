@@ -8,6 +8,7 @@ const modes=['original','photo','relit','materials'];
 export class MaterialPhotoViewer {
   async init(container,device,{foreground=null,onError=error=>console.error(error)}={}) {
     this.container=container;this.views={};this.focus=null;this.cache=new Map();this.environmentTicket=0;
+    this.foreground=foreground;this.environmentRequests=new Set();
     const rig={orbit:new Vector2(),target:new Vector2(),current:new Vector2()};
     for(const mode of modes){
       const canvas=container.querySelector(`[data-canvas=${mode}]`),view=new PhotoViewer();
@@ -108,6 +109,7 @@ export class MaterialPhotoViewer {
   setLight(){this.primary.setLight();const {x,y}=this.primary.getLightHandle();this.setLightHandle(x,y);}
   reset(){this.primary.reset();this.setLight();}
   async loadEnvironment(name){
+    if(this.stopped)throw Error('Photograph viewer disposed');
     if(!Object.hasOwn(ENVIRONMENTS,name))throw Error('Unknown HDR environment');
     const ticket=++this.environmentTicket;
     if(!this.cache.has(name)){
@@ -115,9 +117,23 @@ export class MaterialPhotoViewer {
       this.cache.set(name,promise);
     }
     const texture=await this.cache.get(name);
+    if(this.stopped)throw Error('Photograph viewer disposed');
     if(ticket!==this.environmentTicket)return false;
-    for(const view of Object.values(this.views))view.setEnvironment(texture);
-    this.environment=name;return true;
+    const apply=()=>{
+      if(this.stopped)throw Error('Photograph viewer disposed');
+      if(ticket!==this.environmentTicket)return false;
+      // PMREM generation submits GPU work, so environment changes need admission too.
+      for(const view of Object.values(this.views))view.setEnvironment(texture);
+      this.environment=name;return true;
+    };
+    if(!this.foreground)return apply();
+    const request=this.foreground.request({requestId:`material-photo:environment:${ticket}`,run:apply});
+    this.environmentRequests.add(request);
+    try{
+      const receipt=await request.completion;
+      if(receipt.status!=='completed')throw Error(receipt.failure?.error?.message??`Photograph environment ${receipt.status}`);
+      return receipt.result;
+    }finally{this.environmentRequests.delete(request);}
   }
   exportPreset(){return {...this.primary.exportPreset(),environment:this.environment};}
   async applyPreset(value){
@@ -134,11 +150,13 @@ export class MaterialPhotoViewer {
   clear(){for(const mode of ['original','photo','relit','materials'])this.views[mode].clear();}
   async dispose(){
     this.stopped=true;
-    if(this.frameId!=null)cancelAnimationFrame(this.frameId);
-    this.pendingFrame?.cancel('Photograph viewer disposed');
-    await this.pendingFrame?.completion;
-    this.resizeObserver?.disconnect();
     this.environmentTicket++;
+    if(this.frameId!=null)cancelAnimationFrame(this.frameId);
+    const pending=[...(this.environmentRequests??[])];
+    if(this.pendingFrame)pending.push(this.pendingFrame);
+    for(const request of pending)request.cancel('Photograph viewer disposed');
+    await Promise.all(pending.map(request=>request.completion));
+    this.resizeObserver?.disconnect();
     const errors=[];
     for(const view of Object.values(this.views))try{await view.dispose();}catch(error){errors.push(error);}
     for(const promise of this.cache.values())try{(await promise).dispose();}catch{}

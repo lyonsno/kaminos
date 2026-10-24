@@ -3,10 +3,12 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {test} from 'node:test';
 import {Vector2} from '../../lib/three.webgpu.js';
+import {createWebGpuForegroundService} from '../../webgpu-inference-kit/src/foreground-opportunity.js';
 
-async function fixture({managed=false}={}){
+async function fixture({managed=false,service=null}={}){
   const calls={devices:[],loads:[],gates:{},disposed:[],frames:[],requests:[],renders:[],options:[],errors:[]};
-  const foreground={request(request){let resolve;const completion=new Promise(r=>{resolve=r;});const pending={request,resolve,completion,cancel(){resolve({status:'canceled-before-service'});}};calls.requests.push(pending);return pending;}};
+  let initializing=true;
+  const foreground={request(request){let resolve;const completion=new Promise(r=>{resolve=r;});const pending={request,resolve,completion,cancel(){resolve({status:'canceled-before-service'});}};calls.requests.push(pending);if(initializing)Promise.resolve().then(()=>request.run({})).then(result=>resolve({status:'completed',result}));return pending;}};
   const tile=()=>({hidden:false,dataset:{}}),canvases=Object.fromEntries(['original','photo','relit','materials'].map(mode=>{
     const article=tile();return [mode,{parentElement:tile(),closest:()=>article}];
   }));
@@ -41,8 +43,32 @@ async function fixture({managed=false}={}){
     return new vm.SyntheticModule(Object.keys(exports),function(){for(const[key,value]of Object.entries(exports))this.setExport(key,value);},{context});
   });
   await source.evaluate();const viewer=new source.namespace.MaterialPhotoViewer(),device={};
-  await viewer.init(container,device,managed?{foreground,onError:error=>calls.errors.push(error)}:{});return {viewer,calls,device,container,canvases,texture};
+  await viewer.init(container,device,managed?{foreground:service??foreground,onError:error=>calls.errors.push(error)}:{});initializing=false;calls.requests.length=0;return {viewer,calls,device,container,canvases,texture};
 }
+test('environment application follows the actual Kit foreground service receipt and run boundary',async()=>{
+  const service=createWebGpuForegroundService({device:{queue:{submit(){}}},routeId:'photo-test'});
+  const {viewer}=await fixture({managed:true,service});
+  const run=await service.beginRun('material-test');
+  const changed=viewer.loadEnvironment('warehouse');await new Promise(setImmediate);
+  assert.equal(viewer.environment,'studio');
+  await run.withForeground('weight-loading',async()=>{});
+  assert.equal(await changed,true);
+  assert.equal(viewer.environment,'warehouse');
+  await run.finish();await viewer.dispose();await service.dispose();
+});
+test('managed environment GPU preparation waits for admission and ignores superseded requests',async()=>{
+  const {viewer,calls}=await fixture({managed:true});
+  const old=viewer.loadEnvironment('warehouse');await new Promise(setImmediate);
+  assert.ok(Object.values(viewer.views).every(view=>view.environmentTexture.name==='studio'),'GPU preparation must wait');
+  assert.equal(calls.requests.length,1);
+  const latest=viewer.loadEnvironment('sunset');await new Promise(setImmediate);
+  assert.equal(calls.requests.length,2);
+  for(const request of calls.requests){const result=await request.request.run({runId:'held-model-run'});request.resolve({status:'completed',result});}
+  assert.equal(await old,false);assert.equal(await latest,true);
+  assert.ok(Object.values(viewer.views).every(view=>view.environmentTexture.name==='sunset'));
+  const pending=viewer.loadEnvironment('studio');await new Promise(setImmediate);
+  const rejected=assert.rejects(pending,/disposed|canceled/i);await viewer.dispose();await rejected;
+});
 test('four managed views render together only inside an admitted foreground callback',async()=>{
   const {viewer,calls}=await fixture({managed:true});
   assert.ok(calls.options.every(options=>options.autoRender===false));

@@ -134,6 +134,22 @@ test('a SuperMat app load failure retries without replacing the shared renderer 
   assert.equal(c.behavior.apps?.length,1);assert.equal(c.behavior.viewer,viewer);
   assert.equal(c.behavior.deviceRequests,1);assert.equal(c.state.status,'done');
 });
+test('render failure survives model completion, example selection and cached restoration',async()=>{
+  const c=await controller({examples:true});let release,entered;
+  c.behavior.loadGate=new Promise(r=>{release=r;});const loading=new Promise(r=>{entered=r;});c.behavior.onLoad=entered;
+  const job=c.actions.infer();await loading;
+  c.behavior.viewerOptions.onError(Error('foreground draw failed'));
+  release();await job;
+  assert.equal(c.state.runs.at(-1).status,'done','model output remains retained');
+  assert.equal(c.state.status,'error','stopped rendering cannot advertise completed presentation');
+  assert.match(c.elements.status.textContent,/foreground draw failed/);
+  assert.equal(c.elements.run.disabled,true);
+  await c.actions.sample('orb');
+  assert.equal(c.state.status,'error');assert.match(c.elements.status.textContent,/foreground draw failed/);
+  await c.actions.sample('celebration');
+  assert.equal(c.state.status,'error');assert.match(c.elements.status.textContent,/foreground draw failed/);
+  await c.actions.infer();assert.equal(c.state.runs.length,1,'new work waits for actual renderer recovery');
+});
 
 test('latest requested photograph wins even when fetches complete out of order', async () => {
   const c = await controller(), releaseBag=c.defer('bag.webp'), releaseOrb=c.defer('evil-orb.png');
