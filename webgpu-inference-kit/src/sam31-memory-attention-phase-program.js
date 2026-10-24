@@ -429,7 +429,7 @@ fn main(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(num_workgroups) dispatch_grid: vec3<u32>,
 ) {
-  let token = gid.x + gid.y * dispatch_grid.x * 64u;
+  let token = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (token >= dims.total_tokens) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
@@ -459,7 +459,7 @@ fn main(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(num_workgroups) dispatch_grid: vec3<u32>,
 ) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   output_values[index] = left_values[index] + dims.scale * right_values[index];
 }
@@ -477,7 +477,7 @@ fn main(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(num_workgroups) dispatch_grid: vec3<u32>,
 ) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -535,8 +535,8 @@ struct RopeDims {
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(2) var<uniform> dims: RopeDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.tokens * dims.channels;
   if (index >= total) { return; }
   let channel = index % dims.channels;
@@ -642,6 +642,13 @@ export function createSam31MemoryAttentionDispatchPlan(input = {}) {
   const shape = normalizeShape(input.shape);
   const logicalInvocations = shape.batch * shape.queryTokens * shape.mlpHidden;
   return {
+    memory: {
+      logicalInvocations: shape.batch * shape.memoryTokens * shape.channels,
+      dispatch: createLinearDispatch(shape.batch * shape.memoryTokens * shape.channels, {
+        workgroupSize: 64,
+        maxWorkgroupsPerDimension: input.maxWorkgroupsPerDimension ?? 65_535,
+      }),
+    },
     mlp1: {
       logicalInvocations,
       dispatch: createLinearDispatch(logicalInvocations, {
@@ -892,12 +899,12 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
       { name: `memory-attention-layer-${layerIndex}-cross-object-query`, kernel: `${prefix}ObjectCrossQ`, dispatch: [workgroups(totalQuery)] },
       { name: `memory-attention-layer-${layerIndex}-cross-query-add`, kernel: `${prefix}CrossQAdd`, dispatch: [workgroups(totalQuery)] },
       { name: `memory-attention-layer-${layerIndex}-cross-rope-query`, kernel: `${prefix}CrossQRope`, dispatch: [workgroups(totalQuery)] },
-      { name: `memory-attention-layer-${layerIndex}-cross-memory-key`, kernel: `${prefix}ImageCrossK`, dispatch: [workgroups(totalMemory)], yieldAfter: true },
-      { name: `memory-attention-layer-${layerIndex}-cross-object-key`, kernel: `${prefix}ObjectCrossK`, dispatch: [workgroups(totalMemory)] },
-      { name: `memory-attention-layer-${layerIndex}-cross-key-add`, kernel: `${prefix}CrossKAdd`, dispatch: [workgroups(totalMemory)] },
-      { name: `memory-attention-layer-${layerIndex}-cross-key-position-add`, kernel: `${prefix}CrossKPosAdd`, dispatch: [workgroups(totalMemory)] },
-      { name: `memory-attention-layer-${layerIndex}-cross-value`, kernel: `${prefix}CrossV`, dispatch: [workgroups(totalMemory)], yieldAfter: true },
-      { name: `memory-attention-layer-${layerIndex}-cross-rope-pointer-tail`, kernel: `${prefix}CrossKRope`, dispatch: [workgroups(totalMemory)], yieldAfter: true },
+      { name: `memory-attention-layer-${layerIndex}-cross-memory-key`, kernel: `${prefix}ImageCrossK`, dispatch: dispatchPlan.memory.dispatch, yieldAfter: true },
+      { name: `memory-attention-layer-${layerIndex}-cross-object-key`, kernel: `${prefix}ObjectCrossK`, dispatch: dispatchPlan.memory.dispatch },
+      { name: `memory-attention-layer-${layerIndex}-cross-key-add`, kernel: `${prefix}CrossKAdd`, dispatch: dispatchPlan.memory.dispatch },
+      { name: `memory-attention-layer-${layerIndex}-cross-key-position-add`, kernel: `${prefix}CrossKPosAdd`, dispatch: dispatchPlan.memory.dispatch },
+      { name: `memory-attention-layer-${layerIndex}-cross-value`, kernel: `${prefix}CrossV`, dispatch: dispatchPlan.memory.dispatch, yieldAfter: true },
+      { name: `memory-attention-layer-${layerIndex}-cross-rope-pointer-tail`, kernel: `${prefix}CrossKRope`, dispatch: dispatchPlan.memory.dispatch, yieldAfter: true },
       { name: `memory-attention-layer-${layerIndex}-cross-input-readback`, readbacks: [
         { name: `layer${layerIndex}CrossQueryRope`, tensor: 'queryRope' },
         { name: `layer${layerIndex}CrossKeyRope`, tensor: 'keyRope' },

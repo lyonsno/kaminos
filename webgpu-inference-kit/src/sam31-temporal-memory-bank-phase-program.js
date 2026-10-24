@@ -4,7 +4,7 @@ import {
   defineWebGpuRoute,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { createLinearDispatch, WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 import { createKernelProfileMetadata, createRouteKernelProfileMetadata } from './kernel-profile.js';
 import {
   createRouteReceiptArtifacts,
@@ -52,8 +52,8 @@ struct SpatialDims {
 @group(0) @binding(6) var<uniform> dims: SpatialDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let token = (index / dims.channels) % dims.frame_tokens;
@@ -86,8 +86,8 @@ struct PointerDims {
 @group(0) @binding(2) var<uniform> dims: PointerDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let pointer = (index / dims.channels) % dims.multiplex_count;
@@ -127,8 +127,8 @@ fn sine_component(relative_position: f32, component: u32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let output_channel = index % dims.channels;
   let pointer = (index / dims.channels) % dims.multiplex_count;
@@ -382,7 +382,12 @@ function uniformBinding(name) {
   return { name, resource: `uniform:${name}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' };
 }
 
-function workgroups(total) { return Math.max(1, Math.ceil(total / 64)); }
+export function createSam31TemporalMemoryDispatchPlan({ plan, channels, batch = 1, maxWorkgroupsPerDimension = 65535 }) {
+  const entry = logicalInvocations => ({ logicalInvocations,
+    dispatch: createLinearDispatch(logicalInvocations, { workgroupSize: 64, maxWorkgroupsPerDimension }) });
+  return { spatial: entry(plan.spatialTokenCount * batch * channels),
+    pointer: entry(plan.pointerFrames.length * batch * plan.multiplexCount * channels) };
+}
 
 async function aggregateSha256(arrays) {
   if (!globalThis.crypto?.subtle?.digest) throw new Error('crypto.subtle.digest is required to hash SAM3.1 temporal memory-bank outputs');
@@ -482,18 +487,18 @@ export async function runSam31TemporalMemoryBankPhaseProgramRoute(input = {}) {
     pointerCopy: { code: TEMPORAL_POINTER_COPY_WGSL, bindings: [bind('pointerValues'), bind('memory', 'storage'), uniformBinding('pointerDims')] },
     pointerPosition: { code: TEMPORAL_POINTER_POSITION_WGSL, bindings: [bind('relativePositions'), bind('projectionWeight'), bind('projectionBias'), bind('memoryPos', 'storage'), uniformBinding('pointerDims')] },
   };
-  const spatialTotal = plan.spatialFrames.length * batch * plan.frameTokenCount * channels;
-  const pointerTotal = plan.pointerFrames.length * batch * multiplexCount * channels;
+  const dispatchPlan = createSam31TemporalMemoryDispatchPlan({ plan, channels, batch,
+    maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension });
   const program = runtime.defineProgram({
     name: 'sam31.temporal-memory-bank-phase-program',
     tensors: programTensors,
     uniforms: { spatialDims: tensors.spatialDims, pointerDims: tensors.pointerDims },
     kernels,
     phases: [
-      { name: 'temporal-memory-spatial-assembly', kernel: 'spatialAssembly', dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-      { name: 'temporal-memory-spatial-image-assembly', kernel: 'spatialImageAssembly', dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-      { name: 'temporal-memory-pointer-copy', kernel: 'pointerCopy', dispatch: [workgroups(pointerTotal)], yieldAfter: true },
-      { name: 'temporal-memory-pointer-position', kernel: 'pointerPosition', dispatch: [workgroups(pointerTotal)], yieldAfter: true },
+      { name: 'temporal-memory-spatial-assembly', kernel: 'spatialAssembly', dispatch: dispatchPlan.spatial.dispatch, yieldAfter: true },
+      { name: 'temporal-memory-spatial-image-assembly', kernel: 'spatialImageAssembly', dispatch: dispatchPlan.spatial.dispatch, yieldAfter: true },
+      { name: 'temporal-memory-pointer-copy', kernel: 'pointerCopy', dispatch: dispatchPlan.pointer.dispatch, yieldAfter: true },
+      { name: 'temporal-memory-pointer-position', kernel: 'pointerPosition', dispatch: dispatchPlan.pointer.dispatch, yieldAfter: true },
       { name: 'temporal-memory-readback', readbacks: [
         { name: 'memoryImage', tensor: 'memoryImage' },
         { name: 'memory', tensor: 'memory' },
