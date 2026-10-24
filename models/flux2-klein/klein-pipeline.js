@@ -69,7 +69,7 @@ async function inflatedBody(response, onChunk) {
   return gzipped ? counted.pipeThrough(new DecompressionStream('gzip')) : counted;
 }
 
-async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, onBytes = () => {} } = {}, stats) {
+export async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, onBytes = () => {} } = {}, stats) {
   const cacheWeights = stats.cacheWeights !== false;
   const requestOptions = cacheWeights ? undefined : { cache: 'no-store' };
   const cache = cacheWeights ? await openWeightCache() : null;
@@ -244,7 +244,7 @@ export class KleinPipeline {
   // pad to (its largest buffer, the fused projection, grows with image plus prompt tokens), and
   // whether the decoder fits. Phones commonly allow 128 MiB per storage binding, which at 512 × 512
   // leaves about 189 prompt tokens and rules out 768 and above.
-  sizeLimits(width, height = width) {
+  sizeLimits(width, height = width, referenceTokens = 0) {
     const cap = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize);
     const { D, F } = this.transformer, imgTokens = (width / 16) * (height / 16);
     const maxTextTokens = Math.min(512, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
@@ -256,6 +256,7 @@ export class KleinPipeline {
 
   // Model hooks: FLUX.2 Klein's choices here; another model on the same kernels and decoder (FLUX.3
   // Klein's Flux3Pipeline) overrides them.
+  async encodeReference() { throw new Error('Reference conditioning is not supported by this pipeline'); }
   createTransformer(manifest) { return new KleinTransformer(this.device, manifest); }
   // The text length a generation asks for before device limits: the reference's padding (512) or
   // 'fitN', the prompt's own length plus N padding tokens.
@@ -398,11 +399,11 @@ export class KleinPipeline {
   // or 'fitN' for the prompt's own length plus N padding tokens (fewer tokens for the transformer).
   // onPreview({ width, height, rgba, step, steps }), if given, receives a rough image after each step:
   // the clean-image estimate at latent resolution (an eighth of the output), mapped linearly to RGB.
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, shouldDecode = null, schedule = null }) {
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, shouldDecode = null, reference = null, schedule = null }) {
     this.assertUsable();
     this.sched.setSchedule(schedule);
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview, shouldDecode });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview, shouldDecode, reference });
     } catch (error) {
       await this.sched.discard();
       throw error;
@@ -411,14 +412,15 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, onPreview = null, shouldDecode = null, dry = false }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, onPreview = null, shouldDecode = null, reference = null, dry = false }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
     const requestedLength = this.requestedTextTokens(prompt, textLength);
     // Padding is capped where the device's buffer limits require it (better lettering on phones).
-    const limits = this.sizeLimits(width, height);
+    const referenceTokens = reference ? reference.width / 16 * (reference.height / 16) : 0;
+    const limits = this.sizeLimits(width, height, referenceTokens);
     if (!limits.fits) throw new Error(`${width} × ${height} needs larger GPU buffers than this device allows (${Math.round(limits.cap / 2 ** 20)} MiB per buffer)`);
     const maxLength = Math.min(requestedLength, limits.maxTextTokens);
     if (this.framePrompt(prompt).length > maxLength) throw new Error(`the prompt is too long for this device's GPU buffers at ${width} × ${height}; shorten it or pick a smaller size`);
@@ -428,12 +430,19 @@ export class KleinPipeline {
     // Sequential residency: transformer activations exist from here until the decoder's input is
     // prepared, decoder activations from then until the image is read back, so peak activation
     // memory is the larger stage rather than the sum (about 3 GB plus 5 GB at 1024²).
-    this.transformer.allocate(imgTokens, txtTokens);
+    let condition = null;
+    if (reference) {
+      const started = performance.now(); onPhase?.('reference');
+      condition = await this.encodeReference(reference);
+      t.referenceEncodeMs = performance.now() - started;
+      if (condition.latents.length !== referenceTokens * 128 || condition.ids.length !== referenceTokens * 4) throw Error('Reference encoder returned an inconsistent token grid');
+    }
+    this.transformer.allocate(imgTokens, txtTokens, referenceTokens);
     // Per-row RoPE positions (when the model places its padding specially) depend on the prompt's length.
     const teKey = framed.positionIds ? `${txtTokens}:${framed.length}` : txtTokens;
     if (this.textEncoderTokens !== teKey) { this.textEncoder.allocate(txtTokens, framed.positionIds ?? null); this.textEncoderTokens = teKey; }
     const { imgIds, txtIds } = this.tokenIds(latH, latW, txtTokens);
-    this.transformer.prepare({ latents: gaussianNoise(imgTokens * 128, seed), promptEmbeds: null, imgIds, txtIds });
+    this.transformer.prepare({ latents: gaussianNoise(imgTokens * 128, seed), promptEmbeds: null, imgIds, txtIds, reference: condition?.latents, referenceIds: condition?.ids });
 
     // The text encoding depends only on the prompt and its padding, so a re-roll with a new seed reuses
     // it from the last generation instead of running the text encoder again.
@@ -507,7 +516,7 @@ export class KleinPipeline {
       for (let c = 0; c < 3; c++) rgba[i * 4 + c] = Math.round(Math.min(1, Math.max(0, rgb[i * 3 + c] / 2 + 0.5)) * 255);
       rgba[i * 4 + 3] = 255;
     }
-    t.totalMs = t.embeddingFetchMs + t.textEncodeMs + (t.swapMs ?? 0) + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
+    t.totalMs = (t.referenceEncodeMs ?? 0) + t.embeddingFetchMs + t.textEncodeMs + (t.swapMs ?? 0) + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
     const duties = this.sched.stats.history.splice(0);
     this.promptCache.key = promptKey;
     return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties, sampling: { stepsRequested: steps, stepsCompleted: t.stepMs.length, earlyDecoded } };

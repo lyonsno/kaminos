@@ -1,3 +1,4 @@
+import {readReferenceImage} from './models/flux3-klein/reference-image.js';
 // Text -> image in the Authoring workspace with Klein on the Kaminos shared
 // device. The image is saved to the image inbox and becomes the selected source, so the
 // existing Prepare -> SF3D path turns a prompt into a mesh while the kiln keeps rendering.
@@ -173,6 +174,7 @@ const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Erro
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
+  prepareReference=readReferenceImage,
   encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
@@ -259,11 +261,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2'}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       const spec=imageModel(model);
+      if(reference&&model!=='flux3')throw Error('Reference images currently require FLUX.3');
+      const routeId=reference?'flux3-klein.image-and-text.authoring-shared-device.v0':spec.routeId;
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
       if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
       if(!spec.levels.includes(level))throw Error('FLUX.3 currently has 4-bit weights only');
@@ -275,6 +279,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       startedAt=clock();generationStartedAt=null;generationFinished=false;
       set({status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
+        if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal});}
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
@@ -299,12 +304,12 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         generationStartedAt=clock();state.timing={loadMs:generationStartedAt-startedAt,generationMs:0};
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
         const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
-        frameRun=app?await app.beginRun(runId,{routeId:spec.routeId}):await foreground.beginRun(runId);
-        route=await session.registerRoute({routeId:spec.routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
+        frameRun=app?await app.beginRun(runId,{routeId}):await foreground.beginRun(runId);
+        route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
-        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',
+        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',reference,
           shouldDecode:()=>decodeRequested,
-          onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
+          onPhase:value=>{if(!abort.signal.aborted)set(value==='reference'?{stage:'Reading reference image',canDecode:false,percent:null,progress:'Reading the reference image…'}:value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
           onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
           onPreview:frame=>{
             // GPU readback can land after Stop, save, or the next run. Only the
@@ -320,7 +325,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{})};
+        const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{})};
+        if(reference)provenance.reference=structuredClone(reference.provenance);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
@@ -353,6 +359,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
+    <label id="asset-reference-control" hidden><input type="checkbox" id="asset-use-reference"> Use selected image as reference <span id="asset-reference-name"></span></label>
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-decode" hidden>Decode now</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
@@ -371,6 +378,9 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status);
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
+    const selected=assets.read().selected,reference=byId('asset-use-reference');
+    byId('asset-reference-control').hidden=byId('asset-image-model').value!=='flux3';reference.disabled=active||!!state.pending;
+    byId('asset-reference-name').textContent=reference.checked?`· ${selected?.kind==='image'?(selected.label||selected.name):'Choose an image in Browse or Open file'}`:'';
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;
     byId('asset-text-stop').hidden=!state.canStop&&state.status!=='stopping';byId('asset-text-stop').disabled=!state.canStop;
@@ -384,13 +394,18 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const flux3=byId('asset-image-model').value==='flux3',levels=byId('asset-image-level');
     for(const option of levels.options)option.disabled=flux3&&option.value!=='4-bit';
     if(flux3)levels.value='4-bit';
+    render();
   };
+  byId('asset-use-reference').onchange=render;
   byId('asset-text-decode').onclick=()=>controller.decodeNow();
   byId('asset-text-stop').onclick=()=>controller.stop();
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    controller.run({model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    const useReference=byId('asset-image-model').value==='flux3'&&byId('asset-use-reference').checked;
+    const selected=assets.read().selected;
+    if(useReference&&selected?.kind!=='image'){byId('asset-text-status').textContent='Choose a source image in Browse or Open file first.';return;}
+    controller.run({reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});

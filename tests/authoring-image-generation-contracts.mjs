@@ -388,3 +388,15 @@ test('Decode now requests a saved early result without aborting and resets betwe
  await h.service.run({prompt:'lantern',seed:2});
  assert.equal(h.generations[1].shouldDecode(),false);
 });
+
+test('image conditioning keeps its input and effective route in the saved PNG',async()=>{
+ const h=harness({modelWeights:async()=>'/flux3-weights'});
+ const reference={width:16,height:32,rgb:new Float32Array(16*32*3),provenance:{source:'/api/read?root=image-inbox&path=input.png',sha256:'observed-input',width:16,height:32}};
+ await h.service.run({model:'flux3',prompt:'make it blue',seed:2,reference});
+ assert.equal(h.generations[0].reference,reference);
+ const p=h.delivered[0].provenance;
+ assert.equal(p.route,'flux3-klein.image-and-text.authoring-shared-device.v0');assert.deepEqual(p.reference,reference.provenance);
+ assert.ok(h.log.includes(`route:${p.route}`));
+ assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),p);
+ await assert.rejects(h.service.run({model:'flux2',prompt:'blue',seed:2,reference}),/reference.*FLUX.3/i);
+});
