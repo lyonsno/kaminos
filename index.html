@@ -12832,6 +12832,8 @@ function openFlameWorkbench() {
     readScene:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:workingScene.activeFieldId,domain:window.kaminosFlameDomain.read(),collisionEnabled:window.kaminosSceneCollision.read().enabled}),
     async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
     async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    readBasin:id=>loadAuthoredFlameBasin(id,{report:false}),
+    beginPreview:label=>window.kaminosFlameAuthoring.beginPreview(label),
     saveBasin:options=>saveVolumeSettingsPreset({label:options?.label}),
     select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
   });
@@ -21884,10 +21886,12 @@ async function loadAuthoredFlameBasin(id,options={}) {
   // they are clamped before the write and the page says which.
   const state=flameSettingsState(receipt.preset,receipt,options);
   const clamps=flameSettingsStateClamps(state);
+  if(options.report!==false) {
   window.__kaminosFlameBasinClamps=Object.freeze(clamps);
   // Named in the flame warning until another basin replaces it.
   window.__kaminosFlameBasinClampReport=Object.freeze({label:receipt.label||id,clamps});
   if(clamps.length){console.warn(`Basin ${receipt.label||id} clamped:`,clamps);setInfo(`Basin ${receipt.label||id}: clamped to range: ${clamps.map(clamp=>clamp.message).join('; ')}`);}
+  }
   return clampedFlameSettingsState(state);
 }
 

@@ -68,6 +68,24 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
   let loading = false;
   return {
     read: () => structuredClone(read()), apply, edit,
+    beginPreview(label = 'Blend flame settings') {
+      canApply();
+      edits.begin(id, label);
+      let active = true;
+      const stop = edits.subscribe(state => {
+        if (!state.active || state.active.id !== id) { active = false; stop(); }
+      });
+      return {
+        active: () => active,
+        update(next) {
+          if (!active) throw Error('Flame preview has ended');
+          canApply();
+          return edits.preview(check(structuredClone(next)));
+        },
+        commit() { if (active) edits.commit(); },
+        cancel() { if (active) edits.cancel(); },
+      };
+    },
     async applyBasin(presetId, options = {}) {
       if (loading) throw Error('A basin is already loading');
       canApply();
