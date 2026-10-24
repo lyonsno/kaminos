@@ -211,15 +211,25 @@ export function deriveSam31BrowserTrackerExecutionContracts({
   });
 }
 
+export async function hashSam31DecoderInputs(inputs) {
+  const hashes = [];
+  for (const name of ['imageEmbedding', 'imagePosition', 'highResolutionS0', 'highResolutionS1', 'extraPerObjectEmbedding']) {
+    const value = inputs[name];
+    hashes.push([name, value.byteLength, await sha256Bytes(value)]);
+  }
+  return sha256Text(JSON.stringify(hashes));
+}
+
 export async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-multiplex-mask-decoder-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
+  const inputsHash = await hashSam31DecoderInputs(inputs);
   const request = createRouteInvocationRequest(route, {
     requestId: scopedArtifactId(`sam31-two-frame-decoder-${frame}-${Date.now()}`, invocationTag),
     inputs: {
       'source-frame': { artifactId: `sam31-two-frame:${frame}`, sha256: sourceHash, shape: [1] },
-      'sam31-multiplex-decoder-tensors': { artifactId: `sam31-two-frame-decoder-tensors:${frame}`, sha256: sourceHash, shape: [5] },
+      'sam31-multiplex-decoder-tensors': { artifactId: `sam31-two-frame-decoder-tensors:${frame}`, sha256: inputsHash, shape: [5] },
       'sam31-multiplex-decoder-weights': { artifactId: 'sam31-multiplex-decoder-weights:official', sha256: weightsHash, mappedTensorCount: manifest.weights.length },
     },
     outputs: {
