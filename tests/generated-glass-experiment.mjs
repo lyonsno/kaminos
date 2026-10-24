@@ -11,17 +11,18 @@ test('detail switching preserves optics and source identity; full triangles load
  const sourceMeta={ok:true,count:3,sourceCount:3,stride:12,radius:.01,gridSize:512,sourceHashes:{raw:'raw-hash',material:'material-hash'},triangles:{file:'triangles.u32',count:1},dataSHA256:hash(source.buffer)};
  const coarse=source.slice(),coarseMeta={...sourceMeta,radius:.04,reduction:{factor:4},sourceDataSHA256:sourceMeta.dataSHA256};delete coarseMeta.triangles;
  const footprints=new Float32Array([1,0,0,.01,0,1,0,.01,1,0,0,.01,0,1,0,.01,1,0,0,.01,0,1,0,.01]);coarseMeta.footprints={file:'footprints.f32',stride:8,sha256:hash(footprints.buffer)};
- let corrupt=false,releaseTriangles,readTriangles;
+ const tolerances=new Float32Array([.015,.02,.015]),adaptiveMeta={...coarseMeta,radius:.01,adaptive:{schema:'static-connected-splats.v1'},depthTolerance:{file:'depth-tolerance.f32',sha256:hash(tolerances.buffer)}};delete adaptiveMeta.reduction;
+ let corrupt=false,badTolerance=false,releaseTriangles,readTriangles;
  const trianglesStarted=new Promise(resolve=>{readTriangles=resolve;});
- globalThis.fetch=async url=>{calls.push(url);const meta=url.startsWith('/raw/')?sourceMeta:coarseMeta;
+ globalThis.fetch=async url=>{calls.push(url);const meta=url.startsWith('/raw/')?sourceMeta:url.startsWith('/adaptive/')?{...adaptiveMeta,...(badTolerance?{depthTolerance:{...adaptiveMeta.depthTolerance,sha256:'wrong'}}:{})}:coarseMeta;
   if(url.endsWith('.json'))return {ok:true,json:async()=>({...meta,...(corrupt?{sourceDataSHA256:'wrong'}:{})})};
-  return {ok:true,arrayBuffer:async()=>{if(url.endsWith('.u32')){readTriangles();return new Promise(resolve=>{releaseTriangles=()=>resolve(new Uint32Array([0,1,2]).buffer);});}return (url.endsWith('footprints.f32')?footprints:coarse).buffer.slice(0);}};
+  return {ok:true,arrayBuffer:async()=>{if(url.endsWith('.u32')){readTriangles();return new Promise(resolve=>{releaseTriangles=()=>resolve(new Uint32Array([0,1,2]).buffer);});}return (url.endsWith('footprints.f32')?footprints:url.endsWith('depth-tolerance.f32')?tolerances:coarse).buffer.slice(0);}};
  };
  const asset=new Group();asset.add(new Mesh(new BoxGeometry(),new MeshStandardMaterial({map:new Texture()})));
  const session={loadAsset:async()=>({root:asset,id:'source'}),attach:async root=>{roots.push(root);return {root,id:String(roots.length)};},setView:v=>v,redraw(){},dispose:async()=>{}};
  let c;
  try{
-  c=await experiment.create({host:{scene:{open:async()=>session}},inputs:{url:'asset.glb',surfelBase:'/raw/',surfelLevels:[{factor:4,base:'/coarse/'}],material:{ior:1.4}},record(){}});
+  c=await experiment.create({host:{scene:{open:async()=>session}},inputs:{url:'asset.glb',surfelBase:'/raw/',surfelLevels:[{factor:4,base:'/coarse/'},{factor:'adaptive',base:'/adaptive/'}],surfelFactor:4,material:{ior:1.4}},record(){}});
   assert.equal(c.read().factor,4);assert.equal(c.read().rawMesh,undefined);assert.ok(!calls.includes('/raw/surfels.f32'));
   c.operations.setMaterial({ior:1.7,thickness:.03});c.operations.setReconstructionMode('off');
   await c.operations.setSurfelFactor(1);assert.equal(c.read().surfels.ior,1.7);assert.equal(c.read().surfels.thickness,.03);assert.equal(c.read().surfels.reconstruction,false);
@@ -29,6 +30,10 @@ test('detail switching preserves optics and source identity; full triangles load
   await c.operations.setSurfelFactor(4);assert.equal(c.read().factor,4);assert.equal(roots.filter(r=>r.name==='TRELLIS surfels').length,1);
   await assert.rejects(()=>c.operations.setSurfelFactor(3),/Unavailable/);assert.equal(c.read().factor,4);
   await c.operations.setRepresentation('splats');assert.equal(c.read().splats.route,'deferred-surface-splats');assert.equal(c.read().splats.count,3);assert.equal(c.read().splats.ior,1.7);
+  badTolerance=true;await assert.rejects(()=>c.operations.setSurfelFactor('adaptive'),/tolerance hash mismatch/i);assert.equal(c.read().factor,4);badTolerance=false;
+  await c.operations.setSurfelFactor('adaptive');assert.equal(c.read().factor,'adaptive');assert.equal(c.read().splats.depthTolerance,'per-splat');assert.equal(c.read().splats.ior,1.7);
+  await assert.rejects(()=>c.operations.setRepresentation('surfels'),/uniform detail/i);assert.equal(c.read().representation,'splats');
+  await c.operations.setSurfelFactor(4);assert.equal(c.read().splats.depthTolerance,'uniform');
   await c.operations.setRepresentation('surfels');assert.equal(c.read().surfels.ior,1.7);
   const pending=c.operations.setRepresentation('rawMesh');await trianglesStarted;
   await c.operations.setRepresentation('mesh');releaseTriangles();await pending;
