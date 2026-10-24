@@ -12,20 +12,27 @@ export default {
   const session=await host.scene.open();let asset,glass,frame,surfels,splats,currentField,rawMesh,fieldMeta,reference,representation='mesh',levelRequest=0,representationRequest=0,disposed=false;
   const surfelHolder=new Group(),rawHolder=new Group(),splatHolder=new Group();splatHolder.name='Deferred surface splats';splatHolder.visible=false;surfelHolder.name='TRELLIS surfels';rawHolder.name='Raw triangles';
   const levels=inputs.surfelBase?[{factor:1,base:inputs.surfelBase},...(inputs.surfelLevels??[])]:[];
-  if(levels.some((l,i)=>!Number.isSafeInteger(l.factor)||l.factor<1||!l.base||levels.findIndex(v=>v.factor===l.factor)!==i))throw Error('Invalid surfel levels');
+  if(levels.some((l,i)=>(l.factor!=='adaptive'&&(!Number.isSafeInteger(l.factor)||l.factor<1))||!l.base||levels.findIndex(v=>v.factor===l.factor)!==i))throw Error('Invalid surfel levels');
   let factor=inputs.surfelFactor??levels.at(-1)?.factor;
   const load=async base=>{const [m,b]=await Promise.all([fetch(base+'report.json'),fetch(base+'surfels.f32')]);if(!m.ok||!b.ok)throw Error('Surfel fields unavailable');const meta=await m.json();if(!meta.ok)throw Error('Surfel export did not succeed');const bytes=await b.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',bytes),sha=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');if(sha!==meta.dataSHA256)throw Error('Surfel payload hash mismatch');return {data:new Float32Array(bytes),meta};};
   async function makeSplats({data,meta,base}){
    if(!meta.footprints||meta.footprints.stride!==8)throw Error('This detail has no fitted splat footprints');
    const response=await fetch(base+meta.footprints.file);if(!response.ok)throw Error('Splat footprints unavailable');const bytes=await response.arrayBuffer();
    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');if(hash!==meta.footprints.sha256)throw Error('Splat footprint hash mismatch');
-   const next=createDeferredSurfaceSplats(data,meta,new Float32Array(bytes));next.set(surfels?.read()??{...glass.read(),...inputs.material});return next;
+   let depthTolerance;
+   if(meta.adaptive){
+    if(!meta.depthTolerance)throw Error('Adaptive splats require depth tolerance');
+    const response=await fetch(base+meta.depthTolerance.file);if(!response.ok)throw Error('Splat depth tolerance unavailable');const bytes=await response.arrayBuffer();
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');if(hash!==meta.depthTolerance.sha256)throw Error('Splat depth tolerance hash mismatch');depthTolerance=new Float32Array(bytes);
+   }
+   const next=createDeferredSurfaceSplats(data,meta,new Float32Array(bytes),depthTolerance);next.set(surfels?.read()??{...glass.read(),...inputs.material});return next;
   }
   async function loadLevel(value){
+   if(value==='adaptive'&&representation!=='splats'&&!(representation==='mesh'&&inputs.representation==='splats'))throw Error('Adaptive detail requires deferred splats; choose uniform detail for circles');
    const level=levels.find(l=>l.factor===value);if(!level)throw Error('Unavailable surfel level');
    const request=++levelRequest,{data,meta}=await load(level.base);
    if(disposed||request!==levelRequest)return false;
-   if((meta.reduction?.factor??1)!==value||meta.sourceCount!==fieldMeta.sourceCount||!fieldMeta.sourceHashes||JSON.stringify(meta.sourceHashes)!==JSON.stringify(fieldMeta.sourceHashes)||(value!==1&&meta.sourceDataSHA256!==fieldMeta.dataSHA256))throw Error('Surfel level source mismatch');
+   if((meta.adaptive?'adaptive':meta.reduction?.factor??1)!==value||meta.sourceCount!==fieldMeta.sourceCount||!fieldMeta.sourceHashes||JSON.stringify(meta.sourceHashes)!==JSON.stringify(fieldMeta.sourceHashes)||(value!==1&&meta.sourceDataSHA256!==fieldMeta.dataSHA256))throw Error('Surfel level source mismatch');
    const field={data,meta,base:level.base},next=createSurfelGlass(data,meta);let nextSplats;
    if(representation==='splats'){try{nextSplats=await makeSplats(field);}catch(error){next.dispose();throw error;}if(disposed||request!==levelRequest){nextSplats.dispose();next.dispose();return false;}}
    try{const {mode,ior,thickness,reconstruction,reconstructionScope}=surfels?.read()??{mode:'glass',ior:1.45,thickness:.06,reconstruction:true,reconstructionScope:'glass',...inputs.material};next.set({mode,ior,thickness,reconstruction,reconstructionScope});}catch(error){next.dispose();throw error;}
@@ -60,11 +67,12 @@ export default {
    frame(inputs.closeup===true);
   }catch(error){rawMesh?.dispose();surfels?.dispose();splats?.dispose();reference?.dispose();glass?.dispose();await session.dispose();throw error;}
   let sync=()=>{};
-  const read=()=>({source:inputs.url,objectId:asset.id,representation,factor,levels:levels.map(l=>({factor:l.factor,source:l.base})),fieldRegion:fieldMeta?.regionNormalizedYUp??null,rawMesh:rawMesh?.read(),surfels:surfels?.read(),splats:splats?.read(),reference:reference.read(),...glass.read()});
+  const read=()=>({source:inputs.url,objectId:asset.id,representation,factor,levels:levels.map(l=>({factor:l.factor,source:l.base})),fieldRegion:fieldMeta?.regionNormalizedYUp??null,adaptive:currentField?.meta.adaptive??null,rawMesh:rawMesh?.read(),surfels:surfels?.read(),splats:splats?.read(),reference:reference.read(),...glass.read()});
   return {read,operations:{
    frameBottle(){const view=frame(true);record({kind:'generated-glass.frame-bottle',view});return view;},
    frameWhole(){return frame(false);},
    async setRepresentation(value){if(!surfels||!['mesh','surfels','splats',...(fieldMeta.triangles?['rawMesh']:[])].includes(value))throw Error('Unavailable representation');
+    if(value==='surfels'&&factor==='adaptive')throw Error('Choose uniform detail before viewing circles');
     const request=++representationRequest;
     if(value==='splats'&&!splats){const field=currentField,next=await makeSplats(field);if(disposed||request!==representationRequest||field!==currentField){next.dispose();return;}splats=next;splatHolder.add(next.root);}
     if(value==='rawMesh'&&!rawMesh){const {data,meta}=await load(inputs.surfelBase),response=await fetch(inputs.surfelBase+meta.triangles.file);if(!response.ok)throw Error('Raw triangles unavailable');const triangles=new Uint32Array(await response.arrayBuffer());if(disposed||request!==representationRequest)return;rawMesh=createRawFieldMesh(data,triangles,meta);rawMesh.set(glass.read());rawHolder.add(rawMesh.root);}
@@ -86,7 +94,7 @@ export default {
     representationSelect=document.createElement('select');representationSelect.setAttribute('aria-label','Surface representation');
     for(const [value,text] of [['surfels','Circles — accepted baseline'],['splats','Deferred surface splats — experiment'],...(fieldMeta.triangles?[['rawMesh','Unsimplified raw triangles — expensive']]:[]),['mesh','Finished mesh']]){const o=document.createElement('option');o.value=value;o.textContent=text;representationSelect.append(o);}
     representationSelect.onchange=()=>invoke('setRepresentation',representationSelect.value).catch(e=>{status.textContent=e.message;});root.append(representationSelect);
-    density=document.createElement('select');density.setAttribute('aria-label','Surfel detail');for(const l of levels){const o=document.createElement('option');o.value=l.factor;o.textContent=l.factor===1?'Original detail — expensive':`Merge ${l.factor}×${l.factor}×${l.factor} cells`;density.append(o);}density.onchange=()=>invoke('setSurfelFactor',Number(density.value)).catch(e=>{status.textContent=e.message;sync();});root.append(density);
+    density=document.createElement('select');density.setAttribute('aria-label','Surfel detail');for(const l of levels){const o=document.createElement('option');o.value=l.factor;o.textContent=l.factor==='adaptive'?'Adaptive — retain fine features':l.factor===1?'Original detail — expensive':`Merge ${l.factor}×${l.factor}×${l.factor} cells`;density.append(o);}density.onchange=()=>invoke('setSurfelFactor',density.value==='adaptive'?'adaptive':Number(density.value)).catch(e=>{status.textContent=e.message;sync();});root.append(density);
     countLabel=document.createElement('p');root.append(countLabel);
     reconstruction=document.createElement('select');reconstruction.setAttribute('aria-label','Nearest-wall reconstruction');
     for(const [value,label] of [['off','Reconstruction off'],['glass','Reconstruct glass only'],['all','Reconstruct everything — diagnostic']]){const o=document.createElement('option');o.value=value;o.textContent=label;reconstruction.append(o);}reconstruction.onchange=()=>invoke('setReconstructionMode',reconstruction.value).catch(e=>{status.textContent=e.message;});root.append(reconstruction);

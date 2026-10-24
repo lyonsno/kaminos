@@ -14,3 +14,9 @@ test('coverage reconstruction keeps material transmission separate and resolves 
  assert.throws(()=>c.set({ior:NaN}));assert.equal(c.read().ior,1.6);
  c.dispose();assert.throws(()=>c.set({mode:'opaque'}),/disposed/);
 });
+test('adaptive fields require finite per-splat tolerance rather than silently using one global radius',()=>{
+ const data=new Float32Array([0,0,0,0,0,1,1,.5,0,.2,.3,1]),f=new Float32Array([1,0,0,.01,0,1,0,.01]),meta={count:1,stride:12,radius:.03,adaptive:{schema:'static-connected-splats.v1'}};
+ assert.throws(()=>createDeferredSurfaceSplats(data,meta,f),/tolerance/i);
+ for(const bad of [new Float32Array([]),new Float32Array([NaN]),new Float32Array([0])])assert.throws(()=>createDeferredSurfaceSplats(data,meta,f,bad),/tolerance/i);
+ const c=createDeferredSurfaceSplats(data,meta,f,new Float32Array([.02]));assert.equal(c.read().depthTolerance,'per-splat');c.dispose();
+});
