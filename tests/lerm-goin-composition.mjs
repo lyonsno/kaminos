@@ -54,4 +54,18 @@ assert.doesNotThrow(()=>{for(const tick of [...ticks])tick({deltaSeconds:.01});}
 assert.ok(Math.abs(previewed.read().creature.action.motion.path.distance-priorTravel-.3)<1e-9,'Preview time must not become catch-up travel');
 assert.equal(ticks.size,1);assert.equal(previewed.read().creature.playback.status,'playing');
 await previewed.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
+const previewHit=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,0,100]}}},{loadSources:async()=>data,mountProperties:({invoke})=>{creatureInvoke=invoke;return {properties:new Element(),update(){},dispose(){}};}});
+previewHit.mount({root:new Element(),document,invoke:(name,input)=>previewHit.operations[name](input)});
+previewHit.operations.advance({seconds:.1});
+await creatureInvoke('action',{kind:'preview'});creatureInvoke('play');for(const tick of [...ticks])tick({deltaSeconds:2});
+previewHit.operations.interruptTest({seconds:1});
+await creatureInvoke('action',{kind:'wander'});
+const beforeHit=previewHit.read().creature.action.motion.path.distance;
+for(const tick of [...ticks])tick({deltaSeconds:.5});
+assert.equal(previewHit.read().creature.action.motion.path.distance,beforeHit,'Fresh interruption during preview must hold resumed pursuit');
+assert.equal(previewHit.read().task.phase,'interrupted');
+for(const tick of [...ticks])tick({deltaSeconds:.75});
+assert.ok(Math.abs(previewHit.read().creature.action.motion.path.distance-beforeHit-7.5)<1e-9,'Preview interruption expires on the owner clock, consuming only post-expiry travel');
+assert.equal(ticks.size,1);assert.equal(previewHit.read().creature.playback.status,'playing');
+await previewHit.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 console.log('Live goin composition moves, interrupts, reacquires current targets and releases every owned session');

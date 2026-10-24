@@ -35,7 +35,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     goin.position.fromArray(input.position);host.scene.refreshPresentation(asset);session.redraw();
     const result=read();record({kind:'lerms.goin.move',phase:'applied',effective:result.goin});return result;
    },
-   interruptTest(input={}){active();const event={id:`manual-${++serial}`,source:'explicit-test-operation',seconds:input.seconds??1.5};
+   interruptTest(input={}){active();const event={id:`manual-${++serial}`,source:'explicit-test-operation',time:actor.read().action.time,seconds:input.seconds??1.5};
     task.interrupt(event);record({kind:'lerms.interruption',phase:'applied',event});return read();
    },
    setRunning(input){active();if(typeof input?.running!=='boolean')throw Error('Running must be boolean');actor.operations[input.running?'play':'pause']();return read();},

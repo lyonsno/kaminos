@@ -10,9 +10,10 @@ export function createGoinTask({target,arrivalRadius=.35}={}){
  return {
   read,
   interrupt(event){
-   if(!event||typeof event.id!=='string'||!event.id||typeof event.source!=='string'||!event.source||!Number.isFinite(event.seconds)||event.seconds<=0)throw Error('Interruption requires event id, source and positive seconds');
+   if(!event||typeof event.id!=='string'||!event.id||typeof event.source!=='string'||!event.source||!Number.isFinite(event.time)||!Number.isFinite(event.seconds)||event.seconds<=0)throw Error('Interruption requires event id, source, owner time and positive seconds');
    if(events.has(event.id))return read();
-   events.add(event.id);until=Math.max(until,time+event.seconds);lastEvent={id:event.id,source:event.source};return read();
+   if(event.time<time||event.time<(lastEvent?.time??0))throw Error('Interruption requires monotonic owner time');
+   events.add(event.id);until=Math.max(until,event.time+event.seconds);lastEvent={id:event.id,source:event.source,time:event.time};state.phase='interrupted';return read();
   },
   update({time:next,from=time,position}){
    if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position))throw Error('Goin task requires a monotonic interval and a world position');
