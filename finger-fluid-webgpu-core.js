@@ -13913,7 +13913,15 @@ export async function createWebGPUFingerFluidSolver({
   }
   computeShader=composeFingerFluidVelocityReads(computeShader,safePressureSolver);
   computeShader=applyFingerFluidDiagnosticDynamics(computeShader,safeDiagnosticDynamics);
-  if(finitePBF)computeShader=computeShader.replace('let particleRadius = kernelRadius * 0.22;',`let particleRadius = ${safeDiagnosticBox.collisionRadius};`).replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/,boxBoundaryDensitySource(safeDiagnosticBox)+'\n');
+  if (finitePBF) {
+    computeShader = computeShader.replace('let particleRadius = kernelRadius * 0.22;', `let particleRadius = ${safeDiagnosticBox.collisionRadius};`);
+    // Search bounds are not walls. With the container off, retain density
+    // support from the same scene-distance provider used for collision.
+    // Enabled reference containers retain their existing six-face formula.
+    if (!sceneSupport || safeDiagnosticBox.collisions !== false) {
+      computeShader = computeShader.replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/, boxBoundaryDensitySource(safeDiagnosticBox) + '\n');
+    }
+  }
   if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
   if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)});
