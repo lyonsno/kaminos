@@ -34,7 +34,11 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     return vec4(output.rgb.add(reflected),output.a);
   })();
   // MRT reads its explicit output node; getOutput alone is superseded by MRT.
-  source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
+  const bounceProbe=new URLSearchParams(globalThis.location?.search??'').get('gi_bounce_probe')==='1';
+  const probeDiffuseResponse=Fn(([],{material})=>vec4(sceneGIReceives(material)?diffuseColor.rgb.clamp(0,1)
+    .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material)):vec3(0),1))();
+  source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal,...(bounceProbe?{probeDiffuseResponse}:{})}));
+  if(bounceProbe)source.getTextureNode('probeDiffuseResponse');
   const comparison=sourceComparison?createGISourceComparison(scene,camera,source,visibleNormal,reason=>history.reset(reason),surfaceLighting):null;
   if(comparison)comparison.source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
   if(comparison)effect.sourceOverride=comparison.inputs;
@@ -151,6 +155,10 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
     resetHistory(reason) { history.reset(reason); },
     async readback(renderer,kind='incoming') {
+      if(kind==='bounce-probe-inputs'){
+        if(!bounceProbe)throw Error('Bounce probe requires explicit gi_bounce_probe=1');
+        return {renderer,source,camera,history,settings:{...settings},estimator:{...estimator},sourceComparison:comparison?.inputs.enabled.value??false};
+      }
       if (!['incoming','receiving','estimate','surface'].includes(kind)) throw new Error('Invalid GI readback kind');
       if(kind==='surface'&&!surfaceLighting.capture)throw Error('No flame surface irradiance is mounted');
       const target=kind==='surface'?source.renderTarget:kind==='receiving'?route().beauty.renderTarget:kind==='incoming'&&settings.temporal?history.targets[1-history.writeIndex]:effect._ssgiRenderTarget;
