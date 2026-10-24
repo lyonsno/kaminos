@@ -90,12 +90,12 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
     recording=source.read(runId);position=0;startedAt=now();begin();
    }
    if(recording?.runId!==runId)return;
-   recording=source.read(runId);position=Math.max(position,event.atMs);
+   if(event.type!=='start'){recording.events.push(clone(event));recording.durationMs=event.atMs;if(['complete','failed','stopped'].includes(event.type))recording.status=event.type;}position=Math.max(position,event.atMs);
    apply();notify();
    if(['complete','failed','stopped'].includes(event.type)){unsubscribe();unsubscribe=()=>{};live=false;startedAt=null;playing=event.type==='complete'&&position<playbackEnd();if(!playing)stop();notify();}
   }catch(e){error=e.message;stop(true);}
  };
- const read=()=>({recording:recording?{runId:recording.runId,source:clone(recording.source),status:recording.status,durationMs:recording.durationMs}:null,score:clone(score),position,playbackDurationMs:playbackEnd(),playing,live,previewing:!!transaction,error,stage:lastView?.stage??null,progress:lastView?.progress??null,preview:lastView?.preview??null,flareWeight:lastView?.flareWeight??0});
+ const read=()=>({recording:recording?{runId:recording.runId,source:clone(recording.source),status:recording.status,terminal:clone(recording.events.findLast(e=>['complete','failed','stopped'].includes(e.type))??null),durationMs:recording.durationMs}:null,score:clone(score),position,playbackDurationMs:playbackEnd(),playing,live,previewing:!!transaction,error,stage:lastView?.stage??null,progress:lastView?.progress??null,preview:lastView?.preview??null,flareWeight:lastView?.flareWeight??0});
  return {read,operations:{
   load(value){stop();recording=validateRecording(value);position=0;lastView=null;notify();return read();},
   latest(){const value=source.read();if(!value)throw Error('No observed ImageGen run yet');return this.load(value);},

@@ -55,7 +55,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
   panel.append(el('p','Replay repeats inference events, not the evolved fluid. Follow uses ImageGen in Generate and records observed stages and approximate latent previews.'));
   let lastPreview=null;
   sync=()=>{if(!alive)return;const s=response.read();const selected=s.score.stages[stage.value];
-   status.textContent=message||s.error||(s.live?'Live · waiting for or following ImageGen':s.recording?`${s.recording.source.label||s.recording.source.model||s.recording.runId} · ${s.playing?'replaying':'paused'}`:'No recording loaded');
+   status.textContent=message||s.error||(s.live?'Live · waiting for or following ImageGen':s.recording?`${s.recording.source.label||s.recording.source.model||s.recording.runId} · ${s.playing?'replaying':'paused'}${s.recording.status==='complete'?'':` · ${s.recording.status}`}${s.recording.terminal?.error?.message?': '+s.recording.terminal.error.message:''}`:'No recording loaded');
    scrub.max=String(s.playbackDurationMs||1);scrub.value=String(Math.min(s.position,Number(scrub.max)));scrub.disabled=s.live||!s.recording;play.disabled=s.live||!s.recording;pause.disabled=!s.live&&!s.playing&&!s.previewing;
    position.textContent=`${(s.position/1000).toFixed(1)}s · ${names[s.stage]||s.stage||'Start'}${s.progress===null?'':` · ${Math.round(s.progress*100)}%`}`;
    assigned.textContent=selected?`${selected.a.label} → ${selected.b.label} · ${selected.fields.length} linked parameters`:'No response assigned. Author A/B below, then use that blend here.';

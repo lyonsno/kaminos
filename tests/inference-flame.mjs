@@ -64,3 +64,10 @@ test('following waits at zero and lets the finished look settle after the termin
  assert.equal(f.author.read().domControls['volume-physical-thermal'].value,10);
  f.response.dispose();
 });
+test('live events are retained incrementally without recopied history on every byte update',()=>{
+ let clock=0,reads=0;const source=createInferenceEvents({now:()=>clock});const original=source.read;source.read=(...args)=>{reads++;return original(...args);};
+ const f=fixture();let settingsNow=settings(2);const response=createInferenceFlame({source,flame:{read:()=>({active:true}),settings:()=>settingsNow,beginPreview:()=>({active:()=>true,update:x=>{settingsNow=x;},commit(){},cancel(){}})},onFrame:()=>()=>{}});
+ response.operations.follow();const run=source.begin({kind:'fixture'});
+ for(let i=1;i<=20;i++){clock=i;run.emit({type:'progress',stage:'weights',completed:i,total:20});}
+ run.finish('complete');assert.equal(reads,1);assert.deepEqual(response.operations.export().recording,source.read(run.runId));response.dispose();f.response.dispose();
+});
