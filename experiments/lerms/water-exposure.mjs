@@ -1,16 +1,16 @@
 const SCHEMA='kaminos.finger-fluid.interface-record-descriptor.v0';
 const SHADER=`
-struct Probe { sphere:vec4f, layout:vec4u, dispatch:vec4u }
+struct Probe { sphere:vec4f, recordInfo:vec4u, dispatch:vec4u }
 @group(0) @binding(0) var<storage,read> records:array<f32>;
 @group(0) @binding(1) var<storage,read> counters:array<u32>;
 @group(0) @binding(2) var<uniform> probe:Probe;
 @group(0) @binding(3) var<storage,read_write> result:array<atomic<u32>>;
 @compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id:vec3u){
- let active=counters[probe.layout.y];
+ let population=counters[probe.recordInfo.y];
  let index=id.y*probe.dispatch.x+id.x;
- if(index==0u){atomicStore(&result[0],active);}
- if(index>=min(active,probe.layout.x)){return;}
- let at=index*probe.layout.z+probe.layout.w;
+ if(index==0u){atomicStore(&result[0],population);}
+ if(index>=min(population,probe.recordInfo.x)){return;}
+ let at=index*probe.recordInfo.z+probe.recordInfo.w;
  let p=vec3f(records[at],records[at+1u],records[at+2u]);
  if(distance(p,probe.sphere.xyz)<=probe.sphere.w){atomicAdd(&result[1],1u);}
 }`;
