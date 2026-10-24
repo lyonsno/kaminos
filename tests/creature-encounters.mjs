@@ -39,6 +39,13 @@ const slide=encounter.limitTorsoMotion(slider,[rail],{pivot:[0,0,0],translation:
 assert.equal(slide.fraction,1);assert.ok(slide.probes<20,'A constant-gap straight slide must use a swept segment, not inverse-tolerance steps');
 const tilted=encounter.moveTorso({...rod,nodes:[[1,0,0]]},{...rotation,angle:Math.PI/2,axis:[0,0,1]});
 assert.ok(Math.hypot(...tilted.nodes[0].map((v,i)=>v-[0,1,0][i]))<1e-12,'Torso motion must follow its supplied authored rotation axis');
+for(const scale of [1e-6,.001,1,1000]){
+ const scaled=body=>({...body,position:body.position.map(v=>v*scale),radius:body.radius*scale,nodes:body.nodes.map(p=>p.map(v=>v*scale)),capsules:body.capsules.map(c=>({a:c.a.map(v=>v*scale),b:c.b.map(v=>v*scale),radius:c.radius*scale}))});
+ const point=scaled({id:'point',position:[-.5,0],radius:.5,nodes:[[-.4,0,0]],capsules:[{a:[-.5,0,-.5],b:[-.5,0,.5],radius:.1}]}),bar=scaled({id:'bar',position:[0,0],radius:.5,nodes:[[-.1,0,0]],capsules:[{a:[0,0,-.5],b:[0,0,.5],radius:.1}]});
+ const result=encounter.limitTorsoMotion(point,[bar],{pivot:[-.5*scale,0,0],translation:[scale,0,0],angle:0});
+ assert.ok(result.fraction>.33&&result.fraction<.35,'An endpoint-clear material node must not pass through its stationary capsule at any tested scale');
+ const chord={a:[-.5*scale,0,0],b:[.5*scale,0,0],radius:0};assert.ok(Math.abs(encounter.capsuleGap(chord,bar.capsules[0])+.1*scale)<scale*1e-12,'Perpendicular segment distance must preserve scale');
+}
 const shared=createEncounterWorld({avoidance:false}),sphere=(id,x)=>({id,mounted:true,position:[x,0],direction:[1,0],speed:1,radius:.5,capsules:[{a:[x,0,0],b:[x,0,0],radius:.5}]});
 const left=sphere('left',0),rightBody=sphere('right',2);shared.actor('left').register(()=>left);shared.actor('right').register(()=>rightBody);const token=shared.beginStep();
 const firstMove={pivot:[0,0,0],translation:[.7,0,0],angle:0};assert.equal(shared.actor('left').limit({time:token,body:left,motion:firstMove}).fraction,1);shared.actor('left').commit(token,encounter.moveTorso(left,firstMove));

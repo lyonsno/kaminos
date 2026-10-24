@@ -1,10 +1,17 @@
 const unit=p=>{const n=Math.hypot(...p);return n?p.map(v=>v/n):[0,1];};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
-const dot3=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),sub=(a,b)=>a.map((v,i)=>v-b[i]),clamp=x=>Math.max(0,Math.min(1,x));
+const dot3=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),sub=(a,b)=>a.map((v,i)=>v-b[i]);
 export function capsuleGap(one,two){
- const d1=sub(one.b,one.a),d2=sub(two.b,two.a),r=sub(one.a,two.a),a=dot3(d1,d1),e=dot3(d2,d2),f=dot3(d2,r);let s=0,t=0;
- if(a<=1e-12){t=e>1e-12?clamp(f/e):0;}else{const c=dot3(d1,r);if(e<=1e-12)s=clamp(-c/a);else{const b=dot3(d1,d2),denom=a*e-b*b;s=denom>1e-12?clamp((b*f-c*e)/denom):0;t=(b*s+f)/e;if(t<0){t=0;s=clamp(-c/a);}else if(t>1){t=1;s=clamp((b-c)/a);}}}
- return Math.hypot(...r.map((v,i)=>v+s*d1[i]-t*d2[i]))-one.radius-two.radius;
+ const raw=[sub(one.b,one.a),sub(two.b,two.a),sub(one.a,two.a)],scale=Math.max(...raw.flat().map(Math.abs))||1,[u,v,r]=raw.map(p=>p.map(x=>x/scale));
+ const pointSegment=(p,d)=>{const length=Math.hypot(...d);if(length===0)return Math.hypot(...p);const axis=d.map(x=>x/length),along=Math.max(0,Math.min(length,dot3(p,axis)));return Math.hypot(...p.map((x,i)=>x-along*axis[i]));};
+ const cross=(a,b)=>a.map((_,i)=>a[(i+1)%3]*b[(i+2)%3]-a[(i+2)%3]*b[(i+1)%3]);
+ let distance=Math.min(pointSegment(r,v),pointSegment(r.map((x,i)=>x+u[i]),v),pointSegment(r.map(x=>-x),u),pointSegment(v.map((x,i)=>x-r[i]),u));
+ // Boundary minima cover parallel and zero-length segments. A nonparallel
+ // interior minimum uses cross products, avoiding a dimensional epsilon and
+ // the cancellation in |u|²|v|²-(u.v)² for nearly parallel segments.
+ const normal=cross(u,v),length=Math.hypot(...normal);
+ if(length>0){const axis=normal.map(x=>x/length),s=dot3(cross(v,r),axis)/length,t=dot3(cross(u,r),axis)/length;if(s>=0&&s<=1&&t>=0&&t<=1)distance=Math.min(distance,Math.abs(dot3(r,axis)));}
+ return distance*scale-one.radius-two.radius;
 }
 export function materialContactGap(one,two){
  const gaps=[];
