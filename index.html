@@ -10238,7 +10238,12 @@ function createPageSceneMembershipOperations() {
         removed:()=>sceneCameras?.membershipChanged(),
         restored:(_entry,snapshot)=>sceneCameras?.membershipChanged(snapshot.activeCameraId),
       },
-      [PROCEDURAL_MESH_TYPE]:{retainRoot:true,dispose(entry){proceduralMeshes.get(entry.id)?.dispose();proceduralMeshes.delete(entry.id);}},
+      [PROCEDURAL_MESH_TYPE]:{retainRoot:true,dispose(entry){
+        const instance=proceduralMeshes.get(entry.id);
+        // Geometry edits can replace the root while history retains its predecessor.
+        if(instance?.group===entry.object){instance.dispose();proceduralMeshes.delete(entry.id);}
+        else disposeObjectTree(entry.object);
+      }},
       [LOCAL_LIQUID_EMITTER_TYPE]:{retainRoot:true,detached:()=>syncLocalLiquidHostEmitters(),restored:()=>syncLocalLiquidHostEmitters()},
       [FLAME_EMITTER_TYPE]:{retainRoot:true,remove:id=>window.kaminosBurnerAuthoring.remove(id),
         restored(){authoredFlamePresent=true;syncAuthoredFlameSources();}},

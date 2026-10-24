@@ -7,6 +7,9 @@ import { createWorkingScene } from '../working-scene.mjs';
 import {createSceneMembershipOperations} from '../scene-membership-operations.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
+import * as THREE from '../lib/three.core.js';
+import {checkedProceduralMesh, createProceduralMesh, PROCEDURAL_MESH_TYPE} from '../scene-geometry.mjs';
+import {isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const disposeStart = html.indexOf('function disposeObjectTree(');
@@ -294,4 +297,68 @@ test('an admitted domain object preserves its exact root through membership hist
   assert.equal(root.geometry.disposed, false, 'Redo must keep the root while history retains it');
   edits.clear();
   assert.equal(root.geometry.disposed, true, 'dropping the final history reference disposes the detached root');
+});
+
+test('geometry replacement after membership Undo survives release of the old root', async () => {
+  const workingScene = createWorkingScene(), scene = new THREE.Scene(), proceduralMeshes = new Map();
+  const edits = createSceneEdits({read:()=>null, write(){}});
+  const pose = {position:[0,0,0], rotation:[0,0,0], scale:[1,1,1]};
+  const serializeSceneObject = entry => {
+    const {object, ...record} = entry;
+    return structuredClone(record);
+  };
+  const context = vm.createContext({
+    structuredClone, THREE, workingScene, scene, proceduralMeshes, edits,
+    createSceneMembershipOperations, checkedProceduralMesh, createProceduralMesh,
+    PROCEDURAL_MESH_TYPE, CAMERA_TYPE:'camera', LOCAL_LIQUID_EMITTER_TYPE:'water', FLAME_EMITTER_TYPE:'flame',
+    serializeSceneObject, isReloadableSceneObjectRecord, mergeGeometries:null,
+    addSceneObjectFromSource(){throw Error('Undo must use its retained root');},
+    scenePlacementTools:{edits, finish(){}}, meshDataTargets:new Set(),
+    sceneNavigation:{prepare(){}}, sceneGiProxies:{release(){}},
+    sceneCameras:null, currentMesh:null, transformControls:null,
+    hybridSplatOverlayState:{}, splatCorrectionMode:null,
+    sceneSaveBlockedByFailedRestore:false,
+    setSceneObjectMounted:(entry,mounted)=>mounted?scene.add(entry.object):scene.remove(entry.object),
+    applySceneObjectTransformState(object,transform){
+      object.position.fromArray(transform.position);object.rotation.fromArray(transform.rotation);object.scale.fromArray(transform.scale);
+    },
+    applyMaterialStateToObject(){}, canCollideWithFire:()=>false,
+    setSceneSelection:(ids,id)=>workingScene.select(ids,id),
+    clearActiveSceneObjectSelection:()=>workingScene.clearSelection(),
+    renderSceneObjectList(){}, updateTransformInspector(){}, setInfo(){}, window:{},
+  });
+  // Exercise the production adapter and geometry replacement path together.
+  for (const [first,last] of [
+    ['function disposeObjectTree(', 'function shouldClearSceneForImport('],
+    ['function createPageSceneMembershipOperations(', 'const sceneMembership ='],
+    ['function checkedObjectData(', 'function addProceduralMesh('],
+    ['function mountProceduralMesh(', 'function readBurnerGraph('],
+  ]) {
+    const start=html.indexOf(first), end=html.indexOf(last,start);
+    assert.ok(start>=0&&end>start, `production ${first} must be extractable`);
+    vm.runInContext(html.slice(start,end),context);
+  }
+  const membership=context.createPageSceneMembershipOperations();membership.attachHistory(edits);
+  const original=context.mountProceduralMesh({id:'cube',type:PROCEDURAL_MESH_TYPE,source:'kaminos:geometry',
+    label:'Cube',transform:pose,geometry:{kind:'box',parameters:{width:1,height:1,depth:1}}});
+  membership.remove('cube');await edits.undo();
+  assert.equal(workingScene.find('cube').object,original.object);
+  assert.equal(edits.state().redoCount,1);
+  const next=serializeSceneObject(workingScene.find('cube'));next.geometry.parameters.width=2;
+  const target=context.ensureMeshDataTarget('cube');
+  edits.begin(target,'Edit geometry');edits.preview(next);
+  const replacement=workingScene.find('cube').object,manager=proceduralMeshes.get('cube'),disposed=[];
+  assert.notEqual(replacement,original.object);
+  replacement.geometry.addEventListener('dispose',()=>disposed.push('geometry'));
+  replacement.material.addEventListener('dispose',()=>disposed.push('material'));
+  edits.commit();
+  assert.equal(edits.state().redoCount,0);
+  assert.equal(workingScene.retained('cube'),undefined,'the old membership reference was released');
+  assert.equal(replacement.parent,scene,'editing geometry after Undo must leave the replacement mesh mounted');
+  assert.equal(proceduralMeshes.get('cube'),manager,'release must preserve the replacement manager');
+  assert.deepEqual(disposed,[],'release must not dispose replacement geometry or material');
+  membership.remove('cube');edits.clear();
+  assert.equal(replacement.parent,null);
+  assert.equal(proceduralMeshes.has('cube'),false,'final release must still remove the matching manager');
+  assert.deepEqual(disposed,['geometry','material']);
 });
