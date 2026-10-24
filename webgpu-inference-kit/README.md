@@ -8,6 +8,45 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+## Start With A Model Application
+
+For image generation and material estimation, start with the model's application entry point. It owns loading, queued inference, pause/resume, cancellation and cleanup; your code supplies model inputs and uses the result. These examples use the model packages and kit built together from this checkout. Follow [application setup](./docs/model-applications.md) to pack and install them.
+
+```js
+import { createKleinApp } from '@kaminos/flux2-klein';
+
+const klein = await createKleinApp();
+try {
+  const image = await klein.generate({
+    prompt: 'a blue tank engine on a branch line', seed: 7,
+    width: 512, height: 512,
+  });
+  // image.rgba contains width * height * 4 RGBA bytes.
+} finally {
+  await klein.destroy();
+}
+```
+
+The same lifecycle supports SuperMat's image-to-material workload:
+
+```js
+import { createSuperMatApp, decodeImageRgba } from '@kaminos/supermat';
+
+const materials = await createSuperMatApp();
+try {
+  const image = await decodeImageRgba(imageFile, materials.device);
+  const result = await materials.infer({ image, size: 512 });
+  // result.maps contains albedo, roughness, metallic and ORM images.
+  // result.planes retains the floating-point material outputs.
+} finally {
+  await materials.destroy();
+}
+```
+
+`imageFile` is the browser `File` selected by your application. Both apps reuse loaded model state across sequential calls and expose `load()`, `pause()`, `resume()`, `stop()`, `snapshot()` and `destroy()`. Create with `load: false` to attach your renderer before weights load. Submit its frames through `app.foreground.request(...)`; the same service accepts them before, during and after inference. [Connect a renderer](./docs/model-applications.md#keep-your-renderer-drawing) for the request loop and ownership rules.
+
+Pass `{ device }` to share your renderer's GPU, or `{ session, foreground }` to share an existing coordinated host. Destruction preserves borrowed resources. Model options and outputs remain model-specific: Klein exposes `pipelineOptions` and `app.pipeline`; SuperMat exposes `adapterOptions` and `app.adapter`. Each accepts scheduling policy at creation or per run. Their application wrappers use the kit's shared admitted-run/control/cleanup runner, while each model retains its own loading and resource lifecycle.
+
 ## Segment Images With SAM 3
 
 Install the native-resolution model once with `npx kaminos-sam-model --out public/models/sam3`, then use it in an ordinary browser application:
@@ -47,9 +86,9 @@ The port is built on this kit: generation runs as a queued route invocation, its
 
 For a visual first run, [brighten a photo while a renderer stays active](./docs/getting-started.md#try-the-photo-walkthrough). The worked example walks through sharing a GPU device, queuing an operation, and displaying its result.
 
-## Quick Look
+## Compose Routes Directly
 
-A Kaminos application creates a session, registers a model route, and queues model-owned work through that route:
+For a model port or a host that owns its invocation, create a session, register a route, and queue model-owned work directly:
 
 ```js
 import { createWebGpuInferenceSession } from "@kaminos/webgpu-inference-kit/core";
@@ -95,6 +134,8 @@ WebGpuInferenceSession
             +-- queued invocation
             +-- model-specific output
 ```
+
+The Klein and SuperMat application entry points assemble this session/route lifecycle for their callers. Their shared runner holds admission through control and foreground cleanup; ports retain model-specific loading and output construction. [Application runner contract](./docs/model-applications.md#shared-runner-for-port-authors).
 
 The session coordinates a shared WebGPU device, route lifecycle, global admission, and resource residency. A port typically places reusable model resources in route-scoped state and temporary run resources in invocation-scoped state.
 

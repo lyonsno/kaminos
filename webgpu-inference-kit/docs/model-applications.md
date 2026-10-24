@@ -1,0 +1,84 @@
+# Model applications
+
+Klein and SuperMat provide application entry points over their existing producers. The application handles session admission, foreground ownership, cancellation and retirement. It returns the model's complete output and keeps the producer accessible for hosts that need direct control.
+
+## Install the source packages
+
+Build the kit and model packages from the same Kaminos checkout. This recipe exercises the application APIs in this source revision; it does not require a matching npm release. Choose a new artifact directory outside the checkout. From Kaminos:
+
+```sh
+mkdir -p /path/to/artifacts
+npm pack ./webgpu-inference-kit --pack-destination /path/to/artifacts
+node models/flux2-klein/pack-klein.mjs --out /path/to/artifacts/klein
+node scripts/pack-supermat-module.mjs --out /path/to/artifacts/supermat
+```
+
+In your browser application, install the kit tarball and the model tarball you need using the paths printed by those commands:
+
+```sh
+npm install /path/to/artifacts/kaminos-webgpu-inference-kit-VERSION.tgz /path/to/artifacts/klein/kaminos-flux2-klein-VERSION.tgz
+# Or install the bundled SuperMat package:
+npm install /path/to/artifacts/supermat/kaminos-supermat-VERSION.tgz
+```
+
+Klein imports the kit's public `core` entry point; SuperMat includes its runtime in its bundle. Use a bundler such as Vite or esbuild. SuperMat's CPU worker must accompany the application bundle; its [build recipe](../../models/supermat/GETTING_STARTED.md#install) explains Vite and esbuild handling. Serve over HTTPS or localhost in a WebGPU-capable browser. The first load downloads each model's hosted weights; the model guides describe custom weight locations and memory requirements.
+
+## Choose the model operation
+
+| Application | Input and output | Model-specific controls |
+| --- | --- | --- |
+| `createKleinApp()` → `generate(...)` | Text prompt → `{ width, height, rgba, ... }` | `pipelineOptions` at creation; generation size, steps, seed, previews and other pipeline options per call; direct `app.pipeline` |
+| `createSuperMatApp()` → `infer(...)` | RGBA `{ width, height, data }` → material `maps`, floating-point `planes`, identity and timing | `adapterOptions` at creation; image, size and adapter run options per call; direct `app.adapter` |
+
+Both retain loaded state for sequential calls. An overlapping call on the same app rejects. Each app has `load(onProgress)`, `pause()`, `resume()`, `stop(reason)`, `snapshot()` and `destroy()`. A run accepts `signal` for cancellation and `scheduling` for scheduler policy. Creation also accepts default `scheduling`; per-run values override those defaults. The app supplies runtime, invocation, control, signal and foreground bindings itself.
+
+Pause applies to an admitted cooperative inference. It waits behind an active CPU foreground window, then parks model duties while frames remain serviceable. It returns `null` during loading or while queued. Loading remains model-owned: Klein downloads/compiles before admitted GPU warmup; SuperMat retains its weight resource route and uses a CPU worker. Stopping SuperMat inference while it waits for a shared load cancels that inference request, while the load continues. `destroy()` stops active work and waits for its resources to retire.
+
+`cooperative: false` explicitly uses the model's direct execution path, retaining outer session admission and cleanup. It has no GPU pause or mid-model cancellation contract. For a host that already owns an admitted invocation, use the direct pipeline/adapter rather than enqueueing an application run inside that same session job.
+
+## Keep your renderer drawing
+
+Obtain the application before loading, configure your renderer with its device, and submit each frame through its foreground service. Here `encodeFrame(device)` is your renderer's function returning a finished `GPUCommandBuffer`:
+
+```js
+const app = await createKleinApp({ load: false });
+let drawing = true;
+function frame() {
+  if (!drawing) return;
+  app.foreground.request({
+    requestId: crypto.randomUUID(),
+    run(opportunity) {
+      opportunity.submit([encodeFrame(app.device)]);
+    },
+  }).completion.then(receipt => {
+    if (receipt.status === 'completed' && drawing) requestAnimationFrame(frame);
+  });
+}
+requestAnimationFrame(frame);
+await app.load();
+const image = await app.generate({ prompt: 'a blue tank engine', seed: 7 });
+// Keep rendering and reuse app.generate(...) for the application's lifetime.
+// On teardown:
+drawing = false;
+await app.destroy();
+```
+
+The [Klein outside example](../../models/flux2-klein/examples/external-app/app.js) and [SuperMat outside example](../../models/supermat/examples/external-app/app.js) include concrete GPU rendering and controls. The foreground service uses the model's cooperative boundaries during inference and also services idle frames. Its receipts describe submissions and request completion; they are not display-presentation timestamps.
+
+To borrow your renderer's device, pass `{ device, load: false }`. Klein requires `shader-f16` on that device. To share a coordinated host, pass `{ session, foreground, load: false }` using the same device and queue. The host must finish its current foreground run before releasing its admission. An app destroys only the device/session/foreground objects it created; borrowed resources survive. `snapshot()` exposes that ownership, load state, active phase, control state and fatal error.
+
+## Shared runner for port authors
+
+`createWebGpuApplicationRunner` from `@kaminos/webgpu-inference-kit/core` is the run lifetime used by the two application wrappers. The model wrapper creates its resources and provides:
+
+- `session`, `foreground`, `routeId`: the shared host and this app's route identity.
+- `label`, `phase`, `runtimeLabel`: error text, active phase, and runtime identity.
+- `prepare(signal)`: model-specific loading before inference admission; it must not enqueue another inference inside that admission.
+- `execute(options, schedule)`: model work with the supplied cooperative invocation, or `schedule === null` for direct execution. Its complete return value passes through unchanged.
+- `scheduling`: default policy options.
+- `assertOpen()`, `getError()`, `onFatal(error)`: the owning application's open-state and fatal-error handling.
+- Optional `settle()`: additional model-specific settlement after control closes, still inside admission. SuperMat retains its explicit queue-settlement step here.
+
+The runner returns `run`, `pause`, `resume`, `stop`, `snapshot` and a `pending` promise getter for destruction to await. It acquires foreground ownership only after its queued job is admitted, serializes CPU foreground windows with pause, closes control, unregisters the transient model route, and finishes foreground work before releasing admission. Cancellation while queued never takes another job's foreground ownership. Cleanup errors reach `onFatal` and reject the run.
+
+Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices differ between the two exercised consumers. See [Klein's wrapper](../../models/flux2-klein/klein-app.js) and [SuperMat's wrapper](../../models/supermat/supermat-app.js) for the complete integration.

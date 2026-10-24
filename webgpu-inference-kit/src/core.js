@@ -1,3 +1,4 @@
+export { createWebGpuApplicationRunner } from './application-runner.js';
 export { createWebGpuLinearShader } from './linear-kernel.js';
 export {
   FLASH_ATTENTION_BLOCK_QUERIES,

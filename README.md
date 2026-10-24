@@ -89,6 +89,14 @@ and outputs.
 npm install @kaminos/webgpu-inference-kit
 ```
 
+For a simpler application interface, start with [`createKleinApp` or
+`createSuperMatApp`](webgpu-inference-kit/README.md#start-with-a-model-application).
+Generate images or infer material maps with a reusable model, pause/resume/stop
+controls, and explicit resource ownership. Both use the same run lifecycle and
+can share the host renderer's device and foreground service. The
+[application guide](webgpu-inference-kit/docs/model-applications.md) covers source
+package installation, a rendering loop, and access to model-specific controls.
+
 The same runtime supports several kinds of model:
 
 | Port | Browser-native result | Runtime integration |

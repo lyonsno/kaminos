@@ -1,15 +1,8 @@
 import { KleinPipeline } from './klein-pipeline.js';
-import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession }
+import { createWebGpuForegroundService, createWebGpuApplicationRunner, createWebGpuInferenceSession }
   from '../../webgpu-inference-kit/src/core.js';
 
 export const KLEIN_ROUTE_ID = 'flux2-klein.text-to-image.webgpu-local.v0';
-
-function stopped(signal) {
-  if (!signal.aborted) return;
-  const error = new Error(String(signal.reason?.message ?? signal.reason ?? 'Klein stopped'));
-  error.name = 'AbortError';
-  throw error;
-}
 
 // The demo's cooperative lifecycle, usable without its canvas or scene. A caller can borrow the
 // app's device/foreground service, or lend an existing session/device/foreground service to it.
@@ -27,8 +20,8 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     throw new Error('Klein foreground and device must match');
   }
   if (session && session.queue !== device.queue) throw new Error('Klein session must use the device queue');
-  let pipeline, loading = null, warmupJob = null, loaded = false, active = null, closing = null, destroyed = false, fatal = null;
-  const onGpuError = event => { fatal = event.error ?? new Error('Klein WebGPU error'); active?.abort.abort(fatal); };
+  let pipeline, loading = null, warmupJob = null, loaded = false, runner = null, closing = null, destroyed = false, fatal = null;
+  const onGpuError = event => { fatal = event.error ?? new Error('Klein WebGPU error'); runner?.stop(fatal); };
   function assertOpen() {
     if (destroyed) throw new Error('this Klein app has been destroyed');
     if (fatal) throw fatal;
@@ -55,7 +48,7 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     device.lost.then(info => {
       if (destroyed) return;
       fatal = new Error(`Klein WebGPU device lost: ${info.reason}: ${info.message}`);
-      active?.abort.abort(fatal);
+      runner?.stop(fatal);
     });
   } catch (error) {
     if (ownsSession) session?.close();
@@ -121,106 +114,18 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     return loading;
   }
 
-  function generate({ signal, cooperative = true, scheduling: runScheduling = {}, ...options } = {}) {
-    assertOpen();
-    if (active) throw new Error('a Klein generation is already running');
-    if (Object.hasOwn(options, 'schedule')) throw new Error('use scheduling options here, or pipeline.generate for an existing invocation');
-    for (const key of ['runtime', 'invocation', 'control', 'signal', 'withForeground']) {
-      if (Object.hasOwn(scheduling, key) || Object.hasOwn(runScheduling, key)) throw new Error(`Klein app owns scheduling.${key}`);
-    }
-    const abort = new AbortController();
-    const forwardAbort = () => abort.abort(signal.reason);
-    signal?.addEventListener('abort', forwardAbort, { once: true });
-    if (signal?.aborted) forwardAbort();
-    const run = { abort, control: null, cooperative, phase: 'loading', promise: null, job: null };
-    active = run;
-    const cancelPending = () => run.job?.cancel('Klein stopped');
-    abort.signal.addEventListener('abort', cancelPending, { once: true });
-    run.promise = Promise.resolve().then(async () => {
-      let admissionRoute;
-      try {
-        stopped(abort.signal);
-        await loadWeights();
-        stopped(abort.signal);
-        const runId = `klein:${crypto.randomUUID()}`;
-        // One queued job owns admission. Its model runtime is created after admission,
-        // when the host's previous foreground run has finished. The inner runtime runs
-        // directly; enqueuing it again on this same session would deadlock.
-        admissionRoute = await session.registerRoute({ routeId: `${routeId}:admission` });
-        stopped(abort.signal);
-        run.phase = 'queued';
-        run.job = admissionRoute.enqueue({ jobId: runId, execute: async () => {
-          let frameRun, modelRoute, result, failure;
-          const cleanupErrors = [];
-          try {
-            stopped(abort.signal);
-            frameRun = await foreground.beginRun(runId, { routeId });
-            stopped(abort.signal);
-            run.phase = 'generating';
-            if (cooperative) {
-              modelRoute = await session.registerRoute({ routeId, runtimeOptions: {
-                runtimeLabel: 'klein-app', foregroundOpportunities: frameRun.foregroundOpportunities } });
-              // Pause parks behind any current lean-residency CPU weight window.
-              let windowTail = Promise.resolve();
-              const withForeground = (phase, work) => {
-                const window = windowTail.then(() => frameRun.withForeground(phase, work));
-                windowTail = window.catch(() => {});
-                return window;
-              };
-              run.control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground });
-              result = await modelRoute.runtime.runInvocation({ invocationId: runId }, invocation =>
-                pipeline.generate({ ...options, schedule: { maxInFlight: 2, ...scheduling, ...runScheduling,
-                  runtime: modelRoute.runtime, invocation, control: run.control, signal: abort.signal, withForeground } }));
-            } else {
-              result = await pipeline.generate(options);
-            }
-            if (fatal) throw fatal;
-            stopped(abort.signal);
-          } catch (error) { failure = error; }
-          finally {
-            // Keep admission until all model and foreground settlement has finished.
-            run.phase = 'finishing';
-            try { await run.control?.close(); } catch (e) { cleanupErrors.push(e); }
-            run.control = null;
-            if (modelRoute) {
-              try { session.unregisterRoute(modelRoute.routeId); } catch (e) { cleanupErrors.push(e); }
-            }
-            try { await frameRun?.finish(); } catch (e) { cleanupErrors.push(e); }
-          }
-          if (cleanupErrors.length) {
-            fatal = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Klein generation cleanup failed');
-            throw fatal;
-          }
-          if (failure) throw failure;
-          return result;
-        } });
-        const completion = await run.job.completion;
-        if (fatal) throw fatal;
-        stopped(abort.signal);
-        if (completion.status !== 'succeeded') {
-          const error = new Error(completion.failure?.message ?? completion.status);
-          error.name = completion.failure?.name ?? 'Error';
-          throw error;
-        }
-        return completion.output;
-      } finally {
-        signal?.removeEventListener('abort', forwardAbort);
-        abort.signal.removeEventListener('abort', cancelPending);
-        try {
-          if (admissionRoute) { await admissionRoute.drain(); session.unregisterRoute(admissionRoute.routeId); }
-        } catch (error) { fatal = error; throw error; }
-        finally { active = null; }
-      }
-    });
-    return run.promise;
-  }
+  runner = createWebGpuApplicationRunner({ session, foreground, routeId,
+    label: 'Klein generation', phase: 'generating', runtimeLabel: 'klein-app',
+    scheduling: { maxInFlight: 2, ...scheduling }, assertOpen,
+    getError: () => fatal, onFatal: error => { fatal = error; },
+    prepare: () => loadWeights(),
+    execute: (options, schedule) => pipeline.generate(schedule ? { ...options, schedule } : options),
+  });
+  const { run: generate, pause, resume, stop } = runner;
 
-  async function pause() { return active?.control ? active.control.pause() : null; }
-  async function resume() { return active?.control ? active.control.resume() : null; }
-  function stop(reason = 'stopped by user') { active?.abort.abort(reason); }
   function snapshot() {
-    return { loaded, destroyed, phase: active?.phase ?? (loading ? 'loading' : 'idle'),
-      cooperative: active?.cooperative ?? null, control: active?.control?.snapshot() ?? null,
+    const run = runner.snapshot();
+    return { loaded, destroyed, ...run, phase: run.phase ?? (loading ? 'loading' : 'idle'),
       ownership: { device: ownsDevice ? 'owned' : 'borrowed', session: ownsSession ? 'owned' : 'borrowed',
         foreground: ownsForeground ? 'owned' : 'borrowed' }, routeId, error: fatal?.message ?? null };
   }
@@ -231,7 +136,7 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     warmupJob?.cancel('Klein app destroyed');
     closing = (async () => {
       // The original operation retains its own failure; destruction waits for it to retire.
-      await Promise.allSettled([active?.promise, loading]);
+      await Promise.allSettled([runner.pending, loading]);
       const errors = [];
       try { await pipeline?.destroy(); pipeline = null; loaded = false; } catch (e) { errors.push(e); }
       if (ownsForeground) { try { await foreground.dispose(); } catch (e) { errors.push(e); } }
