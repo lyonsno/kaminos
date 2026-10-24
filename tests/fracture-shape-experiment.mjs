@@ -98,3 +98,41 @@ for(const counts of [[1,3,4,2,2],[1,0,7,2,2]])test(`descendant refinement inheri
   api.operations.refine();assert.deepEqual(api.operations.export().labels,after.labels,'finest detail is stable');await api.dispose();
  }finally{globalThis.Worker=old;}
 });
+
+function controlTree(){
+ const counts=[1,3,4,2,2],nodes=counts.map((ownTriangles,id)=>({id,parent:id?id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
+ const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
+ const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}}));
+ return {hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:faceOwners.slice(),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
+}
+async function withControlTree(run){
+ const old=globalThis.Worker,tree=controlTree();
+ globalThis.Worker=class{postMessage({id,settings}){const result=structuredClone(tree);if(settings.minAreaFraction===1){result.hierarchy={...result.hierarchy,nodes:[{...tree.hierarchy.nodes[0],children:[],ownTriangles:12}],faceOwners:new Uint32Array(12),maxDepth:0};result.parts=[{...tree.parts[0],triangles:12,area:12}];result.labels=new Uint32Array(12);}queueMicrotask(()=>this.onmessage({data:{id,result}}));}terminate(){}};
+ const apis=[];try{await run(async inputs=>{const f=setup(),api=await definition.create({host:f.host,inputs:{source:'/source.glb',...inputs},record(){}});apis.push(api);return api;});}finally{for(const api of apis)await api.dispose();globalThis.Worker=old;}
+}
+const faceOwnership=api=>{const r=api.operations.export();return r.labels.map(id=>r.partition.parts[id].nodeId);};
+test('selecting hidden descendants and reopening that selection never changes grouping',()=>withControlTree(async create=>{
+ const api=await create(),before=faceOwnership(api);api.operations.select(4);api.operations.select(-1);
+ assert.deepEqual(faceOwnership(api),before,'browsing hierarchy must not create cuts');
+ api.operations.select(4);const reopened=await create(api.read().setup);
+ assert.deepEqual(faceOwnership(reopened),before,'saved highlight must not create cuts on reopen');
+}));
+test('keep-together then refinement cannot resurrect old descendant overrides',()=>withControlTree(async create=>{
+ const a=await create({detailLevel:4}),b=await create({detailLevel:4});
+ a.operations.select(2);a.operations.keepTogether();
+ for(const api of [a,b]){api.operations.select(1);api.operations.keepTogether();api.operations.refine();api.operations.refine();}
+ assert.deepEqual(faceOwnership(a),faceOwnership(b),'same parent edit must discard previous child grouping');
+ assert.deepEqual(a.read().localDetail,b.read().localDetail);
+}));
+test('threshold round trips preserve requested detail and reproduce direct grouping',()=>withControlTree(async create=>{
+ const a=await create({detailLevel:4}),before=faceOwnership(a),settings=a.read().settings;
+ await a.operations.partition({...settings,minAreaFraction:1});assert.equal(a.read().partition.parts.length,1);
+ await a.operations.partition(settings);
+ assert.equal(a.read().detailLevel,4,'temporary shallow hierarchy must not overwrite requested detail');
+ assert.deepEqual(faceOwnership(a),before,'returning to initial thresholds must restore grouping');
+}));
+test('reapplying identical thresholds preserves explicit local grouping',()=>withControlTree(async create=>{
+ const api=await create({detailLevel:4});api.operations.select(1);api.operations.keepTogether();const before=faceOwnership(api),setup=api.read().setup;
+ await api.operations.partition(api.read().settings);
+ assert.deepEqual(faceOwnership(api),before);assert.deepEqual(api.read().setup,setup);
+}));
