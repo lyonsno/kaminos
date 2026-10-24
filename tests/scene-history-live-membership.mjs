@@ -10,6 +10,7 @@ import {checkedSelection} from '../scene-selection.mjs';
 import {checkedRepetition} from '../scene-repetition.mjs';
 import {isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 import * as membership from '../scene-membership-history.mjs';
+import * as groupTopology from '../scene-group-topology.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('function readSelectionMembership('),end=html.indexOf('// Separate (P)',start);
 assert.ok(start>=0&&end>start);
@@ -23,7 +24,7 @@ function fixture(){
  }
  function detach(id){const row=workingScene.forget(id);scene.remove(row.object);if(row.type==='glb')workingScene.retain(row);else disposed.push(id);}
  const serializeSceneObject=row=>({id:row.id,type:row.type,source:row.source,label:row.label,groupId:row.groupId??null,repetition:row.repetition,transform:{...pose,position:row.object.position.toArray()}});
- const context={...membership,workingScene,scene,structuredClone,checkedPose,checkedGroupPose:checkedPose,checkedSelection,checkedRepetition,isReloadableSceneObjectRecord,
+ const context={...membership,...groupTopology,workingScene,scene,structuredClone,checkedPose,checkedGroupPose:checkedPose,checkedSelection,checkedRepetition,isReloadableSceneObjectRecord,
   serializeSceneObject,serializeSceneGroups:()=>structuredClone(workingScene.groups),sceneCameras:null,
   flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',
   normalizeFlameDomainTranslation:x=>x,normalizeFlameDomainScale:x=>x,clearActiveSceneObjectSelection:()=>workingScene.clearSelection(),

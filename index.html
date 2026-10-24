@@ -26020,8 +26020,10 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
     for(const id of roots)newRoots.push(id.startsWith('@group:')?'@group:'+groupCopies.get(id.slice(7)):copies.get(id));
     setSceneSelection(newRoots,newRoots.at(-1));
   }catch(error){for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
+  const placementIds=new Set([...copies.values(),...newRoots.flatMap(id=>id.startsWith('@group:')?[id,'@assembly:'+id.slice(7)]:[id])]);
   const complete=({commit})=>{
-    scenePlacementTools.edits.discard(entry=>entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>newRoots.includes(id)||[...copies.values()].includes(id))||[...copies.values()].includes(entry.id));
+    // The accepted placement belongs to the compound insertion, including a single group target.
+    scenePlacementTools.edits.discard(entry=>placementIds.has(entry.id)||entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>placementIds.has(id)));
     if(commit)scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Duplicate ${members.length} selected`);
     else{for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();}
   };

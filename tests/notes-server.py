@@ -423,9 +423,12 @@ def directory_and_notify_contracts():
             "import json, os, sys\n"
             "body = json.load(sys.stdin)\n"
             "name = os.environ['KAMINOS_NOTES_RECIPIENT']\n"
-            "(__import__('pathlib').Path(sys.argv[1]) / f'notified-{name}.json').write_text(json.dumps(\n"
+            "target = __import__('pathlib').Path(sys.argv[1]) / f'notified-{name}.json'\n"
+            "pending = target.with_suffix('.pending')\n"
+            "pending.write_text(json.dumps(\n"
             "    {'recipient': name, 'note': body['note']['id'], 'text': body['note']['text'], 'server': os.environ.get('KAMINOS_NOTES_SERVER'),\n"
             "     'listening': body['listening'], 'listeningEnv': os.environ.get('KAMINOS_NOTES_LISTENING')}))\n"
+            "pending.replace(target)\n"
             "sys.exit(3 if name == 'late-agent' else 0)\n")
         process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,

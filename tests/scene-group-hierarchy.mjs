@@ -86,3 +86,35 @@ test('the active assembly gives all descendant meshes the active highlight',()=>
  const c={...topology,THREE,workingScene:s,scene:new THREE.Scene(),flameDomainGuide:null,localLiquidDomainGuide:null,syncSceneHelperVisibility(){},viewportDisplay:{outlineWidth:1,outlineOpacity:1,overlays:true,outlines:true},selectionCaptureSuspended:false,renderer:null,selectionFeedback:{setStyle(){},suspend(){},update(_entries,ids){active=[...ids];}},isSceneItemVisible:()=>true,CAMERA_TYPE:'camera',FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',selectionBoxes:new Map(),styleHelperLines(){},viewportBoundsVisible:true,viewportHelpersVisible:true};
  vm.createContext(c);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('updateSelectionFeedback'),c);c.updateSelectionFeedback();assert.deepEqual(active,['foot','arm']);for(const box of c.selectionBoxes.values())assert.equal(box.material.color.getHex(),0xffc66d);
 });
+
+
+import {createSceneEdits} from '../scene-edit-session.mjs';
+import {checkedGroupEdit} from '../scene-group.mjs';
+test('confirmed duplicate placement is one reversible operation, including group aliases',async()=>{
+ for(const prefix of ['@group:','@assembly:']){
+  const s=createWorkingScene(),retained=new Map();let serial=0;
+  const readPose=o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()});
+  for(const row of records()){const entry={...row,object:new THREE.Group()};s.put(entry);retained.set(row.id,entry);}s.setGroups(groups());s.select(['@group:machine']);
+  const read=()=>({objects:s.objects.map(e=>({id:e.id,transform:readPose(e.object)})),groups:structuredClone(s.groups),selection:structuredClone(s.selection)});
+  const apply=(id,p)=>{const o=retained.get(id).object;o.position.fromArray(p.position);o.rotation.set(...p.rotation);o.scale.fromArray(p.scale);};
+  const restore=value=>{s.replaceObjects(value.objects.map(row=>{apply(row.id,row.transform);return retained.get(row.id);}));s.setGroups(value.groups);s.select(value.selection.ids,value.selection.activeId);};
+  const edits=createSceneEdits({read:()=>null,write(){throw Error('Unexpected object target');}});
+  const c={...topology,THREE,workingScene:s,structuredClone,checkedGroupPose,checkedGroupEdit,moveGroupMembers,groupEditTargets:new Set(),sceneObjectTransformState:readPose,applyAuthoredScenePose:apply,
+   FLAME_EMITTER_TYPE:'flame-emitter',groupProxy:()=>new THREE.Group(),applySceneObjectTransformState(){},updateTransformInspector(){},window:{},
+   assertSceneConstructionAvailable(){},selectedRootIds:()=>selectionTransformRoots(s.selection.ids,s.groups),canDuplicateObject:()=>true,checkSelectionMembership:x=>x,readSelectionMembership:read,compoundRetentionTargets:new Map(),
+   makeSceneObjectId:()=> 'copy-group-'+(++serial),setSceneSelection:(ids,id)=>s.select(ids,id),detachSelectionMember:id=>s.forget(id),releaseUnreferencedSceneMembershipObjects(){},
+   duplicateSceneObject(id){const row=s.find(id),copy={...row,id:'copy-'+id,object:row.object.clone()};retained.set(copy.id,copy);s.put(copy);return copy.id;},
+   scenePlacementTools:{edits,start(_mode,complete){const target=prefix+s.activeGroupId;edits.begin(target);edits.preview({position:[4,2,1]});edits.commit();complete({commit:true});return true;}}};
+  vm.createContext(c);vm.runInContext(['sceneSelectionMembers','groupEditState','ensureGroupTarget','writeGroupPose','duplicateSceneGroup','duplicateSelectedSceneObjects'].map(fn).join('\n'),c);
+  edits.register('@selection-membership',{read,check:x=>x,write:restore});for(const group of s.groups)c.ensureGroupTarget(group);
+  edits.apply('@group:machine',{position:[1,0,0]},'Earlier move');const before=read(),count=edits.state().undoCount;
+  const copiedId=c.duplicateSceneGroup('machine',{interactive:true}),accepted=read();
+  assert.equal(edits.state().undoCount,count+1,'placement must be absorbed into the duplicate operation');
+  assert.deepEqual(s.groups.find(g=>g.id===copiedId).transform.position,[4,2,1]);
+  assert.equal(s.groups.filter(g=>g.parentId===copiedId).length,2);
+  await edits.undo();assert.deepEqual(read(),before);
+  await edits.undo();assert.equal(edits.state().undoCount,0);assert.deepEqual(s.find('arm').object.position.toArray(),[0,0,0]);
+  await edits.redo();assert.deepEqual(read(),before);
+  await edits.redo();assert.deepEqual(read(),accepted);assert.equal(s.find('arm').groupId,'boom');
+ }
+});
