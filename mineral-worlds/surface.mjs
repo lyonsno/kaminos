@@ -1,4 +1,4 @@
-import {Group,Mesh,BufferGeometry,Float32BufferAttribute,MeshStandardMaterial,DoubleSide,DynamicDrawUsage} from '../lib/three.webgpu.js';
+import {Group,Mesh,BufferGeometry,Float32BufferAttribute,Uint32BufferAttribute,MeshStandardMaterial,DoubleSide,DynamicDrawUsage} from '../lib/three.webgpu.js';
 export function sample(field,n,u,v){
  const x=Math.max(0,Math.min(n-1,u*(n-1))),z=Math.max(0,Math.min(n-1,v*(n-1))),a=Math.floor(x),b=Math.floor(z),fx=x-a,fz=z-b;
  return (field[b*n+a]*(1-fx)+field[b*n+Math.min(n-1,a+1)]*fx)*(1-fz)+(field[Math.min(n-1,b+1)*n+a]*(1-fx)+field[Math.min(n-1,b+1)*n+Math.min(n-1,a+1)]*fx)*fz;
@@ -7,6 +7,7 @@ export function sample(field,n,u,v){
 // rasterizes each patch's footprint; there is no connected terrain mesh or
 // extraction, raymarch, transparency, or camera-facing billboard rotation.
 export function createSurface(state,{samples=160,extent=64}={}){
+ if(!Number.isInteger(samples)||samples<4||!Number.isFinite(extent)||extent<=0)throw Error('Invalid surface resolution or extent');
  const root=new Group();root.name=state.kind==='salt'?'Salt plain':'Flowstone reach';
  const segments=8,stride=segments+1,count=samples*samples,coords=new Float32Array(count*stride*2),indices=new Uint32Array(count*segments*3);
  const warp=t=>extent*.5*(.25*t+.75*t*t*t),grid=i=>warp(2*i/(samples-1)-1);
@@ -15,7 +16,7 @@ export function createSurface(state,{samples=160,extent=64}={}){
   for(let k=0;k<=segments;k++){const j=site*stride+k,a=(k-1)/segments*Math.PI*2;coords[j*2]=cx+(k?rx*Math.cos(a):0);coords[j*2+1]=cz+(k?rz*Math.sin(a):0);}
   for(let k=0;k<segments;k++)indices.set([site*stride,site*stride+1+(k+1)%segments,site*stride+1+k],(site*segments+k)*3);
  }
- const geometry=new BufferGeometry();geometry.setIndex(new Float32BufferAttribute([] ,1));geometry.setIndex(Array.from(indices));
+ const geometry=new BufferGeometry();geometry.setIndex(new Uint32BufferAttribute(indices,1));
  const positions=new Float32Array(count*stride*3),normals=new Float32Array(positions.length),colors=new Float32Array(positions.length);
  geometry.setAttribute('position',new Float32BufferAttribute(positions,3).setUsage(DynamicDrawUsage));geometry.setAttribute('normal',new Float32BufferAttribute(normals,3).setUsage(DynamicDrawUsage));geometry.setAttribute('color',new Float32BufferAttribute(colors,3).setUsage(DynamicDrawUsage));
  const material=new MeshStandardMaterial({roughness:state.kind==='salt'?.94:.7,metalness:0,side:DoubleSide,vertexColors:true,envMapIntensity:.15});

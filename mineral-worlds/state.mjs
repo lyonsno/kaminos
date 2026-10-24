@@ -3,6 +3,7 @@ export const VERSION = 1;
 export function createWorld({kind='flowstone',size=48,depth=6,seed=17}={}) {
   if(!['flowstone','salt'].includes(kind)) throw Error('Unknown mineral kind');
   if(!Number.isInteger(size)||size<4||!Number.isInteger(depth)||depth<2) throw Error('Invalid grid');
+  if(!Number.isSafeInteger(seed))throw Error('Invalid seed');
   const count=size*size;
   const state={version:VERSION,kind,size,depth,seed,tick:0,settings:{supply:1,evaporation:1,mineral:1},
     bed:new Float64Array(count),solid:new Float64Array(count),water:new Float64Array(count),solute:new Float64Array(count),

@@ -21,3 +21,7 @@ test('deposited relief changes subsequent water transport',()=>{
 test('invalid checkpoints fail visibly',()=>{
  const s=checkpoint(createWorld({size:8}));s.solid.pop();assert.throws(()=>restore(s),/solid/);
 });
+
+test('invalid seed cannot introduce NaNs into a new world',()=>{
+ assert.throws(()=>createWorld({size:8,seed:NaN}),/seed/);
+});
