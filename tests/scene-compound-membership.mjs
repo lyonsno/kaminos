@@ -51,3 +51,35 @@ test('failed group Redo rolls back partial reconstruction and permits retry',asy
  assert.equal(f.state.find('second-copy'),undefined);assert.equal(f.edits.state().redoCount,1);
  f.failAttach(null);await f.edits.redo();assert.ok(f.state.find('lamp-copy'));assert.ok(f.state.find('second-copy'));
 });
+
+test('group Redo republishes restored flame sources through the production domain adapters',async()=>{
+ const state=createWorkingScene(),scene=new THREE.Scene(),edits=createSceneEdits({read:()=>null,write(){}}),published=[];let next=0;
+ const serialize=row=>({id:row.id,type:row.type,label:row.label,source:row.source,transform:pose,emission:row.emission});
+ const h=vm.createContext({structuredClone,createSceneMembershipOperations,createSceneMembershipBatch,workingScene:state,scene,scenePlacementTools:{edits},checkedRepetition,
+ FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',LOCAL_LIQUID_EMITTER_TYPE:'water',GROUP_TYPE:'group',
+ serializeSceneObject:serialize,isReloadableSceneObjectRecord:()=>true,sceneNavigation:null,sceneCameras:null,transformControls:null,currentMesh:null,splatCorrectionMode:null,hybridSplatOverlayState:{},
+ applyGiProxySetting(){},sceneGiProxies:{release(){}},applySceneObjectTransformState(){},applyMaterialStateToObject(){},canCollideWithFire:()=>false,disposeObjectTree(){},renderSceneObjectList(){},updateTransformInspector(){},setInfo(){},
+ window:{_kaminosDirty(){}},setSceneSelection:(ids,id)=>state.select(ids,id),clearActiveSceneObjectSelection:()=>state.clearSelection(),setActiveSceneObject:id=>state.select([id]),setActiveSceneGroup:id=>state.select(['@group:'+id]),
+ setSceneObjectMounted:(entry,on)=>on?scene.add(entry.object):scene.remove(entry.object),sceneSaveBlockedByFailedRestore:false,
+ assertSceneConstructionAvailable(){},canDuplicateObject:()=>true,makeSceneObjectId:prefix=>prefix+'-'+(++next),sceneObjectDisplayLabel:row=>row.label,requirePluralFlameSourceRuntime(){},
+ serializeSceneGroups:()=>structuredClone(state.groups),ensureGroupTarget(){},checkedGroupPose:value=>value,groupPivotPose:()=>pose,
+ flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,authoredFlamePresent:true,flameEmitterPose:pose,
+ sceneObjectTransformState:()=>pose,projectAuthoredFlameSourceControls(){},applyFlameEmitterPose(){},pruneSceneGroups:()=>state.pruneGroups(),
+ });
+ h.primaryAuthoredFlameSource=()=>state.objects.find(row=>row.type==='flame-emitter');
+ h.syncAuthoredFlameSources=()=>published.push(state.objects.filter(row=>row.type==='flame-emitter').map(row=>row.id));
+ h.ensureAuthoredFlameEmitter=record=>{const row={...record,object:new THREE.Group()};h.sceneMembership.admit(row);scene.add(row.object);};
+ for(const name of ['createPageSceneMembershipOperations','createPageSceneMembershipBatch','createSceneGroupForObjects','duplicateSceneObject','duplicateSceneGroup','detachSelectionMember','applyCompoundSceneRecord','restoreCompoundSceneContext']){
+   const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),h);
+ }
+ h.sceneMembership=h.createPageSceneMembershipOperations();h.sceneMembership.attachHistory(edits);
+ h.ensureSceneObjectMembershipTarget=h.sceneMembership.ensureTarget;
+ h.sceneMembershipBatch=h.createPageSceneMembershipBatch();h.sceneMembershipBatch.attachHistory(edits);
+ h.ensureAuthoredFlameEmitter({id:'flame',type:'flame-emitter',label:'Fire',source:'kaminos:analytic-flame',emission:{fuel:.8}});
+ h.createSceneGroupForObjects(['flame'],'Flames',{id:'original',transform:pose});
+ const group=h.duplicateSceneGroup('original'),copy=state.groups.find(row=>row.id===group).objectIds[0];
+ assert.deepEqual(published.at(-1),['flame',copy]);await edits.undo();assert.deepEqual(published.at(-1),['flame']);
+ await edits.redo();assert.deepEqual(state.objects.map(row=>row.id),['flame',copy]);
+ assert.deepEqual(published.at(-1),['flame',copy],'Redo must publish every restored source, not just restore its handle');
+ assert.equal(state.find(copy).emission.fuel,.8);
+});

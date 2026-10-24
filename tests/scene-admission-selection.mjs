@@ -14,13 +14,13 @@ import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE} from '../local-li
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function install(context,first,last){const a=html.indexOf(first),b=html.indexOf(last,a);assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),context);}
 function fixture(){
- const workingScene=createWorkingScene(),scene=new THREE.Scene(),calls={selection:0,exit:0};
+ const workingScene=createWorkingScene(),scene=new THREE.Scene(),calls={selection:0,exit:0,water:0};
  const context=vm.createContext({THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
  checkedSelection,changeSelection,createLocalLiquidEmitterObject,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE,
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',FLAME_EMITTER_TYPE:'flame',localLiquidSetup:null,
  sceneNavigation:{prepare(){}},applyGiProxySetting(){},createSceneGroupForObjects(){},
  serializeSceneObject:entry=>({id:entry.id}),isReloadableSceneObjectRecord:()=>true,disposeObjectTree(){},
- sceneCameras:null,sceneSaveBlockedByFailedRestore:false,sceneGiProxies:{release(){}},
+ syncLocalLiquidHostEmitters(){calls.water++;},sceneCameras:null,sceneSaveBlockedByFailedRestore:false,sceneGiProxies:{release(){}},
  hybridSplatOverlayState:{},transformControls:null,currentMesh:null,splatCorrectionMode:null,
  activeSceneComposition:null,burnerGraphWriting:false,authoringWorkspace:null,
  scenePlacementTools:{selectionChanged(){calls.selection++;}},
@@ -55,7 +55,7 @@ for(const group of [false,true])test(`source reconstruction preserves ${group?'g
  const record=createLocalLiquidEmitterSceneRecord({id:'restored-water',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}});
  const entry=await context.sceneMembership.reconstruct(record);
  assert.deepEqual(workingScene.selection,before);assert.equal(context.currentMesh,current);assert.equal(calls.selection,0);assert.equal(calls.exit,0);
- assert.equal(entry.object.parent,scene);assert.equal(entry.object.position.y,1);assert.equal(edits.state().undoCount,0);
+ assert.equal(calls.water,1,'reconstruction republishes the restored water emitter');assert.equal(entry.object.parent,scene);assert.equal(entry.object.position.y,1);assert.equal(edits.state().undoCount,0);
 });
 
 for(const type of ['image','pbr','glb','splat'])test(`${type} source loader preserves selection through its production registration path`,async()=>{

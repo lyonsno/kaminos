@@ -88,6 +88,7 @@ export function createSceneMembershipOperations({
     const entry = scene.find(record.id);
     if (!entry || entry.object !== object) throw Error(`Scene object "${record.id}" did not restore its retained identity`);
     roots.restore(entry, record);
+    domain(entry).restored?.(entry, context);
     return entry;
   }
 
@@ -96,7 +97,6 @@ export function createSceneMembershipOperations({
     const entry = await reconstruct(record, value);
     scene.move(entry.id, index);
     restoreGroups(entry, groups);
-    domain(entry).restored?.(entry, value);
     if (selection.groupId && scene.groups.some(group => group.id === selection.groupId)) {
       select(['@group:' + selection.groupId], '@group:' + selection.groupId);
     } else if (selection.objectId && scene.find(selection.objectId)) {
