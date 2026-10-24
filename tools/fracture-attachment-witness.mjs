@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {checkRefinement} from './fracture-refinement-check.mjs';
 const [url,out,playwright,executable,objectSpec]=process.argv.slice(2);
 if(!url||!out||!playwright||!executable)throw Error('URL, output directory, Playwright module and independent browser executable required');
 fs.mkdirSync(out,{recursive:true});
@@ -47,8 +48,7 @@ try{
  report.ancestorRefined=await invoke('export');await invoke('select',nested.id);report.descendantSelected=await invoke('export');
  assert(JSON.stringify(owners(report.descendantSelected))===JSON.stringify(owners(report.ancestorRefined)),'Selecting a represented descendant changed grouping');
  await invoke('refine');report.descendantRefined=await invoke('export');
- const groups=new Map();for(let i=0;i<report.descendantRefined.labels.length;i++){const id=report.descendantRefined.labels[i],old=report.descendantSelected.labels[i];if(groups.has(id))assert(groups.get(id)===old,'Finer here merged inherited groups');else groups.set(id,old);}
- assert(report.descendantRefined.partition.parts.length>report.descendantSelected.partition.parts.length,'Inherited refinement did not expose finer parts');
+ report.inheritedRefinement=checkRefinement(report.descendantSelected,report.descendantRefined,nested.id);
  await invoke('resetLocal');await invoke('select',-1);await invoke('frame');
  // A real canvas click, through the same selection route as the human.
  const rect=await page.locator('#viewport').boundingBox();assert(rect,'Viewport missing');
@@ -65,6 +65,8 @@ try{
  assert(JSON.stringify(owners(report.beforeThresholdTrip))===JSON.stringify(owners(report.afterThresholdTrip)),'Threshold round trip changed grouping');
  const parent=report.initial.hierarchy.nodes.find(n=>n.children.some(id=>report.initial.hierarchy.nodes[id].children.length));
  assert(parent,'No nested parent for grouping-history comparison');const child=parent.children.find(id=>report.initial.hierarchy.nodes[id].children.length);
+ await invoke('detail',report.initial.hierarchy.maxDepth);await invoke('select',child);await invoke('keepTogether');await invoke('select',parent.id);
+ report.parentButtonBefore=await invoke('export');const parentButton=page.getByRole('button',{name:'Finer here',exact:true});assert(await parentButton.isEnabled(),'Parent refinement unavailable above a coarser child');await parentButton.click();report.parentButtonAfter=await invoke('export');report.parentButtonRefinement=checkRefinement(report.parentButtonBefore,report.parentButtonAfter,parent.id);
  await invoke('select',child);await invoke('keepTogether');await invoke('select',parent.id);await invoke('keepTogether');await invoke('refine');await invoke('refine');report.withChildHistory=await invoke('export');
  await invoke('detail',report.initial.hierarchy.maxDepth);await invoke('select',parent.id);await invoke('keepTogether');await invoke('refine');await invoke('refine');report.withoutChildHistory=await invoke('export');
  assert(JSON.stringify(owners(report.withChildHistory))===JSON.stringify(owners(report.withoutChildHistory)),'Old child overrides resurrected after parent edit');

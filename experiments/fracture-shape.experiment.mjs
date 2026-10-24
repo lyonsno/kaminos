@@ -56,7 +56,7 @@ export default {
     const node=result?.hierarchy.nodes[selected];
     if(selectedText)selectedText.textContent=node?`${node.kind==='component'?'Source component':node.kind==='branch'?'Attachment piece':'Surface patch'} ${node.id+1} · ${node.triangles.toLocaleString()} triangles${node.agreement?` · same boundary in ${node.agreement} of seven searches`:''}`:'Click a fitting in the view to work on it.';
     if(localInput){localInput.disabled=!node;localInput.min=String(node?.depth??0);localInput.max=String(node?subtreeDepth(node.id):0);localInput.value=String(node?Math.max(node.depth,Math.min(subtreeDepth(node.id),inheritedDetail(node.id))):0);localText.textContent=node?`Selected piece detail · ${localInput.value} / ${localInput.max}`:'Selected piece detail';}
-    if(refineButton)refineButton.disabled=!node?.children.length||inheritedDetail(node.id)>=subtreeDepth(node.id);
+    if(refineButton){const visible=new Set(view?.parts.map(p=>p.nodeId));refineButton.disabled=!node?.children.length||!result.hierarchy.nodes.some(n=>n.ownTriangles>0&&belongs(n.id,node.id)&&!visible.has(n.id));}
     if(keepButton)keepButton.disabled=!node;
     if(parentButton)parentButton.disabled=!node||node.parent===null;
     if(resetButton)resetButton.disabled=!Object.keys(localDetail).length;
