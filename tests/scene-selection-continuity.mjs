@@ -52,7 +52,7 @@ test('an absent requested target leaves no pending selection transaction or hist
  assert.throws(()=>c.window.selectSceneObject('absent'),/absent/);assert.equal(c.scenePlacementTools.edits.state().active,null);assert.equal(c.scenePlacementTools.edits.state().undoCount,0);assert.equal(c.readSceneSelection().activeId,'mesh');
 });
 test('Select All keeps bulk object editing usable when visible simulation volumes are present',()=>{
- const c=context();Object.assign(c,{createSelectionTransformTarget:()=>({}),selectionRootState(){},applyAuthoredScenePose(){},checkSelectionRoot(){},readSelectionMembership(){},checkSelectionMembership(){},writeSelectionMembership(){},duplicateSelectedSceneObjects(){},removeSelectedSceneObjects(){},groupSelectedObjects(){},ungroupSelectedObjects(){},isSceneItemVisible:()=>true});
+ const c=context();Object.assign(c,{sceneMembershipBatch:{attachHistory(){}},createSelectionTransformTarget:()=>({}),selectionRootState(){},applyAuthoredScenePose(){},checkSelectionRoot(){},readSelectionMembership(){},checkSelectionMembership(){},writeSelectionMembership(){},duplicateSelectedSceneObjects(){},removeSelectedSceneObjects(){},groupSelectedObjects(){},ungroupSelectedObjects(){},isSceneItemVisible:()=>true});
  vm.runInContext(grab('setupSelectionHistory')+grab('setupSelectionTransforms'),c);c.setupSelectionTransforms();c.window.kaminosSelection.all();assert.deepEqual(Array.from(c.readSceneSelection().ids),['mesh','source'],'A selects editable objects; fields join through explicit Shift selection');
 });
 test('leaving splat correction by selecting or clearing occurs before shared history admission',()=>{

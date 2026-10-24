@@ -45,9 +45,41 @@ export function sceneContext(context, options) {
     retainForHistory(id,target){context.compoundRetentionTargets?.set(id,target);},
     clearHistoryTargets(){for(const id of context.sceneMembershipEditTargets??[])context.scenePlacementTools.edits.unregister(id);context.sceneMembershipEditTargets?.clear();context.compoundRetentionTargets?.clear();},
   };
+  context.sceneMembershipBatch ??= {clearHistoryTargets(){},attachHistory(){}};
   return vm.createContext(context,options);
 }
 
 export function runInSceneContext(code, context, options) {
   return vm.runInContext(code,sceneContext(context),options);
+}
+
+// Domain-unit composition: exercise the imported compound algorithm with the
+// production page's domain adapters. Root lifecycle stays an explicit fixture;
+// working-scene/Workbench integration tests exercise real retention separately.
+export async function composePageMembershipBatch(context, html) {
+  const {createSceneMembershipBatch}=await import('../../scene-membership-batch.mjs');
+  sceneContext(context);
+  context.createSceneMembershipBatch=createSceneMembershipBatch;
+  context.serializeSceneObject??=row=>structuredClone({...row,object:undefined});
+  context.isReloadableSceneObjectRecord??=()=>true;
+  context.serializeSceneGroups??=()=>structuredClone(context.workingScene.groups);
+  context.normalizeFlameDomainTranslation??=value=>value;
+  context.normalizeFlameDomainScale??=value=>value;
+  context.canDuplicateObject??=()=>false;
+  context.createSceneGroupForObjects??=()=>{};
+  context.ensureGroupTarget??=()=>{};
+  context.clearActiveSceneObjectSelection??=()=>context.setSceneSelection([],null);
+  context.sceneMembership.reconstruct??=async record=>{
+    const entry=context.workingScene.retained(record.id);
+    if(entry){context.workingScene.put(entry);context.setSceneObjectMounted?.(entry,true);}
+    else await context.addSceneObjectFromSource(record);
+    return context.workingScene.find(record.id);
+  };
+  for(const name of ['createPageSceneMembershipBatch','applyCompoundSceneRecord','restoreCompoundSceneContext']){
+    const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;
+    if(a<0||b<a)throw Error('Missing production '+name);
+    vm.runInContext(html.slice(a,b),context);
+  }
+  context.sceneMembershipBatch=context.createPageSceneMembershipBatch();
+  return context.sceneMembershipBatch;
 }

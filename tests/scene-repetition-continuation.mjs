@@ -3,6 +3,7 @@ import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import * as T from 'three';import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {exportCloneInWorld} from '../scene-export.mjs';import {checkedRepetition,createRepetitionView,withoutRepetitionCopies} from '../scene-repetition.mjs';
+import {createSceneMembershipBatch} from '../scene-membership-batch.mjs';
 import {createWorkingScene} from '../working-scene.mjs';
 import {canRepeatSceneObject,createSceneRepetitionController} from '../scene-repetition-controller.mjs';import {createSceneEdits,checkedPose} from '../scene-edit-session.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -11,9 +12,15 @@ const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},repetition=checkedR
 
 test('shared selection duplication carries the group relationship into interactive and direct copies',()=>{
  for(const interactive of [false,true]){
-  const group={id:'ring',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition},created=[];
-  const h={structuredClone,checkedRepetition,sceneSelection:{ids:['@group:ring'],activeId:'@group:ring'},sceneGroups:[group],sceneObjects:[{id:'baffle',type:'procedural-mesh'}],compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},selectedRootIds:()=>['@group:ring'],sceneSelectionMembers:()=>['baffle'],canDuplicateObject:()=>true,checkSelectionMembership:x=>x,readSelectionMembership:()=>({groups:[group],selection:{ids:['@group:ring'],activeId:'@group:ring'}}),duplicateSceneObject:()=> 'copy',makeSceneObjectId:()=> 'ring-copy',createSceneGroupForObjects:(ids,label,options)=>created.push({...options,objectIds:ids,label}),setSceneSelection(){},detachSelectionMember(){},scenePlacementTools:{start:()=>true,edits:{discard(){},recordApplied(){}}}};
-  sceneContext(h);vm.runInContext(fn('duplicateSelectedSceneObjects'),h);h.duplicateSelectedSceneObjects({interactive});assert.equal(created.length,1);assert.equal(created[0].repetition?.count,6);assert.equal(created[0].repetition?.mode,'circle');
+  const scene=createWorkingScene(),edits=createSceneEdits({read:()=>null,write(){}}),created=[];
+  scene.put({id:'baffle',type:'procedural-mesh',object:new T.Group(),transform:pose});
+  scene.setGroups([{id:'ring',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition}]);scene.select(['@group:ring']);
+  const batch=createSceneMembershipBatch({scene,membership:{retainForHistory(){},releaseUnreferenced(){}},
+   records:{serialize:({object,...row})=>row,reloadable:()=>true},
+   groups:{serialize:()=>structuredClone(scene.groups),create:(ids,label,options)=>{const group={...options,label,objectIds:ids};created.push(group);scene.setGroups([...scene.groups,group]);}},
+   duplicate:{supported:()=>true,groupId:()=> 'ring-copy',object:()=>{scene.put({id:'copy',object:new T.Group(),transform:pose});return 'copy';}}});
+  batch.attachHistory(edits);batch.duplicateSelection(['@group:ring'],['baffle'],{interactive,start:()=>true});
+  assert.equal(created.length,1);assert.equal(created[0].repetition.count,6);assert.equal(created[0].repetition.mode,'circle');
  }
 });
 

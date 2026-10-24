@@ -1,6 +1,6 @@
 // kaminos-test: node
 import {resolveSceneMembershipTopology} from '../scene-membership-history.mjs';
-import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
+import {sceneContext,runInSceneContext,composePageMembershipBatch} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -20,7 +20,7 @@ function fixture(family='ring'){
  c.resolveSceneMembershipTopology=resolveSceneMembershipTopology;c.readSelectionMembership=()=>({objects:[],liveIds:[],groups:[]});sceneContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','primaryAuthoredFlameSource','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
 }
 test('cluster membership replay and domain resize never invoke analytic placement',async()=>{
- const c=fixture('cluster');await c.writeSelectionMembershipUnchecked({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});
+ const c=fixture('cluster');c.detachSelectionMember=()=>{};await composePageMembershipBatch(c,html);await c.writeSelectionMembershipUnchecked({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});
  c.settleAuthoredFlameDomain({operation:'commit',after:{position:[1,2,0],rotation:[0,0,0],scale:[2,2,2]}});
  assert.equal(c.flameDomainScale,2);assert.equal(c.flameDomainFollowSource,false);
 });

@@ -2876,6 +2876,7 @@ import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-l
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
+import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
@@ -12201,7 +12202,7 @@ function clearScene({loadRequestId = null} = {}) {
     disposeObjectTree(flameDomainGuide);
     flameDomainGuide = null;
   }
-  for(const target of compoundInsertionTargets)scenePlacementTools.edits.unregister(target);compoundInsertionTargets.clear();
+  sceneMembershipBatch.clearHistoryTargets();
   sceneMembership.clearHistoryTargets();
   workingScene.invalidateArrivals();
   localLiquidGeneration++;
@@ -25327,44 +25328,10 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(!deferRecord)recordSceneObjectInsertion(copyId);
   return copyId;
 }
-const compoundInsertionTargets=new Set();
-function duplicateSceneGroup(id,{interactive=false}={}) {
-  assertSceneConstructionAvailable();const original=workingScene.groups.find(g=>g.id===id);
-  if(!original)throw Error('Choose a group');
-  const members=original.objectIds.map(member=>workingScene.objects.find(o=>o.id===member));
-  if(members.some(entry=>!canDuplicateObject(entry)))throw Error('This group contains an emitter whose duplication is not supported; duplicate its mesh members instead');
-  const groupId=makeSceneObjectId('group'),copies=[];
-  try{
-    for(const entry of members)copies.push(duplicateSceneObject(entry.id,{deferRecord:true}));
-    createSceneGroupForObjects(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition)});
-  }catch(error){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});throw error;}
-  const target=`@group-insertion:${groupId}`;
-  function snapshot(){
-    const group=workingScene.groups.find(g=>g.id===groupId),present=copies.filter(copy=>workingScene.objects.some(o=>o.id===copy));
-    if(!group&&!present.length)return null;
-    if(!group||present.length!==copies.length)throw Error('Incomplete group insertion');
-    return {objects:copies.map(copy=>serializeSceneObject(workingScene.objects.find(o=>o.id===copy))),group:structuredClone(group)};
-  }
-  scenePlacementTools.edits.register(target,{allowMissing:true,read:snapshot,
-    check:value=>{if(value===null)return null;if(!Array.isArray(value.objects)||value.objects.length!==copies.length||value.objects.some(r=>!copies.includes(r.id)||!isReloadableSceneObjectRecord(r))||value.group?.id!==groupId)throw Error('Invalid group insertion');return structuredClone(value);},
-    write:async value=>{
-      if(value===null){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false,preserveForMembershipHistory:true});setActiveSceneGroup(id);return;}
-      for(const record of value.objects){
-        const retained=workingScene.retained(record.id);
-        if(retained){scene.add(retained.object);workingScene.put(retained);}else await addSceneObjectFromSource(record);
-        const entry=workingScene.objects.find(o=>o.id===record.id);applySceneObjectTransformState(entry.object,record.transform);applyMaterialStateToObject(entry.object,record.materials);
-      }
-      createSceneGroupForObjects(copies,value.group.label,{...value.group,id:groupId});
-    }});
-  compoundInsertionTargets.add(target);for(const copy of copies)sceneMembership.retainForHistory(copy,target);
-  const complete=({commit})=>{
-    scenePlacementTools.edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);
-    if(commit)scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
-    else {for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});setActiveSceneGroup(id);}
-  };
-  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start group placement');}}
-  else scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
-  return groupId;
+const sceneMembershipBatch=createPageSceneMembershipBatch();
+function duplicateSceneGroup(id,options={}) {
+  assertSceneConstructionAvailable();
+  return sceneMembershipBatch.duplicateGroup(id,{...options,start:(mode,complete)=>scenePlacementTools.start(mode,complete)});
 }
 function duplicateSceneSelection(id,options={}){if(workingScene.selection.ids.length>1)return duplicateSelectedSceneObjects(options);return workingScene.groups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
@@ -25733,52 +25700,36 @@ function setupSelectionTransforms(){
   setupSelectionHistory();
   selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>workingScene.selection,groups:()=>workingScene.groups,preferences:()=>transformPreferences,
     read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
-  scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
+  sceneMembershipBatch.attachHistory(scenePlacementTools.edits);
   window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
     set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>sceneSelectionHistory.set([...workingScene.groups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...workingScene.objects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
     transform:patch=>{if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(workingScene.selection.ids.length)setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);return {...next};}};
 }
 
-function readSelectionMembership(){return {...captureSceneMembership(workingScene.objects.map(serializeSceneObject),isReloadableSceneObjectRecord),groups:serializeSceneGroups(),selection:structuredClone(workingScene.selection),field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
-function checkSelectionMembership(raw){
-  const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
-  const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
-  if(value.liveIds!==undefined&&!Array.isArray(value.liveIds))throw Error('Live scene references must be an array');
-  for(const id of value.liveIds??[]){if(typeof id!=='string'||!id||ids.has(id))throw Error('Invalid live scene reference');ids.add(id);}
-  for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
-  checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
+function createPageSceneMembershipBatch(){
+  return createSceneMembershipBatch({scene:workingScene,membership:sceneMembership,
+    records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,apply:applyCompoundSceneRecord},
+    groups:{serialize:serializeSceneGroups,ensure:ensureGroupTarget,create:createSceneGroupForObjects},
+    context:{
+      capture:()=>({field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null}),
+      check(value){normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');},
+      restore:restoreCompoundSceneContext,
+    },
+    select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
+    detach:detachSelectionMember,
+    duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
+    changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
+  });
 }
-function detachSelectionMember(id){
-  const source=workingScene.objects.find(record=>record.id===id&&record.type===FLAME_EMITTER_TYPE);
-  if(source){scene.remove(source.object);workingScene.retain(source);workingScene.forget(source.id);authoredFlamePresent=workingScene.objects.some(record=>record.type===FLAME_EMITTER_TYPE);const primary=primaryAuthoredFlameSource();if(primary){flameEmitterPose=sceneObjectTransformState(primary.object);projectAuthoredFlameSourceControls(primary);}applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:authoredFlamePresent});syncAuthoredFlameSources();pruneSceneGroups();return;}
-  removeSceneObjectInternal(id,{recordHistory:false,preserveForMembershipHistory:true});
+function applyCompoundSceneRecord(entry,record){
+  const existing=serializeSceneObject(entry);
+  entry.repetition=checkedRepetition(record.repetition);
+  if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
+  if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
+  entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
+  if(entry.type===FLAME_EMITTER_TYPE){entry.emissionEnabled=record.emissionEnabled!==false;entry.emission=record.emission?structuredClone(record.emission):undefined;Object.assign(entry.object.userData.kaminosSceneObject,{emissionEnabled:entry.emissionEnabled,emission:entry.emission});}
 }
-async function writeSelectionMembershipUnchecked(value){
-  const ids=new Set(value.objects.map(o=>o.id));
-  const current=readSelectionMembership(),live=new Set(current.liveIds);
-  if(value.objects.some(record=>live.has(record.id)))throw Error('Cannot restore authored membership over a live scene registration');
-  // Retire selection while its roots still exist; placement redraw reads the old selection.
-  if(current.objects.some(entry=>!ids.has(entry.id)))clearActiveSceneObjectSelection();
-  for(const entry of current.objects)if(!ids.has(entry.id))detachSelectionMember(entry.id);
-  for(const record of value.objects){
-    let entry=workingScene.objects.find(o=>o.id===record.id);
-    if(!entry){
-      const retained=workingScene.retained(record.id);
-      if(retained){entry=retained;workingScene.put(entry);setSceneObjectMounted(entry,true);if(entry.type==='light')mountSceneSpotLight(record);if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);}
-      else {await addSceneObjectFromSource(record);entry=workingScene.objects.find(o=>o.id===record.id);}
-    }
-    const existing=serializeSceneObject(entry);
-    entry.repetition=checkedRepetition(record.repetition);
-    if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
-    if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
-    entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
-    if(entry.type===FLAME_EMITTER_TYPE){entry.emissionEnabled=record.emissionEnabled!==false;entry.emission=record.emission?structuredClone(record.emission):undefined;Object.assign(entry.object.userData.kaminosSceneObject,{emissionEnabled:entry.emissionEnabled,emission:entry.emission});}
-  }
-  // Loading a retained source can yield: resolve against the live owners now,
-  // after the awaits, so an experiment's concurrent close/open remains final.
-  const topology=resolveSceneMembershipTopology(value,{...readSelectionMembership(),order:workingScene.objects.map(row=>row.id)});
-  workingScene.reorder(topology.ids);
-  workingScene.setGroups(topology.groups);for(const group of workingScene.groups)ensureGroupTarget(group);
+function restoreCompoundSceneContext(value){
   const restoredFlameSource=primaryAuthoredFlameSource();
   authoredFlamePresent=!!restoredFlameSource;
   if(restoredFlameSource)flameEmitterPose=sceneObjectTransformState(restoredFlameSource.object);
@@ -25786,20 +25737,23 @@ async function writeSelectionMembershipUnchecked(value){
   if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
   else syncAuthoredFlameSources();
   sceneCameras?.membershipChanged(value.activeCameraId??null);
-  if(value.field&&!topology.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(topology.selection.ids,topology.selection.activeId);
-  renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
 }
-async function writeSelectionMembership(raw){const value=checkSelectionMembership(raw),before=readSelectionMembership();try{await writeSelectionMembershipUnchecked(value);}catch(error){await writeSelectionMembershipUnchecked(before);throw error;}}
+function readSelectionMembership(){return sceneMembershipBatch.capture();}
+function checkSelectionMembership(raw){return sceneMembershipBatch.check(raw);}
+function detachSelectionMember(id){
+  const source=workingScene.objects.find(record=>record.id===id&&record.type===FLAME_EMITTER_TYPE);
+  if(source){scene.remove(source.object);workingScene.retain(source);workingScene.forget(source.id);authoredFlamePresent=workingScene.objects.some(record=>record.type===FLAME_EMITTER_TYPE);const primary=primaryAuthoredFlameSource();if(primary){flameEmitterPose=sceneObjectTransformState(primary.object);projectAuthoredFlameSourceControls(primary);}applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:authoredFlamePresent});syncAuthoredFlameSources();pruneSceneGroups();return;}
+  removeSceneObjectInternal(id,{recordHistory:false,preserveForMembershipHistory:true});
+}
+async function writeSelectionMembershipUnchecked(value){
+  return sceneMembershipBatch.apply(value);
+}
+async function writeSelectionMembership(raw){return sceneMembershipBatch.write(raw);}
 function removeSelectedSceneObjects(){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
-  assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
-  const before=checkSelectionMembership(readSelectionMembership());
-  if(ids.some(id=>!before.objects.some(record=>record.id===id)))throw Error('Scene member has no retained source; close its owning experiment to remove it');
-  for(const id of ids)sceneMembership.retainForHistory(id,'@selection-membership');
-  for(const id of ids)detachSelectionMember(id);
-  clearActiveSceneObjectSelection();
-  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
-  setInfo(`Removed ${ids.length} selected · Undo restores`);return true;
+  assertSceneConstructionAvailable();const ids=sceneSelectionMembers();
+  const removed=sceneMembershipBatch.remove(ids);
+  if(removed)setInfo(`Removed ${ids.length} selected · Undo restores`);return removed;
 }
 // Separate (P) and Slice (K) in Edit Mode split the edited object in two. Both pieces are stored
 // as content-addressed derived GLBs first; then one membership edit swaps the original for them,
@@ -25890,23 +25844,7 @@ async function originToPolySelection(){
 function duplicateSelectedSceneObjects({interactive=false}={}){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
-  if(members.some(id=>!canDuplicateObject(workingScene.objects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
-  const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
-  try{
-    for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);sceneMembership.retainForHistory(copy,'@selection-membership');}
-    for(const id of roots){
-      if(id.startsWith('@group:')){const group=workingScene.groups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
-      else newRoots.push(copies.get(id));
-    }
-    setSceneSelection(newRoots,newRoots.at(-1));
-  }catch(error){for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
-  const complete=({commit})=>{
-    scenePlacementTools.edits.discard(entry=>entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>newRoots.includes(id)||[...copies.values()].includes(id))||[...copies.values()].includes(entry.id));
-    if(commit)scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Duplicate ${members.length} selected`);
-    else{for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();}
-  };
-  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
-  else complete({commit:true});return newRoots;
+  return sceneMembershipBatch.duplicateSelection(roots,members,{interactive,start:(mode,complete)=>scenePlacementTools.start(mode,complete)});
 }
 function groupSelectedObjects(label='Group'){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');

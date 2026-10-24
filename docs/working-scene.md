@@ -49,9 +49,12 @@ selection recovery. Ordinary imports, Workbench registration and authored
 camera/light/procedural mounts consume the same admission operation.
 
 The composition page still connects domain adapters, render invalidation and UI
-projection. Compound selection reconstruction and whole-scene
-replacement remain page orchestration; this service does not extract those
-remaining application operations. `replaceObjects` and `clearMembership`
+projection. Whole-scene replacement remains page orchestration. Compound authored edits
+use `scene-membership-batch.mjs`: capture/validation, multi-removal, group and
+selection duplication, rollback and post-await topology reconciliation. It
+reuses individual reconstruction, including typed light/camera attachments.
+The page supplies domain property application and simulation-context recovery;
+live-only roots remain under their session owners. `replaceObjects` and `clearMembership`
 are low-level operations for that composition layer; callers must also restore
 groups/selection and perform the applicable domain teardown. They do not dispose
 resources or reconstruct evolved simulation state. The established public

@@ -1,6 +1,6 @@
 // kaminos-test: node
 import {resolveSceneMembershipTopology} from '../scene-membership-history.mjs';
-import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
+import {sceneContext,runInSceneContext,composePageMembershipBatch} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {checkedRepetition} from '../scene-repetition.mjs';
@@ -27,6 +27,7 @@ test('actual deletion and membership Undo/Redo preserve a surviving source with 
  h.writeAuthoredFlameEmitterPose=()=>{if(h.projectAuthoredFlameSourceControls)h.projectAuthoredFlameSourceControls();h.applyFlameEmitterPose(pose);h.syncAuthoredFlameSources();};
  const snapshot=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),groups:[],selection:{ids:[],activeId:null},domain:[0,0,0],domainFollowSource:false});
  const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@members',{read:snapshot,write:h.writeSelectionMembershipUnchecked,check:v=>v});
+ await composePageMembershipBatch(h,html);
  const before=snapshot();h.detachSelectionMember('flame-emitter');edits.recordApplied('@members',before,snapshot(),'Remove source');assert.equal(b.emission.settings['volume-immersed-fuel'].value,.8);assert.equal(published.at(-1)[0][1],.8);
  await edits.undo();assert.equal(h.sceneObjects.length,2);assert.equal(h.sceneObjects[1].emission.settings['volume-immersed-fuel'].value,.8);
  await edits.redo();assert.equal(h.sceneObjects.length,1);assert.equal(h.sceneObjects[0].emission.settings['volume-immersed-fuel'].value,.8);
@@ -51,6 +52,7 @@ for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`members
  h.checkedRepetition=checkedRepetition;h.resolveSceneMembershipTopology=resolveSceneMembershipTopology;h.readSelectionMembership=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),liveIds:[],groups:h.sceneGroups||[]});sceneContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose','selectionRootState'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
  const snapshot=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),groups:[],selection:{ids:[...selected],activeId:selected.at(-1)??null},domain:[0,0,0],domainFollowSource:false});
  const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@members',{read:snapshot,write:h.writeSelectionMembershipUnchecked,check:v=>v});
+ await composePageMembershipBatch(h,html);
  const before=snapshot(),expected=flameSourceInputs(before.objects,{controls:shared});for(const id of removed)h.detachSelectionMember(id);h.clearActiveSceneObjectSelection();edits.recordApplied('@members',before,snapshot(),'Remove sources');
  await edits.undo();assert.equal(h.authoredFlamePresent,true,'Undo must restore source presence');assert.deepEqual(h.sceneObjects.map(o=>o.object.pose),poses,'Undo must restore each actual source pose');assert.deepEqual(published.at(-1),expected,'Undo must republish restored domain-space sources');
  await edits.redo();assert.equal(h.sceneObjects.length,2-removed.length);assert.equal(h.authoredFlamePresent,removed.length===1);assert.equal(published.at(-1).length,2-removed.length);
