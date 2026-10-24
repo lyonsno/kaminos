@@ -57,7 +57,8 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
   async function invoke(routeFactory, run, { profile, phase, tag, shape, tensors, roles, outputRoles, extra = {}, weightsHash }) {
     onProgress(phase);
     const kernel = { profile, commit };
-    const route = routeFactory({ model, kernel, ...(shape ? { shape } : {}) });
+    const route = routeFactory({ model, kernel, ...(shape ? { shape } : {}),
+      ...(extra.captureIntermediateReadbacks === undefined ? {} : { captureIntermediateReadbacks: extra.captureIntermediateReadbacks }) });
     const inputs = {};
     for (const [role, value, shape] of roles) inputs[role] = { artifactId: `${phase}:${role}:${tag}`,
       sha256: typeof value === 'string' ? value : await sha256Bytes(value), ...(shape ? { shape } : {}) };

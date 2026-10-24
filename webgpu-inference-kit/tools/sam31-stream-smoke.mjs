@@ -55,6 +55,7 @@ export async function runStreamSmoke(options) {
     server = createServer(async (request, response) => {
       try {
         const url = new URL(request.url, 'http://localhost');
+        if (url.pathname === '/favicon.ico') { response.writeHead(204); response.end(); return; }
         if (request.method === 'POST' && /^\/artifact\/[a-zA-Z0-9_.-]+$/.test(url.pathname)) {
           await pipeline(request, createWriteStream(resolve(out, url.pathname.split('/').at(-1)), { flags: 'wx' }));
           response.end('stored'); return;

@@ -60,5 +60,14 @@ try {
       assert.equal(existsSync(join(directory, 'report.json')), false, 'rejected output evidence remains untouched');
     }
   }
+  await writeFile(join(temp, 'sequence.json'), JSON.stringify({ frames: [0, 1, 2].map(index => ({ sha256: `fixture:${index}` })) }));
+  const startup = spawnSync(process.execPath, [fileURLToPath(moduleUrl), '--out', join(temp, 'http-startup'),
+    '--model', temp, '--sequence', temp, '--chrome', process.execPath,
+    '--playwright', fileURLToPath(new URL('./fixtures/sam31-stream-startup-browser.mjs', import.meta.url))],
+  { env: { ...process.env, EPISTAXIS_JOB_PRIMARY_OUTPUT: join(temp, 'http-startup-primary.json') }, encoding: 'utf8' });
+  assert.equal(startup.status, 1, 'the simulated browser must never count as inference evidence');
+  const startupReport = JSON.parse(await readFile(join(temp, 'http-startup-primary.json'), 'utf8'));
+  assert.match(startupReport.error, /startup-http-fixture-stop/, 'ordinary browser icon requests must not create a spurious missing-resource failure');
+  assert.deepEqual(startupReport.frames, []);
 } finally { await rm(temp, { recursive: true, force: true }); }
 console.log('Sequential SAM smoke rejects stale, partial, nonfinite and fallback frame evidence');
