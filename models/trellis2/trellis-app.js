@@ -30,7 +30,7 @@ export async function createTrellisApp({appGpu,session:providedSession,foregroun
     throw Error('TRELLIS needs an application session on the same device and queue');
   if(appGpu&&(appGpu.queue!==queue||typeof appGpu.beginRun!=='function'))throw Error('TRELLIS needs the actual app foreground owner');
   if(!appGpu&&(!foreground||foreground.device!==device||foreground.queue!==queue))throw Error('TRELLIS needs the session host foreground service');
-  let destroyed=false,fatal=null,closing=null,resources={},settled=true,activeSignal,modelFailure;
+  let destroyed=false,fatal=null,closing=null,resources={},settled=true,foregroundHeld=false,activeSignal,modelFailure;
   const assertOpen=()=>{if(destroyed)throw Error('TRELLIS app destroyed');if(fatal)throw fatal;
     if(session.snapshot().status!=='active')throw Error('TRELLIS session is not active');};
   const held=error=>Object.assign(Error(`TRELLIS GPU route was not released: held (${error.message})`,{cause:error}),{gpuRouteHeld:true});
@@ -38,11 +38,15 @@ export async function createTrellisApp({appGpu,session:providedSession,foregroun
   // during a frame boundary must be observed before a following GPU submission.
   const frames={async beginRun(runId,options){
     const run=await(appGpu?appGpu.beginRun(runId,options):foreground.beginRun(runId,options));
+    const finish=async()=>{
+      try{return await run.finish();}
+      catch(error){foregroundHeld=true;throw held(error);}
+    };
     if(run?.routeId!==routeId||!run.foregroundOpportunities||typeof run.withForeground!=='function'||typeof run.finish!=='function'){
       await run?.finish?.();throw Error('application foreground run must carry the actual TRELLIS model route identity');
     }
     const opportunities=run.foregroundOpportunities;
-    return {withForeground:run.withForeground,finish:run.finish,foregroundOpportunities:{...opportunities,
+    return {withForeground:run.withForeground,finish,foregroundOpportunities:{...opportunities,
       async serviceAtBoundary(boundary){const receipt=await opportunities.serviceAtBoundary(boundary);checkSignal(activeSignal);return receipt;}}};
   }};
   // A failed queue fence must not make unregisterRoute dispose resident model
@@ -51,7 +55,7 @@ export async function createTrellisApp({appGpu,session:providedSession,foregroun
     unregisterRoute(id){if(id===routeId&&!settled)throw held(Error('GPU settlement is unproved'));return session.unregisterRoute(id);}};
   const runner=createWebGpuApplicationRunner({session:lifetimeSession,foreground:frames,routeId,label:'TRELLIS generation',
     phase:'generating',runtimeLabel:'trellis-app',scheduling,assertOpen,getError:()=>fatal,
-    onFatal:error=>{fatal=settled?error:held(error);},
+    onFatal:error=>{fatal=settled&&!foregroundHeld?error:held(error);},
     prepare:async signal=>{activeSignal=signal;},
     async execute(options,schedule){
       if(!schedule)throw Error('TRELLIS requires cooperative application execution');
