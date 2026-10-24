@@ -24,5 +24,13 @@ try{
   const v=report.variants.filter(v=>v.name===name);assert.equal(new Set(v.map(v=>v.dataSHA256)).size,1);assert.equal(new Set(v.map(v=>v.count)).size,1);assert.equal(new Set(v.map(v=>v.footprintSHA256)).size,3);
  }
  assert.deepEqual(fs.readFileSync(out+'/source-1.000/surfels.f32'),Buffer.from(rows.buffer));
+ // Connectivity can make the adaptive target unattainable: preserve both
+ // triangles, but do not label one uniform sample versus two adaptive as equal.
+ const disconnected=new Float32Array([[0,0,0],[.0004,0,0],[0,0,.0004],[.001,0,.001],[.0014,0,.001],[.001,0,.0014]].flatMap(p=>[...p,0,1,0,.2,.4,.1,0,.7,1]));
+ const faces=new Uint32Array([0,1,2,3,4,5]);
+ fs.writeFileSync(source+'/surfels.f32',Buffer.from(disconnected.buffer));fs.writeFileSync(source+'/triangles.u32',Buffer.from(faces.buffer));
+ fs.writeFileSync(source+'/report.json',JSON.stringify({...meta,count:6,sourceCount:6,dataSHA256:hash(Buffer.from(disconnected.buffer)),triangles:{file:'triangles.u32',count:2,sha256:hash(Buffer.from(faces.buffer))}}));
+ const unequal=path.join(root,'unequal'),u=run(source,unequal);assert.equal(u.status,0,u.stdout+u.stderr);
+ assert.deepEqual(JSON.parse(fs.readFileSync(unequal+'/report.json')).reducedComparison,{uniformCount:1,adaptiveCount:2,equalCount:false});
  console.log('Wrong source rejects with durable report; aliases preserved; scale variants keep identical samples');
 }finally{fs.rmSync(root,{recursive:true});}
