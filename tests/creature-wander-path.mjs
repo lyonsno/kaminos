@@ -54,3 +54,12 @@ for(const offset of [0,.01,.02]){
  assert.ok(Math.abs(travel-1)<.001,'Arc-distance inversion changed actual geometric source-paced travel: '+travel);
 }
 console.log('Wander follows source distance, stays in its area, reconstructs and redirects without teleporting');
+const bounded=createWanderPath(input),game=createWanderPath(input),goal=[40,50];
+bounded.setDestination(goal);assert.ok(inside(bounded.read().target,area),'Ordinary destinations retain the authored boundary');
+game.setDestination(goal,{constrainToArea:false});assert.deepEqual(game.read().target,goal);
+game.advance(2);const continued=createWanderPath({snapshot:game.snapshot()});
+continued.setArea(moved);assert.deepEqual(continued.read().target,goal,'Area edits must preserve the explicit game destination policy');
+close(continued.advance(100).position,goal,'Restored unbounded goal was clipped');
+continued.setDestination([100,-20]);assert.ok(inside(continued.read().target,moved),'Ordinary destination call restores area constraint');
+assert.throws(()=>game.setDestination(goal,{constrainToArea:'false'}),/constraint/);
+assert.throws(()=>createWanderPath({snapshot:{...game.snapshot(),constrainDestination:'false'}}),/constraint/);

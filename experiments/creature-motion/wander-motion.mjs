@@ -99,5 +99,5 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;return read();
  }
  function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,contactRate,travel,path:path.snapshot()};}
- return Object.freeze({frame,read,advance,contact,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
+ return Object.freeze({frame,read,advance,contact,seek,setDestination:(next,options)=>path.setDestination(next,options),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
 }

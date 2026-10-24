@@ -159,7 +159,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(!same){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
   catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}
  }
- function presentWander(delta,playing,physicalSeconds=delta){
+ function presentWander(delta,playing,from=clock/1000-delta,physicalSeconds=delta){
   if(!syncArea())return read();
   if(attention&&encounterContext){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);
@@ -171,9 +171,13 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
    const intent=steering.update({time:clock/1000,deltaSeconds:delta,position,arrived:path.status==='arrived',attention:attention?.read()??null});
    if(!intent||typeof intent.source!=='string'||!intent.source||typeof intent.hold!=='boolean'||intent.destination!==null&&(!Array.isArray(intent.destination)||intent.destination.length!==3||!intent.destination.every(Number.isFinite)))throw Error('Invalid game steering intent');
+   if(intent.motionStart!==undefined){
+    if(!Number.isFinite(intent.motionStart)||intent.motionStart<from||intent.motionStart>clock/1000)throw Error('Invalid game steering motion interval');
+    moving=attention?.motionSeconds(intent.motionStart,clock/1000)??clock/1000-intent.motionStart;
+   }
    const local=intent.destination===null?null:frame.worldToLocal(new THREE.Vector3(...intent.destination));
-   const next=local?[local.x,local.z]:null,old=wander.snapshot().path.destination??null;
-   if(next===null?old!==null:!old||next.some((v,i)=>Math.abs(v-old[i])>1e-8))wander.setDestination(next);
+   const next=local?[local.x,local.z]:null,prior=wander.snapshot().path,old=prior.destination??null;
+   if(next===null?old!==null:!old||prior.constrainDestination!==false||next.some((v,i)=>Math.abs(v-old[i])>1e-8))wander.setDestination(next,{constrainToArea:false});
    if(intent.hold)moving=0;
   }else if(attention&&chosenInputs.attention.engage===true){
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
@@ -228,7 +232,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{
     if(wander){
      if(player.read().status==='removed'){unsubscribe();return;}
-     presentWander(motionDelta,true,deltaSeconds);return;
+     presentWander(motionDelta,true,from,deltaSeconds);return;
     }
     if(motionDelta===0)player.represent();else player.tick(motionClock);
     stepFlesh(deltaSeconds);
@@ -382,7 +386,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
-   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=input.observation??clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;presentWander(delta,false,input.seconds);if(!input.observation)encounterContext?.finishStep?.();host.scene.refreshPresentation?.(asset);return read();}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=input.observation??clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;presentWander(delta,false,from,input.seconds);if(!input.observation)encounterContext?.finishStep?.();host.scene.refreshPresentation?.(asset);return read();}),
    flesh:operation('flesh',input=>{if(!chosenInputs.flesh||typeof input?.enabled!=='boolean')throw Error('Physical creature and boolean response required');runtime.flesh.setEnabled(input.enabled);chosenInputs={...chosenInputs,flesh:{...chosenInputs.flesh,enabled:input.enabled}};session.redraw();return read();}),
    physicalSnapshot:operation('physicalSnapshot',async()=>{if(player.read().status==='playing')throw Error('Pause the creature before capturing exact physical geometry');await runtime.flesh.snapshot();return read();}),
    encounterBody:()=>contactState(),

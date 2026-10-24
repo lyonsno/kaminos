@@ -49,10 +49,11 @@ export function chooseWanderZone(areas,draw){
  return areas.findLast(row=>row.preference>0);
 }
 export function createWanderPath({area,areas,position,direction,seed=1,snapshot}={}) {
- let rng,points,offset=0,total=0,entry=false,segments=0,lookup,fallback,zoneId=null,destination=null;
+ let rng,points,offset=0,total=0,entry=false,segments=0,lookup,fallback,zoneId=null,destination=null,constrainDestination=true;
  if(snapshot!==undefined) {
   if(snapshot?.schema!=='kaminos.creature-wander-path.v1'||!Number.isInteger(snapshot.rng)||snapshot.rng<0||snapshot.rng>0xffffffff||!Array.isArray(snapshot.points)||snapshot.points.length!==3||!snapshot.points.every(finitePair)||!Number.isFinite(snapshot.offset)||snapshot.offset<0||!Number.isFinite(snapshot.distance)||snapshot.distance<0||typeof snapshot.entry!=='boolean'||!Number.isSafeInteger(snapshot.segments)||snapshot.segments<0)throw Error('Invalid wander snapshot or random state');
   if(snapshot.destination!==undefined&&snapshot.destination!==null&&!finitePair(snapshot.destination))throw Error('Invalid destination snapshot');destination=snapshot.destination?pair(snapshot.destination):null;
+  if(snapshot.constrainDestination!==undefined&&typeof snapshot.constrainDestination!=='boolean')throw Error('Invalid destination constraint');constrainDestination=snapshot.constrainDestination??true;
   area=validateArea(snapshot.area);rng=snapshot.rng;points=copy(snapshot.points);offset=snapshot.offset;total=snapshot.distance;entry=snapshot.entry;segments=snapshot.segments;fallback=normalized(snapshot.direction);
   if(snapshot.areas!==undefined){areas=validateAreas(snapshot.areas);zoneId=snapshot.zoneId;if(!areas.some(row=>row.id===zoneId))throw Error('Snapshot has an unknown zone');}
   lookup=curveTable(points,area,Boolean(destination));if(offset>lookup.length)throw Error('Wander snapshot distance exceeds current curve');
@@ -114,15 +115,16 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   }
   total+=distance-remaining;return read();
  }
- function setDestination(value) {
+ function setDestination(value,{constrainToArea=true}={}) {
   if(value!==null&&!finitePair(value))throw Error('Destination must be a finite pair or null');
-  if(JSON.stringify(value)===JSON.stringify(destination))return read();
-  const current=sample();destination=value?pair(value):null;
+  if(typeof constrainToArea!=='boolean')throw Error('Destination area constraint must be boolean');
+  if(JSON.stringify(value)===JSON.stringify(destination)&&constrainToArea===constrainDestination)return read();
+  const current=sample();destination=value?pair(value):null;constrainDestination=constrainToArea;
   initialize(current.position,current.direction);
   if(destination){
    const q=localPoint(destination,area),n=Math.max(1,length(q)),c=Math.cos(area.yaw),s=Math.sin(area.yaw);
    const x=q[0]/n*area.radii[0],z=q[1]/n*area.radii[1];
-   const end=[area.center[0]+c*x-s*z,area.center[1]+s*x+c*z];
+   const end=constrainDestination?[area.center[0]+c*x-s*z,area.center[1]+s*x+c*z]:pair(destination);
    // Reuse the in-area tangent handle, shortened for a nearby destination.
    const reach=length(minus(end,current.position)),handle=length(minus(points[1],points[0]));
    points=[pair(current.position),current.position.map((v,i)=>v+current.direction[i]*Math.min(handle,reach*.4)),end];
@@ -132,7 +134,7 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   segments++;return read();
  }
  function setArea(value) {
-  const next=validateArea(value),current=sample();area=next;const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal);return read();
+  const next=validateArea(value),current=sample();area=next;const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal,{constrainToArea:constrainDestination});return read();
  }
  function redirect(value){
   const heading=normalized(value),current=sample(),end=pair(points[2]),reach=length(minus(end,current.position));
@@ -156,7 +158,7 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   offset=0;total=distance;fallback=heading;entry=!inside(position,area);segments++;
   lookup=curveTable(points,area,true);return read();
  }
- function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal);return read();}
- function save() {return {schema:'kaminos.creature-wander-path.v1',...(destination?{destination:pair(destination)}:{}),...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
+ function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal,{constrainToArea:constrainDestination});return read();}
+ function save() {return {schema:'kaminos.creature-wander-path.v1',...(destination?{destination:pair(destination),constrainDestination}:{}),...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
  return Object.freeze({read,advance,redirect,contact,setArea,setAreas,setDestination,snapshot:save});
 }

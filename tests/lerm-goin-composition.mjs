@@ -26,4 +26,22 @@ goin.visible=true;entry.operations.moveGoin({position:[-5,0,5]});entry.operation
 for(const tick of ticks)tick({deltaSeconds:1/30});assert.equal(entry.read().task.phase,'approaching');
 await entry.dispose();assert.equal(ticks.size,0);assert.equal(scene.children.length,0);assert.equal(opens,closes);
 assert.throws(()=>entry.operations.interruptTest(),/disposed/);
+const outside=await createGoinPursuit({host,inputs},{loadSources:async()=>data});
+outside.operations.moveGoin({position:[0,0,30]});
+for(let i=0;i<4;i++)outside.operations.advance({seconds:1});
+assert.equal(outside.read().task.phase,'at-goin','A live game destination must not be clipped to the idle wander area');
+assert.ok(Math.abs(outside.read().creature.action.motion.path.position[1]-30)<1e-9);
+await outside.dispose();
+async function interruptedJourney(parts){
+ const item=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,0,100]}}},{loadSources:async()=>data});
+ item.operations.interruptTest({seconds:1});
+ for(const seconds of parts)item.operations.advance({seconds});
+ const result=item.read();await item.dispose();return result;
+}
+assert.equal((await interruptedJourney([.5,.5])).creature.action.motion.path.distance,0,'No travel before interruption expiry');
+assert.equal((await interruptedJourney([1])).creature.action.motion.path.distance,0,'Exact expiry must not consume held time');
+const spanning=await interruptedJourney([1.25]),partitioned=await interruptedJourney([.5,.5,.25]);
+assert.ok(Math.abs(spanning.creature.action.motion.path.distance-7.5)<1e-9,'Only the quarter second after expiry may move');
+assert.ok(Math.abs(spanning.creature.action.motion.path.distance-partitioned.creature.action.motion.path.distance)<1e-9,'Interruption travel must not depend on frame partition');
+assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 console.log('Live goin composition moves, interrupts, reacquires current targets and releases every owned session');

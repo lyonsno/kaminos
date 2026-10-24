@@ -16,12 +16,12 @@ export function createGoinTask({target,arrivalRadius=.35}={}){
   },
   update({time:next,position}){
    if(!Number.isFinite(next)||next<time||!point(position))throw Error('Goin task requires monotonic time and a world position');
-   time=next;const observed=target();
+   const motionStart=Math.min(next,Math.max(time,until));time=next;const observed=target();
    if(observed!==null&&(!observed||typeof observed.id!=='string'||!observed.id||!point(observed.position)))throw Error('Invalid live goin observation');
    const destination=observed?.position??null,distance=destination?Math.hypot(position[0]-destination[0],position[2]-destination[2]):null;
    const phase=time<until?'interrupted':!observed?'waiting-target':distance<=arrivalRadius?'at-goin':'approaching';
    state={phase,target:observed?.id??null,destination:destination?[...destination]:null,distance};
-   return {source:'lerms.goin-task.v1',destination:state.destination,hold:phase!=='approaching'};
+   return {source:'lerms.goin-task.v1',destination:state.destination,hold:phase!=='approaching',motionStart};
   }
  };
 }
