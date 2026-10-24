@@ -152,7 +152,7 @@ export default {
     boundaryOriginals.set(node.key,originalFaces);
     let anchorFaces=edit?.anchorFaces??originalFaces;
     if(variantKey!==undefined){if(variantKey==='original')anchorFaces=originalFaces;else{const variant=result.candidateBranches.find(c=>c.key===variantKey&&c.status==='boundary-variant'&&result.candidateBranches[c.variantOf]?.key===node.key);if(!variant)throw Error('Choose an available attachment boundary');anchorFaces=Array.from(variant.faces);}offsetFraction=0;}
-    const protectedKeys=[...new Set([...[...fixedCuts,...requestedBoundaries.values()].filter(c=>c.key!==node.key).map(c=>c.key),...view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).map(p=>result.hierarchy.nodes[p.nodeId].key)])];
+    const protectedKeys=[...new Set([...[...fixedCuts,...requestedBoundaries.values()].filter(c=>c.key!==node.key).map(c=>c.key),...view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).flatMap(p=>{const keys=[];for(let n=result.hierarchy.nodes[p.nodeId];n.id!==node.id;n=result.hierarchy.nodes[n.parent])if(n.kind==='branch')keys.push(n.key);return keys;})])];
     return {protectedKeys,key:node.key,anchorFaces:Array.from(anchorFaces),originalFaces:Array.from(originalFaces),variantKey:variantKey??edit?.variantKey??'original',offsetFraction};
    };
    const operations={
