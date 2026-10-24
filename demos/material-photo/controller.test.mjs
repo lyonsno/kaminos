@@ -62,7 +62,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
     setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
   }
-  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,depth:new Float32Array(16).fill(1),normals:new Float32Array(48).fill(1),routeResult:{ receipt } }; } }
+  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;behavior.onGeometryRun?.();await behavior.geometryGate;return { width:4,height:4,depth:new Float32Array(16).fill(1),normals:new Float32Array(48).fill(1),routeResult:{ receipt } }; } }
   const kit = {
     requestBrowserWebGpuDevice: async () => { behavior.deviceRequests++; if (behavior.failDevice) throw Error('Transient setup failure'); return { device, adapter:{}, backendIdentity:{ kind:'webgpu-local' } }; },
     createWebGpuInferenceSession: async () => session,
@@ -73,7 +73,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
     createSuperMatAdapter: async options => {behavior.profile=options;behavior.onLoad?.();if(behavior.loadGate)await behavior.loadGate;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;behavior.inputPixel=input.image.data[0];behavior.onRun?.();if(behavior.runGate)await behavior.runGate;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
   const supermatApp={async createSuperMatApp(options){
     behavior.apps??=[];behavior.apps.push(options);let adapter;
-    return {get adapter(){return adapter;},async load(onProgress){
+    return {device,session,foreground,get adapter(){return adapter;},async load(onProgress){
       if(behavior.failLoad)throw Error('Material load failure');
       adapter??=await supermat.createSuperMatAdapter({...options.adapterOptions,weightsUrl:options.weightsUrl,onProgress});
       return adapter;
@@ -81,20 +81,21 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
   }};
   const mogeApp={async createMoGeApp(options){
     behavior.mogeApps??=[];behavior.mogeApps.push(options);const model=new MoGe();
-    return {model,async load(){if(behavior.failGeometryLoad)throw Error('Geometry load failure');await model.init();},
+    return {device,session,foreground,model,async load(){if(behavior.failGeometryLoad)throw Error('Geometry load failure');await model.init();},
       async infer({image}){return model.run(image);}};
   }};
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
   const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search}, window:{}, URL:BlobURL, URLSearchParams,
-    OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
+    OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob, AbortController, DOMException,
     createImageBitmap:async blob=>{if(behavior.bitmapGate)await behavior.bitmapGate;return {width:4,height:4,pixel:blob.pixel,close(){}};},
     fetch:async url => behavior.failImage?{ok:false,status:404}:behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
     setInterval:()=>0, clearInterval(){}, requestAnimationFrame:callback=>queueMicrotask(()=>callback(0)),
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier.endsWith('/material-photo-operation.js'))return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'),{context});
     if(specifier==='./sample-cutouts.js')return new vm.SyntheticModule(['createSampleCutout'],function(){this.setExport('createSampleCutout',(sample,width,height)=>['orb','bag'].includes(sample)?{sample,width,height,source:'hand-authored-example-cutout'}:null);},{context});
     if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE','SUPERMAT_WEIGHTS_URL'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);this.setExport('SUPERMAT_WEIGHTS_URL',weightsUrl);},{context});
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
@@ -152,6 +153,18 @@ test('a SuperMat app load failure retries without replacing the shared renderer 
   c.behavior.failLoad=false;await c.actions.infer();
   assert.equal(c.behavior.apps?.length,1);assert.equal(c.behavior.viewer,viewer);
   assert.equal(c.behavior.deviceRequests,1);assert.equal(c.state.status,'done');
+});
+test('stopping the composed photograph operation keeps the previous display and prevents material inference',async()=>{
+  const c=await controller({examples:true});
+  assert.equal(typeof c.actions.stopInference,'function','the consumer must expose the composed operation stop');
+  let enter,release;const entered=new Promise(r=>{enter=r;});
+  c.behavior.geometryGate=new Promise(r=>{release=r;});c.behavior.onGeometryRun=enter;
+  const previous=c.behavior.viewer.maps,run=c.actions.infer();await entered;
+  c.actions.stopInference();release();await run;
+  assert.equal(c.state.job.status,'cancelled');assert.equal(c.behavior.materialRuns,0);
+  assert.equal(c.behavior.viewer.maps,previous);
+  await c.actions.infer();assert.equal(c.state.status,'done');
+  assert.equal(c.behavior.deviceRequests,1);
 });
 test('render failure survives model completion, example selection and cached restoration',async()=>{
   const c=await controller({examples:true});let release,entered;
