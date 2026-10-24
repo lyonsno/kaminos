@@ -4,12 +4,14 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const directory = await mkdtemp(join(tmpdir(), 'sam31-controls-'));
 try {
   const checkpoint = join(directory, 'bad.pt'), output = join(directory, 'output');
   await writeFile(checkpoint, 'not an official checkpoint');
-  const run = spawnSync('python3', ['webgpu-inference-kit/tools/sam31-stream-controls.py', '--checkpoint', checkpoint, '--out', output],
+  const run = spawnSync('python3', [fileURLToPath(new URL('../tools/sam31-stream-controls.py', import.meta.url)), '--checkpoint', checkpoint, '--out', output],
     { encoding: 'utf8', env: { ...process.env, EPISTAXIS_JOB_PRIMARY_OUTPUT: join(directory, 'primary.json') } });
+  assert.ifError(run.error);
   assert.notEqual(run.status, 0);
   const report = JSON.parse(await readFile(join(output, 'controls.json'), 'utf8'));
   assert.equal(report.status, 'failed');
