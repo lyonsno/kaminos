@@ -11,8 +11,9 @@ class SurfaceMaterial extends MeshPhysicalNodeMaterial {
  }
  setupLightingModel(builder){const model=super.setupLightingModel(builder);model.transmission=false;return model;}
 }
-export function createDeferredSurfaceSplats(data,meta,footprints){
+export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance){
  if(!(data instanceof Float32Array)||meta.stride!==12||!Number.isSafeInteger(meta.count)||meta.count<1||data.length!==meta.count*12||!data.every(Number.isFinite)||!(meta.radius>0)||!(footprints instanceof Float32Array)||footprints.length!==meta.count*8||!footprints.every(Number.isFinite))throw Error('Invalid surface splat payload');
+ if((meta.adaptive||depthTolerance!==undefined)&&(!(depthTolerance instanceof Float32Array)||depthTolerance.length!==meta.count||!depthTolerance.every(v=>Number.isFinite(v)&&v>0)))throw Error('Invalid per-splat depth tolerance');
  for(let i=0;i<meta.count;i++)if(Math.hypot(...data.subarray(i*12+3,i*12+6))<1e-8||footprints[i*8+3]<=0||footprints[i*8+7]<=0)throw Error('Invalid splat frame');
  const root=new Group();root.name='Deferred TRELLIS surface splats';
  const populations=[[],[]];for(let i=0;i<meta.count;i++)populations[data[i*12+11]<.98?1:0].push(i);
@@ -23,13 +24,13 @@ export function createDeferredSurfaceSplats(data,meta,footprints){
  for(let p=0;p<2;p++){
   const ids=populations[p];if(!ids.length)continue;
   const plane=new PlaneGeometry(2,2),geometry=new InstancedBufferGeometry();geometry.index=plane.index.clone();geometry.setAttribute('position',plane.attributes.position.clone());geometry.setAttribute('uv',plane.attributes.uv.clone());plane.dispose();geometry.instanceCount=ids.length;
-  const packed=new Float32Array(ids.length*20);
-  ids.forEach((id,j)=>{packed.set(data.subarray(id*12,id*12+12),j*20);packed.set(footprints.subarray(id*8,id*8+8),j*20+12);for(let c=0;c<3;c++){const v=Math.min(1,Math.max(0,packed[j*20+6+c]));packed[j*20+6+c]=v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}});
-  const buffer=new InstancedInterleavedBuffer(packed,20);
-  for(const [name,width,offset]of [['center',3,0],['sourceNormal',3,3],['sourceColor',3,6],['sourceMetal',1,9],['sourceRough',1,10],['sourceOpacity',1,11],['axisU',4,12],['axisV',4,16]])geometry.setAttribute(name,new InterleavedBufferAttribute(buffer,width,offset));
+  const packed=new Float32Array(ids.length*21);
+  ids.forEach((id,j)=>{packed.set(data.subarray(id*12,id*12+12),j*21);packed.set(footprints.subarray(id*8,id*8+8),j*21+12);packed[j*21+20]=depthTolerance?.[id]??meta.radius*1.5;for(let c=0;c<3;c++){const v=Math.min(1,Math.max(0,packed[j*21+6+c]));packed[j*21+6+c]=v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}});
+  const buffer=new InstancedInterleavedBuffer(packed,21);
+  for(const [name,width,offset]of [['center',3,0],['sourceNormal',3,3],['sourceColor',3,6],['sourceMetal',1,9],['sourceRough',1,10],['sourceOpacity',1,11],['axisU',4,12],['axisV',4,16],['sourceTolerance',1,20]])geometry.setAttribute(name,new InterleavedBufferAttribute(buffer,width,offset));
   const nearest=new RenderTarget(1,1,{type:FloatType,minFilter:NearestFilter,magFilter:NearestFilter});
   const sums=new RenderTarget(1,1,{count:3,type:HalfFloatType,minFilter:NearestFilter,magFilter:NearestFilter,depthBuffer:false});
-  const tolerance=uniform(meta.radius*1.5),disc=uv().mul(2).sub(1),r2=disc.dot(disc);
+  const tolerance=attribute('sourceTolerance','float').mul(worldScale),disc=uv().mul(2).sub(1),r2=disc.dot(disc);
   const viewNormal=varying(transformNormalToView(attribute('sourceNormal','vec3').normalize())).mul(faceDirection).normalize();
   const nearSample=texture(nearest.texture,screenUV),weight=r2.mul(-4.5).exp();
   const sourcePosition=attribute('center','vec3').add(attribute('axisU','vec4').xyz.mul(attribute('axisU','vec4').w.mul(positionGeometry.x).mul(3))).add(attribute('axisV','vec4').xyz.mul(attribute('axisV','vec4').w.mul(positionGeometry.y).mul(3)));
@@ -57,7 +58,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints){
    const projected=endpoint.xy.div(endpoint.w).mul(.5).add(.5),coords=vec2(projected.x,projected.y.oneMinus()).clamp(.001,.999);
    return viewportOpaqueMipTexture(coords,parameters.z.mul(5)).rgb.mul(color);
   })();
-  layers.push({mesh,material,aoMaterial,geometry,nearest,sums,scenes,nearestMaterial,sumMaterial,tolerance,color,normal,parameters,transmitted,p,count:ids.length});
+  layers.push({mesh,material,aoMaterial,geometry,nearest,sums,scenes,nearestMaterial,sumMaterial,color,normal,parameters,transmitted,p,count:ids.length});
  }
  function apply(){
   ior.value=state.ior;thickness.value=state.thickness;
@@ -76,7 +77,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints){
   try{
    renderer.setMRT(null);renderer.setRenderObjectFunction(null);renderer.setClearColor(0,0);renderer.autoClear=false;renderer.opaque=true;renderer.transparent=true;
    const scale=new Vector3().setFromMatrixScale(root.matrixWorld);worldScale.value=Math.max(scale.x,scale.y,scale.z);
-   for(const l of layers){l.tolerance.value=meta.radius*1.5*worldScale.value;l.nearest.setSize(size.x,size.y);l.sums.setSize(size.x,size.y);
+   for(const l of layers){l.nearest.setSize(size.x,size.y);l.sums.setSize(size.x,size.y);
     for(const [i,target]of [l.nearest,l.sums].entries()){l.scenes[i].children[0].matrix.copy(root.matrixWorld);renderer.setRenderTarget(target);renderer.clear();if(i===1)zeroQuad.render(renderer);renderer.render(l.scenes[i],camera);}
    }
    updates++;key=next;
@@ -84,7 +85,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints){
  }
  for(const l of layers)l.mesh.onBeforeRender=prepare;
  apply();
- return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
+ return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',depthTolerance:depthTolerance?'per-splat':'uniform',layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
   if(disposed)throw Error('Surface splats disposed');const next={...state,...patch};if(!['glass','opaque','opacity','plain','normals'].includes(next.mode)||!Number.isFinite(next.ior)||next.ior<1||next.ior>2.5||!Number.isFinite(next.thickness)||next.thickness<0||next.thickness>1)throw Error('Invalid splat optics');state={mode:next.mode,ior:next.ior,thickness:next.thickness};apply();return this.read();
  },async inspectSurface(x,y){if(!lastRenderer||disposed)throw Error('Splats have not rendered');return Promise.all(layers.map(async l=>({glass:!!l.p,nearest:Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.nearest,x,y,1,1)),sums:await Promise.all(l.sums.textures.map(async(_,i)=>Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.sums,x,y,1,1,i),DataUtils.fromHalfFloat)))})));},
  dispose(){if(disposed)return;disposed=true;zeroMaterial.dispose();for(const l of layers){l.mesh.geometry.dispose();l.geometry.dispose();for(const m of [l.material,l.aoMaterial,l.nearestMaterial,l.sumMaterial])m.dispose();l.nearest.dispose();l.sums.dispose();}root.clear();}};
