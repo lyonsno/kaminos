@@ -60,6 +60,6 @@ The integration witness accepts `--url`, `--repo`, `--out`, `--browser` and
 Chromium/Chrome for Testing executable. It verifies the served checkout,
 captures empty/deposited/contact/restored frames, restores through a fresh page,
 rejects a mismatched checkpoint and deposits again. `--negative-unmounted yes`
-exercises failure after losing the mounted experiment. The report survives
+exercises failure after losing the mounted experiment; `--negative-pageerror yes` injects a browser failure while numerical operations remain functional. The report survives
 failure and the owned browser closes. This is a visual/integration witness,
 not a frame-budget benchmark.
