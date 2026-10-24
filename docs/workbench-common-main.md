@@ -35,8 +35,8 @@ Prefer a selected emitter with editable rate and direction over separate
 buttons for several hardcoded emissions. Prefer choosing a target and framing
 it through camera controls over a row of named camera-pose buttons. A useful
 preset can seed an editable setup; its initial values need not bound the
-operator's exploration. Use familiar sliders, numeric fields, toggles and
-selection tools for their corresponding values, with clear commands for actions.
+operator's exploration. Use shared number-drag controls, toggles and selection
+tools for their corresponding values, with clear commands for actions.
 Group controls by the work they support and expose details in context.
 
 A controlled fixture is appropriate when fixed geometry, timing or inputs are
@@ -48,6 +48,56 @@ without asking for a code change. Retain edits through the applicable scene,
 domain-state or recording service, and state the continuation actually supported.
 Choose flexibility that serves the next useful interaction; a generic framework
 is a separate investment.
+
+### Numeric Controls And Live Tuning
+
+Use `host.controls.installNumberDrag` for every adjustable numeric parameter;
+raw range sliders and standalone number fields are not the Kaminos interaction.
+The installer is the shared `installRelativeNumberDrag` from
+`scene-control-history.mjs`. It supplies relative dragging, click-to-type, Shift
+fine adjustment, formatted presentation and bounded range fill. Install it
+after attaching the input to the document:
+
+```js
+const label = document.createElement('label');
+const grip = document.createElement('span');
+grip.textContent = 'Roughness';
+const input = document.createElement('input');
+Object.assign(input, {type: 'number', className: 'transform-input',
+  min: '0', max: '1', step: 'any', value: String(value)});
+input.setAttribute('aria-label', 'Roughness');
+label.append(grip, input);
+root.append(label);
+const scrub = host.controls.installNumberDrag({input, grip, step: .01});
+// Keep scrub; call scrub.dispose() when the panel is retired.
+```
+
+Connect valid `input` events to the same `invoke` operation as agent calls.
+Treat temporarily blank, incomplete or invalid text as editing, not zero; restore
+the effective value on blur. Refresh from state without overwriting active text
+entry. Domain owners handle Escape/pointer-cancel restoration through their
+existing edit transaction or a captured starting value. The material study
+shows the basic live update pattern; the fracture experiment also shows
+debounced threshold updates and cancellation.
+
+For finite bounds the default drag scale spans the interval over 300 pixels;
+unbounded fields use `step` units per pixel. If a useful parameter neighborhood
+is much smaller than its legal interval, pass a positive `dragStep` in field
+units per pixel without narrowing the legal bounds. Shift gives another 10×
+precision. For example a 0–100 percent field used around 0.01 percent can use
+`step: .0001, dragStep: .0001`; direct typing still admits the full interval.
+Use integer steps for discrete levels, and preserve fractional input precision.
+
+Parameter-space tuning is automatic. Do not put an Apply/Update/Run button
+between an edit and its preview. Cheap changes can apply immediately; expensive
+updates may debounce and coalesce intermediate edits while preserving the newest
+complete settings. Reject an older result as soon as a newer request exists,
+including while that newer request is still debouncing. Show pending state and
+keep requested settings distinct from the settings of the displayed result.
+Release owned drags, timers and workers on disposal. Commands for consequential
+actions such as export or external generation are separate from reversible
+tuning. Exercise dragging, Shift, typed values, intermediate invalid input and
+editing during pending work in the actual mounted surface before handoff.
 
 ## Run The Small Example
 
