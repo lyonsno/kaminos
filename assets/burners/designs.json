@@ -1,0 +1,332 @@
+{
+  "purpose": "Burner geometry studies for operator comparison",
+  "units": "metres",
+  "integration": "Unbound assets. No simulation, scene-host, collision or active emission changes.",
+  "designs": [
+    {
+      "id": "crown-ring",
+      "name": "01 · Crown / ring hearth",
+      "description": "Twelve upward ports around an open centre. Removable bronze jet head on an annular plenum.",
+      "dimensions": [
+        0.4029627195642881,
+        0.1569999995753169,
+        0.421000000834465
+      ],
+      "bounds": {
+        "min": [
+          -0.201481359782144,
+          -2.2351741985060514e-11,
+          -0.17599999904632568
+        ],
+        "max": [
+          0.20148135978214407,
+          0.15699999955296517,
+          0.24500000178813933
+        ]
+      },
+      "openings": [
+        {
+          "name": "port-01",
+          "position": [
+            0,
+            0.157,
+            0.135
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-02",
+          "position": [
+            0.06749999999999999,
+            0.157,
+            0.11691342951089924
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-03",
+          "position": [
+            0.11691342951089922,
+            0.157,
+            0.06750000000000002
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-04",
+          "position": [
+            0.135,
+            0.157,
+            8.266365894244634e-18
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-05",
+          "position": [
+            0.11691342951089924,
+            0.157,
+            -0.06749999999999998
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-06",
+          "position": [
+            0.06749999999999999,
+            0.157,
+            -0.11691342951089924
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-07",
+          "position": [
+            1.653273178848927e-17,
+            0.157,
+            -0.135
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-08",
+          "position": [
+            -0.06749999999999996,
+            0.157,
+            -0.11691342951089925
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-09",
+          "position": [
+            -0.1169134295108992,
+            0.157,
+            -0.06750000000000006
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-10",
+          "position": [
+            -0.135,
+            0.157,
+            -2.4799097682733903e-17
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-11",
+          "position": [
+            -0.11691342951089922,
+            0.157,
+            0.06750000000000002
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        },
+        {
+          "name": "port-12",
+          "position": [
+            -0.06750000000000006,
+            0.157,
+            0.11691342951089918
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.006
+          }
+        }
+      ],
+      "file": "crown-ring.glb",
+      "bytes": 762580,
+      "sha256": "5c3025c41147a55cb1ec9cc722598d8d901279e87a1fa5ca4251de834f211e6e"
+    },
+    {
+      "id": "seam-rail",
+      "name": "02 · Seam / linear flame rail",
+      "description": "Long replaceable ribbon outlet. A narrow open slot, parallel lips and a recessed supply channel.",
+      "dimensions": [
+        0.6200000047683716,
+        0.1310000003762543,
+        0.23300000327825546
+      ],
+      "bounds": {
+        "min": [
+          -0.3100000023841858,
+          -1.862645142292063e-10,
+          -0.10000000149011612
+        ],
+        "max": [
+          0.3100000023841858,
+          0.1310000001899898,
+          0.13300000178813934
+        ]
+      },
+      "openings": [
+        {
+          "name": "ribbon-opening",
+          "position": [
+            0,
+            0.124,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "aperture": {
+            "shape": "rectangle",
+            "width": 0.58,
+            "depth": 0.018
+          }
+        }
+      ],
+      "file": "seam-rail.glb",
+      "bytes": 224580,
+      "sha256": "a4b55a1082d64566860975d7080cb2d895fef8b33af9482ba0f118a819e21f7f"
+    },
+    {
+      "id": "lance-nozzle",
+      "name": "03 · Lance / directional nozzle",
+      "description": "Tilted refractory mouth on a trunnion cradle. The open bore makes aiming and outlet direction explicit.",
+      "dimensions": [
+        0.2199999988079071,
+        0.2814815490768521,
+        0.22921608419240475
+      ],
+      "bounds": {
+        "min": [
+          -0.10999999940395355,
+          -2.682209020860027e-10,
+          -0.1192160847884512
+        ],
+        "max": [
+          0.10999999940395355,
+          0.2814815488086312,
+          0.10999999940395355
+        ]
+      },
+      "openings": [
+        {
+          "name": "nozzle-opening",
+          "position": [
+            0,
+            0.2556706137132799,
+            0.048991360289284934
+          ],
+          "direction": [
+            0,
+            0.819152044288992,
+            0.5735764363510462
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.037
+          }
+        }
+      ],
+      "file": "lance-nozzle.glb",
+      "bytes": 213972,
+      "sha256": "90e26d01f891005cf62813a956050b85da1ca8be338e297d73add55d3fd6c4b0"
+    }
+  ],
+  "comparison": {
+    "file": "burner-studies.glb",
+    "bytes": 1200184,
+    "sha256": "a6302b8f62a8bfd1f6b0086386f973a79e6a29bda154985f93622a2f3958398f"
+  }
+}

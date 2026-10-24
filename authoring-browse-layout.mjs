@@ -26,7 +26,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
   return margin*Math.max(size[1]/2/tanV,across/2/(tanV*aspect))+across/2;
 }
 
-const LABELS={'generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
+const LABELS={burners:'Burners','generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
 export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
   const byId=id=>document.getElementById(id);
