@@ -34,9 +34,20 @@ try{
  const asset=await page.request.get(new URL(report.initial.source,page.url()).href);report.assetDigest=createHash('sha256').update(await asset.body()).digest('hex');assert(asset.ok()&&report.assetDigest===object.sha256,'Wrong asset bytes');
  assert(report.initial.analysis.passes===7&&report.initial.analysis.cacheHit===false,'Seven-origin initial preparation missing');
  await invoke('frame');await capture('initial');
+ report.phase='human-selection';save();
+ assert(report.initial.hierarchy.nodes[report.initial.selected]?.kind==='component','Fresh page has no explicit body target for local controls');
+ assert(await page.getByRole('button',{name:'Keep together',exact:true}).isEnabled(),'Initial Keep together control unavailable');
+ const initialViewport=await page.locator('#viewport').boundingBox();
+ await page.mouse.click(initialViewport.x+initialViewport.width*click[0],initialViewport.y+initialViewport.height*click[1]);
+ report.humanPicked=await read();
+ assert(report.humanPicked.selected>=0&&report.humanPicked.hierarchy.nodes[report.humanPicked.selected].kind!=='patch','Canvas click strands local controls on a terminal surface patch');
+ assert(await page.getByRole('button',{name:'Keep together',exact:true}).isEnabled(),'Picked body has no working grouping control');
+ await capture('human-picked');
  report.phase='local-controls';save();
  const nested=report.initial.hierarchy.nodes.filter(n=>n.kind==='branch'&&n.children.length&&n.triangles>500).sort((a,b)=>b.triangles-a.triangles)[0];assert(nested,'No substantial nested fitting to exercise');
- await invoke('select',nested.id);await invoke('keepTogether');report.kept=await invoke('export');await capture('selected-together');await invoke('separate',.06);await capture('selected-together-separated');await invoke('separate',0);
+ await page.getByRole('combobox',{name:'Selected piece',exact:true}).selectOption(String(nested.id));
+ assert(await page.getByRole('spinbutton',{name:'Cut position (% object extent)',exact:true}).isEnabled(),'Choosing a fitting in the visible UI did not enable cut editing');
+ await page.getByRole('button',{name:'Keep together',exact:true}).click();report.kept=await invoke('export');await capture('selected-together');await invoke('separate',.06);await capture('selected-together-separated');await invoke('separate',0);
  await page.getByRole('button',{name:'Finer here',exact:true}).click();report.refined=await invoke('export');await capture('selected-refined');await invoke('separate',.06);await capture('selected-refined-separated');await invoke('separate',0);
  const owners=r=>r.labels.map(id=>r.partition.parts[id].nodeId),before=owners(report.kept),after=owners(report.refined),nodes=report.kept.hierarchy.nodes;
  const inside=id=>{while(id!==null){if(id===nested.id)return true;id=nodes[id].parent;}return false;};
@@ -53,7 +64,7 @@ try{
  await invoke('resetLocal');await invoke('select',-1);await invoke('frame');
  // A real canvas click, through the same selection route as the human.
  const rect=await page.locator('#viewport').boundingBox();assert(rect,'Viewport missing');
- report.clickPoint={x:rect.x+rect.width*click[0],y:rect.y+rect.height*click[1],viewport:rect};await page.mouse.click(report.clickPoint.x,report.clickPoint.y);report.clicked=await read();assert(report.clicked.selected>=0,'Canvas click did not select a surface piece');await capture('clicked');
+ report.clickPoint={x:rect.x+rect.width*click[0],y:rect.y+rect.height*click[1],viewport:rect};await page.mouse.click(report.clickPoint.x,report.clickPoint.y);report.clicked=await read();assert(report.clicked.selected>=0&&report.clicked.hierarchy.nodes[report.clicked.selected].kind!=='patch','Canvas click did not select an editable containing piece');await capture('clicked');
  report.phase='control-history';save();
  await invoke('detail',Math.min(1,report.initial.hierarchy.maxDepth));await invoke('select',-1);report.beforeBrowsing=await invoke('export');
  const deepest=report.initial.hierarchy.nodes.reduce((a,b)=>b.depth>a.depth?b:a);
@@ -110,6 +121,9 @@ try{
   await choice.selectOption('original');await settled();assert(JSON.stringify(candidateFaces(await invoke('export')))===JSON.stringify(candidateFaces(report.boundaryBase)),'Original boundary choice did not restore membership');
  }
  const cutField=page.getByRole('spinbutton',{name:'Cut position (% object extent)',exact:true});
+ const dragCut=async fine=>{await cutField.scrollIntoViewIfNeeded();const box=await cutField.boundingBox(),x=box.x+box.width/2,y=box.y+box.height/2;await page.mouse.move(x,y);if(fine)await page.keyboard.down('Shift');await page.mouse.down();await page.mouse.move(x+10,y);await page.mouse.up();if(fine)await page.keyboard.up('Shift');await settled();return (await read()).fixedCuts.find(c=>c.key===targetKey)?.offsetFraction;};
+ await type(cutField,0);await settled();report.cutNormalDrag=await dragCut(false);assert(Math.abs(report.cutNormalDrag-.001)<1e-9,'Cut position drag did not apply automatically');
+ await type(cutField,0);await settled();report.cutFineDrag=await dragCut(true);assert(Math.abs(report.cutFineDrag-.0001)<1e-9,'Cut position Shift drag did not give fine adjustment');
  await type(cutField,.2);await settled();report.boundaryOutward=await invoke('export');report.outwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryOutward,targetKey,{expectedOffsetFraction:.002});
  await invoke('separate',.035);await capture('boundary-outward');await invoke('separate',0);
  await type(cutField,-.2);await settled();report.boundaryInward=await invoke('export');report.inwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryInward,targetKey,{expectedOffsetFraction:-.002});

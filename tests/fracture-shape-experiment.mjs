@@ -254,3 +254,49 @@ test('parent movement preserves a child attachment exposed through refined surfa
   assert.deepEqual(after.labels,before.labels,'a rejected collision retains the accepted grouping');
  }finally{await api?.dispose();globalThis.Worker=old;}
 });
+
+for(const offset of [-.45,.12])test(`a delayed boundary reply respects current grouping (${offset})`,async()=>{
+ const {createShapeProcessor}=await import('../fracture-shape-worker-core.mjs');
+ const f=setup(),old=globalThis.Worker,positions=[],indices=[],requests=[];
+ for(let x=0;x<=12;x++)positions.push(x,0,Math.max(0,x-10),x,1,Math.max(0,x-10));
+ for(let x=0;x<12;x++){const i=x*2;indices.push(i,i+2,i+1,i+1,i+2,i+3);}
+ f.mesh.geometry=new THREE.BufferGeometry();f.mesh.geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));f.mesh.geometry.setIndex(indices);
+ globalThis.Worker=class{constructor(){this.process=createShapeProcessor();}postMessage(data){let response;try{response=this.process(data);}catch(e){response={id:data.id,error:e.message};}const reply=()=>this.onmessage({data:response});if(data.geometry)queueMicrotask(reply);else requests.push({data,reply});}terminate(){}};
+ const childFaces=Array.from({length:8},(_,i)=>i+16);let api;
+ try{
+  api=await definition.create({host:f.host,inputs:{source:'/bent-strip.glb',minReachFraction:1,minAreaFraction:1,cleanupAreaFraction:0,detailLevel:1,familyCuts:[{key:'parent',faces:Array.from({length:16},(_,i)=>i+8)},{key:'child',faces:childFaces}]},record(){}});
+  api.operations.select(api.read().hierarchy.nodes.find(n=>n.key==='parent').id);
+  const pending=api.operations.boundary(offset);const outcome=pending.then(value=>({value}),error=>({error}));
+  assert.deepEqual(requests[0].data.boundaries[0].protectedKeys,[]);
+  api.operations.detail(3);const displayed=api.operations.export();requests[0].reply();await drain();
+  assert.equal(requests.length,2,'newly visible child protection must trigger recomputation before installing the old reply');
+  assert.deepEqual(api.operations.export().labels,displayed.labels,'obsolete geometry must never reach the display');
+  assert.ok(requests[1].data.boundaries[0].protectedKeys.includes('child'));
+  requests[1].reply();const settled=await outcome;
+  if(offset<0)assert.match(settled.error?.message??'',/reaches another attachment cut/);else{assert.equal(settled.error,undefined);assert.equal(settled.value.requestApplied,true);assert.equal(api.read().fixedCuts[0].offsetFraction,offset);}
+  const after=api.operations.export();assert.deepEqual(after.candidateBranches.find(c=>c.key==='child'&&c.status==='included')?.faces,childFaces);
+  if(offset<0)assert.deepEqual(after.labels,displayed.labels);else assert.notDeepEqual(after.labels,displayed.labels);
+ }finally{await api?.dispose();globalThis.Worker=old;}
+});
+
+test('fresh mount selects an explicit body target and surface patches pick their editable container',async()=>{
+ const f=setup(),old=globalThis.Worker;globalThis.Worker=f.Worker;
+ try{
+  const api=await definition.create({host:f.host,inputs:{source:'/box.glb'},record(){}});const ui=mounted(api);
+  assert.equal(api.read().hierarchy.nodes[api.read().selected]?.kind,'component','initial local controls need an explicit selected body');
+  assert.equal(ui.elements.find(e=>e.textContent==='Keep together').disabled,false);
+  const before=api.operations.export();api.operations.selectFace(0);
+  assert.equal(api.read().hierarchy.nodes[api.read().selected]?.kind,'component');assert.deepEqual(api.operations.export().labels,before.labels);
+  await api.dispose();
+ }finally{globalThis.Worker=old;}
+});
+
+test('clicking a refined branch patch keeps its containing attachment available for editing',async()=>{
+ const f=setup(),old=globalThis.Worker,tree=controlTree();tree.hierarchy.nodes[4].kind='patch';
+ globalThis.Worker=class{postMessage({id}){queueMicrotask(()=>this.onmessage({data:{id,result:structuredClone(tree)}}));}terminate(){}};
+ try{
+  const api=await definition.create({host:f.host,inputs:{source:'/source.glb',detailLevel:4},record(){}}),before=api.operations.export();
+  api.operations.selectFace(11);
+  assert.equal(api.read().selected,3,'a leaf patch selects its attachment container');assert.deepEqual(api.operations.export().labels,before.labels,'picking never changes grouping');await api.dispose();
+ }finally{globalThis.Worker=old;}
+});

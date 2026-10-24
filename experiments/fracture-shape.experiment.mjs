@@ -73,10 +73,11 @@ export default {
      if(edit?.variantKey&&edit.variantKey!=='original'&&!Array.from(boundarySelect.children).some(o=>o.value===edit.variantKey)){const option=fieldDocument.createElement('option');option.value=edit.variantKey;option.textContent='Selected alternative';boundarySelect.append(option);}
      boundarySelect.value=edit?.variantKey??'original';
     }
-    if(boundaryHint)boundaryHint.textContent=proposal?'Negative moves toward the tip; positive takes more of the body. Neighboring attachment cuts stay fixed. Edited cuts survive global detection changes.':'Select an attachment branch to compare and move its boundary.';
+    if(boundaryHint)boundaryHint.textContent=proposal?'Negative moves toward the tip; positive takes more of the body. Neighboring attachment cuts stay fixed. Edited cuts survive global detection changes.':node?.kind==='component'?'This is a source component, with no parent attachment cut. Click a colored attachment or choose a Branch in Selected piece to move its cut.':'Select an attachment branch to compare and move its boundary.';
     if(boundaryReset)boundaryReset.disabled=!fixedCuts.length;
     if(localInput){localInput.disabled=!node;localInput.min=String(node?.depth??0);localInput.max=String(node?subtreeDepth(node.id):0);value(localInput,node?Math.max(node.depth,Math.min(subtreeDepth(node.id),inheritedDetail(node.id))):0);localText.textContent=node?`Selected piece detail · ${localInput.value} / ${localInput.max}`:'Selected piece detail';}
     if(refineButton){const visible=new Set(view?.parts.map(p=>p.nodeId));refineButton.disabled=!node?.children.length||!result.hierarchy.nodes.some(n=>n.ownTriangles>0&&belongs(n.id,node.id)&&!visible.has(n.id));}
+    if(refineButton)refineButton.title=refineButton.disabled?(node?'All available subparts of this piece are already shown. Select a larger piece to regroup.':'Select a piece to refine.'):'Show more of the selected piece’s subparts';
     if(keepButton)keepButton.disabled=!node;
     if(parentButton)parentButton.disabled=!node||node.parent===null;
     if(resetButton)resetButton.disabled=!Object.keys(localDetail).length;
@@ -108,14 +109,26 @@ export default {
    async function analyze(settings,first=false){
     const next={minReachFraction:Number(settings.minReachFraction),minAreaFraction:Number(settings.minAreaFraction),cleanupAreaFraction:Number(settings.cleanupAreaFraction??cleanup)};
     if(Object.values(next).some(v=>!Number.isFinite(v)||v<0||v>1))throw Error('Choose finite reach and area fractions between 0 and 1');
-    busy=true;error='';sync();const generation=serial+1;
+    busy=true;error='';sync();let generation=serial+1;
     try{
      const changed=next.minReachFraction!==reach||next.minAreaFraction!==smallArea||next.cleanupAreaFraction!==cleanup;
      const persistentCuts=settings.resetBoundaries?[]:fixedCuts;
      let activeCuts=settings.resetBoundaries?[]:changed?persistentCuts:(familyCuts??persistentCuts);
      const boundaries=settings.boundaries??(settings.boundary?[settings.boundary]:[]);
      for(const cut of boundaries)if(!activeCuts.some(c=>c.key===cut.key))activeCuts=[...activeCuts,{key:cut.key,faces:cut.originalFaces}];
-     const response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts:persistentCuts,boundaries});if(disposed||generation!==serial)return {...read(),requestApplied:false};
+     let response;
+     // Grouping stays interactive during worker computation. Recompute the whole
+     // batch if its protection snapshot no longer describes the displayed cuts.
+     // Selection alone does not change protections or invalidate useful work.
+     while(true){
+      const current=boundaries.map(c=>({...c,protectedKeys:protectedKeysFor(c.key)}));
+      let failure;generation=serial+1;
+      try{response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts:persistentCuts,boundaries:current});}catch(e){failure=e;}
+      if(disposed||generation!==serial)return {...read(),requestApplied:false};
+      if(current.some(c=>JSON.stringify(c.protectedKeys)!==JSON.stringify(protectedKeysFor(c.key))))continue;
+      if(failure)throw failure;
+      break;
+     }
      const candidate=response.result;
      const selectedKey=result?.hierarchy.nodes[selected]?.key,grouping=Object.entries(localDetail).map(([id,level])=>({key:result?.hierarchy.nodes[id]?.key,level}));
      if(first){if(selected>=candidate.hierarchy.nodes.length)throw Error('Saved selected piece does not exist');shapeHierarchyView(candidate,Math.min(detailLevel,candidate.hierarchy.maxDepth),localDetail);}
@@ -128,7 +141,9 @@ export default {
     }catch(e){if(disposed||generation!==serial)return {...read(),requestApplied:false};busy=false;error=e.message;sync();throw e;}
    }
    function frame(){const bounds=new Box3().setFromObject(sourceRoot),center=bounds.getCenter(new Vector3()),r=bounds.getSize(new Vector3()).length();return session.setView({position:center.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.8)).toArray(),target:center.toArray()});}
-   await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);frame();
+   await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);
+   if(inputs.selected===undefined)selected=result.hierarchy.nodes.filter(n=>n.kind==='component').sort((a,b)=>b.triangles-a.triangles)[0]?.id??-1;
+   frame();
    const selectPiece=value=>{if(!Number.isInteger(value)||value< -1||value>=result.hierarchy.nodes.length)throw Error('Choose an existing hierarchy piece');selected=value;draw();return event('selection',value);};
    const localLevel=level=>{
     if(selected<0)throw Error('Select a piece first');
@@ -145,6 +160,12 @@ export default {
     }
     localDetail[selected]=level;viewDirty=true;draw();return event('local-detail',{piece:selected,level});
    };
+   function protectedKeysFor(key){
+    const node=result?.hierarchy.nodes.find(n=>n.key===key);
+    const edited=[...fixedCuts,...requestedBoundaries.values()].filter(c=>c.key!==key).map(c=>c.key);
+    const visible=node?view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).flatMap(p=>{const keys=[];for(let n=result.hierarchy.nodes[p.nodeId];n.id!==node.id;n=result.hierarchy.nodes[n.parent])if(n.kind==='branch')keys.push(n.key);return keys;}):[];
+    return [...new Set([...edited,...visible])].sort();
+   }
    const boundaryRequest=(offsetFraction,variantKey)=>{
     const node=result.hierarchy.nodes[selected];if(node?.kind!=='branch')throw Error('Select an attachment branch');
     const proposal=result.candidateBranches.find(c=>c.key===node.key&&c.status==='included'),edit=requestedBoundaries.get(node.key)??fixedCuts.find(c=>c.key===node.key);
@@ -152,7 +173,7 @@ export default {
     boundaryOriginals.set(node.key,originalFaces);
     let anchorFaces=edit?.anchorFaces??originalFaces;
     if(variantKey!==undefined){if(variantKey==='original')anchorFaces=originalFaces;else{const variant=result.candidateBranches.find(c=>c.key===variantKey&&c.status==='boundary-variant'&&result.candidateBranches[c.variantOf]?.key===node.key);if(!variant)throw Error('Choose an available attachment boundary');anchorFaces=Array.from(variant.faces);}offsetFraction=0;}
-    const protectedKeys=[...new Set([...[...fixedCuts,...requestedBoundaries.values()].filter(c=>c.key!==node.key).map(c=>c.key),...view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).flatMap(p=>{const keys=[];for(let n=result.hierarchy.nodes[p.nodeId];n.id!==node.id;n=result.hierarchy.nodes[n.parent])if(n.kind==='branch')keys.push(n.key);return keys;})])];
+    const protectedKeys=protectedKeysFor(node.key);
     return {protectedKeys,key:node.key,anchorFaces:Array.from(anchorFaces),originalFaces:Array.from(originalFaces),variantKey:variantKey??edit?.variantKey??'original',offsetFraction};
    };
    const operations={
@@ -165,7 +186,7 @@ export default {
      view:value=>{if(!['original','regions'].includes(value))throw Error('Choose original or regions');mode=value;draw();return event('view',value);},
      separate:value=>{if(!Number.isFinite(value)||value<0||value>1)throw Error('Separation must be between 0 and 1');explosion=value;draw();return event('separation',value);},
      select:selectPiece,
-     selectFace:face=>{if(!Number.isInteger(face)||face<0||face>=view.labels.length)throw Error('Choose an existing source triangle');return selectPiece(view.parts[view.labels[face]].nodeId);},
+     selectFace:face=>{if(!Number.isInteger(face)||face<0||face>=view.labels.length)throw Error('Choose an existing source triangle');let node=result.hierarchy.nodes[view.parts[view.labels[face]].nodeId];while(node.kind==='patch'&&node.parent!==null)node=result.hierarchy.nodes[node.parent];return selectPiece(node.id);},
      pieceDetail:localLevel,
      refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected],visibleDepth=view.parts.reduce((max,p)=>belongs(p.nodeId,selected)?Math.max(max,result.hierarchy.nodes[p.nodeId].depth):max,node.depth);return localLevel(Math.min(subtreeDepth(selected),Math.max(visibleDepth,inheritedDetail(selected))+1));},
      keepTogether:()=>{if(selected<0)throw Error('Select a piece first');return localLevel(result.hierarchy.nodes[selected].depth);},
@@ -183,7 +204,7 @@ export default {
     read,operations,
     mount({root:panel,document,invoke}){
      fieldDocument=document;
-     const paragraph=document.createElement('p');paragraph.textContent='Click a fitting in the view. Refine that piece, or select a larger piece and keep it together.';panel.append(paragraph);
+     const paragraph=document.createElement('p');paragraph.textContent='Click a fitting to select its editable piece. Finer here reveals its subparts; Keep together joins them. The body is selected initially.';panel.append(paragraph);
      const row=(text,element,parent=panel)=>{const label=document.createElement('label');label.style.cssText='display:grid;gap:6px;margin:10px 0';const title=document.createElement('span');title.textContent=text;label.append(title,element);parent.append(label);return title;};
      const failed=e=>{error=e.message;sync();};
      const number=(input,title,step,apply,dragStep)=>{
