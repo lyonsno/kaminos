@@ -64,3 +64,14 @@ test('an invalid fixture click fails before browser launch with a durable report
   assert.equal(report.lastPhase,'object-identity');assert.match(report.failure.message,/fixture click/i);
  }finally{fs.rmSync(out,{recursive:true,force:true});}
 });
+
+test('boundary witness refuses unchanged cuts and altered neighboring attachments',async()=>{
+ const module=await import('../tools/fracture-refinement-check.mjs');
+ assert.equal(typeof module.checkBoundaryChange,'function','local cut evidence must reject false closure');
+ const before={triangleCount:4,labels:[0,1,2,2],candidateBranches:[{key:'target',status:'included',faces:[2,3]},{key:'neighbor',status:'included',faces:[0]}]};
+ const after={...before,candidateBranches:[{key:'target',status:'included',faces:[1,2,3]},{key:'neighbor',status:'included',faces:[0]}]};
+ assert.equal(module.checkBoundaryChange(before,after,'target').changedTriangles,1);
+ assert.throws(()=>module.checkBoundaryChange(before,before,'target'),/did not move/);
+ assert.throws(()=>module.checkBoundaryChange(before,{...after,candidateBranches:[after.candidateBranches[0],{key:'neighbor',status:'included',faces:[0,1]}]},'target'),/neighbor/);
+ assert.throws(()=>module.checkBoundaryChange(before,{...after,labels:[0]},'target'),/source triangle/);
+});
