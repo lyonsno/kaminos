@@ -1,28 +1,28 @@
 // kaminos-test: node — TRELLIS in the page on the app GPU host, with controlled model stages
 import test from 'node:test';import assert from 'node:assert/strict';
 import {runTrellisInPage} from '../authoring-trellis-page.mjs';
+import {createWebGpuInferenceSession,createWebGpuForegroundService} from '../webgpu-inference-kit/src/core.js';
 
 const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer;
 function fixture({jobStatus='succeeded',release='released'}={}){
-  const events=[],session={id:'app-session'};
-  const appGpu={device:{},queue:{},async session(){events.push('session');return session;},
-    beginRun(runId,options){events.push(['app.beginRun',options.routeId]);return {routeId:options.routeId};}};
+  const events=[],f={runtime:{}};
+  const device={features:new Set(['shader-f16']),limits:{},lost:new Promise(()=>{}),queue:{submit(){},async onSubmittedWorkDone(){
+    events.push('settled');if(release==='held'&&events.includes('asset.run'))throw Error('held');}}};
+  const foreground=createWebGpuForegroundService({routeId:'page-test',device});let sessionPromise;
+  const appGpu={device,queue:device.queue,foreground,async session(){events.push('session');
+    return sessionPromise??=createWebGpuInferenceSession({sessionId:'page-test-session',device,adapterName:'controlled-test',deviceOwnership:'borrowed'}).then(session=>({...session,
+      async registerRoute(options){const route=await session.registerRoute(options);return {...route,runtime:{...route.runtime,...f.runtime}};}}));},
+    async beginRun(id,options){events.push(['beginRun',id,options.routeId]);const run=await foreground.beginRun(id,options);
+      return {...run,async finish(){events.push('finish');return run.finish();}};}};
   const outputs={geometry:{g:1},material:{m:1}};
-  const route={routeId:'trellis2.image-generation.webgpu.v0',runtime:{readTensor(){}},
-    enqueue(job){events.push('enqueue');return {completion:(async()=>{const output=await job.execute('invocation');
-      return jobStatus==='succeeded'?{status:'succeeded',output}:{status:jobStatus,failure:{name:'Error',message:'flow diverged'}};})()};}};
   const deps={
-    async createTrellisSharedHost({appGpu:facade}){events.push(['host',facade.session===session,typeof facade.beginRun]);
-      return {async beginRun({runId,signal}){events.push(['beginRun',typeof runId,signal instanceof AbortSignal]);
-        return {runId,route,withForeground:(phase,work)=>work(),async finish(){events.push('finish');return {status:release};}};},
-        async dispose(){events.push('host.dispose');}};},
     async loadGenerationInputs(manifest,fetchTensor,input){events.push(['inputs',manifest.id,input.pixelValues.length]);return {seed:42};},
-    createTrellisImageGenerationAdapter(options){events.push(['adapter',options.route===route,options.seed]);
-      return {outputs,async run(invocation){events.push(['model',invocation]);return outputs;},dispose(){events.push('adapter.dispose');}};},
+    createTrellisImageGenerationAdapter(options){events.push(['adapter',options.route.routeId,options.seed]);
+      return {outputs,async run(invocation){events.push(['model',invocation]);if(jobStatus!=='succeeded')throw Error('flow diverged');return outputs;},dispose(){events.push('adapter.dispose');}};},
     createTrellisAssetAdapter(options){events.push(['asset',options.geometry===outputs.geometry,typeof options.postprocessMesh,typeof options.unwrapMesh]);
       return {async run(){events.push('asset.run');return {glb,mesh:{uvMetadata:{}},textures:{metadata:{}}};},dispose(){events.push('asset.dispose');}};},
   };
-  return {events,appGpu,deps};
+  return Object.assign(f,{events,appGpu,deps});
 }
 const call=(f,extra={})=>runTrellisInPage({appGpu:f.appGpu,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),
   pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps:f.deps,...extra});
@@ -31,11 +31,12 @@ test('the selected pixels run on the app host and the GLB is finished before the
   const f=fixture();const result=await call(f);
   assert.equal(result.glb,glb);
   const names=f.events.map(e=>Array.isArray(e)?e[0]:e);
-  assert.deepEqual(names,['session','host','beginRun','inputs','adapter','enqueue','model','asset','asset.run','finish','asset.dispose','adapter.dispose','host.dispose']);
-  assert.deepEqual(f.events[1],['host',true,'function'],'TRELLIS receives the resolved app session, not the accessor');
-  assert.deepEqual(f.events[2],['beginRun','string',true]);
-  assert.deepEqual(f.events[3],['inputs','pack',512*512*3]);
-  assert.deepEqual(f.events[7],['asset',true,'function','function']);
+  assert.ok(names.indexOf('inputs')>names.indexOf('beginRun'));
+  assert.ok(names.indexOf('asset.run')>names.indexOf('model'));
+  assert.ok(names.indexOf('finish')>names.indexOf('asset.run'));
+  assert.ok(names.indexOf('adapter.dispose')>names.lastIndexOf('model'));
+  assert.equal((await f.appGpu.session()).snapshot().routes.length,0);
+  assert.equal(f.appGpu.foreground.snapshot().activeRun,null);
 });
 
 test('a failed model job reports its own failure, releases the run and makes no asset',async()=>{
@@ -48,7 +49,7 @@ test('a failed model job reports its own failure, releases the run and makes no 
 test('a run the host cannot release keeps its resources and says so',async()=>{
   const f=fixture({release:'held'});
   await assert.rejects(call(f),/TRELLIS GPU route was not released: held/);
-  assert.ok(!f.events.includes('host.dispose'));
+  assert.ok(!f.events.includes('adapter.dispose'),'unsettled buffers are retained');
 });
 
 test('selected pixels are required; the checkpoint package image is never used in their place',async()=>{
@@ -119,8 +120,7 @@ test('the finished asset must be a GLB, and the run returns the receipt checks i
 test('each phase records its wall time and the kit GPU time spent in it, settled before the route is released',async()=>{
   const f=fixture();const timing={status:'active',resolvedKernels:0,pendingKernels:0,totalGpuMs:0};let settled=0;
   const runtime={profile:{gpuTiming:timing},async settleGpuTiming(){settled++;timing.totalGpuMs=30;timing.resolvedKernels=3;return timing;},readTensor(){}};
-  const base=f.deps.createTrellisSharedHost;
-  f.deps.createTrellisSharedHost=async o=>{const h=await base(o);return {...h,async beginRun(x){const r=await h.beginRun(x);r.route.runtime=runtime;return r;}};};
+  f.runtime=runtime;
   f.deps.createTrellisImageGenerationAdapter=options=>({async run(){await options.onPhase({phase:'sparse-structure-sampling'});timing.totalGpuMs=10;
     await options.onPhase({phase:'texture'});timing.totalGpuMs=25;return {geometry:{},material:{}};},dispose(){}});
   const result=await call(f);
@@ -142,11 +142,10 @@ test('a failed decode is captured before the route is released: tensor bytes, bo
     error:{name:'Error',message:'learned decoder generated empty cells; no replacement support'}};
   const runtime={profile:{stages:[{name:'decoder-linear',ms:5,gpuMs:2,gpuStatus:'resolved',metadata:{yields:[1,2]}},{name:'decoder-linear',ms:3,gpuMs:1,gpuStatus:'resolved'}]},
     async readTensor(x){order.push('read:'+x.name);return new ArrayBuffer(x.byteLength);},async settleGpuTiming(){return {status:'active',totalGpuMs:3};}};
-  const base=f.deps.createTrellisSharedHost;
-  f.deps.createTrellisSharedHost=async o=>{const h=await base(o);return {...h,async beginRun(x){const r=await h.beginRun(x);r.route.runtime=runtime;
-    const finish=r.finish;r.finish=async()=>{order.push('finish');return finish();};return r;}};};
+  f.runtime=runtime;
+  const begin=f.appGpu.beginRun;f.appGpu.beginRun=async(...args)=>{const r=await begin(...args);return {...r,async finish(){order.push('finish');return r.finish();}};};
   f.deps.createTrellisImageGenerationAdapter=()=>({decoderFailureContext:context,noiseInputs:{sparse:{shape:[1,8],values:new Float32Array(8),seed:42,source:'browser'}},
-    async run(){return null;},dispose(){}});
+    async run(){throw Error('flow diverged');},dispose(){}});
   const error=await call(f).then(()=>null,e=>e);
   assert.match(error.message,/flow diverged/);
   const c=error.trellisCapture;
@@ -196,8 +195,7 @@ function surfelRun({failMaterial=false}={}){
     mf:new Float32Array(coords.flatMap(()=>[1,-1,-1,-1,.8,1])).buffer};
   const outputs={geometry:{coordinates:{id:'gc'},resolution:res},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:res}};
   const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');return tensors[t.id].slice(0);}};
-  const host=f.deps.createTrellisSharedHost;
-  f.deps.createTrellisSharedHost=async args=>{const h=await host(args);const begin=h.beginRun;h.beginRun=async o=>{const r=await begin(o);r.route={...r.route,runtime};return r;};return h;};
+  f.runtime=runtime;
   f.deps.createTrellisImageGenerationAdapter=()=>({outputs,async run(){return outputs;},dispose(){}});
   f.deps.createTrellisAssetAdapter=options=>({async run(){await options.postprocessMesh({vertices,triangles});return {glb};},dispose(){}});
   return f;
