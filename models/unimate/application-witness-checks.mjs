@@ -10,6 +10,7 @@ export function checkUniMateApplicationWitness(report) {
   require(Array.isArray(report.runs) && report.runs.length === 2, 'two completed generations');
   for (const run of report.runs ?? []) {
     require(run.textEncoder === 'browser T5', 'real text encoder');
+    require(run.encoding?.demand?.pendingRequestCount > 0, 'real renderer demand before text encoding');
     require(run.encoding?.cooperative === true && run.encoding.duties?.length >= 2 && run.encoding.frameSubmissions?.length > 0, 'foreground submissions inside actual text encoding');
     require(Number.isFinite(run.dutyCount) && run.dutyCount > 0 && run.framesDuring > 0, 'model duties and renderer frames');
     require(run.frames === 60 && run.joints === 18 && run.glbBytes > 0, 'complete animation and GLB');
@@ -24,6 +25,18 @@ export function checkUniMateApplicationWitness(report) {
   require(Array.isArray(report.gpuErrors) && report.gpuErrors.length === 0, 'GPU errors must be present and empty');
   require(report.browser?.browserExit?.code === 0, 'owned browser exited');
   return problems;
+}
+
+// Align the witness with an actual renderer request. A short warm encode may
+// otherwise finish between rAF callbacks, leaving no demand to service.
+// This waits before the measured encode and never submits a frame itself.
+export async function waitForEncoderFrameDemand(foreground, nextFrame) {
+  for (;;) {
+    const run = foreground.snapshot().activeRun;
+    if (!run || run.finishing || run.foregroundPhase) throw Error('encoder witness requires an admitted GPU run');
+    if (run.pressure.pendingRequestCount > 0) return structuredClone(run.pressure);
+    await nextFrame();
+  }
 }
 
 

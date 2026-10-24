@@ -55,6 +55,7 @@ try {
   await phase('install');
   command('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', report.installed.kit, report.installed.model], app);
   await fs.copyFile(path.join(import.meta.dirname, 'application-witness.js'), path.join(app, 'entry.js'));
+  await fs.copyFile(path.join(import.meta.dirname, 'application-witness-checks.mjs'), path.join(app, 'application-witness-checks.mjs'));
   await fs.copyFile(path.join(import.meta.dirname, 'application-witness.html'), path.join(app, 'index.html'));
   await build({ entryPoints: [path.join(app, 'entry.js')], outfile: path.join(app, 'app.js'), bundle: true, format: 'esm', platform: 'browser', target: 'esnext' });
   server = await startServer({ '/weights/': report.modelSources.weights.root, '/t5/': report.modelSources.t5.root,

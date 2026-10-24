@@ -4,6 +4,7 @@ import { createUniMateConsumer } from '@kaminos/unimate-webgpu';
 import { createUniMateDemo } from '@kaminos/unimate-webgpu/demo';
 import { T5Encoder } from '@kaminos/unimate-webgpu/unimate-t5.js';
 import { bundleArrays } from '@kaminos/unimate-webgpu/unimate-generator.js';
+import { waitForEncoderFrameDemand } from './application-witness-checks.mjs';
 
 const state = window.unimateApplication = { phase: 'starting', runs: [], progress: [], partials: [], gpuErrors: [], encodings: [] };
 const status = document.querySelector('#status');
@@ -15,7 +16,8 @@ try {
   // Observe the actual installed encoder without changing its input or schedule.
   const encode = T5Encoder.prototype.encode;
   T5Encoder.prototype.encode = async function(text, options) {
-    const row = { startedAt: performance.now(), cooperative: Boolean(options?.schedule) };
+    const demand = await waitForEncoderFrameDemand(demo.foreground, () => new Promise(requestAnimationFrame));
+    const row = { startedAt: performance.now(), demand, cooperative: Boolean(options?.schedule) };
     state.encodings.push(row);
     try { const result = await encode.call(this, text, options); row.duties = plain(result.duties); return result; }
     catch (error) { row.error = String(error); throw error; }

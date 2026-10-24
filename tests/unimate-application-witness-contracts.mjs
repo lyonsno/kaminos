@@ -1,8 +1,9 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import { checkUniMateApplicationWitness, readBrowserJson } from '../models/unimate/application-witness-checks.mjs';
+import { checkUniMateApplicationWitness, readBrowserJson, waitForEncoderFrameDemand } from '../models/unimate/application-witness-checks.mjs';
+import { createWebGpuForegroundService } from '../webgpu-inference-kit/src/foreground-opportunity.js';
 const positions = Array.from({ length: 60 * 18 * 3 }, (_, i) => i / 1000);
-const run = { encoding: { cooperative: true, duties: [{}, {}], frameSubmissions: [1] }, textEncoder: 'browser T5', dutyCount: 4, framesDuring: 5, frames: 60, joints: 18, glbBytes: 4096, positions };
+const run = { encoding: { demand: { pendingRequestCount: 1 }, cooperative: true, duties: [{}, {}], frameSubmissions: [1] }, textEncoder: 'browser T5', dutyCount: 4, framesDuring: 5, frames: 60, joints: 18, glbBytes: 4096, positions };
 const valid = { source: { rev: 'fixture-source', dirtyFiles: [] }, expectedRevision: 'fixture-source', outsideCheckout: true,
   installed: { kit: 'kit.tgz', model: 'unimate.tgz' }, browser: { executable: 'independent-test-browser', effectiveBrowser: 'fixture', profile: { temporary: true }, browserExit: { code: 0 } },
   input: { joints: 18, frames: 60 }, paused: 'paused', pausedFrames: 2, resumed: 'running', stopped: true,
@@ -15,7 +16,7 @@ for (const mutate of [
   r => { r.input.joints = 43; }, r => { r.runs = []; }, r => { r.runs[0].textEncoder = 'captured embedding'; },
   r => { r.runs[0].dutyCount = 0; }, r => { r.runs[0].framesDuring = 0; }, r => { r.runs[0].positions.fill(0); },
   r => { r.runs[0].positions.pop(); }, r => { r.runs[0].positions[0] = NaN; }, r => { r.pausedFrames = 0; },
-  r => { r.stopped = false; }, r => { r.runs[0].encoding.frameSubmissions = []; }, r => { r.runs[0].encoding.cooperative = false; }, r => { r.repeatMaxDifference = .5; }, r => { r.export.allFinite = false; },
+  r => { r.stopped = false; }, r => { r.runs[0].encoding.demand.pendingRequestCount = 0; }, r => { r.runs[0].encoding.frameSubmissions = []; }, r => { r.runs[0].encoding.cooperative = false; }, r => { r.repeatMaxDifference = .5; }, r => { r.export.allFinite = false; },
   r => { r.afterDestroy.session = 'closed'; }, r => { r.afterDestroy.routes = 1; }, r => { delete r.gpuErrors; },
   r => { r.gpuErrors.push('validation failure'); }, r => { r.browser.browserExit.code = 1; },
 ]) {
@@ -23,6 +24,24 @@ for (const mutate of [
   assert(checkUniMateApplicationWitness(report).length > 0, `reject ${mutate}`);
 }
 console.log('UniMate witness rejects stale source, wrong route, missing output and incomplete lifecycle');
+
+// Use the real service: alignment must leave the renderer request pending for
+// inference to service, not manufacture a frame while waiting for the encode.
+let submitted = 0, frameTicks = 0;
+const foreground = createWebGpuForegroundService({ routeId: 'encoder-witness', device: {}, queue: { submit() { submitted++; } } });
+await assert.rejects(waitForEncoderFrameDemand(foreground, async () => {}), /admitted GPU run/);
+const active = await foreground.beginRun('encode');
+const demand = await waitForEncoderFrameDemand(foreground, async () => {
+  frameTicks++;
+  foreground.request({ requestId: 'actual-renderer-frame', run(opportunity) { opportunity.submit([{}]); } });
+});
+assert.equal(frameTicks, 1);
+assert.equal(demand.pendingRequestCount, 1);
+assert.equal(submitted, 0);
+await active.foregroundOpportunities.serviceAtBoundary({ invocationId: 'encode', boundaryId: 'block0', dutyId: 'block0', phase: 't5', position: 'before-encode' });
+assert.equal(submitted, 1);
+await active.finish();
+await foreground.dispose();
 
 // Replay the complete history shape that exceeded a single CDP message; no rows lost.
 const window = { history: { samples: Array.from({ length: 100 }, (_, i) => ({ i, motion: 'x'.repeat(150000) })) } };
