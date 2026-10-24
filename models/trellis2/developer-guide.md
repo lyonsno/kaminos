@@ -152,6 +152,61 @@ attempting export; it names the failing stage.
 
 ## Embedding generation in a browser application
 
+[`createTrellisApp`](trellis-app.js) runs prepared image pixels through the
+complete model and its asset consumers. It uses the inference kit's shared
+application runner for admission, controls and retirement. Lend it the same
+session and foreground service that your renderer uses:
+
+~~~js
+import { createTrellisApp } from "./models/trellis2/trellis-app.js";
+
+// manifest and fetchTensor describe the prepared weight package.
+// finishing supplies the model's mesh-cleanup and UV providers.
+const app = await createTrellisApp({
+  session, foreground, manifest, fetchTensor, finishing,
+  decoderActivationStorage: "f16", // requires shader-f16 on the borrowed device
+});
+try {
+  const asset = await app.generate({ pixelValues, signal, onPhase });
+  // asset.glb contains the mesh and material textures.
+  // asset.surfelGlb and asset.levelInputs retain the raw surface/material output.
+} finally {
+  await app.destroy();
+}
+~~~
+
+`pixelValues` is a normalized `Float32Array` containing the selected image's
+512 × 512 RGB values; the mounted package's sample image is not substituted.
+`fetchTensor(name)` loads a named package tensor as a `Float32Array`, validating
+its storage and reconstructed bytes. Image preparation, package acquisition and
+finishing providers remain model-specific; the application does not download
+original checkpoints or choose a background-removal model for you.
+
+In Kaminos, pass `{ appGpu, manifest, fetchTensor, finishing }` instead of
+`{ session, foreground, ... }`. The app GPU host then retains its renderer
+installation and unresolved-run accounting. `runTrellisInPage` is the existing
+page convenience call over this API.
+
+An app supports sequential `generate` calls and rejects overlapping calls on the
+same instance. Each call loads model stages as needed. `pause()`, `resume()` and
+`stop(reason)` control cooperative work at its boundaries; queued cancellation
+leaves another model's foreground run alone. CPU loading and finishing windows
+are serialized with pause. `snapshot()` exposes phase, control, error and held
+state. `finishMesh: false` returns surfels without mesh cleanup, UV or PBR baking.
+Generation options, prepared pixels, phase callbacks, provenance and finishing
+providers can be supplied at creation or overridden per call.
+
+The GPU device, session and foreground service remain borrowed. `destroy()`
+stops and waits for the app's work without destroying the host. If GPU settlement
+or foreground release fails, the rejection and snapshot retain `gpuRouteHeld`;
+destruction also rejects while that release is unresolved. Model failures keep
+their decoder capture or retained surfel output. The API does not permit
+`cooperative: false`; use the direct adapter for an already admitted custom
+invocation. `app.generation` exposes the active generation adapter while its
+resources are held.
+
+### Direct resident-field access
+
 The model uses a registered inference-kit **route**, which groups model work
 on an existing WebGPU device. Queue one invocation through that route, then
 consume the returned GPU tensors before disposing the generator:
@@ -176,7 +231,7 @@ if (result.status === "succeeded") {
 }
 ~~~
 
-For Kaminos renderer integration, [`createTrellisSharedHost`](shared-host.js)
+For existing offline/custom composition, [`createTrellisSharedHost`](shared-host.js)
 attaches to the host's existing device and queue. Its `beginRun({runId,signal})`
 returns a run object with a `route` field; use that route for generation, then
 call the run's `finish()` to wait for model/foreground work and release it.

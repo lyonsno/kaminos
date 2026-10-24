@@ -41,17 +41,18 @@ It explains the required files, dependencies and commands for taking an image
 through to a GLB. The current command-line workflow uses Apple Silicon macOS
 and an independent Chrome for Testing browser.
 
-For application integration, the two main entrypoints are:
+For application integration, start with [`createTrellisApp`](trellis-app.js).
+It runs prepared image pixels through generation and finishing, returning the
+GLB and surfel output. It handles queued admission, pause/resume, Stop and
+retirement while the caller keeps ownership of the GPU host. The Kaminos page
+uses this same application API. The [embedding guide](developer-guide.md#embedding-generation-in-a-browser-application)
+shows its inputs and lifecycle.
 
-- [`createTrellisImageGenerationAdapter`](trellis-generation.js): run the
-  complete model through an inference-kit route.
-- [`createTrellisSharedHost`](shared-host.js): connect generation to Kaminos'
-  existing GPU device and renderer.
-
+For direct control over resident geometry and material fields,
+[`createTrellisImageGenerationAdapter`](trellis-generation.js) remains available.
 The model code lives in this directory. Installing
 `@kaminos/webgpu-inference-kit` installs the reusable runtime, not the TRELLIS
-weights or these model tools. Integration with Kaminos' normal Generate panel
-is in development.
+weights or these model tools.
 
 ## Choosing an input and output size
 

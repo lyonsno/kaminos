@@ -54,16 +54,20 @@ test('a server that cannot be reached for the claim fails the run loudly instead
 
 // GL-01: a run whose GPU work did not settle must keep Greenroom blocked.
 import {runTrellisInPage} from '../authoring-trellis-page.mjs';
-function heldTrellis(release){
-  const route={routeId:'trellis2.image-generation.webgpu.v0',runtime:{readTensor(){}},
-    enqueue(job){return {completion:(async()=>({status:'succeeded',output:await job.execute('i')}))()};}};
-  const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer,outputs={geometry:{},material:{}};
-  const deps={async createTrellisSharedHost(){return {async beginRun({runId}){return {runId,route,withForeground:(p,w)=>w(),async finish(){return {status:release};}};},async dispose(){}};},
-    async loadGenerationInputs(){return {seed:42};},createTrellisImageGenerationAdapter(){return {outputs,async run(){return outputs;},dispose(){}};},
-    createTrellisAssetAdapter(){return {async run(){return {glb,mesh:{uvMetadata:{}},textures:{metadata:{}}};},dispose(){}};}};
-  return ()=>runTrellisInPage({appGpu:{device:{},queue:{},async session(){return {};},beginRun(){return {};}},manifest:{id:'p'},fetchTensor:async()=>new ArrayBuffer(4),
+function heldTrellis(release){return async()=>{
+  const kit=await import('../webgpu-inference-kit/src/core.js');
+  const {createAppGpuHost}=await import('../app-gpu-host.mjs');let modelReturned=false;
+  const device={features:new Set(),limits:{},lost:new Promise(()=>{}),
+    queue:{submit(){},async onSubmittedWorkDone(){if(modelReturned&&release==='held')throw Error('actual queue completion rejected');}}};
+  const appGpu=createAppGpuHost({sharedGpu:{device},kit,frameOwner:()=>({setForegroundOpportunityRequester(){}}),
+    host:{device,setForegroundServiceActive(){},runForegroundFrame:work=>work()}});
+  const glb=new Uint32Array([0x46546c67,2,12]).buffer,outputs={geometry:{},material:{}};
+  const deps={async loadGenerationInputs(){return {seed:42};},
+    createTrellisImageGenerationAdapter(){return {outputs,async run(){return outputs;},dispose(){}};},
+    createTrellisAssetAdapter(){return {async run(){modelReturned=true;return {glb,mesh:{uvMetadata:{}},textures:{metadata:{}}};},dispose(){}};}};
+  return runTrellisInPage({appGpu,manifest:{id:'p'},fetchTensor:async()=>new ArrayBuffer(4),
     pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps});
-}
+};}
 test('GL-01: when TRELLIS reports its GPU route held, no release is sent and the run says Greenroom stays blocked',async()=>{
   const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'});
   const error=await withGreenroomLease({post:s.post,runId:'r',route:'t'},heldTrellis('held')).catch(e=>e);
