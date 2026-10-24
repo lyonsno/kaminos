@@ -5,17 +5,19 @@ import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
 import {validateLayoutFrame,validateBrowserSources} from './layout-checks.js';
 import {validateEpisode} from './witness-checks.js';
+import {exercisePhotoApplications} from './application-witness.mjs';
 
-const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output','site-root','image','hosted-weights','manifest-sha256'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false}}});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output','site-root','image','hosted-weights','manifest-sha256'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false},application:{type:'boolean',default:false}}});
 const out=path.resolve(values.output??'example-display-witness');
 const report={status:'failed',phase:'arguments',requested:values,route:'real included outputs; native WebGPU display; no inference',frames:[],requests:[],errors:[]};
 const save=async()=>{await fs.mkdir(out,{recursive:true});await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));};
 let browser;
 try{
   await save();for(const key of ['repo-root','expected-commit','chrome','playwright-module','url','output'])if(!values[key])throw Error(`--${key} required`);
+  if(values.application&&!values.generate)throw Error('--application requires fresh --generate');
   const root=await fs.realpath(values['repo-root']),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8'}).trim();
   report.source={root,commit:git(['rev-parse','HEAD'])};
-  if(report.source.commit!==values['expected-commit']||git(['status','--porcelain','--','demos/material-photo']))throw Error('Exact clean source required');
+  if(report.source.commit!==values['expected-commit']||git(['status','--porcelain']))throw Error('Exact clean source required');
   if(values.image&&!values.generate)throw Error('Uploaded image requires --generate');
   if(values['hosted-weights']&&new URL(values.url).searchParams.has('weights'))throw Error('Hosted witness refuses a weight override');
   const executable=await fs.realpath(values.chrome);if(executable.includes('/Applications/Google Chrome.app/'))throw Error('Independent Chrome required');
@@ -29,7 +31,11 @@ try{
   }});page.on('pageerror',e=>report.errors.push(String(e)));
   const sourceReads=[],observed={};
   const names=['index.html','main.js','style.css','included-examples.js','comparison-viewer.js','viewer.js'];
-  page.on('response',r=>{const u=new URL(r.url()),n=path.basename(u.pathname);if(names.includes(n)&&u.href===new URL(n,values.url).href)sourceReads.push(r.body().then(b=>{observed[n]=createHash('sha256').update(b).digest('hex');}));});
+  const applicationNames=['../../models/material-photo/material-photo-operation.js','../../models/moge/moge-app.js',
+    '../../models/moge/moge-inference.js','../../models/supermat/supermat-app.js','../../models/supermat/supermat-route.js',
+    '../../webgpu-inference-kit/src/application-runner.js'];
+  page.on('response',r=>{const n=[...names,...(values.application?applicationNames:[])].find(n=>r.url()===new URL(n,values.url).href);
+    if(n)sourceReads.push(r.body().then(b=>{observed[n]=createHash('sha256').update(b).digest('hex');}));});
   const start=performance.now();report.phase='arrival';await save();await page.goto(values.url);
   await page.waitForFunction(()=>['included','error','loaded'].includes(window.__materialPhoto?.status)&&!document.getElementById('run').disabled);
   if(await page.evaluate(()=>window.__materialPhoto.status)!=='included')throw Error('No included result on arrival');
@@ -126,6 +132,18 @@ try{
     await page.locator('#view-result').click();await page.waitForFunction(()=>window.__materialPhoto.status==='done');
     report.generated=await page.evaluate(()=>window.__materialPhoto);validateEpisode(report.generated,source,Number(report.selectedSize),hosted?{...hosted,requests:report.hostedRequests}:null);
     await page.screenshot({path:path.join(out,'generated-result.png')});
+    if(values.application){
+      report.phase='application-source-binding';await save();await Promise.all(sourceReads);
+      for(const n of applicationNames){
+        const relative=path.normalize(`demos/material-photo/${n}`);
+        const digest=createHash('sha256').update(execFileSync('git',['show',`${report.source.commit}:${relative}`],{cwd:root})).digest('hex');
+        if(observed[n]!==digest)throw Error(`Application browser source drift: ${n}`);
+      }
+      const run=report.generated.runs.at(-1);
+      if(run.moge.cached||!(run.moge.renderCallbacks>0&&run.supermat.renderCallbacks>0))throw Error('Fresh inference and observed rendering in both models required');
+      report.phase='application-lifecycle';await save();
+      await exercisePhotoApplications(page,out,report,save);
+    }
   }
   report.finalState=await page.evaluate(()=>window.__materialPhoto);
   if(report.errors.length||report.finalState.gpuErrors?.length)throw Error('Browser errors');
