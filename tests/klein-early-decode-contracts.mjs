@@ -28,3 +28,16 @@ test('normal completion retains all steps and final output',async()=>{
  assert.equal(read().forwards,4);assert.equal(read().decoded,8);
  assert.deepEqual(out.sampling,{stepsRequested:4,stepsCompleted:4,earlyDecoded:false});
 });
+
+test('reference latents reach joint attention without changing the generated output grid',async()=>{
+ const {p}=fixture();const reference={width:32,height:16,rgb:new Float32Array(32*16*3)};
+ const packed={latents:new Float32Array(2*128),ids:new Float64Array(2*4)};
+ const order=[];p.encodeReference=async r=>{assert.equal(r,reference);order.push('encode');return packed;};
+ p.transformer.allocate=(image,text,ref)=>{assert.equal(image,1);assert.equal(ref,2);order.push('allocate');};
+ p.transformer.prepare=input=>{assert.equal(input.reference,packed.latents);assert.equal(input.referenceIds,packed.ids);};
+ const out=await p.generateScheduled({prompt:'test',seed:1,width:16,height:16,steps:4,reference});
+ assert.deepEqual(order,['encode','allocate']);assert.equal(out.width,16);assert.equal(out.height,16);
+});
+test('unsupported reference conditioning is rejected, never silently ignored',async()=>{
+ const {p}=fixture();await assert.rejects(p.generateScheduled({prompt:'test',seed:1,width:16,height:16,steps:4,reference:{width:16,height:16,rgb:new Float32Array(768)}}),/reference.*support/i);
+});
