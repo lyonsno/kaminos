@@ -1,10 +1,10 @@
 """Authoring projection over existing asset and generator output records."""
-import hashlib,json,re
+import hashlib,json,re,math
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlencode,urlsplit,parse_qsl
 
-COLLECTIONS = {'generated-meshes','image-inbox','greenroom','trellis2mlx','pixal3d'}
+COLLECTIONS = {'generated-meshes','image-inbox','greenroom','trellis2mlx','pixal3d','agent-work'}
 IMAGE_SUFFIXES = {'.png','.jpg','.jpeg','.webp'}
 HOLDS_PATH = Path(__file__).with_name('asset-visibility-holds.json')
 
@@ -69,24 +69,25 @@ def generator_receipt(receipt):
 
 def read_catalog(collection, *, roots, image_entries, origins, output_resolver, label, levels=dict):
     if collection not in COLLECTIONS:raise ValueError('Unknown authoring asset collection')
-    root=roots.get(collection)
+    root=roots.get('greenroom' if collection=='agent-work' else collection)
     if root is None or not Path(root).is_dir():raise FileNotFoundError('Asset collection is not mounted')
     root=Path(root).resolve();entries=[];warnings=[];unavailable=0;apply_hold=visibility_holds()
     def warn(identity,error):warnings.append({'source':str(identity),'reason':str(error)})
-    def append(path,source,*,name=None,title=None,job=None,generation=None):
+    def append(path,source,*,name=None,title=None,job=None,generation=None,agent=None,output_class=None):
         kind=asset_kind(path)
         if not kind:return
         stat=path.stat()
         entries.append(apply_hold({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
             'name':name or path.name,'label':title or label(name or path.name), 'source':source,'size':stat.st_size,'mtime':stat.st_mtime,
             **({'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route'),'assetOrigin':{'source':source,'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route')}} if job else {}),
-            **({'generation':generation} if generation else {})},path))
+            **({'generation':generation} if generation else {}),
+            **({'agent':agent,'outputClass':output_class,'producedAt':job['finished_at'] if isinstance(job.get('finished_at'),(int,float)) and math.isfinite(job['finished_at']) else stat.st_mtime} if agent else {})},path))
     if collection=='image-inbox':
         for entry in image_entries():
             if entry['root_id']!='image-inbox':continue
             path=root/dict(parse_qsl(urlsplit(entry['source']).query))['path']
             entries.append(apply_hold({**entry,'root':collection,'label':entry['name'],'id':entry['source']},path))
-    elif collection=='greenroom':
+    elif collection in ('greenroom','agent-work'):
         done=root/'done'
         for directory in sorted(done.iterdir()) if done.is_dir() else []:
             receipt_path=directory/'receipt.json'
@@ -94,18 +95,28 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             try:
                 receipt=json.loads(receipt_path.read_text())
                 if not isinstance(receipt,dict):raise ValueError('Generator receipt must be a JSON object')
-                if receipt.get('status')!='done' or receipt.get('exit_code')!=0 or not generator_receipt(receipt):continue
+                if receipt.get('status')!='done' or receipt.get('exit_code')!=0 or (collection=='greenroom' and not generator_receipt(receipt)):continue
                 if receipt.get('job_id')!=directory.name:raise ValueError('Receipt identity differs from its job directory')
+                agent=None;output_class=None
+                if collection=='agent-work':
+                    request=json.loads((directory/'request.json').read_text())
+                    if not isinstance(request,dict) or request.get('job_id')!=directory.name:raise ValueError('Request identity differs from its job directory')
+                    identity=request.get('agent_id')
+                    if not isinstance(identity,str) or not identity.strip():continue
+                    identity=identity.strip()
+                    agent={'id':identity,'label':re.sub(r'[-_]+',' ',identity).title(),'source':'job-request'}
+                    output_class=request.get('output_class') or ('generated' if generator_receipt(receipt) else 'artifact')
                 if not receipt.get('output_dir') or not Path(receipt['output_dir']).is_dir():unavailable+=1;continue
                 output=output_resolver(receipt.get('output_dir'))
                 if output is None:raise ValueError('Recorded outputs are outside serving roots')
+                output=Path(output).resolve()
                 metadata_path=output/'metadata.json';metadata=json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
                 if not isinstance(metadata,dict):raise ValueError('Generator output metadata must be a JSON object')
                 if metadata.get('job_id') not in (None,directory.name):
                     # A later run owns these same paths; do not misattribute its bytes.
                     continue
                 files=metadata.get('output_files')
-                if files is None:files=[path.name for path in output.iterdir() if path.is_file()]
+                if files is None:files=[path.relative_to(output).as_posix() for path in (output.rglob('*') if collection=='agent-work' else output.iterdir()) if path.is_file()]
                 if not isinstance(files,list):raise ValueError('Generator output record must be a file list')
                 title=metadata.get('name') or metadata.get('input_name') or receipt.get('input_name') or receipt.get('input_path')
                 for filename in files:
@@ -119,7 +130,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                     producer=str(receipt.get('job_type') or '') if receipt.get('job_type')!='command' else str(receipt.get('requested_route') or '')
                     family=next((value for prefix,value in [('trellis','Trellis'),('pixal','Pixal'),('sf3d','SF3D'),('mflux','Flux'),('flux','Flux'),('ideogram','Ideogram')] if producer.lower().startswith(prefix)), 'Generated')
                     name=label(title) if title else (label(filename) if Path(filename).stem.lower() not in ('asset','output','mesh') else f'{family} · {label(output.name)}')
-                    append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt)
+                    append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt,agent=agent,output_class=output_class)
             except (OSError,ValueError,TypeError,KeyError) as error:warn(directory.name,error)
     else:
         # Registered LOD levels are coarse stand-ins of another stored mesh, not assets of their own.
@@ -140,5 +151,5 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                 if not title:title=f'Saved mesh · {path.stem[:8]}'
             append(path,source,title=title,generation=generation)
     # Stable newest-first view; all records flow through, with no hidden result cap.
-    entries.sort(key=lambda entry:(-entry['mtime'],entry['id']))
+    entries.sort(key=lambda entry:(-entry.get('producedAt',entry['mtime']),entry['id']))
     return {'schema':'kaminos.authoring-assets.v1','collection':collection,'entries':entries,'warnings':warnings,'unavailableCount':unavailable}
