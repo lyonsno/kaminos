@@ -21,18 +21,18 @@ export default {
  async create({host,inputs,record}) {
   if(!inputs.base)throw Error('Choose a surface field directory');
   const base=new URL(inputs.base,host.controls.document.location.href).href;
-  const field=await loadSurfaceFields(base), session=await host.scene.open();let splats,asset;
+  const field=await loadSurfaceFields(base), session=await host.scene.open();let splats,asset,sync=()=>{};
   try {
    splats=createDeferredSurfaceSplats(field.data,field.meta,field.footprints);
    splats.set({mode:inputs.mode??'opaque'});
    asset=await session.attach(splats.root,{owned:true,metadata:{label:inputs.label??'Generated surface',source:base,type:'experiment'}});
    const low=new Vector3().fromArray(field.bounds[0]),high=new Vector3().fromArray(field.bounds[1]);
    const center=low.clone().add(high).multiplyScalar(.5),span=high.clone().sub(low),distance=span.length()*1.2;
-   const frame=()=>session.setView({position:center.clone().add(new Vector3(distance*.8,distance*.65,distance)).toArray(),target:center.toArray()});
+   const frame=()=>session.setView(inputs.view??{position:center.clone().add(new Vector3(distance*.8,distance*.65,distance)).toArray(),target:center.toArray()});
    frame();
    const read=()=>({source:base,objectId:asset.id,representation:'splats',sourceHashes:field.meta.sourceHashes,gridSize:field.meta.gridSize,bounds:field.bounds,...splats.read()});
-   return {read,operations:{frame(){const view=frame();record({kind:'surface-fields.frame',view});return view;},setMode(mode){splats.set({mode});session.redraw();record({kind:'surface-fields.mode',mode});return read();}},
-    mount({root,document,invoke}){const label=document.createElement('label');label.textContent='Surface appearance ';const select=document.createElement('select');select.setAttribute('aria-label','Surface appearance');for(const [value,text]of [['opaque','Decoded materials'],['plain','Neutral surface'],['normals','Surface normals']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}select.value=inputs.mode??'opaque';select.addEventListener('change',()=>invoke('setMode',select.value));label.append(select);root.append(label);const button=document.createElement('button');button.textContent='Frame room';button.addEventListener('click',()=>invoke('frame'));root.append(button);},
+   return {read,operations:{frame(){const view=frame();record({kind:'surface-fields.frame',view});return view;},setMode(mode){splats.set({mode});session.redraw();sync();record({kind:'surface-fields.mode',mode});return read();}},
+    mount({root,document,invoke}){const label=document.createElement('label');label.textContent='Surface appearance ';const select=document.createElement('select');select.setAttribute('aria-label','Surface appearance');for(const [value,text]of [['opaque','Decoded materials'],['plain','Neutral surface'],['normals','Surface normals']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}sync=()=>{select.value=splats.read().mode;};sync();select.addEventListener('change',()=>invoke('setMode',select.value));label.append(select);root.append(label);const button=document.createElement('button');button.textContent='Frame room';button.addEventListener('click',()=>invoke('frame'));root.append(button);},
     async dispose(){splats.dispose();await session.dispose();}};
   }catch(error){splats?.dispose();await session.dispose();throw error;}
  }
