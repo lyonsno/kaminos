@@ -11,7 +11,7 @@ const indices=new Uint32Array([0,1,2]),hash=b=>crypto.createHash('sha256').updat
 fs.writeFileSync(source+'/surfels.f32',Buffer.from(rows.buffer));fs.writeFileSync(source+'/triangles.u32',Buffer.from(indices.buffer));
 const meta={ok:true,count:3,sourceCount:3,stride:12,radius:.0015625,gridSize:512,bounds:[[-.5,-.5,-.5],[.5,.5,.5]],sourceHashes:{fixture:'local-only'},dataSHA256:hash(Buffer.from(rows.buffer)),triangles:{file:'triangles.u32',count:1,sha256:hash(Buffer.from(indices.buffer))}};
 fs.writeFileSync(source+'/report.json',JSON.stringify(meta));
-const run=(input,out)=>spawnSync(process.execPath,['tools/prepare-splat-crop.mjs',input,out,'[[-0.1,-0.1,-0.1],[0.1,0.1,0.1]]'],{encoding:'utf8'});
+const run=(input,out,...args)=>spawnSync(process.execPath,['tools/prepare-splat-crop.mjs',input,out,'[[-0.1,-0.1,-0.1],[0.1,0.1,0.1]]',...args],{encoding:'utf8'});
 try{
  const alias=path.join(root,'alias');fs.symlinkSync(source,alias);const before=fs.readFileSync(source+'/report.json');
  assert.notEqual(run(source,alias).status,0);assert.deepEqual(fs.readFileSync(source+'/report.json'),before);
@@ -24,6 +24,13 @@ try{
   const v=report.variants.filter(v=>v.name===name);assert.equal(new Set(v.map(v=>v.dataSHA256)).size,1);assert.equal(new Set(v.map(v=>v.count)).size,1);assert.equal(new Set(v.map(v=>v.footprintSHA256)).size,3);
  }
  assert.deepEqual(fs.readFileSync(out+'/source-1.000/surfels.f32'),Buffer.from(rows.buffer));
+ const fitted=path.join(root,'fitted'),f=run(source,fitted,'--triangle-support');assert.equal(f.status,0,f.stdout+f.stderr);
+ const fittedReport=JSON.parse(fs.readFileSync(fitted+'/report.json'));assert.equal(fittedReport.footprintFit,'triangle-dual-cell');assert.equal(fittedReport.variants.length,3);
+ for(const v of fittedReport.variants){
+  const old=report.variants.find(a=>a.name===v.name&&a.scale===1);assert.equal(v.count,old.count);assert.equal(v.dataSHA256,old.dataSHA256);assert.notEqual(v.footprintSHA256,old.footprintSHA256);
+  assert.deepEqual(fs.readFileSync(v.path+'/parent.u32'),fs.readFileSync(old.path+'/parent.u32'));
+ }
+ const unknown=path.join(root,'unknown');assert.notEqual(run(source,unknown,'--unknown-fit').status,0);assert.equal(JSON.parse(fs.readFileSync(unknown+'/report.json')).phase,'options');
  // Connectivity can make the adaptive target unattainable: preserve both
  // triangles, but do not label one uniform sample versus two adaptive as equal.
  const disconnected=new Float32Array([[0,0,0],[.0004,0,0],[0,0,.0004],[.001,0,.001],[.0014,0,.001],[.001,0,.0014]].flatMap(p=>[...p,0,1,0,.2,.4,.1,0,.7,1]));

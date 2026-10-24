@@ -6,13 +6,15 @@ import {cropSurfaceField} from '../surface-field-crop.mjs';
 import {reduceSurfelRows} from '../surfel-field-reduction.mjs';
 import {adaptSurfaceSplats} from '../adaptive-surface-splats.mjs';
 import {fitSurfaceFootprints} from '../surface-splat-footprints.mjs';
-const [source,output,boundsJSON]=process.argv.slice(2);
-if(!source||!output||!boundsJSON)throw Error('Usage: prepare-splat-crop.mjs SOURCE NEW_OUTPUT BOUNDS_JSON');
+const [source,output,boundsJSON,...options]=process.argv.slice(2);
+if(!source||!output||!boundsJSON)throw Error('Usage: prepare-splat-crop.mjs SOURCE NEW_OUTPUT BOUNDS_JSON [--triangle-support]');
 // A new output directory cannot alias or replace a source, including through symlinks.
-fs.mkdirSync(output);const report={ok:false,phase:'load',source:path.resolve(source),variants:[]};
+fs.mkdirSync(output);const report={ok:false,phase:'options',source:path.resolve(source),variants:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const bytes=a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength);
 try{
+ if(options.length>1||options.some(o=>o!=='--triangle-support'))throw Error('Unknown footprint option');
+ const triangleSupport=options.includes('--triangle-support');report.footprintFit=triangleSupport?'triangle-dual-cell':'point-covariance';report.phase='load';
  const meta=JSON.parse(fs.readFileSync(path.join(source,'report.json')));
  const read=(file,sha,Type)=>{const b=fs.readFileSync(path.join(source,file));if(hash(b)!==sha)throw Error('Source hash mismatch: '+file);return new Type(b.buffer.slice(b.byteOffset,b.byteOffset+b.length));};
  if(!meta.ok||meta.stride!==12||!meta.triangles)throw Error('Exact source triangles required');
@@ -26,11 +28,11 @@ try{
  const uniform=reduceSurfelRows(crop.data,cm,2),adaptive=adaptSurfaceSplats(crop.data,cm,crop.triangles,{targetCount:uniform.meta.count});
  report.reducedComparison={uniformCount:uniform.meta.count,adaptiveCount:adaptive.meta.count,equalCount:uniform.meta.count===adaptive.meta.count};
  for(const [name,result] of [['source',original],['uniform',uniform],['adaptive',adaptive]]){
-  report.phase='write-'+name;const fitted=result.footprints??fitSurfaceFootprints(crop.data,result.data,result.parent,meta.radius);
-  for(const scale of [1,2/3,.5]){
+  report.phase='write-'+name;const fitted=triangleSupport?fitSurfaceFootprints(crop.data,result.data,result.parent,meta.radius,crop.triangles):(result.footprints??fitSurfaceFootprints(crop.data,result.data,result.parent,meta.radius));
+  for(const scale of triangleSupport?[1]:[1,2/3,.5]){
    const dir=path.join(output,name+'-'+scale.toFixed(3));fs.mkdirSync(dir);
    const footprint=fitted.slice();for(let i=0;i<footprint.length;i+=8){footprint[i+3]*=scale;footprint[i+7]*=scale;}
-   const m={...result.meta,ok:true,phase:'done',dataSHA256:hash(bytes(result.data)),sourceDataSHA256:cropSHA,diagnosticFootprintScale:scale};delete m.triangles;
+   const m={...result.meta,ok:true,phase:'done',dataSHA256:hash(bytes(result.data)),sourceDataSHA256:cropSHA,diagnosticFootprintScale:scale,footprintFit:report.footprintFit};delete m.triangles;
    const write=(key,file,a,extra={})=>{const b=bytes(a);fs.writeFileSync(path.join(dir,file),b);m[key]={file,sha256:hash(b),...extra};};
    fs.writeFileSync(path.join(dir,'surfels.f32'),bytes(result.data));write('footprints','footprints.f32',footprint,{stride:8,supportSigma:3});
    write('parent','parent.u32',result.parent);
