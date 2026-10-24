@@ -1,0 +1,14 @@
+{
+  "source": {
+    "observedOn": "2026-10-24",
+    "browser": "Playwright Chromium headless-shell 1248",
+    "observation": "Retained GPUAdapter inspected through the running page's DevTools Runtime; native tracking exercise had reached the first vision-transformer block stack."
+  },
+  "adapter": {
+    "fallback": true,
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "device": "",
+    "description": ""
+  }
+}
