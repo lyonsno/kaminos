@@ -26,7 +26,7 @@ export default {
     window.kaminosSelection?.clear();
     const store = createModelStore(window.indexedDB);
     let controller = createHoverController(), state = controller.read();
-    let route = null, stream = null, flight = null, startTask = null, loadTask = null, callback = null;
+    let route = null, stream = null, flight = null, loadTask = null, callback = null;
     let unwatchCamera = () => {};
     const releaseCamera = () => {
       unwatchCamera(); unwatchCamera = () => {};
@@ -111,10 +111,12 @@ export default {
       if (disposed) throw Error('experiment closed');
       if (loading) throw Error('Wait for model loading to finish');
       if (!route) throw Error('load hand models first');
-      if (running || starting) return startTask ?? Promise.resolve(read());
+      if (running || starting) return read();
       const ticket = ++generation;
       starting = true; error = null; sync();
-      const task = (async () => {
+      // Permission is human-paced. Acknowledge initiation so the Workbench
+      // operation queue can still admit Stop or Close while it is pending.
+      void (async () => {
         if (flight) await flight;
         if (ticket !== generation || disposed) return read();
         const acquired = await window.navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
@@ -137,12 +139,10 @@ export default {
         return read();
       })().catch(cause => {
         if (ticket !== generation || disposed) return read();
-        if (ticket === generation && !disposed) {
-          error = String(cause?.message ?? cause); releaseCamera(); hide();
-        }
-        throw cause;
-      }).finally(() => { if (ticket === generation) starting = false; if (startTask === task) startTask = null; sync(); });
-      startTask = task; return task;
+        error = String(cause?.message ?? cause); releaseCamera(); hide();
+        record({ kind: 'iron-gland.failure', phase: 'applied', effective: read() });
+      }).finally(() => { if (ticket === generation) starting = false; sync(); });
+      return read();
     };
     const loadModels = ({ files, base } = {}) => {
       if (disposed) throw Error('experiment closed');
