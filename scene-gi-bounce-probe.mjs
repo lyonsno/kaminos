@@ -1,4 +1,14 @@
 // Diagnostic replay only; does not participate in the ordinary render graph.
+export async function withProbeValidation(device,run) {
+  device.pushErrorScope('validation');
+  let result,failure;
+  try{result=await run();}catch(error){failure=error;}
+  const validation=await device.popErrorScope();
+  if(validation)throw Error(`Probe GPU validation failed: ${validation.message}`,{cause:failure});
+  if(failure)throw failure;
+  return result;
+}
+
 export function validateProbeSource(state) {
   if(state.backend!=='WebGPUBackend')throw Error('Probe requires the actual WebGPU backend');
   if(state.mode!=='combined')throw Error('Probe requires combined GI');
@@ -16,6 +26,7 @@ export function validateProbeSource(state) {
 // edges: the second stage cannot accidentally recapture or feed itself back.
 export async function runFrozenBounceProbe(inputs,{samples=128}={}) {
   const {renderer,source,camera,history,settings,estimator}=inputs;
+  return withProbeValidation(renderer.backend.device,async()=>{
   const {RenderTarget,FloatType,NearestFilter,NodeMaterial,QuadMesh,RendererUtils,TSL}=await import('./lib/three.webgpu.js');
   const {texture,vec4,mix,uniform}=TSL;
   const {ssgi}=await import('./lib/addons/tsl/display/SSGINode.js');
@@ -73,7 +84,7 @@ export async function runFrozenBounceProbe(inputs,{samples=128}={}) {
     // Build the production node graph before explicit updateBefore calls.
     {
       const state=RendererUtils.resetRendererState(renderer);
-      try{renderer.setRenderTarget(mean[0]);quad.render(renderer);}finally{RendererUtils.restoreRendererState(renderer,state);}
+      try{renderer.setRenderTarget(mean[1]);quad.render(renderer);}finally{RendererUtils.restoreRendererState(renderer,state);}
     }
     const replay=async input=>{
       beauty.value=input.texture;effect._sampleIndex=0;
@@ -95,4 +106,5 @@ export async function runFrozenBounceProbe(inputs,{samples=128}={}) {
     const combined=await replay(combinedSource);
     return {identity:initial,snapshots,firstReplay,secondOnly,combined};
   }finally{for(const item of resources)item.dispose();}
+  });
 }
