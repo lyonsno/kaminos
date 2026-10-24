@@ -1,0 +1,560 @@
+{
+  "schema": "kaminos.burner-outlets.v1",
+  "units": "meters; all positions are in each standalone asset root coordinate frame",
+  "coordinateSystem": {
+    "handedness": "right",
+    "up": "+Y",
+    "forward": "+Z",
+    "right": "+X",
+    "gltfUnits": "1 unit = 1 meter"
+  },
+  "assets": {
+    "annular": {
+      "file": "annular-haloforge.glb",
+      "name": "Annular burner — HaloForge",
+      "outlets": {
+        "pattern": "24 upward circular ports distributed evenly around a central open annulus",
+        "count": 24,
+        "centerlineRadius": 0.372,
+        "entries": [
+          {
+            "id": "ring-port-01",
+            "position": [
+              0.372,
+              0.22,
+              0
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-02",
+            "position": [
+              0.359324,
+              0.22,
+              0.096281
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-03",
+            "position": [
+              0.322161,
+              0.22,
+              0.186
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-04",
+            "position": [
+              0.263044,
+              0.22,
+              0.263044
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-05",
+            "position": [
+              0.186,
+              0.22,
+              0.322161
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-06",
+            "position": [
+              0.096281,
+              0.22,
+              0.359324
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-07",
+            "position": [
+              0,
+              0.22,
+              0.372
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-08",
+            "position": [
+              -0.096281,
+              0.22,
+              0.359324
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-09",
+            "position": [
+              -0.186,
+              0.22,
+              0.322161
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-10",
+            "position": [
+              -0.263044,
+              0.22,
+              0.263044
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-11",
+            "position": [
+              -0.322161,
+              0.22,
+              0.186
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-12",
+            "position": [
+              -0.359324,
+              0.22,
+              0.096281
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-13",
+            "position": [
+              -0.372,
+              0.22,
+              0
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-14",
+            "position": [
+              -0.359324,
+              0.22,
+              -0.096281
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-15",
+            "position": [
+              -0.322161,
+              0.22,
+              -0.186
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-16",
+            "position": [
+              -0.263044,
+              0.22,
+              -0.263044
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-17",
+            "position": [
+              -0.186,
+              0.22,
+              -0.322161
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-18",
+            "position": [
+              -0.096281,
+              0.22,
+              -0.359324
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-19",
+            "position": [
+              0,
+              0.22,
+              -0.372
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-20",
+            "position": [
+              0.096281,
+              0.22,
+              -0.359324
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-21",
+            "position": [
+              0.186,
+              0.22,
+              -0.322161
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-22",
+            "position": [
+              0.263044,
+              0.22,
+              -0.263044
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-23",
+            "position": [
+              0.322161,
+              0.22,
+              -0.186
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          },
+          {
+            "id": "ring-port-24",
+            "position": [
+              0.359324,
+              0.22,
+              -0.096281
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.019,
+              "diameter": 0.038,
+              "description": "Machined circular through-port in the top face; all ports form one upward annular outlet array."
+            }
+          }
+        ]
+      }
+    },
+    "linear": {
+      "file": "linear-ribbonrail.glb",
+      "name": "Linear burner — RibbonRail",
+      "outlets": {
+        "pattern": "one continuous upward ribbon slot",
+        "count": 1,
+        "entries": [
+          {
+            "id": "continuous-ribbon-slot",
+            "position": [
+              0,
+              0.272,
+              0
+            ],
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "aperture": {
+              "shape": "rounded-rectangle",
+              "length": 1.035,
+              "width": 0.036,
+              "cornerRadius": 0.018,
+              "description": "One continuous through-slot, long axis along +X, facing upward."
+            }
+          }
+        ]
+      }
+    },
+    "directional": {
+      "file": "directional-vectorlance.glb",
+      "name": "Directional nozzle — VectorLance",
+      "outlets": {
+        "pattern": "one aimed circular nozzle mouth",
+        "count": 1,
+        "entries": [
+          {
+            "id": "directional-circular-mouth",
+            "position": [
+              0,
+              0.90806,
+              0.801307
+            ],
+            "direction": [
+              0,
+              0.26673144,
+              0.9637709
+            ],
+            "aperture": {
+              "shape": "circle",
+              "radius": 0.188,
+              "diameter": 0.376,
+              "description": "Hollow flared mouth, facing forward and 15.47 degrees above horizontal; the barrel remains open through its throat."
+            }
+          }
+        ]
+      }
+    }
+  },
+  "comparison": {
+    "file": "burner-assembly-comparison.glb",
+    "rootTranslationMeters": {
+      "annular": [
+        -1.55,
+        0,
+        0
+      ],
+      "linear": [
+        0,
+        0,
+        0
+      ],
+      "directional": [
+        1.55,
+        0,
+        0
+      ]
+    },
+    "outletCoordinatesRemainLocalToEachNamedAssemblyRoot": true
+  }
+}
