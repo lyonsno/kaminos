@@ -43,6 +43,8 @@ export default {
    const persist=()=>updateInputs(setup());
    const event=(kind,requested)=>{persist();const effective=read();record({kind:'fracture-shape.'+kind,phase:'applied',target:asset.id,requested,effective});return effective;};
    const belongs=(node,parent)=>{while(node!==null){if(node===parent)return true;node=result.hierarchy.nodes[node].parent;}return false;};
+   const inheritedDetail=id=>{const path=[];for(let p=id;p!==null;p=result.hierarchy.nodes[p].parent)path.push(p);let level=detailLevel;for(const p of path.reverse())if(Object.hasOwn(localDetail,p))level=localDetail[p];return level;};
+   const subtreeDepth=id=>result.hierarchy.nodes.reduce((max,node)=>belongs(node.id,id)?Math.max(max,node.depth):max,0);
    function sync(){
     if(statusElement)statusElement.textContent=busy?(result?'Updating pieces from retained attachment search…':'Finding attachments from seven surface starting points…'):error||`${view?.parts.length??0} visible pieces · ${view?.attachments.length??0} shared boundaries · ${(indices.length/3).toLocaleString()} source triangles\n${result?.sourceComponents??0} source components. Attachment search retained for threshold changes. Local refinement changes the selected piece only. Separation is a geometric preview.`;
     if(selectElement&&result&&selectElement._result!==result){
@@ -53,7 +55,7 @@ export default {
     if(selectElement)selectElement.value=String(selected);
     const node=result?.hierarchy.nodes[selected];
     if(selectedText)selectedText.textContent=node?`${node.kind==='component'?'Source component':node.kind==='branch'?'Attachment piece':'Surface patch'} ${node.id+1} · ${node.triangles.toLocaleString()} triangles${node.agreement?` · same boundary in ${node.agreement} of seven searches`:''}`:'Click a fitting in the view to work on it.';
-    if(refineButton)refineButton.disabled=!node?.children.length;
+    if(refineButton)refineButton.disabled=!node?.children.length||inheritedDetail(node.id)>=subtreeDepth(node.id);
     if(keepButton)keepButton.disabled=!node;
     if(parentButton)parentButton.disabled=!node||node.parent===null;
     if(resetButton)resetButton.disabled=!Object.keys(localDetail).length;
@@ -67,7 +69,7 @@ export default {
     const geometryChanged=drawnView!==view||drawnExplosion!==explosion;
     originalMeshes.forEach(m=>{m.visible=mode==='original';});regions.visible=mode!=='original';visibleCuts.visible=mode!=='original';hiddenCuts.visible=mode!=='original'&&showHiddenCuts;
     const offsets=view.parts.map(p=>{const v=new Vector3(...p.center).sub(center);return v.lengthSq()?v.normalize().multiplyScalar(diagonal*explosion).toArray():[0,0,0];});
-    const colors=view.parts.map(p=>{let n=result.hierarchy.nodes[p.nodeId],top=n;while(top.parent!==null&&result.hierarchy.nodes[top.parent].parent!==null)top=result.hierarchy.nodes[top.parent];return n.parent===null?new Color('#b5aa8d'):new Color().setHSL((top.id*.61803398875+.1)%1,.58,.49+.04*(n.depth%3));});
+    const colors=view.parts.map(p=>{const n=result.hierarchy.nodes[p.nodeId];return n.parent===null||p.id===0?new Color('#b5aa8d'):new Color().setHSL((n.id*.61803398875+.1)%1,.64,.49);});
     const colorAttribute=geometry.getAttribute('color'),position=geometry.getAttribute('position'),dim=new Color(.13,.15,.18);
     for(let face=0;face<view.labels.length;face++){
      const part=view.labels[face],c=selected<0||belongs(view.parts[part].nodeId,selected)?colors[part]:dim,offset=offsets[part];
@@ -95,7 +97,7 @@ export default {
    function frame(){const bounds=new Box3().setFromObject(sourceRoot),center=bounds.getCenter(new Vector3()),r=bounds.getSize(new Vector3()).length();return session.setView({position:center.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.8)).toArray(),target:center.toArray()});}
    await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);frame();
    const selectPiece=value=>{if(!Number.isInteger(value)||value< -1||value>=result.hierarchy.nodes.length)throw Error('Choose an existing hierarchy piece');selected=value;
-    if(value>=0){const visible=new Set(view.parts.map(p=>p.nodeId));let ancestor=value;while(!visible.has(ancestor)&&result.hierarchy.nodes[ancestor].parent!==null)ancestor=result.hierarchy.nodes[ancestor].parent;if(ancestor!==value){localDetail={...localDetail,[ancestor]:result.hierarchy.nodes[value].depth};viewDirty=true;}}
+    if(value>=0&&!view.parts.some(p=>belongs(p.nodeId,value))){const visible=new Set(view.parts.map(p=>p.nodeId));let ancestor=value;while(!visible.has(ancestor)&&result.hierarchy.nodes[ancestor].parent!==null)ancestor=result.hierarchy.nodes[ancestor].parent;if(ancestor!==value){localDetail={...localDetail,[ancestor]:result.hierarchy.nodes[value].depth};viewDirty=true;}}
     draw();return event('selection',value);};
    const localLevel=level=>{if(selected<0)throw Error('Select a piece first');localDetail={...localDetail,[selected]:level};viewDirty=true;draw();return event('local-detail',{piece:selected,level});};
    const operations={
@@ -106,13 +108,14 @@ export default {
      separate:value=>{if(!Number.isFinite(value)||value<0||value>1)throw Error('Separation must be between 0 and 1');explosion=value;draw();return event('separation',value);},
      select:selectPiece,
      selectFace:face=>{if(!Number.isInteger(face)||face<0||face>=view.labels.length)throw Error('Choose an existing source triangle');return selectPiece(view.parts[view.labels[face]].nodeId);},
-     refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected];return localLevel(Math.min(result.hierarchy.maxDepth,Math.max(node.depth,localDetail[selected]??detailLevel)+1));},
+     refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected];return localLevel(Math.min(subtreeDepth(selected),Math.max(node.depth,inheritedDetail(selected))+1));},
      keepTogether:()=>{if(selected<0)throw Error('Select a piece first');return localLevel(result.hierarchy.nodes[selected].depth);},
      resetLocal:()=>{localDetail={};viewDirty=true;draw();return event('reset-local',null);},
      parent:()=>{selected=selected<0?-1:result.hierarchy.nodes[selected].parent??-1;draw();return event('parent-selection',selected);},
      frame,
      export:()=>({...read(),labels:Array.from(view.labels),boundaries:view.boundaries,hierarchy:{...result.hierarchy,faceOwners:Array.from(result.hierarchy.faceOwners)},finestLabels:Array.from(result.labels),candidateBranches:result.candidateBranches}),
    };
+   if(selected>=0)selectPiece(selected);
    const stopPick=session.onPick?.(hit=>{
     let face;if(hit.object===regions)face=hit.faceIndex;else if(originalFaceOffsets.has(hit.object))face=originalFaceOffsets.get(hit.object)+hit.faceIndex;
     if(Number.isInteger(face))operations.selectFace(face);
