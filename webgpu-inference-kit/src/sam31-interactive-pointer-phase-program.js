@@ -25,6 +25,7 @@ import {
   MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL,
 } from './sam31-memory-attention-phase-program.js';
 import { SAM31_EXACT_GELU_FUNCTIONS_WGSL } from './sam31-memory-encoder-phase-program.js';
+import { resizeSam3MaskLogits } from './sam3-source-mask.js';
 
 export const SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID = 'sam3.1.interactive-pointer.phase-program.webgpu-local.v0';
 
@@ -99,8 +100,9 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
   if (shape.sourceImageHeight !== shape.imageHeight * 14 || shape.sourceImageWidth !== shape.imageWidth * 14) {
     throw new Error('source image geometry must be fourteen times feature geometry');
   }
-  if (shape.sourceMaskHeight !== shape.imageHeight * 16 || shape.sourceMaskWidth !== shape.imageWidth * 16) {
-    throw new Error('source mask geometry must be sixteen times feature geometry');
+  const nativeMask = shape.sourceMaskHeight === shape.sourceImageHeight && shape.sourceMaskWidth === shape.sourceImageWidth;
+  if (!nativeMask && (shape.sourceMaskHeight !== shape.imageHeight * 16 || shape.sourceMaskWidth !== shape.imageWidth * 16)) {
+    throw new Error('source mask geometry must match the native image or the sixteen-times-feature fixture');
   }
   if (shape.promptMaskHeight !== shape.imageHeight * 4 || shape.promptMaskWidth !== shape.imageWidth * 4) {
     throw new Error('prompt mask geometry must be four times feature geometry');
@@ -109,6 +111,8 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
     throw new Error('decoder mask geometry must equal prompt mask geometry');
   }
   const sourceMaskPixels = shape.sourceMaskHeight * shape.sourceMaskWidth;
+  const maskDownsampleHeight = Math.floor(shape.sourceMaskHeight / 4);
+  const maskDownsampleWidth = Math.floor(shape.sourceMaskWidth / 4);
   const promptMaskPixels = shape.promptMaskHeight * shape.promptMaskWidth;
   const promptIntermediateHeight = shape.promptMaskHeight / 2;
   const promptIntermediateWidth = shape.promptMaskWidth / 2;
@@ -126,6 +130,8 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
     sourceMaskHeight: shape.sourceMaskHeight,
     sourceMaskWidth: shape.sourceMaskWidth,
     sourceMaskPixels,
+    maskDownsampleHeight,
+    maskDownsampleWidth,
     promptMaskHeight: shape.promptMaskHeight,
     promptMaskWidth: shape.promptMaskWidth,
     promptMaskPixels,
@@ -136,7 +142,8 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
     promptIntermediatePixels,
     binaryMaskLength: batch * sourceMaskPixels,
     imageEmbeddingLength: shape.imageTokens * channels,
-    maskDownsampleLength: batch * promptMaskPixels,
+    maskDownsampleLength: batch * maskDownsampleHeight * maskDownsampleWidth,
+    promptMaskLength: batch * promptMaskPixels,
     promptConv0Length: batch * 4 * promptIntermediatePixels,
     promptConv1Length: batch * 16 * shape.imageTokens,
     denseEmbeddingLength: batch * channels * shape.imageTokens,
@@ -301,9 +308,15 @@ function geluInPlace(values) {
 }
 
 function promptEncode(binaryMasks, weights, geometry) {
-  const promptMasks = conv2dNchw(binaryMasks, geometry.batch, 1, geometry.sourceMaskHeight, geometry.sourceMaskWidth, 1, 4, 4,
+  const downsample = conv2dNchw(binaryMasks, geometry.batch, 1, geometry.sourceMaskHeight, geometry.sourceMaskWidth, 1, 4, 4,
     weight(weights, 'mask-downsample.weight', 16), weight(weights, 'mask-downsample.bias', 1));
-  let dense = conv2dNchw(promptMasks.values, geometry.batch, 1, geometry.promptMaskHeight, geometry.promptMaskWidth, 4, 2, 2,
+  const promptMasks = new Float32Array(geometry.promptMaskLength);
+  const pixels = geometry.maskDownsampleHeight * geometry.maskDownsampleWidth;
+  for (let item = 0; item < geometry.batch; item++) {
+    promptMasks.set(resizeSam3MaskLogits(downsample.values.subarray(item * pixels, (item + 1) * pixels),
+      geometry.maskDownsampleWidth, geometry.maskDownsampleHeight, geometry.promptMaskWidth, geometry.promptMaskHeight), item * geometry.promptMaskPixels);
+  }
+  let dense = conv2dNchw(promptMasks, geometry.batch, 1, geometry.promptMaskHeight, geometry.promptMaskWidth, 4, 2, 2,
     weight(weights, 'prompt.mask_downscaling.0.weight', 16), weight(weights, 'prompt.mask_downscaling.0.bias', 4));
   dense.values = geluInPlace(layerNorm2d(dense.values, geometry.batch, 4, geometry.promptIntermediateHeight, geometry.promptIntermediateWidth,
     weight(weights, 'prompt.mask_downscaling.1.weight', 4), weight(weights, 'prompt.mask_downscaling.1.bias', 4)));
@@ -319,8 +332,35 @@ function promptEncode(binaryMasks, weights, geometry) {
     sparse.set(notPoint, (item * 2) * 256);
     sparse.set(notPoint, (item * 2 + 1) * 256);
   }
-  return { maskDownsample: promptMasks.values, sparseEmbeddings: sparse, denseEmbeddings: dense.values };
+  return { maskDownsample: downsample.values, promptMasks, sparseEmbeddings: sparse, denseEmbeddings: dense.values };
 }
+
+export const encodeSam31InteractiveMaskPromptForTest = promptEncode;
+
+// Meta resizes the learned 4x-downsampled mask (252 -> 288 at native
+// resolution), not the original binary mask. This path is upsample-only.
+const PROMPT_MASK_RESIZE_WGSL = `
+struct Dims { input_height: u32, input_width: u32, output_height: u32, output_width: u32, total: u32 };
+@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output: array<f32>;
+@group(0) @binding(2) var<uniform> dims: Dims;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) grid: vec3<u32>) {
+  let i = gid.x + gid.y * grid.x * 64u;
+  if (i >= dims.total) { return; }
+  let x = i % dims.output_width;
+  let y = (i / dims.output_width) % dims.output_height;
+  let plane = i / (dims.output_width * dims.output_height);
+  let sx = max(0.0, (f32(x) + 0.5) * f32(dims.input_width) / f32(dims.output_width) - 0.5);
+  let sy = max(0.0, (f32(y) + 0.5) * f32(dims.input_height) / f32(dims.output_height) - 0.5);
+  let x0 = u32(floor(sx)); let x1 = min(x0 + 1u, dims.input_width - 1u);
+  let y0 = u32(floor(sy)); let y1 = min(y0 + 1u, dims.input_height - 1u);
+  let base = plane * dims.input_width * dims.input_height;
+  let top = mix(input[base + y0 * dims.input_width + x0], input[base + y0 * dims.input_width + x1], fract(sx));
+  let bottom = mix(input[base + y1 * dims.input_width + x0], input[base + y1 * dims.input_width + x1], fract(sx));
+  output[i] = mix(top, bottom, fract(sy));
+}
+`;
 
 function densePosition(weights, geometry) {
   const matrix = weight(weights, 'prompt.pe_layer.positional_encoding_gaussian_matrix', 256);
@@ -780,6 +820,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
       binaryMasks: create('binary-masks', geometry.binaryMaskLength, readonly),
       imageEmbedding: create('image-embedding', geometry.imageEmbeddingLength, readonly),
       maskDownsample: create('mask-downsample', geometry.maskDownsampleLength),
+      promptMasks: create('prompt-masks', geometry.promptMaskLength),
       promptConv0: create('prompt-conv-0', geometry.promptConv0Length),
       promptNorm0: create('prompt-norm-0', geometry.promptConv0Length),
       promptGelu0: create('prompt-gelu-0', geometry.promptConv0Length),
@@ -838,7 +879,9 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     const addSchema = [{ name: 'total', type: 'u32' }, { name: 'scale', type: 'f32' }];
     const gatherSchema = [{ name: 'token_offset', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
     gpu.uniforms = {
-      outerConv: uniform('outer-conv', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.sourceMaskHeight, input_width: geometry.sourceMaskWidth, output_channels: 1, output_height: geometry.promptMaskHeight, output_width: geometry.promptMaskWidth, kernel: 4, stride: 4, total_output: geometry.maskDownsampleLength }),
+      outerConv: uniform('outer-conv', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.sourceMaskHeight, input_width: geometry.sourceMaskWidth, output_channels: 1, output_height: geometry.maskDownsampleHeight, output_width: geometry.maskDownsampleWidth, kernel: 4, stride: 4, total_output: geometry.maskDownsampleLength }),
+      promptResize: uniform('prompt-resize', ['input_height', 'input_width', 'output_height', 'output_width', 'total'].map(name => ({ name, type: 'u32' })),
+        { input_height: geometry.maskDownsampleHeight, input_width: geometry.maskDownsampleWidth, output_height: geometry.promptMaskHeight, output_width: geometry.promptMaskWidth, total: geometry.promptMaskLength }),
       promptConv0: uniform('prompt-conv-0', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.promptMaskHeight, input_width: geometry.promptMaskWidth, output_channels: 4, output_height: geometry.promptIntermediateHeight, output_width: geometry.promptIntermediateWidth, kernel: 2, stride: 2, total_output: geometry.promptConv0Length }),
       promptConv1: uniform('prompt-conv-1', convSchema, { batch: geometry.batch, input_channels: 4, input_height: geometry.promptIntermediateHeight, input_width: geometry.promptIntermediateWidth, output_channels: 16, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 2, stride: 2, total_output: geometry.promptConv1Length }),
       promptConv2: uniform('prompt-conv-2', convSchema, { batch: geometry.batch, input_channels: 16, input_height: geometry.imageHeight, input_width: geometry.imageWidth, output_channels: 256, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 1, stride: 1, total_output: geometry.denseEmbeddingLength }),
@@ -890,7 +933,8 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   });
 
   addKernel('outerMaskDownsample', CONV2D_WGSL, [tb('binaryMasks'), tb(w('mask-downsample.weight')), tb(w('mask-downsample.bias')), tb('maskDownsample', 'storage'), uniformBinding('outerConv')]);
-  addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('maskDownsample'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);
+  addKernel('promptResize', PROMPT_MASK_RESIZE_WGSL, [tb('maskDownsample'), tb('promptMasks', 'storage'), uniformBinding('promptResize')]);
+  addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('promptMasks'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);
   addKernel('promptNorm0Kernel', LAYERNORM2D_WGSL, [tb('promptConv0'), tb(w('prompt.mask_downscaling.1.weight')), tb(w('prompt.mask_downscaling.1.bias')), tb('promptNorm0', 'storage'), uniformBinding('promptNorm0')]);
   addKernel('promptGelu0Kernel', GELU_WGSL, [tb('promptNorm0'), tb('promptGelu0', 'storage')]);
   addKernel('promptConv1Kernel', CONV2D_WGSL, [tb('promptGelu0'), tb(w('prompt.mask_downscaling.3.weight')), tb(w('prompt.mask_downscaling.3.bias')), tb('promptConv1', 'storage'), uniformBinding('promptConv1')]);
@@ -902,6 +946,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   addKernel('keySeedKernel', KEY_SEED_WGSL, [tb('imageEmbedding'), tb('denseEmbedding'), tb('keyA', 'storage'), uniformBinding('keySeed')]);
   phases.push(
     dispatch('interactive-pointer-mask-downsample', 'outerMaskDownsample', geometry.maskDownsampleLength),
+    dispatch('interactive-pointer-prompt-resize', 'promptResize', geometry.promptMaskLength),
     dispatch('interactive-pointer-prompt-conv-0', 'promptConv0Kernel', geometry.promptConv0Length),
     dispatch('interactive-pointer-prompt-norm-0', 'promptNorm0Kernel', geometry.batch * geometry.promptIntermediatePixels),
     dispatch('interactive-pointer-prompt-gelu-0', 'promptGelu0Kernel', geometry.promptConv0Length),
@@ -1048,7 +1093,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     phases,
     metadata: {
       routeId: route.routeId,
-      sourceBoundary: 'Meta _use_mask_as_output H*16 source mask -> interactive_mask_downsample H*4 prompt mask -> PromptEncoder H feature grid',
+      sourceBoundary: 'Meta _use_mask_as_output source mask -> learned stride-4 convolution -> bilinear prompt-grid resize -> PromptEncoder feature grid',
       batch: geometry.batch,
       queryTokens: geometry.queryTokens,
       imageTokens: geometry.imageTokens,
