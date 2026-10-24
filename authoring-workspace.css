@@ -301,10 +301,10 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 .asset-step h3 span{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:#3a4144;color:#cfd5d7;font-size:10px;}
 .asset-step .asset-help{margin:0;font-size:11px;}
 #asset-step-image #asset-prompt{flex:1 1 auto;min-height:3.2em;}
-.asset-mesh-input{display:grid;grid-template-columns:minmax(80px,.8fr) minmax(170px,1.2fr);gap:10px;align-items:start;flex:none;}
+.asset-mesh-input{flex:none;min-width:0;}
 .asset-mesh-controls{display:flex;flex-direction:column;gap:7px;min-width:0;}
-.asset-mesh-input:has(#asset-step-source[hidden]){grid-template-columns:1fr;}
-#asset-step-source{width:100%;height:80px;object-fit:contain;border-radius:4px;background-color:#202426;background-image:linear-gradient(45deg,#2b3032 25%,transparent 25%),linear-gradient(-45deg,#2b3032 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2b3032 75%),linear-gradient(-45deg,transparent 75%,#2b3032 75%);background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0;}
+
+#asset-step-source,#asset-step-preview{width:100%;height:100%;min-height:0;object-fit:contain;border-radius:4px;background-color:#202426;background-image:linear-gradient(45deg,#2b3032 25%,transparent 25%),linear-gradient(-45deg,#2b3032 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2b3032 75%),linear-gradient(-45deg,transparent 75%,#2b3032 75%);background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0;}
 #asset-step-source-name{color:#aeb6b9;font-size:11px;overflow-wrap:anywhere;}
 #asset-mesh-settings{color:#929da2;font-size:11px;line-height:1.4;}
 #asset-step-mesh #asset-mesh-model-row{margin:0;}#asset-step-mesh #asset-preparation-status{margin:0;font-size:11px;}
@@ -428,3 +428,19 @@ body[data-workspace=workbench] #authoring-viewport-tools .selection-setting sele
 /* Keep multi-selection distinct while retaining main's Outliner typography and icons. */
 #authoring-tree .scene-object-row.selected, #authoring-tree .scene-group-row.selected { background:#2d2a26; color:#ead2b2; }
 #authoring-tree .scene-group-row.active { background:#3a3226; border-color:#7d6440; }
+
+/* Image inspection remains in the Generate drawer; expansion gives its center
+   column and the drawer more room without changing viewport content. */
+.asset-image-view{display:flex;flex:1 0 144px;min-height:144px;position:relative;overflow:hidden;border-radius:4px;}
+.asset-image-view>img,.asset-image-view>canvas{position:absolute;inset:0;}
+.asset-image-view-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;flex:none;}
+.asset-image-view-tools label{display:flex;align-items:center;gap:5px;white-space:nowrap;}
+#authoring-assets .asset-image-view-tools button{padding:4px 8px;}
+#asset-image-timing{font-size:15px;font-weight:600;color:#f0d5a9;font-variant-numeric:tabular-nums;flex:none;}
+#asset-image-view-label{font-size:11px;color:#c9b98f;flex:none;}
+#asset-step-source-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;}
+#asset-generate[data-image-expanded=true]:not([hidden]){grid-template-columns:minmax(190px,1fr) minmax(300px,3fr) minmax(120px,.7fr);}
+#asset-generate[data-image-expanded=true] .asset-image-view{flex-basis:260px;min-height:260px;}
+body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) min(68vh,calc(100vh - 222px));}
+@media(max-width:800px){body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) 180px min(60vh,calc(100vh - 402px));}}
+@container asset-pane (max-width:640px){#asset-generate[data-image-expanded=true]:not([hidden]){grid-template-columns:1fr;}#asset-generate[data-image-expanded=true] .asset-image-view{flex-basis:260px;}}
