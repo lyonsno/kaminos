@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import * as THREE from '../lib/three.core.js';
 import { handObservation, createHoverController } from '../experiments/iron-gland/interaction.mjs';
 import { createMechanism } from '../experiments/iron-gland/mechanism.mjs';
+import { installOwnerExperimentEntry } from '../owner-experiment-entry.mjs';
 
 // Exercise the actual experiment, substituting only camera, model loading and host I/O.
 const source = (await fs.readFile(new URL('../experiments/iron-gland.experiment.mjs', import.meta.url), 'utf8'))
@@ -28,10 +29,11 @@ async function fixture() {
     stop() { this.readyState='ended'; }
     end() { this.stop(); this.dispatchEvent(new Event('ended')); }
   }
+  const makeStream = () => {const t=new Track();tracks.push(t);return {getTracks:()=>[t],getVideoTracks:()=>[t]};};
   const video = { videoWidth:640, videoHeight:480, play:async()=>{},
     requestVideoFrameCallback(fn) { this.callback=fn; return 1; }, cancelVideoFrameCallback() { this.callback=null; } };
   const window = Object.assign(new EventTarget(), {innerWidth:1440,innerHeight:1000,indexedDB:{},
-    navigator:{mediaDevices:{getUserMedia:async()=>{const t=new Track();tracks.push(t);return {getTracks:()=>[t],getVideoTracks:()=>[t]};}}},
+    navigator:{mediaDevices:{getUserMedia:async()=>makeStream()}},
     kaminosAppGpu:async()=>({session:async()=>sessionData})});
   const document = {defaultView:window,getElementById:()=>null,createElement:tag=>{
     if(tag==='video')return video;
@@ -48,11 +50,63 @@ async function fixture() {
   const owner = await definition.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{},record:e=>events.push(e)});
   await owner.operations.loadModels();
   return {owner,tracks,attached,events,video,
+    makeStream,setCameraRequest:value=>{window.navigator.mediaDevices.getUserMedia=value;},
     setModelData:value=>{modelData=value;},setSessionData:value=>{sessionData=value;},
     get releases(){return releases;},get routeCreations(){return routeCreations;},
-    async frame(value) { pending=value;const cb=video.callback;video.callback=null;assert.ok(cb,'frame scheduled');cb();await flush(); },
+    async frame(value) { await flush();pending=value;const cb=video.callback;video.callback=null;assert.ok(cb,'frame scheduled');cb();await flush(); },
     tick() { frameCallback?.({timestampMs:1000}); }, get disposed(){return disposed;}};
 }
+
+// Use the real serialized Workbench entry; only discovery's fixture and DOM are substituted.
+async function workbenchEntry(owner) {
+  const oldOption=globalThis.Option, oldOwner=globalThis.__ironGlandEntryFixture;
+  globalThis.Option=class {constructor(text,value){this.text=text;this.value=value;}};
+  globalThis.__ironGlandEntryFixture={read:owner.read,operations:owner.operations,dispose:()=>owner.dispose()};
+  try {
+    const nodes=new Map(), section={querySelector:key=>{
+      if(!nodes.has(key))nodes.set(key,{value:'',textContent:'',addEventListener(){},replaceChildren(){}});
+      return nodes.get(key);
+    }};
+    const definition='data:text/javascript,'+encodeURIComponent("export default {id:'iron-gland',title:'Iron Gland',create(){return globalThis.__ironGlandEntryFixture;}}");
+    const entry=await installOwnerExperimentEntry({document:{createElement:()=>section},root:{append(){}},host:{},discover:async()=>[definition]});
+    await entry.open('iron-gland');return entry;
+  } finally {globalThis.Option=oldOption;globalThis.__ironGlandEntryFixture=oldOwner;}
+}
+
+for(const action of ['stop','close'])test(`Workbench ${action} completes while camera permission remains unresolved`, async()=>{
+  const f=await fixture();let grant,starting,ending,entry,completed=false;
+  const grantCamera=()=>{if(grant){const resolve=grant;grant=null;resolve(f.makeStream());}};
+  try {
+    f.setCameraRequest(()=>new Promise(resolve=>{grant=resolve;}));
+    entry=await workbenchEntry(f.owner);
+    starting=entry.invoke('start');await flush();
+    assert.equal(f.owner.read().starting,true);assert.equal(f.tracks.length,0);
+    ending=(action==='close'?entry.close():entry.invoke('stop')).then(()=>{completed=true;});
+    await flush();
+    assert.equal(completed,true,`${action} must not wait for a human permission decision`);
+    assert.equal(f.owner.read().starting,false);
+    if(action==='close')assert.equal(f.disposed,1);
+    grantCamera();await starting;await flush();
+    assert.ok(f.tracks.every(track=>track.readyState==='ended'),'every late camera track must stop');
+    assert.equal(f.owner.read().running,false);assert.equal(f.owner.read().cameraVisible,false);
+    assert.equal(f.attached.find(a=>!a.options.presentation).root.visible,false);
+  } finally {
+    grantCamera();await starting;await ending;
+    if(entry)await entry.close();else await f.owner.dispose();
+  }
+});
+
+test('asynchronous camera denial remains visible after Start acknowledges initiation', async()=>{
+  const f=await fixture();let deny;
+  try {
+    f.setCameraRequest(()=>new Promise((resolve,reject)=>{deny=reject;}));
+    const started=f.owner.operations.start();
+    assert.equal(started.starting,true,'Start acknowledges initiation rather than waiting on permission');
+    deny(Error('camera permission denied'));await flush();
+    assert.equal(f.owner.read().starting,false);assert.equal(f.owner.read().running,false);
+    assert.equal(f.owner.read().cameraVisible,false);assert.match(f.owner.read().error,/permission denied/);
+  } finally {deny?.(Error('camera permission denied'));await f.owner.dispose();}
+});
 
 test('camera background cannot depth-clip the closed, open or rotated mechanism', async () => {
   const f=await fixture();
