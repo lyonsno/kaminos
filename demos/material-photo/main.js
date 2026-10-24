@@ -2,6 +2,7 @@ import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuF
 import { superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
 import { createSuperMatApp } from '../../models/supermat/supermat-app.js';
 import { createMoGeApp } from '../../models/moge/moge-app.js';
+import { createMaterialPhotoOperation } from '../../models/material-photo/material-photo-operation.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
@@ -24,7 +25,7 @@ const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-app-v1-super
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
-let image,selection,active=false,viewer,gpu,session,foreground,moge,materials,setupPromise;
+let image,selection,active=false,viewer,gpu,session,foreground,moge,materials,photoOperation,setupPromise,inferenceAbort;
 let imageTicket=0;
 let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
@@ -230,6 +231,7 @@ async function restoreCached(ticket=++imageTicket){
 async function infer(){
   if(!GENERATION_AVAILABLE||state.renderError||active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
+  inferenceAbort=new AbortController();
   const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
   const retainDisplay=!!viewer?.maps;
   const visible=()=>ticket===imageTicket&&size===Number($('material-size').value);
@@ -243,37 +245,38 @@ async function infer(){
     if(![512,768,1024].includes(size))throw Error('Choose a supported material resolution');
     await setup();
     const retained=await cache.get(geometryKey(key));
-    if(!retained){
-      moge??=await createMoGeApp({device:gpu.device,session,foreground,load:false});
-      await moge.load((received,total)=>progressStatus(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
-      if(!moge.model.useRealWeights)throw Error('MoGe real weights did not load; preview refuses stub inference');
-    }
-    progressStatus('1/2 Geometry: inferring depth & normals');
-    let phase=performance.now();
-    const geometryFramesBefore=viewer.frameStats?.duringModel??0;
-    const depth=retained?.depth??await moge.infer({image:input});
-    record.phases.geometryMs=performance.now()-phase;
-    record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.model.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null,
-      renderCallbacks:(viewer.frameStats?.duringModel??0)-geometryFramesBefore};
-    if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
-    if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
-    await new Promise(requestAnimationFrame);
+    moge??=await createMoGeApp({device:gpu.device,session,foreground,load:false});
     materials??=await createSuperMatApp({device:gpu.device,session,foreground,load:false,weightsUrl,
       adapterOptions:{weightLoading:'chunks',...superMatProductProfile(gpu.device)}});
-    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
-    await materials.load(event=>{
-      if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
-    });
-    phase=performance.now();
-    const modelFramesBefore=viewer.frameStats?.duringModel??0;
-    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
-    const output=await materials.infer({image:input,size,onRunProgress:progress=>{
+    photoOperation??=createMaterialPhotoOperation({geometry:moge,materials});
+    let geometryFramesBefore=0,modelFramesBefore=0;
+    const {depth,maps:output,phases}=await photoOperation.infer({image:input,size,depth:retained?.depth,signal:inferenceAbort.signal,
+      onGeometry:async depth=>{
+        record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.model.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null,
+          renderCallbacks:(viewer.frameStats?.duringModel??0)-geometryFramesBefore};
+        if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
+        if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
+        await new Promise(requestAnimationFrame);
+      },onProgress:({stage,phase,detail})=>{
+        if(stage==='geometry'){
+          if(phase==='loading')progressStatus(detail?`1/2 Geometry: loading MoGe ${Math.round(detail.received/1e6)}${detail.total?` / ${Math.round(detail.total/1e6)}`:''} MB`:'1/2 Geometry: loading MoGe');
+          else {geometryFramesBefore=viewer.frameStats?.duringModel??0;progressStatus(phase==='retained'?'1/2 Geometry: retained depth & normals':'1/2 Geometry: inferring depth & normals');}
+        }else if(phase==='loading'){
+          if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
+          if(detail?.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${detail.resourceIndex+1}/${detail.resourceCount} resources`);
+          else if(!detail)progressStatus('2/2 Materials: loading SuperMat');
+        }else if(!detail){
+          modelFramesBefore=viewer.frameStats?.duringModel??0;
+          if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
+          progressStatus('2/2 Materials: inferring materials');
+        }else{
+          const progress=detail;
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
           progressStatus(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
           if(progress.totalFlops)$('progress').value=progress.completedFlops/progress.totalFlops;else $('progress').removeAttribute('value');
-        }});
-    record.phases.materialsMs=performance.now()-phase;
-    if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
+        }
+      }});
+    record.phases=phases;
     record.supermat={identity:materials.adapter.identity,size,timings:output.timings,dutyCount:output.dutyCount};
     record.supermat.renderCallbacks=(viewer.frameStats?.duringModel??0)-modelFramesBefore;
     record.wallMs=performance.now()-started;record.status='done';
@@ -285,12 +288,13 @@ async function infer(){
     $('job-status').textContent=`${record.source} | Generation complete`;$('progress').value=1;
     if(visible())presentCompleted();else $('view-result').hidden=false;
   }catch(error){
-    record.status='error';record.error=String(error.stack??error);state.job={source:record.source,size,status:'error',error:error.message};
+    const cancelled=error.name==='AbortError';
+    record.status=cancelled?'cancelled':'error';record.error=String(error.stack??error);state.job={source:record.source,size,status:record.status,error:error.message};
     $('job-status').textContent=`${record.source} | ${error.message}`;
-    if(visible()){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');if(retainDisplay)provenance('Previous result | Generation failed');state.status='error';state.error=error.message;status(error.message,true);}
+    if(visible()){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus(cancelled?'Materials not yet computed':'Materials unavailable');if(retainDisplay)provenance(cancelled?'Previous result | Generation stopped':'Previous result | Generation failed');state.status=record.status;state.error=cancelled?null:error.message;status(cancelled?'Generation stopped':error.message,!cancelled);}
     $('progress').removeAttribute('value');
   }
-  finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
+  finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;inferenceAbort=null;
     runButton();
   }
 }
@@ -407,6 +411,7 @@ for(const [id,key]of [['environment-rotation','rotation'],['environment-intensit
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
 window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,restoreCached,viewResult,
+  stopInference:()=>inferenceAbort?.abort('Generation stopped'),
   inferenceApps:()=>({geometry:moge,materials,session,foreground}),
   exampleEvidence:()=>({imageKey,source:state.source,sample:sampleKey,...results.snapshot(),record:state.runs.at(-1),identity:state.identity}),
   setEffects:value=>{viewer.setEffects(value);syncControls();return viewer.getEffects();},
