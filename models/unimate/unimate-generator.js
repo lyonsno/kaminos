@@ -10,7 +10,7 @@ import { CooperativeUniMateDenoiser, UniMateDutyScheduler, createCooperativeCfgD
 import { dopri5Solve } from './unimate-dopri5.js';
 import { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
 import { T5Encoder } from './unimate-t5.js';
-import { createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/core.js';
+import { createWebGpuApplicationRunner } from '../../webgpu-inference-kit/src/core.js';
 
 export const UNIMATE_ROUTE_ID = 'unimate.text-to-motion.webgpu-local.v0';
 
@@ -83,8 +83,14 @@ async function download(url, onBytes, onResponse) {
 // skeleton: a published bundle directory (bundleBase) or in-memory data ({ b, a }, skeletonData).
 // routeId: the model's kit route. A run starts with beginRun(runId, { routeId }), so the host's
 // foreground service (its own or an app-wide one) carries UniMate's identity for the run.
-export async function createUniMateGenerator({ device, session, beginRun, routeId = UNIMATE_ROUTE_ID, weightsBase, t5Base, bundleBase = null, skeletonData = null,
+export async function createUniMateGenerator({ device, session, beginRun, routeId = `${UNIMATE_ROUTE_ID}:${crypto.randomUUID()}`, weightsBase, t5Base, bundleBase = null, skeletonData = null,
   onStatus = () => {}, onBytes = () => {} }) {
+  let fatalError = null, destroyed = false, destruction = null, changingSkeleton = null;
+  const assertOpen = () => {
+    if (destroyed) throw new Error('UniMate generator is destroyed');
+    if (fatalError) throw fatalError;
+  };
+  const foreground = { beginRun };
   const g = { bundle: null, arrays: null, skeleton: null, parameterCount: null, forwardFlops: null };
   // The generation skeleton (conditioning bundle). useSkeleton() swaps it between runs.
   let bundle, arrays, J, parents, jointNames, fps, T, rest, offsets;
@@ -119,7 +125,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
   ]);
   onStatus({ phase: 'load', detail: 'GPU pipelines' });
   const den = await CooperativeUniMateDenoiser.create(device, manifest, weightBytes);
-  den.configure({ B: 2, J });
+  try { den.configure({ B: 2, J }); } catch (error) { den.destroy(); throw error; }
   const scheduler = new UniMateDutyScheduler(device, { label: 'unimate' });
   let t5 = null;
   if (t5Bytes) {
@@ -135,74 +141,62 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
       motionLength: [bundle.motionLength, bundle.motionLength] };
   };
 
-  let active = null;
-  async function solve({ caption, noise, schedule, onEvaluation, onStep }) {
+  function decode(final) {
+    // Denormalize (motion * std + mean, float32) into [T, J, 12] features, then decode.
+    const features = new Float32Array(T * J * Fe);
+    for (let t = 0; t < T; t++) for (let j = 0; j < J; j++) for (let d = 0; d < Fe; d++) {
+      features[(t * J + j) * Fe + d] = Math.fround(Math.fround(final[(j * Fe + d) * T + t] * arrays.std[j * Fe + d]) + arrays.mean[j * Fe + d]);
+    }
+    const motion = decodeUniMateMotion({ features, frames: T, parents, offsets });
+    return { motion, features };
+  }
+
+  async function solve({ caption, noise, schedule, onEvaluation, onStep, onPartial, rtol, atol, cfgScale }) {
     scheduler.setSchedule(schedule);
-    den.writeConditioning(conditioningFor(caption));
-    den.encodePrepare(scheduler.encoder());
-    await scheduler.flush('unimate.prepare');
-    const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation });
+    let drift;
     try {
-      const res = await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol: 1e-3, atol: 1e-6, onStep });
+      den.writeConditioning(conditioningFor(caption));
+      den.encodePrepare(scheduler.encoder());
+      await scheduler.flush('unimate.prepare');
+      drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation, cfgScale });
+      const res = await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol, atol, onStep,
+        onSample: onPartial ? async ({ state, t, index }) => {
+          schedule?.signal.throwIfAborted();
+          await onPartial({ motion: decode(state).motion, t, index, skeleton: g.skeleton, evaluations: drift.evaluations });
+        } : null });
       const final = res.solution.at(-1);
-      // Denormalize (motion * std + mean, float32) into [T, J, 12] features, then decode.
-      const features = new Float32Array(T * J * Fe);
-      for (let t = 0; t < T; t++) for (let j = 0; j < J; j++) for (let d = 0; d < Fe; d++) {
-        features[(t * J + j) * Fe + d] = Math.fround(Math.fround(final[(j * Fe + d) * T + t] * arrays.std[j * Fe + d]) + arrays.mean[j * Fe + d]);
-      }
-      const motion = decodeUniMateMotion({ features, frames: T, parents, offsets });
+      const { motion, features } = decode(final);
       return { motion, features, steps: res.steps, evaluations: drift.evaluations, duties: scheduler.stats.history.slice() };
     } finally {
-      drift.dispose();
+      drift?.dispose();
       await scheduler.discard();
     }
   }
 
-  // text: any prompt (browser T5), or promptIndex: a captured bundle prompt. seed null replays
-  // the accepted run's noise, which exists only for captured prompts.
-  async function generate({ text = null, promptIndex = null, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1,
-    onEvaluation, onStep } = {}) {
-    if (text === null) text = bundle.prompts[promptIndex ?? 0].text;
-    const match = bundle.prompts.findIndex(p => p.text === text);
-    if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
-    if (!t5 && match < 0) throw new Error('no text encoder loaded: choose one of the captured prompts');
-    if (active) throw new Error('a generation is already running');
-    const encodeStart = performance.now();
-    const caption = t5 ? (await t5.encode(text)).pooled : arrays[bundle.prompts[match].caption];
-    const encodeMs = performance.now() - encodeStart;
-    const prompt = match >= 0 ? bundle.prompts[match] : { text };
-    const noise = seed === null ? Float32Array.from(arrays[prompt.referenceNoise]) : gaussianNoise(seed, J * Fe * T);
-    const runId = `unimate:${crypto.randomUUID()}`;
-    const abort = new AbortController();
-    active = { abort, control: null };
-    scheduler.stats.history.length = 0;
-    const started = performance.now();
-    let frameRun = null, route = null, result;
-    try {
-      if (cooperative) {
-        frameRun = await beginRun(runId, { routeId });
-        route = await session.registerRoute({ routeId, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
-        const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
-        active.control = control;
-        const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep,
-          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
-        const completion = await job.completion;
-        if (completion.status !== 'succeeded') {
-          const error = new Error(completion.failure?.message ?? completion.status);
-          error.name = completion.failure?.name ?? 'Error';
-          throw error;
-        }
-        result = completion.output;
-      } else {
-        result = await solve({ caption, noise, schedule: null, onEvaluation, onStep });
-      }
+  const runner = createWebGpuApplicationRunner({ session, foreground, routeId,
+    label: 'generation', phase: 'generating', runtimeLabel: 'unimate',
+    assertOpen, getError: () => fatalError, onFatal: error => { fatalError = error; },
+    prepare: async () => {}, settle: () => device.queue.onSubmittedWorkDone(),
+    execute: async ({ text, match, seed, onEvaluation, onStep, onPartial, rtol, atol, cfgScale, encodeOnly = false }, schedule) => {
+      const encodeStart = performance.now();
+      // The prompt encoder belongs to the admitted run, before its solver duties.
+      const caption = t5 ? (await t5.encode(text)).pooled : arrays[bundle.prompts[match].caption];
+      schedule?.signal.throwIfAborted();
+      if (encodeOnly) return caption;
+      const encodeMs = performance.now() - encodeStart;
+      const prompt = match >= 0 ? bundle.prompts[match] : { text };
+      const noise = seed === null ? Float32Array.from(arrays[prompt.referenceNoise]) : gaussianNoise(seed, J * Fe * T);
+      scheduler.stats.history.length = 0;
+      const started = performance.now();
+      const result = await solve({ caption, noise, onEvaluation, onStep, onPartial, rtol, atol, cfgScale, schedule });
+      result.solver = { method: 'dopri5', rtol, atol, cfgScale, endTime: bundle.outputTimes.at(-1) };
       result.prompt = text;
       result.seed = seed;
       result.textEncoder = t5 ? 'browser T5' : 'captured embedding';
       result.encodeMs = encodeMs;
       result.noise = seed === null ? 'reference (accepted CPU run)' : `browser seed ${seed}`;
       result.wallMs = performance.now() - started;
-      result.cooperative = cooperative;
+      result.cooperative = Boolean(schedule);
       result.dutyCount = result.duties.length;
       result.longestDutyMs = Math.max(0, ...result.duties.map(d => d.queueMs ?? 0));
       const ref = prompt.referencePositions && seed === null ? arrays[prompt.referencePositions] : null;
@@ -214,46 +208,76 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
       }
       result.skeleton = g.skeleton;
       return result;
-    } finally {
-      try { await active.control?.close(); } catch { /* reported by the control */ }
-      if (route) { await route.drain(); session.unregisterRoute(route.routeId); }
-      if (frameRun) await frameRun.finish();
-      active = null;
-    }
+    },
+  });
+
+  // text: any prompt (browser T5), or promptIndex: a captured bundle prompt. seed null replays
+  // the accepted run's noise, which exists only for captured prompts.
+  async function generate({ text = null, promptIndex = null, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1,
+    onEvaluation, onStep, onPartial, rtol = 1e-3, atol = 1e-6, cfgScale = 3, signal } = {}) {
+    assertOpen();
+    if (changingSkeleton) throw new Error('the generation skeleton is changing');
+    if (![rtol, atol].every(v => Number.isFinite(v) && v > 0)) throw new RangeError('solver tolerance must be finite and positive');
+    if (!Number.isFinite(cfgScale)) throw new RangeError('guidance must be finite');
+    if (text === null) text = bundle.prompts[promptIndex ?? 0].text;
+    const match = bundle.prompts.findIndex(p => p.text === text);
+    if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
+    if (!t5 && match < 0) throw new Error('no text encoder loaded: choose one of the captured prompts');
+    return runner.run({ text, match, seed, cooperative, onEvaluation, onStep, onPartial, rtol, atol, cfgScale, signal,
+      scheduling: { targetDutyMs, maxInFlight } });
   }
 
   async function togglePause() {
-    const control = active?.control;
+    const control = runner.snapshot().control;
     if (!control) return null;
-    const snap = control.snapshot();
-    if (snap.status === 'paused' || snap.pauseRequested) { await control.resume(); return 'running'; }
-    await control.pause(); return 'paused';
+    if (control.status === 'paused' || control.pauseRequested) { await runner.resume(); return 'running'; }
+    await runner.pause(); return 'paused';
   }
-  function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
+  const stop = reason => runner.stop(reason);
+
+  function changeSkeleton(load) {
+    assertOpen();
+    if (runner.pending) throw new Error('a generation is running');
+    if (changingSkeleton) throw new Error('the generation skeleton is changing');
+    changingSkeleton = Promise.resolve().then(load).then(data => {
+      assertOpen(); applySkeleton(data); den.configure({ B: 2, J }); return bundle;
+    }).finally(() => { changingSkeleton = null; });
+    return changingSkeleton;
+  }
 
   // Switch the generation skeleton (a bundle directory) between runs.
   async function useSkeleton(base) {
-    if (active) throw new Error('a generation is running');
-    applySkeleton(await fetchSkeleton(base));
-    den.configure({ B: 2, J });
-    return bundle;
+    return changeSkeleton(() => fetchSkeleton(base));
   }
 
   // Switch to an in-memory skeleton bundle ({ b, a }: index and arrays, e.g. from the rig importer).
   async function useSkeletonData(data) {
-    if (active) throw new Error('a generation is running');
-    applySkeleton(data);
-    den.configure({ B: 2, J });
-    return bundle;
+    return changeSkeleton(() => data);
   }
   // The pooled Flan-T5 encoding of a text (a prompt, or a joint label for an imported rig).
   async function encodeText(text) {
+    assertOpen();
+    if (changingSkeleton) throw new Error('the generation skeleton is changing');
     if (!t5) throw new Error('the text encoder is not loaded');
-    return (await t5.encode(text)).pooled;
+    return runner.run({ text, encodeOnly: true });
   }
 
-  Object.assign(g, { generate, togglePause, stop, useSkeleton, useSkeletonData, encodeText, hasTextEncoder: () => Boolean(t5),
-    get running() { return Boolean(active); }, forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount });
+  function destroy() {
+    if (destruction) return destruction;
+    destroyed = true;
+    runner.stop('UniMate generator destroyed');
+    destruction = (async () => {
+      await Promise.allSettled([runner.pending, changingSkeleton]);
+      // The device/session/renderer are borrowed. Only model allocations are released.
+      await device.queue.onSubmittedWorkDone();
+      den.destroy(); t5?.destroy(); t5 = null;
+    })();
+    return destruction;
+  }
+
+  Object.assign(g, { generate, togglePause, stop, destroy, useSkeleton, useSkeletonData, encodeText, hasTextEncoder: () => Boolean(t5),
+    snapshot: runner.snapshot, routeId, forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount });
+  Object.defineProperty(g, 'running', { get: () => Boolean(runner.pending || changingSkeleton) });
   onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters${t5 ? ' · type any prompt' : ''}` });
   return g;
 }

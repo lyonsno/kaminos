@@ -47,6 +47,8 @@ try {
 
 Pass `{ device }` to share your renderer's GPU, or `{ session, foreground }` to share an existing coordinated host. Destruction preserves borrowed resources. Model options and outputs remain model-specific: Klein exposes `pipelineOptions` and `app.pipeline`; SuperMat exposes `adapterOptions` and `app.adapter`. Each accepts scheduling policy at creation or per run. Their application wrappers use the kit's shared admitted-run/control/cleanup runner, while each model retains its own loading and resource lifecycle.
 
+UniMate uses the same runner through its existing host-injected `createUniMateConsumer(host)`: provide a skeleton and prompt, receive an animated GLB, and retain solver controls and partial motion. Its `run/read/togglePause/stop/destroy` interface borrows your rendering host. [Animate a skeleton](./docs/model-applications.md#animate-a-skeleton-with-unimate) shows the source-package integration.
+
 ## Segment Images With SAM 3
 
 Install the native-resolution model once with `npx kaminos-sam-model --out public/models/sam3`, then use it in an ordinary browser application:
@@ -135,7 +137,7 @@ WebGpuInferenceSession
             +-- model-specific output
 ```
 
-The Klein and SuperMat application entry points assemble this session/route lifecycle for their callers. Their shared runner holds admission through control and foreground cleanup; ports retain model-specific loading and output construction. [Application runner contract](./docs/model-applications.md#shared-runner-for-port-authors).
+The Klein and SuperMat application entry points and the UniMate generator assemble this session/route lifecycle for their callers. Their shared runner holds admission through control and foreground cleanup; ports retain model-specific loading and output construction. [Application runner contract](./docs/model-applications.md#shared-runner-for-port-authors).
 
 The session coordinates a shared WebGPU device, route lifecycle, global admission, and resource residency. A port typically places reusable model resources in route-scoped state and temporary run resources in invocation-scoped state.
 

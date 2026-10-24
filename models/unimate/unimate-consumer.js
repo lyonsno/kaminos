@@ -46,6 +46,10 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
   const state = { phase: 'idle', stage: null, detail: null, progress: null, error: null, last: null, memory: unimateMemoryEstimate() };
   const set = (phase, stage = null, detail = null, progress = null) => Object.assign(state, { phase, stage, detail, progress });
   let generator = null, labeler = null, running = null;
+  let pending = null, destroyed = false, destruction = null;
+  const checkStopped = () => {
+    if (running?.stopped) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
+  };
 
   async function ensureModel(skeletonData = null) {
     if (generator) return generator;
@@ -57,7 +61,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
     return generator;
   }
 
-  async function run({ asset, prompt, seed = 1, onProgress = () => {} } = {}) {
+  async function execute({ asset, prompt, seed = 1, rtol = 1e-3, atol = 1e-6, cfgScale = 3, onPartial, onProgress = () => {} } = {}) {
     if (running) throw new Error('UniMate is already running');
     if (!prompt) throw new Error('a prompt is needed');
     const prepared = asset != null && Object.hasOwn(asset, 'skeletonData');
@@ -75,6 +79,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       if (device.limits && device.limits.maxBufferSize < estimate.largestBuffer) refuse(`this device's largest buffer is ${Math.floor(device.limits.maxBufferSize / 1e6)} MB`);
       const wasLoaded = Boolean(generator);
       const gen = await ensureModel(prepared ? asset.skeletonData : null);
+      checkStopped();
       let rig = null, labels = null, data = null;
       const bytes = asset?.bytes ?? asset?.glb ?? null;
       if (prepared) {
@@ -86,6 +91,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
         rig = turnRest(readRig(bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
           asset.restRotation ?? null);
         labels = asset.labels ?? await (await (labeler ??= createLabeler({ zipUrl: labelerZip, onStatus: s => report('running', 'label', s) }))).label(rig);
+        checkStopped();
         report('running', 'encode', 'joint labels');
         data = await buildSkeletonBundle(rig, labels, { name: asset.name ?? 'rig', embed: text => gen.encodeText(text),
           motion: { frames: gen.bundle.skeleton.frames, outputTimes: gen.bundle.outputTimes } });
@@ -96,8 +102,27 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
         await gen.useSkeleton(`${skeletonsBase}${key}/`);
       }
       if (running.stopped) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
-      report('running', 'solve', prompt, { evaluations: 0, t: 0 });
-      const result = await gen.generate({ text: prompt, seed, onEvaluation: e => report('running', 'solve', prompt, { evaluations: e.evaluations, t: Math.min(e.t, 1) }) });
+      const solverEvaluations = [];
+      let solverProgress = { evaluations: 0, t: 0, acceptedT: 0, attemptedSteps: 0, acceptedSteps: 0, rejectedSteps: 0 };
+      const progress = () => report('running', 'solve', prompt, { ...solverProgress });
+      progress();
+      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale,
+        onPartial: onPartial ? sample => {
+          checkStopped();
+          return onPartial({ ...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? 'browser T5' : 'captured embedding' });
+        } : undefined,
+        onEvaluation: e => {
+          solverEvaluations.push({ ...e });
+          solverProgress = { ...solverProgress, evaluations: e.evaluations, t: Math.min(e.t, 1) };
+          progress();
+        },
+        onStep: step => {
+          solverProgress = { ...solverProgress, attemptedSteps: solverProgress.attemptedSteps + 1,
+            acceptedSteps: solverProgress.acceptedSteps + Number(step.accepted), rejectedSteps: solverProgress.rejectedSteps + Number(!step.accepted),
+            acceptedT: step.accepted ? Math.min(1, step.t0 + step.dt) : solverProgress.acceptedT };
+          progress();
+        } });
+      checkStopped();
       report('running', 'bake', 'animated .glb');
       const sk = gen.skeleton;
       const glb = exportMotionGlb({ name: asset?.name ?? sk.name, jointNames: sk.jointNames, parents: sk.parents, rest: sk.rest, fps: sk.fps,
@@ -106,7 +131,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       const out = {
         glb, motion: result.motion, skeleton: sk, restFrame: data?.restFrame ? structuredClone(data.restFrame) : null,
         rig: rig ? { names: rig.names, pruned: rig.pruned, labels: labels.clean, face: labels.face, restRotation: rig.restRotation ?? null, mesh: Boolean(data?.mesh) } : null,
-        report: { prompt, seed, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
+        report: { prompt, seed, solver: result.solver, solverProgress: { ...solverProgress }, solverSteps: result.steps, solverEvaluations, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
       };
       state.last = { prompt, seed, skeleton: sk.name, glbBytes: glb.byteLength, evaluations: result.evaluations };
       report('done', null, `${sk.name}: ${prompt}`);
@@ -120,10 +145,36 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
     }
   }
 
+  function run(options) {
+    if (destroyed) return Promise.reject(new Error('UniMate consumer is destroyed'));
+    if (pending) return Promise.reject(new Error('UniMate is already running'));
+    const task = execute(options);
+    pending = task;
+    const settled = () => { if (pending === task) pending = null; };
+    task.then(settled, settled);
+    return task;
+  }
+  function stop(reason = 'stopped by user') { if (running) running.stopped = true; generator?.stop(reason); }
+  function destroy() {
+    if (destruction) return destruction;
+    destroyed = true; stop('UniMate consumer destroyed');
+    destruction = (async () => {
+      await pending?.catch(() => {});
+      const failures = [];
+      try { await generator?.destroy(); } catch (error) { failures.push(error); }
+      try { (await labeler)?.close(); } catch (error) { failures.push(error); }
+      if (failures.length) throw new AggregateError(failures, 'UniMate consumer cleanup failed');
+      generator = labeler = null;
+      set('destroyed');
+    })();
+    return destruction;
+  }
+
   return {
     read: () => ({ ...state }),
     run,
-    stop(reason = 'stopped by user') { if (running) running.stopped = true; generator?.stop(reason); },
+    stop, destroy,
+    togglePause: () => generator?.togglePause() ?? Promise.resolve(null),
     // Persistence (saving the .glb, inserting it into the scene) belongs to the host; nothing to retry here.
     retryPersistence: async () => ({ ...state }),
     memoryEstimate: unimateMemoryEstimate,

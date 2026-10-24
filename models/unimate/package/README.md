@@ -15,7 +15,7 @@ Skeletal animation from a text prompt, for any rigged skeleton, running entirely
 npm install @kaminos/unimate-webgpu
 ```
 
-The package is plain ES modules with no build step. Use it from a bundler or straight from a browser with an import map.
+The package is plain ES modules with no build step. Use it from a bundler or straight from a browser with an import map. For the shared application lifecycle below, build the kit and UniMate from the same checkout using the [source-package recipe](https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/model-applications.md#install-the-source-packages). These source additions do not imply a new npm release.
 
 ## Generate motion
 
@@ -52,7 +52,15 @@ const { glb, motion, rig } = await consumer.run({ asset: { bytes, name: 'fox' },
 // generated skeleton. Play it in any glTF viewer (three.js: AnimationMixer), or save it.
 ```
 
-`consumer.read()` reports progress: the stage (`download`, `label`, `encode`, `solve`, `bake`), byte counts while the model downloads, and evaluations while it solves. `consumer.stop()` stops a run between GPU duties.
+`consumer.read()` reports the stage (`download`, `label`, `encode`, `solve`, `bake`), byte counts while the model downloads, and solver progress. `acceptedT` tracks accepted solver time separately from attempted evaluations and rejected steps. The returned report retains solver steps and evaluations.
+
+Reuse the consumer for sequential calls. An overlapping call rejects. `await consumer.togglePause()` switches an admitted cooperative run between `paused` and `running`, returning `null` before its control is available. `consumer.stop()` cancels queued work without taking another model's renderer and stops admitted work at its next cooperative boundary. Prompt encoding settles before cancellation returns. Stopping during the initial load prevents generation after that load completes.
+
+Call `await consumer.destroy()` when finished. It stops and awaits pending work, releases model buffers and closes its labelling worker. The host's device, session and foreground service remain yours. A destroyed consumer rejects further runs.
+
+The generator uses the kit's shared application runner for admission, controls and settlement. Its `generate`, `encodeText`, `togglePause`, `stop` and `destroy` operations share that lifetime; `snapshot()` exposes it and `running` includes queued work. Each generator has a distinct runtime `routeId` by default; callers may supply one explicitly. Switch skeletons between runs. `cooperative: false` retains admission and cleanup but has no pause or mid-model cancellation contract.
+
+Both `consumer.run()` and `generator.generate()` accept `rtol`, `atol`, `cfgScale` and `onPartial(sample)`. Defaults remain `1e-3`, `1e-6` and `3`. Partial callbacks receive decoded motion at the bundle's requested solver output times; the consumer includes `restFrame` for prepared input. These are intermediate estimates, and the final return still contains the complete animation. Use the exported denoiser, solver and decoding steps directly when your host already owns its admitted model invocation.
 
 To prepare the rig yourself, call the steps directly:
 

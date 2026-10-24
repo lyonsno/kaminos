@@ -1,6 +1,6 @@
 # Model applications
 
-Klein and SuperMat provide application entry points over their existing producers. The application handles session admission, foreground ownership, cancellation and retirement. It returns the model's complete output and keeps the producer accessible for hosts that need direct control.
+Klein, SuperMat and UniMate use a shared runner for session admission, foreground ownership, cancellation and retirement. Each model keeps its application interface, complete output and lower-level producer available for hosts that need direct control.
 
 The [hand application guide](../../models/mobrecon/GETTING_STARTED.md) applies the same shared runner to WiLoR detection and MobRecon reconstruction. Its `createHandMeshApp()` entry point takes browser frames and returns hand presence, vertices and landmarks; the standalone hand demo consumes it. That port currently uses checkout/bundler imports and locally prepared models, with model terms handled by its one-command setup. Its guide explains fresh input after admission and whole-operation waiting when sharing a session.
 
@@ -13,6 +13,8 @@ mkdir -p /path/to/artifacts
 npm pack ./webgpu-inference-kit --pack-destination /path/to/artifacts
 node models/flux2-klein/pack-klein.mjs --out /path/to/artifacts/klein
 node scripts/pack-supermat-module.mjs --out /path/to/artifacts/supermat
+node models/unimate/pack-npm.mjs --out /path/to/artifacts/unimate
+npm pack /path/to/artifacts/unimate --pack-destination /path/to/artifacts
 ```
 
 In your browser application, install the kit tarball and the model tarball you need using the paths printed by those commands:
@@ -21,9 +23,11 @@ In your browser application, install the kit tarball and the model tarball you n
 npm install /path/to/artifacts/kaminos-webgpu-inference-kit-VERSION.tgz /path/to/artifacts/klein/kaminos-flux2-klein-VERSION.tgz
 # Or install the bundled SuperMat package:
 npm install /path/to/artifacts/supermat/kaminos-supermat-VERSION.tgz
+# Or install UniMate with the kit tarball from the same checkout:
+npm install /path/to/artifacts/kaminos-webgpu-inference-kit-VERSION.tgz /path/to/artifacts/kaminos-unimate-webgpu-VERSION.tgz
 ```
 
-Klein imports the kit's public `core` entry point; SuperMat includes its runtime in its bundle. Use a bundler such as Vite or esbuild. SuperMat's CPU worker must accompany the application bundle; its [build recipe](../../models/supermat/GETTING_STARTED.md#install) explains Vite and esbuild handling. Serve over HTTPS or localhost in a WebGPU-capable browser. The first load downloads each model's hosted weights; the model guides describe custom weight locations and memory requirements.
+Klein and UniMate import the kit's public `core` entry point; SuperMat includes its runtime in its bundle. Use a bundler such as Vite or esbuild. SuperMat's CPU worker must accompany the application bundle; its [build recipe](../../models/supermat/GETTING_STARTED.md#install) explains Vite and esbuild handling. Serve over HTTPS or localhost in a WebGPU-capable browser. The first load downloads each model's hosted weights; the model guides describe custom weight locations and memory requirements.
 
 ## Choose the model operation
 
@@ -37,6 +41,29 @@ Both retain loaded state for sequential calls. An overlapping call on the same a
 Pause applies to an admitted cooperative inference. It waits behind an active CPU foreground window, then parks model duties while frames remain serviceable. It returns `null` during loading or while queued. Loading remains model-owned: Klein downloads/compiles before admitted GPU warmup; SuperMat retains its weight resource route and uses a CPU worker. Stopping SuperMat inference while it waits for a shared load cancels that inference request, while the load continues. `destroy()` stops active work and waits for its resources to retire.
 
 `cooperative: false` explicitly uses the model's direct execution path, retaining outer session admission and cleanup. It has no GPU pause or mid-model cancellation contract. For a host that already owns an admitted invocation, use the direct pipeline/adapter rather than enqueueing an application run inside that same session job.
+
+## Animate a skeleton with UniMate
+
+UniMate retains its existing host-injected consumer interface:
+
+```js
+import { createUniMateConsumer } from '@kaminos/unimate-webgpu';
+const motion = createUniMateConsumer({ device, session,
+  beginRun: (id, options) => foreground.beginRun(id, options),
+});
+try {
+  const animation = await motion.run({
+    asset: { skeleton: 'go2' }, prompt: 'An object trots forward.', seed: 7,
+  });
+  // animation.glb is the complete animated asset; animation.motion holds joint motion.
+} finally {
+  await motion.destroy();
+}
+```
+
+The host supplies its device, kit session and foreground service, and submits frames through that service. The first `run()` loads UniMate; subsequent calls reuse it. `read()` exposes stage and solver progress, `togglePause()` pauses/resumes an admitted cooperative run, and `stop()` cancels pending work. `destroy()` settles work and frees model resources while leaving the borrowed host alive. The generator's text encoding and solver both run inside admission; queued cancellation does not take foreground ownership. Each generator receives a distinct runtime route by default.
+
+Inputs may be a stock skeleton, prepared conditioning, or a rigged GLB. Solver tolerances, guidance and partial-motion callbacks remain available through the [UniMate API](../../models/unimate/package/README.md). Its lower-level denoiser, text encoder, solver and decoding functions are still exported. UniMate's interface differs from the `load/pause/resume` wrappers above; the shared runner supplies their common lifetime.
 
 ## Keep your renderer drawing
 
@@ -71,7 +98,7 @@ To borrow your renderer's device, pass `{ device, load: false }`. Klein requires
 
 ## Shared runner for port authors
 
-`createWebGpuApplicationRunner` from `@kaminos/webgpu-inference-kit/core` is the run lifetime used by the two application wrappers. The model wrapper creates its resources and provides:
+`createWebGpuApplicationRunner` from `@kaminos/webgpu-inference-kit/core` is the run lifetime used by Klein, SuperMat and the UniMate generator. The model wrapper creates its resources and provides:
 
 - `session`, `foreground`, `routeId`: the shared host and this app's route identity.
 - `label`, `phase`, `runtimeLabel`: error text, active phase, and runtime identity.
@@ -83,4 +110,4 @@ To borrow your renderer's device, pass `{ device, load: false }`. Klein requires
 
 The runner returns `run`, `pause`, `resume`, `stop`, `snapshot` and a `pending` promise getter for destruction to await. It acquires foreground ownership only after its queued job is admitted, serializes CPU foreground windows with pause, closes control, unregisters the transient model route, and finishes foreground work before releasing admission. Cancellation while queued never takes another job's foreground ownership. Cleanup errors reach `onFatal` and reject the run.
 
-Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices differ between the two exercised consumers. See [Klein's wrapper](../../models/flux2-klein/klein-app.js) and [SuperMat's wrapper](../../models/supermat/supermat-app.js) for the complete integration.
+Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices remain model-specific. See [Klein's wrapper](../../models/flux2-klein/klein-app.js), [SuperMat's wrapper](../../models/supermat/supermat-app.js) and [UniMate's generator](../../models/unimate/unimate-generator.js) for the complete integrations.

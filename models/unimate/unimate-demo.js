@@ -562,7 +562,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   const foreground = createWebGpuForegroundService({ routeId: UNIMATE_ROUTE_ID, device });
   const scene = await createSkeletonScene({ device, canvas, foreground });
 
-  const demo = { device, scene: scene.state, bundle: null, parameterCount: null, forwardFlops: null,
+  const demo = { device, session, foreground, scene: scene.state, bundle: null, parameterCount: null, forwardFlops: null,
     hasTextEncoder: () => false, showClip, showGenerationSkeleton, setGenerationMesh, showBones: on => { scene.showBones.forced = on; scene.showBones.on = on || !scene.hasMesh; }, showRest: () => scene.showRest(),
     setPlaying: on => scene.setPlaying(on), seek: f => scene.seek(f), view: scene.view, loadModel };
   let generationSkeleton = null;

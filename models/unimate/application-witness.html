@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>UniMate installed application</title>
+<style>
+  body { margin: 0; background: #181b20; color: #eee; font: 16px system-ui; }
+  main { max-width: 1040px; margin: 24px auto; padding: 0 20px; }
+  h1 { margin-bottom: 8px; } p { color: #bdc4ce; }
+  canvas { width: 100%; aspect-ratio: 2; border-radius: 12px; }
+  input, button { font: inherit; padding: 10px; margin: 4px; border-radius: 6px; }
+  #prompt { width: 48%; } #seed { width: 80px; }
+</style>
+<main><h1>UniMate installed application</h1><p>A prompt and a skeleton become a complete animation on the renderer's GPU.</p>
+<canvas width="960" height="480"></canvas>
+<label>Prompt <input id="prompt"></label><label>Seed <input id="seed" type="number" value="7"></label>
+<button id="generate">Generate</button><button id="pause">Pause / resume</button><button id="stop">Stop</button>
+<p id="status">Starting the renderer…</p></main><script type="module" src="./app.js"></script></html>

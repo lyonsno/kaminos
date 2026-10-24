@@ -27,6 +27,7 @@ export class UniMateDenoiser {
     this.manifest = manifest;
     this.w = weights; // name -> { buffer, shape }
     this.pipelines = new Map();
+    this.uniforms = new Set();
     this.dummy = device.createBuffer({ size: 256, usage: STORAGE });
     this.D = 512;
     this.H = 8;
@@ -91,6 +92,7 @@ export class UniMateDenoiser {
       if (type === 'f') dv.setFloat32(i * 4, value, true); else dv.setUint32(i * 4, value >>> 0, true);
     });
     const buffer = this.device.createBuffer({ size: data.byteLength, usage: SU.UNIFORM | SU.COPY_DST });
+    this.uniforms.add(buffer);
     this.device.queue.writeBuffer(buffer, 0, data);
     return buffer;
   }
@@ -185,7 +187,18 @@ export class UniMateDenoiser {
     const free = v => (Array.isArray(v) ? v.forEach(free) : v?.destroy?.());
     for (const group of [this.io, this.st, this.f]) Object.values(group ?? {}).forEach(free);
     free(this.tmp);
+    this.uniforms.forEach(buffer => buffer.destroy());
+    this.uniforms.clear();
     this.io = this.st = this.f = this.tmp = null;
+    this.prepProgram = this.forwardProgram = [];
+  }
+
+  // Caller settles outstanding work before releasing the model's persistent allocations.
+  destroy() {
+    this.release();
+    this.w.forEach(weight => weight.buffer.destroy()); this.w.clear();
+    this.dummy?.destroy(); this.dummy = null;
+    this.pipelines.clear();
   }
 
   buildPrepare() {

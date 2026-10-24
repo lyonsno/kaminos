@@ -47,6 +47,13 @@ export class T5Encoder {
 
   buf(floats) { return this.device.createBuffer({ size: Math.max(256, Math.ceil(floats * 4 / 256) * 256), usage: STORAGE }); }
 
+  // Caller settles outstanding encodes before releasing these persistent allocations.
+  destroy() {
+    this.w.forEach(weight => weight.buffer.destroy()); this.w.clear();
+    this.dummy?.destroy(); this.dummy = null;
+    this.pipelines.clear();
+  }
+
   dispatch(pass, kernel, bindings, fields, workgroups, keep) {
     const data = new ArrayBuffer(Math.ceil(fields.length / 4) * 16), dv = new DataView(data);
     fields.forEach(([t, v], i) => (t === 'f' ? dv.setFloat32(i * 4, v, true) : dv.setUint32(i * 4, v >>> 0, true)));
@@ -67,50 +74,52 @@ export class T5Encoder {
     const ids = this.tokenizer.encode(text);
     const L = ids.length, { D, H, HD, FF, device } = this;
     const keep = [];
-    const idsBuf = this.buf(L); device.queue.writeBuffer(idsBuf, 0, new Uint32Array(ids));
-    // Position bias [H, L, L] from the bucket table.
-    const { min_distance: minD, buckets } = this.manifest.relative_buckets;
-    const bias = new Float32Array(H * L * L);
-    for (let h = 0; h < H; h++) for (let i = 0; i < L; i++) for (let j = 0; j < L; j++) {
-      bias[(h * L + i) * L + j] = this.relTable[buckets[j - i - minD] * H + h];
-    }
-    const biasBuf = this.buf(H * L * L); device.queue.writeBuffer(biasBuf, 0, bias);
-    const X = this.buf(L * D), N = this.buf(L * D), QKV = this.buf(L * 3 * D), A = this.buf(L * D), P = this.buf(L * D),
-      U = this.buf(L * 2 * FF), G = this.buf(L * FF), out = this.buf(L * D);
-    keep.push(idsBuf, biasBuf, X, N, QKV, A, P, U, G, out);
-    const W = n => this.w.get(n).buffer;
-    const enc = device.createCommandEncoder(), pass = enc.beginComputePass();
-    const linear = (Xb, w, Y, M, Nn, Kd) => this.dispatch(pass, 'LINEAR', [Xb, W(w), this.dummy, Y],
-      [['u', M], ['u', Nn], ['u', Kd], ['u', 0]], [Math.ceil(Nn / 64), Math.ceil(M / 64)], keep);
-    const norm = (Xb, w, Y) => this.dispatch(pass, 'RMSNORM_MOD', [Xb, W(w), this.dummy, Y],
-      [['u', L], ['u', D], ['u', 1], ['u', 0], ['u', 0], ['u', 0], ['u', 0], ['f', this.eps]], [L, 1], keep);
-    const addInto = Y => this.dispatch(pass, 'RESIDUAL', [X, Y, this.dummy],
-      [['u', L * D], ['u', D], ['u', 1], ['u', 0], ['u', 0]], T5Encoder.grid(L * D, 256), keep);
-    this.dispatch(pass, 'GATHER_ROWS', [W('shared'), idsBuf, X], [['u', L], ['u', D]], T5Encoder.grid(L * D, 256), keep);
-    for (let l = 0; l < this.layers; l++) {
-      norm(X, `block${l}.ln_attn`, N);
-      linear(N, `block${l}.qkv`, QKV, L, 3 * D, D);
-      this.dispatch(pass, 'ATTN_SPATIAL', [QKV, biasBuf, A], [['u', 1], ['u', 1], ['u', L], ['u', H], ['u', HD], ['f', 1]],
-        T5Encoder.grid(L * H, 64), keep);
-      linear(A, `block${l}.o`, P, L, D, D);
-      addInto(P);
-      norm(X, `block${l}.ln_ff`, N);
-      linear(N, `block${l}.wi`, U, L, 2 * FF, D);
-      this.dispatch(pass, 'GEGLU_TANH', [U, G], [['u', L], ['u', FF]], T5Encoder.grid(L * FF, 256), keep);
-      linear(G, `block${l}.wo`, P, L, D, FF);
-      addInto(P);
-    }
-    norm(X, 'final_layer_norm', out);
-    pass.end();
-    const rb = device.createBuffer({ size: L * D * 4, usage: SU.COPY_DST | SU.MAP_READ });
-    enc.copyBufferToBuffer(out, 0, rb, 0, L * D * 4);
-    device.queue.submit([enc.finish()]);
-    await rb.mapAsync(GPUMapMode.READ);
-    const hidden = new Float32Array(rb.getMappedRange().slice(0));
-    rb.unmap();
-    [...keep, rb].forEach(b => b.destroy());
-    const pooled = new Float32Array(D);
-    for (let d = 0; d < D; d++) { let s = 0; for (let i = 0; i < L; i++) s += hidden[i * D + d]; pooled[d] = s / L; }
-    return { ids, hidden, pooled };
+    const buf = floats => { const buffer = this.buf(floats); keep.push(buffer); return buffer; };
+    try {
+      const idsBuf = buf(L); device.queue.writeBuffer(idsBuf, 0, new Uint32Array(ids));
+      // Position bias [H, L, L] from the bucket table.
+      const { min_distance: minD, buckets } = this.manifest.relative_buckets;
+      const bias = new Float32Array(H * L * L);
+      for (let h = 0; h < H; h++) for (let i = 0; i < L; i++) for (let j = 0; j < L; j++) {
+        bias[(h * L + i) * L + j] = this.relTable[buckets[j - i - minD] * H + h];
+      }
+      const biasBuf = buf(H * L * L); device.queue.writeBuffer(biasBuf, 0, bias);
+      const X = buf(L * D), N = buf(L * D), QKV = buf(L * 3 * D), A = buf(L * D), P = buf(L * D),
+        U = buf(L * 2 * FF), G = buf(L * FF), out = buf(L * D);
+      const W = n => this.w.get(n).buffer;
+      const enc = device.createCommandEncoder(), pass = enc.beginComputePass();
+      const linear = (Xb, w, Y, M, Nn, Kd) => this.dispatch(pass, 'LINEAR', [Xb, W(w), this.dummy, Y],
+        [['u', M], ['u', Nn], ['u', Kd], ['u', 0]], [Math.ceil(Nn / 64), Math.ceil(M / 64)], keep);
+      const norm = (Xb, w, Y) => this.dispatch(pass, 'RMSNORM_MOD', [Xb, W(w), this.dummy, Y],
+        [['u', L], ['u', D], ['u', 1], ['u', 0], ['u', 0], ['u', 0], ['u', 0], ['f', this.eps]], [L, 1], keep);
+      const addInto = Y => this.dispatch(pass, 'RESIDUAL', [X, Y, this.dummy],
+        [['u', L * D], ['u', D], ['u', 1], ['u', 0], ['u', 0]], T5Encoder.grid(L * D, 256), keep);
+      this.dispatch(pass, 'GATHER_ROWS', [W('shared'), idsBuf, X], [['u', L], ['u', D]], T5Encoder.grid(L * D, 256), keep);
+      for (let l = 0; l < this.layers; l++) {
+        norm(X, `block${l}.ln_attn`, N);
+        linear(N, `block${l}.qkv`, QKV, L, 3 * D, D);
+        this.dispatch(pass, 'ATTN_SPATIAL', [QKV, biasBuf, A], [['u', 1], ['u', 1], ['u', L], ['u', H], ['u', HD], ['f', 1]],
+          T5Encoder.grid(L * H, 64), keep);
+        linear(A, `block${l}.o`, P, L, D, D);
+        addInto(P);
+        norm(X, `block${l}.ln_ff`, N);
+        linear(N, `block${l}.wi`, U, L, 2 * FF, D);
+        this.dispatch(pass, 'GEGLU_TANH', [U, G], [['u', L], ['u', FF]], T5Encoder.grid(L * FF, 256), keep);
+        linear(G, `block${l}.wo`, P, L, D, FF);
+        addInto(P);
+      }
+      norm(X, 'final_layer_norm', out);
+      pass.end();
+      const rb = device.createBuffer({ size: L * D * 4, usage: SU.COPY_DST | SU.MAP_READ });
+      keep.push(rb);
+      enc.copyBufferToBuffer(out, 0, rb, 0, L * D * 4);
+      device.queue.submit([enc.finish()]);
+      await rb.mapAsync(GPUMapMode.READ);
+      const hidden = new Float32Array(rb.getMappedRange().slice(0));
+      rb.unmap();
+      const pooled = new Float32Array(D);
+      for (let d = 0; d < D; d++) { let s = 0; for (let i = 0; i < L; i++) s += hidden[i * D + d]; pooled[d] = s / L; }
+      return { ids, hidden, pooled };
+    } finally { keep.forEach(buffer => buffer.destroy()); }
   }
 }

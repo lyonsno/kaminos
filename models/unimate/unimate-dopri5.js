@@ -159,7 +159,8 @@ async function adaptiveStep(st, drift, rtol, atol, onEval, forced) {
 // forcedSteps: optional reference step list [{dt, accepted}] to replay instead of the
 // controller; forcedFirstStep replaces the selected first step (its two evaluations still run).
 export async function dopri5Solve({ y0, drift, outputTimes, rtol = 1e-3, atol = 1e-6, forcedSteps = null, forcedFirstStep = null,
-  onEval = null, onStep = null }) {
+  onEval = null, onStep = null, onSample = null }) {
+  if (![rtol, atol].every(v => Number.isFinite(v) && v > 0)) throw new RangeError("solver tolerance must be finite and positive");
   const t0 = outputTimes[0];
   const f0 = await drift(f32(t0), y0);
   onEval?.({ t: f32(t0), kind: 'initial' });
@@ -167,6 +168,7 @@ export async function dopri5Solve({ y0, drift, outputTimes, rtol = 1e-3, atol = 
   const firstStep = forcedFirstStep ?? selectedFirstStep;
   let st = { y1: y0, f1: f0, t0, t1: t0, dt: firstStep, interp: [y0, y0, y0, y0, y0] };
   const steps = [], solution = [Float32Array.from(y0)];
+  await onSample?.({state: solution[0].slice(), t: t0, index: 0});
   for (let k = 1; k < outputTimes.length; k++) {
     const next = outputTimes[k];
     while (next > st.t1) {
@@ -178,6 +180,7 @@ export async function dopri5Solve({ y0, drift, outputTimes, rtol = 1e-3, atol = 
       st = r.state;
     }
     solution.push(interpEvaluate(st.interp, st.t0, st.t1, next));
+    await onSample?.({state: solution.at(-1).slice(), t: next, index: k});
   }
   return { solution, steps, firstStep, selectedFirstStep };
 }
