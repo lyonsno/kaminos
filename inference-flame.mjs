@@ -59,7 +59,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   if(!transaction){
    const current=flame.settings();
    const fields=[...new Set([...Object.values(score.stages).flatMap(recipe=>recipe.fields),...(score.flare?.fields??[])])];
-   baseline=baseline?blendSettings({a:baseline,b:baseline,current,fields,amount:0}):current;
+   baseline=baseline&&fields.length?blendSettings({a:baseline,b:baseline,current,fields,amount:0}):current;
    transaction=flame.beginPreview('Inference flame response');
   }
  }

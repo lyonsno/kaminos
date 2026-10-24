@@ -80,3 +80,9 @@ test('pause and resume preserve the evaluation baseline and current held setting
  f.response.operations.play();assert.equal(f.author.read().domControls['volume-wind-angle'].value,75);assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);
  f.tick(.1);f.response.operations.cancel();assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);f.response.dispose();
 });
+test('unassigned replay pauses, resumes and restarts without changing the flame',()=>{
+ const f=fixture(),before=f.author.read();f.response.operations.load(recording);
+ f.response.operations.play();f.tick(.2);f.response.operations.pause();f.response.operations.play();
+ assert.deepEqual(f.author.read(),before);f.tick(10);assert.equal(f.response.read().playing,false);
+ f.response.operations.play();assert.equal(f.response.read().position,0);assert.deepEqual(f.author.read(),before);f.response.dispose();
+});
