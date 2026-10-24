@@ -1,7 +1,6 @@
 import {createBurnMaterial} from './burn-table-material.mjs';
 import {createLiveLogHeatGpu} from './live-log-heat-gpu.mjs';
 import {LIVE_LOG_HEAT_IDENTITY} from './live-log-heat-core.mjs';
-import {createLogBurnIndicator} from './live-log-indicator.mjs';
 import {createLogDebrisGpu} from './log-debris-gpu.mjs';
 import {resolveBurnableTarget} from './burnable-target.mjs';
 import {bindResidentLightCoverage} from './scene-resident-coverage.mjs';
@@ -10,14 +9,14 @@ import {sceneRadianceSourceMaterial} from './scene-radiance.mjs';
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
 // An object's material owns its state; it never switches sources, clocks or domains.
-export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,document}){
+export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame}){
   resolveBurnableTarget([entry],entry.id);
   let mesh;entry.object.traverse(node=>{if(node.isMesh)mesh=node;});
   const original=Array.isArray(mesh.material)?mesh.material.map(originalBurnMaterial):originalBurnMaterial(mesh.material),bindings=[],releases=[];
-  let field,debris,indicator,elapsed=0,disposed=false;
+  let field,debris,elapsed=0,disposed=false;
   function dispose(){
     if(disposed)return;disposed=true;
-    indicator?.dispose();for(const release of releases)release();
+    for(const release of releases)release();
     mesh.material=original;debris?.dispose();
     for(const binding of bindings)binding.dispose();field?.dispose();
   }
@@ -35,7 +34,6 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,d
     releases.push(bindResidentLightCoverage(debris.caps,coverage));debris.caps.castShadow=true;
     // Detached fragments remain world-space presentation, never a separately editable object.
     debris.root.userData.kaminosEditorHelper=true;scene.add(debris.root);
-    indicator=createLogBurnIndicator({object:entry.object,fields:[field],document,fitObject:true});
     // Authored surface edits also apply while the fluid is paused; lighting may
     // have installed an outer clone, whose scalar inputs need the same update.
     releases.push(onFrame(()=>{
