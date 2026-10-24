@@ -148,11 +148,7 @@ export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,
  // Choose narrow, repeated proposals first. Cross-cutting proposals remain in
  // the diagnostic catalog; the visible family is a consistent nested partition.
  const ranked=[...proposals.values()].sort((a,b)=>b.seeds.size-a.seeds.size||a.cutRatio-b.cutRatio||b.reach-a.reach||a.faces[0]-b.faces[0]);
- const accepted=[],mark=new Uint8Array(graph.triangles.length);
- for(const c of ranked){mark.fill(0);for(const face of c.faces)mark[face]=1;let conflict=false;
-  for(const other of accepted){let overlap=0;for(const face of other.faces)overlap+=mark[face];if(overlap&&overlap!==c.faces.length&&overlap!==other.faces.length){conflict=true;break;}}
-  c.status=conflict?'crossing-alternative':'included';if(!conflict)accepted.push(c);
- }
+ const accepted=chooseNeckFamily(ranked,Float64Array.from(graph.triangles,t=>t.area));
  const nodes=[],faceOwners=new Uint32Array(graph.triangles.length),componentIds=new Map();
  const add=(parent,kind,metadata={})=>{const id=nodes.length;nodes.push({id,parent,kind,depth:parent===null?0:nodes[parent].depth+1,children:[],ownTriangles:0,triangles:0,area:0,...metadata});if(parent!==null)nodes[parent].children.push(id);return id;};
  for(const component of analysis.components)componentIds.set(component,add(null,'component'));
@@ -164,8 +160,28 @@ export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,
  const hierarchy={schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:nodes.reduce((m,n)=>Math.max(m,n.depth),0)};
  const fine=summarizeOwners(graph,faceOwners);
  return {route:'kaminos.fracture.multi-origin-neck-hierarchy.v1',settings:{minReachFraction,maxCutRatio,minAreaFraction,cleanupAreaFraction},triangleCount:graph.triangles.length,sourceComponents:graph.sourceComponents,diagnostics:graph.diagnostics,...fine,hierarchy,
-  analysis:{builds:1,cacheHit,seedPolicy:'centroid-and-six-axis-extrema',passes:analysis.passes.length,distinctSeeds:new Set(analysis.seedSets.flat()).size,rawProposals:analysis.passes.reduce((sum,p)=>sum+p.candidates.length,0)},
+  analysis:{builds:1,cacheHit,seedPolicy:'centroid-and-six-axis-extrema',boundaryVariantAreaOverlap:.9,passes:analysis.passes.length,distinctSeeds:new Set(analysis.seedSets.flat()).size,rawProposals:analysis.passes.reduce((sum,p)=>sum+p.candidates.length,0)},
   candidateBranches:ranked.map(({faces,seeds,...c},id)=>({id,...c,triangles:faces.length,seeds:[...seeds]})),claim:'Nested surface branch and patch proposals from seven geodesic origins; exact membership agreement is geometric evidence, not a solid volume or fracture model'};
+}
+
+// Cuts sharing at least 90% of their combined surface area describe alternative
+// boundary placements around the same fitting. Keep the ranked representative
+// rather than turning their thin difference into a nested fragment. Every
+// alternative stays in candidateBranches with its disposition and source seeds.
+export function chooseNeckFamily(ranked,faceAreas){
+ const accepted=[],mark=new Uint8Array(faceAreas.length);
+ for(const [id,c]of ranked.entries()){
+  mark.fill(0);let area=0;for(const face of c.faces){mark[face]=1;area+=faceAreas[face];}
+  c.status='included';delete c.variantOf;
+  for(const other of accepted){let count=0,overlap=0,otherArea=0;
+   for(const face of other.faces){otherArea+=faceAreas[face];if(mark[face]){count++;overlap+=faceAreas[face];}}
+   const union=area+otherArea-overlap;
+   if(union>0&&overlap/union>=.9){c.status='boundary-variant';c.variantOf=ranked.indexOf(other);break;}
+   if(count&&count!==c.faces.length&&count!==other.faces.length){c.status='crossing-alternative';break;}
+  }
+  if(c.status==='included')accepted.push(c);
+ }
+ return accepted;
 }
 
 function summarizeOwners(graph,owners){
