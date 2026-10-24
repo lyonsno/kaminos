@@ -13,3 +13,17 @@ await assert.rejects(loadSurfaceFields('http://test/',fetcher({count:2})),/count
 await assert.rejects(loadSurfaceFields('http://test/',async()=>({ok:false,status:404})),/unavailable/);
 const result=await loadSurfaceFields('http://test/',fetcher());assert.deepEqual(result.bounds,[[1,2,3],[1,2,3]]);assert.equal(result.meta.count,1);
 console.log('surface fields: missing, failed, corrupt and mismatched inputs rejected; valid data preserved');
+
+// A caller changing appearance through the operation must update the visible control.
+const definition=(await import('../experiments/surface-fields.experiment.mjs')).default;
+const oldFetch=globalThis.fetch;globalThis.fetch=fetcher({radius:.01});
+const elements=[];
+const document={location:{href:'http://test/'},createElement(tag){const element={tag,value:'',children:[],append(...nodes){this.children.push(...nodes);},setAttribute(){},addEventListener(){}};elements.push(element);return element;}};
+const session={attach:async()=>({id:'surface-test'}),setView:v=>v,redraw(){},dispose:async()=>{}};
+let experiment;
+try{
+ experiment=await definition.create({host:{controls:{document},scene:{open:async()=>session}},inputs:{base:'/'},record(){}});
+ experiment.mount({root:{append(){}},document,invoke:(name,arg)=>experiment.operations[name](arg)});
+ const select=elements.find(e=>e.tag==='select');
+ for(const mode of ['normals','plain','opaque']){experiment.operations.setMode(mode);assert.equal(select.value,experiment.read().mode,'appearance selector must show effective mode');}
+}finally{await experiment?.dispose();globalThis.fetch=oldFetch;}
