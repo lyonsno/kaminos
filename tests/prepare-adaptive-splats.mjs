@@ -16,6 +16,11 @@ test('actual converter preserves all parents and fails with a durable phase repo
  const run=out=>spawnSync(process.execPath,['tools/prepare-adaptive-splats.mjs',source,out,'2'],{encoding:'utf8'});
  const good=path.join(dir,'good');const success=run(good);assert.equal(success.status,0,success.stderr);
  const report=JSON.parse(fs.readFileSync(path.join(good,'report.json')));assert.equal(report.ok,true);assert.equal(report.sourceDataSHA256,metadata.dataSHA256);assert.equal(fs.statSync(path.join(good,'parent.u32')).size,12);
+ const preserved=fs.readFileSync(path.join(source,'report.json'));
+ for(const destination of [source,path.join(dir,'source-alias')]){
+  if(destination!==source)fs.symlinkSync(source,destination,'dir');
+  const refusal=run(destination);assert.equal(refusal.status,1);assert.deepEqual(fs.readFileSync(path.join(source,'report.json')),preserved,'rejected output must leave source metadata unchanged');assert.match(refusal.stderr,/must not overwrite source/);
+ }
  fs.writeFileSync(path.join(source,'triangles.u32'),Buffer.from(new Uint32Array([0,1,90]).buffer));
  const bad=path.join(dir,'bad');assert.equal(run(bad).status,1);const failure=JSON.parse(fs.readFileSync(path.join(bad,'report.json')));assert.equal(failure.ok,false);assert.equal(failure.phase,'load');assert.match(failure.error,/hash mismatch/);assert.ok(!fs.existsSync(path.join(bad,'surfels.f32')));
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
