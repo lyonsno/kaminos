@@ -13044,6 +13044,15 @@ async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},fluid:{
+    async openInlets(options){
+      await workbenchViewerReady;
+      if(localLiquidSetup)throw Error('Close authored water before opening live inlets');
+      const {openLiveFluidSession}=await import('./owner-live-fluid-session.mjs');
+      const {createLocalLiquidHost}=await import('./local-liquid-host.mjs');
+      return openLiveFluidSession({getHost:()=>localLiquidHost,setHost:value=>{localLiquidHost=value;window._kaminosDirty?.();},
+        getGeneration:()=>localLiquidGeneration,createHost:options=>createLocalLiquidHost({renderer,scene,camera,
+          pipeline:renderPipeline,device:sharedGpu?.device,readColliders:()=>sceneObjects,...options})},options);
+    },
     async open(setup){
       await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
       const generation=localLiquidGeneration;
