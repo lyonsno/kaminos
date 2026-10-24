@@ -40,3 +40,14 @@ test('cold-load evidence rejects missing timing, cache fallback, and actual cach
   const r=good();mutate(r);assert.throws(()=>validate(r));
  }
 });
+
+test('an inspection request cannot pass without real visible previews and exercised display controls',()=>{
+ const r=good();r.inspectControls=true;
+ assert.throws(()=>validate(r),/inspection|preview/i,'a normal final image alone cannot close the new UI witness');
+});
+
+const inspected=()=>{const r=good();r.inspectControls=true;r.entry={source:'/original.png'};r.provenance.elapsed={generationMs:1250,loadMs:89};r.inspection={previews:[{step:1,at:150,visible:true,distinctRgb:20,timer:'Generating 0.5 s'}],compactHeight:144,expandedHeight:320,expandedPressed:true,originalSource:'/original.png',preparedSource:'/cutout.png',segmentedSource:'/cutout.png',preferenceAfterGeneration:false,preferenceAfterReload:false,timerAfter:'Generated in 1.3 s'};return r;};
+test('inspection evidence rejects blank/hidden/stale previews, inert expansion, wrong cutout and missing retained time',()=>{
+ assert.doesNotThrow(()=>validate(inspected()));
+ for(const mutate of [r=>r.inspection.previews=[],r=>r.inspection.previews[0].distinctRgb=1,r=>r.inspection.previews[0].visible=false,r=>r.inspection.previews[0].at=99,r=>r.inspection.expandedHeight=144,r=>r.inspection.segmentedSource='/original.png',r=>r.inspection.preferenceAfterGeneration=true,r=>r.inspection.preferenceAfterReload=true,r=>r.inspection.previews[0].timer='',r=>r.inspection.timerAfter='',r=>delete r.provenance.elapsed]){const r=inspected();mutate(r);assert.throws(()=>validate(r));}
+});

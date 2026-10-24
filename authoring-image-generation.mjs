@@ -173,11 +173,13 @@ const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Erro
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
-  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null}){
+  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
   let loaded=null,active=false,abort=null;
-  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
+  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null,preview:null,timing:null};
+  let startedAt=null,generationStartedAt=null,generationFinished=false;
+  const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt===null?{loadMs:clock()-startedAt}:{generationMs:clock()-generationStartedAt}):{})};
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
   let pendingImage=null;
   async function savePending(){
@@ -187,7 +189,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     const file=new File([blob],kleinImageName(text,seed,model),{type:'image/png'});
     const entry=await deliver(file,provenance);
     pendingImage=null;state.pending=null;state.results.push({...entry,provenance});
-    set({status:'complete',error:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
+    set({status:'complete',error:null,preview:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
     return entry;
   }
   const publish=()=>changed(structuredClone(state));
@@ -237,8 +239,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const reason=unavailable();
         return reason?{...structuredClone(state),status:'unavailable',error:reason}:{...structuredClone(state),status:state.status==='unavailable'?'idle':state.status};
       }
-      return structuredClone(state);
+      return {...structuredClone(state),timing:timing()};
     },
+    timing,
     busy:()=>active,
     async retryPersistence(){
       if(active)throw Error('Image generation is already running');
@@ -264,8 +267,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const {width,height}=kleinImageDimensions(size,aspect);
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
-      active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
-      set({status:'loading',error:null,canStop:true,stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
+      active=true;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
+      startedAt=clock();generationStartedAt=null;generationFinished=false;
+      set({status:'loading',error:null,canStop:true,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
@@ -288,6 +292,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
           handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
           await handoff.activate('klein');
         }
+        generationStartedAt=clock();state.timing={loadMs:generationStartedAt-startedAt,generationMs:0};
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
         const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
         frameRun=app?await app.beginRun(runId,{routeId:spec.routeId}):await foreground.beginRun(runId);
@@ -296,18 +301,28 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',
           onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:{progress:'Swapping weights in from the browser cache…'});},
           onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',percent:i/n*100,progress:`Denoising, step ${i} of ${n}`});},
+          onPreview:frame=>{
+            // GPU readback can land after Stop, save, or the next run. Only the
+            // current inference may replace its own provisional image.
+            if(!active||abort!==runAbort||runAbort.signal.aborted||phase!=='inference'||state.status!=='running')return;
+            if(state.preview?.step>=frame.step)return;
+            set({preview:{...frame,kind:'partial',runId}});
+          },
           schedule:{runtime:route.runtime,invocation,control,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frameRun.withForeground}})});
         const completion=await job.completion;
         if(completion.status!=='succeeded'){const error=Error(completion.failure?.message??completion.status);error.name=completion.failure?.name??'Error';throw error;}
         const image=completion.output;
+        state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
+        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing()};
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
+        state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
         return await savePending();
       }catch(error){
         const identity=errorIdentity(error);
+        if(phase!=='persistence')state.preview=null;
         if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
         set({status:'failed',error:`${phase}: ${identity.message}`,stage:null,percent:null});throw error;
       }finally{
@@ -315,10 +330,18 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(route){await route.drain();session.unregisterRoute(route.routeId);}
         if(frameRun)await frameRun.finish();
         if(previous&&previous!=='klein'&&previous!=='app'&&handoff?.has(previous))await handoff.activate(previous);
-        active=false;state.canStop=false;abort=null;publish();
+        state.timing=timing();active=false;state.canStop=false;abort=null;publish();
       }
     },
   };
+}
+
+export function imageGenerationTimeLabel(timing,status){
+  if(!timing)return '';
+  const seconds=ms=>`${(Math.max(0,ms)/1000).toFixed(1)} s`;
+  if(timing.generationMs===null)return `Loading model · ${seconds(timing.loadMs)}`;
+  const label=['running','stopping'].includes(status)?'Generating':status==='stopped'?'Stopped after':status==='failed'?'Generation elapsed':'Generated in';
+  return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
 export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null}){
@@ -326,14 +349,22 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
-    <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
+    <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
   const byId=id=>document.getElementById(id),seedInput=byId('asset-seed');
   const reseed=()=>{seedInput.value=String(Math.floor(Math.random()*1e9));};reseed();
   const meshBusy=meshBusyOption||(()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status));
+  let timer=null,timingStatus='idle';
+  function renderTime(){
+    const node=byId('asset-image-timing'),value=controller.timing();
+    node.textContent=imageGenerationTimeLabel(value,timingStatus);node.hidden=!value;
+    if(controller.busy()&&timer===null)timer=setTimeout(()=>{timer=null;renderTime();},200);
+    else if(!controller.busy()&&timer!==null){clearTimeout(timer);timer=null;}
+  }
   function render(){
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status);
+    timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;

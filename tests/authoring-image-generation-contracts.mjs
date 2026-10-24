@@ -68,7 +68,7 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null}={}){
  let loadFailures=loadFails;
  let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
@@ -77,16 +77,16 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,m
  const device={features:new Set(features),queue:{submit(){}}};
  let loads=0,generations=[];const swaps=[];
  const service=createKleinAuthoringImageGeneration({
-  context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
+  clock,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:modelWeights|| (async()=>'/klein-weights'),
   createPipeline:(givenDevice,urls,model='flux2')=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push({...urls,model});
    const root=model==='flux3'?'/flux3-weights':'/klein-weights';assert.deepEqual({...urls,transformerUrl:undefined},{textEncoderUrl:`${root}/te`,transformerUrl:undefined,vaeUrl:`${root}/vae`});
    return{sampling:model==='flux3'?{shift:3,steps:4}:undefined,ditManifest:model==='flux3'?{source:{repo:'black-forest-labs/flux-3-image-klein-base',revision:'observed-revision'},lora:{sha256:'observed-adapter-hash'}}:undefined,
     destroy:async()=>log.push(`destroy:${model}`),
-    load:async progress=>{loads++;log.push(`load:${model}`);if(loadFailures-->0)throw Error('local weight load failed');progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
+    load:async progress=>{await onLoad?.();loads++;log.push(`load:${model}`);if(loadFailures-->0)throw Error('local weight load failed');progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
     loadTransformer:async(url,progress)=>{swaps.push(url);if(swapFailures-->0)throw Error('bundle download failed');progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
-    generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
+    generate:async request=>{generations.push(request);await onGenerate?.(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
   encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
   deliver:async(file,provenance)=>{if(deliverFailures-->0)throw Error('image inbox unavailable');delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
@@ -101,7 +101,7 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  assert.equal(first.name,'klein-a-bronze-lantern-s42.png');
  assert.equal(h.delivered.length,1);assert.equal(h.delivered[0].file.type,'image/png');
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),h.delivered[0].provenance,'the stored file itself carries the provenance');
- assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',aspect:'square',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
+ assert.deepEqual((({elapsed,...rest})=>rest)(h.delivered[0].provenance),{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',aspect:'square',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
  assert.ok(h.log.includes('owner:klein'),'denoising runs while klein owns the kiln foreground');
  assert.equal(h.handoff.owner(),'sf3d','after the image the kiln returns to SF3D so mesh generation keeps interleaving frames');
  assert.ok(h.log.indexOf('finish')>h.log.indexOf('drain'),'route drains before the foreground run finishes');
@@ -334,4 +334,42 @@ test('landscape and portrait keep the selected size as the long side and crop th
  assert.deepEqual(h.delivered.map(d=>d.provenance.aspect),['landscape','portrait','landscape','square']);
  await assert.rejects(h.service.run({prompt:'lantern',seed:5,aspect:'panorama'}),/square, landscape or portrait/);
  assert.equal(h.generations.length,4,'an unknown aspect is refused before GPU work');
+});
+
+
+test('partial previews belong to their active run and cannot replace a completed or subsequent image',async()=>{
+ const gate=deferred(),h=harness({gate});const run=h.service.run({prompt:'kettle',seed:1});await tick();await tick();
+ const first=h.generations[0];assert.equal(typeof first.onPreview,'function','Authoring must connect the existing pipeline preview callback');
+ const frame={width:2,height:1,rgba:new Uint8ClampedArray([120,40,10,255,60,20,5,255]),step:1,steps:4};
+ first.onPreview(frame);assert.deepEqual(h.service.read().preview.rgba,frame.rgba);assert.equal(h.service.read().preview.step,1);
+ gate.resolve();await run;assert.equal(h.service.read().preview,null,'saved output replaces partial preview');
+ first.onPreview({...frame,step:4});assert.equal(h.service.read().preview,null,'late readback cannot restore a preview');
+ const next=h.service.run({prompt:'another kettle',seed:2});first.onPreview(frame);assert.equal(h.service.read().preview,null,'old run cannot publish into new loading state');await next;
+});
+
+test('Stop rejects later preview readbacks and clears the unfinished preview',async()=>{
+ const gate=deferred(),h=harness({gate});const run=h.service.run({prompt:'kettle',seed:1});await tick();await tick();
+ const request=h.generations[0];assert.equal(typeof request.onPreview,'function');
+ request.onPreview({width:1,height:1,rgba:new Uint8ClampedArray([120,40,10,255]),step:1,steps:4});
+ h.service.stop();request.onPreview({width:1,height:1,rgba:new Uint8ClampedArray([0,0,0,255]),step:2,steps:4});
+ gate.resolve();await run;assert.equal(h.service.read().preview,null);
+});
+
+test('live and retained elapsed time separates model loading from generation and survives saving',async()=>{
+ let now=1000;const gate=deferred();const h=harness({clock:()=>now,gate,onLoad:()=>{now+=2000;},onGenerate:()=>{now+=5000;}});
+ const run=h.service.run({prompt:'kettle',seed:1});await tick();await tick();
+ assert.equal(h.service.read().timing?.loadMs,2000,'load time is separate');
+ assert.equal(h.service.read().timing?.generationMs,5000,'running timer uses observed elapsed time');
+ now+=300;gate.resolve();await run;
+ assert.equal(h.service.read().timing.generationMs,5300);now+=100000;
+ assert.equal(h.service.read().timing.generationMs,5300,'completed duration is frozen');
+ assert.deepEqual(h.delivered[0].provenance.elapsed,{loadMs:2000,generationMs:5300});
+ const stored=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));assert.deepEqual(stored.elapsed,h.delivered[0].provenance.elapsed);
+});
+
+test('elapsed labels distinguish running, completed and stopped generation',()=>{
+ assert.equal(module.imageGenerationTimeLabel({loadMs:2000,generationMs:null},'loading'),'Loading model · 2.0 s');
+ assert.equal(module.imageGenerationTimeLabel({loadMs:2000,generationMs:5300},'running'),'Generating 5.3 s · model load 2.0 s');
+ assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'complete'),'Generated in 5.3 s');
+ assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'stopped'),'Stopped after 5.3 s');
 });
