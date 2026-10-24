@@ -102,6 +102,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  let releaseEncounter=()=>{},frameStamp=0;
  const poseOverlay=createPoseOverlay({THREE});let resolvedOverlay=null;
  const composedPose=pose=>resolvedOverlay?resolvedOverlay(pose):pose;
+ const poseObservers=new Set();
  let readingZoneState=false;
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();runtime?.flesh.setRunning(false);};
  function read(){
@@ -246,7 +247,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   poseObservers.clear();attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -269,7 +270,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>composedPose(wander?wander.frame(index):walking.frame(index,{mode,cycle}))};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
-   poseModifier:attention?state=>{if(!resolvedOverlay)attention.modify({...state,time:clock/1000,placement});}:null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+   poseModifier:attention?state=>{if(!resolvedOverlay)attention.modify({...state,time:clock/1000,placement});}:null,dirty:()=>{for(const observer of poseObservers)observer();session.redraw();},isMounted:()=>Boolean(placement.parent)});
  }
  function contactState(pose=null){
   if(pose)pose=composedPose(pose);
@@ -454,7 +455,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(inputs.play===true)operations.play();
   host.scene.refreshPresentation?.(asset);
   if(publishInspector&&globalThis.window)window.kaminosWalkingCreature=inspect;
-  return {read,inspect,pose,operations,dispose,mount({root,invoke,reopen=recipe=>{
+  return {read,inspect,pose,observePose(observer){active();if(typeof observer!=='function')throw Error('Pose observer must be a function');poseObservers.add(observer);return ()=>poseObservers.delete(observer);},operations,dispose,mount({root,invoke,reopen=recipe=>{
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();

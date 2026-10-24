@@ -43,6 +43,6 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
   requestParticleState(){assertActive();return solver.requestParticleState();},
   dispose(){if(closed)return;closed=true;presentation.dispose();solver.destroy();},
  };
- host.capability=createOwnerWaterCapability({state,debug:()=>solver.getDebugState(),pressure:()=>solver.getPressureControls?.()??{available:false},apply:patch=>solver.setPressureControls(patch),pause:host.setPaused,advance:host.advanceTo,restart:host.restart,dispose:host.dispose,identity:()=>lifetime,material:host.getMaterialControls,applyMaterial:host.setMaterialControls,setPlaybackRate:host.setPlaybackRate,setPlaybackMode:host.setPlaybackMode});
+ host.capability=createOwnerWaterCapability({state,debug:()=>solver.getDebugState(),pressure:()=>solver.getPressureControls?.()??{available:false},apply:patch=>solver.setPressureControls(patch),pause:host.setPaused,advance:host.advanceTo,restart:host.restart,dispose:host.dispose,identity:()=>lifetime,material:host.getMaterialControls,applyMaterial:host.setMaterialControls,setPlaybackRate:host.setPlaybackRate,setPlaybackMode:host.setPlaybackMode,interfaceRecords:host.interfaceRecordDescriptor});
  return host;
 }
