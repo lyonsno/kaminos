@@ -72,8 +72,8 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   }
   return read();
  }
- function frame(index) {
-  const pose=walking.frame(index,{mode:'cycle',cycle:0}),state=path.read(),point=roots[index];
+ function frame(index,proposedPath=null) {
+  const pose=walking.frame(index,{mode:'cycle',cycle:0}),state=proposedPath??path.read(),point=roots[index];
   const yaw=Math.atan2(state.direction[0],state.direction[1])-Math.atan2(forward[0],forward[1]);
   const warp=new THREE.Matrix4().makeTranslation(state.position[0],0,state.position[1]).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeTranslation(-point[0],0,-point[2]));
   return {...pose,actorMatrix:warp.multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)).toArray(),derived:true};

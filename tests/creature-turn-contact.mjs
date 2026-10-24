@@ -21,7 +21,7 @@ try{
 // Keep the source frame stationary so this observes only the commanded rigid
 // root motion, including an authored tilt rather than articulated pose change.
 const chest={name:'spine-chest',parent:'pelvis',restMatrix:I.map((r,i)=>r.map((v,j)=>j===3&&i===0?1:v)),tail:[1,1,0]},tilt=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/4);
-const staticData={...data,manifest:{...data.manifest,bones:[bones[0],chest]},frame:{...data.frame,bones:[bones[0],chest]},motion:{...data.motion,joints:2,skeleton:{fps:30,jointNames:['pelvis','spine-chest'],parents:[-1,0]},positions:[0,.2,0,1,.2,0,0,.2,1,1,.2,1,0,.2,2,1,.2,2],localRotations:Array.from({length:6},()=>[1,0,0,0]).flat()}};
+const staticData={...data,manifest:{...data.manifest,channels:['fixed','pelvis','spine-chest'],bones:[bones[0],chest]},weights:new Float32Array([0,1,0,0,1,0,0,1,0]),frame:{...data.frame,bones:[bones[0],chest]},motion:{...data.motion,joints:2,skeleton:{fps:30,jointNames:['pelvis','spine-chest'],parents:[-1,0]},positions:[0,.2,0,1,.2,0,0,.2,1,1,.2,1,0,.2,2,1,.2,2],localRotations:Array.from({length:6},()=>[1,0,0,0]).flat()}};
 let predicted;
 const tiltedCreature=await createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{blend_frames:0,action:'wander',play:false,actor_root:'live',transform:{position:[0,0,0],quaternion:tilt.toArray(),scale:[1,1,1]}}},{loadSources:async()=>staticData,encounterContext:{...encounterContext,steer:()=>({direction:[1,0],distanceScale:0}),limit({body,motion}){predicted=moveTorso(body,motion);return{fraction:1};}}});
 try{
@@ -30,3 +30,7 @@ try{
  assert.ok(actual.capsules.length&&predicted.capsules.length);
  for(const key of ['a','b'])assert.ok(Math.hypot(...actual.capsules[0][key].map((v,i)=>v-predicted.capsules[0][key][i]))<1e-10,'Admitted support trajectory differs from the actual tilted root motion');
 }finally{await tiltedCreature.dispose();}
+let livePalette,proposedSeen=false;
+const coreFactory=()=>({update(m){livePalette=m;},flush(){},dispose(){},read:()=>({backend:'test-fixture'}),movementCores(){const p=new THREE.Vector3(1,0,0).applyMatrix4(new THREE.Matrix4().fromArray(livePalette[2])).toArray();return[{a:p,b:[...p],radius:.1}];}});
+const checked=await createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{deformation:'gpu',blend_frames:0,action:'wander',play:false,actor_root:'live'}},{loadSources:async()=>staticData,loadGpuDeformer:async()=>coreFactory,encounterContext:{...encounterContext,limit({body,nextBody}){assert.ok(body.movementCores?.length);assert.ok(nextBody?.movementCores?.length,'Admission must inspect the actual proposed posed support');proposedSeen=true;return{fraction:0};}}});
+try{const before=checked.read();checked.operations.advance({seconds:1/30});assert.ok(proposedSeen);assert.deepEqual(checked.read().action.motion,before.action.motion);assert.deepEqual(checked.read().playback.actualLocalPose,before.playback.actualLocalPose,'Rejected proposal left speculative Bones or live root in the scene');}finally{await checked.dispose();}

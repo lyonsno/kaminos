@@ -90,7 +90,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
  const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
- let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
+ let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null,admissionPath=null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
  const relatedAssets=[];
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
@@ -178,9 +178,13 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const body=contactState(),frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone();
    const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
    constraint={...constraint,admit:({from,to,turnOnly})=>{const pivot=point(from.position),end=point(to.position),a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
-    return encounterContext.limit({time:frameStamp,body,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
+    let nextBody=null;
+    if(body.movementCores?.length){admissionPath=to;try{player.seek(wander.read().frame);nextBody=contactState();}finally{admissionPath=null;}}
+    return encounterContext.limit({time:frameStamp,body,nextBody,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
   }
-  const state=wander.advance(moving,constraint);cycle=state.cycle;source.presentation.cycle=cycle;
+  const before=wander.snapshot();let state;
+  try{state=wander.advance(moving,constraint);}catch(error){admissionPath=null;wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
+  cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
   encounterContext?.commit(frameStamp,contactState());
   stepFlesh(physicalSeconds);
@@ -233,7 +237,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
-  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
+  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index,admissionPath):walking.frame(index,{mode,cycle})};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
    poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
@@ -244,7 +248,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(!capsules.length){const a=runtime.bones.get('pelvis'),b=runtime.bones.get('spine-chest');if(!a||!b)return {mounted:false};capsules=[{a:a.getWorldPosition(new THREE.Vector3()).toArray(),b:b.getWorldPosition(new THREE.Vector3()).toArray(),radius:.4*scale.x}];}
   const c=capsules[0],position=[(c.a[0]+c.b[0])*.5,(c.a[2]+c.b[2])*.5],radius=c.radius+Math.hypot(c.b[0]-c.a[0],c.b[2]-c.a[2])*.35,path=wander?.read(),frame=authoredPlacement(),dir=path?new THREE.Vector3(path.path.direction[0],0,path.path.direction[1]).transformDirection(frame.matrixWorld):new THREE.Vector3(0,0,1);
   const nodes=runtime.flesh.contactNodes().map(p=>new THREE.Vector3(...p).applyMatrix4(matrix).toArray());
-  return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules,nodes};
+  const movementCores=runtime.flesh.movementCores().map(c=>({...c,a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
+  return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules,nodes,movementCores};
  }
  function stepFlesh(seconds){
   if(!inputs.flesh)return;

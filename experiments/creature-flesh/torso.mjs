@@ -3,6 +3,28 @@ const unit=p=>{const n=Math.hypot(...p);if(!(n>1e-10))throw Error('Degenerate to
 const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
+// A locomotion support inside the axial skin, distinct from the outer volume
+// that yields on the GPU. All dominant axial vertices contribute; no anatomical
+// bone/organ inference is claimed. Overlapping spheres follow the given rig.
+export function prepareMovementSupports({manifest,rest,weights}){
+ const C=manifest.channels.length,n=rest.length/3,positions=[],radii=[],parts=[],out=[],profile=[];
+ const names=['pelvis','spine-lumbar','spine-chest','neck','head','head-end'];
+ const add=(p,r,w,part)=>{positions.push(p);radii.push(r);parts.push(part);out.push(...w);};
+ let previous=null;
+ for(const name of names){
+  const channel=manifest.channels.indexOf(name),bone=manifest.bones.find(b=>b.name===name);if(channel<0||!bone)continue;
+  const origin=bone.restMatrix.slice(0,3).map(r=>r[3]),delta=sub(bone.tail??origin,origin);if(Math.hypot(...delta)===0)continue;
+  const axis=unit(delta),seed=Math.abs(axis[1])<.9?[0,1,0]:[1,0,0],right=unit(cross(seed,axis)),up=unit(cross(axis,right)),basis=[right,up,axis],lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let vertices=0;
+  for(let i=0;i<n;i++){let dominant=0;for(let j=1;j<C;j++)if(weights[i*C+j]>weights[i*C+dominant])dominant=j;if(dominant!==channel)continue;vertices++;const q=sub(Array.from(rest.subarray(i*3,i*3+3)),origin);for(let j=0;j<3;j++){const x=dot(q,basis[j]);lo[j]=Math.min(lo[j],x);hi[j]=Math.max(hi[j],x);}}
+  const radius=.4*Math.min(hi[0]-lo[0],hi[1]-lo[1]);if(!vertices||!(radius>0)||!Number.isFinite(radius))continue;
+  const weightsAt=manifest.channels.map((_,i)=>Number(i===channel)),middle=lo.map((v,i)=>(v+hi[i])/2),a=Math.min(middle[2],lo[2]+radius),b=Math.max(middle[2],hi[2]-radius),count=Math.max(1,Math.ceil((b-a)/radius)),centers=Array.from({length:count+1},(_,i)=>origin.map((v,j)=>v+right[j]*middle[0]+up[j]*middle[1]+axis[j]*(a+(b-a)*i/count)));
+  if(previous){const end=centers[0],distance=Math.hypot(...sub(end,previous.p)),r=Math.min(radius,previous.r),steps=Math.ceil(distance/r);for(let i=1;i<steps;i++){const f=i/steps;add(previous.p.map((v,j)=>v+(end[j]-v)*f),r,weightsAt.map((v,j)=>v*f+previous.w[j]*(1-f)),'axial-bridge');}}
+  for(const p of centers)add(p,radius,weightsAt,name);
+  previous={p:centers.at(-1),r:radius,w:weightsAt};profile.push({part:name,vertices,radius,bounds:{min:lo,max:hi}});
+ }
+ return {positions,radii,parts,weights:new Float32Array(out),profile,claim:'Axial skin-derived inner movement spheres; outer flesh remains compressible'};
+}
+
 // Explicit alternative to nearest-surface attachment for the internal volume.
 // A whole section shares its spine blend; skin weights and embedding stay intact.
 export function torsoNodeWeights(prepared,channels){

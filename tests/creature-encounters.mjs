@@ -47,6 +47,12 @@ for(const scale of [1e-6,.001,1,1000]){
  const chord={a:[-.5*scale,0,0],b:[.5*scale,0,0],radius:0};assert.ok(Math.abs(encounter.capsuleGap(chord,bar.capsules[0])+.1*scale)<scale*1e-12,'Perpendicular segment distance must preserve scale');
 }
 const shared=createEncounterWorld({avoidance:false}),sphere=(id,x)=>({id,mounted:true,position:[x,0],direction:[1,0],speed:1,radius:.5,capsules:[{a:[x,0,0],b:[x,0,0],radius:.5}]});
+const yieldingA={...softA,movementCores:[{a:[0,.5,0],b:[0,.5,0],radius:.2}]},yieldingB={...pressed,movementCores:[{a:[1.2,.5,0],b:[1.2,.5,0],radius:.2}]};
+assert.equal(encounterSteering(yieldingA,[yieldingB],{seconds:.1,avoidance:false}).distanceScale,1,'The yielding shell must be allowed to engage without becoming a rigid locomotion wall');
+const long={...rod,movementCores:[{a:[-1.5,0,0],b:[-1.5,0,0],radius:.25},{a:[1.5,0,0],b:[1.5,0,0],radius:.25}]},noseObstacle={...obstacle,movementCores:[{a:[.62,0,2.12],b:[.62,0,2.12],radius:.2}]};
+assert.ok(encounter.limitTorsoMotion(long,[noseObstacle],{pivot:[-1.5,0,0],translation:[0,0,0],angle:Math.PI/2}).fraction<.5,'The long front must not swing through another body about its rear pivot');
+const gaitBefore={...rod,movementCores:[{a:[-1,0,0],b:[-1,0,0],radius:.2}]},gaitAfter={...rod,movementCores:[{a:[1,0,0],b:[1,0,0],radius:.2}]},gaitObstacle={...obstacle,movementCores:[{a:[0,0,0],b:[0,0,0],radius:.2}]};
+assert.ok(encounter.limitTorsoMotion(gaitBefore,[gaitObstacle],{pivot:[0,0,0],translation:[0,0,0],angle:0},gaitAfter).fraction<.5,'The proposed gait pose must be checked even with no path-root motion');
 const left=sphere('left',0),rightBody=sphere('right',2);shared.actor('left').register(()=>left);shared.actor('right').register(()=>rightBody);const token=shared.beginStep();
 const firstMove={pivot:[0,0,0],translation:[.7,0,0],angle:0};assert.equal(shared.actor('left').limit({time:token,body:left,motion:firstMove}).fraction,1);shared.actor('left').commit(token,encounter.moveTorso(left,firstMove));
 assert.ok(shared.actor('right').limit({time:token,body:rightBody,motion:{pivot:[2,0,0],translation:[-.7,0,0],angle:0}}).fraction<1,'Two callbacks must not spend the same separation gap independently');shared.dispose();

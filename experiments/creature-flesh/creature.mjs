@@ -2,7 +2,7 @@ import * as THREE from '../../lib/three.core.js';
 import {createGpuSkinDeformer} from '../creature-motion/gpu-skin-deformer.mjs';
 import {createGpuFleshVolume} from './gpu-volume.mjs';
 import {prepareSmoothFleshEmbedding} from './embedding.mjs';
-import {addFleshOffsets,torsoNodeWeights} from './torso.mjs';
+import {addFleshOffsets,torsoNodeWeights,prepareMovementSupports} from './torso.mjs';
 import {skinTransport,transportDualQuaternions} from '../../hindquarter-live-core.mjs';
 import {prepareGpuPhysicalEmbedding} from '../creature-motion/gpu-skin-data.mjs';
 
@@ -53,6 +53,7 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
   const embedding=embeddingFor(prepared,interpolation),volume=createGpuFleshVolume(prepared),skin=createGpuSkinDeformer({...args,physical:embedding,physicalAttribute:volume.attribute});
   volume.setEnabled(enabled);
   const nodeRest=Float32Array.from(prepared.positions.flat()),weights=torsoNodeWeights(prepared,args.manifest.channels),C=args.channels;
+  const support=prepareMovementSupports(args),supportRest=Float32Array.from(support.positions.flat());
   let running=false,validated=false,validationStarted=false,error=null,accumulator=0,palette=null,currentRotations=null,lastRotations=null,pending=null,snapshotEpoch=-1,snapshotPose='',poseKey='',offsets=prepared.positions.map(()=>[0,0,0]),disposed=false;
   const boneRest=args.manifest.bones.map(b=>({...b,at:b.restMatrix.slice(0,3).map(r=>r[3]),channel:args.manifest.channels.indexOf(b.name)})),pickRadius=prepared.construction.profile[Math.floor(prepared.construction.sections/2)].radius[0];
   const update=matrices=>{
@@ -75,6 +76,7 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
    setEnabled(value){if(typeof value!=='boolean')throw Error('Boolean flesh response required');enabled=value;volume.setEnabled(value);skin.invalidate();},
    setContacts:contacts=>volume.setCapsules(contacts),
    contactNodes:()=>volume.targets().filter((_,i)=>!prepared.pinned[i]),
+   movementCores(){if(!palette)return[];const p=skinTransport(supportRest,support.weights,palette);return support.positions.map((_,i)=>({a:Array.from(p.subarray(i*3,i*3+3)),b:Array.from(p.subarray(i*3,i*3+3)),radius:support.radii[i],part:support.parts[i]}));},
    capsules(){const p=volume.targets(),c=prepared.construction.crossSection,s=prepared.construction.sections,m=(c-1)/2,centers=[],radii=[];for(let k=0;k<s;k++){const center=p[(k*c+m)*c+m];centers.push(center);radii.push(Math.max(...[p[(k*c+m)*c],p[(k*c+m)*c+c-1],p[(k*c)*c+m],p[(k*c+c-1)*c+m]].map(q=>Math.hypot(...q.map((v,a)=>v-center[a])))));}return [{a:centers[1],b:centers[s-2],radius:radii[Math.floor(s/2)]}];},
    snapshot,mirrorKey:()=>volume.read().epoch+':'+poseKey,
    cpuPositions(base){if(volume.read().steps>0&&!current())throw Error('Pause the creature for an exact physical snapshot/export');return addFleshOffsets(base,embedding,offsets);},
