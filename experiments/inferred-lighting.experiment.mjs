@@ -67,7 +67,8 @@ export default {
       const effective = read(); record({kind:'inferred-lighting.load',phase:'applied',target:asset.id,effective});
       return effective;
     }
-    if (report) load(report);
+    const frame = () => session.setView({position:[0, .75, 9],target:[0,.75,0]});
+    if (report) {load(report); frame();}
     const stop = session.onFrame(() => update());
     return {
       read,
@@ -83,7 +84,7 @@ export default {
           yaw=value; update(true); sync();
           record({kind:'inferred-lighting.yaw',phase:'applied',effective:read()}); return read();
         },
-        frame() {return session.setView({position:[0, .75, 9],target:[0,.75,0]});},
+        frame,
       },
       mount({root:container,document,invoke}) {
         const status = document.createElement('p'); status.setAttribute('role','status');
