@@ -33,7 +33,7 @@ async function read(device, buffer, offset, bytes, Type = Float32Array) {
 }
 
 // session: a kit inference session (for example the page's app GPU host session).
-export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, detectorPackageUrl, mobreconPackageSource, detectorPackageSource, signal, onProgress } = {}) {
+export async function createBrowserHandMeshRoute({ session, routeId, mobreconPackageUrl, detectorPackageUrl, mobreconPackageSource, detectorPackageSource, signal, onProgress } = {}) {
   const registered = [];
   let mobrecon, detector, crop;
   // Leases first, then the routes, so the shared session can host this route again.
@@ -45,10 +45,10 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
   };
   let device;
   try {
-    const mobreconRoute = await session.registerRoute({ routeId: MOBRECON_ROUTE_ID });
-    registered.push(MOBRECON_ROUTE_ID);
-    const detectorRoute = await session.registerRoute({ routeId: HAND_DETECTOR_ROUTE_ID });
-    registered.push(HAND_DETECTOR_ROUTE_ID);
+    const mobreconRoute = await session.registerRoute({ routeId: routeId ? `${routeId}:mobrecon` : MOBRECON_ROUTE_ID });
+    registered.push(routeId ? `${routeId}:mobrecon` : MOBRECON_ROUTE_ID);
+    const detectorRoute = await session.registerRoute({ routeId: routeId ? `${routeId}:detector` : HAND_DETECTOR_ROUTE_ID });
+    registered.push(routeId ? `${routeId}:detector` : HAND_DETECTOR_ROUTE_ID);
     device = mobreconRoute.runtime.device;
     if (detectorRoute.runtime.device !== device) throw new Error('detector and MobRecon routes must share one device');
     mobrecon = await loadMobRecon({ route: mobreconRoute, packageUrl: mobreconPackageUrl, packageSource: mobreconPackageSource, signal,
@@ -83,7 +83,7 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
     // In detector mode a frame without a detection falls back to manualBox,
     // reported as such. handedness chooses the MobRecon input flip; the
     // detector's class is reported, not applied.
-    async infer({ source, width, height, handedness, acquisition }) {
+    async infer({ source, width, height, handedness, acquisition, schedule = null }) {
       if (released) throw new Error('browser hand mesh route released');
       if (busy) throw new Error('browser hand mesh route already has an inference in flight');
       if (!['left', 'right'].includes(handedness)) throw new Error('handedness must be left or right');
@@ -93,12 +93,31 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
       busy = true;
       try {
         const t0 = performance.now();
-        const texture = upload(source, width, height);
+        let texture;
+        // Two actual model boundaries. Whole-network passes remain indivisible;
+        // pause/cancellation and foreground work occur before either phase.
+        const runPhase = (phase, work) => {
+          if (!schedule) return work();
+          return schedule.control.runDuty(async () => {
+            const duty = await schedule.runtime.prepareCommandDutyAtBoundary({ phase, kind: 'compute' }, schedule.invocation);
+            try {
+              const result = await work();
+              schedule.runtime.settleCommandDuty(duty, { status: 'encoded' });
+              return result;
+            } catch (error) {
+              schedule.runtime.settleCommandDuty(duty, { status: 'failed', error });
+              throw error;
+            }
+          });
+        };
         const result = { identity, handedness, interactionAuthority: false, authority: 'browser_webgpu_diagnostic_not_interaction',
           acquisition: { mode, padding, threshold, detections: [], selectedDetection: null, fallback: false, source: 'operator_selected_crop_no_detector' } };
         let box = manualBox;
         if (mode === 'detector') {
-          const detections = await detector.detect({ texture, threshold });
+          const detections = await runPhase('hand-detector', () => {
+            texture = upload(source, width, height);
+            return detector.detect({ texture, threshold });
+          });
           result.acquisition.detections = detections;
           result.timings = { detectorMs: performance.now() - t0 };
           if (detections.length) {
@@ -119,12 +138,15 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
         if (!box) throw new Error('no crop box: manual box required');
         result.cropBox = box;
         const t1 = performance.now();
-        const encoder = device.createCommandEncoder({ label: 'hand-mesh:mobrecon' });
-        crop.encode(encoder, { texture, box, handedness });
-        mobrecon.network.encode(encoder);
-        device.queue.submit([encoder.finish()]);
-        const { mesh, uv } = mobrecon.network.outputs;
-        const [vertices, landmarks] = await Promise.all([read(device, mesh.buffer, mesh.offset * 4, 778 * 12), read(device, uv.buffer, uv.offset * 4, 21 * 8)]);
+        const [vertices, landmarks] = await runPhase('mobrecon', async () => {
+          texture ??= upload(source, width, height);
+          const encoder = device.createCommandEncoder({ label: 'hand-mesh:mobrecon' });
+          crop.encode(encoder, { texture, box, handedness });
+          mobrecon.network.encode(encoder);
+          device.queue.submit([encoder.finish()]);
+          const { mesh, uv } = mobrecon.network.outputs;
+          return Promise.all([read(device, mesh.buffer, mesh.offset * 4, 778 * 12), read(device, uv.buffer, uv.offset * 4, 21 * 8)]);
+        });
         if (!vertices.every(Number.isFinite) || !landmarks.every(Number.isFinite)) throw new Error('non-finite MobRecon output');
         Object.assign(result, prediction(vertices, landmarks, handedness));
         result.hasHand = true;

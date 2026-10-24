@@ -1,11 +1,10 @@
 import { WebGPURenderer, Scene, PerspectiveCamera, Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide } from '../../lib/three.webgpu.js';
-import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
-import { createBrowserHandMeshRoute } from '../../models/mobrecon/hand-mesh-route.js';
+import { createHandMeshApp } from '../../models/mobrecon/hand-mesh-app.js';
 import { readLocalModels, readServedModels, createModelStore } from './model-files.js';
 
 const $ = id => document.getElementById(id);
 const video = $('camera'), view = $('viewer'), store = createModelStore(indexedDB);
-let renderer, scene, camera, mesh, route, session;
+let renderer, scene, camera, mesh, route;
 let stream = null, running = false, starting = false, loading = false, importing = false, ticket = 0, callback, flight = null, disposed = false;
 let received = 0, misses = 0, last = null, error = null, source = null, presentation = 'camera-off';
 const status = text => { $('status').textContent = text; };
@@ -47,7 +46,7 @@ function schedule(current) {
   callback = video.requestVideoFrameCallback(() => {
     if (!running || current !== ticket || disposed) return;
     const currentFlight = (async () => {
-      const result = await route.infer({ source: video, width: video.videoWidth, height: video.videoHeight, handedness: $('hand').value,
+      const result = await route.infer({ getFrame: () => ({ source: video, width: video.videoWidth, height: video.videoHeight, frameId: video.currentTime }), handedness: $('hand').value,
         acquisition: { mode: 'detector', threshold: Number($('threshold').value), padding: 1.4, onMiss: 'skip' } });
       if (!running || current !== ticket || disposed) return;
       last = result;
@@ -86,15 +85,16 @@ async function start() {
 }
 async function install(models, origin) {
   loading = true; buttons(); await stop();
-  let nextSession, nextRoute;
+  let nextRoute;
   try {
     status('Loading models onto your GPU…');
-    nextSession = await createWebGpuInferenceSession({ sessionId: crypto.randomUUID(), device: renderer.backend.device, adapter: renderer.backend.adapter, adapterName: renderer.backend.adapter?.info?.description || 'Kaminos hand viewer WebGPU device', deviceOwnership: 'borrowed' });
-    nextRoute = await createBrowserHandMeshRoute({ session: nextSession, mobreconPackageSource: models.mobrecon, detectorPackageSource: models.detector,
+    nextRoute = await createHandMeshApp({ device: renderer.backend.device,
+      adapterName: renderer.backend.adapter?.info?.description || 'Kaminos hand viewer WebGPU device',
+      mobreconPackageSource: models.mobrecon, detectorPackageSource: models.detector,
       onProgress: event => status(`Loading ${event.model === 'mobrecon' ? 'hand reconstruction' : 'hand detection'}…`) });
-    if (disposed) { nextRoute.release(); await nextSession.close(); return; }
-    route?.release(); await session?.close();
-    route = nextRoute; session = nextSession; source = origin; nextRoute = null; nextSession = null;
+    if (disposed) { await nextRoute.destroy(); return; }
+    await route?.destroy();
+    route = nextRoute; source = origin; nextRoute = null;
     mesh.geometry.setIndex(Array.from(route.faces)); mesh.geometry.computeBoundingSphere();
     $('frame').disabled = false;
     $('setup-title').textContent = 'Your models are loaded.';
@@ -102,7 +102,7 @@ async function install(models, origin) {
     $('models-status').textContent = origin === 'local-server' ? 'Loaded from the setup command on this computer.' : origin === 'browser-storage' ? 'Restored from this browser. Nothing downloaded.' : 'Loaded from your files. Nothing uploaded.';
     error = null;
   } catch (cause) {
-    nextRoute?.release(); await nextSession?.close();
+    await nextRoute?.destroy();
     error = String(cause?.message ?? cause); status(`Model load failed: ${error}`);
     throw cause;
   } finally { loading = false; buttons(); }
@@ -138,14 +138,14 @@ async function initialize() {
     finally { $('files').value = ''; importing = false; buttons(); }
   };
   window.handMeshDemo = { read: () => ({ running, starting, loading, importing, received, misses, presentation, error, source, visible: mesh.visible,
-    threshold: Number($('threshold').value), handedness: $('hand').value, identity: route?.identity ?? null, viewerBackend: renderer.backend.isWebGPUBackend ? 'webgpu' : 'fallback',
+    threshold: Number($('threshold').value), handedness: $('hand').value, identity: route?.identity ?? null, application: route?.snapshot() ?? null, viewerBackend: renderer.backend.isWebGPUBackend ? 'webgpu' : 'fallback',
     lastAcquisition: last?.acquisition ?? null, lastTimings: last?.timings ?? null, cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off' }) };
   addEventListener('pagehide', () => {
     disposed = true; ticket++; running = false;
     stream?.getTracks().forEach(track => track.stop()); stream = null;
     if (callback !== undefined) video.cancelVideoFrameCallback(callback);
     observer.disconnect();
-    Promise.resolve(flight).catch(() => {}).finally(async () => { route?.release(); await session?.close(); mesh.geometry.dispose(); mesh.material.dispose(); renderer.dispose(); });
+    Promise.resolve(flight).catch(() => {}).finally(async () => { await route?.destroy(); mesh.geometry.dispose(); mesh.material.dispose(); renderer.dispose(); });
   }, { once: true });
   const servedModels = new URL(location.href).searchParams.get('models');
   if (servedModels !== null) {

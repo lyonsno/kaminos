@@ -6,6 +6,7 @@ export function verifyHandDemoReport(report, expectedRoot) {
   const loaded = report.steps?.find(row => row.name === 'import')?.state;
   if (loaded?.identity?.backend !== 'webgpu-local' || loaded?.identity?.mobrecon?.backend !== 'webgpu-local' || loaded?.identity?.detector?.backend !== 'webgpu-local' || loaded?.viewerBackend !== 'webgpu') failures.push('wrong or missing effective WebGPU route');
   if (!loaded?.identity?.mobrecon?.bundleSha256 || !loaded?.identity?.detector?.bundleSha256) failures.push('missing effective model identities');
+  if (loaded?.application?.api !== 'kaminos.hand-mesh-app.v0' || !loaded.application.loaded || loaded.application.admission !== 'whole-operation-fifo' || loaded.application.ownership?.device !== 'borrowed') failures.push('missing or wrong hand application lifecycle');
   const live = report.steps?.find(row => row.name === 'live')?.state;
   if (!(live?.received > 0 && live.running && live.visible)) failures.push('no displayed live mesh');
   const miss = report.steps?.find(row => row.name === 'miss')?.state;

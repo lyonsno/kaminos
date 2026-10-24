@@ -40,5 +40,26 @@ await route.infer({ ...input, acquisition: { mode: 'manual', manualBox: [0, 0, 1
 assert.equal(calls.detector, 2, 'manual mode does not invoke the detector');
 await assert.rejects(route.infer({ ...input, acquisition: { ...input.acquisition, onMiss: 'invented' } }), /miss policy/i);
 route.release();
+// Distinct application instances use separate resource routes in one session.
+const registered = new Set();
+const session = { async registerRoute({ routeId }) {
+  assert.ok(!registered.has(routeId), `duplicate route ${routeId}`); registered.add(routeId); return { runtime: { device } };
+}, unregisterRoute(routeId) { registered.delete(routeId); } };
+const a = await createBrowserHandMeshRoute({ session, routeId: 'hand-a' });
+const b = await createBrowserHandMeshRoute({ session, routeId: 'hand-b' });
+assert.equal(registered.size, 4); a.release(); assert.equal(registered.size, 2);
+const duties = [], settlements = [];
+const schedule = { control: { runDuty: work => work() }, invocation: {}, runtime: {
+  async prepareCommandDutyAtBoundary(duty) { duties.push(duty.phase); return duty; },
+  settleCommandDuty(duty, result) { settlements.push([duty.phase, result.status]); },
+} };
+await b.infer({ ...input, acquisition: { ...input.acquisition, onMiss: 'manual' }, schedule });
+assert.deepEqual(duties, ['hand-detector', 'mobrecon']);
+assert.deepEqual(settlements, [['hand-detector', 'encoded'], ['mobrecon', 'encoded']]);
+const before = calls.mesh;
+await b.infer({ ...input, schedule });
+assert.equal(calls.mesh, before, 'scheduled detector miss also skips reconstruction');
+assert.equal(duties.at(-1), 'hand-detector');
+b.release(); assert.equal(registered.size, 0);
 delete globalThis.__handMeshMissTest;
 console.log('hand mesh detector-miss contracts passed');

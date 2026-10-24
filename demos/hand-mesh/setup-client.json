@@ -7,7 +7,7 @@
     },
     {
       "path": "demos/hand-mesh/main.js",
-      "sha256": "65d7f379fc799782415128a113501dfe9cd84d4dacb389f07263779df2c546c3"
+      "sha256": "5cbe61dc6c9f8b8d4a268f9035b79a0e1b72e5446279363232134bd5dff713a4"
     },
     {
       "path": "demos/hand-mesh/model-files.js",
@@ -38,8 +38,12 @@
       "sha256": "1bc8bf68011eda13d38e36b65c344ad39ef7aba0cf00e87a305d3f536a23dc75"
     },
     {
+      "path": "models/mobrecon/hand-mesh-app.js",
+      "sha256": "ef85f9a7b2807217a47e25f1e7bf11ea1cee17ac6ee6cf8416619a0d9d12a30f"
+    },
+    {
       "path": "models/mobrecon/hand-mesh-route.js",
-      "sha256": "f2189e3a617831471826a0b97de4837024b5fed9703452865afe3107132159ee"
+      "sha256": "137fa17b0e8edd3da8a87af297d9e9862c4daa555e85c47ec73a9c18eb2d71c9"
     },
     {
       "path": "models/mobrecon/mobrecon-crop.js",
@@ -118,6 +122,10 @@
       "sha256": "4203f2c1ef15d25b059ec77ac091fe8caf86040867a8cc4d0fc2564541329a07"
     },
     {
+      "path": "webgpu-inference-kit/src/application-runner.js",
+      "sha256": "0cd0389b19c1a19b427f7da0456428bf6afca3074898463cee9eeab952e76b0e"
+    },
+    {
       "path": "webgpu-inference-kit/src/bounded-gpu-submission.js",
       "sha256": "c8cd2fcccb33c0c79b6ac081e854739f01978e88a0a94fb739d9955267935b7e"
     },
@@ -151,7 +159,7 @@
     },
     {
       "path": "webgpu-inference-kit/src/core.js",
-      "sha256": "8bd9c41fbacbb565c87e4b82b784cd08c246c9778804f18c49fee78950e7d986"
+      "sha256": "8b1254ddfad601ba76df2ac86c3bc2976d18b14a7f2936efc206754089ad6713"
     },
     {
       "path": "webgpu-inference-kit/src/flash-attention-kernel.js",
