@@ -56,7 +56,12 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
  function begin(){
   if(disposed)throw Error('Inference flame is closed');
   if(!flame.read().active)throw Error('Add or enable a flame first');
-  if(!transaction){baseline=flame.settings();transaction=flame.beginPreview('Inference flame response');}
+  if(!transaction){
+   const current=flame.settings();
+   const fields=[...new Set([...Object.values(score.stages).flatMap(recipe=>recipe.fields),...(score.flare?.fields??[])])];
+   baseline=baseline?blendSettings({a:baseline,b:baseline,current,fields,amount:0}):current;
+   transaction=flame.beginPreview('Inference flame response');
+  }
  }
  function apply(){
   if(!recording||!transaction)return;
@@ -87,7 +92,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   try{
    if(event.type==='start'){
     if(transaction){transaction.commit();transaction=null;}
-    recording=source.read(runId);position=0;startedAt=now();begin();
+    recording=source.read(runId);baseline=null;position=0;startedAt=now();begin();
    }
    if(recording?.runId!==runId)return;
    if(event.type!=='start'){recording.events.push(clone(event));recording.durationMs=event.atMs;if(['complete','failed','stopped'].includes(event.type))recording.status=event.type;}position=Math.max(position,event.atMs);
@@ -97,23 +102,23 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
  };
  const read=()=>({recording:recording?{runId:recording.runId,source:clone(recording.source),status:recording.status,terminal:clone(recording.events.findLast(e=>['complete','failed','stopped'].includes(e.type))??null),durationMs:recording.durationMs}:null,score:clone(score),position,playbackDurationMs:playbackEnd(),playing,live,previewing:!!transaction,error,stage:lastView?.stage??null,progress:lastView?.progress??null,preview:lastView?.preview??null,flareWeight:lastView?.flareWeight??0});
  return {read,operations:{
-  load(value){stop();recording=validateRecording(value);position=0;lastView=null;notify();return read();},
+  load(value){stop();recording=validateRecording(value);baseline=null;position=0;lastView=null;notify();return read();},
   latest(){const value=source.read();if(!value)throw Error('No observed ImageGen run yet');return this.load(value);},
-  assign({stage,recipe}){if(!INFERENCE_STAGES.includes(stage))throw Error('Unknown inference stage');stop();blendSettings({a:recipe.a.settings,b:recipe.b.settings,current:flame.settings(),fields:recipe.fields,amount:0});score.stages[stage]=clone(recipe);notify();return read();},
-  clearStage(stage){stop();delete score.stages[stage];notify();return read();},
-  captureFlare({fields,attackMs=120,settleMs=900}){stop();const settings=flame.settings();blendSettings({a:settings,b:settings,current:settings,fields,amount:0});if(!Number.isFinite(attackMs)||attackMs<0||!Number.isFinite(settleMs)||settleMs<=0)throw Error('Choose nonnegative attack and positive settling times');score.flare={settings,fields:[...fields],attackMs,settleMs};notify();return read();},
-  clearFlare(){stop();score.flare=null;notify();return read();},
+  assign({stage,recipe}){if(!INFERENCE_STAGES.includes(stage))throw Error('Unknown inference stage');stop();blendSettings({a:recipe.a.settings,b:recipe.b.settings,current:flame.settings(),fields:recipe.fields,amount:0});baseline=null;score.stages[stage]=clone(recipe);notify();return read();},
+  clearStage(stage){stop();baseline=null;delete score.stages[stage];notify();return read();},
+  captureFlare({fields,attackMs=120,settleMs=900}){stop();const settings=flame.settings();blendSettings({a:settings,b:settings,current:settings,fields,amount:0});if(!Number.isFinite(attackMs)||attackMs<0||!Number.isFinite(settleMs)||settleMs<=0)throw Error('Choose nonnegative attack and positive settling times');baseline=null;score.flare={settings,fields:[...fields],attackMs,settleMs};notify();return read();},
+  clearFlare(){stop();baseline=null;score.flare=null;notify();return read();},
   play(){if(!recording)throw Error('Load a recording first');stop();if(position>=playbackEnd())position=0;begin();playing=true;apply();notify();return read();},
   seek(value){if(!recording)throw Error('Load a recording first');if(!Number.isFinite(value)||value<0||value>playbackEnd())throw Error('Choose a position inside the recording');if(live)stop();begin();playing=false;position=value;apply();notify();return read();},
   pause(){stop();return read();},cancel(){stop(true);return read();},
-  follow(){stop();live=true;recording=null;position=0;lastView=null;unsubscribe=source.subscribe(receive,{previews:true});notify();return read();},
+  follow(){stop();live=true;recording=null;baseline=null;position=0;lastView=null;unsubscribe=source.subscribe(receive,{previews:true});notify();return read();},
   export(){return {schema:'kaminos.inference-flame.v1',recording:recording&&clone(recording),score:clone(score)};},
   restore(value){
    if(value?.schema!=='kaminos.inference-flame.v1'||!value.score?.stages)throw Error('Choose an inference flame arrangement');
    const next=value.recording?validateRecording(value.recording):null;
    for(const recipe of Object.values(value.score.stages))blendSettings({a:recipe.a?.settings,b:recipe.b?.settings,current:flame.settings(),fields:recipe.fields,amount:0});
    if(value.score.flare){const f=value.score.flare;blendSettings({a:f.settings,b:f.settings,current:flame.settings(),fields:f.fields,amount:0});}
-   evaluateInferenceFlame({events:[]},0,value.score,flame.settings());stop();score=clone(value.score);recording=next;position=0;lastView=null;notify();return read();
+   evaluateInferenceFlame({events:[]},0,value.score,flame.settings());stop();baseline=null;score=clone(value.score);recording=next;position=0;lastView=null;notify();return read();
   },
  },dispose(){stop(true);disposed=true;unframe();unsubscribe();}};
 }

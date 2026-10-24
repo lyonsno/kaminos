@@ -71,3 +71,12 @@ test('live events are retained incrementally without recopied history on every b
  for(let i=1;i<=20;i++){clock=i;run.emit({type:'progress',stage:'weights',completed:i,total:20});}
  run.finish('complete');assert.equal(reads,1);assert.deepEqual(response.operations.export().recording,source.read(run.runId));response.dispose();f.response.dispose();
 });
+test('pause and resume preserve the evaluation baseline and current held settings',()=>{
+ const f=fixture();f.response.operations.load({...recording,events:[{atMs:0,type:'stage',stage:'denoise'},{atMs:1000,type:'complete'}],durationMs:1000});
+ f.response.operations.assign({stage:'denoise',recipe:{...recipe,a:{label:'Hot A',settings:settings(10)},b:{label:'Hot B',settings:settings(20)}}});
+ f.response.operations.seek(200);assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);
+ for(let i=0;i<3;i++){f.response.operations.pause();f.response.operations.play();assert.equal(f.response.read().position,200);assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);}
+ f.response.operations.pause();const held=f.author.read();held.domControls['volume-wind-angle'].value=75;f.author.apply(held);
+ f.response.operations.play();assert.equal(f.author.read().domControls['volume-wind-angle'].value,75);assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);
+ f.tick(.1);f.response.operations.cancel();assert.equal(f.author.read().domControls['volume-physical-thermal'].value,6);f.response.dispose();
+});
