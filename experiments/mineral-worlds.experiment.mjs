@@ -11,20 +11,21 @@ export default {
   const fields=new Map();
   const active=()=>{if(disposed)throw Error('Mineral world is closed');};
   const beforeView=session.readView();
+  try{session.setView(inputs.view??{position:[7,3.4,12],target:[0,.6,-3],fov:48});}catch(error){surface.dispose();await session.dispose();throw error;}
   const root=new Group();root.name=surface.root.name;root.add(surface.root);
   const fill=new HemisphereLight(0xc6d8e4,0x70634d,1.8),key=new DirectionalLight(0xfff1d4,3.2);
   key.position.set(-12,5,-8);root.add(fill,key,key.target);
   const env=document.getElementById("env-intensity-slider"),oldEnv=env?.value;
   if(env){env.value="0.12";env.dispatchEvent(new win.Event("input",{bubbles:true}));}
   let asset;
-  try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'mineral-worlds:reduced-process-v1',type:'experiment'}});}catch(error){surface.dispose();await session.dispose();throw error;}
+  try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'mineral-worlds:reduced-process-v1',type:'experiment'}});}catch(error){surface.dispose();if(env&&env.value==='0.12'){env.value=oldEnv;env.dispatchEvent(new win.Event('input',{bubbles:true}));}session.setView(beforeView);await session.dispose();throw error;}
   let scene=root.parent;while(scene&&!scene.isScene)scene=scene.parent;
   const previousFog=scene?.fog,previousBackground=scene?.background,previousBackgroundNode=scene?.backgroundNode;
   const fog=new FogExp2(0xa7b5ba,.065),background=new Color(0xa7b5ba);
   if(scene){scene.fog=fog;scene.background=background;scene.backgroundNode=null;}
   const ground=document.getElementById('composition-ground-visible'),priorGround=ground?.checked;
   if(ground&&ground.checked){ground.checked=false;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}
-  session.setView(inputs.view??{position:[7,3.4,12],target:[0,.6,-3],fov:48});
+
   const read=()=>({...summary(state),objectId:asset.id,playing,busy,stepsPerSecond,lightMode,surface:surface.read(),view:session.readView(),
     continuation:'Export/import full mineral checkpoint; independent of ordinary scene save',provenance:'Authored initial relief; reduced process evolution, not calibrated geology'});
   const sync=()=>{if(title)title.textContent=state.kind==='salt'?'Salt plain':'Flowstone reach';for(const [key,input] of fields)input.value=state.settings[key];if(lighting)lighting.value=lightMode;if(play)play.textContent=playing?'Hold growth':'Resume growth';if(status)status.textContent=`${state.kind==='salt'?'Salt plain':'Flowstone reach'} · ${state.tick} growth steps · ${surface.read().elements.toLocaleString()} surface elements${busy?' · evolving…':''}`;};

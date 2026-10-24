@@ -25,3 +25,7 @@ test('invalid checkpoints fail visibly',()=>{
 test('invalid seed cannot introduce NaNs into a new world',()=>{
  assert.throws(()=>createWorld({size:8,seed:NaN}),/seed/);
 });
+
+test('saved process/grid identity cannot fall back to new-world defaults',()=>{
+ for(const key of ['kind','size','depth']){const file=checkpoint(createWorld({kind:'salt',size:48,depth:6}));delete file[key];assert.throws(()=>restore(file),/identity|grid|kind/);}
+});
