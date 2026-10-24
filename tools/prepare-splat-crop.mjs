@@ -24,6 +24,7 @@ try{
  const cropSHA=hash(bytes(crop.data)),cm={...meta,count:crop.sourceIds.length,sourceCount:crop.sourceIds.length,dataSHA256:cropSHA,crop:{bounds,policy:'whole triangles incident to inside vertices',originalCount:meta.count,sourceDataSHA256:meta.dataSHA256,sourceTrianglesSHA256:meta.triangles.sha256},regionNormalizedYUp:bounds.map(p=>p.map((v,a)=>(v-meta.bounds[0][a])/(meta.bounds[1][a]-meta.bounds[0][a])))};
  const original={data:crop.data,parent:Uint32Array.from(crop.sourceIds,(_,i)=>i),meta:cm};
  const uniform=reduceSurfelRows(crop.data,cm,2),adaptive=adaptSurfaceSplats(crop.data,cm,crop.triangles,{targetCount:uniform.meta.count});
+ report.reducedComparison={uniformCount:uniform.meta.count,adaptiveCount:adaptive.meta.count,equalCount:uniform.meta.count===adaptive.meta.count};
  for(const [name,result] of [['source',original],['uniform',uniform],['adaptive',adaptive]]){
   report.phase='write-'+name;const fitted=result.footprints??fitSurfaceFootprints(crop.data,result.data,result.parent,meta.radius);
   for(const scale of [1,2/3,.5]){
