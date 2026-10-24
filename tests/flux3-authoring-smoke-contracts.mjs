@@ -51,3 +51,11 @@ test('inspection evidence rejects blank/hidden/stale previews, inert expansion, 
  assert.doesNotThrow(()=>validate(inspected()));
  for(const mutate of [r=>r.inspection.previews=[],r=>r.inspection.previews[0].distinctRgb=1,r=>r.inspection.previews[0].visible=false,r=>r.inspection.previews[0].at=99,r=>r.inspection.expandedHeight=144,r=>r.inspection.segmentedSource='/original.png',r=>r.inspection.preferenceAfterGeneration=true,r=>r.inspection.preferenceAfterReload=true,r=>r.inspection.previews[0].timer='',r=>r.inspection.timerAfter='',r=>delete r.provenance.elapsed]){const r=inspected();mutate(r);assert.throws(()=>validate(r));}
 });
+test('early-decode evidence rejects an unchanged full schedule or a frozen flame',()=>{
+ const r=good();r.decodeAfter=1;
+ assert.throws(()=>validate(r),/completion|decode/i);
+ r.provenance.completion={stepsRequested:4,stepsCompleted:1,earlyDecoded:true};
+ r.flame={before:3,after:6,stopped:true,backend:'WebGPU:apple',simGrid:32,raySteps:4,width:100,height:100};
+ assert.doesNotThrow(()=>validate(r));
+ for(const mutate of [r=>r.provenance.completion.earlyDecoded=false,r=>r.provenance.completion.stepsCompleted=4,r=>r.flame.after=r.flame.before,r=>r.flame.stopped=false,r=>r.flame.simGrid=128]){const bad=structuredClone(r);mutate(bad);assert.throws(()=>validate(bad));}
+});

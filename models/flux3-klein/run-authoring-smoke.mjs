@@ -47,6 +47,14 @@ export function validateFlux3AuthoringResult(r){
     assert.ok(r.provenance.elapsed?.generationMs>0,'generation elapsed time is retained in the PNG');
     assert.ok(ui.timerAfter.includes(`${(r.provenance.elapsed.generationMs/1000).toFixed(1)} s`),'completed elapsed time remains visible');
   }
+  if(r.decodeAfter){
+    const c=r.provenance.completion;assert.ok(c,'early decode completion receipt');
+    assert.equal(c.earlyDecoded,true);assert.equal(c.stepsRequested,r.manifest.sampling.steps);
+    assert.equal(c.stepsCompleted,r.decodeAfter);
+    const f=r.flame;assert.ok(f,'live generation flame receipt');
+    assert.ok(f.after>f.before,'flame advances during actual inference');assert.equal(f.stopped,true);
+    assert.equal(f.backend,'WebGPU:apple');assert.equal(f.simGrid,32);assert.equal(f.raySteps,4);assert.equal(f.width,100);assert.equal(f.height,100);
+  }
   return r;
 }
 
@@ -55,12 +63,12 @@ export async function waitForAuthoringGpuHost({read,wait}){
 }
 
 async function main(){
-  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false}}});
+  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
   const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
   const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
   let browser;
-  report.inspectControls=v['inspect-controls'];
+  report.inspectControls=v['inspect-controls'];report.decodeAfter=Number(v['decode-after'])||null;
   await write();
   try{
     for(const field of ['origin','chrome','repo-root','weights-root'])assert.ok(v[field],`--${field} is required`);
@@ -116,18 +124,19 @@ async function main(){
       const original=Flux3Pipeline.prototype.generate;
       Flux3Pipeline.prototype.generate=async function(options){
         const interval={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
-        window.flux3SmokeInference=interval;window.flux3SmokeCompute=[];
+        window.flux3SmokeInference=interval;window.flux3SmokeCompute=[];window.flux3SmokeFlameBefore=window.kaminosAssets.generationFlame.read().renderer?.frameCount??0;
         window.flux3SmokePreviews=[];
         const receive=options.onPreview;
-        if(${v['inspect-controls']})options={...options,onPreview:frame=>{
+        if(${v['inspect-controls']||!!report.decodeAfter})options={...options,onPreview:frame=>{
           if(typeof receive!=='function')throw Error('Authoring omitted the preview callback');receive(frame);
           const canvas=document.getElementById('asset-step-preview'),rect=canvas.getBoundingClientRect();
           const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,colors=new Set();
           for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
+          if(frame.step===${report.decodeAfter}){const button=document.getElementById('asset-text-decode');if(button.hidden||button.disabled)throw Error('Decode now is unavailable');button.click();}
           window.flux3SmokePreviews.push({step:frame.step,steps:frame.steps,width:canvas.width,height:canvas.height,at:performance.now(),visible:!canvas.hidden&&rect.width>0&&rect.height>0,distinctRgb:colors.size,png:canvas.toDataURL('image/png').split(',')[1],timer:document.getElementById('asset-image-timing').textContent});
         }};
         try{return await original.call(this,options);}
-        finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();}
+        finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();window.flux3SmokeFlameAfter=window.kaminosAssets.generationFlame.read().renderer;}
       };
       window.kaminosAssets.open('generate');
       const byId=id=>document.getElementById(id);byId('asset-image-model').value='flux3';byId('asset-image-model').dispatchEvent(new Event('change'));
@@ -140,7 +149,7 @@ async function main(){
       const state=await browser.evaluate(`(()=>{const state=window.kaminosAssets.images.read();if(state.preview){const {rgba,...metadata}=state.preview;state.preview=metadata;}return state;})()`);
       if(['failed','stopped','unavailable'].includes(state.status))throw Error(JSON.stringify(state));
       if(JSON.stringify(state)!==last){report.state=state;last=JSON.stringify(state);await write();}
-      if(v['inspect-controls']&&state.preview?.kind==='partial'&&!report.partialScreenshot){
+      if((v['inspect-controls']||report.decodeAfter)&&state.preview?.kind==='partial'&&!report.partialScreenshot){
         const shot=await browser.send('Page.captureScreenshot',{format:'png'});
         report.partialScreenshot='partial-app.png';await fs.writeFile(path.join(out,report.partialScreenshot),Buffer.from(shot.result.data,'base64'));
       }
@@ -175,6 +184,10 @@ async function main(){
       await browser.navigate(report.url,'!!window.kaminosAssets?.images && !!document.getElementById("asset-show-segmented")');
       report.inspection.preferenceAfterReload=await browser.evaluate('document.getElementById("asset-show-segmented").checked');
     }
+    if(report.decodeAfter){
+      await browser.evaluate(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+      report.flame=await browser.evaluate(`(()=>{const f=window.flux3SmokeFlameAfter,s=window.kaminosAssets.generationFlame.read();return {before:window.flux3SmokeFlameBefore,after:f?.frameCount,stopped:!s.running&&s.renderer?.active===false,backend:f?.backend,simGrid:f?.simGrid,raySteps:f?.volumePresentationReceipt?.effectiveRayQuality?.raySteps,width:f?.width,height:f?.height,raw:f};})()`);
+    }
     validateFlux3AuthoringResult(report);
     assert.equal(report.selected?.kind,'image','the saved image is selected for the mesh input');
     assert.equal(report.selected.source,report.entry.source,'mesh input uses this generated image');
@@ -186,7 +199,7 @@ async function main(){
   finally{
     try{
       if(browser){
-        if(v['inspect-controls']){
+        if(v['inspect-controls']||report.decodeAfter){
           const previews=report.inspection?.previews??await browser.evaluate('window.flux3SmokePreviews??[]').catch(()=>[]);
           for(const p of previews){if(p.png){p.file=`preview-step-${p.step}.png`;await fs.writeFile(path.join(out,p.file),Buffer.from(p.png,'base64'));delete p.png;}}
           if(!report.inspection)report.partialPreviews=previews;
