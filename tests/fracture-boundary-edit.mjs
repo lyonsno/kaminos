@@ -36,3 +36,11 @@ test('candidate catalog carries exact source membership and stable branch identi
  assert.ok(c?.faces,'candidate boundaries must be displayable from source faces');assert.deepEqual(Array.from(c.faces),fixedCuts[0].faces);
  assert.equal(r.hierarchy.nodes.find(n=>n.key==='chosen').kind,'branch');
 });
+
+test('inward motion retains the main connected fitting and reassigns detached surface scraps',()=>{
+ // Two ends joined by a narrow near-boundary face: erosion disconnects a small
+ // scrap. Their areas make the main fitting unambiguous, independent of IDs.
+ const graph={triangles:[{center:[0,0,0],area:10},{center:[1,0,0],area:1},{center:[2,0,0],area:2},{center:[1,.1,0],area:20}],vertices:[[0,0,0],[2,1,0]],links:[{faces:[0,1]},{faces:[1,2]},{faces:[1,3]}],duplicates:[]};
+ const result=shape.moveShapeBoundary(graph,{faces:[0,1,2],allowedFaces:[0,1,2,3]},-.1);
+ assert.deepEqual(result.faces,[0]);assert.deepEqual(result.reassignedIslands,[2]);
+});

@@ -75,3 +75,11 @@ test('boundary witness refuses unchanged cuts and altered neighboring attachment
  assert.throws(()=>module.checkBoundaryChange(before,{...after,candidateBranches:[after.candidateBranches[0],{key:'neighbor',status:'included',faces:[0,1]}]},'target'),/neighbor/);
  assert.throws(()=>module.checkBoundaryChange(before,{...after,labels:[0]},'target'),/source triangle/);
 });
+
+test('boundary witness rejects retained old geometry after a failed inward request',async()=>{
+ const {checkBoundaryChange}=await import('../tools/fracture-refinement-check.mjs');
+ const before={triangleCount:4,labels:[0,1,2,2],candidateBranches:[{key:'target',status:'included',faces:[2,3]}]};
+ const outward={...before,error:'This position disconnects the fitting',fixedCuts:[{key:'target',offsetFraction:.002}],candidateBranches:[{key:'target',status:'included',faces:[1,2,3]}]};
+ assert.throws(()=>checkBoundaryChange(before,outward,'target',{expectedOffsetFraction:-.002}),/error|position/i);
+ assert.throws(()=>checkBoundaryChange(before,{...outward,error:''},'target',{expectedOffsetFraction:-.002}),/position/i);
+});
