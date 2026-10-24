@@ -10,10 +10,13 @@ import { parseArgs } from 'node:util';
 import { createTrellisSparseSamplerAdapter } from './sparse-sampler.js';
 import { admitFrozenStdResult } from './frozen-std-witness-checks.mjs';
 
-const { values: args } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'fixture', 'output', 'chrome', 'expected-commit'].map(k => [k, { type: 'string' }])) });
-if (!args.output) throw Error('--output required');
-const output = path.resolve(args.output), report = { status: 'failed', phase: 'admission', rows: [], command: process.argv };
+// Recover the output destination before strict parsing so malformed arguments
+// cannot leave an earlier successful observation at this invocation's path.
+const rawArgs = process.argv.slice(2);
+const outputArg = rawArgs.flatMap((arg, i) => arg.startsWith('--output=') ? [arg.slice(9)]
+  : arg === '--output' && rawArgs[i + 1] && !rawArgs[i + 1].startsWith('--') ? [rawArgs[i + 1]] : []).at(-1);
+if (!outputArg) throw Error('--output required');
+const output = path.resolve(outputArg), report = { status: 'failed', phase: 'admission', rows: [], command: process.argv };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const persist = async () => { await fs.mkdir(output, { recursive: true }); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n'); };
 let server, child, cdp;
@@ -39,6 +42,8 @@ async function connect(url) {
 }
 try {
   await persist();
+  const { values: args } = parseArgs({ options: Object.fromEntries(
+    ['repo-root', 'fixture', 'output', 'chrome', 'expected-commit'].map(k => [k, { type: 'string' }])) });
   for (const name of ['repo-root', 'fixture', 'chrome', 'expected-commit']) if (!args[name]) throw Error(`--${name} required`);
   const root = await fs.realpath(args['repo-root']), fixture = await fs.realpath(args.fixture);
   if (await fs.realpath(new URL('../..', import.meta.url)) !== root) throw Error('invoked source root mismatch');
