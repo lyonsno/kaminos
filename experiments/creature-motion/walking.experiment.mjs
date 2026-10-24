@@ -151,22 +151,29 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const prior=engagement.read();
    const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,cessation:a.interruption,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
    attention.setEngagement(['approaching','inspecting','cautious','withdrawing'].includes(intent.phase)?intent:null);
-   const backward=wander.read().reverse;
+   if(intent.watch){
+    const target=frame.worldToLocal(new THREE.Vector3(...intent.watch.point));
+    wander.face([target.x,target.z],delta);
+   }
+   else wander.face(null,delta);
+   const motion=wander.read(),backward=motion.reverse;
    let retreatBackward=false;
    if(intent.phase==='withdrawing'){
     const target=frame.worldToLocal(new THREE.Vector3(...intent.point)),dx=target.x-path.position[0],dz=target.z-path.position[1],d=Math.hypot(dx,dz);
-    const facing=d>0?(dx*path.direction[0]+dz*path.direction[1])*(backward?-1:1)/d:1;
+    const heading=motion.facing??Math.atan2(path.direction[0],path.direction[1])+(backward?Math.PI:0);
+    const facing=d>0?(dx*Math.sin(heading)+dz*Math.cos(heading))/d:1;
     retreatBackward=facing>(backward?-.2:.2);
    }
-   // Reverse both retained pose phase and travel, preserving body orientation.
-   // A threat already behind the body still permits ordinary forward escape.
+   // Select signed pose phase and travel while preserving the explicit facing.
+   // Forward escape is faster until body turning brings watchful backward
+   // stepping into reach. The head keeps its independent observation clock.
    wander.setReverse(retreatBackward);
    if(intent.destination){
     const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
     if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
    }else if(intent.phase!=='inspecting')wander.setDestination(null);
-   if(intent.hold)moving=0;else moving*=intent.pace??1;
-  }else wander.setReverse(false);
+   if(intent.hold)moving=0;else moving*=(intent.pace??1)*(intent.phase==='withdrawing'&&!retreatBackward?1.5:1);
+  }else {wander.setReverse(false);wander.face(null,delta);}
   const state=wander.advance(moving);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
   if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
@@ -254,7 +261,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      const result=await probe.sample(points);
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;
-     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+     // The probe measures this emitter's field, whose atlas may remain resident
+     // while disabled. A known disabled emitter contributes zero radiance even
+     // behind the observer; unavailable source state supplies no such evidence.
+     const off=flame?.sensed!==false&&flame?.active===false;
+     attention.sense({time:clock/1000,status:flame?.sensed===false?'unavailable':result.status,sourcePower:off?0:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:off?0:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
     }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
     finally{lightBusy=false;}
    };
@@ -339,8 +350,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
-     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path,pathReverse:prior.wander.read().reverse});
-     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path,pathReverse:prior.heldWander.read().reverse});
+     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path,pathReverse:prior.wander.read().reverse,pathFacing:prior.wander.read().facing});
+     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path,pathReverse:prior.heldWander.read().reverse,pathFacing:prior.heldWander.read().facing});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();
     }
     catch(error){

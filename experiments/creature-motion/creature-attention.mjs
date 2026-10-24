@@ -407,10 +407,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const raw=samples.map(x=>x.luminance).sort((a,b)=>a-b),local=raw[Math.floor(raw.length/2)];
   const priorLevels=new Map(localLevels);localLevels.clear();
   const contrasts=samples.flatMap(x=>{const key=x.point.join(','),before=priorLevels.get(key);localLevels.set(key,x.luminance);return before===undefined?[]:[Math.log((x.luminance+o.lightFloor)/(before+o.lightFloor))];}).sort((a,b)=>a-b);
-  const contrast=litOnset?Math.log1p(local/o.lightFloor):contrasts.length?contrasts[Math.floor(contrasts.length/2)]:0;
+  // A measured field returning from zero is available all around the body.
+  // Its off baseline is zero at new sample points too; observer travel must
+  // not erase the transition merely by crossing a sampling cell boundary.
+  const fieldOnset=previousPower===0&&Number.isFinite(sourcePower)&&sourcePower>0;
+  const contrast=litOnset||fieldOnset?Math.log1p(local/o.lightFloor):contrasts.length?contrasts[Math.floor(contrasts.length/2)]:0;
   const sourceRise=Number.isFinite(sourcePower)&&previousPower!==null?Math.log((sourcePower+1e-6)/(previousPower+1e-6)):0;
   const riseSeconds=litOnset?Math.max(dt,time-onset.since+onset.observedOver):dt;
-  if(source&&known?.previous!=='off'&&contrast>.7&&(litOnset||sourceRise>.5)&&riseSeconds>0){
+  if(source&&(fieldOnset||known?.previous!=='off')&&contrast>.7&&(litOnset||sourceRise>.5)&&riseSeconds>0){
    const rate=contrast/riseSeconds,strength=(1-Math.exp(-(contrast-.7)/2))*rate/(rate+2);
    if(rate>1&&strength>stimulusAmount(sensoryAlarm,time)){
     const familiarity=litOnset?onset.familiarity:known?.familiarity??0;

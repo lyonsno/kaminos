@@ -34,3 +34,21 @@ const wrap=make();wrap.setReverse(true);wrap.setDestination([0,-10]);wrap.advanc
 wrap.advance(100);assert.equal(wrap.read().path.status,'arrived');const stopped=wrap.snapshot();wrap.advance(1);assert.deepEqual(wrap.snapshot(),stopped,'backward arrival holds both phase and root');
 assert.throws(()=>m.setReverse(1),/boolean/);
 console.log('Retained reverse steps preserve facing, phase, stance travel, snapshot and arrival');
+
+// Body assistance remains bounded and carries through checkpoint/clip changes.
+const turning=make();turning.setDestination([0,10]);
+const start=forward(turning),position=turning.read().path.position,phase=turning.read().phase;
+turning.face([1,-5],0);assert.ok(forward(turning).distanceTo(start)<1e-12,'zero time cannot rotate the body');
+turning.face([1,-5],1/60);
+assert.ok(forward(turning).angleTo(start)<=4/60+1e-9,'body reacquisition has a bounded angular speed');
+assert.deepEqual(turning.read().path.position,position);assert.equal(turning.read().phase,phase,'facing alone cannot advance the source stride');
+for(let i=0;i<60;i++)turning.face([1,-5],1/60);
+assert.ok(forward(turning).angleTo(new THREE.Vector3(1,0,-5))<=.451,'body brings the target within comfortable head reach');
+const beforeSwitch=forward(turning),direction=turning.read().path.direction;
+turning.setReverse(true);
+assert.ok(forward(turning).distanceTo(beforeSwitch)<1e-9,'switching gait preserves the assisted body turn');
+assert.deepEqual(turning.read().path.direction,direction,'already-away travel stays away when the body turns to watch');
+assert.deepEqual(pose(make({snapshot:turning.snapshot()})),pose(turning),'checkpoint retains assisted facing');
+assert.ok(forward(make({pathSnapshot:turning.snapshot().path,pathReverse:true,pathFacing:turning.read().facing})).distanceTo(forward(turning))<1e-9,'clip replacement retains assisted facing');
+const released=forward(turning);turning.face(null,1/60);assert.ok(forward(turning).angleTo(released)<=4/60+1e-9,'watch release cannot snap the body back');
+const invalid=turning.snapshot();assert.throws(()=>turning.face([NaN,0],.1),/finite/);assert.deepEqual(turning.snapshot(),invalid);
