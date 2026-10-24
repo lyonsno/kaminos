@@ -93,5 +93,32 @@ class SurfaceClaims(unittest.TestCase):
             self.assertEqual(report['status'],'failed');self.assertEqual(report['phase'],'raw_surface')
             self.assertFalse((root/'output/candidate.glb').exists())
 
+    def reject_raw_mutation(self, mutate, error):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path, manifest = self.fixture(root)
+            with np.load(root/'raw.npz', allow_pickle=False) as raw:
+                vertices, faces = mutate(raw['vertices'], raw['faces'])
+            np.savez(root/'raw.npz', vertices=vertices, faces=faces)
+            manifest['inputs']['raw_mesh']['sha256'] = m.digest(root/'raw.npz')
+            path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, error):
+                m.run(path)
+            report = json.loads((root/'output/report.json').read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['phase'], 'raw_surface')
+            self.assertEqual(report['last_trustworthy_evidence'], {})
+            self.assertEqual({p.name for p in (root/'output').iterdir()}, {'report.json'})
+
+    def test_fractional_raw_indices_cannot_be_truncated_into_success(self):
+        self.reject_raw_mutation(lambda v, f: (v, f.astype(float) + .75), 'integer triangles')
+
+    def test_out_of_range_raw_indices_cannot_wrap_into_success(self):
+        self.reject_raw_mutation(lambda v, f: (v, f.astype(np.int64) + 2**32), 'outside vertex range')
+
+    def test_extra_vertex_component_cannot_be_discarded_into_success(self):
+        self.reject_raw_mutation(lambda v, f: (np.column_stack([v, np.full(len(v), np.nan)]), f),
+                                 'finite vertices')
+
 
 if __name__ == '__main__': unittest.main()

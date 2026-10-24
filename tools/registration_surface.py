@@ -174,8 +174,11 @@ def run(manifest_path):
         report['grid_size'] = meta['mesh_grid_size']
         report['phase'] = 'raw_surface'
         with np.load(inputs['raw_mesh']['path'], allow_pickle=False) as raw:
-            vertices = export_frame(raw['vertices']).astype(np.float32)
-            faces = np.asarray(raw['faces'], dtype=np.int32)
+            vertices, faces = raw['vertices'], raw['faces']
+        # Check the supplied arrays before frame selection can drop components
+        # or an index conversion can truncate/wrap malformed geometry.
+        checked_mesh(vertices, faces)
+        vertices = export_frame(vertices).astype(np.float32)
         checked_mesh(vertices, faces)
         report['raw_surface'] = {'vertices':len(vertices),'triangles':len(faces),
                                   'bounds':[vertices.min(axis=0).tolist(),vertices.max(axis=0).tolist()]}
