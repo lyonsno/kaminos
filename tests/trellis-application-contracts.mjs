@@ -9,13 +9,14 @@ import {createTrellisApp} from '../models/trellis2/trellis-app.js';
 
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 const glb=new Uint32Array([0x46546c67,2,12]).buffer;
-function fixture(){
+function fixture({now}={}){
   const events=[];
   const device={features:new Set(),limits:{maxBufferSize:2**30,maxStorageBufferBindingSize:2**29},lost:new Promise(()=>{}),
     queue:{submit(){events.push('submit');},async onSubmittedWorkDone(){events.push('settled');}},
     createCommandEncoder(){events.push('encode');return{beginComputePass(){return{setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return{};}};}};
   const owner={setForegroundOpportunityRequester(){events.push('install');},foregroundGpuContext:()=>({renderer:'kaminos-app',device,queue:device.queue})};
-  const appGpu=createAppGpuHost({sharedGpu:{device,queue:device.queue,adapter:{info:{description:'controlled-test-device'}}},kit,
+  const appGpu=createAppGpuHost({sharedGpu:{device,queue:device.queue,adapter:{info:{description:'controlled-test-device'}}},
+    kit:{...kit,createWebGpuForegroundService:options=>kit.createWebGpuForegroundService({...options,...(now?{now}:{})})},
     frameOwner:()=>owner,host:{device,setForegroundServiceActive(){},runForegroundFrame:work=>work()}});
   const deps={createTrellisSharedHost,
     async loadGenerationInputs(){events.push('load');return{};},
@@ -118,4 +119,19 @@ test('a failed queue fence retains resident model resources and poisons reuse',a
   const session=await f.appGpu.session();assert.ok(session.snapshot().routes.some(r=>r.routeId===app.routeId));
   // Fixture-only recovery after observing the held state, never production certification.
   fail=false;await session.drain();session.close();await f.appGpu.foreground.dispose();
+});
+
+test('successful model settlement cannot erase a failed foreground finish and host hold',async()=>{
+  let breakFinish=false,arm=false;
+  const f=fixture({now(){if(breakFinish)throw Error('foreground finish observation failed');return performance.now();}});
+  f.device.queue.onSubmittedWorkDone=async()=>{if(arm)breakFinish=true;};
+  f.deps.createTrellisAssetAdapter=()=>({async run(){
+    f.appGpu.foreground.request({requestId:'last-frame',run(){}});arm=true;return{glb};
+  },dispose(){f.events.push('asset.dispose');}});
+  const app=await createTrellisApp(options(f));
+  await assert.rejects(app.generate(),error=>error.gpuRouteHeld===true);
+  assert.equal(app.snapshot().gpuRouteHeld,true);
+  assert.equal(f.appGpu.unsettledRuns().length,1,'the actual host keeps its unresolved-release ledger');
+  await assert.rejects(app.destroy(),error=>error.gpuRouteHeld===true);
+  assert.equal(f.appGpu.unsettledRuns().length,1);
 });
