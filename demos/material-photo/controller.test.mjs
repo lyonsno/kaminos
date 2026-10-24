@@ -79,6 +79,11 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
       return adapter;
     },async infer(input){behavior.appInferences=(behavior.appInferences??0)+1;return adapter.run(input);}};
   }};
+  const mogeApp={async createMoGeApp(options){
+    behavior.mogeApps??=[];behavior.mogeApps.push(options);const model=new MoGe();
+    return {model,async load(){if(behavior.failGeometryLoad)throw Error('Geometry load failure');await model.init();},
+      async infer({image}){return model.run(image);}};
+  }};
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
@@ -106,7 +111,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
       this.setExport('createInferenceCache',()=>({async get(key){return structuredClone(behavior.cache.get(key)??null);},async put(key,value){behavior.cache.set(key,structuredClone(value));return true;}}));
     },{context});
     if (['./photo-contracts.js','./photo-surface.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
-    const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-app') ? supermatApp : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
+    const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-app') ? supermatApp : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-app') ? mogeApp : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
   });
   await source.evaluate();
@@ -125,6 +130,20 @@ test('the photograph borrows its device, session and renderer service into one r
   assert.equal(c.behavior.viewerOptions.foreground,c.foreground);
   assert.equal(c.behavior.appInferences,2);
   assert.equal(c.state.runs.at(-1).status,'done');
+});
+test('MoGe uses the same resident application host and retries loading without replacing the renderer',async()=>{
+  const c=await controller({examples:true});const viewer=c.behavior.viewer;
+  assert.equal(c.behavior.mogeApps,undefined,'included outputs do not load geometry weights');
+  c.behavior.failGeometryLoad=true;await c.actions.infer();
+  assert.equal(c.state.status,'error');assert.ok(viewer.maps);
+  c.behavior.failGeometryLoad=false;await c.actions.infer();
+  await c.actions.sample('orb');await c.actions.infer();
+  assert.equal(c.behavior.mogeApps?.length,1);
+  const options=c.behavior.mogeApps[0];
+  assert.equal(options.device,c.device);assert.equal(options.session,c.session);
+  assert.equal(options.foreground,c.foreground);assert.equal(options.load,false);
+  assert.equal(c.behavior.geometryRuns,2);assert.equal(c.behavior.deviceRequests,1);
+  assert.equal(c.behavior.viewer,viewer);assert.equal(c.state.status,'done');
 });
 test('a SuperMat app load failure retries without replacing the shared renderer or device',async()=>{
   const c=await controller({examples:true});const viewer=c.behavior.viewer;

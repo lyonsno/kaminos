@@ -12,6 +12,7 @@ on:
       - models/wilor-hand-detector/*.js
       - demos/material-photo/**
       - models/supermat/*.js
+      - models/moge/**
       - assets/hdr/**
       - lib/three*.js
       - lib/addons/tsl/display/**
