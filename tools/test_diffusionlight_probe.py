@@ -42,12 +42,20 @@ class TurboContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'fov'):
             self.probe.camera_input(environment, 180, 0)
 
-    def test_exposures_share_seed_and_keep_immutable_prompt_endpoints(self):
+    def test_interpolation_keeps_immutable_prompt_endpoints(self):
         a, b = np.array([10.]), np.array([0.])
         np.testing.assert_array_equal([self.probe.interpolate_prompt(a,b,ev)[0] for ev in [0,-2.5,-5]], [10,5,0])
         np.testing.assert_array_equal(a,[10])
         with self.assertRaisesRegex(ValueError, 'exposure'):
             self.probe.interpolate_prompt(a,b,-6)
+
+    def test_call_settings_match_effective_upstream_pipeline_defaults(self):
+        import inspect
+        from diffusers import StableDiffusionXLControlNetInpaintPipeline
+        parameters=inspect.signature(StableDiffusionXLControlNetInpaintPipeline.__call__).parameters
+        self.assertEqual(getattr(self.probe,'PIPELINE_SETTINGS',{}),{
+            'num_inference_steps':30,'guidance_scale':parameters['guidance_scale'].default,
+            'strength':parameters['strength'].default,'controlnet_conditioning_scale':.5})
 
     def test_absent_assets_leave_durable_failure_not_stale_success(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -24,6 +24,8 @@ from emlight_probe import (camera_to_native, diffuse_metrics, digest,
 SOURCE_REVISION = '6e8b0f1ad664f5e11281d80482ae19a490927cc4'
 EVS = (0, -2.5, -5)
 SEED = 200
+PIPELINE_SETTINGS = {'num_inference_steps':30,'guidance_scale':5.0,
+                     'strength':0.9999,'controlnet_conditioning_scale':.5}
 PROMPT = 'a perfect mirrored reflective chrome ball sphere'
 BLACK_PROMPT = 'a perfect black dark mirrored reflective chrome ball sphere'
 NEGATIVE_PROMPT = 'matte, diffuse, flat, dull'
@@ -197,18 +199,18 @@ def run_inference(models, image, output, report, report_path):
     report['route']={'depthDevice':'mps','depthDtype':'float32','diffusionDevice':'mps',
         'diffusionDtype':'float16','randomGeneratorDevice':'cpu','cpuFallback':False,
         'torchVersion':torch.__version__,'diffusersVersion':__import__('diffusers').__version__}
-    report['settings']={'exposures':EVS,'seed':SEED,'stepsPerExposure':30,
-        'scheduler':'UniPCMultistepScheduler','controlnetConditioningScale':.5,
-        'guidanceScale':7.5,'strength':1.0,'switchTimestep':800,'exposureLoraScale':.75,
+    report['settings']={'exposures':EVS,'seed':SEED,'pipeline':PIPELINE_SETTINGS,
+        'scheduler':'UniPCMultistepScheduler','switchTimestep':800,'exposureLoraScale':.75,
         'prompt':PROMPT,'blackPrompt':BLACK_PROMPT,'negativePrompt':NEGATIVE_PROMPT}
     report['exposures']=[]
     (output/'raw').mkdir(); (output/'square').mkdir()
     with torch.inference_mode():
         for ev in EVS:
             phase(f'inference-ev-{ev}')
-            switched=False; switches=[]
+            switched=False; switches=[]; step_count=0
             def callback(pipeline, index, timestep, callback_kwargs):
-                nonlocal switched
+                nonlocal switched, step_count
+                step_count+=1
                 if not switched and float(timestep)<=800:
                     apply_lora('exposure',.75); switched=True
                     switches.append({'step':index,'timestep':float(timestep)})
@@ -217,9 +219,8 @@ def run_inference(models, image, output, report, report_path):
             torch.mps.synchronize(); start=time.perf_counter()
             frame=pipe(prompt_embeds=interpolate_prompt(bright,dark,ev),
                 pooled_prompt_embeds=interpolate_prompt(bright_pool,dark_pool,ev),
-                negative_prompt=NEGATIVE_PROMPT,num_inference_steps=30,guidance_scale=7.5,
-                strength=1.0,image=image,mask_image=mask,control_image=control_image,
-                controlnet_conditioning_scale=.5,callback_on_step_end=callback,
+                negative_prompt=NEGATIVE_PROMPT,image=image,mask_image=mask,control_image=control_image,
+                **PIPELINE_SETTINGS,callback_on_step_end=callback,
                 generator=torch.Generator(device='cpu').manual_seed(SEED)).images[0]
             torch.mps.synchronize()
             elapsed=time.perf_counter()-start
@@ -229,7 +230,7 @@ def run_inference(models, image, output, report, report_path):
             pixels=np.asarray(frame)
             if not switches or np.ptp(pixels[384:640,384:640])==0:
                 raise RuntimeError('missing LoRA switch or blank generated ball')
-            report['exposures'].append({'ev':ev,'seed':SEED,'seconds':elapsed,'switches':switches,
+            report['exposures'].append({'ev':ev,'seed':SEED,'seconds':elapsed,'switches':switches,'effectiveSteps':step_count,
                 'image':str(output/'raw'/name),'sha256':digest(output/'raw'/name)})
             save_json(report_path,report)
     del pipe, control
@@ -273,6 +274,7 @@ def main(argv=None):
         report['sourceRevision']=subprocess.check_output(['git','-C',str(args.source_root),'rev-parse','HEAD'],text=True).strip()
         if report['sourceRevision']!=SOURCE_REVISION: raise ValueError('upstream revision mismatch')
         report['adapterSha256']=digest(__file__)
+        report['inferenceExampleRevision']='ef7a372e54d5cfeeb47ae5900a5531dbc0628b56'
         report['environmentSha256']=digest(args.environment)
         report['environmentPath']=str(args.environment.resolve())
         report['phase']='preprocess'
