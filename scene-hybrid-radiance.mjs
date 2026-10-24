@@ -32,6 +32,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   validateSmoke(smokeShadowSteps,smokeShadowResolution);
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
+  // Deferred surfaces reconstruct their world position per pixel. The default
+  // positionWorld is the fullscreen carrier geometry, not the visible surface.
+  const receiverPosition=Fn(([],builder)=>builder.context.positionWorld??positionWorld)();
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
   const surfaceOn=uniform(surfaceEnabled,'bool');
   const paired=uniform(pointSampling==='paired','bool');
@@ -43,7 +46,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function buildPoints(count){
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
-  const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?positionWorld.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
+  const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?receiverPosition.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
   points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
   smokeShadow=smokeShadowSteps?createFireSmokeShadow(device,{points:points.texture,count,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter}):null;
   external=new THREE.ExternalTexture(points.texture);
@@ -53,12 +56,12 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
     const filterCoordinates=grain?.coordinates??paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*sourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern});
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:receiverPosition,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*sourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
-    const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
+    const delta=position.sub(receiverPosition).div(scale),distance2=delta.dot(delta);
     const direction=delta.div(distance2.sqrt().max(1e-6));
-    const medium=smokeShadow?smokeShadow.visibility(region.xyz,positionWorld.sub(translation).div(scale),i):THREE.TSL.float(1);
+    const medium=smokeShadow?smokeShadow.visibility(region.xyz,receiverPosition.sub(translation).div(scale),i):THREE.TSL.float(1);
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility).mul(medium)};
   });
   const currentLights=lights;
