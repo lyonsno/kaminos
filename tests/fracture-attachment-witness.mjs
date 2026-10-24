@@ -15,3 +15,13 @@ test('source identification failure replaces stale success with a terminal repor
   assert.equal(report.status,'failed','startup must overwrite an old success');assert.equal(report.phase,'terminal');assert.equal(report.lastPhase,'source-identification');assert.equal(report.sourceCommit,null);assert.match(report.failure.message,/git|ENOENT/);
  }finally{fs.rmSync(out,{recursive:true,force:true});}
 });
+
+test('an invalid object identity fails before browser launch with a durable report',()=>{
+ const out=fs.mkdtempSync(path.join(os.tmpdir(),'fracture-witness-spec-'));
+ try{
+  const spec=path.join(out,'object.json');fs.writeFileSync(spec,JSON.stringify({triangles:12}));
+  const run=spawnSync(process.execPath,[new URL('../tools/fracture-attachment-witness.mjs',import.meta.url).pathname,'http://127.0.0.1:1',out,'/unavailable-playwright','/unavailable-browser',spec],{encoding:'utf8'});
+  assert.equal(run.status,1);const report=JSON.parse(fs.readFileSync(path.join(out,'report.json'),'utf8'));
+  assert.equal(report.status,'failed');assert.equal(report.lastPhase,'object-identity');assert.match(report.failure.message,/object identity/i);
+ }finally{fs.rmSync(out,{recursive:true,force:true});}
+});
