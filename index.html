@@ -2468,6 +2468,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
         <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
+        <div class="scene-menu-heading">Assemblies</div>
+        <button type="button" role="menuitem" data-scene-add="piston-arm">Piston arm</button>
+        <button type="button" role="menuitem" data-scene-add="browse-assemblies">Browse Assets…</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Emitter</div>
@@ -3279,6 +3282,9 @@ import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
 import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
 import {createSceneSimulationActivity} from './scene-simulation-activity.mjs';
+import {assemblyCatalog,instantiateAssembly,remapActuators,assemblySelectionId,extractAssembly} from './scene-assembly.mjs';
+import {createActuatorController,prepareActuator,checkedActuators} from './scene-actuator.mjs';
+import {mountActuatorControls} from './scene-actuator-ui.mjs';
 import { installCommandSearch } from './scene-command-search.mjs';
 import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
@@ -3327,6 +3333,7 @@ import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
+let sceneActuators=null,actuatorControls=null,actuatorPointPick=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
@@ -6127,6 +6134,7 @@ function serializeSceneGroups() {
     ...(group.parentId?{parentId:group.parentId}:{}),
     ...(group.repetition?{repetition:checkedRepetition(group.repetition)}:{}),
     ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
+    ...(group.assembly?{assembly:structuredClone(group.assembly)}:{}),
     source: group.source ?? null,
     createdAt: group.createdAt ?? null,
   }));
@@ -6369,6 +6377,7 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   sceneOwnerControls?.update();
+  actuatorControls?.refresh();
   inspector.dataset.selectedObjectId = workingScene.activeFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = workingScene.activeGroupId || '';
   inspector.dataset.selectionCount=String(workingScene.selection.ids.length);
@@ -6790,7 +6799,8 @@ function handleViewportSelectionClick(event) {
   }
   // Geometry and emitter symbols own their pixels before helper outlines.
   if(record){
-    window.selectSceneObject(record.id,{extend:!!event.shiftKey});
+    const selectionId=assemblySelectionId(record.id,workingScene.objects,workingScene.groups);
+    window.selectSceneObject(selectionId,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
   }
   if(pickFlameDomainFromViewportPointer(event)){
@@ -7018,6 +7028,8 @@ sceneAddMenuPopup.addEventListener('click', event => {
     setActiveTab('finger-fluid-bench');
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
+  if(action.dataset.sceneAdd==='piston-arm')addSceneAssembly('piston-arm',{interactive:true}).catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='browse-assemblies')showAssemblyAssets();
   if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
@@ -11632,6 +11644,7 @@ async function initScene() {
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   window.kaminosSceneEdits = scenePlacementTools.edits;
+  installSceneActuators();
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
   const workspaceParam = initialViewerParams.get('workspace') ?? new URLSearchParams(location.hash.slice(1)).get('workspace');
@@ -11710,6 +11723,8 @@ async function initScene() {
       const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
       const result=[
         ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        ...assemblyCatalog.map(item=>command('add.assembly.'+item.id,'Add · Assemblies',item.label,()=>addSceneAssembly(item.id,{interactive:true}),{aliases:item.aliases})),
+        command('assets.assemblies','Assets','Browse Assemblies',showAssemblyAssets,{aliases:['library','machine','piston']}),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
@@ -12336,6 +12351,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene({loadRequestId = null} = {}) {
+  sceneActuators?.clear();actuatorPointPick=null;
   if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
@@ -12981,6 +12997,53 @@ function installSharedWorkbench() {
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
   sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
+}
+function installSceneActuators(){
+  const members=id=>id?.startsWith('@group:')?groupObjectIds(workingScene.groups,id.slice(7)):[id];
+  const readPose=id=>{if(id?.startsWith('@group:'))return structuredClone(workingScene.groups.find(g=>g.id===id.slice(7))?.transform||null);const e=workingScene.objects.find(e=>e.id===id);return e?sceneObjectTransformState(e.object):null;};
+  const supported=id=>{const ids=members(id);return ids.length&&ids.every(key=>{const e=workingScene.objects.find(e=>e.id===key);return e&&['glb',PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(e.type)&&(id.startsWith('@group:')||!e.groupId);});};
+  const validatePoses=poses=>{
+    const before={},seen=new Set();for(const [id,pose]of Object.entries(poses)){
+      if(!supported(id))throw Error('Actuator parts need ungrouped rigid meshes (or a carried flame source)');
+      for(const member of members(id)){if(seen.has(member))throw Error('Actuator groups overlap');seen.add(member);}
+      checkedGroupPose(pose);const e=workingScene.objects.find(e=>e.id===id);if(e?.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(pose);before[id]=readPose(id);
+    }
+    return before;
+  };
+  const writePoses=poses=>{
+    const before=validatePoses(poses);
+    try{for(const [id,pose]of Object.entries(poses))applyAuthoredScenePose(id,pose);}
+    catch(error){for(const [id,pose]of Object.entries(before))applyAuthoredScenePose(id,pose);throw error;}
+  };
+  const controller=createActuatorController({edits:scenePlacementTools.edits,readPose,writePoses,validatePoses,
+    changed:()=>{actuatorControls?.refresh();window._kaminosDirty?.();},
+    admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||vantageCaptureHeld||polyEdit?.active()||greenroomPreviewIsActive())throw Error('Finish the current document, edit or capture action');}});
+  sceneActuators=controller;
+  const api={...controller,
+    install(raw){
+      assertSceneConstructionAvailable();
+      const ids=[raw.fixedId,raw.followerId,raw.barrelId,raw.rodId,...(raw.carried||[])];
+      if(ids.some(id=>!supported(id)))throw Error('Choose distinct ungrouped rigid parts');
+      const expanded=ids.flatMap(members);if(new Set(expanded).size!==expanded.length)throw Error('Actuator roles contain the same part');
+      const r=prepareActuator({...raw,id:raw.id||makeSceneObjectId('piston'),label:raw.label||'Piston',reference:Object.fromEntries(ids.map(id=>[id,readPose(id)]))});
+      controller.install(r);window.selectSceneObject(r.barrelId);return r;
+    },
+    mountInstaller:root=>actuatorControls.mountInstaller(root),
+  };
+  actuatorControls=mountActuatorControls({document,root:document.getElementById('transform-inspector'),api,
+    readObjects:()=>[...workingScene.objects.filter(e=>!e.groupId).map(e=>({id:e.id,type:e.type,label:e.label||e.fileName})),...workingScene.groups.map(g=>({id:'@group:'+g.id,type:'group',label:g.label}))],selectedIds:()=>workingScene.activeGroupId?['@group:'+workingScene.activeGroupId,...groupDescendants(workingScene.groups,workingScene.activeGroupId).map(g=>'@group:'+g.id),...groupObjectIds(workingScene.groups,workingScene.activeGroupId)]:[workingScene.activeObjectId],selectedId:()=>workingScene.activeGroupId?'@group:'+workingScene.activeGroupId:workingScene.activeObjectId,
+    pickPoint:callback=>{actuatorPointPick=callback;},cancelPick:()=>{actuatorPointPick=null;},installNumberDrag:installRelativeNumberDrag});
+  window.kaminosActuators=api;
+  workbenchSceneFrames.onFrame(({deltaSeconds})=>controller.tick(deltaSeconds));
+  document.addEventListener('keydown',event=>{if(actuatorPointPick&&event.key==='Escape'){actuatorPointPick=null;setInfo('Mount placement cancelled');event.preventDefault();event.stopImmediatePropagation();}},true);
+  document.addEventListener('pointerdown',event=>{
+    if(!actuatorPointPick||event.button!==0||!renderer.domElement.contains(event.target))return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const rect=renderer.domElement.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);
+    const hit=ray.intersectObjects(workingScene.objects.filter(e=>['glb',PROCEDURAL_MESH_TYPE].includes(e.type)).map(e=>e.object),true)[0];
+    if(!hit){setInfo('Click a mesh surface for the mount');return;}
+    const callback=actuatorPointPick;actuatorPointPick=null;callback(hit.point.toArray());
+  },true);
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
@@ -25050,6 +25113,7 @@ function buildSceneData(capture = null) {
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
   const data = buildSceneDocument({
+    actuators:sceneActuators?.read()||[],
     timestamp: new Date().toISOString(),
     objects,
     groups: serializeSceneGroups(),
@@ -25441,6 +25505,42 @@ function addProceduralMesh(kind,parameters={}) {
   try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   renderSceneObjectList();return id;
 }
+async function showAssemblyAssets(){
+  await authoringAssetsUI.open('browse');
+  await authoringAssets.browse('assemblies');
+}
+async function addSceneAssembly(kind,{interactive=false,source=null,position=null}={}){
+  assertSceneConstructionAvailable();
+  if(!source){const item=assemblyCatalog.find(row=>row.id===kind);if(!item)throw Error('Unknown assembly');const response=await fetch(item.url);if(!response.ok)throw Error('Could not load assembly');source=await response.json();}
+  assertSceneConstructionAvailable();sceneActuators.pause();
+  const instance=instantiateAssembly(source,{newId:makeSceneObjectId,position:position||controls.target.toArray()});
+  const before=checkSelectionMembership(readSelectionMembership()),root='@group:'+instance.rootId;
+  scenePlacementTools.edits.assertCanRecordApplied('@selection-membership');
+  const rollback=()=>{for(const row of instance.objects)if(workingScene.find(row.id))detachSelectionMember(row.id);workingScene.setGroups(before.groups);sceneActuators.restore(before.actuators);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();};
+  try{
+    for(const row of instance.objects){mountProceduralMesh(row);compoundRetentionTargets.set(row.id,'@selection-membership');}
+    workingScene.setGroups([...before.groups,...instance.groups]);for(const g of instance.groups)ensureGroupTarget(g);
+    sceneActuators.restore([...before.actuators,...instance.actuators]);setSceneSelection([root],root);
+  }catch(error){rollback();throw error;}
+  const complete=({commit})=>{
+    scenePlacementTools.edits.discard(entry=>entry.id===root||entry.id==='@assembly:'+instance.rootId);
+    if(commit){scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),'Add '+source.label);setInfo(source.label+' added · Piston controls in Properties');}
+    else rollback();
+  };
+  document.activeElement?.blur?.();
+  if(interactive){if(!scenePlacementTools.start('translate',complete)){rollback();throw Error('Could not start assembly placement');}}
+  else complete({commit:true});
+  return root;
+}
+function selectedAssemblySource(){
+  assertSceneConstructionAvailable();
+  if(sceneActuators.state().running)throw Error('Stop the piston before saving its position');
+  const root=workingScene.activeGroupId;if(!root)throw Error('Select the assembly group first');
+  const source=extractAssembly(readSelectionMembership(),root);
+  // Validate the same contract that Add saved assembly consumes before offering a file.
+  instantiateAssembly(source,{newId:makeSceneObjectId});return source;
+}
+window.kaminosAssemblies={list:()=>structuredClone(assemblyCatalog),add:addSceneAssembly,export:selectedAssemblySource};
 function cloneSceneMaterial(material){const copy=material.clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
 function addSceneSpotLight() {
   assertSceneConstructionAvailable();const id=makeSceneObjectId('light');
@@ -25856,9 +25956,9 @@ function setupSelectionTransforms(){
     transform:patch=>{if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(workingScene.selection.ids.length)setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);return {...next};}};
 }
 
-function readSelectionMembership(){return {...captureSceneMembership(workingScene.objects.map(serializeSceneObject),isReloadableSceneObjectRecord),groups:serializeSceneGroups(),selection:structuredClone(workingScene.selection),field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
+function readSelectionMembership(){return {actuators:sceneActuators?.read()||[],...captureSceneMembership(workingScene.objects.map(serializeSceneObject),isReloadableSceneObjectRecord),groups:serializeSceneGroups(),selection:structuredClone(workingScene.selection),field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
 function checkSelectionMembership(raw){
-  const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
+  const value=structuredClone(raw);value.actuators=checkedActuators(value.actuators);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
   const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
   if(value.liveIds!==undefined&&!Array.isArray(value.liveIds))throw Error('Live scene references must be an array');
   for(const id of value.liveIds??[]){if(typeof id!=='string'||!id||ids.has(id))throw Error('Invalid live scene reference');ids.add(id);}
@@ -25903,17 +26003,21 @@ async function writeSelectionMembershipUnchecked(value){
   if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
   else syncAuthoredFlameSources();
   sceneCameras?.membershipChanged(value.activeCameraId??null);
+  sceneActuators?.restore(value.actuators||[]);
   if(value.field&&!topology.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(topology.selection.ids,topology.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
 }
 async function writeSelectionMembership(raw){const value=checkSelectionMembership(raw),before=readSelectionMembership();try{await writeSelectionMembershipUnchecked(value);}catch(error){await writeSelectionMembershipUnchecked(before);throw error;}}
 function removeSelectedSceneObjects(){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
-  assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
+  assertSceneConstructionAvailable();sceneActuators?.pause();const ids=sceneSelectionMembers();if(!ids.length)return false;
   const before=checkSelectionMembership(readSelectionMembership());
   if(ids.some(id=>!before.objects.some(record=>record.id===id)))throw Error('Scene member has no retained source; close its owning experiment to remove it');
   for(const id of ids)compoundRetentionTargets.set(id,'@selection-membership');
   for(const id of ids)detachSelectionMember(id);
+  // A deleted construction must not leave a detached controller in the saved scene.
+  const present=new Set([...workingScene.objects.map(o=>o.id),...workingScene.groups.map(g=>'@group:'+g.id)]);
+  sceneActuators?.restore((before.actuators||[]).filter(r=>[r.fixedId,r.followerId,r.barrelId,r.rodId,...r.carried].some(id=>present.has(id))));
   clearActiveSceneObjectSelection();
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
   setInfo(`Removed ${ids.length} selected · Undo restores`);return true;
@@ -26006,7 +26110,7 @@ async function originToPolySelection(){
 }
 function duplicateSelectedSceneObjects({interactive=false}={}){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
-  assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
+  assertSceneConstructionAvailable();sceneActuators?.pause();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
   if(members.some(id=>!canDuplicateObject(workingScene.objects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
   const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
   try{
@@ -26018,14 +26122,18 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
     for(const group of before.groups)if(groupIds.has(group.id))nextGroups.push({...structuredClone(group),id:groupCopies.get(group.id),label:`${group.label} copy`,parentId:groupCopies.get(group.parentId)||null,objectIds:group.objectIds.map(id=>copies.get(id))});
     workingScene.setGroups(nextGroups);for(const group of workingScene.groups)ensureGroupTarget(group);
     for(const id of roots)newRoots.push(id.startsWith('@group:')?'@group:'+groupCopies.get(id.slice(7)):copies.get(id));
+    const referenceMap=new Map([...copies,...[...groupCopies].map(([a,b])=>['@group:'+a,'@group:'+b])]);
+    const mechanisms=remapActuators(before.actuators||[],referenceMap,makeSceneObjectId);
+    workingScene.setGroups(workingScene.groups.map(g=>g.assembly&&new Set(groupCopies.values()).has(g.id)?{...g,assembly:{...g.assembly,sourceIds:Object.fromEntries(Object.entries(g.assembly.sourceIds||{}).map(([key,value])=>[key,referenceMap.get(value)||value]))}}:g));
+    sceneActuators?.restore([...(before.actuators||[]),...mechanisms]);
     setSceneSelection(newRoots,newRoots.at(-1));
-  }catch(error){for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
+  }catch(error){for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);sceneActuators?.restore(before.actuators||[]);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
   const placementIds=new Set([...copies.values(),...newRoots.flatMap(id=>id.startsWith('@group:')?[id,'@assembly:'+id.slice(7)]:[id])]);
   const complete=({commit})=>{
     // The accepted placement belongs to the compound insertion, including a single group target.
     scenePlacementTools.edits.discard(entry=>placementIds.has(entry.id)||entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>placementIds.has(id)));
     if(commit)scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Duplicate ${members.length} selected`);
-    else{for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();}
+    else{for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);sceneActuators?.restore(before.actuators||[]);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();}
   };
   if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
   else complete({commit:true});return newRoots;
@@ -26504,6 +26612,7 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if(sceneActuators?.state().running){setInfo('Stop the piston drive before saving its position');return true;}
   if (scenePlacementTools?.edits.state().active) { setInfo('Finish or cancel the active edit before saving'); return true; }
   if (scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
@@ -26894,6 +27003,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
   sceneCameras?.restore(restorePlan.sceneCamera);
+  sceneActuators?.restore(restorePlan.actuators);
   sceneCameras?.restoreViewport(restorePlan.viewport);
   cameraViews?.restore(restorePlan.cameraViews);
   sceneNavigation?.resetView();
@@ -27384,7 +27494,7 @@ function setupAuthoringAssets(){
     }
     return authoringGenerator;
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();},
+  authoringAssets=createAuthoringAssets({request,assemblies:{list:()=>assemblyCatalog,add:entry=>addSceneAssembly(entry.id,{interactive:true})},prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -27395,6 +27505,18 @@ function setupAuthoringAssets(){
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
+  document.getElementById('asset-entries').insertAdjacentHTML('beforebegin',`    <section id="assembly-assets" hidden>
+      <p>Editable constructions with working controls.</p>
+      <div class="authoring-actions"><button type="button" class="btn" id="assembly-export">Save selected assembly…</button><button type="button" class="btn" id="assembly-import">Add saved assembly…</button></div>
+      <input id="assembly-file" type="file" accept=".json" hidden>
+    </section>`);
+document.getElementById('assembly-import').onclick=()=>document.getElementById('assembly-file').click();
+document.getElementById('assembly-file').onchange=async event=>{const file=event.target.files[0];event.target.value='';if(!file)return;try{await addSceneAssembly(null,{source:JSON.parse(await file.text()),interactive:true});}catch(error){setInfo(error.message);}};
+document.getElementById('assembly-export').onclick=async()=>{
+  try{const source=selectedAssemblySource(),name=await promptForFileName({title:'Save assembly',defaultStem:source.label,extension:'.kaminos-assembly.json'});if(!name)return;
+    const url=URL.createObjectURL(new Blob([JSON.stringify(source,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name+'.kaminos-assembly.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(error){setInfo(error.message);}
+};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),

@@ -6,7 +6,7 @@ const collections=new Set(['generated-meshes','image-inbox','greenroom','trellis
 export function assetSource(root, path) {
   return `/api/read?${new URLSearchParams({root, path})}`;
 }
-export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, nameForSource=()=>null, changed = () => {}}) {
+export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, assemblies=null, nameForSource=()=>null, changed = () => {}}) {
   let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, preparation:null, loading:false, adding:false, error:null, results:[]};
   let preparationTicket=0,preparationAbort=null,preparationPromise=null;
   let navigation = 0,revision=0;
@@ -29,9 +29,13 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
     })();return preparationPromise;
   }
   async function browse(root = state.root, path = '') {
-    const ticket = ++navigation;
-    clearPreparation();state = {...state, root, path:collections.has(root)?'':path, catalog:collections.has(root), selected:null, entries:[],warnings:[],listRevision:++revision,loading:true,error:null};publish();
+    const ticket = ++navigation,isAssembly=root==='assemblies'&&!!assemblies;
+    clearPreparation();state = {...state, root, path:collections.has(root)||isAssembly?'':path, catalog:collections.has(root)||isAssembly, selected:null, entries:[],warnings:[],listRevision:++revision,loading:true,error:null};publish();
     try {
+      if(isAssembly){
+        const rows=await assemblies.list();if(ticket!==navigation)return false;
+        state.entries=rows.map(row=>({...row,kind:'assembly',root,path:row.id,name:row.label,source:row.url}));state.unavailableCount=0;
+      }else{
       const result = await get(collections.has(root)?`/api/authoring-assets?${new URLSearchParams({collection:root})}`:`/api/browse?${new URLSearchParams({root,path})}`);
       if(ticket !== navigation)return false;
       if(collections.has(root)){
@@ -45,6 +49,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
         label:nameForSource(assetSource(root,[path,entry.name].filter(Boolean).join('/'))) || entry.metadata?.name || (entry.generation?entry.display?.title:null) || (/^[a-f0-9]{64}\.glb$/i.test(entry.name)?`Saved mesh · ${entry.name.slice(0,8)}`:entry.display?.title || entry.name)}));
       }
 
+      }
       state.listRevision=++revision;
     } catch(error) {if(ticket===navigation){state.entries=[];state.listRevision=++revision;state.error=error.message;}}
     finally {if(ticket===navigation){state.loading=false;publish();}}
@@ -56,17 +61,19 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       try {
         const roots = await get('/api/roots');
         state.roots = Object.entries(roots).filter(([id,value])=>collections.has(id)&&value.exists).map(([id,value])=>({id,...value}));
+        if(assemblies)state.roots.push({id:'assemblies',exists:true});
         if(!state.roots.some(root=>root.id===state.root))state.root=state.roots[0]?.id || 'generated-meshes';
         return browse(state.root,state.path);
       }catch(error){state.error=error.message;publish();return false;}
     },
-    select(entry) {if(!entry || !['mesh','image'].includes(entry.kind))throw Error('Choose a mesh or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
+    select(entry) {if(!entry || !['mesh','image','assembly'].includes(entry.kind))throw Error('Choose a mesh, assembly or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
     async add(entry = state.selected) {
       if(state.adding)throw Error('An asset is already being added');
-      if(entry?.kind !== 'mesh')throw Error('Choose a GLB mesh to add');
+      if(!['mesh','assembly'].includes(entry?.kind))throw Error('Choose a mesh or assembly to add');
+      if(entry.kind==='assembly'&&!assemblies)throw Error('Assemblies are unavailable');
       requireVisible(entry);
       state.adding=true;state.error=null;publish();
-      try {return await addMesh({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}
+      try {return entry.kind==='assembly'?await assemblies.add(copy(entry)):await addMesh({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}
       catch(error){state.error=error.message;throw error;}
       finally{state.adding=false;publish();}
     },
@@ -118,7 +125,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   const runHeader=document.createElement('div');runHeader.id='authoring-generation-header';runHeader.hidden=true;runHeader.innerHTML='<button type="button" id="generation-header-show" title="Show generation"><span id="generation-header-status"></span></button><button type="button" id="generation-header-stop">Stop</button>';byId('authoring-header')?.append(runHeader);const runById=id=>runHeader.querySelector('#'+id);
   const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&document.body.dataset.workspace!=='workbench')).then(source=>{if(!row.target.isConnected)return;if(!source){row.target.dataset.previewState='skipped';armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{if(row.target.isConnected){row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';}});}}, {root:panel});
   function armPreviews(){if(panel.hidden||mode!=='browse'||document.body.dataset.workspace==='workbench')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
-  const labels={'generated-meshes':'Saved meshes',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs',assets:'Assets',scratch:'Scratch'};
+  const labels={assemblies:'Assemblies','generated-meshes':'Saved meshes',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
   function close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');render(controller.read());}
   function setMode(next){mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());}
@@ -134,7 +141,8 @@ export function installAuthoringAssets({document,controller,edits}) {
       const button=document.createElement('button');button.type='button';button.className='asset-entry';button.dataset.assetPath=entry.path;button.title=entry.path;
       if(assetWithheld(entry)){button.dataset.visibility='withheld';const cover=document.createElement('div');cover.className='asset-hold-cover';const cross=document.createElement('b');cross.textContent='×';cross.setAttribute('aria-hidden','true');const stamp=document.createElement('strong');stamp.textContent='TOP SECRET';const notice=document.createElement('p');notice.textContent=entry.visibility.reason;cover.append(cross,stamp,notice);button.append(cover);}
       else if(entry.kind==='image'){const img=document.createElement('img');img.loading='lazy';img.src=entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
-      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='image'?'Image':'';button.append(subtitle);
+      if(entry.kind==='assembly'){const illustration=document.createElement('div');illustration.className='assembly-tile-symbol';illustration.setAttribute('aria-hidden','true');illustration.innerHTML='<svg viewBox="0 0 120 80" width="100%" height="80"><path d="M15 66H75M35 64V47L82 17L105 28" fill="none" stroke="#aab8c6" stroke-width="9" stroke-linejoin="round"/><path d="M52 62L72 26" stroke="#e4b45f" stroke-width="8"/><path d="M62 44L72 26" stroke="#dbe5ed" stroke-width="4"/><circle cx="35" cy="47" r="6" fill="#4b8dce"/></svg>';button.append(illustration);}
+      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='image'?'Image':entry.kind==='assembly'?'Assembly · editable':'';button.append(subtitle);
       button.setAttribute('aria-pressed',String(state.selected?.root===entry.root&&state.selected?.path===entry.path));
       button.onclick=()=>action(()=>entry.kind==='folder'?controller.browse(entry.root,entry.path):controller.select(entry));return button;
     }));
@@ -144,8 +152,9 @@ export function installAuthoringAssets({document,controller,edits}) {
     for(const [index,button] of [...byId('asset-entries').children].entries())button.setAttribute('aria-pressed',String(state.selected?.source?state.selected.source===entries[index]?.source:state.selected?.root===entries[index]?.root&&state.selected?.path===entries[index]?.path));
     byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
-    const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=withheld||selected?.kind!=='mesh';byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;
-    if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
+    const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('assembly-assets')&&(byId('assembly-assets').hidden=state.root!=='assemblies');
+    byId('asset-add').hidden=withheld||!['mesh','assembly'].includes(selected?.kind);byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;
+    if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.description|| (selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file');byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
     const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
     const selfPreparing=mode==='generate'&&controller.preparesInput?.();

@@ -37,6 +37,8 @@ test('authored history retains ancestor groups while leaving live experiments cu
  assert.deepEqual(resolved.groups.map(g=>g.id),['machine','base','boom','live']);assert.equal(resolved.selection.activeId,'@group:machine');assert.equal(resolved.ids[0],'experiment');
 });
 
+import {remapActuators} from '../scene-assembly.mjs';
+import {checkedActuators} from '../scene-actuator.mjs';
 import fs from 'node:fs';import vm from 'node:vm';import * as THREE from '../lib/three.core.js';
 import {checkedGroupPose,moveGroupMembers,identityGroupPose} from '../scene-group.mjs';
 import * as topology from '../scene-group-topology.mjs';
@@ -45,13 +47,13 @@ const fn=name=>{const start=html.indexOf('function '+name+'(');assert.ok(start>=
 test('Group selected wraps selected roles without destroying them',()=>{
  const s=scene();s.setGroups(groups().filter(g=>g.id!=='machine').map(g=>({...g,parentId:null})));s.select(['@group:base','@group:boom']);
  const c={...topology,workingScene:s,GROUP_TYPE:'group',structuredClone,selectionTransformRoots,groupPivotPose:()=>structuredClone(pose),makeSceneObjectId:()=> 'wrapper',selectedRootIds:()=>selectionTransformRoots(s.selection.ids,s.groups),setSceneSelection:(ids,active)=>s.select(ids,active),setActiveSceneGroup:id=>s.select(['@group:'+id]),editSceneGroups:change=>{const next=structuredClone(s.groups);change(next);s.setGroups(next);}};
- vm.createContext(c);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('groupSceneObjects')+'\n'+fn('groupSelectedObjects'),c);c.groupSelectedObjects('Arm');
+ Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('groupSceneObjects')+'\n'+fn('groupSelectedObjects'),c);c.groupSelectedObjects('Arm');
  assert.deepEqual(JSON.parse(JSON.stringify(s.groups.map(g=>[g.id,g.parentId??null,g.objectIds]))),[['base','wrapper',['foot']],['boom','wrapper',['arm']],['wrapper',null,[]]]);assert.equal(s.activeGroupId,'wrapper');
 });
 test('moving the assembly updates every part and each role frame once; reverse restores them',()=>{
  const s=createWorkingScene();for(const row of records()){const object=new THREE.Group();s.put({...row,object});}s.setGroups(groups());
  const c={...topology,THREE,workingScene:s,structuredClone,checkedGroupPose,moveGroupMembers,sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),applyAuthoredScenePose:(id,p)=>{const o=s.find(id).object;o.position.fromArray(p.position);o.rotation.set(...p.rotation);o.scale.fromArray(p.scale);},FLAME_EMITTER_TYPE:'flame-emitter',groupProxy:()=>new THREE.Group(),applySceneObjectTransformState(){},updateTransformInspector(){},window:{_kaminosDirty(){}}};
- vm.createContext(c);vm.runInContext(fn('groupEditState')+'\n'+fn('writeGroupPose'),c);const before=c.groupEditState(s.groups[0]);c.writeGroupPose('machine',{...before,position:[4,2,1]});
+ Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(fn('groupEditState')+'\n'+fn('writeGroupPose'),c);const before=c.groupEditState(s.groups[0]);c.writeGroupPose('machine',{...before,position:[4,2,1]});
  assert.deepEqual(s.find('arm').object.position.toArray(),[4,2,1]);assert.deepEqual(s.groups.find(g=>g.id==='boom').transform.position,[4,2,1]);c.writeGroupPose('machine',before);assert.deepEqual(s.find('arm').object.position.toArray(),[0,0,0]);assert.deepEqual(s.groups.find(g=>g.id==='boom').transform.position,[0,0,0]);
 });
 
@@ -72,19 +74,19 @@ test('array placements compose across nested group frames',()=>{
 test('adding another part to an existing role retains its assembly parent',()=>{
  const s=scene();s.put({id:'bolt',type:'procedural-mesh',object:{userData:{}}});s.setGroups(groups());
  const c={workingScene:s,checkedRepetition:value=>value??null,checkedGroupPose,GROUP_TYPE:'group',ensureGroupTarget(){},setActiveSceneGroup(){},renderSceneObjectList(){},window:{}};
- vm.createContext(c);vm.runInContext(fn('createSceneGroupForObjects'),c);c.createSceneGroupForObjects(['bolt'],null,{id:'boom'});
+ Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(fn('createSceneGroupForObjects'),c);c.createSceneGroupForObjects(['bolt'],null,{id:'boom'});
  assert.equal(s.groups.find(g=>g.id==='boom').parentId,'machine');assert.equal(s.find('bolt').groupId,'boom');
 });
 test('ungrouping the outer assembly preserves the rigid role groups',()=>{
  const s=scene();s.setGroups(groups());s.select(['@group:machine']);
  const c={...topology,structuredClone,workingScene:s,selectedRootIds:()=>selectionTransformRoots(s.selection.ids,s.groups),editSceneGroups:change=>{const next=structuredClone(s.groups);change(next);s.setGroups(next);},setSceneSelection:(ids,active)=>s.select(ids,active)};
- vm.createContext(c);vm.runInContext(fn('ungroupSelectedObjects'),c);c.ungroupSelectedObjects();assert.deepEqual(s.groups.map(g=>[g.id,g.parentId??null]),[['base',null],['boom',null]]);assert.deepEqual([...s.selection.ids],['@group:base','@group:boom']);
+ Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(fn('ungroupSelectedObjects'),c);c.ungroupSelectedObjects();assert.deepEqual(s.groups.map(g=>[g.id,g.parentId??null]),[['base',null],['boom',null]]);assert.deepEqual([...s.selection.ids],['@group:base','@group:boom']);
 });
 
 test('the active assembly gives all descendant meshes the active highlight',()=>{
  const s=createWorkingScene();for(const row of records())s.put({...row,object:new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial())});s.setGroups(groups());s.select(['@group:machine']);let active;
  const c={...topology,THREE,workingScene:s,scene:new THREE.Scene(),flameDomainGuide:null,localLiquidDomainGuide:null,syncSceneHelperVisibility(){},viewportDisplay:{outlineWidth:1,outlineOpacity:1,overlays:true,outlines:true},selectionCaptureSuspended:false,renderer:null,selectionFeedback:{setStyle(){},suspend(){},update(_entries,ids){active=[...ids];}},isSceneItemVisible:()=>true,CAMERA_TYPE:'camera',FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',selectionBoxes:new Map(),styleHelperLines(){},viewportBoundsVisible:true,viewportHelpersVisible:true};
- vm.createContext(c);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('updateSelectionFeedback'),c);c.updateSelectionFeedback();assert.deepEqual(active,['foot','arm']);for(const box of c.selectionBoxes.values())assert.equal(box.material.color.getHex(),0xffc66d);
+ Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('updateSelectionFeedback'),c);c.updateSelectionFeedback();assert.deepEqual(active,['foot','arm']);for(const box of c.selectionBoxes.values())assert.equal(box.material.color.getHex(),0xffc66d);
 });
 
 
@@ -105,7 +107,7 @@ test('confirmed duplicate placement is one reversible operation, including group
    makeSceneObjectId:()=> 'copy-group-'+(++serial),setSceneSelection:(ids,id)=>s.select(ids,id),detachSelectionMember:id=>s.forget(id),releaseUnreferencedSceneMembershipObjects(){},
    duplicateSceneObject(id){const row=s.find(id),copy={...row,id:'copy-'+id,object:row.object.clone()};retained.set(copy.id,copy);s.put(copy);return copy.id;},
    scenePlacementTools:{edits,start(_mode,complete){const target=prefix+s.activeGroupId;edits.begin(target);edits.preview({position:[4,2,1]});edits.commit();complete({commit:true});return true;}}};
-  vm.createContext(c);vm.runInContext(['sceneSelectionMembers','groupEditState','ensureGroupTarget','writeGroupPose','duplicateSceneGroup','duplicateSelectedSceneObjects'].map(fn).join('\n'),c);
+  Object.assign(c,{sceneActuators:null,remapActuators,checkedActuators});vm.createContext(c);vm.runInContext(['sceneSelectionMembers','groupEditState','ensureGroupTarget','writeGroupPose','duplicateSceneGroup','duplicateSelectedSceneObjects'].map(fn).join('\n'),c);
   edits.register('@selection-membership',{read,check:x=>x,write:restore});for(const group of s.groups)c.ensureGroupTarget(group);
   edits.apply('@group:machine',{position:[1,0,0]},'Earlier move');const before=read(),count=edits.state().undoCount;
   const copiedId=c.duplicateSceneGroup('machine',{interactive:true}),accepted=read();

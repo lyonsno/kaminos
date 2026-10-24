@@ -26,7 +26,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
   return margin*Math.max(size[1]/2/tanV,across/2/(tanV*aspect))+across/2;
 }
 
-const LABELS={'generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
+const LABELS={assemblies:'Assemblies','generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
 export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
   const byId=id=>document.getElementById(id);
@@ -46,7 +46,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   byId('asset-entries').addEventListener('dblclick',event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
     const selected=controller.read().selected;if(!selected||selected.visibility?.status==='withheld')return;
-    if(selected.kind==='mesh')controller.add().catch(()=>{});
+    if(['mesh','assembly'].includes(selected.kind))controller.add().catch(()=>{});
     else if(selected.kind==='image')open('generate');
   });
   function render(){

@@ -1,3 +1,4 @@
+import {checkedActuators} from './scene-actuator.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
@@ -16,7 +17,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 12;
+export const SCENE_VERSION = 13;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -82,7 +83,8 @@ function normalizeSceneGroupRecord(record) {
     ...(record.parentId!=null?{parentId:String(record.parentId)}:{}),
     type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
-    source: record.source ?? null,
+    source: cloneJson(record.source ?? null),
+    ...(record.assembly?{assembly:cloneJson(record.assembly)}:{}),
     createdAt: record.createdAt ?? null,
   };
 }
@@ -198,6 +200,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    actuators:checkedActuators(data.actuators),
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
@@ -219,6 +222,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
 }
 
 export function buildSceneDocument({
+  actuators = [],
   timestamp = new Date().toISOString(),
   objects = [],
   groups = [],
@@ -265,7 +269,8 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: sceneGroups.some(g=>g.parentId)?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?11:fireSettings?10:8,
+    ...(actuators.length?{actuators:checkedActuators(actuators)}:{}),
+    version: actuators.length?13:sceneGroups.some(g=>g.parentId)?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?11:fireSettings?10:8,
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

@@ -1,6 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {remapActuators} from '../scene-assembly.mjs';
+import {checkedActuators} from '../scene-actuator.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
@@ -36,7 +38,7 @@ function fixture(){
   compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},sceneSelectionMembers:()=>workingScene.selection.ids,
   scenePlacementTools:{edits},setInfo(){},
  };
- const h=vm.createContext(context);vm.runInContext(html.slice(start,end),h);h.detachSelectionMember=detach;
+ Object.assign(context,{sceneActuators:null,checkedActuators});const h=vm.createContext(context);vm.runInContext(html.slice(start,end),h);h.detachSelectionMember=detach;
  edits.register('@selection-membership',{read:h.readSelectionMembership,check:h.checkSelectionMembership,write:h.writeSelectionMembership});
  return {h,workingScene,scene,edits,add,detach,disposed,loaded};
 }
@@ -81,4 +83,15 @@ test('experiment close/open during asynchronous source restore is resolved from 
  f.h.addSceneObjectFromSource=async record=>{await waiting;f.add(record.id);};
  const restoring=f.h.writeSelectionMembership(saved);f.detach('old');const live=f.add('new','experiment');live.object.position.x=7;
  release();await restoring;assert.ok(f.workingScene.find('a'));assert.equal(f.workingScene.find('new'),live);assert.equal(live.object.position.x,7);assert.equal(f.workingScene.find('old'),undefined);
+});
+test('removing every part removes the mechanism recipe and Undo restores it with those parts',async()=>{
+ const {h,workingScene,edits,add}=fixture();
+ const source=JSON.parse(fs.readFileSync(new URL('../assets/assemblies/piston-arm.json',import.meta.url))),r=structuredClone(source.actuators[0]);
+ const fields=['fixedId','followerId','barrelId','rodId'],reference={};
+ for(const [i,key]of fields.entries()){const id='part-'+i;reference[id]=r.reference[r[key]];r[key]=id;add(id);}r.reference=reference;r.carried=[];
+ let recipes=[r];h.sceneActuators={read:()=>structuredClone(recipes),pause(){},restore:rows=>{recipes=structuredClone(rows);}};
+ workingScene.select(fields.map(k=>r[k]),r.fixedId);
+ h.removeSelectedSceneObjects();assert.equal(recipes.length,0,'Deleted construction must not retain its mechanism');
+ await edits.undo();assert.deepEqual(recipes,[r]);assert.equal(workingScene.objects.length,4);
+ await edits.redo();assert.equal(recipes.length,0);assert.equal(workingScene.objects.length,0);
 });

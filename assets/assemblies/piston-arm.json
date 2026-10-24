@@ -1,0 +1,1208 @@
+{
+  "schema": "kaminos.assembly.v1",
+  "id": "piston-arm",
+  "label": "Piston arm",
+  "objects": [
+    {
+      "id": "analytical-arm-foot",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "foot",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-base",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.2,
+          "height": 0.065
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.5675,
+          -0.48
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#8998a3",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-upright",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "upright",
+      "fileName": "box",
+      "groupId": "analytical-arm-base",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.1,
+          "height": 0.605,
+          "depth": 0.11499999999999999
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.23749999999999993,
+          -0.48
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#8998a3",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-boom-hinge",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "boom hinge",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-base",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.095,
+          "height": 0.19
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          0.06500000000000006,
+          -0.48
+        ],
+        "rotation": [
+          0,
+          0,
+          -1.5707963267948963
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#bca477",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-boom-cheek-left",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "boom cheek left",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.028000000000000004,
+          "height": 0.06999999999999999,
+          "depth": 1.1
+        }
+      },
+      "transform": {
+        "position": [
+          -0.043000000000000003,
+          0.06500000000000006,
+          0.07000000000000006
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-boom-cheek-right",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "boom cheek right",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.028000000000000004,
+          "height": 0.06999999999999999,
+          "depth": 1.1
+        }
+      },
+      "transform": {
+        "position": [
+          0.043000000000000003,
+          0.06500000000000006,
+          0.07000000000000006
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-mount-bracket",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "mount bracket",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.08000000000000002,
+          "height": 0.125,
+          "depth": 0.06
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          0.020000000000000052,
+          0.05900000000000005
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-neck",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner neck",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.042,
+          "height": 0.1
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          0.10000000000000007,
+          0.5100000000000001
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-floor",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner floor",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.14,
+          "height": 0.022000000000000002
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          0.15000000000000008,
+          0.5100000000000001
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-0",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 0",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          0.19000000000000009,
+          0.6416000000000002
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-1",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 1",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0.06579999999999998,
+          0.19000000000000009,
+          0.6239689431380322
+        ],
+        "rotation": [
+          0,
+          0.5235987755982988,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-2",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 2",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0.11396894313803212,
+          0.19000000000000009,
+          0.5758000000000001
+        ],
+        "rotation": [
+          0,
+          1.0471975511965976,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-3",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 3",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0.1316,
+          0.19000000000000009,
+          0.5100000000000001
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-4",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 4",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0.11396894313803213,
+          0.19000000000000009,
+          0.44420000000000015
+        ],
+        "rotation": [
+          0,
+          2.0943951023931953,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-5",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 5",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          0.06579999999999998,
+          0.19000000000000009,
+          0.396031056861968
+        ],
+        "rotation": [
+          0,
+          2.6179938779914944,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-6",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 6",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          1.611635187677917e-17,
+          0.19000000000000009,
+          0.3784000000000001
+        ],
+        "rotation": [
+          0,
+          3.141592653589793,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-7",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 7",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          -0.06579999999999996,
+          0.19000000000000009,
+          0.396031056861968
+        ],
+        "rotation": [
+          0,
+          3.665191429188092,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-8",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 8",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          -0.1139689431380321,
+          0.19000000000000009,
+          0.44420000000000004
+        ],
+        "rotation": [
+          0,
+          4.1887902047863905,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-9",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 9",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          -0.1316,
+          0.19000000000000009,
+          0.5100000000000001
+        ],
+        "rotation": [
+          0,
+          4.71238898038469,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-10",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 10",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          -0.11396894313803212,
+          0.19000000000000009,
+          0.5758000000000001
+        ],
+        "rotation": [
+          0,
+          5.235987755982989,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-burner-rim-11",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "burner rim 11",
+      "fileName": "box",
+      "groupId": "analytical-arm-boom",
+      "geometry": {
+        "kind": "box",
+        "parameters": {
+          "width": 0.07052422744787148,
+          "height": 0.08000000000000002,
+          "depth": 0.018
+        }
+      },
+      "transform": {
+        "position": [
+          -0.06580000000000005,
+          0.19000000000000009,
+          0.6239689431380322
+        ],
+        "rotation": [
+          0,
+          5.759586531581287,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#d9d3bd",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-barrel-body",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "barrel body",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-barrel",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.05500000000000001,
+          "height": 0.42961505977328124
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.24956399999999998,
+          -0.21008
+        ],
+        "rotation": [
+          0.8753332489131107,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#668698",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-base-eye",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "base eye",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-barrel",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.065,
+          "height": 0.19
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.3872,
+          -0.375
+        ],
+        "rotation": [
+          0,
+          0,
+          -1.5707963267948963
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#bca477",
+        "roughness": 0.5,
+        "metalness": 0.25
+      }
+    },
+    {
+      "id": "analytical-arm-sliding-shaft",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "sliding shaft",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-rod",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.025,
+          "height": 0.3787395921685506
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.14633699999999997,
+          -0.08638999999999997
+        ],
+        "rotation": [
+          0.8753332489131107,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#c9d5dc",
+        "roughness": 0.25,
+        "metalness": 0.65
+      }
+    },
+    {
+      "id": "analytical-arm-rod-eye",
+      "type": "procedural-mesh",
+      "source": "kaminos:geometry",
+      "label": "rod eye",
+      "fileName": "cylinder",
+      "groupId": "analytical-arm-rod",
+      "geometry": {
+        "kind": "cylinder",
+        "parameters": {
+          "radius": 0.048,
+          "height": 0.19
+        }
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.024999999999999953,
+          0.05900000000000005
+        ],
+        "rotation": [
+          0,
+          0,
+          -1.5707963267948963
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "surface": {
+        "color": "#bca477",
+        "roughness": 0.25,
+        "metalness": 0.65
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "analytical-arm-base",
+      "type": "group",
+      "label": "Analytical base",
+      "objectIds": [
+        "analytical-arm-foot",
+        "analytical-arm-upright",
+        "analytical-arm-boom-hinge"
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": null
+    },
+    {
+      "id": "analytical-arm-boom",
+      "type": "group",
+      "label": "Analytical boom",
+      "objectIds": [
+        "analytical-arm-boom-cheek-left",
+        "analytical-arm-boom-cheek-right",
+        "analytical-arm-mount-bracket",
+        "analytical-arm-burner-neck",
+        "analytical-arm-burner-floor",
+        "analytical-arm-burner-rim-0",
+        "analytical-arm-burner-rim-1",
+        "analytical-arm-burner-rim-2",
+        "analytical-arm-burner-rim-3",
+        "analytical-arm-burner-rim-4",
+        "analytical-arm-burner-rim-5",
+        "analytical-arm-burner-rim-6",
+        "analytical-arm-burner-rim-7",
+        "analytical-arm-burner-rim-8",
+        "analytical-arm-burner-rim-9",
+        "analytical-arm-burner-rim-10",
+        "analytical-arm-burner-rim-11"
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": null
+    },
+    {
+      "id": "analytical-arm-barrel",
+      "type": "group",
+      "label": "Analytical barrel",
+      "objectIds": [
+        "analytical-arm-barrel-body",
+        "analytical-arm-base-eye"
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": null
+    },
+    {
+      "id": "analytical-arm-rod",
+      "type": "group",
+      "label": "Analytical rod",
+      "objectIds": [
+        "analytical-arm-sliding-shaft",
+        "analytical-arm-rod-eye"
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": null
+    }
+  ],
+  "actuators": [
+    {
+      "id": "analytical-arm-drive",
+      "label": "Analytical lift piston",
+      "fixedId": "@group:analytical-arm-base",
+      "followerId": "@group:analytical-arm-boom",
+      "barrelId": "@group:analytical-arm-barrel",
+      "rodId": "@group:analytical-arm-rod",
+      "baseMount": [
+        0,
+        -0.3872,
+        -0.375
+      ],
+      "movingMount": [
+        0,
+        -0.024999999999999953,
+        0.05900000000000005
+      ],
+      "hinge": [
+        0,
+        0.06500000000000006,
+        -0.48
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "carried": [],
+      "reference": {
+        "@group:analytical-arm-base": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "@group:analytical-arm-boom": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "@group:analytical-arm-barrel": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "@group:analytical-arm-rod": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "length": 0.5652829733858964,
+      "drive": {
+        "min": 0.4239622300394223,
+        "max": 0.7066037167323704,
+        "period": 1.8,
+        "outward": 0.75
+      }
+    }
+  ],
+  "source": {
+    "schema": "kaminos.assembly-source.v1",
+    "owner": "hostile-stunt-department",
+    "revision": "90a1b8e95419c468b36ead97cc2db17070840f87",
+    "documentSha256": "81b56b384b7715f879cefd1103e34525138150c29ff39d9a5a2963b87447e806",
+    "analyticalCarrier": {
+      "schema": "kaminos.piston-arm-carrier.v1",
+      "parameters": {
+        "height": 0.665,
+        "reach": 1.1,
+        "thickness": 0.1,
+        "cupRadius": 0.14,
+        "prefix": "analytical-arm"
+      },
+      "parts": {
+        "base": [
+          "analytical-arm-foot",
+          "analytical-arm-upright",
+          "analytical-arm-boom-hinge"
+        ],
+        "boom": [
+          "analytical-arm-boom-cheek-left",
+          "analytical-arm-boom-cheek-right",
+          "analytical-arm-mount-bracket",
+          "analytical-arm-burner-neck",
+          "analytical-arm-burner-floor",
+          "analytical-arm-burner-rim-0",
+          "analytical-arm-burner-rim-1",
+          "analytical-arm-burner-rim-2",
+          "analytical-arm-burner-rim-3",
+          "analytical-arm-burner-rim-4",
+          "analytical-arm-burner-rim-5",
+          "analytical-arm-burner-rim-6",
+          "analytical-arm-burner-rim-7",
+          "analytical-arm-burner-rim-8",
+          "analytical-arm-burner-rim-9",
+          "analytical-arm-burner-rim-10",
+          "analytical-arm-burner-rim-11",
+          "flame-emitter"
+        ],
+        "barrel": [
+          "analytical-arm-barrel-body",
+          "analytical-arm-base-eye"
+        ],
+        "rod": [
+          "analytical-arm-sliding-shaft",
+          "analytical-arm-rod-eye"
+        ]
+      },
+      "roleIds": {
+        "fixedId": "@group:analytical-arm-base",
+        "followerId": "@group:analytical-arm-boom",
+        "barrelId": "@group:analytical-arm-barrel",
+        "rodId": "@group:analytical-arm-rod"
+      }
+    },
+    "derivation": "Mechanical parts and actuator from supported analytical arm; flame emitter, simulation and camera excluded."
+  },
+  "origin": [
+    0,
+    -0.6,
+    -0.48
+  ]
+}

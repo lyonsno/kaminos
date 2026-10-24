@@ -4,6 +4,20 @@ import {createAuthoringAssets,assetSource} from '../authoring-assets.mjs';
 import {createAuthoringGeneration} from '../authoring-generation.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+test('assemblies browse and add through the authoring drawer without becoming mesh imports',async()=>{
+ const calls=[],arm={id:'piston-arm',label:'Piston arm',url:'./assets/assemblies/piston-arm.json'};
+ const c=createAuthoringAssets({request:async url=>{calls.push(url);return {};},addMesh:()=>assert.fail('assembly is not a mesh'),assemblies:{list:()=>[arm],add:async entry=>{calls.push(entry.id);return '@group:arm';}}});
+ await c.refresh();assert.ok(c.read().roots.some(r=>r.id==='assemblies'));
+ assert.equal(await c.browse('assemblies'),true);assert.equal(c.read().catalog,true);
+ const entry=c.read().entries[0];assert.equal(entry.kind,'assembly');assert.equal(entry.source,arm.url);
+ c.select(entry);assert.equal(await c.add(),'@group:arm');assert.equal(c.read().adding,false);
+ assert.deepEqual(calls,['/api/roots','piston-arm']);
+});
+test('assembly load failure remains visible and late lists cannot replace another collection',async()=>{
+ const pending=deferred();const c=createAuthoringAssets({request:async()=>({type:'dir',root:'other',path:'',entries:[]}),assemblies:{list:()=>pending.promise,add:async()=>{throw Error('incomplete mechanism');}}});
+ const old=c.browse('assemblies');await c.browse('other');pending.resolve([{id:'arm',label:'Arm',url:'./arm.json'}]);await old;assert.equal(c.read().root,'other');assert.equal(c.read().entries.length,0);
+ c.select({id:'arm',kind:'assembly'});await assert.rejects(c.add(),/incomplete mechanism/);assert.equal(c.read().error,'incomplete mechanism');assert.equal(c.read().adding,false);
+});
 test('held catalog selections retain their identity but cannot load, prepare or generate',async()=>{
  let calls=0;const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'greenroom',entries:[]}),addMesh:async()=>calls++,prepareImage:async()=>calls++,generator:()=>({preparesInput:true,read:()=>({status:'idle'}),run:async()=>calls++})});
  const held={kind:'image',source:'/api/job-output?job_id=held&file=output.png',label:'Lirm study',visibility:{status:'withheld',reason:'Hostile to eyesight. Awaiting further review.'}};
