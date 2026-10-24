@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { createSceneEdits } from '../scene-edit-session.mjs';
+import { createWorkingScene } from '../working-scene.mjs';
 import { resolveFlameLightingRoute } from '../scene-authoring.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -44,6 +45,7 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
     },
   };
   const context = {
+    workingScene: createWorkingScene(),
     // The fluid route is already up unless coldBoot; a scene without it boots it first (fire-boot.mjs).
     volumePrototype: coldBoot ? null : {},
     initKaminosVolumeRoute: () => { bootCalls++; return new Promise((resolve, reject) => {
