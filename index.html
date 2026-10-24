@@ -13030,7 +13030,7 @@ function installSceneActuators(){
     },
     mountInstaller:root=>actuatorControls.mountInstaller(root),
   };
-  actuatorControls=mountActuatorControls({document,root:document.getElementById('transform-inspector'),api,
+  actuatorControls=mountActuatorControls({document,root:document.getElementById('transform-inspector'),api,edits:scenePlacementTools.edits,
     readObjects:()=>[...workingScene.objects.filter(e=>!e.groupId).map(e=>({id:e.id,type:e.type,label:e.label||e.fileName})),...workingScene.groups.map(g=>({id:'@group:'+g.id,type:'group',label:g.label}))],selectedIds:()=>workingScene.activeGroupId?['@group:'+workingScene.activeGroupId,...groupDescendants(workingScene.groups,workingScene.activeGroupId).map(g=>'@group:'+g.id),...groupObjectIds(workingScene.groups,workingScene.activeGroupId)]:[workingScene.activeObjectId],selectedId:()=>workingScene.activeGroupId?'@group:'+workingScene.activeGroupId:workingScene.activeObjectId,
     pickPoint:callback=>{actuatorPointPick=callback;},cancelPick:()=>{actuatorPointPick=null;},installNumberDrag:installRelativeNumberDrag});
   window.kaminosActuators=api;
@@ -25509,10 +25509,11 @@ async function showAssemblyAssets(){
   await authoringAssetsUI.open('browse');
   await authoringAssets.browse('assemblies');
 }
-async function addSceneAssembly(kind,{interactive=false,source=null,position=null}={}){
-  assertSceneConstructionAvailable();
+async function addSceneAssembly(kind,{interactive=false,source=null,file=null,position=null}={}){
+  assertSceneConstructionAvailable();const arrival=workingScene.arrival();
+  if(file)source=JSON.parse(await file.text());
   if(!source){const item=assemblyCatalog.find(row=>row.id===kind);if(!item)throw Error('Unknown assembly');const response=await fetch(item.url);if(!response.ok)throw Error('Could not load assembly');source=await response.json();}
-  assertSceneConstructionAvailable();sceneActuators.pause();
+  arrival.assertCurrent();assertSceneConstructionAvailable();sceneActuators.pause();
   const instance=instantiateAssembly(source,{newId:makeSceneObjectId,position:position||controls.target.toArray()});
   const before=checkSelectionMembership(readSelectionMembership()),root='@group:'+instance.rootId;
   scenePlacementTools.edits.assertCanRecordApplied('@selection-membership');
@@ -27511,7 +27512,7 @@ function setupAuthoringAssets(){
       <input id="assembly-file" type="file" accept=".json" hidden>
     </section>`);
 document.getElementById('assembly-import').onclick=()=>document.getElementById('assembly-file').click();
-document.getElementById('assembly-file').onchange=async event=>{const file=event.target.files[0];event.target.value='';if(!file)return;try{await addSceneAssembly(null,{source:JSON.parse(await file.text()),interactive:true});}catch(error){setInfo(error.message);}};
+document.getElementById('assembly-file').onchange=async event=>{const file=event.target.files[0];event.target.value='';if(!file)return;try{await addSceneAssembly(null,{file,interactive:true});}catch(error){setInfo(error.message);}};
 document.getElementById('assembly-export').onclick=async()=>{
   try{const source=selectedAssemblySource(),name=await promptForFileName({title:'Save assembly',defaultStem:source.label,extension:'.kaminos-assembly.json'});if(!name)return;
     const url=URL.createObjectURL(new Blob([JSON.stringify(source,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name+'.kaminos-assembly.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);

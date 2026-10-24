@@ -20,7 +20,7 @@ test('shared selection duplication preserves nested roles, repetition and cancel
    duplicateSceneObject(id){const original=workingScene.find(id);workingScene.put({...original,id:'copy',object:{userData:{}}});workingScene.updateGroup(original.groupId,{objectIds:[id,'copy']});return 'copy';},
    makeSceneObjectId:()=> 'group-copy-'+(++nextId),ensureGroupTarget(){},setSceneSelection:(ids,id)=>workingScene.select(ids,id),detachSelectionMember:id=>workingScene.forget(id),releaseUnreferencedSceneMembershipObjects(){},
    scenePlacementTools:{start:(_mode,done)=>{completion=done;return true;},edits:{discard(){},recordApplied(){recorded++;}}}};
-  vm.createContext(h);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('duplicateSelectedSceneObjects'),h);const result=h.duplicateSelectedSceneObjects({interactive});
+  sceneContext(h);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('duplicateSelectedSceneObjects'),h);const result=h.duplicateSelectedSceneObjects({interactive});
   const outer=workingScene.groups.find(g=>'@group:'+g.id===result[0]),role=workingScene.groups.find(g=>g.parentId===outer.id);
   assert.deepEqual([...outer.objectIds],[]);assert.equal(role.repetition.count,6);assert.equal(role.repetition.mode,'circle');assert.deepEqual([...role.objectIds],['copy']);assert.equal(workingScene.find('baffle').groupId,'ring');assert.equal(workingScene.find('copy').groupId,role.id);
   if(interactive){completion({commit:false});assert.deepEqual(workingScene.groups.map(g=>g.id),['assembly','ring']);assert.equal(workingScene.find('copy'),undefined);assert.equal(workingScene.selection.activeId,'@group:assembly');assert.equal(recorded,0);}else assert.equal(recorded,1);

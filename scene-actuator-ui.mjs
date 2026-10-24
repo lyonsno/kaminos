@@ -1,31 +1,35 @@
+import {installSceneControlHistory} from './scene-control-history.mjs';
 // Shared controls for installing and operating authored length-driven pistons.
-export function mountActuatorControls({document,root,api,readObjects,selectedId,selectedIds=()=>[selectedId()],pickPoint,cancelPick,installNumberDrag}){
+export function mountActuatorControls({document,root,api,edits,readObjects,selectedId,selectedIds=()=>[selectedId()],pickPoint,cancelPick,installNumberDrag}){
  const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const section=el('section');section.className='actuator-properties';
  section.append(el('style',`.actuator-properties{display:grid;gap:10px;padding:12px;min-width:0;width:100%;box-sizing:border-box;border-top:1px solid #53606a;font:12px system-ui;color:#dae5e8}.actuator-properties[hidden]{display:none}.actuator-properties h3{margin:0}.actuator-properties label{display:grid;gap:4px;min-width:0}.actuator-properties input,.actuator-properties select,.actuator-properties button{box-sizing:border-box;width:100%;max-width:100%;min-width:0;padding:6px;color:inherit;background:#252c31;border:1px solid #53606a;border-radius:4px}.actuator-properties .actuator-row{display:flex;gap:5px}.actuator-properties .actuator-row>*{flex:1;min-width:0;width:0}.actuator-properties [role=alert]{color:#ffb5a6}.actuator-properties small{color:#a9bcc3}`));
  section.append(el('h3','Piston'));
  const error=el('div');error.setAttribute('role','alert');
- const fail=e=>{error.textContent=e.message;refresh();};
+ const fail=e=>{error.textContent=e.message;history.cancel();drags.forEach(d=>d.stop());refresh();};
  const call=fn=>{try{error.textContent='';return fn();}catch(e){fail(e);}};
  const select=el('select');select.setAttribute('aria-label','Installed piston');select.addEventListener('change',refresh);section.append(select);
  const state=el('small');section.append(state);
- const fields={};
+ const fields={},drags=[],dragOptions=[];
  const number=(name,label,step,callback)=>{
   const wrap=el('label'),grip=el('span',label),input=el('input');input.type='number';input.step='any';input.setAttribute('aria-label',label);input.dataset.actuator=name;
-  input.addEventListener('change',()=>call(()=>{if(!input.value.trim())throw Error('Enter a value');callback(Number(input.value));}));
-  wrap.append(grip,input);section.append(wrap);installNumberDrag?.({input,grip,step});fields[name]=input;return input;
+  const preview=()=>call(()=>{if(!input.value.trim())throw Error('Enter a value');callback(Number(input.value));});
+  input.addEventListener('input',preview);input.addEventListener('change',preview);
+  wrap.append(grip,input);section.append(wrap);dragOptions.push({input,grip,step});fields[name]=input;return input;
  };
  const chosen=()=>select.value||api.read()[0]?.id;
- number('length','Length · hand crank',.005,value=>api.configure(chosen(),{length:value}));
+ number('length','Length · hand crank',.005,value=>api.scrubConfiguration(chosen(),{length:value}));
  const stroke=el('input');stroke.type='range';stroke.step='any';stroke.setAttribute('aria-label','Piston hand crank');stroke.dataset.actuator='crank';
  stroke.addEventListener('input',()=>call(()=>api.scrub(chosen(),Number(stroke.value))));
- stroke.addEventListener('change',()=>call(()=>api.finishScrub()));
- stroke.addEventListener('keydown',e=>{if(e.key==='Escape'){api.cancelScrub();e.preventDefault();}});
+
  section.append(stroke);
- number('min','Short length',.005,value=>api.configure(chosen(),{drive:{min:value}}));
- number('max','Long length',.005,value=>api.configure(chosen(),{drive:{max:value}}));
- number('period','Cycle · seconds',.05,value=>api.configure(chosen(),{drive:{period:value}}));
- number('outward','Outward fraction',.01,value=>api.configure(chosen(),{drive:{outward:value}}));
+ number('min','Short length',.005,value=>api.scrubConfiguration(chosen(),{drive:{min:value}}));
+ number('max','Long length',.005,value=>api.scrubConfiguration(chosen(),{drive:{max:value}}));
+ number('period','Cycle · seconds',.05,value=>api.scrubConfiguration(chosen(),{drive:{period:value}}));
+ number('outward','Outward fraction',.01,value=>api.scrubConfiguration(chosen(),{drive:{outward:value}}));
+ const history=installSceneControlHistory({controls:[...Object.values(fields),stroke],edits:{...edits,begin(id,label){api.pause();edits.begin(id,label);}},id:'@actuators',label:'Adjust piston',onError:fail});
+ for(const options of dragOptions){const drag=installNumberDrag?.(options);if(drag)drags.push(drag);}
+ const unsubscribe=edits.subscribe(state=>{if(state.active?.id!=='@actuators')drags.forEach(d=>d.stop());refresh();});
  const buttons=el('div');buttons.className='actuator-row';
  for(const [label,fn] of [['Run',()=>api.play(chosen())],['Stop',()=>api.pause()],['Detach',()=>api.detach(chosen())]]){const b=el('button',label);b.type='button';b.addEventListener('click',()=>call(fn));buttons.append(b);}section.append(buttons,error);root.append(section);
  let installer=null,draft={axis:[1,0,0]},installRefresh=()=>{};
@@ -36,8 +40,8 @@ export function mountActuatorControls({document,root,api,readObjects,selectedId,
   section.hidden=!matching;if(matching&&document.activeElement!==select)select.value=matching.id;
   const r=rows.find(r=>r.id===chosen()),live=api.state();
   if(r){const s=live.actuators.find(s=>s.id===r.id);state.textContent=live.error||(!s.available?'Attachment missing · restore the part or detach':live.running===r.id?'Running · kinematic length drive':'Stopped · drag the hand crank');
-   const values={length:s.length,...r.drive};for(const [key,input]of Object.entries(fields))if(document.activeElement!==input)input.value=String(values[key]);
-   stroke.min=r.drive.min;stroke.max=r.drive.max;if(document.activeElement!==stroke)stroke.value=s.length;
+   const values={length:s.length,...r.drive};for(const [key,input]of Object.entries(fields))if(document.activeElement!==input||edits.state().active?.id!=='@actuators')input.value=String(values[key]);
+   stroke.min=r.drive.min;stroke.max=r.drive.max;if(document.activeElement!==stroke||edits.state().active?.id!=='@actuators')stroke.value=s.length;
   }
   installRefresh();
  }
@@ -54,5 +58,5 @@ export function mountActuatorControls({document,root,api,readObjects,selectedId,
   installRefresh=()=>{const list=readObjects().filter(o=>['glb','procedural-mesh','group'].includes(o.type)),signature=JSON.stringify(list.map(o=>[o.id,o.label]));for(const [key,input]of Object.entries(selects)){if(input.dataset.options===signature)continue;const previous=input.value||draft[key];input.replaceChildren(el('option','Choose a part'),...list.map(o=>{const option=el('option',o.label);option.value=o.id;return option;}));input.firstChild.value='';input.value=list.some(o=>o.id===previous)?previous:'';draft[key]=input.value;input.dataset.options=signature;}};installRefresh();
   return ()=>{cancelPick();installer?.remove();installer=null;installRefresh=()=>{};};
  }
- return {refresh,mountInstaller,dispose(){cancelPick();section.remove();installer?.remove();}};
+ return {refresh,mountInstaller,dispose(){history.dispose();unsubscribe();drags.forEach(d=>d.dispose());cancelPick();section.remove();installer?.remove();}};
 }

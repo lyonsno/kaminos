@@ -1,11 +1,18 @@
 import vm from 'node:vm';
 import * as groupTopology from '../../scene-group-topology.mjs';
+import * as assemblies from '../../scene-assembly.mjs';
 
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
   for(const [name,operation] of Object.entries(groupTopology))context[name]??=operation;
+  for(const [name,operation] of Object.entries(assemblies))context[name]??=operation;
+  // Extracted non-mechanism consumers use the same unmounted optional state as
+  // page startup. Mechanism fixtures supply their actual controller explicitly.
+  context.sceneActuators ??= null;
+  context.actuatorControls ??= null;
+  context.actuatorPointPick ??= null;
   if (!context.workingScene) {
     context.sceneObjects ??= [];
     context.sceneGroups ??= [];

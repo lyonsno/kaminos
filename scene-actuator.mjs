@@ -97,6 +97,13 @@ export function createActuatorController({edits,readPose,writePoses,validatePose
   const checked=checkedActuators(next);stage(checked,required);
   return edits.apply('@actuators',{actuators:checked},label);
  };
+ const configuration=(id,patch)=>{find(id);return recipes.map(r=>r.id===id?{...r,...(running===id?{length:lastLength}:{}),...patch,drive:{...r.drive,...patch.drive}}:r);};
+ const scrubConfiguration=(id,patch)=>{
+  admit();const next=checkedActuators(configuration(id,patch).map(r=>r.id===running&&r.id!==id?{...r,length:lastLength}:r));stage(next,[id]);stop();
+  if(!edits.state().active)edits.begin('@actuators','Adjust piston');
+  if(edits.state().active.id!=='@actuators')throw Error('Finish the current edit');
+  edits.preview({actuators:next});
+ };
  const acceptLive=()=>{const id=running;if(!id)return;recipes=recipes.map(r=>r.id===id?{...r,length:lastLength}:r);running=null;};
  const stop=()=>{if(!running)return;const id=running;apply(recipes.map(r=>r.id===id?{...r,length:lastLength}:r),'Stop piston',[id]);};
  let previousHistory=edits.state();
@@ -116,8 +123,9 @@ export function createActuatorController({edits,readPose,writePoses,validatePose
  return {
   read,restore:rows=>restore({actuators:rows}),clear(){running=null;if(edits.state().active?.id==='@actuators')edits.cancel();recipes=[];error=null;changed();},
   install(raw){const r=checkedActuator(raw);apply([...recipes,r],'Install piston',[r.id]);return copy(r);},
-  configure(id,patch){const next=recipes.map(r=>r.id===id?{...r,...(running===id?{length:lastLength}:{}),...patch,drive:{...r.drive,...patch.drive}}:r);find(id);apply(next,'Adjust piston',[id]);return copy(find(id));},
-  scrub(id,length){admit();const next=checkedActuators(recipes.map(r=>r.id===id?{...r,length}:r.id===running?{...r,length:lastLength}:r));find(id);stage(next,[id]);stop();if(!edits.state().active)edits.begin('@actuators','Hand crank piston');if(edits.state().active.id!=='@actuators')throw Error('Finish the current edit');edits.preview({actuators:next});},
+  configure(id,patch){apply(configuration(id,patch),'Adjust piston',[id]);return copy(find(id));},
+  scrubConfiguration,
+  scrub(id,length){scrubConfiguration(id,{length});},
   finishScrub(){if(edits.state().active?.id==='@actuators')edits.commit();},
   cancelScrub(){if(edits.state().active?.id==='@actuators')edits.cancel();},
   detach(id){find(id);apply(recipes.filter(r=>r.id!==id),'Detach piston');},
