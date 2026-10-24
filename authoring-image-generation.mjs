@@ -1,3 +1,4 @@
+import {inferenceEvents} from './inference-events.mjs';
 import {readReferenceImage} from './models/flux3-klein/reference-image.js';
 // Text -> image in the Authoring workspace with Klein on the Kaminos shared
 // device. The image is saved to the image inbox and becomes the selected source, so the
@@ -175,7 +176,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
   prepareReference=readReferenceImage,
-  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
+  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now(),observationSource=inferenceEvents}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
   let loaded=null,active=false,abort=null,decodeRequested=false;
@@ -184,8 +185,21 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt===null?{loadMs:clock()-startedAt}:{generationMs:clock()-generationStartedAt}):{})};
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
   let pendingImage=null;
-  async function savePending(){
+  // Event observers are optional: neither a broken consumer nor a stale async callback
+  // can change the generation's outcome. Keep the guard local to this particular run.
+  function observe(source,runId){
+    let handle=null,open=true,lastStage=null;
+    try{handle=observationSource?.begin(source,{runId});}catch{}
+    return {runId,isOpen:()=>open,
+      emit(event){if(open)try{handle?.emit(event);}catch{}},
+      stage(stage,details={}){if(open&&stage!==lastStage){lastStage=stage;this.emit({type:'stage',stage,...details});}},
+      finish(status,details={}){if(open){open=false;try{handle?.finish(status,details);}catch{}}},
+    };
+  }
+  function wantsPreviews(){try{return !!observationSource?.hasPreviewObservers();}catch{return false;}}
+  async function savePending(observation){
     const {image,provenance,text,seed,model}=pendingImage;
+    observation.stage('saving');
     set({status:'saving',canStop:false,canDecode:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
     const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
     const file=new File([blob],kleinImageName(text,seed,model),{type:'image/png'});
@@ -211,12 +225,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       await previous.foreground?.dispose?.();await previous.session.close?.();
     }
   }
-  async function load(level,model){
+  async function load(level,model,observation,signal){
     const spec=imageModel(model);
     const {sharedGpu}=context();
     const core=await kit(),device=sharedGpu.device,root=await weights(model);
     if(typeof root!=='string'||!root.trim())throw Error(`No weights configured for ${spec.name}`);
     const base=root.replace(/\/$/,'');
+    observation.emit({type:'configuration',weights:base,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,frameOwner:appHost?'app':'klein'});
     await releaseLoaded();
     const app=appHost?await appHost():null;
     const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
@@ -225,7 +240,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     try{
     pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`},model);
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
-      if(abort?.signal.aborted)return;
+      if(signal.aborted||!observation.isOpen())return;
+      observation.emit({type:'progress',stage:'weights',completed:loadedBytes,total:totalBytes>0?totalBytes:null,part,name,unit:'bytes'});
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading ${spec.name} weights (${part})`});
     });
     return {core,session,foreground,pipeline,base,app,level,model};
@@ -249,8 +265,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(active)throw Error('Image generation is already running');
       if(!pendingImage)throw Error('No generated image needs saving');
       active=true;
-      try{return await savePending();}
-      catch(error){set({status:'failed',error:`persistence: ${errorIdentity(error).message}`});throw error;}
+      const observation=observe({kind:'persistence-retry',parentRunId:pendingImage.runId,...pendingImage.provenance},`kaminos-klein-save:${crypto.randomUUID()}`);
+      try{const entry=await savePending(observation);observation.finish('complete');return entry;}
+      catch(error){observation.finish('failed',{phase:'persistence',error:errorIdentity(error)});set({status:'failed',error:`persistence: ${errorIdentity(error).message}`});throw error;}
       finally{active=false;publish();}
     },
     decodeNow(){
@@ -275,23 +292,29 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;decodeRequested=false;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
+      const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`,signal=runAbort.signal;
+      const observation=observe({kind:'image-generation',route:routeId,model:spec.name,prompt:text,seed,width,height,aspect,weightsLevel:level},runId);
       startedAt=clock();generationStartedAt=null;generationFinished=false;
       set({status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
-        if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
-        if(!loaded||loaded.model!==model)loaded=await load(level,model);
+        if(reference&&!reference.rgb){observation.stage('reference');set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
+        if(!loaded||loaded.model!==model){observation.stage('weights');loaded=await load(level,model,observation,signal);}
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
           // The pipeline destroys the current transformer before loading the next, so until this resolves no level
           // is loaded: a failed or stopped swap must make the next run load its level again.
-          loaded.level=null;
+          loaded.level=null;observation.stage('weights');
+          observation.emit({type:'configuration',weights:loaded.base,transformer:`${loaded.base}/${KLEIN_WEIGHT_LEVELS[level]}`,frameOwner:loaded.app?'app':'klein'});
           set({stage:'Loading weights',percent:null,progress:`Loading the ${level} transformer…`});
           await loaded.pipeline.loadTransformer(`${loaded.base}/${KLEIN_WEIGHT_LEVELS[level]}`,(part,name,{loadedBytes,totalBytes})=>{
-            if(!abort.signal.aborted)set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});});
+            if(signal.aborted||!observation.isOpen())return;
+            observation.emit({type:'progress',stage:'weights',completed:loadedBytes,total:totalBytes>0?totalBytes:null,part,name,unit:'bytes'});
+            set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});});
           loaded.level=level;
           if(abort.signal.aborted)throw abort.signal.reason;
         }
         ({session}=loaded);const {core,foreground,pipeline,base,app}=loaded;
+        observation.emit({type:'configuration',weights:base,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,frameOwner:app?'app':'klein',...(reference?{reference:reference.provenance}:{})});
         // The kiln of the scene loaded now; a reloaded scene has a new prototype and handoff.
         const current=context();handoff=current.handoff;const host=current.host;
         if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
@@ -302,18 +325,26 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         }
         generationStartedAt=clock();state.timing={loadMs:generationStartedAt-startedAt,generationMs:0};
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
-        const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
         frameRun=app?await app.beginRun(runId,{routeId}):await foreground.beginRun(runId);
         route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
         const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',reference,
           shouldDecode:()=>decodeRequested,
-          onPhase:value=>{if(!abort.signal.aborted)set(value==='reference'?{stage:'Reading reference image',canDecode:false,percent:null,progress:'Reading the reference image…'}:value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
-          onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
+          onPhase:value=>{
+            if(signal.aborted||!observation.isOpen())return;
+            observation.stage(value);
+            set(value==='reference'?{stage:'Reading reference image',canDecode:false,percent:null,progress:'Reading the reference image…'}:value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
+          onStep:(i,n)=>{
+            if(signal.aborted||!observation.isOpen())return;
+            observation.stage('denoise');observation.emit({type:'progress',stage:'denoise',completed:i,total:n,unit:'steps'});
+            set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
           onPreview:frame=>{
             // GPU readback can land after Stop, save, or the next run. Only the
             // current inference may replace its own provisional image.
             if(!active||abort!==runAbort||runAbort.signal.aborted||phase!=='inference'||state.status!=='running')return;
+            // Generate already requests these pixels. Wake shares that computation and
+            // records only when its own observers request previews, without changing UI ownership.
+            if(observation.isOpen()&&wantsPreviews())observation.emit({type:'preview',width:frame.width,height:frame.height,rgba:frame.rgba,step:frame.step,steps:frame.steps,kind:'latent-rgb-approximation'});
             if(state.preview?.step>=frame.step)return;
             set({preview:{...frame,kind:'partial',runId}});
           },
@@ -328,13 +359,14 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
-        pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
+        pendingImage={image,provenance,text,seed,model,runId};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
-        return await savePending();
+        const entry=await savePending(observation);observation.finish('complete',{provenance});return entry;
       }catch(error){
         const identity=errorIdentity(error);
         if(phase!=='persistence')state.preview=null;
-        if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
+        if(phase!=='persistence'&&signal.aborted&&identity.name==='AbortError'){observation.finish('stopped');set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
+        observation.finish('failed',{phase,error:identity});
         set({status:'failed',error:`${phase}: ${identity.message}`,stage:null,percent:null});throw error;
       }finally{
         try{await control?.close();}catch{/* the control reports its own close failure */}

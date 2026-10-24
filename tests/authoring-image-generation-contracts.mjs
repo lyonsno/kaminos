@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as module from '../authoring-image-generation.mjs';
+import {createInferenceEvents} from '../inference-events.mjs';
 const {kleinDeviceRequirements,composeDeviceRequirements,createForegroundHandoff,createKleinAuthoringImageGeneration,kleinImageName}=module;
 const tick=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
@@ -68,7 +69,7 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null,observationSource,generateCallbacks}={}){
  let loadFailures=loadFails;
  let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
@@ -77,6 +78,7 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,m
  const device={features:new Set(features),queue:{submit(){}}};
  let loads=0,generations=[];const swaps=[];
  const service=createKleinAuthoringImageGeneration({
+  observationSource,
   clock,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:modelWeights|| (async()=>'/klein-weights'),
@@ -86,7 +88,7 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,m
     destroy:async()=>log.push(`destroy:${model}`),
     load:async progress=>{await onLoad?.();loads++;log.push(`load:${model}`);if(loadFailures-->0)throw Error('local weight load failed');progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
     loadTransformer:async(url,progress)=>{swaps.push(url);if(swapFailures-->0)throw Error('bundle download failed');progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
-    generate:async request=>{generations.push(request);await onGenerate?.(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
+    generate:async request=>{generations.push(request);await onGenerate?.(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);await generateCallbacks?.(request);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
   encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
   deliver:async(file,provenance)=>{if(deliverFailures-->0)throw Error('image inbox unavailable');delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
@@ -408,4 +410,98 @@ test('image conditioning keeps its input and effective route in the saved PNG',a
  assert.ok(h.log.includes(`route:${p.route}`));
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),p);
 
+});
+
+// Injected callback fixture follows models/flux2-klein/klein-pipeline.js generateScheduled:
+// text -> denoise -> onPreview({width,height,rgba,step,steps}) -> onStep -> decode.
+// This exercises the production authoring adapter, not GPU inference or a timing benchmark.
+function observationFixture(previews=true){
+ const records=[];
+ return {records,hasPreviewObservers:()=>previews,begin(source,{runId}){
+  const record={source,runId,events:[]};records.push(record);let done=false;
+  return {runId,emit(event){if(!done)record.events.push(event);},finish(status,details={}){if(!done){done=true;record.events.push({type:status,...details});record.status=status;}}};
+ }};
+}
+test('inference observer receives actual producer phases, byte/step progress and opted-in latent preview',async()=>{
+ const observations=observationFixture();let invocation;
+ const h=harness({observationSource:observations,generateCallbacks:r=>{
+  invocation=r.schedule.invocation;r.onPhase('denoise');
+  r.onPreview?.({width:1,height:1,rgba:new Uint8ClampedArray([9,21,34,255]),step:2,steps:4});
+  r.onPhase('decode');
+ }});
+ await h.service.run({prompt:'lantern',seed:8,size:256});
+ assert.equal(observations.records.length,1,'the authoring route must publish one run, including weights');
+ const record=observations.records[0];
+ assert.equal(record.runId,invocation.jobId,'recording and kit job have the same identity');
+ assert.equal(record.source.route,module.KLEIN_AUTHORING_ROUTE_ID);
+ assert.deepEqual(record.events.filter(e=>e.type==='stage').map(e=>e.stage),['weights','text','denoise','decode','saving']);
+ assert.ok(record.events.some(e=>e.type==='progress'&&e.stage==='weights'&&e.completed===30&&e.total===120));
+ assert.ok(record.events.some(e=>e.type==='progress'&&e.stage==='denoise'&&e.completed===2&&e.total===4));
+ const preview=record.events.find(e=>e.type==='preview');assert.ok(preview);assert.equal(preview.kind,'latent-rgb-approximation');assert.deepEqual([...preview.rgba],[9,21,34,255]);
+ assert.equal(record.status,'complete');
+ const count=record.events.length;
+ h.generations[0].onPreview({width:1,height:1,rgba:new Uint8ClampedArray(4),step:3,steps:4});
+ assert.equal(record.events.length,count,'a late async preview cannot extend a terminal recording');
+});
+test('idle Wake observers share Generate previews without retaining pixels; observer failure cannot fail generation',async()=>{
+ const observations=observationFixture(false),h=harness({observationSource:observations,generateCallbacks:r=>r.onPreview({width:1,height:1,rgba:new Uint8ClampedArray([10,20,30,255]),step:1,steps:4})});
+ await h.service.run({prompt:'lantern',seed:1,size:256});
+ assert.equal(typeof h.generations[0].onPreview,'function','Generate owns its own partial preview independently of Wake');
+ assert.equal(observations.records[0].events.some(e=>e.type==='preview'),false,'Wake does not retain previews without a requesting observer');
+ const broken=harness({observationSource:{begin(){throw Error('observer unavailable');},hasPreviewObservers(){throw Error('observer unavailable');}}});
+ await broken.service.run({prompt:'lantern',seed:2,size:256});assert.equal(broken.service.read().status,'complete');
+});
+test('stopped and failed runs remain terminal, and persistence retry has its own identity',async()=>{
+ const observations=observationFixture(),gate=deferred(),h=harness({observationSource:observations,gate});
+ const pending=h.service.run({prompt:'lantern',seed:1,size:256});
+ while(!h.generations.length)await tick();h.service.stop();gate.resolve();await pending;
+ assert.equal(observations.records[0]?.status,'stopped');
+ const failed=harness({observationSource:observations,deliverFails:1});
+ await assert.rejects(failed.service.run({prompt:'lantern',seed:2,size:256}),/image inbox unavailable/);
+ const original=observations.records.at(-1);assert.equal(original.status,'failed');
+ await failed.service.retryPersistence();const retry=observations.records.at(-1);
+ assert.notEqual(retry.runId,original.runId);assert.equal(retry.source.kind,'persistence-retry');assert.equal(retry.source.parentRunId,original.runId);assert.equal(retry.status,'complete');
+ assert.equal(original.status,'failed');
+});
+
+test('real event source records the injected Klein callback fixture as replayable JSON',async()=>{
+ const source=createInferenceEvents();const unsub=source.subscribe(()=>{},{previews:true});
+ const h=harness({observationSource:source,generateCallbacks:r=>{
+  r.onPhase('denoise');r.onPreview({width:1,height:1,rgba:new Uint8ClampedArray([10,20,30,255]),step:2,steps:4});r.onPhase('decode');
+ }});
+ await h.service.run({prompt:'fixture prompt',seed:12,size:256});unsub();
+ const record=JSON.parse(JSON.stringify(source.export()));
+ assert.equal(record.status,'complete');assert.equal(record.source.prompt,'fixture prompt');
+ assert.equal(record.events[0].type,'start');assert.equal(record.events.at(-1).type,'complete');
+ assert.deepEqual(record.events.find(e=>e.type==='preview').rgba,[10,20,30,255]);
+ assert.equal(record.events.find(e=>e.type==='configuration').transformer,'/klein-weights/dit');
+ const {validateRecording}=await import('../inference-flame.mjs');assert.equal(validateRecording(record).runId,record.runId);
+});
+
+test('failure before image output retains its source and last observed loading phase',async()=>{
+ const source=createInferenceEvents(),h=harness({observationSource:source,loadFails:true});
+ await assert.rejects(h.service.run({prompt:'fixture prompt',seed:13,size:256}),/local weight load failed/);
+ const record=source.read();assert.equal(record.status,'failed');assert.equal(h.generations.length,0);
+ assert.equal(record.events.at(-1).phase,'weights');assert.equal(record.events.at(-1).error.message,'local weight load failed');
+ assert.equal(record.events.find(e=>e.type==='configuration').weights,'/klein-weights');
+ assert.equal(record.events.some(e=>e.type==='complete'),false);
+});
+
+test('FLUX3 reference and manual decode preserve their effective identity in Wake observations',async()=>{
+ const source=createInferenceEvents(),gate=deferred();source.subscribe(()=>{},{previews:true});
+ const h=harness({observationSource:source,modelWeights:async()=>'/flux3-weights',gate});
+ const reference={width:16,height:16,rgb:new Float32Array(16*16*3),provenance:{source:'fixture-input.png',sha256:'fixture-input-digest'}};
+ const pending=h.service.run({model:'flux3',reference,prompt:'fixture input',seed:14,size:256});
+ while(!h.generations.length)await tick();
+ const request=h.generations[0],record=source.read();
+ assert.ok(record,'selected FLUX3 route must produce a run recording');
+ assert.equal(record.source.route,'flux3-klein.image-and-text.authoring-shared-device.v0');
+ assert.equal(record.source.model,'FLUX.3 Image Klein');assert.equal(record.runId,request.schedule.invocation.jobId);
+ assert.equal(h.service.decodeNow(),true);assert.equal(request.shouldDecode(),true);
+ request.onPreview({width:1,height:1,rgba:new Uint8ClampedArray([1,2,3,255]),step:2,steps:4});
+ assert.equal(h.service.read().preview.step,2);assert.equal(source.read().events.filter(e=>e.type==='preview').length,1);
+ gate.resolve();await pending;
+ const completed=source.read().events.at(-1);assert.equal(completed.type,'complete');
+ assert.deepEqual(completed.provenance.reference,reference.provenance);assert.ok(completed.provenance.elapsed);
+ assert.deepEqual(completed.provenance.source,{repo:'black-forest-labs/flux-3-image-klein-base',revision:'observed-revision'});
 });
