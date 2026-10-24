@@ -159,3 +159,16 @@ for (const reentry of ['abort', 'unsubscribe']) {
     assert.equal(prematurelyFinished, false, 'reentrant disposal must wait for removal');
   });
 }
+
+test('piece picks belong to this session and stop on disposal',async()=>{
+ let deliver,unsubscribed=false;
+ const f=fixture({onPick:callback=>{deliver=callback;return ()=>{unsubscribed=true;};}});
+ const own=await f.session.loadAsset({}),child=new THREE.Mesh(new THREE.BoxGeometry());own.root.add(child);
+ const received=[];
+ assert.equal(typeof f.session.onPick,'function','scene sessions must offer scoped surface picks');
+ f.session.onPick(hit=>received.push(hit));
+ deliver({id:own.id,object:child,faceIndex:3});deliver({id:'other',object:new THREE.Object3D(),faceIndex:0});
+ assert.equal(received.length,1);assert.equal(received[0].faceIndex,3);
+ await f.session.dispose();deliver({id:own.id,object:child,faceIndex:2});
+ assert.equal(unsubscribed,true);assert.equal(received.length,1);
+});

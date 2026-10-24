@@ -54,7 +54,7 @@ const stopFrames = scene.onFrame(frame => {
 ```
 
 The returned methods are `loadAsset`, `attach`, `readView`, `setView`, `redraw`,
-`onFrame`, and `dispose`. Disposal immediately disables callbacks, requests load
+`onFrame`, optional host-backed `onPick`, and `dispose`. Disposal immediately disables callbacks, requests load
 cancellation, awaits late receipts and releases every owned registration, reporting
 cleanup errors together. Repeated disposal returns the same promise. Caller must
 await disposal before reusing the application slot. Host callbacks may still be
@@ -80,3 +80,14 @@ and the existing investigation layer owns capture and persistence.
 objects with injected host services. These tests establish lifecycle behavior.
 Hotwet's real loader, registration, frame service and shared capture remain the
 browser conformance boundary for each consumer.
+
+## Surface selection
+
+A host with surface picking supplies `onPick(callback)` returning an unsubscribe
+function. `session.onPick(callback)` receives `{id, object, faceIndex, point}`
+only for a descendant of a registration in that session. `object` is the actual
+Three mesh, `faceIndex` its triangle ordinal, and `point` a world-space array.
+The application emits after its ordinary click selection, with the same overlay,
+gizmo and drag suppression. This subscription observes selection; it does not
+replace scene selection or camera gestures. Session disposal unsubscribes and
+suppresses stale callbacks. A host without picking rejects subscription explicitly.
