@@ -4,10 +4,8 @@
 // pause/resume/stop through the kit inference control. A blocking run submits per block
 // without yielding to the scene. Frame gaps during each run are recorded.
 import { KleinPipeline } from './klein-pipeline.js';
-import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession }
-  from '../../webgpu-inference-kit/src/core.js';
-
-export const KLEIN_ROUTE_ID = 'flux2-klein.text-to-image.webgpu-local.v0';
+import { createKleinApp } from './klein-app.js';
+export { KLEIN_ROUTE_ID } from './klein-app.js';
 
 // The live scene: a little blue engine with a grey face and two coaches running round a track,
 // puffing smoke. Cheap signed-distance shapes; its job is to show frames keep coming during inference.
@@ -101,9 +99,8 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
     buffer.destroy = () => { if (alive) { alive = false; gpuBytes.live -= size; } destroy(); };
     return buffer;
   };
-  const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
-  const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
-  const pipeline = new Pipeline(device, { ...urls, ...kernels });
+  const app = await createKleinApp({ device, Pipeline, pipelineOptions: { ...urls, ...kernels }, load: false });
+  const { foreground } = app;
 
   // Live scene through the foreground service.
   const surface = canvas.getContext('webgpu');
@@ -141,9 +138,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   let active = null;
   async function generate({ prompt, seed, size, steps = 4, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 2, onStep, onPhase, onPreview = null }) {
     if (active) throw new Error('a generation is already running');
-    const runId = `flux2-klein:${crypto.randomUUID()}`;
-    const abort = new AbortController();
-    active = { abort, control: null, cooperative };
+    active = true;
     scene.gaps = []; scene.lastFrameAt = null;
     gpuBytes.peak = gpuBytes.live;
     const started = performance.now();
@@ -152,28 +147,9 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
     const mark = stage => marks.push({ stage, atMs: performance.now() - started });
     const phaseHook = phase => { mark(phase); onPhase?.(phase); };
     const stepHook = (i, n) => { mark(`step${i}`); onStep?.(i, n); };
-    let frameRun = null, route = null, result;
     try {
-      if (cooperative) {
-        frameRun = await foreground.beginRun(runId);
-        route = await session.registerRoute({ routeId: KLEIN_ROUTE_ID, runtimeOptions: {
-          runtimeLabel: 'flux2-klein', foregroundOpportunities: frameRun.foregroundOpportunities } });
-        const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
-        active.control = control;
-        const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
-          prompt, seed, width: size, height: size, steps, textLength, onStep: stepHook, onPhase: phaseHook, onPreview,
-          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight,
-            withForeground: frameRun.withForeground } }) });
-        const completion = await job.completion;
-        if (completion.status !== 'succeeded') {
-          const error = new Error(completion.failure?.message ?? completion.status);
-          error.name = completion.failure?.name ?? 'Error';
-          throw error;
-        }
-        result = completion.output;
-      } else {
-        result = await pipeline.generate({ prompt, seed, width: size, height: size, steps, textLength, onStep: stepHook, onPhase: phaseHook, onPreview });
-      }
+      const result = await app.generate({ prompt, seed, width: size, height: size, steps, textLength,
+        cooperative, scheduling: { targetDutyMs, maxInFlight }, onStep: stepHook, onPhase: phaseHook, onPreview });
       result.wallMs = performance.now() - started;
       result.gpuBytes = { peak: gpuBytes.peak, live: gpuBytes.live };
       result.gpuErrors = gpuErrors.splice(0);
@@ -185,32 +161,33 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
       result.longestDutyMs = Math.max(0, ...result.duties.map(d => d.queueMs ?? 0));
       return result;
     } finally {
-      try { await active.control?.close(); } catch { /* close failures are reported by the control */ }
-      if (route) { await route.drain(); session.unregisterRoute(route.routeId); }
-      if (frameRun) await frameRun.finish();
       scene.gaps = null;
       active = null;
     }
   }
 
   async function togglePause() {
-    const control = active?.control;
-    if (!control) return null;
-    const snap = control.snapshot();
-    if (snap.status === 'paused' || snap.pauseRequested) { await control.resume(); return 'running'; }
-    await control.pause(); return 'paused';
+    const snap = app.snapshot().control;
+    if (!snap) return null;
+    if (snap.status === 'paused' || snap.pauseRequested) { await app.resume(); return 'running'; }
+    await app.pause(); return 'paused';
   }
-  function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
+  const stop = app.stop;
 
   let gpuBytesAfterLoad = null;
   async function loadWeights(status = onStatus) {
     gpuBytes.peak = gpuBytes.live;
-    await pipeline.load((part, name, p) => status({ phase: 'load', part, detail: `${part} ${name}`, ...p }));
+    await app.load((part, name, p) => status({ phase: 'load', part, detail: `${part} ${name}`, ...p }));
     gpuBytesAfterLoad = { peak: gpuBytes.peak, live: gpuBytes.live };
   }
   if (load) await loadWeights();
 
-  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes, gpuBytes, gpuErrors,
+  async function destroy() {
+    scene.running = false;
+    try { await app.destroy(); } finally { uniform.destroy(); surface.unconfigure(); device.destroy(); }
+  }
+
+  return { device, get pipeline() { return app.pipeline; }, app, destroy, generate, togglePause, stop, scene, load: loadWeights, get residentBytes() { return app.pipeline?.residentBytes; }, gpuBytes, gpuErrors,
     limits: Object.fromEntries(['maxBufferSize', 'maxStorageBufferBindingSize', 'maxStorageBuffersPerShaderStage', 'maxComputeWorkgroupStorageSize'].map(k => [k, device.limits[k]])),
-    get gpuBytesAfterLoad() { return gpuBytesAfterLoad; }, get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
+    get gpuBytesAfterLoad() { return gpuBytesAfterLoad; }, get loadMs() { return app.pipeline?.timings.loadMs; }, get kernels() { return app.pipeline?.kernels; } };
 }

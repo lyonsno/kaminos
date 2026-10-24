@@ -6,18 +6,10 @@ const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
 
-assert.match(index, /<input[^>]+type="checkbox"[^>]+id="volume-procedural-detail-forces"[^>]+checked/, 'procedural detail forces remain a live default-on excitation switch');
-assert.deepEqual(schema.controls.find(control => control.key === 'volume-procedural-detail-forces'), {
-  key: 'volume-procedural-detail-forces',
-  param: 'volume_procedural_detail_forces',
-  tagName: 'INPUT',
-  type: 'checkbox',
-  additiveDefault: true,
-}, 'procedural detail forces remain additive and persisted');
-assert.ok(index.includes("proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked"));
-assert.ok(index.includes("params.has('volume_procedural_detail_forces')"));
-assert.match(index, /'proceduralDetailForces', 'volume_procedural_detail_forces'/);
-
+// The master switch was retired 2026-10-22; its uniform is held on so the kernel gate stays inspectable.
+assert.doesNotMatch(index, /id="volume-procedural-detail-forces"/, 'the master switch is retired from the cockpit');
+assert.ok(schema.retiredControls.some(control => control.key === 'volume-procedural-detail-forces'), 'saved basins strip it at an explicit retirement boundary');
+assert.ok(index.includes('proceduralDetailForces: true,'), 'the snapshot holds the gate on');
 assert.doesNotMatch(index, /id="volume-procedural-transport-slip"/, 'retired transport slip is absent from the live cockpit');
 assert.doesNotMatch(index, /volume_procedural_transport_slip/, 'retired transport slip has no live route authority');
 assert.equal(schema.controls.some(control => control.key === 'volume-procedural-transport-slip'), false);

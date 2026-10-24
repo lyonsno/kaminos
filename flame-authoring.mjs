@@ -7,10 +7,10 @@ import {describeVolumeSettingsSaveOutcome} from './volume-settings-preset-contra
 export function portableFlamePreset(preset, localScale) {
   const result=structuredClone(preset);
   if(result.domControls?.['volume-emitter-source-law']?.value!=='immersed-source')return result;
-  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
+  if(localScale<0||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
   const d=result.domControls['volume-immersed-radius'];
   const radius=Number(d.rawValue??d.value)*localScale;
-  if(!Number.isFinite(radius)||radius<.02-1e-12)throw Error('Effective preset aperture must be finite and at least 0.02');
+  if(!Number.isFinite(radius)||radius<0)throw Error('Effective preset aperture must be finite and nonnegative');
   if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
   if(Object.hasOwn(d,'value'))d.value=radius;
   const route=new URL(result.route);route.searchParams.set('volume_immersed_radius',String(radius));
@@ -20,8 +20,10 @@ export function flamePresetRadius(preset,localScale) {
   const d=preset.domControls['volume-immersed-radius'];const radius=Number(d.rawValue??d.value);
   if(preset.sourceRadiusSpace===undefined)return radius;
   if(preset.sourceRadiusSpace!=='simulation-v1')throw Error('Unknown preset source radius space');
-  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
-  return radius/localScale;
+  if(localScale<0||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
+  // A collapsed source has no invertible aperture space. Keep the coefficient
+  // editable while its zero pose continues to suppress injection.
+  return localScale===0?radius:radius/localScale;
 }
 // Compare a portable receipt with local controls without changing its saved
 // identity. Scene snapshots retain their own raw radius plus authored pose.
@@ -143,8 +145,8 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wavelet-strength','Detail strength'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
-    ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Carrier contour scale'],
+    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
+    ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
   ] },
   { name:'Emitter & feed', scope:'emitter', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
@@ -189,8 +191,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
-  { name:'Legacy diagnostic appearance', view:'quality', fields:[
-    ['volume-smoke','Smoke amount'], ['volume-absorption','Absorption'], ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
@@ -328,6 +328,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
+        if(id==='volume-immersed-radius'&&field.value.trim()&&Number(field.value)<0)field.value='0';
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
         const value=field.type==='checkbox'?(source.type==='checkbox'?field.checked:field.checked?1:0):source.tagName==='SELECT'?field.value:Number(flameControlSourceValue(id,field.value));
         try{if(writeSourceControl(id,value)){syncVisibility();return;}}catch(error){syncField(true);onError(error);return;}

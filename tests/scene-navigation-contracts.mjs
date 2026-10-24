@@ -50,8 +50,8 @@ test('depth samples unselected transformed visible triangles; empty space retain
 });
 test('ground is visible but cannot set authored-mesh navigation depth',()=>{
  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const roots=source.slice(source.indexOf('    roots: () => [...sceneObjects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => [...sceneObjects.filter(')));
- assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \'splat\' && entry.id !== RIM_LIGHT_ID)'));
+ const roots=source.slice(source.indexOf('    roots: () => [...workingScene.objects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => [...workingScene.objects.filter(')));
+ assert.ok(roots.includes("workingScene.objects.filter(entry => isSceneItemVisible(entry.id) && entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE)"));
  assert.ok(!roots.includes('groundPlane'),'ground belongs in the rendered scene, not the navigation depth candidates');
  assert.ok(source.includes('occluders: () => groundPlane ? [groundPlane] : []'));
 });

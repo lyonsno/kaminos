@@ -22,6 +22,23 @@ function fixture(thumbnails,providedController=null){
  return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.body.children[0].modes.find(e=>e.dataset.assetsMode===mode).onclick()};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
+test('held image and mesh cards remain named without thumbnails, preview work or selected-image requests',async()=>{
+ let previewCalls=0;const f=fixture(async()=>{previewCalls++;return 'preview';});
+ const visibility={status:'withheld',reason:'Hostile to eyesight. Awaiting further review.'};
+ f.state.entries=[{kind:'image',root:'greenroom',path:'held.png',label:'Lirm study',source:'/api/job-output?job_id=held&file=output.png',visibility},{kind:'mesh',root:'greenroom',path:'held.glb',label:'Lirm reconstruction',source:'/api/job-output?job_id=held&file=output.glb',visibility},{kind:'image',path:'normal.png',label:'Ordinary image',source:'/api/read?root=image-inbox&path=normal.png'}];
+ f.ui.open('browse');const [image,mesh,normal]=f.doc.getElementById('asset-entries').children;
+ assert.equal(image.children.filter(e=>e.tagName==='img').length,0,'a hold must prevent creating an image request');
+ assert.equal(normal.children.filter(e=>e.tagName==='img').length,1,'ordinary images still have thumbnails');
+ assert.equal(image.dataset.visibility,'withheld');assert.equal(mesh.dataset.visibility,'withheld');
+ assert.equal(f.observer().watched.has(mesh),false,'held meshes must never enter the thumbnail queue');
+ f.observer().fire(mesh);await tick();assert.equal(previewCalls,0);
+ f.state.selected=f.state.entries[2];f.ui.render(f.state);assert.equal(f.doc.getElementById('asset-image').src,f.state.selected.source);
+ f.state.selected=f.state.entries[0];f.ui.render(f.state);
+ assert.equal(f.doc.getElementById('asset-image').hidden,true);assert.equal(f.doc.getElementById('asset-image').getAttribute('src'),null);
+ assert.equal(f.doc.getElementById('asset-use-image').hidden,true);assert.equal(f.doc.getElementById('asset-hold-notice').hidden,false);
+ assert.equal(f.doc.getElementById('asset-name').textContent,'Lirm study');
+ f.state.selected=f.state.entries[1];f.ui.render(f.state);assert.equal(f.doc.getElementById('asset-add').hidden,true);
+});
 test('unavailable historical results remain explained beside available or empty catalogs',()=>{
  const f=fixture(async()=>null);f.state.unavailableCount=1928;f.state.entries=[{kind:'image',name:'image.png',source:'/api/job-output?job_id=a&file=image.png'}];f.ui.render(f.state);assert.match(f.doc.getElementById('asset-status').textContent,/1928.*unavailable/);
  f.state.entries=[];f.state.listRevision++;f.ui.render(f.state);assert.match(f.doc.getElementById('asset-status').textContent,/1928.*unavailable/);

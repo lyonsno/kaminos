@@ -23,6 +23,7 @@ async function preview(entry){
  }
 }
 export function meshThumbnail(entry,isCurrent=()=>true){
+ if(entry.visibility?.status==='withheld')return Promise.resolve(null);
  const key=JSON.stringify([entry.source,entry.mtime,entry.size]);
  const existing=cache.get(key);if(existing){existing.checks?.add(isCurrent);return existing.promise;}
  const record={checks:new Set([isCurrent]),promise:null};

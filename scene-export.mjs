@@ -11,7 +11,12 @@ export function exportCloneInWorld(object) {
   const clone = cloneHierarchy(object);
   snapshotExportGeometry(object, clone);
   const helpers = [];
-  clone.traverse(child => { if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child); });
+  clone.traverse(child => {
+    // Evaluated copies become ordinary asset geometry at this boundary. Their
+    // live ownership marker must not survive glTF extras and a later import.
+    delete child.userData.kaminosRepetitionCopy;
+    if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child);
+  });
   for (const helper of helpers) helper.removeFromParent();
   object.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
   return clone;

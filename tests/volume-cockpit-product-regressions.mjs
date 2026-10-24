@@ -7,15 +7,8 @@ const index = readFileSync(join(root, 'index.html'), 'utf8');
 const layoutSource = readFileSync(join(root, 'volume-cockpit-layout.mjs'), 'utf8');
 const layoutModule = await import('../volume-cockpit-layout.mjs');
 
-const detailRowAndFollower = index.match(
-  /<div class="slider-row" data-volume-visual-cost-knob="ray-detail">[\s\S]*?id="volume-detail-scale"[\s\S]*?<\/div>[\s\S]*?(?=<div class="slider-row")/,
-)?.[0] || '';
-assert.ok(detailRowAndFollower, 'Detail Scale row is present');
-assert.doesNotMatch(
-  detailRowAndFollower,
-  /<span class="slider-help">/,
-  'Detail Scale does not grow unsolicited explanatory copy',
-);
+// Detail Scale was retired 2026-10-21 (the single Flame simulator fixes the detail frequency).
+assert.doesNotMatch(index, /id="volume-detail-scale"/, 'Detail Scale is retired');
 
 const windRowAndFollower = index.match(
   /<div class="slider-row" data-volume-visual-cost-knob="occupied-volume">[\s\S]*?id="volume-wind-angle"[\s\S]*?<\/div>[\s\S]*?(?=<div class="slider-row")/,

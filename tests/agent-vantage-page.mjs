@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -432,7 +433,7 @@ function definition(name) {
   throw new Error(`${name} has no end`);
 }
 // Evaluates that statement with stand-ins for the page variables it reads.
-const fromIndex = (name, scope) => new Function(...Object.keys(scope), `${definition(name)}\nreturn ${name};`)(...Object.values(scope));
+const fromIndex = (name, scope) => { sceneContext(scope); return new Function(...Object.keys(scope), `${definition(name)}\nreturn ${name};`)(...Object.values(scope)); };
 // A `function name(` declaration in index.html, up to its closing brace.
 function declaration(name) {
   const start = INDEX.indexOf(`\nfunction ${name}(`) + 1;
@@ -456,6 +457,7 @@ function fromIndexLive(name, scope) {
     get: (target, key) => (key === Symbol.unscopables ? undefined : key in target ? target[key] : inert),
     set: (target, key, value) => { target[key] = value; return true; }});
   const source = INDEX.includes(`const ${name}=`) ? definition(name) : declaration(name);
+  sceneContext(live);
   return new Function('scope', `with (scope) { ${source}\nreturn ${name}; }`)(live);
 }
 

@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ test('grouping loose objects preserves burner assemblies and records one reversi
   get sceneGroups(){return groups;},makeSceneObjectId:()=> 'loose',setInfo(){},sceneGroupDisplayLabel:g=>g.label,setActiveSceneGroup(){},
   editSceneGroups(change){history.push(structuredClone(groups));const next=structuredClone(groups);change(next);groups=next;},
   createSceneGroupForObjects(ids,label){groups=groups.map(g=>({...g,objectIds:g.objectIds.filter(id=>!ids.includes(id))}));const group={id:'loose',label,objectIds:ids};groups.push(group);return group;}};
- vm.createContext(context);vm.runInContext(code,context);
+ sceneContext(context);vm.runInContext(code,context);
  context.window.createSceneGroupFromAllObjects('Loose');
  assert.deepEqual(groups.find(g=>g.id==='burner'),original,'grouping must preserve the placement unit');
  assert.deepEqual(Array.from(groups.find(g=>g.id==='loose').objectIds),['kiln','@rim-light']);

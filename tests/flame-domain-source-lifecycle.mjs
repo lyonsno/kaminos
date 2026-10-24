@@ -1,4 +1,6 @@
 // kaminos-test: node
+import {resolveSceneMembershipTopology} from '../scene-membership-history.mjs';
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -15,7 +17,7 @@ function fixture(family='ring'){
  transformControls:null,document:{getElementById:()=>null},window:{__kaminosVolumeEmitterReceipt:{effective:{family}}},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){throw Error('analytic source must not be invoked');},
  authoredFlamePresent:true,flameEmitterPose:{position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
  volumePrototype:{relocateOrdinaryDomain(){}},isFireLightFieldRoute:()=>true,disposeObjectTree(){},sceneSelectionMembers:()=>[],syncAuthoredFlameSources(){},pruneSceneGroups(){},pruneSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},setSceneSelection(){},ensureGroupTarget(){},applySceneObjectTransformState(o,p){o.position.fromArray(p.position);o.scale.fromArray(p.scale);}};
- vm.createContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','primaryAuthoredFlameSource','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
+ c.resolveSceneMembershipTopology=resolveSceneMembershipTopology;c.readSelectionMembership=()=>({objects:[],liveIds:[],groups:[]});sceneContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','primaryAuthoredFlameSource','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
 }
 test('cluster membership replay and domain resize never invoke analytic placement',async()=>{
  const c=fixture('cluster');await c.writeSelectionMembershipUnchecked({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});

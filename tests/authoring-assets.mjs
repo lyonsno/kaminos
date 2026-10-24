@@ -4,6 +4,13 @@ import {createAuthoringAssets,assetSource} from '../authoring-assets.mjs';
 import {createAuthoringGeneration} from '../authoring-generation.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+test('held catalog selections retain their identity but cannot load, prepare or generate',async()=>{
+ let calls=0;const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'greenroom',entries:[]}),addMesh:async()=>calls++,prepareImage:async()=>calls++,generator:()=>({preparesInput:true,read:()=>({status:'idle'}),run:async()=>calls++})});
+ const held={kind:'image',source:'/api/job-output?job_id=held&file=output.png',label:'Lirm study',visibility:{status:'withheld',reason:'Hostile to eyesight. Awaiting further review.'}};
+ c.select(held);assert.deepEqual(c.read().selected,held);
+ await assert.rejects(c.prepare(),/awaiting further review/i);await assert.rejects(c.generate(),/awaiting further review/i);
+ c.select({...held,kind:'mesh'});await assert.rejects(c.add(),/awaiting further review/i);assert.equal(calls,0);
+});
 test('late folder response cannot replace a newer choice or source',async()=>{
  const old=deferred(),fresh=deferred();const c=createAuthoringAssets({request:url=>url.includes('root=old')?old.promise:fresh.promise});
  const a=c.browse('old','a'),b=c.browse('new','b');fresh.resolve({type:'dir',root:'new',path:'b',entries:[{name:'part.glb',type:'file'}]});await b;c.select(c.read().entries[0]);old.resolve({type:'dir',root:'old',path:'a',entries:[{name:'wrong.glb',type:'file'}]});await a;

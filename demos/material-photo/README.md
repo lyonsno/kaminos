@@ -32,8 +32,8 @@ To use a separately served package, append a URL-encoded `weights` query paramet
 
 ## How It Composes
 
-[main.js](main.js) owns image selection, model setup, inference and result restoration. The [comparison viewer](comparison-viewer.js) shares the device and camera controls across four views and the same subject geometry between the two lit views; [viewer.js](viewer.js) handles material rendering. The [SuperMat adapter](../../models/supermat/supermat-route.js) owns model resources and execution.
+[main.js](main.js) owns image selection, model setup, inference and result restoration. The [comparison viewer](comparison-viewer.js) shares the device and camera controls across four views and the same subject geometry between the two lit views; [viewer.js](viewer.js) handles material rendering. The [SuperMat application wrapper](../../models/supermat/supermat-app.js) owns loading and per-run lifetime around the model adapter.
 
-The application creates the shared device and inference session, gives MoGe that device, and registers SuperMat's weight and inference routes with the session. Model outputs become rendering inputs without replacing the application's device. Emission is a presentation heuristic, not a SuperMat output.
+The application creates the shared device, inference session and foreground service, gives MoGe that device, and lends those resources to `createSuperMatApp`. SuperMat stays resident across runs; its wrapper manages weight loading and inference admission. The comparison viewer draws its four views together through the foreground service, including opportunities during cooperative SuperMat inference. Model outputs become rendering inputs without replacing the application's device. Emission is a presentation heuristic, not a SuperMat output.
 
 Read the [Kaminos WebGPU Inference Kit guide](../../webgpu-inference-kit/README.md) for the reusable runtime and [Getting Started](../../webgpu-inference-kit/docs/getting-started.md) for a smaller integration example.

@@ -19,7 +19,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const actions=document.createElement('div');actions.className='asset-step-actions';
   actions.append(...[byId('asset-run'),byId('asset-prepare'),byId('asset-recover')].filter(Boolean));
   const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
-  masks.onclick=()=>{const image=selected();if(image?.kind==='image')openMasks?.(image);};actions.append(masks);
+  masks.onclick=()=>{const image=selected();if(image?.kind==='image'&&image.visibility?.status!=='withheld')openMasks?.(image);};actions.append(masks);
   const controls=document.createElement('div');controls.className='asset-mesh-controls';
   controls.append(...[byId('asset-mesh-model-row'),actions,byId('asset-express-row')].filter(Boolean));
   const input=document.createElement('div');input.className='asset-mesh-input';input.append(preview,controls);
@@ -32,12 +32,12 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     // The drawer's detail column shows the selected image in Browse; in Generate the
     // Mesh step shows it, at the stage generation will actually use.
     const source=byId('asset-image');const showing=source&&!source.hidden&&source.getAttribute('src');
-    preview.hidden=!showing;if(showing&&preview.getAttribute('src')!==source.getAttribute('src'))preview.src=source.getAttribute('src');
-    sourceName.textContent=showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
+    preview.hidden=!showing;if(!showing)preview.removeAttribute('src');else if(preview.getAttribute('src')!==source.getAttribute('src'))preview.src=source.getAttribute('src');
+    sourceName.textContent=selected()?.visibility?.status==='withheld'?'Hostile to eyesight. Awaiting further review.':showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
-    masks.hidden=!openMasks||selected()?.kind!=='image';
+    masks.hidden=!openMasks||selected()?.kind!=='image'||selected()?.visibility?.status==='withheld';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;
   }

@@ -208,3 +208,18 @@ the retained, active grid. The original request and refusal reason remain in
 the runtime receipt. Saving that unapplied request is blocked: Undo or choose
 supported dimensions first, so the accepted scene file is not replaced by a
 configuration the live field did not admit. Other mesh scenes remain saveable.
+
+
+## Editable repetition
+
+Select a static mesh or a group of static meshes and use **Selection → Repetition**. **Array** offers Circle and Line; **Mirror** independently enables X/Y/Z reflections. The count includes the original. A complete circle omits the duplicate endpoint; a partial arc includes its end angle. Spacing is a vector per copy. World/Local chooses the axes and coordinate system for spacing and center. Local spacing and center coordinates follow the source scale; angular and mirror frames remain orthogonal. Center fields and Source origin / World origin / View pivot buttons choose the pivot. If a Circle is first enabled directly on its center, the initial center is offset by twice the source width so the placements are visible. Move the source or edit the center to change radius.
+
+Source geometry, material and pose edits update its copies. Object and group repetition compose, with object repetition evaluated before group repetition. Within one repetition, mirrors are evaluated before the array. Derived meshes share the source buffers and materials; they have no extra authored identities or Outliner rows. Clicking a copy selects its source, whose inspector edits the relationship. A member of a repeated group offers a link to that group's repetition controls.
+
+**Make copies editable** converts the visible placements into ordinary independently editable objects, through one shared membership-history action. Undo restores the linked relationship. Select the parent group to convert a group repetition. Mirror reflects whole objects; it does not weld seams. Skinned, morphed and instanced source meshes, lights, cameras and simulation sources are outside this static-mesh entrance.
+
+Copies use ordinary scene meshes for selection, lighting, shadow geometry and fire-obstacle membership. Repeated planes, spheres and bowls also enter the existing analytical water-support path; its uniform-scale and supported-shape rules still apply. Reflection preserves orientation in both surface normals and analytical collider frames. Hiding a mesh keeps the existing collision-membership semantics. Removing or rebuilding derived views releases borrowed nodes without disposing the source geometry/material.
+
+The same operations are callable through `kaminosSceneAuthoring.setRepetition(id, settingsOrNull)`, `repetitionState(id)` and async `makeCopiesEditable(id)`. Group IDs accept `@group:<id>`. Settings use `schema: "kaminos.repetition.v1"`, `mode: "none" | "line" | "circle"`, positive integer `count`, `axis: "x" | "y" | "z"`, `angle` in degrees, `step: [x,y,z]`, `space: "world" | "local"`, `center: [x,y,z]`, and `mirror: [boolean,boolean,boolean]`. Defaults are six circular/linear placements, Y axis,360degrees, X spacing1, world center0 and no mirroring. Inspector controls use the existing gesture ledger: preview, Escape, one Undo/Redo entry. Command search includes Circular Array, Linear Array, Mirror X and Make Repeated Copies Editable.
+
+Scene files containing a repetition relationship use version11. Older clients refuse them rather than silently discarding their generated arrangement. Files without repetition retain their prior version. GLB export includes the evaluated geometry.

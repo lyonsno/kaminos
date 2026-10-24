@@ -27,6 +27,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
   const route = () => ({ routeId: 'test', runtime: {}, async drain() {},
     enqueue({ execute }) { return { completion: Promise.resolve().then(() => execute({})).then(output => ({ status:'succeeded',output }), failure => ({ status:'failed',failure })) }; } });
   const session = { registerRoute: async () => route(), unregisterRoute() {}, async close() {} };
+  const foreground={device,queue:device.queue,async dispose(){}};
   const receipt = { schema: 'kaminos.webgpu-route-receipt.v0', status: 'succeeded', effectiveRouteId: 'moge.depth-normal.webgpu-local.v0' };
   class Viewer {
     get primary(){return this;}
@@ -37,7 +38,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
     getMaterialContrast(){return {mode:'original',roughness:.5,metallic:.5,...this.contrast};}
     setMaterialContrast(value){this.contrast={...this.getMaterialContrast(),...value};}
     presentation(){return {contrast:{settings:this.getMaterialContrast(),analysis:null,gains:null}};}
-    async init() { behavior.viewer = this;this.target={set(){}}; this.renderer = { backend: { device }, toneMappingExposure: 1 }; this.gi = { debugState: () => ({}) }; return this; }
+    async init(container,borrowed,options) { behavior.viewerOptions=options;behavior.viewer = this;this.target={set(){}}; this.renderer = { backend: { device }, toneMappingExposure: 1 }; this.gi = { debugState: () => ({}) }; return this; }
     clear() { this.maps = this.surface = null; }
     reset() { this.setLight(); this.renderer.toneMappingExposure = 1; }
     setLight(a = -35, h = 35) { this.light = [a,h]; }
@@ -65,10 +66,19 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
   const kit = {
     requestBrowserWebGpuDevice: async () => { behavior.deviceRequests++; if (behavior.failDevice) throw Error('Transient setup failure'); return { device, adapter:{}, backendIdentity:{ kind:'webgpu-local' } }; },
     createWebGpuInferenceSession: async () => session,
+    createWebGpuForegroundService: () => foreground,
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
     createSuperMatAdapter: async options => {behavior.profile=options;behavior.onLoad?.();if(behavior.loadGate)await behavior.loadGate;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;behavior.inputPixel=input.image.data[0];behavior.onRun?.();if(behavior.runGate)await behavior.runGate;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
+  const supermatApp={async createSuperMatApp(options){
+    behavior.apps??=[];behavior.apps.push(options);let adapter;
+    return {get adapter(){return adapter;},async load(onProgress){
+      if(behavior.failLoad)throw Error('Material load failure');
+      adapter??=await supermat.createSuperMatAdapter({...options.adapterOptions,weightsUrl:options.weightsUrl,onProgress});
+      return adapter;
+    },async infer(input){behavior.appInferences=(behavior.appInferences??0)+1;return adapter.run(input);}};
+  }};
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
@@ -96,13 +106,50 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
       this.setExport('createInferenceCache',()=>({async get(key){return structuredClone(behavior.cache.get(key)??null);},async put(key,value){behavior.cache.set(key,structuredClone(value));return true;}}));
     },{context});
     if (['./photo-contracts.js','./photo-surface.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
-    const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
+    const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-app') ? supermatApp : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
   });
   await source.evaluate();
   const defer = key => { let resolve; const promise=new Promise(r=>{resolve=r;}); behavior.gates.set(`./images/${key}`,{promise}); return () => resolve(response()); };
-  return { behavior, elements, views, samples, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer };
+  return { behavior, elements, views, samples, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer,device,session,foreground };
 }
+
+test('the photograph borrows its device, session and renderer service into one resident SuperMat app',async()=>{
+  const c=await controller({examples:true});
+  assert.equal(c.behavior.apps,undefined,'included outputs do not load the model app');
+  await c.actions.infer();await c.actions.infer();
+  assert.equal(c.behavior.apps?.length,1,'one app owns both material runs');
+  const options=c.behavior.apps[0];
+  assert.equal(options.device,c.device);assert.equal(options.session,c.session);
+  assert.equal(options.foreground,c.foreground);assert.equal(options.load,false);
+  assert.equal(c.behavior.viewerOptions.foreground,c.foreground);
+  assert.equal(c.behavior.appInferences,2);
+  assert.equal(c.state.runs.at(-1).status,'done');
+});
+test('a SuperMat app load failure retries without replacing the shared renderer or device',async()=>{
+  const c=await controller({examples:true});const viewer=c.behavior.viewer;
+  c.behavior.failLoad=true;await c.actions.infer();
+  assert.equal(c.state.status,'error');assert.ok(viewer.maps);
+  c.behavior.failLoad=false;await c.actions.infer();
+  assert.equal(c.behavior.apps?.length,1);assert.equal(c.behavior.viewer,viewer);
+  assert.equal(c.behavior.deviceRequests,1);assert.equal(c.state.status,'done');
+});
+test('render failure survives model completion, example selection and cached restoration',async()=>{
+  const c=await controller({examples:true});let release,entered;
+  c.behavior.loadGate=new Promise(r=>{release=r;});const loading=new Promise(r=>{entered=r;});c.behavior.onLoad=entered;
+  const job=c.actions.infer();await loading;
+  c.behavior.viewerOptions.onError(Error('foreground draw failed'));
+  release();await job;
+  assert.equal(c.state.runs.at(-1).status,'done','model output remains retained');
+  assert.equal(c.state.status,'error','stopped rendering cannot advertise completed presentation');
+  assert.match(c.elements.status.textContent,/foreground draw failed/);
+  assert.equal(c.elements.run.disabled,true);
+  await c.actions.sample('orb');
+  assert.equal(c.state.status,'error');assert.match(c.elements.status.textContent,/foreground draw failed/);
+  await c.actions.sample('celebration');
+  assert.equal(c.state.status,'error');assert.match(c.elements.status.textContent,/foreground draw failed/);
+  await c.actions.infer();assert.equal(c.state.runs.length,1,'new work waits for actual renderer recovery');
+});
 
 test('latest requested photograph wins even when fetches complete out of order', async () => {
   const c = await controller(), releaseBag=c.defer('bag.webp'), releaseOrb=c.defer('evil-orb.png');

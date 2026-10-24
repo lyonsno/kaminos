@@ -7115,7 +7115,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * 1.0;
       shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * 1.0;
     }
-    if (u.detail_force_isolation.w > 0.5) {
+    if (u.detail_force_isolation.w > 0.0) {
       let rawFineBreakup = fieldDerivedFineScaleBreakup(
         cellI,
         curl,
@@ -7125,7 +7125,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         clamp(u.reserved_source_extension_2.x, 0.0, 1.0)
       );
       let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * 1.0;
-      fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * 1.0;
+      fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * u.detail_force_isolation.w;
     }
   }
   let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
@@ -16248,7 +16248,7 @@ export function createKaminosVolumePrototype({
     uniforms[345] = confinementModeUniformValue(confinementConfig.effective.mode);
     uniforms[346] = confinementConfig.effective.confinementAmount;
     uniforms[347] = confinementConfig.effective.thermalExpansionAmount;
-    uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
+    uniforms.set(detailForceContributionMask(controlsSnapshot), 348);
     uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
     uniforms[353] = controlsSnapshot.commonGasTransport === true ? 1 : 0;
     const pressureSolverConfig = resolvePressureSolverConfig(controlsSnapshot);

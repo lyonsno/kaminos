@@ -1,9 +1,34 @@
 # kaminos-test: python
-import http.client,json,sys,tempfile,threading,unittest
+import hashlib,http.client,json,sys,tempfile,threading,unittest
+from unittest.mock import patch
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import serve
+import authoring_asset_catalog as catalog
+
+class VisibilityHolds(unittest.TestCase):
+ def test_source_and_identical_content_aliases_stay_listed_but_held(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=Path(temporary);assets=root/'assets';assets.mkdir()
+   for name,data in [('known.png',b'held'),('copy.png',b'held'),('ordinary.png',b'fine')]: (assets/name).write_bytes(data)
+   source='/api/read?root=trellis2mlx&path=known.png'
+   manifest=root/'holds.json';manifest.write_text(json.dumps({'schema':'kaminos.asset-visibility-holds.v1','holds':[{'id':'observed','kind':'image','label':'Lirm study · clay normal','basis':'visual-triage','sources':[source],'sha256':hashlib.sha256(b'held').hexdigest(),'size':4}]}))
+   with patch.object(catalog,'HOLDS_PATH',manifest,create=True):
+    def read():return catalog.read_catalog('trellis2mlx',roots={'trellis2mlx':assets},image_entries=lambda:[],origins=lambda _:None,output_resolver=lambda _:None,label=lambda x:x)
+    entries={e['name']:e for e in read()['entries']}
+    self.assertEqual(len(entries),3)
+    for name in ['known.png','copy.png']:
+     self.assertEqual(entries[name].get('visibility',{}).get('status'),'withheld',name)
+     self.assertEqual(entries[name]['label'],'Lirm study · clay normal')
+    self.assertNotIn('visibility',entries['ordinary.png'])
+    self.assertEqual(entries['known.png']['source'],source)
+    self.assertEqual((assets/'known.png').read_bytes(),b'held')
+    (assets/'copy.png').write_bytes(b'fine')
+    self.assertNotIn('visibility',next(e for e in read()['entries'] if e['name']=='copy.png'),'changed alias bytes must invalidate the digest cache')
+    manifest.write_text('{broken')
+    with self.assertRaises(ValueError):read()
+
 class Catalog(unittest.TestCase):
  def test_completed_generator_assets_replace_queue_folders_and_preserve_authorized_source(self):
   with tempfile.TemporaryDirectory() as temporary:

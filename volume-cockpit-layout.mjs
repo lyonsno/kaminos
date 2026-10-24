@@ -25,10 +25,7 @@ const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
 const FORCE_CONTRIBUTION_CONTROL_IDS = Object.freeze([
-  'volume-procedural-detail-forces',
-  'volume-force-micro-carrier',
-  'volume-force-interface-shred',
-  'volume-force-fine-breakup',
+  'volume-swirl-jostle',
   'volume-fine-breakup-localization',
 ]);
 
@@ -417,13 +414,13 @@ function sourceGroupForControl(control, looseIndex) {
 const ORGANIZED_GROUPS = [
   ['renderer', 'Renderer & emission model', /^volume-reaction-live-view$/],
   ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(kelvin-per-heat|soot-burnout-rate|soot-burnout-kelvin|thermal|clean|exposure|knee|white))$/],
-  ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
+  ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density)$/],
   ['structure', 'Combustion-front structure', /^volume-boundary-sidecar-(source|width)$/],
   ['support', 'Support field & baked ridge', /^volume-boundary-sidecar-(blur|ridge)$/],
-  ['detail', 'Flame detail', /^volume-(fire|fire-scale|detail-scale|microdetail|interface-shred|fire-licks)$/],
+  ['detail', 'Flame detail', /^volume-(fire-scale|microdetail|interface-shred|fire-licks)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
-  ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
+  ['force', 'Force contributions', /^volume-(swirl-jostle|fine-breakup-localization)$/],
   ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|wavelet-turbulence|wavelet-octaves|wavelet-strength|common-gas-transport)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|residual-.+|grid-overlay|flow-debug|oracle-.+|look-freeze)$/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],
@@ -484,7 +481,6 @@ export function volumeCockpitModeAvailability(c, controlIds = [], physicalColor 
   const set = (ids, active, reason) => {
     for (const id of ids) availability[`volume-${id}`] = active ? '' : reason;
   };
-  set(['smoke', 'absorption'], !emissive, 'Legacy transfer; emissive transport uses hot soot density and smoke extinction.');
   set(['physical-thermal', 'physical-clean', 'physical-exposure', 'physical-knee', 'physical-white',
     'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient',
     'physical-kelvin-per-heat', 'physical-soot-burnout-rate', 'physical-soot-burnout-kelvin'],

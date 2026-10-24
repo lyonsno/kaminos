@@ -1,3 +1,41 @@
+// Reconstructible membership is history-owned. Live-only roots are references:
+// history neither serializes their evolving state nor acquires their lifetime.
+export function captureSceneMembership(records, isReloadable) {
+  const objects = [], liveIds = [];
+  for (const record of records) {
+    if (isReloadable(record)) objects.push(record);
+    else liveIds.push(record.id);
+  }
+  return {objects, liveIds};
+}
+
+// Merge restored authored topology with the live registrations that exist now.
+// In particular, an experiment opened since capture survives, and one closed
+// since capture is never reconstructed from a historical reference.
+export function resolveSceneMembershipTopology(value, current) {
+  const authoredIds = value.objects.map(row => row.id), authored = new Set(authoredIds);
+  const live = new Set(current.liveIds), ids = [];
+  let index = 0;
+  for (const id of current.order) {
+    if (live.has(id)) ids.push(id);
+    else if (index < authoredIds.length) ids.push(authoredIds[index++]);
+  }
+  ids.push(...authoredIds.slice(index));
+  const groups = value.groups.map(group => ({
+    ...structuredClone(group), objectIds: group.objectIds.filter(id => authored.has(id)),
+  })).filter(group => group.objectIds.length);
+  for (const group of current.groups) {
+    const objectIds = group.objectIds.filter(id => live.has(id));
+    if (!objectIds.length) continue;
+    const restored = groups.find(row => row.id === group.id);
+    if (restored) restored.objectIds.push(...objectIds);
+    else groups.push({...structuredClone(group), objectIds});
+  }
+  const valid = new Set([...ids, ...groups.map(group => '@group:' + group.id), 'flame-field', 'water-field']);
+  const selected = value.selection.ids.filter(id => valid.has(id));
+  return {ids, groups, selection:{ids:selected, activeId:selected.includes(value.selection.activeId) ? value.selection.activeId : selected.at(-1) ?? null}};
+}
+
 export function restoreSceneObjectGroups(currentGroups, savedGroups, objectId, presentObjectIds) {
   const groups = structuredClone(currentGroups);
   const present = new Set(presentObjectIds);

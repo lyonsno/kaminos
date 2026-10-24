@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 140,
+  "controlCount": 132,
   "controls": [
     {
       "key": "volume-physical-white",
@@ -131,34 +131,6 @@
     {
       "key": "volume-phased-sway",
       "param": "volume_phased_sway",
-      "tagName": "INPUT",
-      "type": "checkbox",
-      "additiveDefault": true
-    },
-    {
-      "key": "volume-procedural-detail-forces",
-      "param": "volume_procedural_detail_forces",
-      "tagName": "INPUT",
-      "type": "checkbox",
-      "additiveDefault": true
-    },
-    {
-      "key": "volume-force-micro-carrier",
-      "param": "volume_force_micro_carrier",
-      "tagName": "INPUT",
-      "type": "checkbox",
-      "additiveDefault": true
-    },
-    {
-      "key": "volume-force-interface-shred",
-      "param": "volume_force_interface_shred",
-      "tagName": "INPUT",
-      "type": "checkbox",
-      "additiveDefault": true
-    },
-    {
-      "key": "volume-force-fine-breakup",
-      "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true
@@ -652,24 +624,6 @@
       "type": "range"
     },
     {
-      "key": "volume-fire",
-      "param": "volume_fire",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-absorption",
-      "param": "volume_absorption",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-smoke",
-      "param": "volume_smoke",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-curl",
       "param": "volume_curl",
       "tagName": "INPUT",
@@ -708,12 +662,6 @@
     {
       "key": "volume-fire-scale",
       "param": "volume_fire_scale",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-detail-scale",
-      "param": "volume_detail_scale",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -856,12 +804,6 @@
       "type": "range"
     },
     {
-      "key": "volume-pyro-carrier-view",
-      "param": "volume_pyro_carrier_view",
-      "tagName": "SELECT",
-      "type": "select-one"
-    },
-    {
       "key": "volume-pressure-mode",
       "param": "volume_pressure_mode",
       "tagName": "SELECT",
@@ -994,6 +936,14 @@
       "type": "range",
       "additiveDefault": 2,
       "additiveSinceControlCount": 260
+    },
+    {
+      "key": "volume-swirl-jostle",
+      "param": "volume_swirl_jostle",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 261
     }
   ],
   "retiredControls": [
@@ -1904,6 +1854,69 @@
       "tagName": "INPUT",
       "type": "range",
       "axis": "domControls"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-smoke",
+      "param": "volume_smoke",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-absorption",
+      "param": "volume_absorption",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire",
+      "param": "volume_fire",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-pyro-carrier-view",
+      "param": "volume_pyro_carrier_view",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-detail-scale",
+      "param": "volume_detail_scale",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-procedural-detail-forces",
+      "param": "volume_procedural_detail_forces",
+      "tagName": "INPUT",
+      "type": "checkbox"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-force-micro-carrier",
+      "param": "volume_force_micro_carrier",
+      "tagName": "INPUT",
+      "type": "checkbox"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-force-interface-shred",
+      "param": "volume_force_interface_shred",
+      "tagName": "INPUT",
+      "type": "checkbox"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-force-fine-breakup",
+      "param": "volume_force_fine_breakup",
+      "tagName": "INPUT",
+      "type": "checkbox"
     }
   ],
   "rendererControls": [

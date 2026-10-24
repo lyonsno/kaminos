@@ -86,7 +86,7 @@ export function collectStaticSceneGeometry(scene) {
       const color = material.color?.isColor ? material.color : new THREE.Color(1, 1, 1);
       surfaces.push({id: identity,
         position: a.clone().add(b).add(c).multiplyScalar(1 / 3).toArray(),
-        normal: cross.multiplyScalar(1 / twiceArea).toArray(), area: twiceArea / 2,
+        normal: cross.multiplyScalar((mesh.matrixWorld.determinant()<0?-1:1) / twiceArea).toArray(), area: twiceArea / 2,
         albedo: color.toArray(), albedoAuthority: material.map ? 'base-color-factor-excludes-texture' : 'material-base-color'});
     }
   });

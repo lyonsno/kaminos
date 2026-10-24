@@ -60,7 +60,7 @@ try {
   assert.equal(JSON.parse(fs.readFileSync(path.join(kitInstalled, 'package.json'), 'utf8')).license, 'MIT');
   assert.match(fs.readFileSync(path.join(kitInstalled, 'LICENSE'), 'utf8'), /^MIT License\n/);
   const probe = `import * as klein from '@kaminos/flux2-klein';
-const names = ['KleinPipeline', 'kleinWeightUrls', 'kleinWeightStatus', 'KLEIN_HOSTED_WEIGHTS', 'KLEIN_LEVELS', 'WEIGHT_CACHE'];
+const names = ['createKleinApp', 'KleinPipeline', 'kleinWeightUrls', 'kleinWeightStatus', 'KLEIN_HOSTED_WEIGHTS', 'KLEIN_LEVELS', 'WEIGHT_CACHE'];
 const pipeline = new klein.KleinPipeline({ queue: {}, limits: {} });
 console.log(JSON.stringify({ missing: names.filter(n => !(n in klein)), urls: pipeline.urls, destroy: typeof pipeline.destroy }));`;
   const result = JSON.parse(run(process.execPath, ['--input-type=module', '-e', probe], app));

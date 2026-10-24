@@ -37,7 +37,7 @@ test("Pages site keeps the flame boutique at the root and publishes the model di
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-(?:settings|history|convergence|source-comparison))?\.mjs|scene-(?:lighting-filter|surface-lighting)\.mjs|annular-burner\.mjs|scene-(?:geometry|liquid-support|edit-session)\.mjs|finger-fluid-webgpu-core\.js|finger-fluid-[^/]+\.mjs|local-liquid-(?:transport|optical-query|inlet-continuity)\.mjs)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/hand-mesh\/[^/]+\.(html|js|css)|models\/(?:mobrecon|wilor-hand-detector)\/[^/]+\.js|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-(?:settings|history|convergence|source-comparison))?\.mjs|scene-(?:lighting-filter|surface-lighting)\.mjs|annular-burner\.mjs|scene-(?:geometry|liquid-support|edit-session)\.mjs|finger-fluid-webgpu-core\.js|finger-fluid-[^/]+\.mjs|local-liquid-(?:transport|optical-query|inlet-continuity)\.mjs)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "unimate", "index.html")));
@@ -64,7 +64,7 @@ test("published model directory routes visitors to existing demos and builder gu
   assert.doesNotMatch(html, /Development branch/);
 });
 
-for(const [label,entry] of [["Klein","inference-kit/klein/index.html"],["UniMate","inference-kit/unimate/index.html"],["Material Photograph","inference-kit/material-photo/main.js"]]){
+for(const [label,entry] of [["Hand mesh","inference-kit/hand-mesh/main.js"],["Klein","inference-kit/klein/index.html"],["UniMate","inference-kit/unimate/index.html"],["Material Photograph","inference-kit/material-photo/main.js"]]){
 test(`every relative module import in the ${label} demo resolves inside the site`, async () => {
   const site = await assembled();
   const pending = [path.join(site, entry)];
@@ -81,9 +81,19 @@ test(`every relative module import in the ${label} demo resolves inside the site
       pending.push(target);
     }
   }
+
+
   assert.ok([...seen].some(file => file.endsWith(path.join("webgpu-inference-kit", "src", "core.js"))));
 });
 }
+
+test('hand demo publishes code without model bundles or machine-local routes', async () => {
+  const site = await assembled(), page = path.join(site, 'inference-kit/hand-mesh/index.html');
+  assert.ok(fs.existsSync(page), 'focused hand demo must be assembled');
+  assert.ok(!walk(site).some(file => /(?:mobrecon|hand-detector)\.bin$|\.pkl$/.test(file)), 'restricted model data must not escape into Pages');
+  const main = fs.readFileSync(path.join(site, 'inference-kit/hand-mesh/main.js'), 'utf8');
+  assert.doesNotMatch(main, /127\.0\.0\.1|\/scratch\/|\/Users\//);
+});
 
 test("Pages workflow uploads the assembled site", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "flame-atlas-pages.yml"), "utf8");

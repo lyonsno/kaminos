@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -15,7 +16,7 @@ function host(){
   activeSceneComposition:{},selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:1,emitters:true,emitterOpacity:1},isSceneItemVisible:()=>true,styleHelperLines:()=>{},applySceneObjectTransformState:(object,p)=>{object.position.fromArray(p.position);object.rotation.fromArray(p.rotation);object.scale.fromArray(p.scale);},
   setActiveSceneObject:()=>{},primaryAuthoredFlameSource:()=>ctx.sceneObjects.find(o=>o.id==='flame-emitter')??ctx.sceneObjects.find(o=>o.type==='flame-emitter'),
   registerSceneObject:(object,metadata)=>{const r={...metadata,object};object.userData.kaminosSceneObject={...metadata};ctx.sceneObjects.push(r);return r;}};
- vm.createContext(ctx);vm.runInContext(block('ensureAuthoredFlameEmitter','acceptedFlameDomainPose'),ctx);return ctx;
+ sceneContext(ctx);vm.runInContext(block('ensureAuthoredFlameEmitter','acceptedFlameDomainPose'),ctx);return ctx;
 }
 test('ordinary host mounts two distinct emitter handles and restores each authored pose',()=>{
  const h=host();h.ensureAuthoredFlameEmitter(record('flame-emitter',-.3));h.ensureAuthoredFlameEmitter(record('flame-source-second',.35));
@@ -30,7 +31,7 @@ test('a remaining source does not recreate a deleted original emitter',()=>{
  assert.deepEqual(h.sceneObjects.map(o=>o.id),['flame-source-second']);
 });
 test('ordinary Duplicate accepts flame source objects',()=>{
- const ctx={LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',FLAME_EMITTER_TYPE:'flame-emitter',PROCEDURAL_MESH_TYPE:'procedural-mesh',CAMERA_TYPE:'camera'};vm.createContext(ctx);vm.runInContext(block('canDuplicateObject','duplicateSceneObject'),ctx);
+ const ctx={LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',FLAME_EMITTER_TYPE:'flame-emitter',PROCEDURAL_MESH_TYPE:'procedural-mesh',CAMERA_TYPE:'camera'};sceneContext(ctx);vm.runInContext(block('canDuplicateObject','duplicateSceneObject'),ctx);
  assert.equal(ctx.canDuplicateObject(record('flame-source-second',.35)),true);
 });
 
@@ -49,7 +50,7 @@ test('source property edits publish only the target data and Undo keeps the othe
   document:{getElementById:()=>({tagName:'INPUT',type:'range'})},sceneObjectTransformState:()=>pose(0),
   applyFlameEmitterPose:()=>assert.fail('editing the other source must not apply the primary pose'),
   syncAuthoredFlameSources:()=>publications.push(flameSourceInputs(objects.map(o=>({...o,object:undefined})),{controls:{emitterSourceLaw:'immersed-source'}}))};
- vm.createContext(ctx);vm.runInContext(code,ctx);
+ sceneContext(ctx);vm.runInContext(code,ctx);
  ctx.editAuthoredFlameSource('other',{'volume-immersed-fuel':.65});
  assert.equal(a.emission.settings['volume-immersed-fuel'].value,.25);
  assert.equal(objects[1].emission.settings['volume-immersed-fuel'].value,.65);
@@ -69,7 +70,7 @@ test('moving a source in a plural field never relocates or restarts its shared g
  const h={sceneObjects:sources,FLAME_EMITTER_TYPE:'flame-emitter',flameDomainFollowSource:true,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterInjectionSuspended:true,
   flameDomainTranslationForAcceptedPose:()=>[9,0,0],readVolumeControls:()=>({}),effectiveFlameDomainControls:x=>x,volumePrototype:{},setInfo:()=>{},
   setFlameDomainTranslation:()=>assert.fail('source move must leave the shared field in place'),writeAuthoredFlameEmitterPose:()=>assert.fail('no relocation rewrite')};
- vm.createContext(h);vm.runInContext(block('settleFlameDomainForPose','writeAuthoredFlameEmitterPose'),h);
+ sceneContext(h);vm.runInContext(block('settleFlameDomainForPose','writeAuthoredFlameEmitterPose'),h);
  assert.equal(h.settleFlameDomainForPose(pose(9)),false);
  assert.equal(h.settleFlameDomainForPose(pose(9),[1,0,0]),false,'source Undo must not relocate a plural field either');
 });
@@ -79,7 +80,7 @@ test('compatibility state follows the remaining source after deleting the origin
  const remaining={...record('other',.35),emissionEnabled:false};
  const h={window:{},structuredClone,sceneObjects:[remaining],FLAME_EMITTER_ID:'flame-emitter',primaryAuthoredFlameSource:()=>remaining,authoredFlamePresent:true,
  flameEmitterPose:remaining.transform,authoredFlameSourceRecords:()=>[remaining],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameEmitterInjectionSuspended:false};
- vm.createContext(h);vm.runInContext(html.slice(html.indexOf('window.kaminosFlameEmitterState ='),html.indexOf('function cloneTransformState(')),h);
+ sceneContext(h);vm.runInContext(html.slice(html.indexOf('window.kaminosFlameEmitterState ='),html.indexOf('function cloneTransformState(')),h);
  assert.equal(h.window.kaminosFlameEmitterState().registered,true);
  assert.equal(h.window.kaminosFlameEmitterState().emissionEnabled,false);
 });

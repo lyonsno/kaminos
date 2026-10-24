@@ -38,7 +38,31 @@ await copyFile(
 
 Run `node build.mjs` from the application root. `src/main.js` contains your application code, using the imports and lifecycle example below. Serve both output files from `dist`.
 
-## Load, Run, Release
+## Cooperative Application
+
+The application entry point owns the session, foreground coordination, cancellation and model retirement. Supply your renderer's device to share it, or omit `device` to let the application create one.
+
+```js
+import { createSuperMatApp } from '@kaminos/supermat';
+
+const materials = await createSuperMatApp({ device, onProgress });
+try {
+  const result = await materials.infer({ image, size: 512, onRunProgress });
+  display(result.maps.albedo, result.maps.roughness, result.maps.metallic);
+} finally {
+  await materials.destroy();
+}
+```
+
+`image` is `{ width, height, data }` with RGBA bytes. The package also exports `decodeImageRgba(file, materials.device)` for a browser image file. `infer` returns the adapter's complete output, including ORM, float planes, identity and timing fields. Adapter precision/kernel/worker options go in `adapterOptions`; per-inference scheduling policy goes in `scheduling`. The application retains the adapter's default precision. The cooperative demo selects its existing F16 product profile explicitly.
+
+Use `load: false` to obtain the device and `materials.foreground` before loading, then call `materials.load()` when you want. A renderer submits frames with `materials.foreground.request(...)` before, during and after inference, using the kit's foreground request contract. During a cooperative inference, `pause()`, `resume()` and `stop()` control model duties while foreground rendering continues. `infer({ signal, ... })` also accepts an AbortSignal. Loading itself has no pause/resume contract; stopping an inference waiting for a shared load cancels that request while the load continues. `destroy()` cancels loading and waits for retirement.
+
+For an existing coordinated host, pass `{ session, foreground }` from the same device and queue. Destruction preserves borrowed device/session/foreground resources. A standalone app owns its created device; its destruction releases it. `snapshot()` reports ownership and phase. `materials.adapter` retains direct access to the original producer when the host needs the lower-level interface.
+
+The packaged [outside application source](examples/external-app/app.js) uses file input, material-map canvases, pause/resume/stop and a continuously rendered activity strip. Bundle that example as `dist/app.js`, copy its `index.html` into `dist`, and copy the exported worker beside the bundle as in the build recipe above. The existing [cooperative demo](https://github.com/lyonsno/kaminos/blob/main/models/supermat/supermat-demo.html) uses the same application entry point with its numerical and scheduling options.
+
+## Adapter-Level Load, Run, Release
 
 `gpu` is your application's `{ device, adapter, backendIdentity }` context. `images` contains RGBA images shaped as `{ width, height, data }`, where `data` is an RGBA byte array. The example loads one model for all images and returns its results; each result contains `maps.albedo`, `maps.roughness`, `maps.metallic`, `maps.orm`, and floating-point `planes`.
 

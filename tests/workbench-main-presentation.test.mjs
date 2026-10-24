@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ function fixture(){
  const c={authoredWaterControls:null,document,sceneOwnerControls:null,sceneObjects:rows,flameDomainGuide:null,activeSceneObjectId:'body',activeSceneGroupId:null,activeSceneFieldId:null,FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',flameEmitterInjectionSuspended:false,
   sceneSelection:{ids:['body']},selectionProxy:null,updateSelectionFeedback(){c.feedbackRefreshes=(c.feedbackRefreshes??0)+1;},syncEditorHelperVisibility(){},syncSelectionInspector(){},syncLevelingButton(){},setTransformInspectorFieldsDisabled(){},updateSplatCorrectionPanel(){},selectedPlacementEntry:()=>selected,
   scenePlacementTools:{draw(){refreshes++;},edits:{state:()=>({undoCount:3,redoCount:1,active:null})}},window:{_kaminosDirty(){redraws++;}}};
- vm.createContext(c);vm.runInContext(['sceneObjectTransformState','degreesFromRadians','updateTransformInspector','refreshWorkbenchAssetPresentation'].map(actual).join('\n'),c);
+ sceneContext(c);vm.runInContext(['sceneObjectTransformState','degreesFromRadians','updateTransformInspector','refreshWorkbenchAssetPresentation'].map(actual).join('\n'),c);
  return {root,other,rows,fields,nodes,document,c,refresh:()=>c.refreshWorkbenchAssetPresentation({id:'body',root}),selectOther(){selected=rows[1];c.activeSceneObjectId='other';},counts:()=>({refreshes,redraws})};
 }
 test('explicit refresh projects actual restored pose without writing history or selection',()=>{

@@ -40,19 +40,17 @@ assert.match(inspector, /volumeControlTooltip\(id\)/, 'the flame inspector shows
     const row = { querySelector: selector => (selector === '.slider-label' ? label : null) };
     return { id, title: '', disabled: false, dataset: {}, label, closest: selector => (selector === '.slider-row' ? row : null) };
   };
-  const elements = new Map(['volume-physical-exposure', 'volume-smoke'].map(id => [id, make(id)]));
+  const elements = new Map(['volume-physical-exposure'].map(id => [id, make(id)]));
   const documentRef = {
     getElementById: id => elements.get(id) ?? null,
     querySelectorAll: () => [],
   };
   applyVolumeControlDescriptions(documentRef);
   const exposure = elements.get('volume-physical-exposure');
-  const smoke = elements.get('volume-smoke');
   const description = volumeControlTooltip('volume-physical-exposure');
   assert.equal(exposure.title, description, 'startup sets the input description');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'emissive-transport-v2' });
   assert.equal(exposure.title, description, 'an active control keeps its description after an availability refresh');
-  assert.ok(smoke.disabled && smoke.title.includes(volumeControlTooltip('volume-smoke')), 'an unavailable control keeps its description alongside the reason');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'legacy' });
   assert.ok(exposure.disabled && exposure.title.length > description.length && exposure.title.includes(description), 'unavailable: reason plus description');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'emissive-transport-v2' });
@@ -65,4 +63,9 @@ assert.match(volumeControlTooltip('volume-immersed-centre-y'), /ceiling|top of t
 const densityRow = index.slice(index.lastIndexOf('<div class="slider-row', index.indexOf('id="volume-density"')), index.indexOf('id="volume-density"'));
 assert.doesNotMatch(densityRow, />Density</, 'the cockpit no longer calls the drawn-soot gain Density');
 assert.doesNotMatch(inspector, /\['volume-density','Density'\]/, 'nor does the flame inspector');
+// Scene controls outside the basin schema that the flame panel shows also explain themselves.
+for (const id of ['kiln-collision-enabled', 'kiln-collision-voxels']) {
+  assert.ok((volumeControlTooltip(id) || '').length >= 40, `${id} is described`);
+}
+assert.match(index, /panel\.querySelectorAll\('input\[id\]'\)\) \{ const text = volumeControlTooltip\(input\.id\)/, 'the collision panel applies them when it is built');
 console.log('volume control descriptions contracts passed');
