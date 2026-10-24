@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pipeline } from 'node:stream/promises';
@@ -21,16 +21,18 @@ export function validateStreamSmokeFrame(result, expected) {
 
 export async function runStreamSmoke(options) {
   const out = resolve(options.out);
-  await mkdir(out, { recursive: false });
-  const report = { schema: 'kaminos.sam31-stream-smoke.v1', status: 'running', phase: 'inputs', frames: [],
+  const report = { schema: 'kaminos.sam31-stream-smoke.v1', status: 'running', phase: 'output-initialization', frames: [], browserLaunched: false,
     numericalParity: null, visualAcceptance: null, claim: 'successive-frame execution only' };
-  let context, server, page;
+  let context, server, page, outputInitialized = false;
   const saveReport = async () => {
-    const text = JSON.stringify(report, null, 2);
-    await writeFile(resolve(out, 'report.json'), text);
-    if (process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT) await writeFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, text);
+    if (outputInitialized) try { await writeFile(resolve(out, 'report.json'), JSON.stringify(report, null, 2)); }
+    catch (error) { report.status = 'failed'; report.outputReportError = String(error); process.exitCode = 1; }
+    if (process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT) await writeFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, JSON.stringify(report, null, 2));
   };
   try {
+    await mkdir(out, { recursive: true });
+    if ((await readdir(out)).length) throw new Error('output directory contains retained evidence; choose a new output');
+    outputInitialized = true; report.phase = 'inputs';
     const kit = await realpath(fileURLToPath(new URL('..', import.meta.url)));
     const modelDir = await realpath(options.model), sequenceDir = await realpath(options.sequence);
     const sequence = JSON.parse(await readFile(resolve(sequenceDir, 'sequence.json'), 'utf8'));
@@ -66,6 +68,7 @@ export async function runStreamSmoke(options) {
     context = await chromium.launchPersistentContext(resolve(out, 'browser-profile'), { executablePath: chrome,
       headless: true, viewport: { width: 1280, height: 900 }, timeout: 0,
       args: ['--enable-unsafe-webgpu', '--use-mock-keychain', '--password-store=basic', '--no-first-run', '--no-default-browser-check'] });
+    report.browserLaunched = true;
     page = context.pages()[0];
     page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
     page.on('console', message => { if (message.type() === 'error') (report.consoleErrors ||= []).push(message.text()); });
