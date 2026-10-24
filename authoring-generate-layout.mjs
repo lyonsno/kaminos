@@ -1,6 +1,7 @@
 // Generate tab as three steps across the drawer: 1 Image (text -> image), 2 Mesh (the
 // image that will be used, model choice, Generate mesh), 3 Results (meshes to Add).
 // Existing controls are moved, not rebuilt, so their ids and handlers stay as they are.
+import {installGenerationFlame} from './authoring-generation-flame.mjs';
 import {installImageZoom} from './authoring-image-zoom.mjs';
 import {assetSource,assetWithheld} from './authoring-assets.mjs';
 
@@ -12,7 +13,7 @@ export function generationImageView({selected,preparedSource=null,showSegmented=
   return {source,preview:null,label:source===original?'Original image':'Segmented image'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null}){
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -28,6 +29,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
   const canvas=document.createElement('canvas');canvas.id='asset-step-preview';canvas.hidden=true;canvas.setAttribute('role','img');
   const frame=document.createElement('div');frame.className='asset-image-view';frame.append(preview,canvas);
+  const ceremony=createFlame?installGenerationFlame({document,slot:frame,createRenderer:createFlame}):null;
   const tools=document.createElement('div');tools.className='asset-image-view-tools';
   const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='asset-show-segmented';toggle.checked=showSegmented;
   toggleLabel.append(toggle,document.createTextNode('Show segmented'));toggleLabel.title='Changes the displayed image; mesh generation still uses its prepared input.';
@@ -58,11 +60,11 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   function render(){
     // The drawer's detail column shows the selected image in Browse; in Generate the
     // Mesh step shows it, at the stage generation will actually use.
-    const source=byId('asset-image'),state=imageState();
+    const source=byId('asset-image'),state=imageState();ceremony?.render(state);
     const view=generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
     const identity=view.preview?.runId||selected()?.source||selected()?.path||null;
     if(identity!==viewIdentity){zoom.reset();viewIdentity=identity;}
-    const showing=!!(view.source||view.preview);frame.hidden=!showing;preview.hidden=!view.source;canvas.hidden=!view.preview;
+    const showing=!!(view.source||view.preview);frame.hidden=!showing&&!ceremony?.read().running;preview.hidden=!view.source;canvas.hidden=!view.preview;
     if(view.source&&preview.getAttribute('src')!==view.source)preview.src=view.source;
     if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=view.label;caption.hidden=!showing;
     if(view.preview){
@@ -80,5 +82,5 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     empty.hidden=resultList.children.length>0;
   }
   render();
-  return {render};
+  return {render,ceremony};
 }

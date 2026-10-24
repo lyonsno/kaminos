@@ -452,3 +452,11 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-image-view[data-zoomed=true]{cursor:grab;}
 .asset-image-view[data-zoomed=true]:active{cursor:grabbing;}
 .asset-image-view>img,.asset-image-view>canvas{transform-origin:center;user-select:none;}
+
+#asset-step-image{position:relative;}
+.generation-flame{position:absolute;right:8px;bottom:8px;z-index:5;width:100px;height:100px;flex:none;align-self:center;isolation:isolate;border-radius:14px;overflow:hidden;background:#120e0a;box-shadow:0 0 22px #b65c1820;}
+.generation-flame-volume{position:absolute;inset:0;}
+#generation-flame-canvas{position:absolute;inset:0;width:100px!important;height:100px!important;pointer-events:none;}
+.generation-flame-paper{position:absolute;inset:12px 14px 22px;padding:7px;background:#30241b;font-size:9px;line-height:1.4;overflow:hidden;box-shadow:0 1px 7px #0008;z-index:1;}
+.generation-flame-card{position:absolute;left:20px;top:16px;width:60px;height:60px;object-fit:contain;transform:rotate(-4deg);border:1px solid #f5d5a565;box-shadow:0 2px 10px #0009;z-index:2;}
+.generation-flame-volume{z-index:3;pointer-events:none;}

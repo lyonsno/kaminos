@@ -184,7 +184,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   let pendingImage=null;
   async function savePending(){
     const {image,provenance,text,seed,model}=pendingImage;
-    set({status:'saving',canStop:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
+    set({status:'saving',canStop:false,canDecode:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
     const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
     const file=new File([blob],kleinImageName(text,seed,model),{type:'image/png'});
     const entry=await deliver(file,provenance);
