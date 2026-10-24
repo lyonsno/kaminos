@@ -80,7 +80,7 @@ try{
  for(const name of names){const field=page.getByRole('spinbutton',{name,exact:true});assert(await field.evaluate(e=>e.classList.contains('authoring-number')&&e.parentElement.classList.contains('authoring-number-wrap')),`Shared number-drag missing: ${name}`);}
  assert(await page.getByRole('button',{name:'Apply global thresholds',exact:true}).count()===0,'Tuning still requires an Apply button');
  const reachField=page.getByRole('spinbutton',{name:names[3],exact:true}),areaField=page.getByRole('spinbutton',{name:names[4],exact:true});
- const settled=()=>page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).busy);
+ const settled=()=>page.evaluate(async()=>{let state;do{await new Promise(requestAnimationFrame);state=await window.kaminosWorkbenchExperiments.read();}while(state.busy);return state;});
  const type=async(field,value)=>{await field.click();await field.fill(String(value));await field.press('Tab');};
  await type(reachField,.2);await type(reachField,.3);await type(areaField,.02);await settled();report.typedThresholds=await read();
  assert(report.typedThresholds.settings.minReachFraction===.003&&report.typedThresholds.settings.minAreaFraction===.0002,'Typed parameters did not update automatically');

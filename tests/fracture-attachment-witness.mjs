@@ -5,7 +5,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import vm from 'node:vm';
 import {checkRefinement} from '../tools/fracture-refinement-check.mjs';
+
+test('browser settlement keeps awaiting busy reads instead of accepting a truthy Promise',async()=>{
+ const source=fs.readFileSync(new URL('../tools/fracture-attachment-witness.mjs',import.meta.url),'utf8');
+ const start=source.indexOf('const settled='),end=source.indexOf('\n const type=',start);
+ assert.ok(start>=0&&end>start,'settling helper must be available for replay');
+ const frames=[];let reads=0,done=false;
+ const scope={window:{kaminosWorkbenchExperiments:{read:async()=>({busy:++reads<3})}},requestAnimationFrame:fn=>frames.push(fn),page:{evaluate:fn=>fn(),
+  // Observed Playwright1.63 polling behavior (coreBundle.js:24413): tests a
+  // returned Promise for truthiness before awaiting its resolved value.
+  waitForFunction:async predicate=>{const result=predicate();if(result)return result;throw Error('Synchronous predicate requires another poll');}}};
+ const settled=vm.runInNewContext(source.slice(start,end)+';settled',scope);
+ const drain=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+ const waiting=settled().then(state=>{done=true;return state;});await drain();
+ assert.equal(done,false,'a busy read cannot complete the wait');
+ for(let i=1;i<=3;i++){assert.equal(frames.length,1);frames.shift()();await drain();assert.equal(reads,i);assert.equal(done,i===3);}
+ assert.equal((await waiting).busy,false);
+});
 
 test('refinement witness accepts exhausted depth-2 branches and rejects hidden or merged grouping',()=>{
  const hierarchy={nodes:[{id:0,parent:null,depth:0},{id:1,parent:0,depth:1},{id:2,parent:1,depth:2},{id:3,parent:1,depth:2}],faceOwners:[0,2,3]};
