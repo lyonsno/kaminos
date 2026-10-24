@@ -62,3 +62,16 @@ test('reorder preserves exact roots and rejects incomplete or duplicate ordering
   scene.reorder(['b','a']);assert.equal(scene.objects[0],b);assert.equal(scene.objects[1],a);
   scene.move('a',0);assert.equal(scene.objects[0],a);
 });
+
+test('preview suspension keeps identity and history resources while allowing an owner to retire a root',()=>{
+ const scene=createWorkingScene(),a={id:'a',object:{}},b={id:'b',object:{}};
+ scene.put(a);scene.put(b);scene.setGroups([{id:'group',objectIds:['a','b']}]);scene.select(['@group:group']);scene.retain(a);
+ assert.equal(typeof scene.suspendMembership,'function','scene ownership must represent temporary suspension');
+ scene.suspendMembership();assert.equal(scene.objects.length,0);assert.deepEqual(scene.suspendedObjects(),[a,b]);
+ const disposed=[];scene.releaseUnreferenced(()=>false,root=>disposed.push(root));assert.deepEqual(disposed,[],'suspended roots remain live resource consumers');
+ assert.throws(()=>scene.put({id:'new',object:{}}),/suspended/);
+ assert.equal(scene.forgetSuspended('b',{}),undefined,'stale owner handle cannot retire another root');
+ assert.equal(scene.forgetSuspended('b',b.object),b);
+ scene.resumeMembership();assert.deepEqual(scene.objects,[a]);assert.deepEqual(scene.groups[0].objectIds,['a']);assert.equal(scene.selection.activeId,'@group:group');
+ assert.deepEqual(scene.suspendedObjects(),[]);assert.throws(()=>scene.resumeMembership(),/not suspended/);
+});

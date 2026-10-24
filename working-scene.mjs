@@ -7,7 +7,7 @@ import { checkedSelection } from './scene-selection.mjs';
 export function createWorkingScene() {
   let objects = Object.freeze([]), groups = Object.freeze([]);
   let selection = freezeSelection(checkedSelection([]));
-  let generation = 0;
+  let generation = 0, suspended = null;
   const loads = createSceneLoadRequests();
   const retained = new Map(), disposers = new WeakMap();
 
@@ -77,6 +77,7 @@ export function createWorkingScene() {
     get generation(){return generation;}, loads,
     find:id=>objects.find(row=>row.id===id), findRoot:root=>objects.find(row=>row.object===root),
     put(record,{index=null}={}) {
+      if(suspended)throw Error('Scene membership is suspended for preview');
       const next=objects.filter(row=>row.id!==record.id);
       next.splice(index===null?next.length:Math.min(index,next.length),0,record);
       objects=checkedObjects(next);return record;
@@ -108,9 +109,30 @@ export function createWorkingScene() {
         if(isReferenced(id))continue;
         retained.delete(id);
         const release=disposers.get(record.object)||dispose;disposers.delete(record.object);
-        if(!objects.some(row=>row.id===id&&row.object===record.object))release(record.object,record);
+        if(![...objects,...(suspended?.objects??[])].some(row=>row.id===id&&row.object===record.object))release(record.object,record);
       }
     },
+    get isSuspended(){return suspended!==null;},
+    suspendedObjects:()=>suspended?.objects??Object.freeze([]),
+    suspendMembership(){
+      if(suspended)throw Error('Scene membership is already suspended');
+      suspended=Object.freeze({objects,groups,selection});api.clearMembership();return suspended;
+    },
+    forgetSuspended(id,root){
+      const entry=suspended?.objects.find(row=>row.id===id&&row.object===root);if(!entry)return undefined;
+      const remaining=suspended.objects.filter(row=>row!==entry),present=new Set(remaining.map(row=>row.id));
+      const nextGroups=suspended.groups.map(group=>freezeData({...structuredClone(group),objectIds:group.objectIds.filter(id=>present.has(id))})).filter(group=>group.objectIds.length);
+      const valid=new Set([...present,...nextGroups.map(group=>'@group:'+group.id),'flame-field','water-field']);
+      const ids=suspended.selection.ids.filter(id=>valid.has(id)),activeId=ids.includes(suspended.selection.activeId)?suspended.selection.activeId:ids.at(-1)??null;
+      suspended=Object.freeze({objects:Object.freeze(remaining),groups:Object.freeze(nextGroups),selection:freezeSelection(checkedSelection(ids,activeId))});return entry;
+    },
+    resumeMembership(){
+      if(!suspended)throw Error('Scene membership is not suspended');
+      if(objects.length)throw Error('Cannot resume over current scene membership');
+      const snapshot=suspended;suspended=null;objects=snapshot.objects;api.setGroups(snapshot.groups);
+      api.select(snapshot.selection.ids,snapshot.selection.activeId,['flame-field','water-field']);return snapshot;
+    },
+    discardSuspendedMembership(){const snapshot=suspended;suspended=null;return snapshot;},
     clearMembership(){objects=Object.freeze([]);groups=Object.freeze([]);api.clearSelection();},
   };
   return Object.freeze(api);

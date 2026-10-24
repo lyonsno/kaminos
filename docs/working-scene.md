@@ -40,7 +40,7 @@ grouping or selection effects. Domain constructors still own their roots and
 mounting. `scene-object-record.mjs` builds generic registration metadata using
 the existing domain validators; it does not mount or register the root.
 `reconstruct(record, context)` restores a retained root or uses the source
-adapter, then reapplies its saved properties without creating a history entry
+adapter, then reapplies its saved properties and completes domain publication without creating a history entry
 or selecting it. The source adapter receives `{activate:false}` and must pass
 that intent through loading and registration without transient activation.
 Ordinary registration defaults to activation; the page selection adapter owns
@@ -49,7 +49,11 @@ selection recovery. Ordinary imports, Workbench registration and authored
 camera/light/procedural mounts consume the same admission operation.
 
 The composition page still connects domain adapters, render invalidation and UI
-projection. Whole-scene replacement remains page orchestration. Compound authored edits
+projection. `scene-lifecycle.mjs` owns whole-scene clear/replacement and temporary
+preview suspension/return. Domain teardown, loading and presentation remain page
+adapters. Replacement preserves latest-request admission, releases partial loads
+on failure and restores topology/selection after construction. Empty documents
+use the same replacement path. Compound authored edits
 use `scene-membership-batch.mjs`: capture/validation, multi-removal, group and
 selection duplication, rollback and post-await topology reconciliation. It
 reuses individual reconstruction, including typed light/camera attachments.
@@ -79,3 +83,11 @@ membership edit: it is refused before changing any root. Close its owner instead
 Reloadable Workbench assets retain the existing individual-object Undo and scoped
 resource-disposal behavior. This distinction does not add a checkpoint or replay
 facility for evolved experiment state.
+
+Temporary preview parks exact roots, groups and selection in the working-scene
+owner. `suspendMembership` removes them from active membership;
+`resumeMembership` returns surviving roots. Owner closure can retire a parked root
+by exact identity, pruning its saved topology, so Back cannot resurrect a closed
+experiment. Parked roots continue to protect shared resources and history
+retention. New admission is refused during preview. Whole-scene clear discards
+the suspension and releases its roots; it cannot later resume that document.

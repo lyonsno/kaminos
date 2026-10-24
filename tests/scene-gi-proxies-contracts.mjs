@@ -109,7 +109,17 @@ test('GI-PROXY-01: clearing the registry (a cleared or reopened scene) disposes 
 test('GI-PROXY-01: the page clears the registry when it clears a scene, and releases a removed object',async()=>{
   const fs=await import('node:fs'),html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const body=name=>{const a=html.indexOf(`function ${name}(`);let depth=0,i=html.indexOf(") {",a)+2;for(;i<html.length;i++){if(html[i]==='{')depth++;else if(html[i]==='}'&&--depth===0)break;}return html.slice(a,i);};
-  assert.match(body('clearScene'),/sceneGiProxies\.clear\(\)/);
+  const {createWorkingScene}=await import('../working-scene.mjs'),{createSceneLifecycle}=await import('../scene-lifecycle.mjs'),vm=await import('node:vm');
+  const {registry}=world(),{root}=sceneObject(heroSource);await registry.attach(root);let disposed=0;
+  registry.get(root).proxyRoot.traverse(node=>node.geometry?.addEventListener('dispose',()=>disposed++));
+  const h=vm.createContext({createSceneLifecycle,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
+    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,localLiquidGeneration:0,localLiquidHost:null,sceneSpotLights:new Map()});
+  const extract=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);return html.slice(a,b);};
+  vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);
+  h.sceneLifecycle=h.createPageSceneLifecycle();
+  const start=html.indexOf('function clearScene('),end=html.indexOf('\nfunction clearSceneEditingState(',start);
+  vm.runInContext(html.slice(start,end)+'\nclearScene();',h);
+  assert.equal(registry.list().length,0);assert.equal(disposed,1,'page lifecycle must release the real proxy registry');
   assert.match(body('createPageSceneMembershipOperations'),/sceneGiProxies\.release\(entry\.object\)/);
 });
 

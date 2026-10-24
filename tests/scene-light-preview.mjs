@@ -1,3 +1,6 @@
+// kaminos-test: node
+import {createWorkingScene} from '../working-scene.mjs';
+import {createSceneLifecycle} from '../scene-lifecycle.mjs';
 import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -34,16 +37,25 @@ function context() {
   });
   state.updateRimLight = () => { state.rimLight.visible = false; };
   state.setRimLight = recipe => { state.rimLight.visible = recipe.enabled; };
-  state.setActiveSceneObject = id => { state.activeSceneObjectId = id; state.activeSceneFieldId = null; };
-  state.setActiveSceneGroup = id => { state.activeSceneGroupId = id; state.activeSceneFieldId = null; };
-  state.window.selectSceneField = id => { state.activeSceneFieldId = id; };
-  state.setSceneSelection=(ids,activeId=ids.at(-1)??null)=>{state.sceneSelection={ids:[...ids],activeId};state.activeSceneFieldId=['flame-field','water-field'].includes(activeId)?activeId:null;state.activeSceneObjectId=state.activeSceneFieldId?null:activeId;};
+  state.workingScene=createWorkingScene();state.createSceneLifecycle=createSceneLifecycle;
+  for(const [name,get,set] of [
+    ['sceneObjects',()=>state.workingScene.objects,value=>state.workingScene.replaceObjects(value)],
+    ['sceneGroups',()=>state.workingScene.groups,value=>state.workingScene.setGroups(value)],
+    ['sceneSelection',()=>state.workingScene.selection,value=>state.workingScene.select(value.ids,value.activeId,['flame-field','water-field'])],
+    ['activeSceneObjectId',()=>state.workingScene.activeObjectId],['activeSceneGroupId',()=>state.workingScene.activeGroupId],['activeSceneFieldId',()=>state.workingScene.activeFieldId],
+  ])Object.defineProperty(state,name,{get,set,configurable:true});
+  state.setSceneSelection=(ids,id=ids.at(-1)??null)=>state.workingScene.select(ids,id,['flame-field','water-field']);
+  state.setActiveSceneObject=id=>state.setSceneSelection(id?[id]:[],id);
+  state.setActiveSceneGroup=id=>state.setSceneSelection(['@group:'+id]);
+  state.window.selectSceneField=id=>state.setSceneSelection([id]);
+  state.setSceneGroupsFromRecords=rows=>state.workingScene.setGroups(rows);
+  state.workingScene.select(['flame-field'],'flame-field',['flame-field']);
   state.recordedInsertions = [];
   state.recordSceneObjectInsertion = async id => { state.recordedInsertions.push(id); return true; };
   state.sceneObjectRecordForDescendant = object => state.sceneObjects.find(entry => entry.object === object);
   state.showGLB = async (url, options) => {
     const object = new THREE.Group(); object.name = url; scene.add(object);
-    if (options.register !== false) state.sceneObjects.push({ id: url, type: 'glb', object });
+    if (options.register !== false) state.workingScene.put({ id: url, type: 'glb', object });
     return object;
   };
   state.applyGiProxySetting = () => {}; state.sceneGiProxies = { release() {} };
@@ -54,6 +66,9 @@ function context() {
   vm.runInContext(source('async function restoreAuthoredSceneFromPreview(', 'function sceneObjectReloadabilityLabel('), state);
   vm.runInContext(source('async function greenroomViewMesh(', 'function createSplatSceneObjectPlaceholder('), state);
   vm.runInContext(source('async function importGreenroomPreviewToScene(', 'function addGreenroomMeshActions('), state);
+  vm.runInContext(source('function restoreLoadedSceneRecord(', 'async function loadSceneObjects('),state);
+  vm.runInContext(source('function createPageSceneLifecycle(', 'function loadTexture(').replace('const sceneLifecycle=createPageSceneLifecycle();',''),state);
+  state.sceneLifecycle=state.createPageSceneLifecycle();
   for (const [id, enabled] of [['spot-on', true], ['spot-off', false], ['@rim-light', true]]) {
     state.mountSceneSpotLight({ id, type: 'light', source: 'kaminos:scene-spot-light',
       transform: { position: [2, 3, 4], rotation: [-.6, .7, 0], scale: [1, 1, 1] },
@@ -117,4 +132,18 @@ test('failed View and a late completion after Back preserve original light ident
   await loading;
   assertRestored(state, original);
   assert.equal(late.parent, null, 'stale preview cannot reattach authored or preview objects');
+});
+
+test('clearing during preview releases the detached authored roots',async()=>{
+ const state=context(),root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());state.scene.add(root);
+ state.workingScene.put({id:'authored-mesh',type:'glb',source:'/authored.glb',object:root});let disposed=0;
+ state.disposeObjectTree=object=>{if(object===root)disposed++;};
+ await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ Object.assign(state,{authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
+ groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
+ localLiquidDomainGuide:null,flameDomainGuide:null,localLiquidGeneration:0,localLiquidHost:null});
+ state.sceneLoadRequests=state.workingScene.loads??{invalidate(){},isCurrent:()=>false};
+ state.sceneLifecycle=state.createPageSceneLifecycle();state.clearScene();
+ assert.equal(disposed,1,'whole-scene clear must release authored roots parked outside the preview');
+ assert.equal(state.greenroomPreviewState,null);assert.equal(await state.restoreAuthoredSceneFromPreview(),false);
 });

@@ -34,17 +34,7 @@ test('clearing resets scene history while typed water objects join chronological
     'partial scene transform patches are checked against the full accepted emitter pose');
   // Membership admission, retention, selection and restoration run as imported
   // behavior in scene-membership-operations.mjs and consumer-regressions.mjs.
-  const clearStart = html.indexOf('function clearScene(');
-  assert.ok(clearStart >= 0, 'scene clear must remain present');
-  const clearSource = html.slice(clearStart, clearStart + 2000);
-  const clearSteps = ['sceneLoadRequests.invalidate()', 'scenePlacementTools?.clear()',
-    'sceneMembership.clearHistoryTargets()', 'workingScene.invalidateArrivals()'];
-  let lastClearStep = -1;
-  for (const step of clearSteps) {
-    const index = clearSource.indexOf(step);
-    assert.ok(index > lastClearStep, `clear must execute ${step} after the preceding history/load step`);
-    lastClearStep = index;
-  }
+  // Clear ordering is exercised by scene-lifecycle.mjs with the real owner.
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
   assert.match(html, /historyScope: document\.getElementById\('scene-object-list'\)/);
   assert.match(editTools, /const neutralPageFocus = document\.activeElement === document\.body/);

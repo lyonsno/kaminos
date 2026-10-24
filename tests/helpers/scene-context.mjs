@@ -83,3 +83,20 @@ export async function composePageMembershipBatch(context, html) {
   context.sceneMembershipBatch=context.createPageSceneMembershipBatch();
   return context.sceneMembershipBatch;
 }
+
+// Page lifecycle/domain composition. This adapter does not claim ownership
+// invariants; the lifecycle and preview tests use the real working-scene owner.
+export async function composePageSceneLifecycle(context,html){
+ const {createSceneLifecycle}=await import('../../scene-lifecycle.mjs');sceneContext(context);
+ context.workingScene.loads??=context.sceneLoadRequests;
+ context.workingScene.suspendedObjects??=()=>[];
+ context.workingScene.discardSuspendedMembership??=()=>null;
+ for(const name of ['setSceneObjectMounted','setSceneGroupsFromRecords','setSceneSelection','setActiveSceneObject','setActiveSceneGroup'])context[name]??=()=>{};
+ context.createSceneLifecycle=createSceneLifecycle;
+ const a=html.indexOf('function createPageSceneLifecycle('),b=html.indexOf('function loadTexture(',a);
+ const c=html.indexOf('function restoreLoadedSceneRecord('),d=html.indexOf('async function loadSceneObjects(',c);
+ if(a<0||b<a||c<0||d<c)throw Error('Missing production scene lifecycle adapters');
+ vm.runInContext(html.slice(c,d),context);
+ vm.runInContext(html.slice(a,b).replace('const sceneLifecycle=createPageSceneLifecycle();',''),context);
+ context.sceneLifecycle=context.createPageSceneLifecycle();return context.sceneLifecycle;
+}

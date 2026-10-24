@@ -2877,6 +2877,7 @@ import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
+import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
@@ -5139,21 +5140,7 @@ function nextGreenroomPreviewGeneration() {
 }
 
 function captureAuthoredSceneStateForPreview() {
-  return {
-    sceneObjects: [...workingScene.objects],
-    sceneGroups: workingScene.groups.map(group => ({ ...group, objectIds: [...group.objectIds] })),
-    activeSceneObjectId: workingScene.activeObjectId,
-    activeSceneGroupId: workingScene.activeGroupId,
-    activeSceneFieldId: workingScene.activeFieldId,
-    sceneSelection:structuredClone(workingScene.selection),
-    currentMesh,
-    currentSceneFile,
-    sceneSaveBlockedByFailedRestore,
-    volumePrimitives: getVolumePrimitiveState(),
-    modelSourceUrl,
-    modelSourceType,
-    glbFileName,
-  };
+  return sceneLifecycle.capturePreview();
 }
 
 function setSceneObjectMounted(entry, mounted) {
@@ -5167,20 +5154,8 @@ function setSceneObjectMounted(entry, mounted) {
   if (mounted) applyGiProxySetting(entry); else if (entry.giProxy) sceneGiProxies.release(entry.object);
 }
 
-function detachAuthoredSceneForPreview(authored) {
-  workingScene.invalidateArrivals();
-  for (const entry of authored.sceneObjects) setSceneObjectMounted(entry, false);
-  workingScene.clearMembership();
-  if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
-  workingScene.setGroups([]);
-  currentMesh = null;
-  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] });
-  if (transformControls) {
-    transformControls.detach();
-    transformControls.visible = false;
-  }
-  renderSceneObjectList();
-  updateTransformInspector();
+function detachAuthoredSceneForPreview() {
+  sceneLifecycle.suspendPreview();
 }
 
 function updateGreenroomPreviewControls() {
@@ -6053,33 +6028,9 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   const state = greenroomPreviewState;
   const authored = state.authored;
   removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
-  workingScene.invalidateArrivals();
   greenroomPreviewState = null;
   updateGreenroomPreviewControls();
-  workingScene.replaceObjects(authored.sceneObjects);
-  workingScene.setGroups(authored.sceneGroups);
-  for (const entry of workingScene.objects) {
-    setSceneObjectMounted(entry, true);
-    if (entry.id === RIM_LIGHT_ID) {
-      const record = serializeSceneObject(entry);
-      setRimLight(sceneLightRuntimeRecipe(record));
-      mountSceneSpotLight(record);
-    }
-  }
-  currentSceneFile = authored.currentSceneFile;
-  sceneSaveBlockedByFailedRestore = authored.sceneSaveBlockedByFailedRestore;
-  modelSourceUrl = authored.modelSourceUrl;
-  modelSourceType = authored.modelSourceType;
-  glbFileName = authored.glbFileName;
-  setVolumePrimitivesState(authored.volumePrimitives);
-  if(authored.sceneSelection?.ids.length)setSceneSelection(authored.sceneSelection.ids,authored.sceneSelection.activeId);
-  else if (authored.activeSceneFieldId) setSceneSelection([authored.activeSceneFieldId],authored.activeSceneFieldId);
-  else if (authored.activeSceneGroupId) setActiveSceneGroup(authored.activeSceneGroupId);
-  else setActiveSceneObject(authored.activeSceneObjectId);
-  if (!workingScene.objects.length) {
-    renderSceneObjectList();
-    document.getElementById('transform-bar').classList.remove('visible');
-  }
+  sceneLifecycle.resumePreview(authored);
   if (!options.silent) setInfo('Returned to scene');
   return true;
 }
@@ -11603,9 +11554,9 @@ async function initScene() {
   installSelectionInput();
   workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
-    registerObject:registerSceneObject,findObject:root=>workingScene.objects.find(row=>row.object===root),
+    registerObject:registerSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
     removeObject:handle=>sceneMembership.removeOwned(handle,
-      root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object)],[scene.environment,scene.background])),
+      root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)],[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
   window.kaminosWorkbenchSceneState=()=>{
@@ -12182,8 +12133,30 @@ function applyEnvMap(envMap, intensity) {
 }
 
 // --- File Loading ---
-function clearScene({loadRequestId = null} = {}) {
-  if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
+function createPageSceneLifecycle(){
+  return createSceneLifecycle({scene:workingScene,
+    roots:{detach:entry=>scene.remove(entry.object),dispose:disposeObjectTree,mount:setSceneObjectMounted,
+      resumed(entry){if(entry.id===RIM_LIGHT_ID){const record=serializeSceneObject(entry);setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}}},
+    records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
+    groups:{restore:setSceneGroupsFromRecords},
+    selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
+    context:{beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
+      beginLoad:setup=>{localLiquidSetup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
+      capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,currentSceneFile,sceneSaveBlockedByFailedRestore,volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+      previewDetached(){
+        if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
+        currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
+        if(transformControls){transformControls.detach();transformControls.visible=false;}
+        renderSceneObjectList();updateTransformInspector();
+      },
+      restorePreview(authored){currentSceneFile=authored.currentSceneFile;sceneSaveBlockedByFailedRestore=authored.sceneSaveBlockedByFailedRestore;modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
+      previewResumed(){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}},
+    },
+  });
+}
+const sceneLifecycle=createPageSceneLifecycle();
+function clearScene(options={}) {return sceneLifecycle.clear(options);}
+function clearSceneEditingState(){
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
@@ -12204,7 +12177,8 @@ function clearScene({loadRequestId = null} = {}) {
   }
   sceneMembershipBatch.clearHistoryTargets();
   sceneMembership.clearHistoryTargets();
-  workingScene.invalidateArrivals();
+}
+function clearSceneDomains(){
   localLiquidGeneration++;
   localLiquidHost?.dispose();
   localLiquidHost = null;
@@ -12213,12 +12187,9 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidPaused = false;
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
-  const registeredObjects = new Set(workingScene.objects.map(entry => entry.object));
-  for (const entry of workingScene.objects) {
-    scene.remove(entry.object);
-    disposeObjectTree(entry.object);
-  }
-  if (greenroomPreviewState?.previewObject) {
+}
+function clearSceneTransient(registeredObjects){
+  if (greenroomPreviewState) {
     removeGreenroomPreviewObject({ dispose: true });
     greenroomPreviewState = null;
     updateGreenroomPreviewControls();
@@ -12227,9 +12198,9 @@ function clearScene({loadRequestId = null} = {}) {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
   }
-  workingScene.clearMembership();
+}
+function projectClearedScene(){
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
-  workingScene.setGroups([]);
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -24806,51 +24777,17 @@ function assertSceneObjectsReloadable(records) {
   }
 }
 
+function restoreLoadedSceneRecord(entry,record){
+  if(record.transform){
+    if(entry.type==='splat'){setSceneObjectSceneTransform(entry,record.sceneTransform||record.transform);applySplatCorrectionToRecord(entry);}
+    else if(entry.type===FLAME_EMITTER_TYPE)applyAuthoredScenePose(entry.id,record.transform);
+    else applySceneObjectTransformState(entry.object,record.transform);
+  }
+  applyMaterialStateToObject(entry.object,record.materials);
+  if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
+}
 async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
-  if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
-  clearScene(loadRequestId === null ? {} : {loadRequestId});
-  localLiquidSetup = liquidSetup;
-  const loaded = [];
-  try {
-    for (const record of records) {
-      const object = await addSceneObjectFromSource(record, loadRequestId);
-      if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
-      if (record.transform) {
-        const entry = workingScene.objects.find(sceneObject => sceneObject.id === record.id);
-        if (entry?.type === 'splat') {
-          setSceneObjectSceneTransform(entry, record.sceneTransform || record.transform);
-          applySplatCorrectionToRecord(entry);
-        } else if (entry?.type === FLAME_EMITTER_TYPE) {
-          applyAuthoredScenePose(entry.id, record.transform);
-        } else {
-          applySceneObjectTransformState(object, record.transform);
-        }
-      }
-      applyMaterialStateToObject(object, record.materials);
-      const entry = workingScene.objects.find(sceneObject => sceneObject.id === record.id);
-      if (entry && record.groupId) setSceneObjectGroupId(entry, record.groupId);
-      loaded.push(record.id);
-    }
-  } catch (e) {
-    if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
-    clearScene(loadRequestId === null ? {} : {loadRequestId});
-    throw e;
-  }
-  if (localLiquidSetup) {
-    if (loadRequestId === null) await mountLocalLiquidHost();
-    else {
-      const hostStage = await sceneLoadRequests.awaitStage(loadRequestId, mountLocalLiquidHost());
-      if (!hostStage.current) return false;
-    }
-  }
-  if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
-  setSceneGroupsFromRecords(groups, activeGroupId);
-  if (activeGroupId && workingScene.groups.some(group => group.id === activeGroupId)) {
-    setActiveSceneGroup(activeGroupId);
-  } else {
-    setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
-  }
-  return true;
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:liquidSetup,loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -26544,27 +26481,17 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   const restoredFlame=objectRecords.find(record=>record.id===FLAME_EMITTER_ID)??objectRecords.find(record=>record.type===FLAME_EMITTER_TYPE);
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
-  if (objectRecords.length > 0) {
-    try {
-      const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
-      if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
-    } catch (e) {
-      if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-      setFlameDomainTranslation(previousFlameDomainTranslation,previousFlameDomainScale);flameDomainFollowSource=previousFlameDomainFollowSource;
-      setVolumePrimitivesState(previousVolumePrimitiveState);
-      sceneSaveBlockedByFailedRestore = true;
-      currentSceneFile = null;
-      setInfo('Scene load failed: ' + e.message);
-      return;
-    }
-  } else {
-    clearScene({loadRequestId});
-    localLiquidSetup = restorePlan.localLiquid;
-    if (localLiquidSetup) {
-      const hostStage = await sceneLoadRequests.awaitStage(loadRequestId, mountLocalLiquidHost());
-      if (!hostStage.current) return;
-    }
+  try {
+    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
+    if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
+  } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    setFlameDomainTranslation(previousFlameDomainTranslation,previousFlameDomainScale);flameDomainFollowSource=previousFlameDomainFollowSource;
+    setVolumePrimitivesState(previousVolumePrimitiveState);
+    sceneSaveBlockedByFailedRestore = true;
+    currentSceneFile = null;
+    setInfo('Scene load failed: ' + e.message);
+    return;
   }
   if (activeSceneComposition && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster') {
     ensureAuthoredFlameEmitter();

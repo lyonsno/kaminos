@@ -177,6 +177,14 @@ export function createSceneMembershipOperations({
   }
 
   function removeOwned(handle, disposeTree) {
+    const suspended=scene.forgetSuspended?.(handle.id,handle.root);
+    if(suspended){
+      roots.detach(suspended);domain(suspended).removed?.(suspended);
+      if(hasHistory(handle.id))scene.retain(suspended,disposeTree);
+      else if(disposeTree&&!domain(suspended).dispose)disposeTree(suspended.object);
+      else dispose(suspended);
+      return true;
+    }
     if (scene.find(handle.id)?.object !== handle.root) return false;
     return remove(handle.id, {recordHistory:false, preserveForMembershipHistory:hasHistory(handle.id), disposeTree});
   }

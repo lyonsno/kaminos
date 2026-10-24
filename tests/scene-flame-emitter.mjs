@@ -1,4 +1,4 @@
-import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
+import {sceneContext,runInSceneContext,composePageSceneLifecycle} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildSceneDocument, planSceneRestore, isReloadableSceneObjectRecord } from '../scene-persistence-core.js';
@@ -88,11 +88,8 @@ test('a legacy cluster composition reopens without placing an analytic source', 
   assert.equal(sourceWrites,0);
 });
 
-test('clearing a scene removes its old flame member before the next scene saves', () => {
+test('clearing a scene removes its old flame member before the next scene saves', async () => {
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=html.indexOf('function clearScene({loadRequestId = null} = {}) {');
-  const end=html.indexOf('function loadTexture(file)',start);
-  assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
   const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),flameSourceDataTargets:new Set(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},giProxyEditTargets:new Set(),applyGiProxySetting(){},giProxySettingFor:()=>null,rimLight:null,
@@ -103,7 +100,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
     activeSceneGroupId:null,glbSourceScene:null,transformControls:null,
     document:{getElementById:()=>({classList:{remove:()=>{}}})},
     renderSceneObjectList:()=>{},updateTransformInspector:()=>{}};
-  runInSceneContext(html.slice(start,end)+'\nclearScene();',context);
+  await composePageSceneLifecycle(context,html);context.clearScene();
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
 });
