@@ -7,11 +7,12 @@ import {createHash} from 'node:crypto';
 const [url,out,playwright,executable]=process.argv.slice(2);
 if(!url||!out||!playwright||!executable)throw Error('URL, output directory, Playwright module and independent browser executable required');
 fs.mkdirSync(out,{recursive:true});
-const root=path.resolve(new URL('..',import.meta.url).pathname),commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
-const report={status:'running',phase:'launch',requestedURL:url,sourceRoot:root,sourceCommit:commit,executable,errors:[],console:[]};
+const root=path.resolve(new URL('..',import.meta.url).pathname);let commit=null;
+const report={status:'running',phase:'source-identification',requestedURL:url,sourceRoot:root,sourceCommit:commit,executable,errors:[],console:[]};
 const save=()=>{const target=path.join(out,'report.json');fs.writeFileSync(target+'.next',JSON.stringify(report,null,2));fs.renameSync(target+'.next',target);};
 const assert=(ok,message)=>{if(!ok)throw Error(message);};let context;save();
 try{
+ commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();report.sourceCommit=commit;report.phase='launch';save();
  const {chromium}=await import(playwright);
  context=await chromium.launchPersistentContext(path.join(out,'profile'),{headless:true,executablePath:executable,viewport:{width:1440,height:1100},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});
  const page=context.pages()[0];page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>report.console.push({type:m.type(),text:m.text()}));
@@ -29,14 +30,20 @@ try{
  await invoke('frame');await capture('initial');
  report.phase='local-controls';save();
  const nested=report.initial.hierarchy.nodes.filter(n=>n.kind==='branch'&&n.children.length&&n.triangles>500).sort((a,b)=>b.triangles-a.triangles)[0];assert(nested,'No substantial nested fitting to exercise');
- await invoke('select',nested.id);await invoke('keepTogether');report.kept=await invoke('export');await capture('selected-together');
- await page.getByRole('button',{name:'Finer here',exact:true}).click();report.refined=await invoke('export');await capture('selected-refined');
+ await invoke('select',nested.id);await invoke('keepTogether');report.kept=await invoke('export');await capture('selected-together');await invoke('separate',.06);await capture('selected-together-separated');await invoke('separate',0);
+ await page.getByRole('button',{name:'Finer here',exact:true}).click();report.refined=await invoke('export');await capture('selected-refined');await invoke('separate',.06);await capture('selected-refined-separated');await invoke('separate',0);
  const owners=r=>r.labels.map(id=>r.partition.parts[id].nodeId),before=owners(report.kept),after=owners(report.refined),nodes=report.kept.hierarchy.nodes;
  const inside=id=>{while(id!==null){if(id===nested.id)return true;id=nodes[id].parent;}return false;};
  let changed=0;for(let i=0;i<before.length;i++){if(!inside(report.kept.hierarchy.faceOwners[i]))assert(before[i]===after[i],'Local refinement changed an outside triangle');else if(before[i]!==after[i])changed++;}assert(changed>0,'Finer here did not refine selected fitting');report.localChangedTriangles=changed;
  await page.getByRole('button',{name:'Keep together',exact:true}).click();assert(JSON.stringify(owners(await invoke('export')))===JSON.stringify(before),'Keep together failed to restore local grouping');
  report.savedSetup=(await read()).setup;await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert((await page.evaluate(()=>window.kaminosWorkbenchExperiments.state())).id===null,'Close did not release experiment');
  await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-shape',setup),report.savedSetup);report.reopened=await invoke('export');assert(JSON.stringify(owners(report.reopened))===JSON.stringify(before),'Reopen lost local grouping');assert(report.reopened.selected===nested.id,'Reopen lost selection');
+ await invoke('resetLocal');await invoke('detail',1);await invoke('select',0);await invoke('refine');await invoke('refine');
+ report.ancestorRefined=await invoke('export');await invoke('select',nested.id);report.descendantSelected=await invoke('export');
+ assert(JSON.stringify(owners(report.descendantSelected))===JSON.stringify(owners(report.ancestorRefined)),'Selecting a represented descendant changed grouping');
+ await invoke('refine');report.descendantRefined=await invoke('export');
+ const groups=new Map();for(let i=0;i<report.descendantRefined.labels.length;i++){const id=report.descendantRefined.labels[i],old=report.descendantSelected.labels[i];if(groups.has(id))assert(groups.get(id)===old,'Finer here merged inherited groups');else groups.set(id,old);}
+ assert(report.descendantRefined.partition.parts.length>report.descendantSelected.partition.parts.length,'Inherited refinement did not expose finer parts');
  await invoke('resetLocal');await invoke('select',-1);await invoke('frame');
  // A real canvas click, through the same selection route as the human.
  const rect=await page.locator('#viewport').boundingBox();assert(rect,'Viewport missing');
