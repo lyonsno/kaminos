@@ -1,3 +1,6 @@
 # Python distributions the test suite needs. tools/test-runner.mjs checks them before running tests, in the repo-local .venv (or KAMINOS_PYTHON, or the python3 on PATH), and warns with the install command when any is missing; CI installs them from this file.
 numpy
 pillow
+# Offline analytical-carrier surface proposal and GLB round-trip tests.
+scipy
+trimesh
