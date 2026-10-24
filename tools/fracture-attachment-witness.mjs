@@ -26,7 +26,7 @@ try{
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='fracture-shape');
  const invoke=(name,value)=>page.evaluate(({name,value})=>window.kaminosWorkbenchExperiments.invoke(name,value),{name,value});
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
- const capture=async name=>{await page.waitForTimeout(400);await page.screenshot({path:path.join(out,name+'.png')});};
+ const capture=async name=>{await page.evaluate(()=>document.activeElement?.blur?.());await page.waitForTimeout(400);await page.screenshot({path:path.join(out,name+'.png')});};
  report.phase='source-conformance';report.effectiveURL=page.url();report.runtime=await page.evaluate(async()=>({config:await(await fetch('/api/runtime-config')).json(),scene:window.kaminosWorkbenchSceneState?.()}));report.initial=await read();save();
  assert(report.runtime.config.source.commit===commit,'Effective served revision differs from inspected checkout');
  assert(report.initial.triangleCount===object.triangles,'Wrong source triangle count');if(object.source)assert(report.initial.source===object.source,'Wrong requested source route');
@@ -110,9 +110,9 @@ try{
   await choice.selectOption('original');await settled();assert(JSON.stringify(candidateFaces(await invoke('export')))===JSON.stringify(candidateFaces(report.boundaryBase)),'Original boundary choice did not restore membership');
  }
  const cutField=page.getByRole('spinbutton',{name:'Cut position (% object extent)',exact:true});
- await type(cutField,.2);await settled();report.boundaryOutward=await invoke('export');report.outwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryOutward,targetKey);
+ await type(cutField,.2);await settled();report.boundaryOutward=await invoke('export');report.outwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryOutward,targetKey,{expectedOffsetFraction:.002});
  await invoke('separate',.035);await capture('boundary-outward');await invoke('separate',0);
- await type(cutField,-.2);await settled();report.boundaryInward=await invoke('export');report.inwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryInward,targetKey);
+ await type(cutField,-.2);await settled();report.boundaryInward=await invoke('export');report.inwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryInward,targetKey,{expectedOffsetFraction:-.002});
  await invoke('separate',.035);await capture('boundary-inward');await invoke('separate',0);
  await type(cutField,.2);await settled();report.boundaryRepeated=await invoke('export');assert(JSON.stringify(candidateFaces(report.boundaryRepeated))===JSON.stringify(candidateFaces(report.boundaryOutward)),'Cut position depends on edit history');
  const cutSetup=(await read()).setup;await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-shape',setup),cutSetup);report.boundaryReopened=await invoke('export');
