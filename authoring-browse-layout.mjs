@@ -26,7 +26,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
   return margin*Math.max(size[1]/2/tanV,across/2/(tanV*aspect))+across/2;
 }
 
-const LABELS={'generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
+const LABELS={'generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
 export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
   const byId=id=>document.getElementById(id);
@@ -61,7 +61,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
       }));
     }
     masks.hidden=!openMasks||state.selected?.kind!=='image'||state.selected.visibility?.status==='withheld';
-    const present=inScene();
+    const present=inScene(),sourceByPath=new Map(state.entries.flatMap(e=>[[e.path,e.source],[e.source,e.source]]));
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry')){
       const span=button.querySelector(':scope > span');if(!span)continue;
       const full=button.dataset.fullTitle||span.textContent.replace(/^[◇▸] /,'');
@@ -72,7 +72,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
         const small=button.querySelector(':scope > small');
         if(small&&badge)small.textContent=`${small.textContent.split(' · ')[0]} · ${badge}`;
       }
-      const source=[...controller.read().entries].find(e=>e.path===button.dataset.assetPath||e.source===button.dataset.assetPath)?.source;
+      const source=sourceByPath.get(button.dataset.assetPath);
       button.dataset.inScene=String(!!source&&present.has(source));
     }
   }

@@ -428,3 +428,10 @@ body[data-workspace=workbench] #authoring-viewport-tools .selection-setting sele
 /* Keep multi-selection distinct while retaining main's Outliner typography and icons. */
 #authoring-tree .scene-object-row.selected, #authoring-tree .scene-group-row.selected { background:#2d2a26; color:#ead2b2; }
 #authoring-tree .scene-group-row.active { background:#3a3226; border-color:#7d6440; }
+
+/* Agent work retains the ordinary selectable asset tiles. */
+#asset-entries.asset-agent-groups { display:block; }
+.asset-agent-group { border-bottom:1px solid #ffffff19; padding:10px 0; }
+.asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
+.asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
+.asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
