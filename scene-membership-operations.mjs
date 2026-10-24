@@ -83,7 +83,7 @@ export function createSceneMembershipOperations({
       roots.attach(retained);
       domain(retained).attach?.(retained, context);
     } else {
-      object = await records.load(record);
+      object = await records.load(record, {activate:false});
     }
     const entry = scene.find(record.id);
     if (!entry || entry.object !== object) throw Error(`Scene object "${record.id}" did not restore its retained identity`);

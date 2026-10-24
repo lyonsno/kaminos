@@ -41,7 +41,10 @@ mounting. `scene-object-record.mjs` builds generic registration metadata using
 the existing domain validators; it does not mount or register the root.
 `reconstruct(record, context)` restores a retained root or uses the source
 adapter, then reapplies its saved properties without creating a history entry
-or selecting it. Individual Undo composes that operation with topology and
+or selecting it. The source adapter receives `{activate:false}` and must pass
+that intent through loading and registration without transient activation.
+Ordinary registration defaults to activation; the page selection adapter owns
+editing-mode cleanup. Individual Undo composes that operation with topology and
 selection recovery. Ordinary imports, Workbench registration and authored
 camera/light/procedural mounts consume the same admission operation.
 

@@ -5228,7 +5228,7 @@ function identitySceneTransform() {
   };
 }
 
-function ensureAuthoredFlameEmitter(metadata = {}) {
+function ensureAuthoredFlameEmitter(metadata = {}, {activate = true} = {}) {
   const id=metadata.id??primaryAuthoredFlameSource()?.id??FLAME_EMITTER_ID;
   let entry=workingScene.objects.find(record=>record.id===id);
   const analytic=authoredFlamePresent&&!!scene&&isFireLightFieldRoute()&&!!applyFlameEmitterPose
@@ -5243,8 +5243,8 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     const previous=workingScene.activeObjectId,object=createFlameEmitterHandle(THREE);
     applySceneObjectTransformState(object,metadata.transform??flameEmitterPose);scene.add(object);
     entry=registerSceneObject(object,{...metadata,id,type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,
-      fileName:'Flame source',label:metadata.label||'Flame source'});
-    if(previous&&previous!==id)setActiveSceneObject(previous);
+      fileName:'Flame source',label:metadata.label||'Flame source'},{activate});
+    if(activate&&previous&&previous!==id)setActiveSceneObject(previous);
   }
   refreshFlameDomainPreview();
   if(flameDomainGuide)flameDomainGuide.visible=isSceneItemVisible('flame-field')&&!!activeSceneComposition&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;
@@ -7053,13 +7053,13 @@ document.addEventListener('keydown', event => {
   }
 });
 
-function registerSceneObject(object, metadata = {}) {
+function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
   const sceneTransform = metadata.type === 'splat'
     ? cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object))
     : null;
   const record = createSceneObjectRecord(object, metadata, {id, sceneTransform});
-  const admitted = sceneMembership.admit(record, {activate:true,
+  const admitted = sceneMembership.admit(record, {activate,
     group:metadata.groupLabel?{label:metadata.groupLabel,source:metadata.groupSource??metadata.source,select:false}:null});
   sceneSaveBlockedByFailedRestore = false;
   return admitted;
@@ -10160,7 +10160,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 function createPageSceneMembershipOperations() {
   return createSceneMembershipOperations({
     scene:workingScene,
-    records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,load:addSceneObjectFromSource},
+    records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
     roots:{
       prepare(entry){sceneNavigation?.prepare(entry.object);applyGiProxySetting(entry);},
       attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneSaveBlockedByFailedRestore=false;},
@@ -10200,7 +10200,10 @@ function createPageSceneMembershipOperations() {
         restored(){authoredFlamePresent=true;syncAuthoredFlameSources();}},
     },
     createGroup:createSceneGroupForObjects,
-    select:(ids,activeId)=>ids.length?setSceneSelection(ids,activeId):clearActiveSceneObjectSelection(),
+    select(ids,activeId){
+      if(splatCorrectionMode&&splatCorrectionMode.objectId!==activeId)exitSplatCorrectionMode({revert:false,silent:true});
+      return ids.length?setSceneSelection(ids,activeId):clearActiveSceneObjectSelection();
+    },
     finishInteraction:()=>scenePlacementTools?.finish(false),
     captureContext:()=>({activeCameraId:sceneCameras?.read().settings.activeId??null}),
     changed({operation}){if(operation!=='admit'){renderSceneObjectList();updateTransformInspector();}window._kaminosDirty?.();},
@@ -12311,9 +12314,11 @@ async function showImagePlane(source, options = {}) {
     fileName,
     label: metadata.label ?? fileName,
     image: imageMetadata,
-  });
-  currentMesh = mesh;
-  document.getElementById('transform-bar').classList.add('visible');
+  }, {activate:options.activate!==false});
+  if(options.activate!==false){
+    currentMesh = mesh;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
   setInfo(`Imported image to scene: ${record.label || fileName}`);
   return mesh;
 }
@@ -12370,8 +12375,8 @@ async function showPBRPreview(options = {}) {
     source: metadata.source ?? modelSourceUrl ?? 'material-preview',
     type: metadata.type ?? 'pbr',
     fileName: metadata.fileName ?? glbFileName ?? 'pbr-material-preview',
-  });
-  document.getElementById('transform-bar').classList.add('visible');
+  }, {activate:options.activate!==false});
+  if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
   setInfo('PBR Material Preview — orbit to inspect');
   return mesh;
 }
@@ -12607,9 +12612,9 @@ async function showGLB(file, options = {}) {
           source: assetSource,
           type: assetMetadata.type ?? 'glb',
           fileName: assetFileName,
-        });
+        }, {activate:options.activate!==false});
       }
-      document.getElementById('transform-bar').classList.add('visible');
+      if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(options.returnAsset ? {
@@ -21499,7 +21504,7 @@ async function handleFiles(files, options = {}) {
 
   if (loadedFiles['albedo.png']) {
     const metadata = options.metadata || {};
-    const previewOptions = { metadata };
+    const previewOptions = { metadata, activate:options.activate };
     if (Object.prototype.hasOwnProperty.call(options, 'clear')) previewOptions.clear = options.clear;
     modelSourceUrl = metadata.source ?? 'material-preview';
     modelSourceType = 'pbr';
@@ -21508,7 +21513,7 @@ async function handleFiles(files, options = {}) {
   } else {
     const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
     const splat = Object.keys(loadedFiles).find(f => /\.(ply|spz)$/i.test(f));
-    const loadOptions = { metadata: options.metadata };
+    const loadOptions = { metadata: options.metadata, activate:options.activate };
     if (Object.prototype.hasOwnProperty.call(options, 'clear')) loadOptions.clear = options.clear;
     if (glb) return showGLB(loadedFiles[glb], loadOptions);
     else if (splat) return ingestDroppedSplatFile(loadedFiles[splat], loadOptions);
@@ -23876,18 +23881,20 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
         type: 'splat',
         sceneTransform,
         renderHandoffSchema: RENDER_HANDOFF_SCHEMA,
-      });
+      }, {activate:options.activate!==false});
     },
   });
   if (!published) return null;
   applySplatCorrectionToRecord(record, splat.correction);
-  currentMesh = object;
-  if (transformControls) {
-    transformControls.detach();
-    attachViewportGizmo(object);
-    transformControls.visible = true;
+  if(options.activate!==false){
+    currentMesh = object;
+    if (transformControls) {
+      transformControls.detach();
+      attachViewportGizmo(object);
+      transformControls.visible = true;
+    }
+    document.getElementById('transform-bar').classList.add('visible');
   }
-  document.getElementById('transform-bar').classList.add('visible');
   buildRenderHandoffV0(record);
   setInfo(`Greenroom splat import: ${display?.title || fileName}`);
   return object;
@@ -24732,21 +24739,21 @@ function readNumberControl(id, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function addSceneObjectFromSource(record, loadRequestId = null) {
+async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
   if (!record?.source) throw new Error('Scene object missing source');
   if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
   if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
   if (record.type === FLAME_EMITTER_TYPE) {
     authoredFlamePresent=true;
-    const object = ensureAuthoredFlameEmitter(record);
+    const object = ensureAuthoredFlameEmitter(record,{activate});
     if (!object) throw new Error('The saved analytic flame source is not mounted');
     return object;
   }
   if (record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE) {
     const { object } = createLocalLiquidEmitterObject(THREE, record,{sampling:localLiquidSetup?.waterSampling});
     scene.add(object);
-    registerSceneObject(object, record);
+    registerSceneObject(object, record, {activate});
     return object;
   }
   if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
@@ -24754,6 +24761,7 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
     if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
     return handleFiles(files, {
       clear: false,
+      activate,
       metadata: record,
     });
   }
@@ -24761,6 +24769,7 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
     if (record.type === 'image') {
       return showImagePlane(record.source, {
         clear: false,
+        activate,
         metadata: record,
       });
     }
@@ -24770,12 +24779,14 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
         raw_name: record.fileName || record.source,
       }, {
         clear: false,
+        activate,
         metadata: record,
         isCurrent: loadRequestId === null ? undefined : () => sceneLoadRequests.isCurrent(loadRequestId),
       });
     }
     const object = await showGLB(record.source, {
       clear: false,
+      activate,
       normalize: false,
       metadata: record,
     });
