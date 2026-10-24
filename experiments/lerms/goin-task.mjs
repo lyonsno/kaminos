@@ -14,9 +14,9 @@ export function createGoinTask({target,arrivalRadius=.35}={}){
    if(events.has(event.id))return read();
    events.add(event.id);until=Math.max(until,time+event.seconds);lastEvent={id:event.id,source:event.source};return read();
   },
-  update({time:next,position}){
-   if(!Number.isFinite(next)||next<time||!point(position))throw Error('Goin task requires monotonic time and a world position');
-   const motionStart=Math.min(next,Math.max(time,until));time=next;const observed=target();
+  update({time:next,from=time,position}){
+   if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position))throw Error('Goin task requires a monotonic interval and a world position');
+   const motionStart=Math.min(next,Math.max(from,until));time=next;const observed=target();
    if(observed!==null&&(!observed||typeof observed.id!=='string'||!observed.id||!point(observed.position)))throw Error('Invalid live goin observation');
    const destination=observed?.position??null,distance=destination?Math.hypot(position[0]-destination[0],position[2]-destination[2]):null;
    const phase=time<until?'interrupted':!observed?'waiting-target':distance<=arrivalRadius?'at-goin':'approaching';

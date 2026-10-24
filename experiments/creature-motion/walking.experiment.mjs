@@ -169,7 +169,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(steering){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
-   const intent=steering.update({time:clock/1000,deltaSeconds:delta,position,arrived:path.status==='arrived',attention:attention?.read()??null});
+   const intent=steering.update({time:clock/1000,from,deltaSeconds:delta,position,arrived:path.status==='arrived',attention:attention?.read()??null});
    if(!intent||typeof intent.source!=='string'||!intent.source||typeof intent.hold!=='boolean'||intent.destination!==null&&(!Array.isArray(intent.destination)||intent.destination.length!==3||!intent.destination.every(Number.isFinite)))throw Error('Invalid game steering intent');
    if(intent.motionStart!==undefined){
     if(!Number.isFinite(intent.motionStart)||intent.motionStart<from||intent.motionStart>clock/1000)throw Error('Invalid game steering motion interval');

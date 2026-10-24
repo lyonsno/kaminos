@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createGoinPursuit} from '../experiments/lerms/goin-pursuit.experiment.mjs';
-class Element{constructor(){this.children=[];this.style={};}append(...xs){this.children.push(...xs);}setAttribute(){}remove(){}}
+class Element{constructor(){this.children=[];this.style={};}append(...xs){this.children.push(...xs);}setAttribute(){}addEventListener(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene(),ticks=new Set();
 let opens=0,closes=0;
 const host={controls:{document},scene:{refreshPresentation(){},async open(){opens++;const own=[];return {async attach(root){scene.add(root);own.push(root);return {id:root.uuid,root,owned:true};},onFrame(fn){ticks.add(fn);return ()=>ticks.delete(fn);},redraw(){},readView:()=>({}),setView(){},async dispose(){closes++;for(const root of own)root.removeFromParent();}};}}};
@@ -44,4 +44,14 @@ const spanning=await interruptedJourney([1.25]),partitioned=await interruptedJou
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-7.5)<1e-9,'Only the quarter second after expiry may move');
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-partitioned.creature.action.motion.path.distance)<1e-9,'Interruption travel must not depend on frame partition');
 assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
+let creatureInvoke;
+const previewed=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,0,100]}}},{loadSources:async()=>data,mountProperties:({invoke})=>{creatureInvoke=invoke;return {properties:new Element(),update(){},dispose(){}};}});
+previewed.mount({root:new Element(),document,invoke:(name,input)=>previewed.operations[name](input)});
+previewed.operations.advance({seconds:.1});const priorTravel=previewed.read().creature.action.motion.path.distance;
+await creatureInvoke('action',{kind:'preview'});creatureInvoke('play');for(const tick of [...ticks])tick({deltaSeconds:.01});
+await creatureInvoke('action',{kind:'wander'});
+assert.doesNotThrow(()=>{for(const tick of [...ticks])tick({deltaSeconds:.01});},'Returning from motion preview must use the current owner interval');
+assert.ok(Math.abs(previewed.read().creature.action.motion.path.distance-priorTravel-.3)<1e-9,'Preview time must not become catch-up travel');
+assert.equal(ticks.size,1);assert.equal(previewed.read().creature.playback.status,'playing');
+await previewed.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 console.log('Live goin composition moves, interrupts, reacquires current targets and releases every owned session');
