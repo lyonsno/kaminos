@@ -25,8 +25,19 @@ existing chronological edit ledger drops its last reference,
 live. Workbench removal uses its existing scoped disposer so borrowed geometry,
 materials and textures remain with their owner.
 
-The composition page still connects domain adapters, chronological edit targets,
-render invalidation and UI projection. `replaceObjects` and `clearMembership`
+`scene-membership-operations.mjs` owns individual removal/insertion history,
+retained-root restoration, group/selection recovery and owner-session removal.
+The page supplies source loading, root behavior and typed domain adapters,
+then attaches the existing chronological edit ledger. UI removal, generated
+insertion history and Workbench owner closure use the same service instance.
+Domain adapters declare whether their roots survive in history and supply
+mount/removal/disposal behavior; adding a retained domain does not require
+changing a type whitelist inside the membership algorithm.
+
+The composition page still connects domain adapters, render invalidation and UI
+projection. Registration, compound selection reconstruction and whole-scene
+replacement remain page orchestration; this service does not extract those
+remaining application operations. `replaceObjects` and `clearMembership`
 are low-level operations for that composition layer; callers must also restore
 groups/selection and perform the applicable domain teardown. They do not dispose
 resources or reconstruct evolved simulation state. The established public
@@ -35,8 +46,8 @@ authoring and Workbench APIs remain the consumer entrances.
 Ownership tests use the real module. Existing isolated domain-unit tests use the
 explicit `tests/helpers/scene-context.mjs` double for their page dependency;
 those tests do not establish the owner's invariants. Membership/history and
-Workbench-removal integration tests compose the actual owner with their existing
-adapters. Browser exercise remains necessary to assess the composed editor.
+Workbench-removal integration tests import the actual operation service and
+owner with their explicit adapters. Browser exercise remains necessary to assess the composed editor.
 
 Compound membership history separates reconstructible records from live-only
 references through `scene-membership-history.mjs`. It uses the same reloadability

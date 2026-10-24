@@ -1,16 +1,14 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import { createWorkingScene } from '../working-scene.mjs';
+import {createSceneMembershipOperations} from '../scene-membership-operations.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const membershipStart = html.indexOf('function membershipEditTargetId(');
-const membershipEnd = html.indexOf('function shouldIgnoreSceneObjectDeleteShortcut(', membershipStart);
-assert.ok(membershipStart >= 0 && membershipEnd > membershipStart, 'production scene-membership methods must be extractable');
-const membershipSource = html.slice(membershipStart, membershipEnd);
 const disposeStart = html.indexOf('function disposeObjectTree(');
 const disposeEnd = html.indexOf('function shouldClearSceneForImport(', disposeStart);
 assert.ok(disposeStart >= 0 && disposeEnd > disposeStart, 'production object disposal must be extractable');
@@ -24,80 +22,45 @@ function makeRecord(id, object, overrides = {}) {
   };
 }
 
-function makeSceneContext({ reloadObject = () => ({}) } = {}) {
+function makeSceneContext({reloadObject = () => ({}), reloadableType = 'glb'} = {}) {
   const workingScene = createWorkingScene();
-  const sceneGroups = [];
   const scene = {
     add(object) { object.parent = this; },
     remove(object) { if (object.parent === this) object.parent = null; },
   };
-  const context = vm.createContext({
-    structuredClone,canCollideWithFire,
-    writeObjectCollision(id,value){const entry=workingScene.objects.find(e=>e.id===id);entry.collision=checkedObjectCollision(entry,value);},
-    FLAME_EMITTER_ID: '@flame-emitter',FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
-    PROCEDURAL_MESH_TYPE:'procedural-mesh',compoundRetentionTargets:new Map(),RIM_LIGHT_ID: '@rim-light',
-    LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
-    workingScene,
-
-    sceneSelection:{ids:[],activeId:null},
-    scene,
-    setSceneObjectMounted(entry,mounted){if(mounted)scene.add(entry.object);else scene.remove(entry.object);},
-    window: { _kaminosDirty() {} },
-    scenePlacementTools: { finish() {}, edits: null },
-    sceneMembershipEditTargets: new Set(),
-    sceneMembershipRetainedObjects: new Map(),
-    sceneMembershipDisposers: new WeakMap(),
-    activeSceneObjectId: null,
-    activeSceneGroupId: null,
-    currentMesh: null,
-    hybridSplatOverlayState: { objectId: null },
-    splatCorrectionMode: null,
-    transformControls: null,
-    sceneSaveBlockedByFailedRestore: false,
-    isReloadableSceneObjectRecord: record => record?.type === 'glb' && typeof record.source === 'string',
-    serializeSceneObject: entry => ({
-      id: entry.id, source: entry.source, type: entry.type, fileName: entry.fileName,
-      label: entry.label, groupId: entry.groupId, createdAt: entry.createdAt,
-      transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, materials: [],
-    }),
-    sceneObjectMetadataFor: () => null,
-    restoreSceneObjectGroupsState: current => structuredClone(current),
-    setSceneObjectGroupId: (entry, id) => { entry.groupId = id; },
-    pruneSceneGroups() {},
-    applySceneObjectTransformState() {},
-    applyMaterialStateToObject() {},
-    renderSceneObjectList() {},
-    updateTransformInspector() {},
-    stopHybridSplatOverlay() {},
-    exitSplatCorrectionMode() {},
-    setInfo() {},
-    sceneNavigation: { prepare() {}, invalidate() {} },
-    sceneObjectsForFraming: () => [],
-    setActiveSceneObject(id) {
-      workingScene.select(id?[id]:[],id);
-      context.currentMesh = workingScene.objects.find(entry => entry.id === id)?.object || null;
-    },
-    setActiveSceneGroup(id) { workingScene.select(id?['@group:'+id]:[],id?'@group:'+id:null); },
-    setSceneSelection(ids,activeId){workingScene.select(ids,activeId);context.setActiveSceneObject(activeId);context.renderSceneObjectList();},
-    clearActiveSceneObjectSelection() {
-      workingScene.clearSelection();
-      context.currentMesh = null;
-    },
-    reloadObject,
+  // VM remains only for the unrelated page presenter and mesh repair callers.
+  // Membership operations themselves are imported and run outside that context.
+  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,
+    window:{_kaminosDirty(){}},setInfo(){},renderSceneObjectList(){},sceneNavigation:{invalidate(){}},
+    applyMaterialStateToObject(){},applySceneObjectTransformState(){},
   });
-  const edits = createSceneEdits({ read: () => null, write() {} });
-  context.scenePlacementTools.edits = edits;
-  context.addSceneObjectFromSource = async record => {
-    const object = context.reloadObject(record);
-    const entry = makeRecord(record.id, object, record);
-    workingScene.put(entry);
-    scene.add(object);
-    return object;
-  };
+  const edits = createSceneEdits({read:() => null, write(){}});
   vm.runInContext(disposeSource, context);
-  vm.runInContext(membershipSource, context);
-  edits.subscribe(context.releaseUnreferencedSceneMembershipObjects);
-  return { context, edits, workingScene, scene };
+  const membership = createSceneMembershipOperations({
+    scene:workingScene,
+    records:{
+      serialize:entry=>({id:entry.id,source:entry.source,type:entry.type,fileName:entry.fileName,
+        label:entry.label,groupId:entry.groupId,createdAt:entry.createdAt,
+        transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},materials:[]}),
+      reloadable:record=>record?.type===reloadableType&&typeof record.source==='string',
+      async load(record){const object=reloadObject(record);workingScene.put(makeRecord(record.id,object,record));scene.add(object);return object;},
+    },
+    roots:{attach:entry=>scene.add(entry.object),detach:entry=>scene.remove(entry.object),
+      restore(entry,record){context.applySceneObjectTransformState(entry.object,record.transform);context.applyMaterialStateToObject(entry.object,record.materials);
+        if(canCollideWithFire(entry))entry.collision=checkedObjectCollision(entry,record.collision);},
+      dispose:context.disposeObjectTree},
+    domains:{[reloadableType]:{retainRoot:true}},
+    select(ids,activeId){workingScene.select(ids,activeId);context.currentMesh=workingScene.find(activeId)?.object??null;},
+    changed:()=>context.renderSceneObjectList(),
+  });
+  membership.attachHistory(edits);
+  Object.assign(context,{scenePlacementTools:{edits},
+    recordSceneObjectInsertion:membership.recordInsertion,removeSceneObjectInternal:membership.remove,
+    ensureSceneObjectMembershipTarget:membership.ensureTarget,
+    releaseUnreferencedSceneMembershipObjects:membership.releaseUnreferenced,
+    serializeSceneObject:entry=>membership.snapshot(entry.id)?.record,
+  });
+  return {context,edits,workingScene,scene,membership};
 }
 
 function presentGlbMethod() {
@@ -300,6 +263,9 @@ test('duplicating a grouped light changes membership through the real scene owne
   workingScene.put(makeRecord('lamp',{}, {type:'light'}));
   workingScene.setGroups([{id:'pair',objectIds:['lamp']}]);
   Object.assign(context,{
+    serializeSceneObject:entry=>({...entry,object:undefined}),
+    LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',RIM_LIGHT_ID:'@rim-light',
+    setActiveSceneObject:id=>workingScene.select([id],id),
     assertSceneConstructionAvailable(){},canDuplicateObject:()=>true,makeSceneObjectId:()=> 'copy',
     sceneObjectDisplayLabel:entry=>entry.label,sceneLightRuntimeRecipe:record=>record,
     mountSceneSpotLight:record=>workingScene.put({...record,object:{}}),
@@ -310,4 +276,22 @@ test('duplicating a grouped light changes membership through the real scene owne
   assert.equal(context.duplicateSceneObject('lamp'),'copy');
   assert.deepEqual(workingScene.groups[0].objectIds,['lamp','copy']);
   assert.equal(workingScene.find('copy').groupId,'pair');
+});
+
+
+test('an admitted domain object preserves its exact root through membership history', async () => {
+  const root = repairedMesh();
+  const {context, edits, workingScene, scene} = makeSceneContext({
+    reloadableType: 'assembly-fixture', reloadObject: () => repairedMesh(),
+  });
+  workingScene.put(makeRecord('assembly', root, {type:'assembly-fixture'}));
+  scene.add(root);
+  context.removeSceneObjectInternal('assembly');
+  assert.equal(root.geometry.disposed, false, 'a domain-admitted retained root must remain alive for Undo');
+  await edits.undo();
+  assert.equal(workingScene.find('assembly').object, root, 'Undo must restore the same domain root');
+  await edits.redo();
+  assert.equal(root.geometry.disposed, false, 'Redo must keep the root while history retains it');
+  edits.clear();
+  assert.equal(root.geometry.disposed, true, 'dropping the final history reference disposes the detached root');
 });

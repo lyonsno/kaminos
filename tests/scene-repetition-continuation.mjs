@@ -48,7 +48,7 @@ function realGroupConsumer(settings=null){
  const controller=createSceneRepetitionController({objects:()=>workingScene.objects,groups:()=>workingScene.groups,readPose});
  const read=()=>({objects:workingScene.objects.map(e=>({id:e.id,repetition:structuredClone(e.repetition),pose:readPose(e.object)})),groups:structuredClone(workingScene.groups),selection:structuredClone(workingScene.selection)});
  const restore=value=>{workingScene.replaceObjects(value.objects.map(row=>{const e=roots.get(row.id);e.repetition=structuredClone(row.repetition);e.object.position.fromArray(row.pose.position);return e;}));workingScene.setGroups(value.groups);workingScene.select(value.selection.ids,value.selection.activeId);controller.sync();};
- const h=vm.createContext({THREE:T,workingScene,checkedRepetition,canRepeatSceneObject,sceneObjectTransformState:readPose,
+ const h=sceneContext({THREE:T,workingScene,checkedRepetition,canRepeatSceneObject,sceneObjectTransformState:readPose,
   sceneRepetitionController:controller,sceneRepetitionInspector:null,repetitionEditTargets:new Set(),polyEdit:null,scenePlacementTools:{edits},
   compoundRetentionTargets:new Map(),window:{},assertSceneConstructionAvailable(){},updateSelectionFeedback(){},setInfo(){},
   readSelectionMembership:read,checkSelectionMembership:value=>value,writeSelectionMembership:restore,

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
+import {createSceneMembershipOperations} from '../scene-membership-operations.mjs';
 import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneEdits,checkedPose} from '../scene-edit-session.mjs';
 import {checkedSelection} from '../scene-selection.mjs';
@@ -21,9 +22,15 @@ function fixture(){
   const object=new THREE.Group();object.userData.kaminosSceneObject={id};scene.add(object);
   const row={id,object,type,source:type==='glb'?`/api/read?root=models&path=${id}.glb`:null,label:id,repetition:null};workingScene.put(row);return row;
  }
- function detach(id){const row=workingScene.forget(id);scene.remove(row.object);if(row.type==='glb')workingScene.retain(row);else disposed.push(id);}
+ function detach(id){return operations.remove(id,{recordHistory:false,preserveForMembershipHistory:true});}
  const serializeSceneObject=row=>({id:row.id,type:row.type,source:row.source,label:row.label,groupId:row.groupId??null,repetition:row.repetition,transform:{...pose,position:row.object.position.toArray()}});
- const context={...membership,workingScene,scene,structuredClone,checkedPose,checkedGroupPose:checkedPose,checkedSelection,checkedRepetition,isReloadableSceneObjectRecord,
+ const operations=createSceneMembershipOperations({scene:workingScene,
+  records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord},
+  roots:{detach:row=>scene.remove(row.object),dispose:root=>disposed.push(root.userData.kaminosSceneObject.id)},
+  domains:{glb:{retainRoot:true}},
+ });
+ operations.attachHistory(edits);
+ const context={sceneMembership:operations,...membership,workingScene,scene,structuredClone,checkedPose,checkedGroupPose:checkedPose,checkedSelection,checkedRepetition,isReloadableSceneObjectRecord,
   serializeSceneObject,serializeSceneGroups:()=>structuredClone(workingScene.groups),sceneCameras:null,
   flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',
   normalizeFlameDomainTranslation:x=>x,normalizeFlameDomainScale:x=>x,clearActiveSceneObjectSelection:()=>workingScene.clearSelection(),
@@ -32,7 +39,7 @@ function fixture(){
   applyAuthoredScenePose:(id,value)=>workingScene.find(id).object.position.fromArray(value.position),
   ensureGroupTarget(){},primaryAuthoredFlameSource:()=>null,setFlameDomainTranslation(){},syncAuthoredFlameSources(){},
   setSceneSelection:(ids,id)=>workingScene.select(ids,id,['flame-field','water-field']),renderSceneObjectList(){},updateTransformInspector(){},window:{},
-  compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},sceneSelectionMembers:()=>workingScene.selection.ids,
+  assertSceneConstructionAvailable(){},sceneSelectionMembers:()=>workingScene.selection.ids,
   scenePlacementTools:{edits},setInfo(){},
  };
  const h=vm.createContext(context);vm.runInContext(html.slice(start,end),h);h.detachSelectionMember=detach;

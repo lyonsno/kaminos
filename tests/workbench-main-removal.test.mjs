@@ -2,17 +2,11 @@
 // Exercise actual application removal and history release, not just the disposer.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
+import {createSceneMembershipOperations, membershipEditTargetId} from '../scene-membership-operations.mjs';
 import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
-const source=fs.readFileSync(process.env.KAMINOS_REMOVAL_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
-function actual(name){const a=source.indexOf('function '+name+'('),b=source.indexOf('\n}\n',a);assert.ok(a>=0&&b>a);return source.slice(a,b+2);}
-const a=source.indexOf('    removeObject:handle=>{',source.indexOf('workbenchSceneHost=createWorkbenchSceneHost('));
-const b=source.indexOf('\n    },',a);assert.ok(a>=0&&b>a);
-const adapter=source.slice(a,b).replace('    removeObject:handle=>{','function closeOwned(handle){')+'\n}';
 const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
 function fixture(){
  const scene=new THREE.Scene(),texture=new THREE.Texture(),geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial({map:texture});
@@ -21,14 +15,17 @@ function fixture(){
  const disposed=[];for(const [name,value]of Object.entries({texture,geometry,material,uniqueGeometry,uniqueMaterial}))value.addEventListener('dispose',()=>disposed.push(name));
  const edits=createSceneEdits({read:()=>pose,write(){}}),rows=[{id:'owned',type:'glb',object:owned},{id:'borrowed',type:'glb',object:borrowed}];
  const workingScene=createWorkingScene();workingScene.replaceObjects(rows);
- const c={scene,workingScene,sceneGroups:[],sceneSelection:{ids:[],activeId:null},activeSceneObjectId:null,activeSceneGroupId:null,currentMesh:null,transformControls:null,sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
-  FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'liquid',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',RIM_LIGHT_ID:'rim',hybridSplatOverlayState:{},splatCorrectionMode:null,
-  sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
-  pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){workingScene.select(id?[id]:[],id);},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
- };
- vm.createContext(c);vm.runInContext(['membershipEditTargetId','releaseUnreferencedSceneMembershipObjects','pruneSceneSelection','removeSceneObjectInternal','disposeObjectTree'].map(actual).join('\n')+'\n'+adapter,c);
- edits.subscribe(c.releaseUnreferencedSceneMembershipObjects);
- return {c,edits,owned,borrowed,texture,geometry,material,disposed,close:()=>c.closeOwned({id:'owned',root:owned})};
+ const c={scene,workingScene};
+ const scopedDisposer=root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object)],[scene.environment,scene.background]);
+ const membership=createSceneMembershipOperations({scene:workingScene,
+  records:{serialize:entry=>({id:entry.id,type:entry.type}),reloadable:()=>false},
+  roots:{detach:entry=>scene.remove(entry.object),dispose:()=>{throw Error('owner scoped disposal required');}},
+  domains:{glb:{retainRoot:true}},
+ });
+ membership.attachHistory(edits);
+ c.membershipEditTargetId=membershipEditTargetId;
+ return {c,edits,membership,owned,borrowed,texture,geometry,material,disposed,
+  close:()=>membership.removeOwned({id:'owned',root:owned},scopedDisposer)};
 }
 function intact(f){assert.equal(f.material.map,f.texture);assert.ok(!f.disposed.some(v=>['geometry','material','texture'].includes(v)));assert.equal(f.borrowed.parent,f.c.scene);}
 test('unreferenced owner GLB releases immediately without destroying a registered comparison clone',()=>{

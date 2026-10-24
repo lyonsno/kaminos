@@ -27,26 +27,18 @@ test('F frames the selected authored object through generic geometry bounds', ()
 
 test('clearing resets scene history while typed water objects join chronological membership history', () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*return removeSceneObjectInternal\(id\);/);
-  assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*!isReloadableSceneObjectRecord\(record\)/);
   assert.doesNotMatch(html, /record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
   assert.match(persistence, /if \(type === LOCAL_LIQUID_EMITTER_TYPE\) return source === LOCAL_LIQUID_EMITTER_SOURCE/);
   assert.match(html, /record\.type === LOCAL_LIQUID_EMITTER_TYPE && record\.source === LOCAL_LIQUID_EMITTER_SOURCE/);
   assert.match(html, /mergeAndValidateLocalLiquidEmitterPose\(entry\.localLiquidEmitter, sceneObjectTransformState\(entry\.object\), transform\)/,
     'partial scene transform patches are checked against the full accepted emitter pose');
-  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true, preserveForMembershipHistory = false(?:, disposeTree = disposeObjectTree)? \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
-  assert.match(html, /recordApplied\(editId, before, null, `Remove/);
-  const removeStart = html.indexOf('function removeSceneObjectInternal(');
-  const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);
-  const removeSource = html.slice(removeStart, removeEnd);
-  const admissionIndex = removeSource.indexOf('scenePlacementTools.edits.assertCanRecordApplied(editId)');
-  const removalIndex = removeSource.indexOf('workingScene.forget(id)');
-  assert.ok(admissionIndex >= 0 && admissionIndex < removalIndex, 'membership history admission must succeed before the scene object is removed');
-  assert.match(removeSource, /catch \(error\) \{ setInfo\(error\.message\); return false; \}/, 'a rejected admission must leave a visible reason and preserve scene membership');
+  // Membership admission, retention, selection and restoration run as imported
+  // behavior in scene-membership-operations.mjs and consumer-regressions.mjs.
   const clearStart = html.indexOf('function clearScene(');
   assert.ok(clearStart >= 0, 'scene clear must remain present');
   const clearSource = html.slice(clearStart, clearStart + 2000);
   const clearSteps = ['sceneLoadRequests.invalidate()', 'scenePlacementTools?.clear()',
-    'scenePlacementTools.edits.unregister(editId)', 'sceneMembershipEditTargets.clear()', 'workingScene.invalidateArrivals()'];
+    'sceneMembership.clearHistoryTargets()', 'workingScene.invalidateArrivals()'];
   let lastClearStep = -1;
   for (const step of clearSteps) {
     const index = clearSource.indexOf(step);
@@ -58,14 +50,10 @@ test('clearing resets scene history while typed water objects join chronological
   assert.match(editTools, /const neutralPageFocus = document\.activeElement === document\.body/);
   assert.match(editTools, /modal\.awaitViewportEntry = !pointerInViewport\(lastPointer\)/);
   assert.match(editTools, /if \(modal\.awaitViewportEntry\)[\s\S]*pointerInViewport\(lastPointer\)/);
-  assert.match(html, /selection: \{ objectId: workingScene.activeObjectId, groupId: workingScene.activeGroupId \}/);
-  assert.match(html, /selection\.groupId[\s\S]*setActiveSceneGroup\(selection\.groupId\)[\s\S]*selection\.objectId[\s\S]*setActiveSceneObject\(selection\.objectId\)/);
-  assert.match(html, /group\.groupIndex\) \|\| group\.groupIndex < 0[\s\S]*group\.objectIds\.includes\(id\)/);
 });
 
 test('the same authored history records SF3D insertion and restores its retained GLB source', () => {
   assert.match(html, /async presentGlb\(glb, \{runId, sha256\}\)[\s\S]*showGLB\(saved\.source[\s\S]*recordSceneObjectInsertion\(entry\.id\)/);
-  assert.match(html, /function restoreSceneObjectMembership\(snapshot\)[\s\S]*addSceneObjectFromSource\(record\)[\s\S]*applySceneObjectTransformState\(object, record\.transform\)/);
   assert.match(html, /window\.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion/);
   assert.match(html, /window\.kaminosSceneEdits = scenePlacementTools\.edits/);
 });

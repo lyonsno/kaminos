@@ -2874,6 +2874,7 @@ import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTE
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createWorkingScene } from './working-scene.mjs';
+import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
@@ -3269,7 +3270,7 @@ import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
 import { createViewProjection } from './view-projection.mjs';
 import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
-import { captureSceneMembership, resolveSceneMembershipTopology, restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
+import { captureSceneMembership, resolveSceneMembershipTopology } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -3953,7 +3954,7 @@ window.kaminosGiProxies = {
     placed.updateMatrixWorld(true); const proxy = box(placed); placed.remove(proxyRoot);
     return { id: root.userData?.kaminosSceneObject?.id ?? null, object: box(root), proxy }; }); },
 };
-const sceneMembershipEditTargets = new Set();
+
 
 
 let getLocalLiquidDisplayPolicy=null;
@@ -10206,201 +10207,83 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
   };
 };
 
+function createPageSceneMembershipOperations() {
+  return createSceneMembershipOperations({
+    scene:workingScene,
+    records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,load:addSceneObjectFromSource},
+    roots:{
+      attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneSaveBlockedByFailedRestore=false;},
+      detach(entry){
+        if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
+        if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
+        if(transformControls&&currentMesh===entry.object){transformControls.detach();transformControls.visible=false;}
+        scene.remove(entry.object);sceneGiProxies.release(entry.object);
+      },
+      restore(entry,record){
+        applySceneObjectTransformState(entry.object,record.transform);
+        applyMaterialStateToObject(entry.object,record.materials);
+        if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
+      },
+      dispose:disposeObjectTree,
+    },
+    domains:{
+      glb:{retainRoot:true},
+      light:{retainRoot:true,
+        detached(entry){setSceneObjectMounted(entry,false);if(entry.id===RIM_LIGHT_ID)bindingRimHideForRemoval();},
+        attach:(_entry,snapshot)=>mountSceneSpotLight(snapshot.record),
+        dispose:entry=>disposeSceneSpotLight(entry.id),
+      },
+      [CAMERA_TYPE]:{retainRoot:true,
+        attach:(_entry,snapshot)=>mountAuthoredCamera(snapshot.record),
+        removed:()=>sceneCameras?.membershipChanged(),
+        restored:(_entry,snapshot)=>sceneCameras?.membershipChanged(snapshot.activeCameraId),
+      },
+      [PROCEDURAL_MESH_TYPE]:{retainRoot:true,dispose(entry){proceduralMeshes.get(entry.id)?.dispose();proceduralMeshes.delete(entry.id);}},
+      [LOCAL_LIQUID_EMITTER_TYPE]:{retainRoot:true,detached:()=>syncLocalLiquidHostEmitters(),restored:()=>syncLocalLiquidHostEmitters()},
+      [FLAME_EMITTER_TYPE]:{retainRoot:true,remove:id=>window.kaminosBurnerAuthoring.remove(id),
+        restored(){authoredFlamePresent=true;syncAuthoredFlameSources();}},
+    },
+    select:(ids,activeId)=>ids.length?setSceneSelection(ids,activeId):clearActiveSceneObjectSelection(),
+    finishInteraction:()=>scenePlacementTools?.finish(false),
+    captureContext:()=>({activeCameraId:sceneCameras?.read().settings.activeId??null}),
+    changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
+    status:setInfo,
+  });
+}
+const sceneMembership = createPageSceneMembershipOperations();
+
+// Existing authoring entrances share the same operations as owner sessions.
 function membershipEditTargetId(id) {
-  return `@scene-membership:${encodeURIComponent(id)}`;
+  return sceneMembershipTargetId(id);
 }
-
 function releaseUnreferencedSceneMembershipObjects() {
-  workingScene.releaseUnreferenced(
-    id=>scenePlacementTools?.edits?.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id)),
-    (object,entry)=>entry.type==='light'?disposeSceneSpotLight(entry.id):disposeObjectTree(object),
-  );
+  return sceneMembership.releaseUnreferenced();
 }
-
 function sceneObjectMembershipSnapshot(id) {
-  const index = workingScene.objects.findIndex(obj => obj.id === id);
-  if (index < 0) return null;
-  const entry = workingScene.objects[index];
-  const record = serializeSceneObject(entry);
-  if (!isReloadableSceneObjectRecord(record)) return null;
-  return {
-    record,
-    index,
-    groups: workingScene.groups.flatMap((group, groupIndex) => group.objectIds.includes(id)
-      ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
-      : []),
-    selection: { objectId: workingScene.activeObjectId, groupId: workingScene.activeGroupId },
-    activeCameraId:sceneCameras?.read().settings.activeId??null,
-  };
+  return sceneMembership.snapshot(id);
 }
-
 function checkedSceneObjectMembership(value, id) {
-  if (value == null) return null;
-  if (!value || typeof value !== 'object' || !value.record || value.record.id !== id
-      || !isReloadableSceneObjectRecord(value.record)
-      || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
-      || value.groups.some(group => !group || typeof group.id !== 'string'
-        || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
-        || !Array.isArray(group.objectIds) || !group.objectIds.includes(id))
-      || !value.selection
-      || !(value.selection.objectId === null || typeof value.selection.objectId === 'string')
-      || !(value.selection.groupId === null || typeof value.selection.groupId === 'string')) {
-    throw new Error(`Scene object "${id}" cannot be restored from its retained source`);
-  }
-  return {
-    record: structuredClone(value.record),
-    index: value.index,
-    groups: value.groups.map(group => ({ ...structuredClone(group), objectIds: [...group.objectIds] })),
-    selection: structuredClone(value.selection),
-    activeCameraId:value.activeCameraId??null,
-  };
+  return sceneMembership.check(value,id);
 }
-
 function restoreSceneObjectGroups(entry, groups) {
-  workingScene.setGroups(restoreSceneObjectGroupsState(
-    workingScene.groups, groups, entry.id, workingScene.objects.map(record=>record.id),
-  ));
-  const restoredGroup = workingScene.groups.find(group => group.objectIds.includes(entry.id));
-  setSceneObjectGroupId(entry, restoredGroup?.id || null);
-  pruneSceneGroups();
+  return sceneMembership.restoreGroups(entry,groups);
 }
-
 async function restoreSceneObjectMembership(snapshot) {
-  const { record, index, groups, selection } = snapshot;
-  if (workingScene.objects.some(entry => entry.id === record.id)) {
-    throw new Error(`Scene object "${record.id}" is already present`);
-  }
-  const retainedEntry = workingScene.retained(record.id);
-  let object;
-  if (retainedEntry) {
-    object = retainedEntry.object;
-    workingScene.put(retainedEntry);
-    setSceneObjectMounted(retainedEntry,true);
-    if(retainedEntry.type==='light')mountSceneSpotLight(snapshot.record);
-    if(retainedEntry.type===CAMERA_TYPE)mountAuthoredCamera(snapshot.record);
-    sceneNavigation?.prepare(object);
-    sceneSaveBlockedByFailedRestore = false;
-  } else {
-    object = await addSceneObjectFromSource(record);
-  }
-  const entry = workingScene.objects.find(sceneObject => sceneObject.id === record.id);
-  if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
-  applySceneObjectTransformState(object, record.transform);
-  applyMaterialStateToObject(object, record.materials);
-  if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
-  workingScene.move(entry.id,index);
-  restoreSceneObjectGroups(entry, groups);
-  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged(snapshot.activeCameraId);
-  if(entry.type===FLAME_EMITTER_TYPE){authoredFlamePresent=true;syncAuthoredFlameSources();}
-  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
-  if (selection.groupId && workingScene.groups.some(group => group.id === selection.groupId)) {
-    setActiveSceneGroup(selection.groupId);
-  } else if (selection.objectId && workingScene.objects.some(record => record.id === selection.objectId)) {
-    setActiveSceneObject(selection.objectId);
-  } else {
-    clearActiveSceneObjectSelection();
-  }
-  window._kaminosDirty?.();
-  return true;
+  return sceneMembership.restore(snapshot);
 }
-
 function ensureSceneObjectMembershipTarget(id) {
-  const editId = membershipEditTargetId(id);
-  if (!scenePlacementTools) throw new Error('Scene edit history is not installed');
-  if (!sceneMembershipEditTargets.has(editId)) {
-    scenePlacementTools.edits.register(editId, {
-      allowMissing: true,
-      read: () => sceneObjectMembershipSnapshot(id),
-      check: value => checkedSceneObjectMembership(value, id),
-      write: value => value == null
-        ? removeSceneObjectInternal(id, { recordHistory: false, preserveForMembershipHistory: true })
-        : restoreSceneObjectMembership(value),
-    });
-    sceneMembershipEditTargets.add(editId);
-  }
-  return editId;
+  return sceneMembership.ensureTarget(id);
 }
-
 async function recordSceneObjectInsertion(id) {
-  const after = sceneObjectMembershipSnapshot(id);
-  if (!after) return false;
-  const editId = ensureSceneObjectMembershipTarget(id);
-  return scenePlacementTools.edits.recordAppliedWhenAvailable(
-    editId, null, after, `Add ${after.record.label || after.record.fileName || id}`,
-  );
+  return sceneMembership.recordInsertion(id);
 }
-
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
-
 function pruneSceneSelection() {
   workingScene.pruneSelection();
 }
-
-function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false, disposeTree = disposeObjectTree } = {}) {
-  if(workingScene.objects.find(record=>record.id===id)?.type===FLAME_EMITTER_TYPE)return window.kaminosBurnerAuthoring.remove(id);
-  if (recordHistory && scenePlacementTools?.edits.state().replaying) {
-    setInfo('Wait for the current scene history action to finish');
-    return false;
-  }
-  scenePlacementTools?.finish(false);
-  const index = workingScene.objects.findIndex(obj => obj.id === id);
-  if (index < 0) return;
-  const before = recordHistory ? sceneObjectMembershipSnapshot(id) : null;
-  const editId = before ? ensureSceneObjectMembershipTarget(id) : null;
-  if (editId) {
-    try { scenePlacementTools.edits.assertCanRecordApplied(editId); }
-    catch (error) { setInfo(error.message); return false; }
-  }
-  if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
-  const previousActiveGroupId = workingScene.activeGroupId;
-  const wasActive = workingScene.activeObjectId === id;
-  const entry = workingScene.forget(id);
-  pruneSceneGroups();pruneSceneSelection();
-  if(entry.type==='light'){setSceneObjectMounted(entry,false);if(id===RIM_LIGHT_ID)bindingRimHideForRemoval();}
-  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
-  if (hybridSplatOverlayState.objectId === entry.id) {
-    stopHybridSplatOverlay({ silent: true });
-  }
-  if (splatCorrectionMode?.objectId === entry.id) {
-    exitSplatCorrectionMode({ revert: false, silent: true });
-  }
-  const activeGroupSurvives = !wasActive
-    && previousActiveGroupId
-    && workingScene.groups.some(group => group.id === previousActiveGroupId);
-  if (transformControls && currentMesh === entry.object) {
-    transformControls.detach();
-    transformControls.visible = false;
-  }
-  scene.remove(entry.object);
-  sceneGiProxies.release(entry.object);
-  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
-  const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
-    !recordHistory
-    && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
-    && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
-  ));
-  if (retainForMembershipHistory) {
-    workingScene.retain(entry,disposeTree !== disposeObjectTree ? disposeTree : undefined);
-  }
-  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);}
-  const fallback = wasActive ? (workingScene.objects[index] || workingScene.objects[index - 1] || null) : workingScene.objects.find(obj => obj.id === workingScene.activeObjectId);
-  if(workingScene.selection.ids.length){setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);}
-  else if (activeGroupSurvives) {
-    setActiveSceneGroup(previousActiveGroupId);
-  } else if (wasActive || !fallback) {
-    setActiveSceneObject(fallback?.id || null);
-  } else {
-    renderSceneObjectList();
-    updateTransformInspector();
-  }
-  setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
-  if (editId) {
-    scenePlacementTools.edits.recordApplied(editId, before, null, `Remove ${entry.label || entry.fileName || id}`);
-  }
-  window._kaminosDirty?.();
-  return true;
+function removeSceneObjectInternal(id, options = {}) {
+  return sceneMembership.remove(id,options);
 }
-
 window.removeSceneObject = function(id) {
   return removeSceneObjectInternal(id);
 };
@@ -11601,6 +11484,7 @@ async function initScene() {
     },
     historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-light-properties'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
+  sceneMembership.attachHistory(scenePlacementTools.edits);
   scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
   window.kaminosFlameDomain={helpers:()=>({guideVisible:flameDomainGuide?.visible??false,guideCount:scene.children.filter(object=>object.name==='Flame simulation bounds').length}),read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
@@ -11633,7 +11517,7 @@ async function initScene() {
     write: restoreBurnerControlHistoryState,
     onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
-  scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
+
   installAuthoringParameterEditing();
   const upgradedRangeFields=installLegacyRangeFields({root:document,installNumberDrag:installRelativeNumberDrag,
     unboundedMax:source=>source.id==='volume-immersed-radius',
@@ -11759,14 +11643,8 @@ async function initScene() {
   workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
     registerObject:registerSceneObject,findObject:root=>workingScene.objects.find(row=>row.object===root),
-    removeObject:handle=>{
-      const row=workingScene.objects.find(row=>row.id===handle.id);
-      if(!row||row.object!==handle.root)return false;
-      const hasMembershipHistory=Boolean(scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(handle.id))
-        || scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(handle.id)));
-      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:hasMembershipHistory,
-        disposeTree:root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object)],[scene.environment,scene.background])});
-    },
+    removeObject:handle=>sceneMembership.removeOwned(handle,
+      root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object)],[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
   window.kaminosWorkbenchSceneState=()=>{
@@ -12363,9 +12241,8 @@ function clearScene({loadRequestId = null} = {}) {
     disposeObjectTree(flameDomainGuide);
     flameDomainGuide = null;
   }
-  for(const target of compoundInsertionTargets)scenePlacementTools.edits.unregister(target);compoundInsertionTargets.clear();compoundRetentionTargets.clear();
-  for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
-  sceneMembershipEditTargets.clear();
+  for(const target of compoundInsertionTargets)scenePlacementTools.edits.unregister(target);compoundInsertionTargets.clear();
+  sceneMembership.clearHistoryTargets();
   workingScene.invalidateArrivals();
   localLiquidGeneration++;
   localLiquidHost?.dispose();
@@ -25482,7 +25359,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(!deferRecord)recordSceneObjectInsertion(copyId);
   return copyId;
 }
-const compoundInsertionTargets=new Set(),compoundRetentionTargets=new Map();
+const compoundInsertionTargets=new Set();
 function duplicateSceneGroup(id,{interactive=false}={}) {
   assertSceneConstructionAvailable();const original=workingScene.groups.find(g=>g.id===id);
   if(!original)throw Error('Choose a group');
@@ -25511,7 +25388,7 @@ function duplicateSceneGroup(id,{interactive=false}={}) {
       }
       createSceneGroupForObjects(copies,value.group.label,{...value.group,id:groupId});
     }});
-  compoundInsertionTargets.add(target);for(const copy of copies)compoundRetentionTargets.set(copy,target);
+  compoundInsertionTargets.add(target);for(const copy of copies)sceneMembership.retainForHistory(copy,target);
   const complete=({commit})=>{
     scenePlacementTools.edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);
     if(commit)scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
@@ -25665,7 +25542,7 @@ async function makeSceneRepetitionReal(id){
   for(const entry of owner.entries){entry.repetition=null;entry.object.userData.kaminosSceneObject.repetition=null;sceneRepetitionController.clear(entry.object);}
   for(const plan of plans)for(const delta of plan.deltas.slice(1)){
    const copy=duplicateSceneObject(plan.id,{deferRecord:true}),world=delta.clone().multiply(plan.world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();world.decompose(position,rotation,scale);const euler=new THREE.Euler().setFromQuaternion(rotation);
-   applyAuthoredScenePose(copy,{position:position.toArray(),rotation:[euler.x,euler.y,euler.z],scale:scale.toArray()});compoundRetentionTargets.set(copy,'@selection-membership');copies.push(copy);
+   applyAuthoredScenePose(copy,{position:position.toArray(),rotation:[euler.x,euler.y,euler.z],scale:scale.toArray()});sceneMembership.retainForHistory(copy,'@selection-membership');copies.push(copy);
   }
   setSceneSelection([...owner.entries.map(o=>o.id),...copies],copies.at(-1));
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),'Make repeated copies editable');
@@ -25950,7 +25827,7 @@ function removeSelectedSceneObjects(){
   assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
   const before=checkSelectionMembership(readSelectionMembership());
   if(ids.some(id=>!before.objects.some(record=>record.id===id)))throw Error('Scene member has no retained source; close its owning experiment to remove it');
-  for(const id of ids)compoundRetentionTargets.set(id,'@selection-membership');
+  for(const id of ids)sceneMembership.retainForHistory(id,'@selection-membership');
   for(const id of ids)detachSelectionMember(id);
   clearActiveSceneObjectSelection();
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
@@ -26001,7 +25878,7 @@ async function replacePolyObject({id,token,verb,sha256,pieces,mark=polyTimer()})
   after.objects.splice(after.objects.findIndex(o=>o.id===id),1,...records);
   for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?ids:[member]);
   after.selection={...after.selection,ids:[...ids].reverse(),activeId:ids[0]};after.field=null;
-  for(const target of [id,...ids])compoundRetentionTargets.set(target,'@selection-membership');
+  for(const target of [id,...ids])sceneMembership.retainForHistory(target,'@selection-membership');
   await writeSelectionMembership(after);mark('swap');
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`${verb} ${original.label}`);
   polyEdit.api.enter(ids[0]);mark('edit');
@@ -26048,7 +25925,7 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
   if(members.some(id=>!canDuplicateObject(workingScene.objects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
   const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
   try{
-    for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);compoundRetentionTargets.set(copy,'@selection-membership');}
+    for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);sceneMembership.retainForHistory(copy,'@selection-membership');}
     for(const id of roots){
       if(id.startsWith('@group:')){const group=workingScene.groups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
       else newRoots.push(copies.get(id));

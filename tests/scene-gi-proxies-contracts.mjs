@@ -110,7 +110,7 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   const fs=await import('node:fs'),html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const body=name=>{const a=html.indexOf(`function ${name}(`);let depth=0,i=html.indexOf(") {",a)+2;for(;i<html.length;i++){if(html[i]==='{')depth++;else if(html[i]==='}'&&--depth===0)break;}return html.slice(a,i);};
   assert.match(body('clearScene'),/sceneGiProxies\.clear\(\)/);
-  assert.match(body('removeSceneObjectInternal'),/sceneGiProxies\.release\(entry\.object\)/);
+  assert.match(body('createPageSceneMembershipOperations'),/sceneGiProxies\.release\(entry\.object\)/);
 });
 
 test('GI-PROXY-04: a texture or material shared within the proxy is disposed once',async()=>{
