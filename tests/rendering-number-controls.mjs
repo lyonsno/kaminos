@@ -41,6 +41,12 @@ try {
  gi.fire('pointermove',{pointerId:4,clientX:10,clientY:0});
  assert.equal(gi.value,released,'history release stops all GI scrubbing');
  firstScrub.dispose();evenScrub.dispose();historyScrub.dispose();
+ const fine=new Control();fine.ownerDocument=doc;fine.type='number';fine.value='.01';fine.min='0';fine.max='100';fine.step='any';
+ const fineScrub=installRelativeNumberDrag({input:fine,step:.0001,dragStep:.0001});
+ fine.fire('pointerdown',{button:0,pointerId:5,clientX:0,clientY:0});fine.fire('pointermove',{pointerId:5,clientX:10,clientY:0});
+ assert.ok(Math.abs(Number(fine.value)-.011)<1e-12,'small-value bounded controls need an explicit useful drag scale');
+ fine.fire('pointermove',{pointerId:5,clientX:20,clientY:0,shiftKey:true});assert.ok(Math.abs(Number(fine.value)-.0111)<1e-12,'Shift retains fine adjustment');
+ fine.fire('pointerup');fineScrub.dispose();
  const baseline=doc.listenerCount()+win.listenerCount();
  for(let cycle=0;cycle<3;cycle++){
    let retiredCancel=0;const retired=[];

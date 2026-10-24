@@ -30,7 +30,7 @@ try{
  report.phase='source-conformance';report.effectiveURL=page.url();report.runtime=await page.evaluate(async()=>({config:await(await fetch('/api/runtime-config')).json(),scene:window.kaminosWorkbenchSceneState?.()}));report.initial=await read();save();
  assert(report.runtime.config.source.commit===commit,'Effective served revision differs from inspected checkout');
  assert(report.initial.triangleCount===object.triangles,'Wrong source triangle count');if(object.source)assert(report.initial.source===object.source,'Wrong requested source route');
- report.sourceFiles={};for(const name of ['fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
+ report.sourceFiles={};for(const name of ['fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs','scene-control-history.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
  const asset=await page.request.get(new URL(report.initial.source,page.url()).href);report.assetDigest=createHash('sha256').update(await asset.body()).digest('hex');assert(asset.ok()&&report.assetDigest===object.sha256,'Wrong asset bytes');
  assert(report.initial.analysis.passes===7&&report.initial.analysis.cacheHit===false,'Seven-origin initial preparation missing');
  await invoke('frame');await capture('initial');
@@ -72,8 +72,24 @@ try{
  await invoke('detail',report.initial.hierarchy.maxDepth);await invoke('select',parent.id);await invoke('keepTogether');await invoke('refine');await invoke('refine');report.withoutChildHistory=await invoke('export');
  assert(JSON.stringify(owners(report.withChildHistory))===JSON.stringify(owners(report.withoutChildHistory)),'Old child overrides resurrected after parent edit');
  // The new absolute local slider uses the same domain operation as agent calls.
- const localSlider=page.getByRole('slider',{name:'Selected piece detail',exact:true});const maximum=Number(await localSlider.getAttribute('max'));
- await localSlider.fill(String(maximum));await localSlider.dispatchEvent('input');report.sliderResult=await read();assert(report.sliderResult.localDetail[parent.id]===maximum,'Selected piece slider did not set explicit detail');
+ const localSlider=page.getByRole('spinbutton',{name:'Selected piece detail',exact:true});const maximum=Number(await localSlider.getAttribute('max'));
+ await localSlider.click();await localSlider.fill(String(maximum));await localSlider.press('Tab');report.sliderResult=await read();assert(report.sliderResult.localDetail[parent.id]===maximum,'Selected piece slider did not set explicit detail');
+ report.phase='friendly-controls';save();
+ await page.getByText('Global detection settings',{exact:true}).click();
+ const names=['Selected piece detail','Preview separation','Grouping detail','Minimum branch reach (% object extent)','Minimum branch area (% surface)','Merge surface patches below (% surface)'];
+ for(const name of names){const field=page.getByRole('spinbutton',{name,exact:true});assert(await field.evaluate(e=>e.classList.contains('authoring-number')&&e.parentElement.classList.contains('authoring-number-wrap')),`Shared number-drag missing: ${name}`);}
+ assert(await page.getByRole('button',{name:'Apply global thresholds',exact:true}).count()===0,'Tuning still requires an Apply button');
+ const reachField=page.getByRole('spinbutton',{name:names[3],exact:true}),areaField=page.getByRole('spinbutton',{name:names[4],exact:true});
+ const settled=()=>page.waitForFunction(()=>!window.kaminosWorkbenchExperiments.read().busy);
+ const type=async(field,value)=>{await field.click();await field.fill(String(value));await field.press('Tab');};
+ await type(reachField,.2);await type(reachField,.3);await type(areaField,.02);await settled();report.typedThresholds=await read();
+ assert(report.typedThresholds.settings.minReachFraction===.003&&report.typedThresholds.settings.minAreaFraction===.0002,'Typed parameters did not update automatically');
+ await type(reachField,.1);await settled();
+ const drag=async fine=>{await reachField.scrollIntoViewIfNeeded();const box=await reachField.boundingBox(),x=box.x+box.width/2,y=box.y+box.height/2;await page.mouse.move(x,y);if(fine)await page.keyboard.down('Shift');await page.mouse.down();await page.mouse.move(x+12,y);await page.mouse.up();if(fine)await page.keyboard.up('Shift');await settled();return (await read()).settings.minReachFraction;};
+ report.normalDrag=await drag(false);assert(Math.abs(report.normalDrag-.00112)<1e-9,'Normal drag lost the small-value scale');
+ await type(reachField,.1);await settled();report.fineDrag=await drag(true);assert(Math.abs(report.fineDrag-.001012)<1e-9,'Shift fine drag did not preserve tenfold precision');
+ await reachField.click();await reachField.fill('');await reachField.press('Tab');assert(Number(await reachField.inputValue())>0,'Blank input silently applied zero');
+ await capture('friendly-controls');
  await invoke('detail',Math.min(1,report.initial.hierarchy.maxDepth));
  report.phase='threshold-filter';save();
  report.filtered=await invoke('partition',{minReachFraction:.001,minAreaFraction:.0001,cleanupAreaFraction:.001});assert(report.filtered.analysis.cacheHit===true&&report.filtered.analysis.builds===1,'Threshold edit reran source preparation');assert(Object.keys(report.filtered.localDetail).length===0,'Global edit retained stale local IDs');
