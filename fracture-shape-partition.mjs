@@ -1,3 +1,5 @@
+import {checkedFaces,faceKey} from './fracture-boundary-edit.mjs';
+export {moveShapeBoundary,boundaryAnchor} from './fracture-boundary-edit.mjs';
 // Geometry-only draft. Every source triangle keeps its identity and geometry.
 export const SHAPE_PARTITION_ROUTE = 'kaminos.fracture.concave-surface-regions.v1';
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -131,7 +133,7 @@ function buildNeckTree(triangles,neighbors,seeds){
  return {candidates,leaves:Uint32Array.from(leaves),begin,end};
 }
 
-export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,minAreaFraction=.0005,cleanupAreaFraction=.001}={}){
+export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,minAreaFraction=.0005,cleanupAreaFraction=.001,fixedCuts=[]}={}){
  if(graph?.route!==SHAPE_PARTITION_ROUTE)throw Error('Source shape graph required');
  if(![minReachFraction,maxCutRatio,minAreaFraction,cleanupAreaFraction].every(Number.isFinite)||minReachFraction<0||minReachFraction>1||maxCutRatio<=0||minAreaFraction<0||minAreaFraction>1||cleanupAreaFraction<0||cleanupAreaFraction>1)throw Error('Finite positive neck criteria required');
  const cacheHit=neckAnalysisCache.has(graph);
@@ -142,26 +144,31 @@ export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,
   const faces=pass.leaves.slice(pass.begin[c.node],pass.end[c.node]).sort(),signature=faces.join(',');
   const previous=proposals.get(signature);
   if(previous){previous.seeds.add(seed);previous.reach=Math.max(previous.reach,c.reach);previous.cutRatio=Math.min(previous.cutRatio,c.cutRatio);}
-  else proposals.set(signature,{faces,seeds:new Set([seed]),area:c.area,reach:c.reach,cutRatio:c.cutRatio});
+  else proposals.set(signature,{key:faceKey(faces),faces,seeds:new Set([seed]),area:c.area,reach:c.reach,cutRatio:c.cutRatio});
  }});
  // Agreement is exact membership agreement, not a claim of semantic confidence.
  // Choose narrow, repeated proposals first. Cross-cutting proposals remain in
  // the diagnostic catalog; the visible family is a consistent nested partition.
  const ranked=[...proposals.values()].sort((a,b)=>b.seeds.size-a.seeds.size||a.cutRatio-b.cutRatio||b.reach-a.reach||a.faces[0]-b.faces[0]);
- const accepted=chooseNeckFamily(ranked,Float64Array.from(graph.triangles,t=>t.area));
+ if(!Array.isArray(fixedCuts))throw Error('Fixed cut list required');
+ const fixed=fixedCuts.map(c=>{const faces=checkedFaces(graph,c.faces);if(typeof c.key!=='string'||!c.key)throw Error('Fixed cut identity required');const component=analysis.componentOwners[faces[0]];if(faces.some(f=>analysis.componentOwners[f]!==component))throw Error('A fixed cut must stay within one source component');return {key:c.key,faces:Uint32Array.from(faces),seeds:new Set(),area:faces.reduce((sum,f)=>sum+graph.triangles[f].area,0),reach:0,cutRatio:0,fixed:true};});
+ if(new Set(fixed.map(c=>c.key)).size!==fixed.length)throw Error('Duplicate fixed cut identity');
+ const fixedKeys=new Set(fixed.map(c=>c.key));
+ const catalog=[...fixed,...ranked.filter(c=>!fixedKeys.has(c.key))];
+ const accepted=chooseNeckFamily(catalog,Float64Array.from(graph.triangles,t=>t.area));
  const nodes=[],faceOwners=new Uint32Array(graph.triangles.length),componentIds=new Map();
  const add=(parent,kind,metadata={})=>{const id=nodes.length;nodes.push({id,parent,kind,depth:parent===null?0:nodes[parent].depth+1,children:[],ownTriangles:0,triangles:0,area:0,...metadata});if(parent!==null)nodes[parent].children.push(id);return id;};
- for(const component of analysis.components)componentIds.set(component,add(null,'component'));
+ for(const component of analysis.components)componentIds.set(component,add(null,'component',{key:`component:${component}`}));
  for(let i=0;i<faceOwners.length;i++)faceOwners[i]=componentIds.get(analysis.componentOwners[i]);
  accepted.sort((a,b)=>b.faces.length-a.faces.length||a.faces[0]-b.faces[0]);
- for(const c of accepted){const parent=faceOwners[c.faces[0]],id=add(parent,'branch',{reach:c.reach,cutRatio:c.cutRatio,agreement:c.seeds.size});for(const face of c.faces)faceOwners[face]=id;}
+ for(const c of accepted){const parent=faceOwners[c.faces[0]],id=add(parent,'branch',{key:c.key,reach:c.reach,cutRatio:c.cutRatio,agreement:c.seeds.size});for(const face of c.faces)faceOwners[face]=id;}
  const patchLabels=partitionShape(graph,{concavityDegrees:20,minAreaFraction:cleanupAreaFraction},analysis.orderedLinks).labels;
  finishHierarchy(graph,nodes,faceOwners,patchLabels,add);
  const hierarchy={schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:nodes.reduce((m,n)=>Math.max(m,n.depth),0)};
  const fine=summarizeOwners(graph,faceOwners);
  return {route:'kaminos.fracture.multi-origin-neck-hierarchy.v1',settings:{minReachFraction,maxCutRatio,minAreaFraction,cleanupAreaFraction},triangleCount:graph.triangles.length,sourceComponents:graph.sourceComponents,diagnostics:graph.diagnostics,...fine,hierarchy,
   analysis:{builds:1,cacheHit,seedPolicy:'centroid-and-six-axis-extrema',boundaryVariantAreaOverlap:.9,passes:analysis.passes.length,distinctSeeds:new Set(analysis.seedSets.flat()).size,rawProposals:analysis.passes.reduce((sum,p)=>sum+p.candidates.length,0)},
-  candidateBranches:ranked.map(({faces,seeds,...c},id)=>({id,...c,triangles:faces.length,seeds:[...seeds]})),claim:'Nested surface branch and patch proposals from seven geodesic origins; exact membership agreement is geometric evidence, not a solid volume or fracture model'};
+  candidateBranches:catalog.map(({faces,seeds,...c},id)=>({id,...c,faces,triangles:faces.length,seeds:[...seeds]})),claim:'Nested surface branch and patch proposals from seven geodesic origins; exact membership agreement is geometric evidence, not a solid volume or fracture model'};
 }
 
 // Cuts sharing at least 90% of their combined surface area describe alternative
@@ -176,7 +183,8 @@ export function chooseNeckFamily(ranked,faceAreas){
   for(const other of accepted){let count=0,overlap=0,otherArea=0;
    for(const face of other.faces){otherArea+=faceAreas[face];if(mark[face]){count++;overlap+=faceAreas[face];}}
    const union=area+otherArea-overlap;
-   if(union>0&&overlap/union>=.9){c.status='boundary-variant';c.variantOf=ranked.indexOf(other);break;}
+   if(c.fixed&&other.fixed&&count&&(count!==c.faces.length&&count!==other.faces.length||count===c.faces.length&&count===other.faces.length))throw Error('Fixed attachment cuts must be distinct and nested or disjoint');
+   if(!(c.fixed&&other.fixed)&&union>0&&overlap/union>=.9){c.status='boundary-variant';c.variantOf=ranked.indexOf(other);break;}
    if(count&&count!==c.faces.length&&count!==other.faces.length){c.status='crossing-alternative';break;}
   }
   if(c.status==='included')accepted.push(c);
@@ -218,7 +226,7 @@ function finishHierarchy(graph,nodes,faceOwners,patchLabels,add){
  // Concavity cleanup refines the remaining surface owned by each branch; it
  // never changes which branch proposals were admitted or their parent relation.
  const patches=new Map();for(let i=0;i<n;i++){const owner=faceOwners[i];if(!patches.has(owner))patches.set(owner,new Map());const groups=patches.get(owner),p=patchLabels[i];if(!groups.has(p))groups.set(p,[]);groups.get(p).push(i);}
- for(const [owner,groups]of patches)if(groups.size>1)for(const faces of groups.values()){const patch=add(owner,'patch');for(const i of faces)faceOwners[i]=patch;}
+ for(const [owner,groups]of patches)if(groups.size>1)for(const faces of groups.values()){const patch=add(owner,'patch',{key:faceKey(faces)});for(const i of faces)faceOwners[i]=patch;}
  for(let i=0;i<n;i++){const node=nodes[faceOwners[i]];node.ownTriangles++;node.triangles++;node.area+=graph.triangles[i].area;}
  for(let i=nodes.length-1;i>=0;i--){const node=nodes[i];if(node.parent!==null){nodes[node.parent].triangles+=node.triangles;nodes[node.parent].area+=node.area;}}
 }
