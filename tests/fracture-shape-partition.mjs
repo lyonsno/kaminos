@@ -112,3 +112,28 @@ test('detail views are nested refinements and never lose source triangles',()=>{
  assert.equal(previous.parts.length,result.parts.length);
  assert.throws(()=>shapeHierarchyView(result,-1),/detail level/);
 });
+
+test('threshold changes reuse source analysis and consider different starting points',()=>{
+ const graph=buildShapeGraph(specimen([[0,1],[1,1],[1,.2],[3,.2]],24));
+ const first=geodesicNeckPartition(graph,{minReachFraction:.001,minAreaFraction:0});
+ const next=geodesicNeckPartition(graph,{minReachFraction:.02,minAreaFraction:.0001});
+ assert.equal(first.analysis?.builds,1,'source traversal must have an explicit preparation receipt');
+ assert.equal(next.analysis.builds,1,'changing thresholds must not rebuild geodesics');
+ assert.equal(next.analysis.cacheHit,true);
+ assert.equal(first.analysis.seedPolicy,'centroid-and-six-axis-extrema');
+ assert.equal(first.analysis.passes,7);
+ assert.ok(first.analysis.distinctSeeds>1,'alternative origins must actually differ');
+ assert.equal(next.parts.reduce((s,p)=>s+p.triangles,0),graph.triangles.length);
+});
+
+test('local detail changes only the selected subtree and can keep its children together',()=>{
+ const graph=buildShapeGraph({positions:[0,0,0,1,0,0,0,1,0,0,0,1],indices:[0,2,1,0,1,3,0,3,2,1,2,3]});
+ const hierarchy=buildBranchHierarchy(graph,{children:[[0,1],[4,2],[5,3]],roots:[6],candidates:[{node:5,reach:2,cutRatio:1},{node:4,reach:1,cutRatio:.5}],patchLabels:new Uint32Array(4)});
+ const result={hierarchy,labels:Uint32Array.from([0,0,1,2]),parts:[{id:0,nodeId:2,triangles:2,area:2,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}},{id:1,nodeId:1,triangles:1,area:1,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}},{id:2,nodeId:0,triangles:1,area:1,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}}],boundaries:[]};
+ const before=shapeHierarchyView(result,1),local=shapeHierarchyView(result,1,{1:2});
+ const owners=v=>Array.from(v.labels,id=>v.parts[id].nodeId);
+ assert.deepEqual(owners(before),[1,1,1,0]);
+ assert.deepEqual(owners(local),[2,2,1,0],'local refinement must expose the nested fitting without changing the rest');
+ assert.deepEqual(owners(shapeHierarchyView(result,2,{1:1})),[1,1,1,0]);
+ assert.throws(()=>shapeHierarchyView(result,1,{999:1}),/local detail/);
+});
