@@ -13107,6 +13107,8 @@ function openFlameWorkbench() {
     readScene:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read(),collisionEnabled:window.kaminosSceneCollision.read().enabled}),
     async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
     async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    readPresence:()=>Boolean(activeSceneComposition),
+    initialize:(settings,{signal}={})=>addFirstFlameField(settings.source?.presetId,{settings,signal}),
     readBasin:id=>loadAuthoredFlameBasin(id,{report:false}),
     beginPreview:label=>window.kaminosFlameAuthoring.beginPreview(label),
     saveBasin:options=>saveVolumeSettingsPreset({label:options?.label}),
@@ -22146,6 +22148,20 @@ function writeFlameSettingsState(state) {
 function installFlameAuthoring() {
   window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
+    preparePreview:state=>{
+      // Continuous blends produce doubles between saved endpoints. Ask the
+      // actual native control for its representation before exact readback.
+      // A toPrecision approximation disagrees with Chrome at rounding ties.
+      for(const axis of ['domControls','rendererControls'])for(const [id,d] of Object.entries(state[axis])){
+        const source=document.getElementById(id);
+        if(source?.type!=='range'||id==='volume-render-scale')continue;
+        const value=Number(d.rawValue??d.value);
+        if((source.min!==''&&value<Number(source.min))||(source.max!==''&&value>Number(source.max)))throw Error('Blend parameter outside its current range: '+id);
+        const probe=source.cloneNode();probe.step='any';probe.value=String(value);
+        d.value=Number(probe.value);if(Object.hasOwn(d,'rawValue'))d.rawValue=probe.value;
+      }
+      return state;
+    },
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
     changed:()=>flameInspector?.sync(),
     load:loadAuthoredFlameBasin});
@@ -22216,10 +22232,10 @@ function writeFirstFlameFieldStateUnchecked(value) {
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
 }
-async function addFirstFlameField(presetId,{signal}={}) {
+async function addFirstFlameField(presetId,{signal,settings:capturedSettings}={}) {
   signal?.throwIfAborted();
   assertSceneConstructionAvailable();
-  if(activeSceneComposition)return addBurnerObject('flame-source');
+  if(activeSceneComposition){if(capturedSettings)throw Error('Enable the existing flame in Properties before blending');return addBurnerObject('flame-source');}
   if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
   // A scene that started without fire boots the fluid route now (fire-boot.mjs).
   if(!volumePrototype){authoringBusy=true;try{await initKaminosVolumeRoute();}finally{authoringBusy=false;}signal?.throwIfAborted();}
@@ -22227,7 +22243,7 @@ async function addFirstFlameField(presetId,{signal}={}) {
   const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
   authoringBusy=true;
   let settings;
-  try{settings=await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
+  try{settings=capturedSettings?checkFlameSettingsState(structuredClone(capturedSettings)):await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
   signal?.throwIfAborted();
   if(JSON.stringify(firstFlameFieldState())!==before||JSON.stringify(scenePlacementTools.edits.state())!==ledger)throw Error('Scene changed while loading the flame basin; add it again');
   if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
@@ -22235,7 +22251,11 @@ async function addFirstFlameField(presetId,{signal}={}) {
   if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
   const route=Object.fromEntries(resolveFlameLightingRoute({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'}));
   const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
-  await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
+  const edits=scenePlacementTools.edits;
+  const cancel=()=>{if(edits.state().active?.id==='@first-flame-field')edits.cancel();};
+  signal?.addEventListener('abort',cancel,{once:true});
+  try{await edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');signal?.throwIfAborted();}
+  finally{signal?.removeEventListener('abort',cancel);}
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
   setActiveSceneObject(FLAME_EMITTER_ID);
   const clamped=globalThis.__kaminosFlameBasinClamps||[];

@@ -35,9 +35,10 @@ export function blendSettings({a,b,current,fields,amount}) {
 // The endpoints are authored settings; the evolving fluid belongs to the host.
 export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
   let a=null,b=null,fields=[],amount=0,duration=4,gesture=null,playback=null,disposed=false,loading=false,error=null;
+  const lifetime=new AbortController();
   const settings=()=>flame.settings ? flame.settings() : flame.read().settings;
   const current=()=>({a,b,fields,amount,duration});
-  const read=()=>({...structuredClone(current()),active:flame.read().active,playing:!!playback,previewing:!!gesture,loading,error,
+  const read=()=>({...structuredClone(current()),active:flame.read().active,present:flame.read().present===true,playing:!!playback,previewing:!!gesture,loading,error,
     choices:blendChoices(a?.settings,b?.settings,settings())});
   const available=()=>{if(disposed)throw Error('Flame blend is disposed');};
   const editable=()=>{available();if(gesture||loading)throw Error('Finish the current blend or preset load first');};
@@ -94,8 +95,8 @@ export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
       try{const next=await flame.readBasin(presetId);if(disposed)throw Error('Flame blend was closed during preset load');
         const endpoint={label:next.source?.label||presetId,settings:next};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('endpoint');return read();
       }finally{loading=false;changed();}},
-    async useA(){editable();if(!a?.settings.source?.presetId)throw Error('Choose a saved preset for A first');loading=true;changed();
-      try{await flame.applyBasin(a.settings.source.presetId);}finally{loading=false;changed();}return read();},
+    async useA(){editable();if(flame.read().present)throw Error('Enable the existing flame in Properties before blending');if(!a?.settings.source?.presetId)throw Error('Choose a saved preset for A first');loading=true;changed();
+      try{await flame.initialize(structuredClone(a.settings),{signal:lifetime.signal});}finally{loading=false;changed();}return read();},
     setFields(value){editable();if(!Array.isArray(value))throw Error('Choose continuous parameters');
       const choices=blendChoices(a?.settings,b?.settings,settings());for(const id of value)if(!choices.find(f=>f.id===id)?.available)throw Error('Unavailable continuous parameter: '+id);
       fields=[...new Set(value)];emit('fields');changed();return read();},
@@ -110,5 +111,5 @@ export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
     export(){available();return {schema:'kaminos-flame-blend-v1',...structuredClone(current())};},
     restore,
   };
-  return {read,operations,dispose(){end(true);disposed=true;stopFrames();}};
+  return {read,operations,dispose(){disposed=true;lifetime.abort();end(true);stopFrames();}};
 }

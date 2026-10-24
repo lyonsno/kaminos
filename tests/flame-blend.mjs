@@ -60,3 +60,25 @@ test('closing during an endpoint fetch cannot repopulate disposed work',async()=
  const flame={read:()=>({active:true,settings:f.author.read()}),settings:f.author.read,beginPreview:f.author.beginPreview,readBasin:()=>new Promise(resolve=>complete=resolve)};
  const c=createFlameBlend({flame,onFrame:()=>()=>{}});const pending=c.operations.choose({slot:'a',presetId:'pending'});c.dispose();complete(state(5,0));await assert.rejects(pending,/closed/);f.controller.dispose();
 });
+
+function emptyCockpit({present=false,delay=false}={}) {
+ let live=state(2,2),active=false,release,applied=0;
+ const flame={read:()=>({active,present,settings:structuredClone(live)}),settings:()=>structuredClone(live),
+  readBasin:async()=>state(7,7),applyBasin:async()=>{live=state(2,2);active=true;applied++;},
+  initialize:async(settings,{signal})=>{if(delay)await new Promise(resolve=>release=resolve);signal.throwIfAborted();live=structuredClone(settings);active=true;applied++;}};
+ const c=createFlameBlend({flame,onFrame:()=>()=>{}});
+ return {c,flame,release:()=>release?.(),applied:()=>applied};
+}
+test('initializing imported A preserves its held authored values as well as the blend fields',async()=>{
+ const f=emptyCockpit();await f.c.operations.choose({slot:'a',presetId:'original'});await f.c.operations.useA();
+ assert.equal(f.flame.settings().domControls['volume-physical-thermal'].value,7);
+ assert.equal(f.flame.settings().domControls['volume-wind-angle'].value,7);f.c.dispose();
+});
+test('closing while initialization waits prevents scene mutation',async()=>{
+ const f=emptyCockpit({delay:true});await f.c.operations.choose({slot:'a',presetId:'original'});
+ const pending=f.c.operations.useA();f.c.dispose();f.release();await assert.rejects(pending);assert.equal(f.applied(),0);
+});
+test('an existing disabled field must be enabled instead of duplicated',async()=>{
+ const f=emptyCockpit({present:true});await f.c.operations.choose({slot:'a',presetId:'original'});
+ await assert.rejects(f.c.operations.useA(),/Enable.*existing/);assert.equal(f.applied(),0);f.c.dispose();
+});

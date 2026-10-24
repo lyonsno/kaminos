@@ -152,7 +152,7 @@ test('the real host retains geometry, collision and confirmed-source notificatio
   const api=runInNewContext(functionSource+'\nopenFlameWorkbench()',{
     window,document,controls,createFlameWorkbench,scenePlacementTools:{edits},
     volumePrototype:{debugState:f.options.readRuntime},readAuthoredCameraView:f.options.readView,
-    readAuthoredFireObjects:()=>structuredClone(objects),serializeSceneGroups:()=>[],activeSceneFieldId:'flame-field',
+    readAuthoredFireObjects:()=>structuredClone(objects),serializeSceneGroups:()=>[],activeSceneFieldId:'flame-field',activeSceneComposition:{},
   });
   const initial=api.read(),rows=[];
   const stop=observeFlameInvestigation({read:api.read,subscribe:api.subscribe,channel:{emit:row=>rows.push(structuredClone(row))}});
@@ -248,4 +248,23 @@ test('ordinary Enable/Disable publishes its settled state to flame subscribers i
     window,Event,volumePrototype:{debugState:()=>({active}),setActive:async value=>{await Promise.resolve();active=value;}},setInfo(){},refreshVolumeReadout(){}});
   await click();assert.deepEqual(observed,[false],'off interrupts without waiting for the fallback poll');
   await click();assert.deepEqual(observed,[false,true],'on publishes only after activation has completed');
+});
+
+test('first-flame endpoint initialization uses captured settings and honors cancellation before construction',async()=>{
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const body=source.slice(source.indexOf('async function addFirstFlameField('),source.indexOf('async function openFirstFlameFieldDialog('));
+ const endpoint={source:{presetId:'original'},domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-pressure-solver':{value:'converged-open-top'},'volume-advection-scheme':{value:'maccormack'},'volume-time-step':{value:'uniform'},'volume-physical-thermal':{value:7},'volume-wind-angle':{value:7}}};
+ let received,loads=0,duplicates=0,release;
+ const scope={structuredClone,JSON,COMPOSITION_SCHEMA:'fixture',FLAME_EMITTER_ID:'source',activeSceneComposition:null,authoringBusy:false,
+  assertSceneConstructionAvailable(){},volumePrototype:{},firstFlameFieldState:()=>({unchanged:true}),checkFlameSettingsState:value=>value,
+  loadAuthoredFlameBasin:async()=>{loads++;return {...endpoint,domControls:{...endpoint.domControls,'volume-wind-angle':{value:2}}};},
+  resolveFlameLightingRoute:x=>Object.entries(x),setActiveSceneObject(){},setInfo(){},globalThis:{},
+  addBurnerObject:()=>{duplicates++;},scenePlacementTools:{edits:{state:()=>({}),applySettled:async(id,value)=>{received=value;scope.activeSceneComposition=value.composition;}}}};
+ const add=runInNewContext(body+'\naddFirstFlameField',scope);
+ await add('original',{settings:endpoint});assert.equal(received.settings.domControls['volume-wind-angle'].value,7);assert.equal(loads,0);
+ await assert.rejects(add('original',{settings:endpoint}),/existing/);assert.equal(duplicates,0);
+ scope.activeSceneComposition=null;scope.volumePrototype=null;received=null;
+ scope.initKaminosVolumeRoute=()=>new Promise(resolve=>{release=()=>{scope.volumePrototype={};resolve();};});
+ const request=new AbortController(),pending=add('original',{settings:endpoint,signal:request.signal});request.abort();release();
+ await assert.rejects(pending);assert.equal(received,null);
 });
