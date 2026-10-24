@@ -36,3 +36,13 @@ test('an invalid object identity fails before browser launch with a durable repo
   assert.equal(report.status,'failed');assert.equal(report.lastPhase,'object-identity');assert.match(report.failure.message,/object identity/i);
  }finally{fs.rmSync(out,{recursive:true,force:true});}
 });
+
+test('an invalid fixture click fails before browser launch with a durable report',()=>{
+ const out=fs.mkdtempSync(path.join(os.tmpdir(),'fracture-witness-click-'));
+ try{
+  const spec=path.join(out,'object.json');fs.writeFileSync(spec,JSON.stringify({name:'fixture',triangles:12,sha256:'a'.repeat(64),source:'/fixture.glb',click:[2,.5]}));
+  const run=spawnSync(process.execPath,[new URL('../tools/fracture-attachment-witness.mjs',import.meta.url).pathname,'http://127.0.0.1:1',out,'/unavailable-playwright','/unavailable-browser',spec],{encoding:'utf8'});
+  assert.equal(run.status,1);const report=JSON.parse(fs.readFileSync(path.join(out,'report.json'),'utf8'));
+  assert.equal(report.lastPhase,'object-identity');assert.match(report.failure.message,/fixture click/i);
+ }finally{fs.rmSync(out,{recursive:true,force:true});}
+});
