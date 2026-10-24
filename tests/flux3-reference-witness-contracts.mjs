@@ -15,3 +15,8 @@ test('different quantization cannot masquerade as the CPU oracle weight route',(
  const r=good();r.weights.format='i3';r.weights.globals_format='i8';r.weights.group=64;r.oracle.weights={format:'i4',globals_format:'i8',group:64};
  assert.throws(()=>validate(r),/quantization/);
 });
+
+test('FLUX2 reference witness refuses a different model oracle',()=>{
+ const r=good();r.model='flux2';r.oracle.model='flux3';
+ assert.throws(()=>validate(r),/model/);
+});

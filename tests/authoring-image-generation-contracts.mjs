@@ -111,6 +111,15 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  assert.equal(h.service.read().status,'complete');assert.equal(h.service.read().results.length,2);
 });
 
+test('FLUX.2 reference generation retains the selected input and identifies image-and-text execution',async()=>{
+ const h=harness(),reference={width:32,height:32,rgb:new Float32Array(32*32*3),provenance:{source:'/selected.png',sha256:'source-image-digest'}};
+ await h.service.run({model:'flux2',prompt:'Make the kettle blue',seed:1,reference});
+ assert.equal(h.generations[0].reference,reference);
+ assert.equal(h.delivered[0].provenance.route,'flux2-klein.image-and-text.authoring-shared-device.v0');
+ assert.deepEqual(h.delivered[0].provenance.reference,reference.provenance);
+ assert.ok(h.log.includes('route:flux2-klein.image-and-text.authoring-shared-device.v0'));
+});
+
 test('FLUX.3 uses its pipeline and local weights and saves the effective model recipe in the PNG',async()=>{
  const h=harness({modelWeights:async model=>model==='flux3'?'/flux3-weights':'/klein-weights'});
  await h.service.run({model:'flux3',prompt:'a copper kettle',seed:9});
@@ -398,5 +407,5 @@ test('image conditioning keeps its input and effective route in the saved PNG',a
  assert.equal(p.route,'flux3-klein.image-and-text.authoring-shared-device.v0');assert.deepEqual(p.reference,reference.provenance);
  assert.ok(h.log.includes(`route:${p.route}`));
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),p);
- await assert.rejects(h.service.run({model:'flux2',prompt:'blue',seed:2,reference}),/reference.*FLUX.3/i);
+
 });

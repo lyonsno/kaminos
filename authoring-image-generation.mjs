@@ -26,7 +26,7 @@ export async function createAuthoringImagePipeline(device,urls,model='flux2'){
   if(model==='flux3'){
     const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');return new Flux3Pipeline(device,{...urls,cacheWeights:false});
   }
-  const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);
+  const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,{...urls,cacheWeights:!urls.transformerUrl.startsWith('/klein-weights/')});
 }
 // The sizes klein's own demo offers and its README times.
 export const KLEIN_IMAGE_SIZES=[256,384,512,768,1024];
@@ -266,8 +266,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       const spec=imageModel(model);
-      if(reference&&model!=='flux3')throw Error('Reference images currently require FLUX.3');
-      const routeId=reference?'flux3-klein.image-and-text.authoring-shared-device.v0':spec.routeId;
+      const routeId=reference?`${model}-klein.image-and-text.authoring-shared-device.v0`:spec.routeId;
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
       if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
       if(!spec.levels.includes(level))throw Error('FLUX.3 currently has 4-bit weights only');
@@ -279,7 +278,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       startedAt=clock();generationStartedAt=null;generationFinished=false;
       set({status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
-        if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal});}
+        if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
@@ -327,6 +326,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{})};
         if(reference)provenance.reference=structuredClone(reference.provenance);
+        if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
@@ -379,7 +379,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
     const selected=assets.read().selected,reference=byId('asset-use-reference');
-    byId('asset-reference-control').hidden=byId('asset-image-model').value!=='flux3';reference.disabled=active||!!state.pending;
+    byId('asset-reference-control').hidden=false;reference.disabled=active||!!state.pending;
     byId('asset-reference-name').textContent=reference.checked?`· ${selected?.kind==='image'?(selected.label||selected.name):'Choose an image in Browse or Open file'}`:'';
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;
@@ -402,7 +402,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    const useReference=byId('asset-image-model').value==='flux3'&&byId('asset-use-reference').checked;
+    const useReference=byId('asset-use-reference').checked;
     const selected=assets.read().selected;
     if(useReference&&selected?.kind!=='image'){byId('asset-text-status').textContent='Choose a source image in Browse or Open file first.';return;}
     controller.run({reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});

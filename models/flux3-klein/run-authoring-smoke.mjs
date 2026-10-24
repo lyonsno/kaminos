@@ -10,17 +10,19 @@ import {verifyAuthoringServer} from '../../scene-authoring-witness-identity.mjs'
 import {readPngProvenance} from '../../authoring-image-generation.mjs';
 
 export function validateFlux3AuthoringResult(r){
-  assert.equal(r.runtime.flux3?.mounted,true,'local FLUX.3 pack is mounted');
-  assert.equal(r.runtime.flux3.modelRoot,r.expectedModelRoot,'effective local package');
-  assert.equal(r.provenance.model,'FLUX.3 Image Klein');
-  assert.equal(r.provenance.route,r.reference?'flux3-klein.image-and-text.authoring-shared-device.v0':'flux3-klein.text-to-image.authoring-shared-device.v0');
+  const model=r.model??'flux3';assert.ok(['flux2','flux3'].includes(model),'known requested model');
+  const mount=model==='flux2'?'klein':'flux3',base=model==='flux2'?'/klein-weights':'/flux3-weights';
+  assert.equal(r.runtime[mount]?.mounted,true,'local model pack is mounted');
+  assert.equal(r.runtime[mount].modelRoot,r.expectedModelRoot,'effective local package');
+  assert.equal(r.provenance.model,model==='flux2'?'FLUX.2 [klein] 4B':'FLUX.3 Image Klein');
+  assert.equal(r.provenance.route,`${model}-klein.${r.reference?'image-and-text':'text-to-image'}.authoring-shared-device.v0`);
   if(r.reference){
     assert.equal(r.provenance.reference?.source,r.reference.source,'selected reference source');
     assert.equal(r.provenance.reference?.sha256,r.reference.sha256,'selected reference bytes');
   }
-  assert.equal(r.provenance.weights,'/flux3-weights');
-  assert.equal(r.provenance.transformer,'/flux3-weights/dit');
-  assert.deepEqual(r.provenance.sampling,r.manifest.sampling);
+  assert.equal(r.provenance.weights,base);
+  assert.equal(r.provenance.transformer,`${base}/dit`);
+  if(model==='flux3')assert.deepEqual(r.provenance.sampling,r.manifest.sampling);
   assert.deepEqual(r.provenance.source,r.manifest.source);
   assert.deepEqual(r.provenance.lora,r.manifest.lora);
   for(const key of ['width','height']){
@@ -53,7 +55,7 @@ export function validateFlux3AuthoringResult(r){
   }
   if(r.decodeAfter){
     const c=r.provenance.completion;assert.ok(c,'early decode completion receipt');
-    assert.equal(c.earlyDecoded,true);assert.equal(c.stepsRequested,r.manifest.sampling.steps);
+    assert.equal(c.earlyDecoded,true);assert.equal(c.stepsRequested,(r.manifest.sampling?.steps??4));
     assert.equal(c.stepsCompleted,r.decodeAfter);
     const f=r.flame;assert.ok(f,'live generation flame receipt');
     assert.ok(f.after>f.before,'flame advances during actual inference');assert.equal(f.stopped,true);
@@ -67,9 +69,9 @@ export async function waitForAuthoringGpuHost({read,wait}){
 }
 
 async function main(){
-  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'},'reference-source':{type:'string'},prompt:{type:'string'}}});
+  const {values:v}=parseArgs({options:{model:{type:'string',default:'flux3'},origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'},'reference-source':{type:'string'},prompt:{type:'string'}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
-  const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
+  const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',model:v.model,requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
   const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
   let browser;
   report.inspectControls=v['inspect-controls'];report.decodeAfter=Number(v['decode-after'])||null;
@@ -83,9 +85,11 @@ async function main(){
     report.serving=await verifyAuthoringServer({origin:v.origin,repoRoot:repo});
     report.runtime=await (await fetch(`${v.origin}/api/runtime-config`)).json();
     report.expectedModelRoot=await fs.realpath(v['weights-root']);
-    assert.equal(report.runtime.flux3?.mounted,true,'requested local FLUX.3 weights must be mounted');
-    assert.equal(report.runtime.flux3.modelRoot,report.expectedModelRoot);
-    report.manifest=await (await fetch(`${v.origin}/flux3-weights/dit/manifest.json`)).json();
+    assert.ok(['flux2','flux3'].includes(v.model),'known requested model');
+    const mount=v.model==='flux2'?'klein':'flux3',base=v.model==='flux2'?'/klein-weights':'/flux3-weights';
+    assert.equal(report.runtime[mount]?.mounted,true,'requested local weights must be mounted');
+    assert.equal(report.runtime[mount].modelRoot,report.expectedModelRoot);
+    report.manifest=await (await fetch(`${v.origin}${base}/dit/manifest.json`)).json();
     // Keep recipe/source identity, not a second copy of all tensor descriptions.
     report.manifest={source:report.manifest.source,sampling:report.manifest.sampling,lora:report.manifest.lora};
     report.phase='browser';await write();
@@ -109,11 +113,11 @@ async function main(){
     report.phase='generate';await write();
     // Observe the actual pipeline promise, excluding weight loading and PNG persistence.
     // This wrapper preserves the production method and its caller; no synthetic work is substituted.
-    await browser.evaluate(`(async()=>{const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');
-      const {Flux3Transformer}=await import('./models/flux3-klein/flux3-transformer.js');
+    await browser.evaluate(`(async()=>{const {${v.model==='flux2'?'KleinPipeline':'Flux3Pipeline'}:Flux3Pipeline}=await import(${JSON.stringify(v.model==='flux2'?'./models/flux2-klein/klein-pipeline.js':'./models/flux3-klein/flux3-pipeline.js')});
+      const {${v.model==='flux2'?'KleinTransformer':'Flux3Transformer'}:Flux3Transformer}=await import(${JSON.stringify(v.model==='flux2'?'./models/flux2-klein/klein-transformer.js':'./models/flux3-klein/flux3-transformer.js')});
       const cacheWrites=[];const put=Cache.prototype.put;
       Cache.prototype.put=function(key,...args){const url=typeof key==='string'?key:key.url;
-        if(url.includes('/flux3-weights/'))cacheWrites.push({url,startedAt:performance.now()});return put.call(this,key,...args);};
+        if(url.includes(${JSON.stringify(base+'/')}))cacheWrites.push({url,startedAt:performance.now()});return put.call(this,key,...args);};
       const load=Flux3Pipeline.prototype.load;
       Flux3Pipeline.prototype.load=async function(...args){
         const interval=window.flux3SmokeLoad={startedAt:performance.now(),cacheWrites};
@@ -148,7 +152,7 @@ async function main(){
         finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();window.flux3SmokeFlameAfter=window.kaminosAssets.generationFlame.read().renderer;}
       };
       await window.kaminosAssets.open('generate');
-      const byId=id=>document.getElementById(id);byId('asset-image-model').value='flux3';byId('asset-image-model').dispatchEvent(new Event('change'));
+      const byId=id=>document.getElementById(id);byId('asset-image-model').value=${JSON.stringify(v.model)};byId('asset-image-model').dispatchEvent(new Event('change'));
       if(${!!v['reference-source']}){window.kaminosAssets.select({kind:'image',name:'Reference image',source:${JSON.stringify(v['reference-source']??null)}});byId('asset-use-reference').checked=true;byId('asset-use-reference').dispatchEvent(new Event('change'));}
       if(${v['inspect-controls']}){const toggle=byId('asset-show-segmented');if(!toggle)throw Error('Missing segmented display control');toggle.checked=false;toggle.dispatchEvent(new Event('change'));}
       byId('asset-image-size').value=${JSON.stringify(v.size)};byId('asset-prompt').value=${JSON.stringify(report.prompt)};byId('asset-seed').value='7006';

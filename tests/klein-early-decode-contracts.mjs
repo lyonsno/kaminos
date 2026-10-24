@@ -38,6 +38,6 @@ test('reference latents reach joint attention without changing the generated out
  const out=await p.generateScheduled({prompt:'test',seed:1,width:16,height:16,steps:4,reference});
  assert.deepEqual(order,['encode','allocate']);assert.equal(out.width,16);assert.equal(out.height,16);
 });
-test('unsupported reference conditioning is rejected, never silently ignored',async()=>{
- const {p}=fixture();await assert.rejects(p.generateScheduled({prompt:'test',seed:1,width:16,height:16,steps:4,reference:{width:16,height:16,rgb:new Float32Array(768)}}),/reference.*support/i);
+test('missing reference encoder weights fail the run, never silently ignore conditioning',async()=>{
+ const {p}=fixture();p.encodeReference=async()=>{throw Error('Reference encoder manifest: 404');};await assert.rejects(p.generateScheduled({prompt:'test',seed:1,width:16,height:16,steps:4,reference:{width:16,height:16,rgb:new Float32Array(768)}}),/Reference encoder manifest: 404/);
 });

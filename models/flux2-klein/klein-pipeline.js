@@ -7,6 +7,7 @@
 import { KleinTransformer } from './klein-transformer.js';
 import { KleinTextEncoder, gatherEmbeddings } from './klein-text-encoder.js';
 import { KleinVaeDecoder } from './klein-vae.js';
+import { KleinVaeEncoder } from './klein-vae-encoder.js';
 import { QwenTokenizer } from './qwen-tokenizer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinDutyScheduler } from './klein-duties.js';
@@ -153,11 +154,12 @@ export class KleinPipeline {
   // about 2.6 GB at 512 instead of 4 GB, at the cost of those reloads. A re-roll swaps nothing.
   // Weights: the hosted copy by default; weightsBase and level choose another base or jank level
   // (see klein-weights.js), and explicit textEncoderUrl / transformerUrl / vaeUrl roots override both.
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all', cacheWeights = true } = {}) {
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, encoderUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all', cacheWeights = true } = {}) {
     const defaults = kleinWeightUrls({ base: weightsBase, level });
     this.device = device;
     this.urls = { textEncoderUrl: textEncoderUrl ?? defaults.textEncoderUrl, transformerUrl: transformerUrl ?? defaults.transformerUrl,
       vaeUrl: vaeUrl ?? defaults.vaeUrl };
+    this.encoderUrl = encoderUrl ?? `${this.urls.vaeUrl.replace(/\/$/, '').replace(/[^/]+$/, '')}encoder`;
     this.kernels = { gemmVersion, sharedType, vaeActType };
     this.residency = residency;
     // Local packages already live on disk: opt out of both CacheStorage and HTTP cache copies.
@@ -259,7 +261,29 @@ export class KleinPipeline {
 
   // Model hooks: FLUX.2 Klein's choices here; another model on the same kernels and decoder (FLUX.3
   // Klein's Flux3Pipeline) overrides them.
-  async encodeReference() { throw new Error('Reference conditioning is not supported by this pipeline'); }
+  referenceIds(height,width) {
+    const ids=new Float64Array(height*width*4);
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++)ids.set([10,y,x,0],(y*width+x)*4);
+    return ids;
+  }
+  async encodeReference({rgb,width,height}) {
+    const {fits,cap}=this.sizeLimits(width,height);
+    if (!fits) throw Error(`Reference ${width} × ${height} exceeds this device's GPU buffer limit (${Math.round(cap/2**20)} MiB); choose a smaller reference image`);
+    if (!this.referenceEncoder) {
+      const response=await fetch(`${this.encoderUrl}/manifest.json`,this.cacheWeights?undefined:{cache:'no-store'});
+      if (!response.ok) throw Error(`Reference encoder manifest: ${response.status}`);
+      const manifest=await response.json();
+      if (manifest.schema !== 'kaminos.flux2-klein.vae-encoder-weights.v0') throw Error('Invalid reference encoder weight manifest');
+      const encoder=new KleinVaeEncoder(this.device,manifest);
+      encoder.actType=this.kernels.vaeActType;encoder.sharedType=this.kernels.sharedType;encoder.sched=this.sched;
+      try {
+        const stats={cacheWeights:this.cacheWeights,cachedBytes:0,downloadedBytes:0,cacheErrors:[]};
+        await encoder.load(await getWeightBytes(`${this.encoderUrl}/${manifest.bundle.file}`,manifest.bundle,stats));
+        this.referenceEncoder=encoder;
+      } catch(error) {encoder.destroy();throw error;}
+    }
+    return {latents:await this.referenceEncoder.encode(rgb,width,height),ids:this.referenceIds(height/16,width/16)};
+  }
   createTransformer(manifest) { return new KleinTransformer(this.device, manifest); }
   // The text length a generation asks for before device limits: the reference's padding (512) or
   // 'fitN', the prompt's own length plus N padding tokens.
@@ -310,9 +334,9 @@ export class KleinPipeline {
     this.destroyed = true;
     try { await this.sched.discard(); } catch { /* nothing unsubmitted to drop */ }
     await this.device.queue.onSubmittedWorkDone?.();
-    for (const model of [this.textEncoder, this.transformer, this.vae]) model?.destroy();
+    for (const model of [this.textEncoder, this.transformer, this.vae, this.referenceEncoder]) model?.destroy();
     this.preview?.destroy(); this.previewInput?.destroy(); this.promptCache?.buffer?.destroy();
-    this.textEncoder = this.transformer = this.vae = this.preview = this.previewInput = this.promptCache = null;
+    this.referenceEncoder = this.textEncoder = this.transformer = this.vae = this.preview = this.previewInput = this.promptCache = null;
     this.residentBytes = {};
   }
 
@@ -347,7 +371,7 @@ export class KleinPipeline {
   // synchronously at first use. Returns the number of pipelines compiled.
   async precompile({ runWarmup = work => work() } = {}) {
     const t0 = performance.now();
-    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae];
+    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae, this.referenceEncoder];
     for (const m of models) m.pipelineCollector = collected;
     const stubbed = [this.textEncoder, this.transformer].filter(m => !m.weightsResident);
     for (const m of stubbed) m.stubWeights();

@@ -93,3 +93,21 @@ To share the GPU with a renderer, pass a `schedule` with an inference-kit route 
 ## License
 
 The code in this directory is MIT ([LICENSE](LICENSE)). FLUX.2 [klein] 4B is by Black Forest Labs and its text encoder, Qwen3-4B, is by the Qwen team; both are released under the Apache License 2.0, as are the converted weights.
+
+## Local reference-image edits in Kaminos
+
+The Generate tab can use the selected image as a reference with FLUX.2 Klein 4B.
+Pack the encoder alongside the existing local `te/`, `dit/` and `vae/` directories
+with `python models/flux2-klein/pack-vae.py --model-dir <snapshot> --encoder --out <package>/encoder`,
+then mount that package with `KAMINOS_KLEIN_WEIGHTS_ROOT`. Select an image, choose
+FLUX.2, enable **Use selected image as reference**, and enter the edit prompt.
+The saved image retains the reference digest and the image-and-text route.
+The reference keeps its own aspect ratio, is reduced only above 1024² pixels,
+and is cropped to the sixteen-pixel latent grid; output dimensions are chosen separately.
+
+The pipeline accepts `reference: {rgb, width, height}` (row-major RGB floats in
+[-1,1], dimensions divisible by sixteen) and an optional `encoderUrl`.
+The encoder is loaded on the first reference request. Existing hosted packages
+without `encoder/` still support text-to-image; reference requests fail visibly
+if their encoder is unavailable. FLUX.2 reference tokens use T=10 with unscaled
+row/column coordinates and remain fixed between denoising steps.
