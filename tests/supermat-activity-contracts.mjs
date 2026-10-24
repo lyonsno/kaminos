@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 const source = await fs.readFile(new URL('../models/supermat/examples/external-app/app.js', import.meta.url), 'utf8');
-let now = 0, pending, finish, inference;
+let now = 0, encodeDelay = 0, pending, finish, inference;
 const raf = [], writes = [], submissions = [];
 const context = { configure() {}, getCurrentTexture: () => ({ createView() {} }) };
 const elements = Object.fromEntries(['scene', 'frame-gap', 'status', 'run', 'file', 'size', 'pause', 'stop', 'destroy', 'input', 'albedo', 'roughness', 'metallic'].map(id => [id, { width: 1024, height: 96, value: '512', files: [{}], textContent: '', getContext: () => id === 'scene' ? context : { putImageData() {} } }]));
@@ -12,7 +12,7 @@ const pass = { setPipeline() {}, setBindGroup() {}, draw() {}, end() {} };
 const app = { device: { addEventListener() {}, createBuffer: () => ({}), createShaderModule: () => ({}),
   createRenderPipelineAsync: async () => ({ getBindGroupLayout() {} }), createBindGroup: () => ({}),
   queue: { writeBuffer(_b, _o, data) { writes.push([...data]); } },
-  createCommandEncoder: () => ({ beginRenderPass: () => pass, finish: () => ({}) }) },
+  createCommandEncoder: () => { now += encodeDelay; return { beginRenderPass: () => pass, finish: () => ({}) }; } },
   foreground: { request(request) { pending = request; return { completion: new Promise(r => { finish = r; }) }; } },
   infer: () => new Promise((_r, reject) => { inference = reject; }), destroy: async () => {} };
 const sandbox = { window: {}, document: { getElementById: id => elements[id] }, location: { search: '' }, URLSearchParams,
@@ -26,7 +26,7 @@ assert.equal(state.status, 'idle', state.error);
 async function frame(requestedAt, submittedAt, receiptAt, submitError = false) {
   now = requestedAt; assert.ok(raf.length); raf.shift()(requestedAt);
   now = submittedAt;
-  try { pending.run({ submit(commands) { if (submitError) throw Error('submit failed'); submissions.push({ now, commands }); } }); }
+  try { pending.run({ submit(commands) { if (submitError) throw Error('submit failed'); submissions.push({ now, commands }); return { submittedAtMs: now }; } }); }
   catch (error) { assert.ok(submitError); }
   now = receiptAt; finish({ status: submitError ? 'failed-before-submission' : 'completed' }); await Promise.resolve();
 }
@@ -51,8 +51,15 @@ await frame(570, 580, 590);
 await frame(600, 640, 660);
 assert.equal(state.frameTiming.lastGapMs, 60);
 assert.equal(state.frameTiming.longestGapMs, 60);
-await frame(670, 900, 950, true);
-assert.equal(state.frameTiming.longestGapMs, 60, 'a failed submission cannot become a successful draw observation');
-assert.equal(state.frames, 6);
+encodeDelay = 200;
+await frame(670, 700, 950);
+assert.equal(submissions.at(-1).now, 900);
+assert.equal(state.frameTiming.lastGapMs, 260, 'encoding time must count toward the actual submission interval');
+assert.equal(state.frameTiming.lastSubmittedAt, submissions.at(-1).now);
+assert.equal(state.frameTiming.longestGapMs, 260);
+encodeDelay = 0;
+await frame(960, 1000, 1050, true);
+assert.equal(state.frameTiming.longestGapMs, 260, 'a failed submission cannot become a successful draw observation');
+assert.equal(state.frames, 7);
 assert.equal(raf.length, 0, 'failure must not manufacture ongoing successful frames');
 console.log('Outside-app marker follows submission time and preserves unsmoothed gaps without counting failed submissions');
