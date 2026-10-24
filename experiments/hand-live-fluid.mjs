@@ -34,8 +34,9 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
   });
   const count=Math.max(1,emitters.filter(e=>e.active).length);
   for(const emitter of emitters)emitter.source_flux_particles_per_second=emitter.active?sourceFlux/count:0;
-  return {packet_id:`native-finger-${frame.captureId}-${reason??'live'}`,route_identity:NATIVE_FINGER_ROUTE,
-    source_route:NATIVE_FINGER_ROUTE,source_frame_id:frame.captureId,timestamp_ms:frame.captureEpochMs,sample_age_ms:age,
+  const route=frame.identity?.backend==='webgpu-local'?'mobrecon-browser-mesh-finger-juice-v1':NATIVE_FINGER_ROUTE;
+  return {packet_id:`${route}-${frame.captureId}-${reason??'live'}`,route_identity:route,source_identity:frame.identity??null,
+    source_route:route,source_frame_id:frame.captureId,timestamp_ms:frame.captureEpochMs,sample_age_ms:age,
     adapter_contract:'hand-state-distal-axis-full-extension-emitters-v1',
     interaction_scope:'operator_finger_juice_experiment_not_world_registration',
     simulation_authority:reason?'invalid':'live_simulation',authority:{simulation_safe:!reason,stale:age>MAX_SAMPLE_AGE_MS,reason},

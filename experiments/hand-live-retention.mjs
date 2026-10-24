@@ -1,5 +1,5 @@
 // The camera sample survives even when the inference server never receives it.
-export async function openCaptureStore() {
+export async function openCaptureStore(retain) {
   const request=indexedDB.open('hand-live-diagnostic',1);
   request.onupgradeneeded=()=>request.result.createObjectStore('captures',{keyPath:'captureId'});
   const db=await new Promise((resolve,reject)=>{
@@ -14,6 +14,7 @@ export async function openCaptureStore() {
         transaction.onabort=()=>reject(transaction.error ?? Error('camera retention aborted'));
         transaction.onerror=()=>reject(transaction.error);
       });
+      await retain?.(capture);
     },
     close:()=>db.close(),
   };

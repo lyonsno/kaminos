@@ -3,7 +3,10 @@ export function liveMeshFrame(result, capture, identity) {
   for (const key of ['model','backend','device','checkpointSha256','sourceRevision']) {
     if (!identity[key] || result.identity?.[key] !== identity[key]) throw Error('route identity mismatch');
   }
-  if (result.interactionAuthority !== false || result.authority !== 'live_native_diagnostic_not_interaction') throw Error('diagnostic authority mismatch');
+  const browser=identity.backend==='webgpu-local';
+  if(browser&&(identity.routeId!=='kaminos.browser-hand-mesh.webgpu-local.v0'||result.identity?.routeId!==identity.routeId||
+    result.identity?.jointRegressorSha256!==identity.jointRegressorSha256))throw Error('browser route identity mismatch');
+  if (result.interactionAuthority !== false || result.authority !== (browser?'browser_webgpu_diagnostic_not_interaction':'live_native_diagnostic_not_interaction')) throw Error('diagnostic authority mismatch');
   if (capture.acquisitionMode === 'detector') {
     const a = result.acquisitionDetails;
     if (!identity.detector || JSON.stringify(result.identity?.detector) !== JSON.stringify(identity.detector) ||

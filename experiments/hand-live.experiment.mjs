@@ -8,6 +8,9 @@ export default {
   async create({host, inputs, record}) {
     const document = host.controls.document;
     const fingerJuice=inputs.fingerJuice===true;
+    const browser=inputs.backend==='webgpu';
+    if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
+    const browserBackend=browser?await (await import('./hand-browser-backend.mjs')).openBrowserHandBackend({host,inputs}):null;
     const endpoint = new URL(inputs.endpoint ?? 'http://127.0.0.1:8791');
     if (endpoint.hostname !== '127.0.0.1' || endpoint.protocol !== 'http:') throw Error('local diagnostic endpoint required');
     let apiTail=Promise.resolve();
@@ -18,7 +21,8 @@ export default {
       if (!response.ok) throw Error(value.error ?? `HTTP ${response.status}`);
       return value;
     };
-    const api=(path,body)=>{
+    const api=(path,body,source)=>{
+      if(browserBackend)return browserBackend.api(path,body,source);
       const request=apiTail.then(()=>requestApi(path,body));
       apiTail=request.catch(()=>{});
       return request;
@@ -29,12 +33,12 @@ export default {
     let acquisitionMode=inputs.acquisitionMode ?? 'manual', cropPadding=Number(inputs.cropPadding ?? 1.4), detectorThreshold=Number(inputs.detectorThreshold ?? .18);
     if (!['manual','detector'].includes(acquisitionMode) || (acquisitionMode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
     const scene = await host.scene.open();
-    const captures = await openCaptureStore();
+    const captures = await openCaptureStore(browserBackend?.retain);
     const geometry = new BufferGeometry();
     geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
     geometry.setIndex(health.faces.flat());
     const mesh = new Mesh(geometry,new MeshNormalMaterial({side:DoubleSide}));
-    mesh.name = 'MobRecon native diagnostic'; mesh.position.y=1.5; mesh.scale.setScalar(5); mesh.visible=false;
+    mesh.name = browser?'MobRecon browser diagnostic':'MobRecon native diagnostic'; mesh.position.y=1.5; mesh.scale.setScalar(5); mesh.visible=false;
     const asset = await scene.attach(mesh,{owned:true,metadata:{label:mesh.name,type:'live-diagnostic',source:health.identity}});
     document.defaultView.kaminosSelection?.clear();
     const video = document.createElement('video'); video.muted=true; video.autoplay=true; video.playsInline=true;
@@ -63,8 +67,8 @@ export default {
     const read = () => {
       const runtime=useFluid(live=>live.read());
       fluidState=runtime;
-      return {authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
-      identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
+      return {authority:browser?'browser_webgpu_diagnostic_not_interaction':'live_native_diagnostic_not_interaction',interactionAuthority:false,
+      identity:health.identity,endpoint:browser?null:endpoint.href,sessionId,running,starting,error,received,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
@@ -93,7 +97,7 @@ export default {
       }
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
-        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidError??fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
+        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / ${browser?'WebGPU':'CPU'} | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?`YOLO / ${browser?'WebGPU':'MLX'} crop`:acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidError??fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
       if (overlay && video.videoWidth) {
         const [x0,y0,x1,y1]=acquisitionMode==='detector' && last ? last.cropBox : cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
         overlay.style.borderColor=last?.acquisitionDetails?.fallback?'#ff725e':acquisitionMode==='detector'?'#60e1a1':'#ffd75a';
@@ -128,14 +132,14 @@ export default {
       const request={...capture,sessionId,handedness,pixelBasis:'unmirrored_camera',
         clock:'browser_sample_not_sensor_exposure',videoFrameMetadata:metadata,
         cropBox:cameraCrop(canvas.width,canvas.height,cropX,cropY,cropSize),
-        image:canvas.toDataURL('image/jpeg',.95).split(',')[1]};
+        imageMime:browser?'image/png':'image/jpeg',image:canvas.toDataURL(browser?'image/png':'image/jpeg',.95).split(',')[1]};
       lastSubmission={captureId:capture.captureId,database:'hand-live-diagnostic',store:'captures',origin:document.location.origin};
       const retained={captureId:capture.captureId,request,identity:health.identity,outcome:{state:'submitted'}};
       await captures.put(retained);
       let result;
       try {
-        result=await api('/frame',request);
-        await captures.put({...retained,outcome:{state:'computed',serverOutput:result.output}});
+        result=await api('/frame',request,canvas);
+        await captures.put({...retained,outcome:{state:'computed',serverOutput:result.output,...(browser?{prediction:result}:{})}});
       } catch(cause) {
         await captures.put({...retained,outcome:{state:'failed',error:String(cause),epochMs:Date.now()}});
         throw cause;
@@ -273,7 +277,7 @@ export default {
         finally {
           await waterChanges;
           const owned=fluid;fluid=null;
-          try{await owned?.dispose();}finally{captures.close();await scene.dispose();}
+          try{await owned?.dispose();}finally{captures.close();try{await browserBackend?.close();}finally{await scene.dispose();}}
         }
       },
     };
