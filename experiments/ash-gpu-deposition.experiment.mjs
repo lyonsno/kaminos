@@ -1,6 +1,7 @@
 import {Box3,Vector3,Mesh,SphereGeometry,MeshStandardMaterial} from '../lib/three.core.js';
 import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
 import {createGpuAshPatch} from '../ash/gpu-patch.mjs';
+import {disposeAsh} from '../ash/lifecycle.mjs';
 import {patchLayout} from '../ash/gpu-plan.mjs';
 const kilnSha='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 const finitePoint=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
@@ -72,6 +73,6 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
    const newButton=button('Create empty patch',()=>invoke('newPatch',{width:Number(width.value),cellSize:Number(cell.value)}));details.append(newButton);
    button('Save ash',async()=>{const data=await invoke('snapshot'),url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='gpu-kiln-ash.json';a.click();URL.revokeObjectURL(url);});
    const file=document.createElement('input');file.type='file';file.accept='.json';file.hidden=true;file.addEventListener('change',async()=>{try{if(file.files[0])await invoke('restore',JSON.parse(await file.files[0].text()));}catch(e){failed(e);}finally{file.value='';}});panel.append(file);button('Load ash',()=>file.click());status=document.createElement('p');status.setAttribute('role','status');panel.append(status);sync();
-  },dispose:async()=>{disposed=true;for(const control of controls)control.dispose();patch.dispose();await session.dispose();device.removeEventListener('uncapturederror',onError);}};
+  },dispose:async()=>{disposed=true;await disposeAsh({controls,patch,session,device,onError});}};
  }catch(e){producer?.destroy();patch?.dispose();device?.removeEventListener('uncapturederror',onError);await session.dispose();throw e;}
 }};
