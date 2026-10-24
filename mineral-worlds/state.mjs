@@ -107,6 +107,7 @@ export function checkpoint(s){return JSON.parse(JSON.stringify(s,(_,v)=>ArrayBuf
 export function restore(c){
   if(!c||c.version!==VERSION)throw Error('Unsupported mineral checkpoint version');
   if(!Number.isSafeInteger(c.tick)||c.tick<0||!Number.isSafeInteger(c.seed))throw Error('Invalid clock or seed');
+  if(!['flowstone','salt'].includes(c.kind)||!Number.isInteger(c.size)||c.size<4||!Number.isInteger(c.depth)||c.depth<2)throw Error('Invalid checkpoint process/grid identity');
   const s=createWorld(c),N=s.size*s.size;
   for(const key of fields){const expected=['brine','pressure'].includes(key)?N*s.depth:N;
     if(!Array.isArray(c[key])||c[key].length!==expected||!c[key].every(v=>Number.isFinite(v)&&(['bed','pressure'].includes(key)||v>=0)))throw Error(`Invalid checkpoint ${key}`);
