@@ -70,6 +70,7 @@ export default {
       const add=(key,text)=>{const option=fieldDocument.createElement('option');option.value=key;option.textContent=text;boundarySelect.append(option);};add('original','Original attachment cut');
       if(proposal)for(const c of result.candidateBranches)if(c.status==='boundary-variant'&&result.candidateBranches[c.variantOf]?.key===branch.key)add(c.key,`Alternative · ${c.triangles.toLocaleString()} triangles`);
      }
+     if(edit?.variantKey&&edit.variantKey!=='original'&&!Array.from(boundarySelect.children).some(o=>o.value===edit.variantKey)){const option=fieldDocument.createElement('option');option.value=edit.variantKey;option.textContent='Selected alternative';boundarySelect.append(option);}
      boundarySelect.value=edit?.variantKey??'original';
     }
     if(boundaryHint)boundaryHint.textContent=proposal?'Negative moves toward the tip; positive takes more of the body. Neighboring attachment cuts stay fixed. Edited cuts survive global detection changes.':'Select an attachment branch to compare and move its boundary.';
@@ -110,14 +111,15 @@ export default {
     busy=true;error='';sync();const generation=serial+1;
     try{
      const changed=next.minReachFraction!==reach||next.minAreaFraction!==smallArea||next.cleanupAreaFraction!==cleanup;
-     let activeCuts=changed?fixedCuts:(familyCuts??fixedCuts);
+     const persistentCuts=settings.resetBoundaries?[]:fixedCuts;
+     let activeCuts=settings.resetBoundaries?[]:changed?persistentCuts:(familyCuts??persistentCuts);
      if(settings.boundary&&!activeCuts.some(c=>c.key===settings.boundary.key))activeCuts=[...activeCuts,{key:settings.boundary.key,faces:settings.boundary.originalFaces}];
-     const response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts,boundary:settings.boundary});if(disposed||generation!==serial)return read();
+     const response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts:persistentCuts,boundary:settings.boundary});if(disposed||generation!==serial)return read();
      const candidate=response.result;
      const selectedKey=result?.hierarchy.nodes[selected]?.key,grouping=Object.entries(localDetail).map(([id,level])=>({key:result?.hierarchy.nodes[id]?.key,level}));
      if(first){if(selected>=candidate.hierarchy.nodes.length)throw Error('Saved selected piece does not exist');shapeHierarchyView(candidate,Math.min(detailLevel,candidate.hierarchy.maxDepth),localDetail);}
      fixedCuts=response.fixedCuts??fixedCuts;
-     familyCuts=settings.boundary?candidate.candidateBranches.filter(c=>c.status==='included').map(c=>({key:c.key,faces:Array.from(c.faces)})):changed?null:familyCuts;
+     familyCuts=settings.boundary?candidate.candidateBranches.filter(c=>c.status==='included').map(c=>({key:c.key,faces:Array.from(c.faces)})):changed||settings.resetBoundaries?null:familyCuts;
      result=candidate;viewDirty=true;reach=next.minReachFraction;smallArea=next.minAreaFraction;cleanup=next.cleanupAreaFraction;if(!first){
       if(changed&&!fixedCuts.length){selected=-1;localDetail={};}
       else {selected=selectedKey?result.hierarchy.nodes.find(n=>n.key===selectedKey)?.id??-1:selected;localDetail=Object.fromEntries(grouping.flatMap(g=>{const n=result.hierarchy.nodes.find(n=>n.key===g.key);return n?[[n.id,Math.max(n.depth,Math.min(g.level,result.hierarchy.maxDepth))]]:[];}));}
@@ -156,7 +158,7 @@ export default {
      partition:settings=>analyze(settings),
      boundary:value=>analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,boundary:boundaryRequest(value)}),
      boundaryVariant:key=>analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,boundary:boundaryRequest(0,key)}),
-     resetBoundaries:async()=>{clearTimeout(thresholdTimer);thresholdTimer=null;requestedThresholds=null;requestedBoundary=null;++serial;const oldCuts=fixedCuts,oldFamily=familyCuts;fixedCuts=[];familyCuts=null;try{return await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup});}catch(e){fixedCuts=oldCuts;familyCuts=oldFamily;throw e;}},
+     resetBoundaries:()=>{clearTimeout(thresholdTimer);thresholdTimer=null;requestedThresholds=null;requestedBoundary=null;return analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,resetBoundaries:true});},
      detail:value=>{if(!Number.isInteger(value)||value<0||value>Math.max(detailLevel,result.hierarchy.maxDepth))throw Error('Choose an existing hierarchy detail level');detailLevel=value;localDetail={};viewDirty=true;while(selected>=0&&result.hierarchy.nodes[selected].depth>detailLevel)selected=result.hierarchy.nodes[selected].parent??-1;draw();return event('detail',value);},
      hiddenCuts:value=>{if(typeof value!=='boolean')throw Error('Hidden cuts requires a boolean');showHiddenCuts=value;draw();return event('hidden-cuts',value);},
      view:value=>{if(!['original','regions'].includes(value))throw Error('Choose original or regions');mode=value;draw();return event('view',value);},
