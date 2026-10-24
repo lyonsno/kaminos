@@ -124,11 +124,23 @@ def import_source(root, name):
     return module
 
 
+def hdr_converter(root):
+    import OpenEXR
+    module=import_source(root,'exposure2hdr')
+    def write(path, rgb):
+        # skylibs0.7.4 calls NumPy's removed tostring(). Keep upstream HDR math
+        # intact and replace only its EXR file writer with the installed API.
+        channels={c:np.ascontiguousarray(rgb[...,i],dtype=np.float32) for i,c in enumerate('RGB')}
+        OpenEXR.File({},channels).write(str(path))
+    module.ezexr=SimpleNamespace(imwrite=write)
+    return module
+
+
 def reconstruct(root, output):
     # These exact upstream functions define the camera convention and EV merge.
     sys.path.insert(0,str(root))
     ball=import_source(root,'ball2envmap')
-    exposure=import_source(root,'exposure2hdr')
+    exposure=hdr_converter(root)
     env_dir=output/'envmap'; env_dir.mkdir()
     hdr_dir=output/'hdr'; hdr_dir.mkdir()
     names={ev:f'probe_ev{int(ev*10)}.png' for ev in EVS}

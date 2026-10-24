@@ -75,7 +75,7 @@ class TurboContract(unittest.TestCase):
         root=Path(os.environ['DIFFUSIONLIGHT_SOURCE_ROOT'])
         sys.path.insert(0,str(root))
         ball=self.probe.import_source(root,'ball2envmap')
-        hdr=self.probe.import_source(root,'exposure2hdr')
+        hdr=self.probe.hdr_converter(root)
         # Canonical projection contract: normal = normalize(camera + light).
         lights=np.eye(3)
         normals=ball.get_normal_vector(np.array([1,0,0]),lights)
