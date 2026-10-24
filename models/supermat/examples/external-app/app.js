@@ -88,16 +88,16 @@ try {
       const encoder = app.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
       pass.setPipeline(pipeline); pass.setBindGroup(0, binding); pass.draw(3);
-      pass.end(); opportunity.submit([encoder.finish()]);
+      pass.end(); const { submittedAtMs } = opportunity.submit([encoder.finish()]);
       // Submission spacing is observable here; GPU completion and screen
       // presentation are not. Keep the readout literal, without FPS averaging.
       const timing = state.frameTiming;
       if (timing.lastSubmittedAt !== null) {
-        timing.lastGapMs = now - timing.lastSubmittedAt;
+        timing.lastGapMs = submittedAtMs - timing.lastSubmittedAt;
         timing.longestGapMs = Math.max(timing.longestGapMs ?? 0, timing.lastGapMs);
         $('frame-gap').textContent = `Draw submission gap: ${timing.lastGapMs.toFixed(1)} ms · Longest: ${timing.longestGapMs.toFixed(1)} ms`;
       }
-      timing.lastSubmittedAt = now;
+      timing.lastSubmittedAt = submittedAtMs;
     } }).completion.then(receipt => { if (receipt.status === 'completed') { state.frames++; if (!stopped) requestAnimationFrame(frame); } });
   };
   requestAnimationFrame(frame); $('destroy').disabled = false;
