@@ -62,6 +62,14 @@ try{
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:.18}));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('YOLO / WebGPU crop'));
   report.reacquired=await read();
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('stop'));
+  report.stopped=await read();assert.equal(report.stopped.running,false);
+  assert.equal(report.stopped.retention?.pending??0,0);
+  assert.equal(report.stopped.retention?.error??null,null);
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
+  await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=5);
+  report.restarted=await read();assert.notEqual(report.restarted.sessionId,report.live.sessionId);
+  assert.equal(report.restarted.visible,true);
   await page.route('**/api/hand-record',route=>route.fulfill({status:503,body:'fixture retention failure'}));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('retention failed'));
   report.failure=await read();assert.equal(report.failure.running,false);assert.equal(report.failure.visible,true);
@@ -70,7 +78,8 @@ try{
   await page.setViewportSize({width:430,height:932});
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('frame'));
   await page.screenshot({path:out+'/mobile.png'});
-  await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
+  report.closeError=await page.evaluate(()=>window.kaminosWorkbenchExperiments.close().then(()=>null,error=>String(error)));
+  if(report.closeError!==null)assert.match(report.closeError,/retention failed/);
   assert.equal(await page.evaluate(()=>window.kaminosLocalLiquidState().mounted),false);
   report.tracks=await page.evaluate(()=>window.handFixtureStream.getTracks().map(t=>t.readyState));
   assert(report.tracks.every(x=>x==='ended'));
