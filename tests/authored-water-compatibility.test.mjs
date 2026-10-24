@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import * as water from '../authored-water-drop.mjs';
 assert.equal(typeof water.inspectAuthoredWaterCompatibility,'function','Authored water must diagnose mismatched setup before allocating or pressing Play');
@@ -30,7 +31,7 @@ const rows=[a,source('B',.63,100/7)].map(r=>{const built=createLocalLiquidEmitte
 const record=()=>rows.map(({object,...r})=>structuredClone(r));
 const history=createSceneEdits({read:()=>null,write(){throw Error('Unexpected transform edit');}}),original=record();
 const context={localLiquidSetup:null,structuredClone,THREE,normalizeLocalLiquidEmitter,LOCAL_LIQUID_EMITTER_TYPE,sceneObjects:rows,planAuthoredWaterMatch:plan,assertSceneConstructionAvailable(){},localLiquidEmitterRecords:record,sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),serializeSceneObject:r=>({...r,object:undefined}),scenePlacementTools:{edits:history},localLiquidHost:null,createLocalLiquidEmitterObject,updateWaterSourceGuides(){},syncLocalLiquidHostEmitters(){},authoredWaterControls:null,authoredWaterState:record,window:{_kaminosDirty(){}}};
-const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('const waterSettingTargets='),end=html.indexOf('\nlet authoredWaterSimulationTarget',start);vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('const waterSettingTargets='),end=html.indexOf('\nlet authoredWaterSimulationTarget',start);sceneContext(context);vm.runInContext(html.slice(start,end),context);
 context.matchAuthoredWaterSetup('A');assert.equal(history.state().undoCount,1);assert.equal(inspect(record()).compatible,true);assert.equal(rows[1].object.children.find(n=>n.userData.kaminosWaterPreview).count,2197);assert.deepEqual(record()[0],original[0],'Reference source remains untouched');const matched=record();
 await history.undo();assert.deepEqual(record(),original,'Undo restores exact source settings and amount');assert.equal(inspect(record()).compatible,false);
 await history.redo();assert.deepEqual(record(),matched);assert.equal(inspect(record()).compatible,true);assert.equal(authoredDropSetup(record()).solver.particleCount,3925);

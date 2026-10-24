@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your hand. In 3D.</title>
+  <meta name="description" content="Move your hand and see it reconstructed in 3D. MobRecon and hand detection run locally on your GPU with Kaminos WebGPU Inference Kit.">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header><nav aria-label="Demo links"><a href="https://github.com/lyonsno/kaminos/tree/main/demos/hand-mesh#model-setup">Source &amp; setup</a><a href="https://lyonsno.github.io/kaminos/inference-kit/">More demos ↗</a></nav></header>
+  <main>
+    <section class="intro"><p class="eyebrow">LIVE IN YOUR BROWSER</p><h1>Your hand. In 3D.</h1><p>Open, point, turn. A hand mesh follows your camera on your own GPU.</p></section>
+    <section class="workspace" aria-label="Live hand reconstruction">
+      <div class="stage"><div class="stage-top"><span class="pill" id="presence">CAMERA OFF</span><span class="stage-label">778 VERTICES · WEBGPU</span></div><div id="viewer" aria-label="3D hand mesh"></div><div id="empty"><span class="hand-symbol" aria-hidden="true">✳</span><p id="empty-text">Your hand will appear here.</p></div><div class="stage-bottom"><span>Local inference. Camera frames stay on this device.</span><button id="frame" class="text-button" disabled>Reset view</button></div></div>
+      <aside>
+        <div class="camera"><video id="camera" muted autoplay playsinline aria-label="Camera preview"></video><span id="camera-label">CAMERA PREVIEW</span></div>
+        <div class="controls"><button id="start" class="primary" disabled>Start camera</button><p id="status" role="status" aria-live="polite">Checking WebGPU…</p>
+          <label for="hand">Your hand</label><select id="hand"><option value="right">Right hand</option><option value="left">Left hand</option></select>
+          <div class="range-label"><label for="threshold">Detection confidence</label><output id="threshold-value" for="threshold">0.80</output></div><input id="threshold" type="range" min="0" max="1" step="0.01" value="0.8"><p class="hint">Higher rejects more uncertain detections. Lower it if your hand disappears.</p>
+        </div>
+      </aside>
+    </section>
+    <section class="setup" id="setup" aria-labelledby="setup-title"><div><p class="eyebrow">ONE-TIME SETUP</p><h2 id="setup-title">One command. Then your camera.</h2><p>Paste this into Terminal on macOS or Linux. It gets the demo and models, then opens the browser. Review the model terms when asked.</p><div class="command"><code id="setup-command">curl -fsSL https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/hand-mesh/setup.sh | bash</code><button id="copy-command" type="button">Copy command</button></div><p class="hint"><a href="https://github.com/lyonsno/kaminos/tree/main/demos/hand-mesh#model-setup">Setup details</a> · <a href="https://mano.is.tue.mpg.de/license.html">MANO terms</a></p></div><div class="import"><button id="choose">Use existing model folder</button><input id="files" type="file" webkitdirectory multiple hidden><p id="models-status" class="hint">Files are read locally. Nothing is uploaded.</p></div></section>
+    <details><summary>How it works</summary><p>A WiLoR hand detector locates the hand; MobRecon reconstructs its shape. Both neural networks run as WebGPU compute shaders using Kaminos WebGPU Inference Kit. With no accepted detection, reconstruction pauses and the mesh disappears. This shows hand shape and articulation, not calibrated world position.</p></details>
+  </main>
+  <footer><span>Built with <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Kaminos WebGPU Inference Kit</a></span><span><a href="https://github.com/SeanChenxy/HandMesh">MobRecon</a> · <a href="https://github.com/rolpotamias/WiLoR">WiLoR</a> · <a href="https://mano.is.tue.mpg.de/">MANO</a></span></footer>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

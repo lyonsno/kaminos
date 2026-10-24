@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -9,7 +10,7 @@ import {flamePoseToDomain} from '../scene-flame-emitter.mjs';
 import {DEFAULT_VOLUME_SCENE} from '../volume-scene-ontology.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const values={domControls:{a:{value:1}},rendererControls:{},presentationControls:{}};
-function context(){return vm.createContext({structuredClone,DEFAULT_VOLUME_SCENE,document:{getElementById:()=>({dataset:{}})},activeVolumeSettingsPresetReceipt:{label:'Accepted',preset:structuredClone(values)},readVolumeSettingsValues:()=>structuredClone(values),volumeSettingsPresetControlValuesEqual,flamePresetForLocalControls,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,buildVolumeSettingsPreset(){throw Error('capture URL constructed during live authoring read');},flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}});}
+function context(){return sceneContext({structuredClone,DEFAULT_VOLUME_SCENE,document:{getElementById:()=>({dataset:{}})},activeVolumeSettingsPresetReceipt:{label:'Accepted',preset:structuredClone(values)},readVolumeSettingsValues:()=>structuredClone(values),volumeSettingsPresetControlValuesEqual,flamePresetForLocalControls,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,buildVolumeSettingsPreset(){throw Error('capture URL constructed during live authoring read');},flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}});}
 test('inspector modified state compares current values without building a capture route',()=>{
  const source=html.slice(html.indexOf('function createFlameQuickFields()'));const expr=source.slice(source.indexOf('readSource:')+11,source.indexOf('readSourceControl:')).trim().replace(/,$/,'');
  const ctx=context();const read=vm.runInContext('('+expr+')',ctx);assert.equal(read().modified,false);ctx.activeVolumeSettingsPresetReceipt.preset.domControls.a.value=2;assert.equal(read().modified,true);
@@ -29,7 +30,7 @@ test('history snapshots retain migration provenance independently of editable st
 });
 test('interactive pose writes do not scan precise bounds for every object in the scene',()=>{
  const start=html.indexOf('function applyAuthoredScenePose('),code=html.slice(start,html.indexOf('\n}\n',start)+3);let applied;
- const ctx=vm.createContext({sceneObjects:[{id:'source',type:'flame'}],CAMERA_TYPE:'camera',FLAME_EMITTER_TYPE:'flame',LOCAL_LIQUID_EMITTER_TYPE:'water',
+ const ctx=sceneContext({sceneObjects:[{id:'source',type:'flame'}],CAMERA_TYPE:'camera',FLAME_EMITTER_TYPE:'flame',LOCAL_LIQUID_EMITTER_TYPE:'water',
   writeAuthoredFlameEmitterPose:value=>{applied=value;},updateTransformInspector(){},updateSelectionFeedback(){},window:{_kaminosDirty(){},kaminosSceneObjectDebugState(){throw Error('scanned whole scene bounds during pose preview');}}});
  vm.runInContext(code,ctx);ctx.applyAuthoredScenePose('source',{position:[1,2,3]});assert.deepEqual(applied.position,[1,2,3]);
 });
@@ -41,7 +42,7 @@ test('non-basin history preserves a legacy request while native basin applicatio
  const held=ctx.flameSettingsState();
  assert.equal(held.volumeSceneRequested,'canonical_plume');
  const expression=html.match(/setVolumeControlValue\('volume-scene', ([^;]+)\);\n  for\(const axis/)[1];
- assert.equal(vm.runInNewContext(expression,{state:held,DEFAULT_VOLUME_SCENE}),'canonical_plume');
+ assert.equal(runInSceneContext(expression,{state:held,DEFAULT_VOLUME_SCENE}),'canonical_plume');
  const applied=ctx.flameSettingsState(values,{label:'Native',preset:values});
- assert.equal(vm.runInNewContext(expression,{state:applied,DEFAULT_VOLUME_SCENE}),'flame');
+ assert.equal(runInSceneContext(expression,{state:applied,DEFAULT_VOLUME_SCENE}),'flame');
 });

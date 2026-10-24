@@ -6,6 +6,17 @@ const createSelectionMaskProxies=createSelectionFeedback.maskProxies;
 const feedbackFor=()=>{const scene=new THREE.Scene(),m=createSelectionMaskProxies(scene,{selected:new THREE.MeshBasicMaterial(),active:new THREE.MeshBasicMaterial()});return {update:m.update,proxies:m.proxies,state:()=>({meshCount:m.pairs().length})};};
 import {buildSurfelField,createSurfelObject} from '../trellis-surfels.mjs';
 
+test('changing children of the same selected root replaces stale outlines and preserves unchanged proxies',()=>{
+ const feedback=feedbackFor(),root=new THREE.Group(),geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial();
+ const source=new THREE.Mesh(geometry,material),copy=new THREE.Mesh(geometry,material);copy.position.x=3;root.add(source,copy);
+ const entries=[{id:'repeated',object:root}];feedback.update(entries,['repeated']);assert.equal(feedback.proxies().length,2);
+ const old=feedback.proxies()[1];root.remove(copy);const replacement=new THREE.Mesh(geometry,material);replacement.position.x=-3;root.add(replacement);
+ feedback.update(entries,['repeated']);assert.equal(feedback.proxies().length,2);assert.ok(!feedback.proxies().includes(old),'removed copy must not keep an outline');
+ assert.equal(feedback.proxies()[1].matrix.elements[12],-3,'replacement outline follows the new copy');
+ const retained=feedback.proxies().slice();feedback.update(entries,['repeated']);assert.deepEqual(feedback.proxies(),retained,'steady frames reuse their proxies');
+ root.remove(replacement);feedback.update(entries,['repeated']);assert.equal(feedback.proxies().length,1);
+});
+
 function surfels(){
   const coords=new Int32Array([128,128,192,129,128,192,128,129,192,129,129,192]);
   const field=buildSurfelField({vertices:new Float32Array([...coords].map(v=>(v+.5)/512-.5)),triangles:new Uint32Array([0,1,3,0,3,2]),geometryCoordinates:coords,

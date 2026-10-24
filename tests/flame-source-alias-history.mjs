@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -43,7 +44,7 @@ test('source dephasing alias records a source-scoped gesture and Undo/Redo leave
     writeSourceControl(key,value){assert.equal(key,id);values.other=value;return true;},
     syncVisibility(){},syncField(){},onError:error=>assert.fail(error.message),setInfo:message=>assert.fail(message),
   };
-  vm.createContext(ctx);vm.runInContext(handler,ctx);vm.runInContext(registration,ctx);
+  sceneContext(ctx);vm.runInContext(handler,ctx);vm.runInContext(registration,ctx);
   assert.equal(sessions.length,1,'emitter alias must receive a history adapter');
   field.dispatchEvent(new Event('focusin'));
   assert.equal(edits.state().active?.id,'@source:other');

@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,7 +14,7 @@ function context(){
   selectedSceneObjectEntry:()=>c.sceneObjects.find(o=>o.id===c.activeSceneObjectId),selectedSceneGroupEntry:()=>null,selectionTransformProxy:()=>({}),sceneSelectionMembers:()=>c.sceneSelection.ids.filter(id=>!id.endsWith('-field')),window:{_kaminosDirty(){}}
  };
  c.scenePlacementTools={selectionChanged(){},edits:createSceneEdits({read(){},write(){}})};
- vm.createContext(c);
+ sceneContext(c);
  for(const name of ['setSceneSelection','readSceneSelection','setActiveSceneObject','clearActiveSceneObjectSelection'])vm.runInContext(grab(name),c);
  const a=html.indexOf('window.selectSceneObject = function'),b=html.indexOf('\n};',a)+3;vm.runInContext(html.slice(a,b),c);
  if(html.includes('function setActiveSceneField('))vm.runInContext(grab('setActiveSceneField'),c);
@@ -35,7 +36,7 @@ test('a user selection enters shared chronological history and restores via Undo
  c.window.selectSceneObject('source');assert.equal(c.scenePlacementTools.edits.state().undoCount,1,'reselecting an identical target adds no noise');
 });
 test('a mesh overlapping a domain edge wins an ordinary viewport click',()=>{
- let picked=null;const c={polyEdit:null,vantageCaptureHeld:false,viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,viewportSuppressedClick:null,viewportPointerDown:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:null,sceneHitsFromViewportPointer:()=>[],pickVisibleFlameFromViewportPointer:()=>null,pickSceneObjectFromViewportPointer:()=>({id:'mesh',type:'glb'}),pickFlameDomainFromViewportPointer:()=>true,pickWaterDomainFromViewportPointer:()=>false,FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',setActiveSceneObject:id=>picked=id,clearActiveSceneObjectSelection(){},setInfo(){},window:{selectSceneObject:id=>picked=id,selectSceneField:id=>picked=id,_kaminosDirty(){}}};vm.createContext(c);vm.runInContext(grab('handleViewportSelectionClick'),c);c.handleViewportSelectionClick({button:0,type:'click',clientX:20,clientY:30});assert.equal(picked,'mesh');
+ let picked=null;const c={polyEdit:null,vantageCaptureHeld:false,viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,viewportSuppressedClick:null,viewportPointerDown:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:null,sceneHitsFromViewportPointer:()=>[],pickVisibleFlameFromViewportPointer:()=>null,pickSceneObjectFromViewportPointer:()=>({id:'mesh',type:'glb'}),pickFlameDomainFromViewportPointer:()=>true,pickWaterDomainFromViewportPointer:()=>false,FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',setActiveSceneObject:id=>picked=id,clearActiveSceneObjectSelection(){},setInfo(){},window:{selectSceneObject:id=>picked=id,selectSceneField:id=>picked=id,_kaminosDirty(){}}};sceneContext(c);vm.runInContext(grab('handleViewportSelectionClick'),c);c.handleViewportSelectionClick({button:0,type:'click',clientX:20,clientY:30});assert.equal(picked,'mesh');
 });
 test('selection and authored edits undo in one chronology without changing poses on selection replay',()=>{
  const c=context();vm.runInContext(grab('setupSelectionHistory'),c);c.setupSelectionHistory();const edits=c.scenePlacementTools.edits;

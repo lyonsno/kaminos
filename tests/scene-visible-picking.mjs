@@ -34,3 +34,8 @@ test('widened emitter rings own their visible screen footprint before the field'
  assert.equal(pick(15).length,0,'the helper must not claim the surrounding empty volume');
  }
 });
+
+
+test('an enlarged ordinary line retains its endpoint pixel aperture',()=>{
+ const camera=new THREE.PerspectiveCamera(40,1,.01,100);camera.position.z=10;camera.updateMatrixWorld();const parent=new THREE.Group();parent.scale.setScalar(2);const line=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.5,0,0),new THREE.Vector3(.5,0,0)]),new THREE.LineBasicMaterial());parent.add(line);parent.updateMatrixWorld(true);const point=new THREE.Vector3(1,0,0).project(camera);point.x+=10/1000;const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);assert.ok(api.visibleSceneIntersections({raycaster,roots:[parent],camera,viewport:{width:1000,height:1000}}).some(h=>h.object===line));
+});

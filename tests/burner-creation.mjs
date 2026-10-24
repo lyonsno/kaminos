@@ -1,3 +1,4 @@
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {checkedFireSourceRecord} from '../scene-fire-domain.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from '../scene-geometry.mjs';
 import {GROUP_TYPE,checkedGroupPose} from '../scene-group.mjs';
@@ -20,7 +21,7 @@ function harness({family='ring',objects=[source],groups=[]}={}){
   PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,GROUP_TYPE,checkedGroupPose,groupPivotPose:()=>structuredClone(pose),RIM_LIGHT_ID:'@rim-light',authoringBusy:false,scenePlacementTools:{edits},flameEmitterPose:pose,isFireLightFieldRoute:()=>true,applyFlameEmitterPose(){},setActiveSceneGroup(){},setActiveSceneObject(){},setInfo(){},sceneGroupDisplayLabel:g=>g.label,bedPoseBelowSource:()=>structuredClone(pose),makeSceneObjectId:prefix=>`${prefix}-${++serial}`,
   get authoredFlamePresent(){return state.objects.some(o=>o.id===FLAME_EMITTER_ID);},get sceneGroups(){return state.groups;},get sceneObjects(){return [...state.objects,{id:'kiln',type:'glb'}];},
   editSceneGroups(change){const groups=structuredClone(state.groups);change(groups);edits.apply('@scene-groups',{groups},'Group objects');},readBurnerGraph:()=>structuredClone(state),window:{__kaminosVolumeEmitterReceipt:{effective:{family}}}};
- vm.createContext(context);vm.runInContext(extract('function checkBurnerGraph(value)','function writeBurnerGraphUnchecked')+extract('function burnerEdit(change,label)','function bedPoseBelowSource')+extract('function addBurnerObject(kind)','function migrateLegacyBurner')+extract('window.createSceneGroupFromAllObjects = function','window.kaminosSceneObjectDebugState = function')+'\nthis.add=addBurnerObject;',context);
+ sceneContext(context);vm.runInContext(extract('function checkBurnerGraph(value)','function writeBurnerGraphUnchecked')+extract('function burnerEdit(change,label)','function bedPoseBelowSource')+extract('function addBurnerObject(kind)','function migrateLegacyBurner')+extract('window.createSceneGroupFromAllObjects = function','window.kaminosSceneObjectDebugState = function')+'\nthis.add=addBurnerObject;',context);
  edits.register('@scene-groups',{read:()=>({groups:structuredClone(state.groups)}),check:v=>v,write:v=>{state.groups=structuredClone(v.groups);}});
  edits.register('@burner-graph',{read:()=>structuredClone(state),check:context.checkBurnerGraph,write:next=>{if(failure){const error=failure;failure=null;throw error;}state=structuredClone(next);}});
  return{context,edits,read:()=>structuredClone(state),failOnce:()=>{failure=Error('runtime rejected write');}};

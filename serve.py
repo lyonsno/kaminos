@@ -3778,7 +3778,7 @@ def ingest_splat_asset(filename, content):
 
 def ingest_image_asset(filename, content):
     if Path(filename).name != filename or '/' in filename or '\\' in filename:
-        raise PermissionError("Path traversal")
+        raise ValueError("Path traversal")
     if Path(filename).suffix.lower() not in IMAGE_EXTENSIONS:
         raise ValueError("image must be PNG, JPEG, or WebP")
     if not content:
@@ -3789,27 +3789,42 @@ def ingest_image_asset(filename, content):
     digest = hashlib.sha256(content).hexdigest()
     directory = (root_path / digest).resolve()
     if not directory.is_relative_to(root_path):
-        raise PermissionError("Path traversal")
+        raise ValueError("Path traversal")
     directory.mkdir(exist_ok=True)
     # Keep the complete display name in metadata, independent of filesystem name limits.
     storage_name = hashlib.sha256(filename.encode('utf-8')).hexdigest() + Path(filename).suffix.lower()
     target = (directory / storage_name).resolve()
     if not target.is_relative_to(directory):
-        raise PermissionError("Path traversal")
-    try:
-        with target.open('xb') as handle:
-            handle.write(content)
-    except FileExistsError:
-        if target.read_bytes() != content:
-            raise ValueError('image asset content identity collision')
+        raise ValueError("Path traversal")
+    if target.exists() and target.read_bytes() != content:
+        raise ValueError('image asset content identity collision')
     metadata = {'schema': 'kaminos.image-asset.v0', 'name': filename, 'sha256': f'sha256:{digest}'}
-    with tempfile.NamedTemporaryFile(mode='w', dir=directory, prefix='.image-', delete=False) as handle:
-        temporary = Path(handle.name)
-        json.dump(metadata, handle)
+    temporary_image = temporary_metadata = None
     try:
-        os.replace(temporary, target.with_name(f'.{target.name}.json'))
+        # Keep incomplete pixels hidden from Assets. Publish the image only after
+        # its full bytes and display metadata have both been written successfully.
+        with tempfile.NamedTemporaryFile(mode='wb', dir=directory, prefix='.image-', delete=False) as handle:
+            temporary_image = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with tempfile.NamedTemporaryFile(mode='w', dir=directory, prefix='.image-', delete=False) as handle:
+            temporary_metadata = Path(handle.name)
+            json.dump(metadata, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_metadata, target.with_name(f'.{target.name}.json'))
+        try:
+            # link is exclusive: concurrent saves may share an identical asset,
+            # but must never replace an existing file with different bytes.
+            os.link(temporary_image, target)
+        except FileExistsError:
+            if target.read_bytes() != content:
+                raise ValueError('image asset content identity collision')
     finally:
-        temporary.unlink(missing_ok=True)
+        for temporary in (temporary_image, temporary_metadata):
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
     entry = build_asset_entry(root, target)
     entry['sha256'] = f'sha256:{digest}'
     return entry
@@ -5084,7 +5099,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             if len(content) != length:
                 raise ValueError('incomplete image body')
             entry = ingest_image_asset(params.get('name', [''])[0], content)
-        except (ValueError, PermissionError) as error:
+        except ValueError as error:
             self.send_json({'error': str(error)}, 400)
             return
         except OSError as error:

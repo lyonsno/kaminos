@@ -27,7 +27,7 @@ function materialBarrier(kernel,faceMaterial){
   }
   return barrier;
 }
-function triangleMeshes(root){const found=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)found.push(o);});return found;}
+function triangleMeshes(root){const found=[];function visit(o){if(o.userData.kaminosRepetitionCopy)return;if(o.isMesh&&o.geometry?.attributes?.position)found.push(o);for(const child of o.children)visit(child);}visit(root);return found;}
 // Every primitive of the object edits as one face set, in order, each with its own block of
 // vertices: the same order the GLB side merges primitives in, so face indices agree.
 function mergedArrays(meshes){

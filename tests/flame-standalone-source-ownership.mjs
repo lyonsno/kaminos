@@ -10,7 +10,7 @@ function replay({lightField=false,composition=null,records=[]}={}){
  const published=[],controls={emitterSourceLaw:'immersed-source'};
  const context={authoredFlamePresent:true,flameDomainFollowSource:true,activeSceneComposition:composition,
   isFireLightFieldRoute:()=>lightField,authoredFlameSourceRecords:()=>records,
-  requirePluralFlameSourceRuntime(){},readVolumeControls:()=>controls,
+  requirePluralFlameSourceRuntime(){},readVolumeControls:()=>controls,isSceneItemVisible:()=>true,
   flameDomainTranslation:[0,0,0],flameDomainScale:1,
   flameSourceInputs:rows=>rows.map(row=>({id:row.id,enabled:row.emissionEnabled!==false})),
   volumePrototype:{setImmersedSources:rows=>published.push(rows)},window:{_kaminosDirty(){}}};

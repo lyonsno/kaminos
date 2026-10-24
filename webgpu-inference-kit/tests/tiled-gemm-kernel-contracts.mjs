@@ -31,4 +31,28 @@ assert.match(gelu, /fn tiled_gemm_activate\(value:f32\)->f32\{return max\(value,
 assert.match(gelu, /fn unused_helper\(\)/);
 assert.match(gelu, /v\+=bias_n\[n\];v=tiled_gemm_activate\(v\);c\[/);
 assert.throws(() => createWebGpuTiledGemmShader({ activation: { expression: ' ' } }), /activation expression/);
+// Residual after the activation (y = act(Wx + b) + x, as in MobRecon's
+// mobile_unit and YOLOv8's Bottleneck): activation first, then the residual.
+const before = createWebGpuTiledGemmShader({ biasM: true, residual: true, activation: { expression: 'max(value, 0.0)' } });
+assert.match(before, /v\+=bias_m\[m\];v\+=res\[[^;]+;v=tiled_gemm_activate\(v\);c\[/);
+const after = createWebGpuTiledGemmShader({ biasM: true, residual: true, residualAfterActivation: true,
+  activation: { expression: 'max(value, 0.0)' } });
+assert.match(after, /v\+=bias_m\[m\];v=tiled_gemm_activate\(v\);v\+=res\[p\.c_off\+bat\*p\.c_sb\+m\*p\.c_sm\+n\*p\.c_sn\];c\[/);
+assert.match(createWebGpuTiledGemmShader({ residual: true, residualAfterActivation: true, precision: 'f16-tiles',
+  activation: { expression: 'max(value, 0.0)' } }), /v=tiled_gemm_activate\(v\);v\+=res\[/);
+assert.throws(() => createWebGpuTiledGemmShader({ residualAfterActivation: true, activation: { expression: 'value' } }),
+  /residualAfterActivation requires a residual/);
+assert.throws(() => createWebGpuTiledGemmShader({ residual: true, residualAfterActivation: true }),
+  /residualAfterActivation requires an activation/);
+// Residual read from another region of the output buffer (word 19 holds its
+// element offset): YOLOv8's C2f appends each bottleneck output, residual from
+// the preceding chunk, to the same concat buffer. No separate res binding.
+const inOutput = createWebGpuTiledGemmShader({ biasM: true, residual: true, residualInOutput: true, residualAfterActivation: true,
+  activation: { expression: 'value/(1.0+exp(-value))' } });
+assert.doesNotMatch(inOutput, /var<storage,read> res:/);
+assert.match(inOutput, /v=tiled_gemm_activate\(v\);v\+=c\[p\.z1\+bat\*p\.c_sb\+m\*p\.c_sm\+n\*p\.c_sn\];c\[p\.c_off/);
+assert.match(createWebGpuTiledGemmShader({ residual: true, residualInOutput: true }), /v\+=c\[p\.z1\+[^;]+;c\[p\.c_off/);
+assert.throws(() => createWebGpuTiledGemmShader({ residualInOutput: true }), /residualInOutput requires a residual/);
+assert.throws(() => createWebGpuTiledGemmShader({ residual: true, residualInOutput: true, types: { c: 'f16packed' } }),
+  /residualInOutput requires an f32 or f16 output/);
 console.log('tiled gemm kernel contracts: passed (264 shader identities)');

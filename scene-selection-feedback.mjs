@@ -26,13 +26,16 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
   const shown=(source,root)=>{for(let o=source;o;o=o.parent){if(!o.visible)return false;if(o===root)return true;}return true;};
   function update(entries,activeIds){
     const next=entries.map(entry=>entry.object),activeSet=new Set(activeIds);
-    if(next.length!==roots.length||next.some((object,i)=>object!==roots[i])){
+    const meshes=[];
+    for(const entry of entries)entry.object.traverse(source=>{
+      if(source.isMesh&&!source.isSkinnedMesh&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
+    });
+    if(next.length!==roots.length||next.some((object,i)=>object!==roots[i])||meshes.length!==pairs.length||meshes.some((mesh,i)=>mesh.source!==pairs[i].source||mesh.id!==pairs[i].id)){
       roots=next;maskScene.clear();pairs.length=0;
-      for(const entry of entries)entry.object.traverse(source=>{
-        if(!source.isMesh||source.isSkinnedMesh||source.userData.kaminosEditorHelper||source.userData.kaminosEditorOnly)return;
+      for(const {source,id,root} of meshes){
         const proxy=source.isInstancedMesh?new THREE.InstancedMesh(source.geometry,selected,source.count):new THREE.Mesh(source.geometry,selected);
-        proxy.matrixAutoUpdate=false;maskScene.add(proxy);pairs.push({source,proxy,id:entry.id,root:entry.object});
-      });
+        proxy.matrixAutoUpdate=false;maskScene.add(proxy);pairs.push({source,proxy,id,root});
+      }
     }
     for(const root of roots)root.updateWorldMatrix(true,true);
     if(camera)for(const root of roots)root.traverse(o=>{if(o.isLOD&&o.autoUpdate)o.update(camera);});

@@ -4,8 +4,13 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
 import unittest
+import resource
+import signal
+import errno
+from unittest.mock import patch
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
@@ -36,6 +41,69 @@ class ImageHttpContracts(unittest.TestCase):
         with urlopen(request) as response:
             self.assertEqual(response.status, 200)
             return json.load(response)['entry']
+
+    def test_interrupted_write_stays_out_of_catalog_and_retries_exact_pixels(self):
+        # Real OS write failure, isolated to this test process and its temporary store.
+        # It exercises both direct writes and temporary-file publication without mocking either.
+        body = b'image-transport-fixture' * 256
+        before = {row['source'] for row in serve.list_asset_entries(kind='image')}
+        old_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+        old_signal = signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        try:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (128, old_limit[1]))
+            with self.assertRaises(OSError):
+                serve.ingest_image_asset('interrupted.png', body)
+        finally:
+            resource.setrlimit(resource.RLIMIT_FSIZE, old_limit)
+            signal.signal(signal.SIGXFSZ, old_signal)
+        self.assertEqual({row['source'] for row in serve.list_asset_entries(kind='image')}, before,
+                         'a failed image write must not publish partial pixels into Assets')
+        entry = self.ingest('interrupted.png', body)
+        with urlopen(self.base + entry['source']) as response:
+            self.assertEqual(response.read(), body, 'retry must save the original bytes without regeneration')
+        self.assertEqual(self.ingest('interrupted.png', body)['source'], entry['source'])
+
+    def test_metadata_failure_reports_failed_save_without_publishing_an_unlabelled_image(self):
+        name = 'long-name-' + 'x' * 190 + '.png'
+        body = b'complete-image-transport'
+        before = {row['source'] for row in serve.list_asset_entries(kind='image')}
+        old_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+        old_signal = signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        try:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (128, old_limit[1]))
+            with self.assertRaises(HTTPError) as failed:
+                self.ingest(name, body)
+            self.assertEqual(failed.exception.code, 500)
+            self.assertEqual(json.load(failed.exception)['phase'], 'image-persistence')
+        finally:
+            resource.setrlimit(resource.RLIMIT_FSIZE, old_limit)
+            signal.signal(signal.SIGXFSZ, old_signal)
+        self.assertEqual({row['source'] for row in serve.list_asset_entries(kind='image')}, before,
+                         'metadata failure must not expose an image under its storage hash')
+        self.assertEqual(list(Path(self.directory.name).rglob('.image-*')), [], 'failed saves clean up temporary files')
+        entry = self.ingest(name, body)
+        self.assertEqual(entry['name'], name)
+        with urlopen(self.base + entry['source']) as response:
+            self.assertEqual(response.read(), body)
+
+    def test_filesystem_permission_failure_is_persistence_error_and_retry_keeps_pixels(self):
+        body = b'permission-failure-original-pixels'
+        before = {row['source'] for row in serve.list_asset_entries(kind='image')}
+        with patch.object(serve.os, 'link', side_effect=PermissionError(errno.EPERM, 'publication denied')):
+            with self.assertRaises(HTTPError) as failed:
+                self.ingest('permission.png', body)
+            self.assertEqual(failed.exception.code, 500, 'filesystem failure is not a bad upload')
+            self.assertEqual(json.load(failed.exception)['phase'], 'image-persistence')
+        self.assertEqual({row['source'] for row in serve.list_asset_entries(kind='image')}, before)
+        entry = self.ingest('permission.png', body)
+        with urlopen(self.base + entry['source']) as response:
+            self.assertEqual(response.read(), body)
+
+    def test_unsafe_image_names_remain_invalid_requests(self):
+        for name in ['../escaped.png', '/escaped.png', 'nested\\image.png']:
+            with self.subTest(name=name), self.assertRaises(HTTPError) as failed:
+                self.ingest(name, b'pixels')
+            self.assertEqual(failed.exception.code, 400)
 
     def test_webp_binary_transport(self):
         # Transport bytes, not a WebP decode fixture; live browser decode is separate.

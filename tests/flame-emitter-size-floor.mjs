@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusBounds,defaultFlameEmitterPose} from '../scene-flame-emitter.mjs';
 import {flameSourceInputs} from '../scene-fire-domain.mjs';
@@ -42,5 +43,5 @@ test('one emitter gizmo uses its provider pose target through zero instead of a 
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('function attachViewportGizmo('),code=html.slice(start,html.indexOf('\n}',start)+2);
  const source={type:'flame-emitter',object:{}},proxy={},helper={};let attached;
  const c={window:{},sceneSelection:{ids:['source']},selectionTransforms:{},splatCorrectionMode:null,FLAME_EMITTER_TYPE:'flame-emitter',selectedSceneObjectEntry:()=>source,selectionTransformProxy:()=>proxy,viewportGizmosVisible:true,transformControls:{attach:o=>{attached=o;},getHelper:()=>helper}};
- vm.runInNewContext(code+';attachViewportGizmo(selectedSceneObjectEntry().object);',c);assert.equal(attached,source.object,'a single emitter must reach its own clamping pose provider, not invertible group-frame math');
+ runInSceneContext(code+';attachViewportGizmo(selectedSceneObjectEntry().object);',c);assert.equal(attached,source.object,'a single emitter must reach its own clamping pose provider, not invertible group-frame math');
 });

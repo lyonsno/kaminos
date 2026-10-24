@@ -1,0 +1,553 @@
+{
+  "schema": "kaminos.hand-demo-client.v1",
+  "files": [
+    {
+      "path": "demos/hand-mesh/index.html",
+      "sha256": "11d64595676c61be62d75aa79cf5b161e91c19c1ca292fa01bfe82b1da8206b2"
+    },
+    {
+      "path": "demos/hand-mesh/main.js",
+      "sha256": "65d7f379fc799782415128a113501dfe9cd84d4dacb389f07263779df2c546c3"
+    },
+    {
+      "path": "demos/hand-mesh/model-files.js",
+      "sha256": "aa6791eb94e487375cdd4187ba7a8180615912d081a4e15d68314c941629d1d7"
+    },
+    {
+      "path": "demos/hand-mesh/style.css",
+      "sha256": "32f11a3f9573963736db8b6a9941a9dda4e49f66a98cb137097a8892fd2b760e"
+    },
+    {
+      "path": "lib/three.core.js",
+      "sha256": "40c6e328e7186d876cf469fffbfb6980b940ecc08cccc87d8b767436fe57ded9"
+    },
+    {
+      "path": "lib/three.tsl.js",
+      "sha256": "e9ac9b8360cf73162bbe02d872c70d4eb16d0998b9778a079d9d1f9a6c1f65c1"
+    },
+    {
+      "path": "lib/three.webgpu.js",
+      "sha256": "e5b62bfe5c8c2103dd9c2a42780e06b1e08733363031f6068851601663b330fd"
+    },
+    {
+      "path": "models/mobrecon/OPENMESH-LICENSE.txt",
+      "sha256": "768e6051e5d7a62fd4b0a14c0ce753a65c08218ade8e85bd1927d48c5ed9b750"
+    },
+    {
+      "path": "models/mobrecon/fixtures/tensor-shapes.json",
+      "sha256": "1bc8bf68011eda13d38e36b65c344ad39ef7aba0cf00e87a305d3f536a23dc75"
+    },
+    {
+      "path": "models/mobrecon/hand-mesh-route.js",
+      "sha256": "f2189e3a617831471826a0b97de4837024b5fed9703452865afe3107132159ee"
+    },
+    {
+      "path": "models/mobrecon/mobrecon-crop.js",
+      "sha256": "47882eaf2543446ebed7825da11554e51805b55a988eca85efaba08bde969ad7"
+    },
+    {
+      "path": "models/mobrecon/mobrecon-kernels.js",
+      "sha256": "a810ea36a285641cc4adc63568de1c4638bc248b43871b161e8fa4ff30cf4730"
+    },
+    {
+      "path": "models/mobrecon/mobrecon-network.js",
+      "sha256": "5621b4a0bcdc0c9e31a41b50b4a910d918a00df04b334511fdff3f87c7ecab47"
+    },
+    {
+      "path": "models/mobrecon/mobrecon-route.js",
+      "sha256": "ba30fb63cb50fbed57c550cb1dbc05b437a39fec5ef381fc94a2bee19f90b421"
+    },
+    {
+      "path": "models/mobrecon/model-package-source.js",
+      "sha256": "c8a96a84939558a8a38092098aefe7d91ade97385a4ee5944342b0974281b5c7"
+    },
+    {
+      "path": "models/mobrecon/parity-checks.js",
+      "sha256": "a117d3bf12b2169816c90441c0ea1ee43a32874bf1cc20fb4ccb271eee2c6a12"
+    },
+    {
+      "path": "models/mobrecon/parity-witness.js",
+      "sha256": "447116f2124113b75dd997705969d9b4c06764e13c363a6275981c9933e7a850"
+    },
+    {
+      "path": "models/mobrecon/portable_pack.py",
+      "sha256": "ed5e132843ac8c5a43ed45074a0ee70724de91028d9eef929be1bfef818817f1"
+    },
+    {
+      "path": "models/mobrecon/static-graph.js",
+      "sha256": "135a2f6c38a1c60f79d08a182ce2d3ccac892c2d3441fc0f6ee1e1157f081a2c"
+    },
+    {
+      "path": "models/wilor-hand-detector/detections.js",
+      "sha256": "34aefc54214aecb7c06f15b2b6f835cac46cbf28f889c420ef4a6b39c8fa1b02"
+    },
+    {
+      "path": "models/wilor-hand-detector/detector-kernels.js",
+      "sha256": "9fa875ff23fe6c2ac8f7797ce9661be57de25f74d3d228631d860a6b38ab67af"
+    },
+    {
+      "path": "models/wilor-hand-detector/detector-letterbox.js",
+      "sha256": "05dabd7dfce10b3ca0a24b67da4ba793949a211e32dd3b601c5c8a3e7d1e6bde"
+    },
+    {
+      "path": "models/wilor-hand-detector/detector-network.js",
+      "sha256": "e004e654d614dfb6871735f70e8208f3a049fb57ad2804910378ad7b942b2485"
+    },
+    {
+      "path": "models/wilor-hand-detector/detector-route.js",
+      "sha256": "5adbe4143ac7969f408d869ce05b1d6163ed1e67db5fd708c00653ce1155d18d"
+    },
+    {
+      "path": "models/wilor-hand-detector/pack-weights.py",
+      "sha256": "725bf9b6f0b8f5eccc413bce0d4c9cab38423fe22d2e8827f011595feb771421"
+    },
+    {
+      "path": "models/wilor-hand-detector/parity-witness.js",
+      "sha256": "4008892c14ca45607fd24f68102e950663415f53737772a22274fb5b9f074064"
+    },
+    {
+      "path": "models/wilor-hand-detector/profile-witness.js",
+      "sha256": "1e7ec0ace40d05e451bec293247ecd430218c96085819e65a7712a1111857e85"
+    },
+    {
+      "path": "webgpu-inference-kit/LICENSE",
+      "sha256": "cecf0c72b76354cd60888ec129b5e607330d24fc16df90543255c021baf39650"
+    },
+    {
+      "path": "webgpu-inference-kit/src/adaptive-command-duty.js",
+      "sha256": "4203f2c1ef15d25b059ec77ac091fe8caf86040867a8cc4d0fc2564541329a07"
+    },
+    {
+      "path": "webgpu-inference-kit/src/bounded-gpu-submission.js",
+      "sha256": "c8cd2fcccb33c0c79b6ac081e854739f01978e88a0a94fb739d9955267935b7e"
+    },
+    {
+      "path": "webgpu-inference-kit/src/chunked-json-evidence.js",
+      "sha256": "6a430357193f69a3a374a22bdd9db42991002e33f60658d64a9b461f9da5d562"
+    },
+    {
+      "path": "webgpu-inference-kit/src/command-duty-descriptor.js",
+      "sha256": "5d280aafe22fbbf200b96057bbc1b38d1cc1379e1f223a8e61418fcb745eaddd"
+    },
+    {
+      "path": "webgpu-inference-kit/src/command-duty-scheduler.js",
+      "sha256": "871af20ff7a6e946a2a0b011ed34c5454f3a03ca2fb83d3a6ab925c096b31c8b"
+    },
+    {
+      "path": "webgpu-inference-kit/src/cooperative-adapter-conformance.js",
+      "sha256": "7e5f0b26451580ee500508b6726b2ff7a008e7ca43dc3bf330a23a7907fdf10c"
+    },
+    {
+      "path": "webgpu-inference-kit/src/cooperative-boundary-manifest.js",
+      "sha256": "99d4ac5a03de1bf72d57485a17d37672a8b03d81d77e3dd58b454d95cb9f0957"
+    },
+    {
+      "path": "webgpu-inference-kit/src/cooperative-execution.js",
+      "sha256": "cf6b259a6531c3f44b7dc1e7b1e3dd462749d6afacb1b24ce27c300e72534431"
+    },
+    {
+      "path": "webgpu-inference-kit/src/cooperative-report-validation.js",
+      "sha256": "d570c0e27f72c486c7344d56864397f43cb32f0a7cf6f55faf2df2ae143d8451"
+    },
+    {
+      "path": "webgpu-inference-kit/src/core.js",
+      "sha256": "8bd9c41fbacbb565c87e4b82b784cd08c246c9778804f18c49fee78950e7d986"
+    },
+    {
+      "path": "webgpu-inference-kit/src/flash-attention-kernel.js",
+      "sha256": "e7c677f3d020c9d62ae1837eb77f94088d2f7044dffb4d1d0ff3b18545fd0136"
+    },
+    {
+      "path": "webgpu-inference-kit/src/foreground-budget-governor.js",
+      "sha256": "0613b0eb159687c4fc7581c456d91b89d4a5b2f3daa0a825c16f6e9866de85b9"
+    },
+    {
+      "path": "webgpu-inference-kit/src/foreground-opportunity.js",
+      "sha256": "42d14a7b9e4fbd7c350ce8ac4b16cfa94ebff2b58a96765f6d290b7dcebcef3f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/gpu-environment.js",
+      "sha256": "2c8294ddf5e58c686b6ddb456c0c830da917a9f8aafbcb42325dd90a198ce9e7"
+    },
+    {
+      "path": "webgpu-inference-kit/src/gpu-timing.js",
+      "sha256": "963b5870af72ed39ec51866fbad42182387bca5a39cf8c7ba89d760dcc3b8383"
+    },
+    {
+      "path": "webgpu-inference-kit/src/host-phase-recorder.js",
+      "sha256": "3814d8d388b58b45f44f6f90ea95e7e637f510a10d10bead8b678040068da01a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/index.js",
+      "sha256": "6660659318b6ea2d8f44c9a303458322406da0f9bd76333f3cd918a940488575"
+    },
+    {
+      "path": "webgpu-inference-kit/src/inference-control.js",
+      "sha256": "5f85be05ef6615833f640aec837f6d6daaa08be68356d45fef978df83ca4a2a0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/inference-coordinator.js",
+      "sha256": "7c501a8dfe0ffa225a82f38d18eb0947b8ccc7a66bd8b29dba1cf3d2d9d3721c"
+    },
+    {
+      "path": "webgpu-inference-kit/src/inference-queue.js",
+      "sha256": "54991f3a873b9896b2a73ccbc08523eaa30ef1306fc7607bf74104cc60756c0a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/inference-runtime.js",
+      "sha256": "c6ce3c63014d277007a2ae0c763befc22a0518944710e797a8a7e9b7443bc0ee"
+    },
+    {
+      "path": "webgpu-inference-kit/src/inference-session.js",
+      "sha256": "8549aedfab2e5e5c063ee891183252652d8bf1086074f955a1603129400f4b58"
+    },
+    {
+      "path": "webgpu-inference-kit/src/kernel-profile.js",
+      "sha256": "a33865eeb50fd2c44b60e9e19df3011bade90600ee8a01cb2de92a6b298278e1"
+    },
+    {
+      "path": "webgpu-inference-kit/src/kimodo-route.js",
+      "sha256": "e1235d83b18777b4c9959fde32c19623bb61632e2e9dbea1806bfa22d8bca3f4"
+    },
+    {
+      "path": "webgpu-inference-kit/src/latent-preview.js",
+      "sha256": "494e75988a73b6210b99be5d98fd2a54c965d9456a360fa8c0b959acba92e33d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/linear-kernel.js",
+      "sha256": "8f12ea81584ce246dfa3226c244b480554daf4f923679cbef1346a1879669b4f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-cache-storage.js",
+      "sha256": "2187802990585be29d5e8ba81072963d37d4bbdf6a02453adb116a3e014d667a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-chunk-plan.js",
+      "sha256": "4c7365e061f882ef3b13e890764d1cc36716bb1d4469cd6d9692e09d9c1de422"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-fetch-options.js",
+      "sha256": "ad61fe6864ad5f6db1406fb17c2564835ddde56525b17d683651579310d0c4d9"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-manifest.js",
+      "sha256": "65d54583e7eaada507a69a485ed8d084ee284aed454a7bd6b87d0265356e067f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-package.js",
+      "sha256": "4c8641af13d5e9bb3a79c97a20ef121d782000b8984284a0b48a3c27fd53f3de"
+    },
+    {
+      "path": "webgpu-inference-kit/src/model-resource-source.js",
+      "sha256": "6a24441746ccfeb1908a24452243992ad51ba8fbe418776c5f82bbd7af1fd22f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/moge-route.js",
+      "sha256": "382553e33e03591b95e9006aef3acee1c6e0ff99068e455bc0e9b5a39b89d8bd"
+    },
+    {
+      "path": "webgpu-inference-kit/src/parity-primitives.js",
+      "sha256": "a0b8814d685b86ce0259248b95033c4bdb063a2720ca5a50c54afc7583eb76ea"
+    },
+    {
+      "path": "webgpu-inference-kit/src/phase-program.js",
+      "sha256": "99fd76479da23c580896b67bb117e62eb0f09a83c5140ae2c13ededadce17b76"
+    },
+    {
+      "path": "webgpu-inference-kit/src/phase-resource-working-set.js",
+      "sha256": "1dd7a8904f4a763e45c0ace5374713faa7224289eb26747b0897add1d696ec2a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/resource-factory.js",
+      "sha256": "6f5fa15ff5a9758eb500a9b3a13e0ff8ec160ffe5ae95990e7c6a4af07f76b92"
+    },
+    {
+      "path": "webgpu-inference-kit/src/resource-residency.js",
+      "sha256": "d4aca700b64127a8a6bee57bc01c9e5e21007c90af5f884d640e5cb6a3146d6a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/route-boundary.js",
+      "sha256": "97bf40a7dba490fcde3a54c853b37edc0e9b406451e24d1d2a26471f8c987c7d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/route-receipt-consumer.js",
+      "sha256": "0ba5de311509b5131be3acc7303c4e235fcf465c2a23f9381d6f78d5a514dc22"
+    },
+    {
+      "path": "webgpu-inference-kit/src/route-receipt-helper.js",
+      "sha256": "f69c6fef952cde68e29cbafd61a857abf4e3cd2caf24ada59750e533ac0ae668"
+    },
+    {
+      "path": "webgpu-inference-kit/src/route-receipt.js",
+      "sha256": "db2d8fb0a5553fe5d0bcabe1f1d04a74d13bdd2ad5b9ecb8592841503d9e496f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/route-schema-contract.js",
+      "sha256": "2f936915b9524f0e8765b0747c3e913ee17dffd09245527a5ff5b948a12a452c"
+    },
+    {
+      "path": "webgpu-inference-kit/src/runtime-primitives.js",
+      "sha256": "90904d5c6af83e71650ee109afabdb4f62769542dec4b5f60eee571fa4d5b4ee"
+    },
+    {
+      "path": "webgpu-inference-kit/src/runtime-profile.js",
+      "sha256": "34576de7ecb9a45506f12e032c23b1dd3590f3948a98da26f2c53915e6ffe22c"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-browser-package-manifest.js",
+      "sha256": "9580f46e3842fe51f69e103c3f17b06ab9fe557dbf5959a49ec78774df6ec592"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-detr-decoder-phase-program.js",
+      "sha256": "a2f8dffba13fd7fe97089bde153b61b146ad0d1a508c472558b6144bd4a8c242"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-detr-encoder-phase-program.js",
+      "sha256": "0c63c0976ebcf29bbd01348a205d7160b65283329901cd81b4a075babd334ea2"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-detr-image-ingress.js",
+      "sha256": "a5bf7908879b27163f28a0f66f49e6ed292661ca63a9d2c9d66267f60c88359e"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-flash-attention.js",
+      "sha256": "70432e3ab102c363a784b1f19ab09defc7f37135e8f071177700011d7170abfe"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-fpn-neck-phase-program.js",
+      "sha256": "747716c23820faffa8e967379316ebfeca039d9f0000388aa69fba30924e3b7a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-patch-embed-phase-program.js",
+      "sha256": "d2e23e1eb195690fefdfa0bc57610b16b07c580f89034c45535cf5393eac7dc0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-preprocess-phase-program.js",
+      "sha256": "811b06cc462587f3aebb14d3706e1aa783f4b0febb2992d89c63ebb145b88d3d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-vit-block-stack-phase-program.js",
+      "sha256": "9a2df1fbbb398eb2be6f6f023a5045b3ce437a08949df827640ff0b3e3450266"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-vit-first-block-phase-program.js",
+      "sha256": "ef0e1bed2dcf1bda3cf35b2946b4eb02569ea65b77a6ff62d8bde827648bc0bb"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-image-vit-prefix-phase-program.js",
+      "sha256": "747233e2e499eb4445e9d005f3825ad6f87cdd55dadc708eda6ef9827c5a3b9f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-mask-decoder-island.js",
+      "sha256": "1de725a9d1c25f2f414f9404d266ffbd20f2bc21c74f6db62f0f60e2dc07ffe7"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-mask-tail-phase-program.js",
+      "sha256": "9b267346a8cf95185af67b4ff9fc1567d3a11bc38247f682e41bc28dd81fb0f6"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-online-attention-wgsl.js",
+      "sha256": "dd76e4ab51fa5b621970146e6105cdd2c73b8403136f6c8a526d8db4a9a1f4a0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-phase-cleanup.js",
+      "sha256": "93ae0905c82ff48949d31047ba7e779ff1dd27fe33e2ce9f459fdc6530597a93"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-pixel-decoder-phase-program.js",
+      "sha256": "c37404a95ee8b55209260af5d1e58a29a511a3f6fa483d8ed46aec40c02e39bd"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-prompt-fpn-phase-program.js",
+      "sha256": "2453ba232702639cb573316de252b64b149bfd157993938ddbee8925326b8526"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-prompt-text-ingress-phase-program.js",
+      "sha256": "bf1fddcee631e269b53f415230e90eb28ac4ada7686911c8e3729bde907f35b9"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-prompt-tokenizer.js",
+      "sha256": "2fa7309a40904a580952369ae05de9945375d16ac540a39c542565e60dda6de0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-range-phase-program.js",
+      "sha256": "8e9d42e6246ffd0fdea53eb969e4bd8395ed7b0bb6337f87accd60f4862f8708"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-readback.js",
+      "sha256": "9f23123b011af46b0a725dad775d070f1c942f28d1473bf2f42e068b556121d0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-scoring-phase-program.js",
+      "sha256": "8c467807c6e6857766293fbc3d18d0d16255498b93f22afea062e5d74f20813e"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-selection-postprocess-phase-program.js",
+      "sha256": "ef234dab055d5a0d8f549b3dcbd2e246bf3d5050fc140ab56e268f88e315263d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-tiled-linear.js",
+      "sha256": "a8d5f477af86760143bf2780fc0f2cf2f3c50bed94c8efde73b628e73ff357df"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam-vector-linear-wgsl.js",
+      "sha256": "996a830c9ba08100036586debc617767a6121abd541f96b877f99b5a45b40e35"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam.js",
+      "sha256": "ddc22e70ed5fc7d1554037cacb1ed94252455d81978b72ac7be9ec4bcd2aeb46"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-application-foreground.js",
+      "sha256": "d51f13f69698940becd1e7a900f0812ef7b2ab44cef74f5f34d796bb6a791504"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-browser-image-runtime.js",
+      "sha256": "8515620f75bc484ece107a0e1feb5e205c61c4d542ab561c9b3644a886bc6a40"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-browser-model-package-runtime.js",
+      "sha256": "86fa56d1d90a5b8bc215207eddf75c7e464c137e1885a3e308de8db0ae0cde3e"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-browser-resident-model-session.js",
+      "sha256": "4e6f3859e488205f333abf7dcdd7667fa21152095c6bc08a8323a1f965e3fc83"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-browser-serving-resources.js",
+      "sha256": "2a61804a95195d0850f68e35971d0c7e2f743fce31257658d21f4dc760148506"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-segmenter.js",
+      "sha256": "a4ff132fa4ba8d364733aaed40d36d5b4ecbebe2610d4138550a5b105ca471d3"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam3-source-mask.js",
+      "sha256": "0f99bbf39cc47b12fbdfff44185be1cb84fdf57c94af79c801b097e7ea5bf258"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-browser-tracker-caller-invocation.js",
+      "sha256": "81d61f419aa178d9eab0e86ec7f308718190aef93ee683f477ff8c7599e5687f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-browser-tracker-package-runtime.js",
+      "sha256": "8bc90dd98aad03f74ff8b6f16ce311747bda3472b681ca55f34def015ffe29da"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-browser-tracker-package.js",
+      "sha256": "fb8a86b91958bed288380474cdf9646b86a479aa218d3fe5787cec79ca674ddd"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-browser-tracker-session-driver.js",
+      "sha256": "d4cd46b9067c09cefd9ef3252f066f5bb6bd4b125a0f79b73fa19aba4a5e8d35"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-browser-tracker-session.js",
+      "sha256": "636b60309f84f47a8fd1f6910d75fbe856c82df21374a316f18df9474132f427"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-decoder-high-resolution-projection-phase-program.js",
+      "sha256": "73af2fa5179ba565b65c2aa87493af00675c0f20cb69b414778534823d578323"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-interactive-pointer-phase-program.js",
+      "sha256": "6746c5682fbc5b2d5164bdee2fca6cc5cf177bf866e38155eccccffa8b445761"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-mask-conditioning-phase-program.js",
+      "sha256": "ca116a1a1cb063fe8fcfe0000e17292c71afeaef8d8be18a54b29b609ac4208f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-memory-attention-evidence.js",
+      "sha256": "062bce0ae120a7a9bd69ee456f1a8eaafdc10eee8696235ba2ef079cc3e3bcc0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-memory-attention-phase-program.js",
+      "sha256": "d3afc4308810a5320cf86ec2c8e116c9ab0862e52779386ef9eca329d5322856"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-memory-encoder-phase-program.js",
+      "sha256": "380855327d8e23eaaaf5cbf35ac9fab8c3514732ebca104786600845cf76cdd6"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-multiplex-mask-decoder-phase-program.js",
+      "sha256": "87f2747df1b33f9eb870b84d719af9777f8698b789cb4a24c706006c661225c5"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-packet-artifact.js",
+      "sha256": "2eb5f28d4f3428236fef1a4f9cc464eec5c744b98b24eecd1b780073b7d8f6d6"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-propagation-memory-evidence.js",
+      "sha256": "9cd43a90f59cbbf66efaf01cfa062151e62a59026e9168a05cea25033d069ffa"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-resident-model-resources.js",
+      "sha256": "870692cc57fa69ed48bc0b1c0f07272106a98e51f2defeb2324ea9a5ce90f187"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-temporal-memory-bank-phase-program.js",
+      "sha256": "0e9b3e96bed66e142ba7167981e6810b0a997267a5af24cfe0e9d230dad5e671"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-tracker-parity.js",
+      "sha256": "b93f933c323be281f5ed6372309d90c80915d1bf8ab672325ab18c07919fc8f8"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-tracker-state.js",
+      "sha256": "caa3a46c50ddb188802b69a262499f412669eb85471155d19956a43354ea9dee"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sam31-two-image-backbone.js",
+      "sha256": "09f92f9c1257f93d1b744f328074a270d4a42f21510564c9d102e83d757e635a"
+    },
+    {
+      "path": "webgpu-inference-kit/src/scheduler-application.js",
+      "sha256": "f2a7fb4a1f22c7ca8069e6df782009f4bf60d482e42a9f552f5bce8cc048a318"
+    },
+    {
+      "path": "webgpu-inference-kit/src/scheduler-backpressure.js",
+      "sha256": "86a35503d9981bf20fe0509c36789de5f04ab0a435a8a5c9ac2b85788327afb9"
+    },
+    {
+      "path": "webgpu-inference-kit/src/scheduler-verification-receipt.js",
+      "sha256": "ab1991041e5fc9548fdf5ef2088230708f4b8a385d59ee83908f1eda438a38c0"
+    },
+    {
+      "path": "webgpu-inference-kit/src/scratch-arena.js",
+      "sha256": "a37faaf9ed09cee0e21bed7a760371bc2397604d5d50705650d99e7c18b89b60"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sf3d-route.js",
+      "sha256": "231f38486bbfd0f14395180e83298ff2d04cc2132df571d5dff9b31fe5996db6"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sharp-breathing-room-validation.js",
+      "sha256": "d4dae78fbdf79f68bc1df3bd4de387e033890c7054ae93723b7f1b0b288d901e"
+    },
+    {
+      "path": "webgpu-inference-kit/src/sharp-route.js",
+      "sha256": "faed83e0194b7f78c9e68e493e0b50234c641cb84dd1145076c7c49b144cff3f"
+    },
+    {
+      "path": "webgpu-inference-kit/src/staged-profile.js",
+      "sha256": "c51b219f1c46e28527120b5974e3bdae62fb185f8845c3acd35755247947a65d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/tensor-manifest.js",
+      "sha256": "f5fc298bf3619e2200c87abb9dcc0ec09727840e71f4fc440faeb73cdfc13674"
+    },
+    {
+      "path": "webgpu-inference-kit/src/tiled-gemm-kernel.js",
+      "sha256": "664cf176e1fd078c6fbe830455b56646f5fda427d3a26d9b39ce796358bc4d8d"
+    },
+    {
+      "path": "webgpu-inference-kit/src/weight-representation.js",
+      "sha256": "dda62aa930e1bfe757364fa2f340aaa101442caefe51023b049312227a75c558"
+    },
+    {
+      "path": "webgpu-inference-kit/src/worker-phase.js",
+      "sha256": "2045b5ac0c7ae7aced149ceaa48712f8f19ddcba0c54b141ceb7e77150b0e31e"
+    }
+  ]
+}

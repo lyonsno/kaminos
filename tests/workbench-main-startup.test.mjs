@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 // Execute the actual main startup tail with controlled environment/restore I/O.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ function fixture({saved=true,authoring=true,restoreFailure=false,silentFailure=f
   resolveWorkbenchViewerReady(){events.push('viewer ready');resolveReady();},rejectWorkbenchViewerReady(error){events.push('viewer failed');rejectReady(error);},
   async installOwnerWorkbenchEntry(){await ready;ownerCount++;session=host.open();const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());await session.attach(root,{owned:true});session.onFrame(()=>{});events.push('owner attached');},
  };
- vm.createContext(c);vm.runInContext(tail,c);
+ sceneContext(c);vm.runInContext(tail,c);
  return {c,events,scene,rows,ready,releaseVolume,releaseRestore,ownerCount:()=>ownerCount,frames,dispose:()=>session?.dispose()};
 }
 test('saved-scene startup admits owner only after actual restoration completes',async t=>{
