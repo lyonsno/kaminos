@@ -3,10 +3,20 @@
   "phase": "complete",
   "blender_version": "5.1.2",
   "effective_route": "Blender glTF importer; Cycles CPU, 2 threads, 24 samples",
+  "requested_views": [
+    "comparison",
+    "nozzle",
+    "nozzle-bore"
+  ],
+  "rendered_views": [
+    "comparison",
+    "nozzle",
+    "nozzle-bore"
+  ],
   "assets": [
     {
       "file": "annular-burner.glb",
-      "sha256": "3beb7226efc6a603af56a2b3538d83c5a321d94a79232ee92325aaf6b113a7f8",
+      "sha256": "68ea38c59de7a65eb9ce9f5ccefd9db87a22ea24af300b36123d2e812092fa59",
       "mesh_parts": 56,
       "triangles": 74232,
       "bounds_gltf": [
@@ -1228,7 +1238,7 @@
     },
     {
       "file": "linear-burner.glb",
-      "sha256": "7fa3997ce090934ac61b91826f976032c72202464d24640442a0b96882a508ae",
+      "sha256": "074f2f3a5fa0f1df8cdb126688db3622b0a87ed1ef921e84bf6ce9c01eb01bec",
       "mesh_parts": 100,
       "triangles": 37100,
       "bounds_gltf": [
@@ -1340,9 +1350,9 @@
     },
     {
       "file": "directional-nozzle.glb",
-      "sha256": "3bf44669ef84d1a38f4355d6e394bb26cf76db70145a96debe20cf8c3c637bc2",
-      "mesh_parts": 51,
-      "triangles": 77100,
+      "sha256": "2402eb04894043d1150a7be04f17429a91147933294d0674f7851d0efaa4a89e",
+      "mesh_parts": 52,
+      "triangles": 81196,
       "bounds_gltf": [
         [
           -0.1457500010728836,

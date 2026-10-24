@@ -131,11 +131,12 @@ def render(path, outfile, camera_side=(1, -1.5, 1.1), width=1600, height=1100):
     bpy.ops.render.render(write_still=True)
 
 
-def main(assets, render_enabled=True):
+def main(assets, render_enabled=True, views=None):
     out = assets/'previews'
     out.mkdir(exist_ok=True)
     report = {'status': 'running', 'phase': 'import', 'blender_version': bpy.app.version_string,
-              'effective_route': 'Blender glTF importer; Cycles CPU, 2 threads, 24 samples', 'assets': []}
+              'effective_route': 'Blender glTF importer; Cycles CPU, 2 threads, 24 samples',
+              'requested_views': views or ('all' if render_enabled else []), 'rendered_views': [], 'assets': []}
     report_path = out/'inspection.json'
     report_path.write_text(json.dumps(report, indent=2)+'\n')
     try:
@@ -155,9 +156,12 @@ def main(assets, render_enabled=True):
                 ('annular-top', 'annular-burner.glb', (.02, -.04, 3), 1100, 1100),
                 ('nozzle-bore', 'directional-nozzle.glb', (.20, -2, .65), 1100, 1100),
             ]:
+                if views and name not in views:
+                    continue
                 report['rendering'] = name
                 report_path.write_text(json.dumps(report, indent=2)+'\n')
                 render(assets/file, out/(name+'.png'), side, w, h)
+                report['rendered_views'].append(name)
         report.update(status='passed', phase='complete')
     except Exception:
         report.update(status='failed', error=traceback.format_exc())
@@ -170,5 +174,6 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--assets', type=Path, default=Path(__file__).resolve().parent.parent)
     p.add_argument('--no-render', action='store_true')
+    p.add_argument('--views', nargs='+', choices=['comparison', 'annular', 'linear', 'nozzle', 'annular-top', 'nozzle-bore'])
     args = p.parse_args(sys.argv[sys.argv.index('--')+1:])
-    main(args.assets.resolve(), not args.no_render)
+    main(args.assets.resolve(), not args.no_render, args.views)

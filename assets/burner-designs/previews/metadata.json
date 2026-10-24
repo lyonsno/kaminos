@@ -1,7 +1,7 @@
 {
   "name": "",
   "job_type": "command",
-  "job_id": "a32e84e86e3f",
+  "job_id": "5e6c978a0f6a",
   "input_path": "",
   "input_name": "",
   "params": {},
@@ -10,12 +10,11 @@
     "annular.png",
     "comparison.png",
     "inspection.json",
-    "kaminos-comparison.json",
     "kaminos-comparison.png",
     "linear.png",
     "nozzle-bore.png",
     "nozzle.png"
   ],
-  "created_at": 1792834813.169726,
-  "duration_s": 133.1
+  "created_at": 1792835296.072958,
+  "duration_s": 101.0
 }

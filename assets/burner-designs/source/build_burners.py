@@ -389,7 +389,10 @@ def nozzle():
         o = box(f'lockwheel_spoke_{i}', (.010, .040, .009),
                 (.153, .022*math.cos(aa), p.z+.022*math.sin(aa)), 'orange', .002)
         o.rotation_euler.x = aa
-    # Index ticks on the exposed left pivot bezel; each remains a mesh.
+    # A solid bezel seats the index marks around the exposed left pivot.
+    ring('aim_index_bezel', .025, .052, -.1443, -.140, 'dark_steel',
+         center=(0, 0, p.z), axis=(1, 0, 0), bevel=.0005)
+    # Each index tick remains a separately editable mesh.
     for i in range(7):
         aa = math.radians(-45 + 15*i)
         o = box(f'aim_index_{i}', (.0015, .010 if i%2==0 else .006, .0018),

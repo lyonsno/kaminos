@@ -48,7 +48,7 @@ blender --background --factory-startup --threads 2 --python-exit-code 1 \
   -- --assets assets/burner-designs --no-render
 ```
 
-Omit `--no-render` for six studio images. That route uses Cycles CPU, two threads, 24 samples and denoising. In this shared shop, submit rendering through Greenroom; the delivery receipt records its actual queue/route. The modeling script does not execute renders.
+Omit `--no-render` for six studio images. Use `--views comparison nozzle nozzle-bore` to refresh only those views after a nozzle revision; the report records the requested and rendered views. That route uses Cycles CPU, two threads, 24 samples and denoising. In this shared shop, submit rendering through Greenroom. The modeling script does not execute renders.
 
 ## Inspection scope
 
