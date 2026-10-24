@@ -134,12 +134,12 @@ export function installAuthoringAssets({document,controller,edits}) {
     const query=byId('asset-filter').value.toLowerCase(),entries=state.entries.filter(e=>(agentWork?`${e.agent?.id||''} ${e.agent?.label||''}`:`${e.name} ${e.label}`).toLowerCase().includes(query));
     const nextList=JSON.stringify([state.root,state.path,state.listRevision,query]);
     if(nextList!==listKey){listKey=nextList;observer.disconnect();previews.clear();
-    const makeButton=entry=>{
+    const makeButton=(entry,selected=state.selected)=>{
       const button=document.createElement('button');button.type='button';button.className='asset-entry';button.dataset.assetPath=entry.source||entry.path;button.title=entry.path;
       if(assetWithheld(entry)){button.dataset.visibility='withheld';const cover=document.createElement('div');cover.className='asset-hold-cover';const cross=document.createElement('b');cross.textContent='×';cross.setAttribute('aria-hidden','true');const stamp=document.createElement('strong');stamp.textContent='TOP SECRET';const notice=document.createElement('p');notice.textContent=entry.visibility.reason;cover.append(cross,stamp,notice);button.append(cover);}
       else if(entry.kind==='image'){const img=document.createElement('img');img.loading='lazy';img.src=entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
       const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='image'?'Image':'';button.append(subtitle);
-      button.setAttribute('aria-pressed',String(state.selected?.root===entry.root&&state.selected?.path===entry.path));
+      button.setAttribute('aria-pressed',String(!!selected&&(selected.source||selected.path)===(entry.source||entry.path)));
       button.onclick=()=>action(()=>entry.kind==='folder'?controller.browse(entry.root,entry.path):controller.select(entry));
       if(entry.kind==='mesh'&&!assetWithheld(entry))previews.set(button,entry);
       return button;
@@ -154,12 +154,12 @@ export function installAuthoringAssets({document,controller,edits}) {
         const date=document.createElement('small');date.textContent=new Date((first.producedAt||first.mtime)*1000).toLocaleString();summary.append(date);
         const grid=document.createElement('div');grid.className='asset-agent-entries';detail.append(summary,grid);
         let populated=false;
-        const populate=()=>{if(!detail.open||populated)return;populated=true;grid.replaceChildren(...items.map(entry=>{
-          const button=makeButton(entry),subtitle=button.querySelector('small');subtitle.textContent+=' · '+(entry.outputClass==='witness'?'Evidence':entry.outputClass==='generated'?'Generated':'Output');return button;
+        const populate=()=>{if(!detail.open||populated)return;populated=true;const selected=controller.read().selected;grid.replaceChildren(...items.map(entry=>{
+          const button=makeButton(entry,selected),subtitle=button.querySelector('small');subtitle.textContent+=' · '+(entry.outputClass==='witness'?'Evidence':entry.outputClass==='generated'?'Generated':'Output');return button;
         }));armPreviews();};
         detail.addEventListener('toggle',()=>{if(detail.open)expandedAgents.add(id);else expandedAgents.delete(id);populate();});populate();return detail;
       }));
-    }else container.replaceChildren(...entries.map(makeButton));
+    }else container.replaceChildren(...entries.map(entry=>makeButton(entry)));
     }
     armPreviews();
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry'))button.setAttribute('aria-pressed',String((state.selected?.source||state.selected?.path)===button.dataset.assetPath));
