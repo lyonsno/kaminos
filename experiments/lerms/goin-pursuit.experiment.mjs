@@ -67,19 +67,20 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const read=()=>({schema:'lerms.goin-pursuit.v1',route:'shared-owner-scene',task:task.read(),creature:actor.read(),
   goin:{id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray(),mounted:Boolean(goin.parent),visible:goin.visible},
   theft:theft?{socket:structuredClone(theft.socket),attachment:'provisional-source-bone-offset',escape:{id:escapeAsset.id,position:escape.getWorldPosition(new THREE.Vector3()).toArray()},release:'world-position detach; no fall or rolling solver'}:null,
-  water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-interface-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
+  water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-liquid-volume-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
  try{
   asset=await session.attach(goin,{owned:true,metadata:{label:'Goin',source:'lerms:provisional-goin-geometry',type:'experiment'}});
   if(escape)escapeAsset=await session.attach(escape,{owned:true,metadata:{label:'Escape point',source:'lerms:authored-escape-target',type:'experiment'}});
-  const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false,interests:[...inputs.creature.attention.interests,{object:asset.id,interest:1,anchor:'center',label:'Goin'}]}:undefined;
+  const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false,interests:[...inputs.creature.attention.interests,...theft?[]:[{object:asset.id,interest:1,anchor:'center',label:'Goin'}]]}:undefined;
   actor=await createWalkingCreature({host,record,inputs:{...inputs.creature,attention,actor_root:'live',action:'wander',play:false}},
    {...dependencies,publishInspector:false,steering});
   if(theft){actor.pose({bones:[theft.socket.bone]});stopPose=actor.observePose(presentCarry);stopCarry=session.onFrame(presentCarry);presentCarry();}
   if(waterInput){
    actor.pose({bones:[waterInput.receiver.bone]});
    const {lazarusFiniteSetup}=await import('../lazarus-fluid/contributions.mjs');
-   water=await host.fluid.open(lazarusFiniteSetup(waterInput.finite));
-   receiver=await createWaterExposure({descriptor:()=>water.getInterfaceRecordDescriptor()});
+   const setup=lazarusFiniteSetup(waterInput.finite);setup.solver.liquidFireContactCoverage='active-liquid-particles';
+   water=await host.fluid.open(setup);
+   receiver=await createWaterExposure({descriptor:()=>water.getContactRecordDescriptor()});
    waterState={status:'awaiting-sample',route:'shared-finite-fluid',receiver:structuredClone(waterInput.receiver)};
    stopWater=session.onFrame(()=>{if(!waterPending)sampleWater().catch(()=>{});});
    if(waterInput.running===true)water.setPaused(false);
