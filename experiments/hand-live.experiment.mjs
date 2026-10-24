@@ -13,7 +13,7 @@ export default {
     const idlePacket=reason=>idleFingerPacket(reason,browser?'mobrecon-browser-mesh-finger-juice-v1':undefined);
     if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
     const browserBackend=browser?await (await import('./hand-browser-backend.mjs')).openBrowserHandBackend({host,inputs}):null;
-    let scene,captures;
+    let scene,captures,captureOpening;
     try {
     const endpoint = new URL(inputs.endpoint ?? 'http://127.0.0.1:8791');
     if (endpoint.hostname !== '127.0.0.1' || endpoint.protocol !== 'http:') throw Error('local diagnostic endpoint required');
@@ -120,6 +120,7 @@ export default {
       if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
       stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;
       updateFluid();useFluid(live=>live.setPaused(true));sync();
+      if(captureOpening)await captureOpening.catch(()=>{});
       if (flight) await flight.catch(()=>{});
       try {await browserBackend?.stopRecording();}
       finally {
@@ -239,9 +240,17 @@ export default {
       try {
         if(browser) {
           if(captures?.read().error){await captures.close().catch(()=>{});captures=null;}
-          captures??=await openBrowserCaptureStore({onFailure:cause=>{
-            error=String(cause);stop().catch(cleanup=>{error=String(cleanup);sync();});
-          }});
+          if(!captures) {
+            captureOpening=(async()=>{
+              const opened=await openBrowserCaptureStore({onFailure:cause=>{
+                error=String(cause);stop().catch(cleanup=>{error=String(cleanup);sync();});
+              }});
+              if(disposed||ticket!==generation){await opened.close();return;}
+              captures=opened;
+            })().finally(()=>{captureOpening=null;});
+            await captureOpening;
+          }
+          if(disposed||ticket!==generation)return read();
         }
         if(fingerJuice)await queueWater(async()=>{if(!fluid)await mountWater(particleCount);});
         if(disposed||ticket!==generation)return read();

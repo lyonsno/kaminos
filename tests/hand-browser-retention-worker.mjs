@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {readFile} from 'node:fs/promises';
 const worker=await import('../experiments/hand-browser-retention-worker.mjs').catch(e=>{if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;return {};});
 const client=await import('../experiments/hand-browser-retention.mjs').catch(e=>{if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;return {};});
 test('browser capture retention has an independent worker path',()=>{
@@ -71,4 +72,37 @@ test('encoding failure leaves a durable phase report and retains any subsequent 
   await writer.enqueue({type:'outcome',captureId:'a',outcome:{state:'computed',prediction:{captureId:'a'}}});
   assert.match(saved[1].sourceFailure,/PNG encoder failed/);assert.equal(saved[1].outcome.state,'computed');
   assert.equal(closed,1);
+});
+for(const operation of ['stop','dispose'])test(`${operation} owns a recording worker that finishes loading late`,async t=>{
+  const saved=new Map(['Worker','__handStartupBackend','navigator'].map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+  t.after(()=>{for(const [key,descriptor] of saved)if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
+  let instance,sceneClosed=0,backendClosed=0,sessions=0,cameras=0,water=0;
+  globalThis.Worker=class {
+    constructor(){instance=this;this.terminated=false;}
+    postMessage(message){queueMicrotask(()=>this.onmessage({data:{type:'settled',sequence:message.sequence}}));}
+    terminate(){this.terminated=true;}
+  };
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async()=>{cameras++;throw Error('late camera start');}}}});
+  globalThis.__handStartupBackend={
+    api:async path=>{if(path==='/session'){sessions++;return {sessionId:'late'};}return {status:'loaded',identity:{model:'mobrecon_densestack_spiralconv',detector:{}},interactionAuthority:false,faces:Array.from({length:1538},()=>[0,1,2])};},
+    stopRecording:async()=>{},close:async()=>backendClosed++,
+  };
+  const url=new URL('../experiments/hand-live.experiment.mjs',import.meta.url);
+  const source=(await readFile(url,'utf8'))
+    .replaceAll(/from '([^']+)'/g,(_,specifier)=>`from '${new URL(specifier,url).href}'`)
+    .replace("await (await import('./hand-browser-backend.mjs')).openBrowserHandBackend({host,inputs})",'globalThis.__handStartupBackend');
+  const {default:experiment}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#${operation}`);
+  const scene={attach:async()=>({}),setView(){},onFrame:()=>()=>{},dispose:async()=>sceneClosed++};
+  const document={defaultView:{innerWidth:1000},location:{origin:'http://fixture'},createElement:()=>({style:{},getContext:()=>({})})};
+  const hand=await experiment.create({host:{controls:{document},scene:{open:async()=>scene},fluid:{openInlets:async()=>{water++;throw Error('late water start');}}},inputs:{backend:'webgpu',fingerJuice:true},record(){}});
+  const starting=hand.operations.start().catch(error=>error);
+  assert(instance,'worker was not started');
+  const cancelling=operation==='dispose'?hand.dispose():hand.operations.stop();
+  await new Promise(resolve=>setImmediate(resolve));
+  instance.onmessage({data:{type:'loaded'}});
+  await Promise.all([starting,cancelling]);
+  assert.equal(instance.terminated,true,'late worker survives cancelled startup');
+  assert.equal(sessions,0);assert.equal(cameras,0);assert.equal(water,0);
+  if(operation==='stop')await hand.dispose();
+  assert.equal(sceneClosed,1);assert.equal(backendClosed,1);
 });
