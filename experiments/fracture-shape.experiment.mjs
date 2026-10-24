@@ -33,20 +33,20 @@ export default {
    let result=null,view=null,mode=inputs.mode??'regions',explosion=Number(inputs.explosion??0),selected=Number(inputs.selected??-1),localDetail=structuredClone(inputs.localDetail??{}),viewDirty=true,drawnView=null,drawnExplosion=null,detailLevel=Number(inputs.detailLevel??1),showHiddenCuts=inputs.showHiddenCuts??false;
    let reach=Number(inputs.minReachFraction??.001),smallArea=Number(inputs.minAreaFraction??.0001),cleanup=Number(inputs.cleanupAreaFraction??.0001),busy=false,error='';
    if(!Number.isInteger(selected)||selected< -1||!['regions','original'].includes(mode)||!Number.isFinite(explosion)||explosion<0||explosion>1||!Number.isInteger(detailLevel)||detailLevel<0||typeof showHiddenCuts!=='boolean')throw Error('Invalid shape presentation setup');
-   let statusElement,selectedText,refineButton,keepButton,parentButton,resetButton,selectElement,detailInput,detailText,hiddenInput,modeInput,separationInput,fieldDocument;const numericInputs={};
+   let statusElement,selectedText,refineButton,keepButton,parentButton,resetButton,selectElement,localInput,localText,detailInput,detailText,hiddenInput,modeInput,separationInput,fieldDocument;const numericInputs={};
    worker=new Worker(new URL('../fracture-shape-partition.worker.mjs',import.meta.url),{type:'module'});
    worker.onerror=e=>{if(disposed)return;error=e.message||'Partition worker failed';busy=false;failAll(Error(error));sync();};
    worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);};
    const request=(settings,first)=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});worker.postMessage({id,settings,...(first?{geometry:{positions:sourcePositions,indices:sourceIndices}}:{})});});
    const setup=()=>({source:inputs.source,minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,detailLevel,showHiddenCuts,mode,explosion,selected,localDetail:{...localDetail}});
-   const read=()=>({route:'kaminos.fracture.attachment-draft.v2',source:inputs.source,triangleCount:indices.length/3,settings:{method:'geodesic-neck',minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,maxCutRatio:4},mode,explosion,selected,detailLevel,showHiddenCuts,busy,error,analysis:result?.analysis??null,localDetail:{...localDetail},setup:setup(),hierarchy:result?{schema:result.hierarchy.schema,nodes:result.hierarchy.nodes,maxDepth:result.hierarchy.maxDepth}:null,partition:view?{route:result.route,triangleCount:result.triangleCount,sourceComponents:result.sourceComponents,diagnostics:result.diagnostics,parts:view.parts,attachments:view.attachments,boundaryEdges:view.boundaries.length}:null,claim:'Nested surface grouping and geometric separation preview; no fracture physics'});
+   const read=()=>({route:'kaminos.fracture.attachment-draft.v2',source:inputs.source,triangleCount:indices.length/3,settings:{method:'geodesic-neck',minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,maxCutRatio:4},mode,explosion,selected,detailLevel,effectiveDetailLevel:result?Math.min(detailLevel,result.hierarchy.maxDepth):null,showHiddenCuts,busy,error,analysis:result?.analysis??null,localDetail:{...localDetail},setup:setup(),hierarchy:result?{schema:result.hierarchy.schema,nodes:result.hierarchy.nodes,maxDepth:result.hierarchy.maxDepth}:null,partition:view?{route:result.route,triangleCount:result.triangleCount,sourceComponents:result.sourceComponents,diagnostics:result.diagnostics,parts:view.parts,attachments:view.attachments,boundaryEdges:view.boundaries.length}:null,claim:'Nested surface grouping and geometric separation preview; no fracture physics'});
    const persist=()=>updateInputs(setup());
    const event=(kind,requested)=>{persist();const effective=read();record({kind:'fracture-shape.'+kind,phase:'applied',target:asset.id,requested,effective});return effective;};
    const belongs=(node,parent)=>{while(node!==null){if(node===parent)return true;node=result.hierarchy.nodes[node].parent;}return false;};
    const inheritedDetail=id=>{const path=[];for(let p=id;p!==null;p=result.hierarchy.nodes[p].parent)path.push(p);let level=detailLevel;for(const p of path.reverse())if(Object.hasOwn(localDetail,p))level=localDetail[p];return level;};
    const subtreeDepth=id=>result.hierarchy.nodes.reduce((max,node)=>belongs(node.id,id)?Math.max(max,node.depth):max,0);
    function sync(){
-    if(statusElement)statusElement.textContent=busy?(result?'Updating pieces from retained attachment search…':'Finding attachments from seven surface starting points…'):error||`${view?.parts.length??0} visible pieces · ${view?.attachments.length??0} shared boundaries · ${(indices.length/3).toLocaleString()} source triangles\n${result?.sourceComponents??0} source components. Attachment search retained for threshold changes. Local refinement changes the selected piece only. Separation is a geometric preview.`;
+    if(statusElement)statusElement.textContent=busy?(result?'Updating pieces from retained attachment search…':'Finding attachments from seven surface starting points…'):error||`${view?.parts.length??0} visible pieces · ${view?.attachments.length??0} shared boundaries · ${(indices.length/3).toLocaleString()} source triangles\n${result?.sourceComponents??0} source components. Attachment search retained for threshold changes. ${Object.keys(localDetail).length} local grouping edits. Separation is a geometric preview.`;
     if(selectElement&&result&&selectElement._result!==result){
      selectElement._result=result;
      selectElement.replaceChildren();const all=fieldDocument.createElement('option');all.value='-1';all.textContent='All pieces';selectElement.append(all);
@@ -55,24 +55,25 @@ export default {
     if(selectElement)selectElement.value=String(selected);
     const node=result?.hierarchy.nodes[selected];
     if(selectedText)selectedText.textContent=node?`${node.kind==='component'?'Source component':node.kind==='branch'?'Attachment piece':'Surface patch'} ${node.id+1} · ${node.triangles.toLocaleString()} triangles${node.agreement?` · same boundary in ${node.agreement} of seven searches`:''}`:'Click a fitting in the view to work on it.';
+    if(localInput){localInput.disabled=!node;localInput.min=String(node?.depth??0);localInput.max=String(node?subtreeDepth(node.id):0);localInput.value=String(node?Math.max(node.depth,Math.min(subtreeDepth(node.id),inheritedDetail(node.id))):0);localText.textContent=node?`Selected piece detail · ${localInput.value} / ${localInput.max}`:'Selected piece detail';}
     if(refineButton)refineButton.disabled=!node?.children.length||inheritedDetail(node.id)>=subtreeDepth(node.id);
     if(keepButton)keepButton.disabled=!node;
     if(parentButton)parentButton.disabled=!node||node.parent===null;
     if(resetButton)resetButton.disabled=!Object.keys(localDetail).length;
-    if(detailInput&&result){detailInput.max=String(result.hierarchy.maxDepth);detailInput.value=String(detailLevel);detailText.textContent=`Grouping detail · ${detailLevel} / ${result.hierarchy.maxDepth}`;}
+    if(detailInput&&result){detailInput.max=String(Math.max(detailLevel,result.hierarchy.maxDepth));detailInput.value=String(detailLevel);detailText.textContent=`Global grouping detail · ${detailLevel}${detailLevel>result.hierarchy.maxDepth?` (current hierarchy reaches ${result.hierarchy.maxDepth})`:` / ${result.hierarchy.maxDepth}`}`;}
     if(hiddenInput)hiddenInput.checked=showHiddenCuts;if(modeInput)modeInput.value=mode;if(separationInput)separationInput.value=String(explosion);
-    for(const [key,value]of Object.entries({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup})){const input=numericInputs[key];if(input&&fieldDocument.activeElement!==input)input.value=String(value*100);}
+    for(const [key,value]of Object.entries({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup})){const input=numericInputs[key];if(input&&input.dataset.applied!==String(value*100)){input.value=String(value*100);input.dataset.applied=String(value*100);}}
    }
    function draw(){
     if(!result)return;
-    if(viewDirty){view=shapeHierarchyView(result,detailLevel,localDetail);viewDirty=false;}
+    if(viewDirty){view=shapeHierarchyView(result,Math.min(detailLevel,result.hierarchy.maxDepth),localDetail);viewDirty=false;}
     const geometryChanged=drawnView!==view||drawnExplosion!==explosion;
     originalMeshes.forEach(m=>{m.visible=mode==='original';});regions.visible=mode!=='original';visibleCuts.visible=mode!=='original';hiddenCuts.visible=mode!=='original'&&showHiddenCuts;
     const offsets=view.parts.map(p=>{const v=new Vector3(...p.center).sub(center);return v.lengthSq()?v.normalize().multiplyScalar(diagonal*explosion).toArray():[0,0,0];});
     const colors=view.parts.map(p=>{const n=result.hierarchy.nodes[p.nodeId];return n.parent===null||p.id===0?new Color('#b5aa8d'):new Color().setHSL((n.id*.61803398875+.1)%1,.64,.49);});
     const colorAttribute=geometry.getAttribute('color'),position=geometry.getAttribute('position'),dim=new Color(.13,.15,.18);
     for(let face=0;face<view.labels.length;face++){
-     const part=view.labels[face],c=selected<0||belongs(view.parts[part].nodeId,selected)?colors[part]:dim,offset=offsets[part];
+     const part=view.labels[face],c=selected<0||belongs(result.hierarchy.faceOwners[face],selected)?colors[part]:dim,offset=offsets[part];
      for(let j=0;j<3;j++){const v=face*3+j;colorAttribute.setXYZ(v,c.r,c.g,c.b);if(geometryChanged)position.setXYZ(v,expanded[v*3]+offset[0],expanded[v*3+1]+offset[1],expanded[v*3+2]+offset[2]);}
     }
     colorAttribute.needsUpdate=true;if(geometryChanged){position.needsUpdate=true;geometry.computeBoundingSphere();geometry.computeBoundingBox();drawnView=view;drawnExplosion=explosion;}
@@ -91,23 +92,37 @@ export default {
     try{
      const candidate=await request({method:'geodesic-neck',...next,maxCutRatio:4},first);if(disposed||generation!==serial)return read();
      if(first){if(selected>=candidate.hierarchy.nodes.length)throw Error('Saved selected piece does not exist');shapeHierarchyView(candidate,Math.min(detailLevel,candidate.hierarchy.maxDepth),localDetail);}
-     result=candidate;viewDirty=true;reach=next.minReachFraction;smallArea=next.minAreaFraction;cleanup=next.cleanupAreaFraction;if(!first){selected=-1;localDetail={};}detailLevel=Math.min(detailLevel,result.hierarchy.maxDepth);busy=false;draw();return event('partition',settings);
+     const changed=next.minReachFraction!==reach||next.minAreaFraction!==smallArea||next.cleanupAreaFraction!==cleanup;
+     result=candidate;viewDirty=true;reach=next.minReachFraction;smallArea=next.minAreaFraction;cleanup=next.cleanupAreaFraction;if(!first&&changed){selected=-1;localDetail={};}busy=false;draw();return event('partition',settings);
     }catch(e){if(!disposed&&generation===serial){busy=false;error=e.message;sync();}throw e;}
    }
    function frame(){const bounds=new Box3().setFromObject(sourceRoot),center=bounds.getCenter(new Vector3()),r=bounds.getSize(new Vector3()).length();return session.setView({position:center.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.8)).toArray(),target:center.toArray()});}
    await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);frame();
-   const selectPiece=value=>{if(!Number.isInteger(value)||value< -1||value>=result.hierarchy.nodes.length)throw Error('Choose an existing hierarchy piece');selected=value;
-    if(value>=0&&!view.parts.some(p=>belongs(p.nodeId,value))){const visible=new Set(view.parts.map(p=>p.nodeId));let ancestor=value;while(!visible.has(ancestor)&&result.hierarchy.nodes[ancestor].parent!==null)ancestor=result.hierarchy.nodes[ancestor].parent;if(ancestor!==value){localDetail={...localDetail,[ancestor]:result.hierarchy.nodes[value].depth};viewDirty=true;}}
-    draw();return event('selection',value);};
-   const localLevel=level=>{if(selected<0)throw Error('Select a piece first');localDetail={...localDetail,[selected]:level};viewDirty=true;draw();return event('local-detail',{piece:selected,level});};
+   const selectPiece=value=>{if(!Number.isInteger(value)||value< -1||value>=result.hierarchy.nodes.length)throw Error('Choose an existing hierarchy piece');selected=value;draw();return event('selection',value);};
+   const localLevel=level=>{
+    if(selected<0)throw Error('Select a piece first');
+    if(!Number.isInteger(level)||level<result.hierarchy.nodes[selected].depth||level>subtreeDepth(selected))throw Error('Choose a detail level within the selected piece');
+    // An explicit edit replaces the subtree's settings; hidden child overrides
+    // must not reappear after a parent is collapsed and expanded again.
+    localDetail=Object.fromEntries(Object.entries(localDetail).filter(([id])=>!belongs(Number(id),selected)));
+    // Revealing a hidden target is an explicit grouping operation, never a
+    // side effect of browsing or reconstructing the current selection.
+    if(!view.parts.some(p=>belongs(p.nodeId,selected))){
+     const visible=new Set(view.parts.map(p=>p.nodeId));let ancestor=selected;
+     while(!visible.has(ancestor)&&result.hierarchy.nodes[ancestor].parent!==null)ancestor=result.hierarchy.nodes[ancestor].parent;
+     if(ancestor!==selected)localDetail[ancestor]=result.hierarchy.nodes[selected].depth;
+    }
+    localDetail[selected]=level;viewDirty=true;draw();return event('local-detail',{piece:selected,level});
+   };
    const operations={
      partition:settings=>analyze(settings),
-     detail:value=>{if(!Number.isInteger(value)||value<0||value>result.hierarchy.maxDepth)throw Error('Choose an existing hierarchy detail level');detailLevel=value;localDetail={};viewDirty=true;while(selected>=0&&result.hierarchy.nodes[selected].depth>detailLevel)selected=result.hierarchy.nodes[selected].parent??-1;draw();return event('detail',value);},
+     detail:value=>{if(!Number.isInteger(value)||value<0||value>Math.max(detailLevel,result.hierarchy.maxDepth))throw Error('Choose an existing hierarchy detail level');detailLevel=value;localDetail={};viewDirty=true;while(selected>=0&&result.hierarchy.nodes[selected].depth>detailLevel)selected=result.hierarchy.nodes[selected].parent??-1;draw();return event('detail',value);},
      hiddenCuts:value=>{if(typeof value!=='boolean')throw Error('Hidden cuts requires a boolean');showHiddenCuts=value;draw();return event('hidden-cuts',value);},
      view:value=>{if(!['original','regions'].includes(value))throw Error('Choose original or regions');mode=value;draw();return event('view',value);},
      separate:value=>{if(!Number.isFinite(value)||value<0||value>1)throw Error('Separation must be between 0 and 1');explosion=value;draw();return event('separation',value);},
      select:selectPiece,
      selectFace:face=>{if(!Number.isInteger(face)||face<0||face>=view.labels.length)throw Error('Choose an existing source triangle');return selectPiece(view.parts[view.labels[face]].nodeId);},
+     pieceDetail:localLevel,
      refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected];return localLevel(Math.min(subtreeDepth(selected),Math.max(node.depth,inheritedDetail(selected))+1));},
      keepTogether:()=>{if(selected<0)throw Error('Select a piece first');return localLevel(result.hierarchy.nodes[selected].depth);},
      resetLocal:()=>{localDetail={};viewDirty=true;draw();return event('reset-local',null);},
@@ -129,17 +144,19 @@ export default {
      const failed=e=>{error=e.message;sync();};
      selectElement=document.createElement('select');selectElement.addEventListener('change',()=>invoke('select',Number(selectElement.value)).catch(failed));row('Selected piece',selectElement);
      selectedText=document.createElement('p');panel.append(selectedText);
+     localInput=document.createElement('input');Object.assign(localInput,{type:'range',min:'0',max:'0',step:'1'});localInput.setAttribute('aria-label','Selected piece detail');localInput.addEventListener('input',()=>invoke('pieceDetail',Number(localInput.value)).catch(failed));localText=row('Selected piece detail',localInput);
      const actions=document.createElement('div');actions.style.cssText='display:flex;flex-wrap:wrap;gap:6px';panel.append(actions);
      const action=(text,operation)=>{const button=document.createElement('button');button.textContent=text;button.addEventListener('click',()=>invoke(operation).catch(failed));actions.append(button);return button;};
      refineButton=action('Finer here','refine');keepButton=action('Keep together','keepTogether');parentButton=action('Select larger piece','parent');resetButton=action('Reset local grouping','resetLocal');
      separationInput=document.createElement('input');Object.assign(separationInput,{type:'range',min:'0',max:'0.3',step:'0.005',value:String(explosion)});separationInput.setAttribute('aria-label','Preview separation');separationInput.addEventListener('input',()=>invoke('separate',Number(separationInput.value)).catch(failed));row('Preview separation',separationInput);
      modeInput=document.createElement('select');for(const [value,text]of [['regions','Colored pieces + visible cuts'],['original','Original textured surface']]){const option=document.createElement('option');option.value=value;option.textContent=text;modeInput.append(option);}modeInput.addEventListener('change',()=>invoke('view',modeInput.value).catch(failed));row('Compare',modeInput);
      detailInput=document.createElement('input');Object.assign(detailInput,{type:'range',min:'0',max:String(result.hierarchy.maxDepth),step:'1',value:String(detailLevel)});detailInput.setAttribute('aria-label','Grouping detail');detailText=row('Grouping detail',detailInput);detailInput.addEventListener('input',()=>invoke('detail',Number(detailInput.value)).catch(failed));
+     const detailHint=document.createElement('p');detailHint.textContent='Global detail replaces all local grouping edits. Selecting a piece only highlights it.';detailHint.style.fontSize='12px';panel.append(detailHint);
      const global=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Global detection settings';global.append(summary);panel.append(global);
-     const hint=document.createElement('p');hint.textContent='Threshold changes reuse the retained attachment search and reset local grouping. They apply when you finish editing a value.';hint.style.fontSize='12px';global.append(hint);
+     const hint=document.createElement('p');hint.textContent='Set the values, then Apply global thresholds. Changed thresholds reset local grouping; unchanged values preserve it.';hint.style.fontSize='12px';global.append(hint);
      const applyThresholds=()=>invoke('partition',Object.fromEntries(Object.entries(numericInputs).map(([k,v])=>[k,Number(v.value)/100]))).catch(failed);
      for(const [key,text,value]of [['minReachFraction','Minimum branch reach (% object extent)',reach],['minAreaFraction','Minimum branch area (% surface)',smallArea],['cleanupAreaFraction','Merge surface patches below (% surface)',cleanup]]){
-      const input=document.createElement('input');Object.assign(input,{type:'number',min:'0',max:'100',step:'any',value:String(value*100)});numericInputs[key]=input;input.addEventListener('change',applyThresholds);row(text,input,global);
+      const input=document.createElement('input');Object.assign(input,{type:'number',min:'0',max:'100',step:'any',value:String(value*100)});numericInputs[key]=input;row(text,input,global);
      }
      const update=document.createElement('button');update.textContent='Apply global thresholds';update.addEventListener('click',applyThresholds);global.append(update);
      hiddenInput=document.createElement('input');hiddenInput.type='checkbox';hiddenInput.setAttribute('aria-label','Show hidden cuts');hiddenInput.addEventListener('change',()=>invoke('hiddenCuts',hiddenInput.checked).catch(failed));row('Show hidden cuts (faint dashed lines)',hiddenInput,global);
