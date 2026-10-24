@@ -77,3 +77,24 @@ test('surface picking and keep-together use recorded, reconstructable piece oper
   await api.dispose();
  }finally{globalThis.Worker=old;}
 });
+
+for(const counts of [[1,3,4,2,2],[1,0,7,2,2]])test(`descendant refinement inherits detail, including an empty parent remainder (${counts[1]})`,async()=>{
+ const f=setup(),old=globalThis.Worker;
+ // A small explicit ownership tree tests local controls, not geometry detection.
+ const nodes=counts.map((ownTriangles,id)=>({id,parent:id? id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
+ const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
+ const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}})).filter(p=>p.triangles);parts.forEach((p,id)=>{p.id=id;});
+ const result={hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:Uint32Array.from(faceOwners,node=>parts.findIndex(p=>p.nodeId===node)),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
+ globalThis.Worker=class {postMessage({id}){queueMicrotask(()=>this.onmessage({data:{id,result:structuredClone(result)}}));}terminate(){}};
+ try{
+  const api=await definition.create({host:f.host,inputs:{source:'/source.glb'},record(){}});
+  api.operations.select(0);api.operations.refine();api.operations.refine();
+  const previous=api.operations.export();api.operations.select(1);const before=api.operations.export();assert.deepEqual(before.labels,previous.labels,'selection of an already-visible subtree must not coarsen it');api.operations.refine();const after=api.operations.export();
+  const owners=r=>r.labels.map(id=>r.partition.parts[id].nodeId);
+  assert.equal(after.localDetail[1],4,'refinement must advance the inherited level3 to4');
+  assert.ok(after.partition.parts.length>before.partition.parts.length);
+  assert.equal(owners(after)[0],owners(before)[0],'outside root remainder stays unchanged');
+  const provenance=new Map();for(let i=0;i<after.labels.length;i++){const id=after.labels[i];if(provenance.has(id))assert.equal(provenance.get(id),before.labels[i],'refinement cannot merge old groups');else provenance.set(id,before.labels[i]);}
+  api.operations.refine();assert.deepEqual(api.operations.export().labels,after.labels,'finest detail is stable');await api.dispose();
+ }finally{globalThis.Worker=old;}
+});
