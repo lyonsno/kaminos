@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {validateLightingReport, makeDiffuseEvaluator} from '../lib/inferred-lighting.js';
 import * as THREE from '../lib/three.core.js';
 import definition from '../experiments/inferred-lighting.experiment.mjs';
+import * as lighting from '../lib/inferred-lighting.js';
 import {createWorkbenchSceneHost} from '../workbench-scene-host.mjs';
 
 const constant = () => [[Math.sqrt(4*Math.PI), Math.sqrt(4*Math.PI), Math.sqrt(4*Math.PI)], ...Array.from({length:8}, () => [0,0,0])];
@@ -24,6 +25,40 @@ test('constant radiance produces neutral Lambertian gray independent of normal',
     for (const value of evaluate(normal)) assert.ok(Math.abs(value-.5)<1e-5);
     for (const value of evaluate(normal, 1)) assert.ok(Math.abs(value-1)<1e-5);
   }
+  const white = makeDiffuseEvaluator(constant(), 1);
+  assert.ok(Math.abs(white([0,0,1])[0]-1)<1e-5, 'material albedo must not be multiplied by the gray probe reflectance');
+});
+
+test('suite refuses failed, duplicate or incomplete cases rather than silently selecting a substitute', () => {
+  assert.equal(typeof lighting.validateLightingSuite,'function');
+  const suite={schema:'kaminos.inferred-lighting-suite.v1',status:'complete',cases:[{id:'studio',label:'Studio',status:'complete',reportUrl:'studio/lighting.json',environmentSha256:'fixture'}]};
+  assert.equal(lighting.validateLightingSuite(suite),suite);
+  assert.throws(()=>lighting.validateLightingSuite({...suite,status:'failed'}),/complete/);
+  assert.throws(()=>lighting.validateLightingSuite({...suite,cases:[...suite.cases,...suite.cases]}),/unique/);
+  assert.throws(()=>lighting.validateLightingSuite({...suite,cases:[{...suite.cases[0],status:'failed'}]}),/complete/);
+});
+
+test('failed case selection preserves the visible source, and manual input supersedes an in-flight selection', async t => {
+  const suite={schema:'kaminos.inferred-lighting-suite.v1',status:'complete',cases:
+    ['a','b'].map(id=>({id,label:id,status:'complete',reportUrl:`${id}.json`,environmentSha256:id}))};
+  let resolveB;
+  t.mock.method(globalThis,'fetch',async url=>({ok:true,json:async()=>{
+    if(String(url).endsWith('suite.json'))return suite;
+    if(String(url).endsWith('b.json'))return new Promise(resolve=>{resolveB=resolve;});
+    return {...report(),environmentSha256:'a'};
+  }}));
+  const session={attach:async root=>({id:'fixture',root}),readView:()=>({}),setView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>{}};
+  const instance=await definition.create({host:{scene:{open:async()=>session}},inputs:{suiteUrl:'https://fixture.test/suite.json'},record(){}});
+  assert.equal(instance.read().caseId,'a');
+  await assert.rejects(instance.operations.selectCase('missing'),/Unknown/);
+  const mismatch=instance.operations.selectCase('b');await new Promise(resolve=>setImmediate(resolve));
+  resolveB({...report(),environmentSha256:'wrong'});
+  await assert.rejects(mismatch,/hash mismatch/);assert.equal(instance.read().caseId,'a');
+  const pending=instance.operations.selectCase('b');await new Promise(resolve=>setImmediate(resolve));
+  instance.operations.loadReport({...report(),environmentSha256:'manual'});
+  resolveB({...report(),environmentSha256:'b'});await pending;
+  assert.equal(instance.read().environmentSha256,'manual');assert.equal(instance.read().caseId,null);
+  await instance.dispose();
 });
 
 test('shared-scene comparison starts unverified, loads three probes, and releases only its objects', async () => {
