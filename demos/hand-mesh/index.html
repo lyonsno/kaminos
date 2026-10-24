@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Live hand mesh · Kaminos</title>
+  <title>Your hand. In 3D.</title>
   <meta name="description" content="Move your hand and see it reconstructed in 3D. MobRecon and hand detection run locally on your GPU with Kaminos WebGPU Inference Kit.">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header><a class="brand" href="https://lyonsno.github.io/kaminos/inference-kit/">Kaminos<span>WebGPU Inference Kit</span></a><nav><a href="https://github.com/lyonsno/kaminos/tree/main/demos/hand-mesh#model-setup">Source &amp; setup</a><a href="https://lyonsno.github.io/kaminos/inference-kit/">More demos ↗</a></nav></header>
+  <header><nav aria-label="Demo links"><a href="https://github.com/lyonsno/kaminos/tree/main/demos/hand-mesh#model-setup">Source &amp; setup</a><a href="https://lyonsno.github.io/kaminos/inference-kit/">More demos ↗</a></nav></header>
   <main>
-    <section class="intro"><p class="eyebrow">MOBRECON / LIVE IN YOUR BROWSER</p><h1>Your hand. In 3D.</h1><p>Open, point, turn. A hand mesh follows your camera on your own GPU.</p></section>
+    <section class="intro"><p class="eyebrow">LIVE IN YOUR BROWSER</p><h1>Your hand. In 3D.</h1><p>Open, point, turn. A hand mesh follows your camera on your own GPU.</p></section>
     <section class="workspace" aria-label="Live hand reconstruction">
       <div class="stage"><div class="stage-top"><span class="pill" id="presence">CAMERA OFF</span><span class="stage-label">778 VERTICES · WEBGPU</span></div><div id="viewer" aria-label="3D hand mesh"></div><div id="empty"><span class="hand-symbol" aria-hidden="true">✳</span><p id="empty-text">Your hand will appear here.</p></div><div class="stage-bottom"><span>Local inference. Camera frames stay on this device.</span><button id="frame" class="text-button" disabled>Reset view</button></div></div>
       <aside>
