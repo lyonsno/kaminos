@@ -40,6 +40,7 @@ export default {
     let exposure = 0, yaw = 0, panel = null, surface = 'probes', surfaceIdentity = null, albedo = null;
     const normal = new Vector3(), matrix = new Matrix3();
     const read = () => ({objectId:asset.id, status:report ? 'estimated' : 'awaiting-report', exposure, yaw,
+      estimator:report ? (report.estimator ?? 'EMLight') : null,
       checkpointSha256:report?.checkpointSha256 ?? null, effectiveDevice:report?.effectiveDevice ?? null,
       sourceRevision:report?.sourceRevision ?? null, environmentSha256:report?.environmentSha256 ?? null,
       caseId,cases:suite?.cases.map(({id,label})=>({id,label})) ?? [],surface,surfaceIdentity,metrics:report?.metrics ?? null,
@@ -63,7 +64,7 @@ export default {
     }
     function sync() {
       if (!panel) return;
-      panel.status.textContent = report ? `EMLight · ${report.effectiveDevice} · ${surface === 'probes' ? 'relative diffuse light' : 'MoGe + SuperMAT albedo · diffuse only'}` : 'No estimate loaded';
+      panel.status.textContent = report ? `${report.estimator ?? 'EMLight'} · ${report.effectiveDevice} · ${surface === 'probes' ? 'relative diffuse light' : 'MoGe + SuperMAT albedo · diffuse only'}` : 'No estimate loaded';
       panel.image.hidden = !report;
       if (report) panel.image.src = report.input.image;
       if (panel.cases) panel.cases.value = caseId ?? '';
@@ -161,7 +162,7 @@ export default {
         };
         const reference=document.createElement('img'),estimated=document.createElement('img'),metrics=document.createElement('p');
         const maps=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Environment maps';maps.append(summary);
-        for (const [preview,title] of [[reference,'Reference HDR panorama'],[estimated,'Estimated SG panorama']]) {
+        for (const [preview,title] of [[reference,'Reference HDR panorama'],[estimated,'Estimated environment']]) {
           preview.alt=title;preview.style.cssText='width:100%;aspect-ratio:2/1;object-fit:contain';
           const caption=document.createElement('p');caption.textContent=title;maps.append(caption,preview);
         }

@@ -19,6 +19,15 @@ test('incomplete and nonfinite data cannot masquerade as estimated lighting', ()
   const bad = report(); bad.lights.estimated.sh[2][1] = NaN;
   assert.throws(() => validateLightingReport(bad), /finite/);
 });
+test('estimator labels distinguish Turbo from the legacy EMLight report', async () => {
+  const session={attach:async()=>({id:'fixture'}),readView:()=>({}),setView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>{}};
+  const instance=await definition.create({host:{scene:{open:async()=>session}},inputs:{},record(){}});
+  instance.operations.loadReport({...report(),estimator:'DiffusionLight-Turbo'});
+  assert.equal(instance.read().estimator,'DiffusionLight-Turbo');
+  instance.operations.loadReport(report());
+  assert.equal(instance.read().estimator,'EMLight');
+  await instance.dispose();
+});
 test('constant radiance produces neutral Lambertian gray independent of normal', () => {
   const evaluate = makeDiffuseEvaluator(constant());
   for (const normal of [[1,0,0],[0,1,0],[0,0,-1]]) {
