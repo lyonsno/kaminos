@@ -15,18 +15,34 @@ export function materialContactGap(one,two){
 // Swept admission for the commanded rigid torso motion, independently of the
 // soft residual solve. A bound on every support point's speed makes endpoint-
 // clear rotations and long translations observable without a fixed sample cap.
-export function moveTorso(body,{pivot,translation,angle},fraction=1){
- const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),point=p=>{const x=p[0]-pivot[0],z=p[2]-pivot[2];return[pivot[0]+c*x-s*z+translation[0]*fraction,p[1]+translation[1]*fraction,pivot[2]+s*x+c*z+translation[2]*fraction];};
+function rotate(p,axis,angle){const c=Math.cos(angle),s=Math.sin(angle),d=dot3(p,axis);return p.map((v,i)=>c*v+s*(axis[(i+1)%3]*p[(i+2)%3]-axis[(i+2)%3]*p[(i+1)%3])+(1-c)*d*axis[i]);}
+function movedPoint(p,{pivot,translation,angle,axis=[0,-1,0]},fraction){return rotate(sub(p,pivot),axis,angle*fraction).map((v,i)=>v+pivot[i]+translation[i]*fraction);}
+export function moveTorso(body,motion,fraction=1){
+ const {pivot}=motion,point=p=>movedPoint(p,motion,fraction);
  return {...body,position:point([body.position[0],pivot[1],body.position[1]]).filter((_,i)=>i!==1),nodes:body.nodes?.map(point),capsules:body.capsules?.map(q=>({...q,a:point(q.a),b:point(q.b)}))};
 }
 export function limitTorsoMotion(self,others,motion){
- if(![motion.pivot,motion.translation].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||!Number.isFinite(motion.angle))throw Error('Finite torso motion required');
- const supports=[...(self.nodes??[]),...(self.capsules??[]).flatMap(c=>[c.a,c.b])],extent=Math.max(0,...supports.map(p=>Math.hypot(p[0]-motion.pivot[0],p[2]-motion.pivot[2]))),speed=Math.hypot(...motion.translation)+Math.abs(motion.angle)*extent;
+ if(![motion.pivot,motion.translation].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||!Number.isFinite(motion.angle)||motion.axis&&(!Array.isArray(motion.axis)||motion.axis.length!==3||!motion.axis.every(Number.isFinite)||Math.abs(Math.hypot(...motion.axis)-1)>1e-10))throw Error('Finite torso motion required');
+ const axis=motion.axis??[0,-1,0],supports=[...(self.nodes??[]),...(self.capsules??[]).flatMap(c=>[c.a,c.b])],radial=p=>{const r=sub(p,motion.pivot),d=dot3(r,axis);return Math.hypot(...r.map((v,i)=>v-d*axis[i]));},extent=Math.max(0,...supports.map(radial)),travel=Math.hypot(...motion.translation),omega=Math.abs(motion.angle),speed=travel+omega*extent;
  let fraction=1,probes=0,blockedBy=null;
  if(speed===0)return {fraction,probes,blockedBy};
  for(const other of others){
   if(other.id===self.id)continue;
   const radius=self.radius+other.radius,tolerance=1e-5*radius,initial=materialContactGap(self,other),floor=Math.min(-.04*radius,initial)-tolerance;
+  if((self.nodes?.length&&other.capsules?.length)||(other.nodes?.length&&self.capsules?.length)){
+   // A twice differentiable trajectory stays within maxAcceleration*h²/8 of
+   // its endpoint chord. Segment/capsule distance therefore supplies a lower
+   // bound over the WHOLE interval, including a compressed tangential slide.
+   // Inverse motion turns the opposite node/capsule term into the same test.
+   const inverse=(p,t)=>rotate(sub(p,motion.pivot).map((v,i)=>v-motion.translation[i]*t),axis,-motion.angle*t).map((v,i)=>v+motion.pivot[i]);
+   const forward=(self.nodes??[]).map(p=>({at:t=>movedPoint(p,motion,t),acceleration:omega*omega*radial(p),capsules:other.capsules??[]}));
+   const backward=(other.nodes??[]).map(p=>({at:t=>inverse(p,t),acceleration:omega*omega*(radial(p)+travel)+2*omega*travel,capsules:self.capsules??[]}));
+   const terms=[...forward,...backward].filter(p=>p.capsules.length);
+   function bound(a,b){let gap=Infinity;for(const term of terms){const chord={a:term.at(a),b:term.at(b),radius:term.acceleration*(b-a)**2/8};for(const capsule of term.capsules)gap=Math.min(gap,capsuleGap(chord,capsule));}probes++;return gap;}
+   const pending=[[0,fraction]];
+   while(pending.length){const [a,b]=pending.pop();if(bound(a,b)>=floor)continue;const mid=(a+b)/2;if((b-a)*speed<=tolerance*.1||mid===a||mid===b){fraction=a;blockedBy=other.id;break;}pending.push([mid,b],[a,mid]);}
+   continue;
+  }
   let t=0;
   while(t<fraction){
    const gap=materialContactGap(moveTorso(self,motion,t),other);probes++;

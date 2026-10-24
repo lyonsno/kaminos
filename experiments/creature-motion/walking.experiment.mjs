@@ -176,9 +176,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   }
   if(encounterContext){
    const body=contactState(),frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone();
-   const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),heading=p=>new THREE.Vector3(p[0],0,p[1]).transformDirection(matrix);
-   constraint={...constraint,admit:({from,to,turnOnly})=>{const pivot=point(from.position),end=point(to.position),a=heading(from.direction),b=heading(to.direction),angle=Math.atan2(a.x*b.z-a.z*b.x,a.x*b.x+a.z*b.z);
-    return encounterContext.limit({time:frameStamp,body,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle}}).fraction;}};
+   const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
+   constraint={...constraint,admit:({from,to,turnOnly})=>{const pivot=point(from.position),end=point(to.position),a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
+    return encounterContext.limit({time:frameStamp,body,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
   }
   const state=wander.advance(moving,constraint);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();

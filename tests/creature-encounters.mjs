@@ -34,6 +34,11 @@ assert.equal(encounter.limitTorsoMotion(rod,[highObstacle],rotation).fraction,1,
 const near={...rod,capsules:[{a:[0,0,0],b:[0,0,0],radius:.2}]},touch={...obstacle,capsules:[{a:[.39,0,0],b:[.39,0,0],radius:.2}]};
 assert.equal(encounter.limitTorsoMotion(near,[touch],{pivot:[0,0,0],translation:[-.5,0,0],angle:0}).fraction,1,'A compressed body can move out of contact');
 assert.ok(encounter.limitTorsoMotion(near,[touch],{pivot:[0,0,0],translation:[.5,0,0],angle:0}).fraction<.1,'Compression allowance cannot license passing through');
+const slider={id:'slider',position:[0,0],radius:.5,capsules:[{a:[0,0,-1],b:[0,0,1],radius:.2}],nodes:[[.2,0,0]]},rail={id:'rail',position:[.35,0],radius:.5,capsules:[{a:[.35,0,-5],b:[.35,0,5],radius:.2}],nodes:[[.15,0,0]]};
+const slide=encounter.limitTorsoMotion(slider,[rail],{pivot:[0,0,0],translation:[0,0,.1],angle:0});
+assert.equal(slide.fraction,1);assert.ok(slide.probes<20,'A constant-gap straight slide must use a swept segment, not inverse-tolerance steps');
+const tilted=encounter.moveTorso({...rod,nodes:[[1,0,0]]},{...rotation,angle:Math.PI/2,axis:[0,0,1]});
+assert.ok(Math.hypot(...tilted.nodes[0].map((v,i)=>v-[0,1,0][i]))<1e-12,'Torso motion must follow its supplied authored rotation axis');
 const shared=createEncounterWorld({avoidance:false}),sphere=(id,x)=>({id,mounted:true,position:[x,0],direction:[1,0],speed:1,radius:.5,capsules:[{a:[x,0,0],b:[x,0,0],radius:.5}]});
 const left=sphere('left',0),rightBody=sphere('right',2);shared.actor('left').register(()=>left);shared.actor('right').register(()=>rightBody);const token=shared.beginStep();
 const firstMove={pivot:[0,0,0],translation:[.7,0,0],angle:0};assert.equal(shared.actor('left').limit({time:token,body:left,motion:firstMove}).fraction,1);shared.actor('left').commit(token,encounter.moveTorso(left,firstMove));
