@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {encounterSteering,createEncounterWorld} from '../experiments/creature-motion/encounters.mjs';
+import * as encounter from '../experiments/creature-motion/encounters.mjs';
 const a={id:'a',position:[0,0],direction:[1,0],speed:1,radius:.5},b={id:'b',position:[2,0],direction:[-1,0],speed:1,radius:.5};
 const before=encounterSteering(a,[],{seconds:.1});assert.deepEqual(before.direction,[1,0]);assert.equal(before.distanceScale,1);
 const turn=encounterSteering(a,[b],{seconds:.1});assert.ok(turn.direction[1]<0,'head-on walkers choose their own right-hand pass');assert.ok(turn.distanceScale<=1);
@@ -20,3 +21,20 @@ for(const order of [['a','b'],['b','a']]){
  for(const id of order){const self=id==='a'?a:b;assert.equal(room.actor(id).steer({time:observation,seconds:.1,direction:self.direction,speed:1}).neighbours,1,'Room step must observe before any actor advances');assert.ok(room.actor(id).contacts(observation)[0].a[0]<3);}
  room.dispose();
 }
+assert.equal(typeof encounter.limitTorsoMotion,'function','Root turning needs swept contact admission');
+const rod={id:'rod',position:[0,0],radius:.2,capsules:[{a:[-1,0,0],b:[1,0,0],radius:.1}]},obstacle={id:'obstacle',position:[0,.8],radius:.2,capsules:[{a:[0,0,.8],b:[0,0,.8],radius:.1}]};
+const rotation={pivot:[0,0,0],translation:[0,0,0],angle:Math.PI};
+const limited=encounter.limitTorsoMotion(rod,[obstacle],rotation);
+assert.ok(limited.fraction>0&&limited.fraction<.5,'An endpoint-clear half-turn must stop before its intervening collision');
+assert.equal(encounter.limitTorsoMotion(rod,[],rotation).fraction,1);
+const crossing=encounter.limitTorsoMotion({...rod,capsules:[{a:[-2,0,0],b:[-2,0,0],radius:.1}]},[{...obstacle,capsules:[{a:[0,0,0],b:[0,0,0],radius:.1}]}],{pivot:[-2,0,0],translation:[4,0,0],angle:0});
+assert.ok(crossing.fraction<.5,'A large step cannot tunnel through a body even when its final pose is clear');
+const highObstacle={...obstacle,capsules:[{a:[0,3,.8],b:[0,3,.8],radius:.1}]};
+assert.equal(encounter.limitTorsoMotion(rod,[highObstacle],rotation).fraction,1,'Swept admission is three-dimensional');
+const near={...rod,capsules:[{a:[0,0,0],b:[0,0,0],radius:.2}]},touch={...obstacle,capsules:[{a:[.39,0,0],b:[.39,0,0],radius:.2}]};
+assert.equal(encounter.limitTorsoMotion(near,[touch],{pivot:[0,0,0],translation:[-.5,0,0],angle:0}).fraction,1,'A compressed body can move out of contact');
+assert.ok(encounter.limitTorsoMotion(near,[touch],{pivot:[0,0,0],translation:[.5,0,0],angle:0}).fraction<.1,'Compression allowance cannot license passing through');
+const shared=createEncounterWorld({avoidance:false}),sphere=(id,x)=>({id,mounted:true,position:[x,0],direction:[1,0],speed:1,radius:.5,capsules:[{a:[x,0,0],b:[x,0,0],radius:.5}]});
+const left=sphere('left',0),rightBody=sphere('right',2);shared.actor('left').register(()=>left);shared.actor('right').register(()=>rightBody);const token=shared.beginStep();
+const firstMove={pivot:[0,0,0],translation:[.7,0,0],angle:0};assert.equal(shared.actor('left').limit({time:token,body:left,motion:firstMove}).fraction,1);shared.actor('left').commit(token,encounter.moveTorso(left,firstMove));
+assert.ok(shared.actor('right').limit({time:token,body:rightBody,motion:{pivot:[2,0,0],translation:[-.7,0,0],angle:0}}).fraction<1,'Two callbacks must not spend the same separation gap independently');shared.dispose();

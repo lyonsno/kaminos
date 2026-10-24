@@ -46,3 +46,12 @@ assert.throws(()=>yielding.advance(.1,{distanceScale:NaN}),/scale/);
 const plain=make({area,position:[0,0],direction:[0,1],seed:1}),unchanged=make({snapshot:plain.snapshot()});
 for(let i=0;i<30;i++){plain.advance(.003);unchanged.advance(.003,{direction:unchanged.read().path.direction});}
 assert.deepEqual(unchanged.snapshot(),plain.snapshot(),'An unchanged steering heading must preserve curve, distance and RNG exactly');
+const protectedMotion=make({area,position:[0,0],direction:[0,1],seed:4}),priorProtected=protectedMotion.snapshot();let checks=0;
+protectedMotion.advance(.1,{direction:[1,0],admit:()=>{checks++;return 0;}});
+assert.ok(checks>0,'Wander must submit proposed root motion before applying it');
+assert.deepEqual(protectedMotion.snapshot(),priorProtected,'Refused motion preserves phase, placement, path and RNG');
+const free=make({snapshot:priorProtected}),admitted=make({snapshot:priorProtected});
+free.advance(.05,{direction:[1,0]});admitted.advance(.05,{direction:[1,0],admit:()=>1});assert.deepEqual(admitted.snapshot(),free.snapshot());
+const rotating=make({snapshot:priorProtected});let proposedAngle;rotating.advance(.1,{direction:[1,0],admit:({from,to,turnOnly})=>{if(turnOnly)proposedAngle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);return turnOnly?.5:0;}});
+assert.equal(rotating.read().elapsed,priorProtected.elapsed,'Blocked travel holds gait while a safe partial turn remains possible');
+assert.ok(Math.abs(rotating.read().path.direction[0]+Math.sin(proposedAngle*.5))<1e-9);assert.deepEqual(rotating.read().path.position,[0,0]);

@@ -11,6 +11,35 @@ export function materialContactGap(one,two){
  for(const [body,obstacle]of [[one,two],[two,one]])for(const point of body.nodes??[])for(const capsule of obstacle.capsules??[])gaps.push(capsuleGap({a:point,b:point,radius:0},capsule));
  return gaps.length?Math.min(...gaps):one.capsules?.length&&two.capsules?.length?Math.min(...one.capsules.flatMap(a=>two.capsules.map(b=>capsuleGap(a,b)))):Math.hypot(...one.position.map((v,i)=>v-two.position[i]))-one.radius-two.radius;
 }
+
+// Swept admission for the commanded rigid torso motion, independently of the
+// soft residual solve. A bound on every support point's speed makes endpoint-
+// clear rotations and long translations observable without a fixed sample cap.
+export function moveTorso(body,{pivot,translation,angle},fraction=1){
+ const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),point=p=>{const x=p[0]-pivot[0],z=p[2]-pivot[2];return[pivot[0]+c*x-s*z+translation[0]*fraction,p[1]+translation[1]*fraction,pivot[2]+s*x+c*z+translation[2]*fraction];};
+ return {...body,position:point([body.position[0],pivot[1],body.position[1]]).filter((_,i)=>i!==1),nodes:body.nodes?.map(point),capsules:body.capsules?.map(q=>({...q,a:point(q.a),b:point(q.b)}))};
+}
+export function limitTorsoMotion(self,others,motion){
+ if(![motion.pivot,motion.translation].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||!Number.isFinite(motion.angle))throw Error('Finite torso motion required');
+ const supports=[...(self.nodes??[]),...(self.capsules??[]).flatMap(c=>[c.a,c.b])],extent=Math.max(0,...supports.map(p=>Math.hypot(p[0]-motion.pivot[0],p[2]-motion.pivot[2]))),speed=Math.hypot(...motion.translation)+Math.abs(motion.angle)*extent;
+ let fraction=1,probes=0,blockedBy=null;
+ if(speed===0)return {fraction,probes,blockedBy};
+ for(const other of others){
+  if(other.id===self.id)continue;
+  const radius=self.radius+other.radius,tolerance=1e-5*radius,initial=materialContactGap(self,other),floor=Math.min(-.04*radius,initial)-tolerance;
+  let t=0;
+  while(t<fraction){
+   const gap=materialContactGap(moveTorso(self,motion,t),other);probes++;
+   const clearance=gap-floor;
+   if(clearance<=tolerance*.1){fraction=t;blockedBy=other.id;break;}
+   const step=clearance/speed*.8;
+   if(t+step>=fraction){const end=materialContactGap(moveTorso(self,motion,fraction),other);probes++;if(end>=floor)break;}
+   if(t+step===t){fraction=t;blockedBy=other.id;break;}
+   t=Math.min(fraction,t+step);
+  }
+ }
+ return {fraction,probes,blockedBy};
+}
 export function encounterSteering(self,others,{seconds,avoidance=true}={}){
  if(!Number.isFinite(seconds)||seconds<0)throw Error('Encounter time must be finite and nonnegative');
  const original=unit(self.direction),force=[...original],right=[original[1],-original[0]];let scale=1,touching=false,neighbours=0;
@@ -32,11 +61,13 @@ export function encounterSteering(self,others,{seconds,avoidance=true}={}){
 // One timestamp means one shared observation, independent of actor callback
 // order. No timer, pose authority or private simulation is owned here.
 export function createEncounterWorld({avoidance=true}={}){
- const actors=new Map();let stamp=null,snapshot=[],last=new Map();
- function observe(time){if(time!==stamp){snapshot=[...actors].map(([id,stack])=>({id,...stack.at(-1)()})).filter(a=>a.mounted);stamp=time;}return snapshot;}
+ const actors=new Map();let stamp=null,snapshot=[],last=new Map(),committed=new Map();
+ function observe(time){if(time!==stamp){snapshot=[...actors].map(([id,stack])=>({id,...stack.at(-1)()})).filter(a=>a.mounted);committed=new Map();stamp=time;}return snapshot;}
  return {beginStep(){const observation={};observe(observation);return observation;},setAvoidance(value){if(typeof value!=='boolean')throw Error('Boolean avoidance required');avoidance=value;stamp=null;},read:()=>({avoidance,actors:actors.size,last:[...last].map(([id,state])=>({id,...state}))}),
   actor(id){return {register(get){const stack=actors.get(id)??[];stack.push(get);actors.set(id,stack);stamp=null;return()=>{const i=stack.indexOf(get);if(i>=0)stack.splice(i,1);if(!stack.length){actors.delete(id);last.delete(id);}stamp=null;};},
    steer({time,seconds,direction,speed}){const rows=observe(time),self=rows.find(r=>r.id===id);if(!self)return {direction,distanceScale:1};const result=encounterSteering({...self,direction,speed},rows,{seconds,avoidance});last.set(id,result);return result;},
+   limit({time,body,motion,turnOnly=false}){const rows=observe(time).map(r=>committed.get(r.id)??r),result=limitTorsoMotion({id,...body},rows,motion),prior=last.get(id);last.set(id,{...prior,motion:{...prior?.motion,[turnOnly?'turn':'travel']:{...result,...motion}}});return result;},
+   commit(time,body){observe(time);committed.set(id,{id,...body});},
    contacts(time){return observe(time).filter(r=>r.id!==id).flatMap(r=>r.capsules);},
   };},dispose(){actors.clear();snapshot=[];last.clear();},
  };

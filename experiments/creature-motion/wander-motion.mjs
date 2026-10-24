@@ -41,9 +41,10 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   return {cycle,frame:Math.min(adapter.frames-2,index),distance:travel==='stance'?time*transport.unitsPerSecond:cycle*sourceDistance+distances[index]+(distances[next]-distances[index])*(fractional-index)};
  }
  function read(){const t=timing();return {elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,travel:structuredClone(transport),path:path.read()};}
- function advance(delta,{distanceScale=1,direction=null}={}) {
+ function advance(delta,{distanceScale=1,direction=null,admit=null}={}) {
   if(!Number.isFinite(delta)||delta<0)throw Error('Wander time delta must be finite and nonnegative');
   if(!Number.isFinite(distanceScale)||distanceScale<0||distanceScale>1)throw Error('Travel scale must be in [0,1]');
+  const prior=admit?{path:path.snapshot(),elapsed,heldFrame}:null,from=admit?path.read():null;
   if(direction)path.redirect(direction);
   const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;heldFrame=null;
   const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
@@ -54,6 +55,20 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
    let low=previousElapsed,high=elapsed;
    for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
    elapsed=consumed===0?previousElapsed:(low+high)/2;
+  }
+  if(admit){
+   const to=path.read(),allowed=admit({from,to,turnOnly:false});
+   if(!Number.isFinite(allowed)||allowed<0||allowed>1)throw Error('Motion admission must return a fraction in [0,1]');
+   if(allowed<1){
+    path=createWanderPath({snapshot:prior.path});elapsed=prior.elapsed;heldFrame=prior.heldFrame;
+    // A blocked journey may still turn out of contact. Keep its gait held and
+    // admit that rotation separately; never apply a fraction of an unchecked
+    // rebuilt curve or silently consume its random state.
+    const angle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);
+    const fraction=admit({from,to:{...from,direction:to.direction},turnOnly:true});
+    if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Motion admission must return a fraction in [0,1]');
+    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction);path.redirect([c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]]);}
+   }
   }
   return read();
  }
