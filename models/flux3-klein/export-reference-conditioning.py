@@ -7,6 +7,16 @@ phase are retained under the caller's output directory.
 """
 import argparse, gc, hashlib, importlib.util, json, pathlib, subprocess, traceback
 
+# Source parameter names in FLUX.2's pack-transformer.py globals bundle.
+FLUX2_GLOBALS = {
+    'x_embedder.weight', 'context_embedder.weight',
+    'time_guidance_embed.timestep_embedder.linear_1.weight',
+    'time_guidance_embed.timestep_embedder.linear_2.weight',
+    'double_stream_modulation_img.linear.weight',
+    'double_stream_modulation_txt.linear.weight',
+    'single_stream_modulation.linear.weight', 'norm_out.linear.weight', 'proj_out.weight',
+}
+
 
 def main():
     ap=argparse.ArgumentParser()
@@ -16,7 +26,7 @@ def main():
     a=ap.parse_args();out=pathlib.Path(a.out);out.mkdir(parents=True,exist_ok=True)
     source=pathlib.Path(a.model_dir);here=pathlib.Path(__file__).resolve().parent
     r={'ok':False,'phase':'source-identity','modelDir':str(source),'sourceRevision':source.name,
-       'model':a.model,'weights':{'format':'i4','globals_format':'i4' if a.model=='flux2' else 'i8','group':128 if a.model=='flux2' else 64},'tensors':{},'width':48,'height':32,'seed':9021}
+       'model':a.model,'weights':{'format':'i4','globals_format':'i4' if a.model=='flux2' else 'i8','group':128 if a.model=='flux2' else 64,'globals_group':64},'tensors':{},'width':48,'height':32,'seed':9021}
     def write():(out/'manifest.json').write_text(json.dumps(r,indent=2))
     def save(name,t):
         x=np.ascontiguousarray(t.detach().float().cpu().numpy());data=x.tobytes();file=name+'.f32'
@@ -69,10 +79,13 @@ def main():
         del params,deltas;gc.collect()
         r['phase']='transformer-quantize';write()
         globals_names={p for _,p in pack.GLOBALS}|{'x_embedders.image_cond.weight','early_stream_modulations.image_cond.linear.weight','single_stream_modulations.image_cond.linear.weight'}
+        if a.model=='flux2':globals_names=FLUX2_GLOBALS
         with torch.no_grad():
             for name,p in tr.named_parameters():
                 w=p.numpy()
-                if w.ndim==2 and w.shape[1]%r['weights']['group']==0:p.copy_(torch.from_numpy(pack.quantize(w,'i8' if a.model=='flux3' and name in globals_names else 'i4',r['weights']['group'])[2]))
+                fmt=r['weights']['globals_format' if name in globals_names else 'format']
+                group=r['weights']['globals_group' if name in globals_names else 'group']
+                if w.ndim==2 and w.shape[1]%group==0:p.copy_(torch.from_numpy(pack.quantize(w,fmt,group)[2]))
                 else:p.copy_(p.half().float())
         r['phase']='transformer-forward';write()
         gen=torch.Generator('cpu').manual_seed(r['seed'])

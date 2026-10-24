@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {KleinTransformer} from '../models/flux2-klein/klein-transformer.js';
 import {KleinPipeline} from '../models/flux2-klein/klein-pipeline.js';
+import {Flux3Pipeline} from '../models/flux3-klein/flux3-pipeline.js';
 import {referenceImageGeometry} from '../models/flux3-klein/reference-image.js';
 
 test('FLUX2 reference tokens participate in attention while velocity and Euler state contain generated tokens only',()=>{
@@ -28,4 +29,21 @@ test('FLUX2 preprocessing preserves aspect and applies its canonical one-megapix
  assert.equal(g.resizedWidth,1448);assert.equal(g.resizedHeight,724);
  assert.equal(g.width,1440);assert.equal(g.height,720);
  assert.equal(referenceImageGeometry(259,145,{maxArea:1024*1024}).width,256);
+});
+
+for(const Pipeline of [KleinPipeline,Flux3Pipeline])for(const hasReference of [false,true])
+test(`${Pipeline.name} precompiles before and after lazy reference loading: reference=${hasReference}`,async()=>{
+ const model=()=>({weightsResident:true});
+ const mock={textEncoder:model(),transformer:model(),vae:model(),referenceEncoder:hasReference?model():undefined,
+  timings:{},sched:{stats:{history:[]},async discard(){},async flush(){}},
+  async generateScheduled(){
+   if(this.collecting){
+    assert.ok(this.transformer.pipelineCollector instanceof Map);
+    if(this.referenceEncoder)assert.equal(this.referenceEncoder.pipelineCollector,this.transformer.pipelineCollector);
+   }
+  }};
+ assert.equal(await Pipeline.prototype.precompile.call(mock),0);
+ assert.equal(mock.collecting,false);
+ for(const m of [mock.textEncoder,mock.transformer,mock.vae,mock.referenceEncoder].filter(Boolean))assert.equal(m.pipelineCollector,null);
+ assert.equal(Boolean(mock.referenceEncoder),hasReference);
 });

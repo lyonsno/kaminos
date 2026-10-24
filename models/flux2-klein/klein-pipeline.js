@@ -371,7 +371,7 @@ export class KleinPipeline {
   // synchronously at first use. Returns the number of pipelines compiled.
   async precompile({ runWarmup = work => work() } = {}) {
     const t0 = performance.now();
-    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae, this.referenceEncoder];
+    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae, this.referenceEncoder].filter(Boolean);
     for (const m of models) m.pipelineCollector = collected;
     const stubbed = [this.textEncoder, this.transformer].filter(m => !m.weightsResident);
     for (const m of stubbed) m.stubWeights();
