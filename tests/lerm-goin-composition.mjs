@@ -44,6 +44,39 @@ const spanning=await interruptedJourney([1.25]),partitioned=await interruptedJou
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-7.5)<1e-9,'Only the quarter second after expiry may move');
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-partitioned.creature.action.motion.path.distance)<1e-9,'Interruption travel must not depend on frame partition');
 assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
+// A producer failure is terminal for this composition, including native controls.
+const savedBufferUsage=globalThis.GPUBufferUsage;
+globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2,STORAGE:4,COPY_SRC:8,MAP_READ:16};
+let producerFailed=false,waterDisposed=false;
+const device={queue:{},createShaderModule:()=>({}),createComputePipelineAsync:async()=>({}),createBuffer:()=>({destroy(){}})};
+const descriptor={schema:'kaminos.liquid-fire-contact-descriptor.v1',packing:'gpu-sparse-liquid-fire-contact-source-vec4x8-v1',device,queue:device.queue,recordsBuffer:{},headerBuffer:{},headerBytes:80,recordFloats:32,recordBytes:128,capacity:1,generation:1,allocationGeneration:1,epoch:0,step:1,writeTick:0,sourceFrameId:'kaminos/finger-fluid-bench:gpu-simulation-frame',sourceFrameHash:12,coverage:'active-liquid-particles',volumeMeaning:'world-volume-per-particle',validitySource:'gpu_header_only_fail_closed_v0'};
+const wetHost={...host,fluid:{open:async()=>({getContactRecordDescriptor(){if(producerFailed)throw Error('Producer unavailable');return descriptor;},setPaused(){},async restart(){},async advanceTo(){},async dispose(){waterDisposed=true;}})}};
+let failedInvoke;
+const failedWater=await createGoinPursuit({host:wetHost,inputs:{...inputs,theft:{escape:[0,0,20],socket:{bone:'pelvis',offset:[0,1,0]}},water:{receiver:{bone:'pelvis',offset:[0,0,0],radius:.5}}}},{loadSources:async()=>data,mountProperties:({invoke})=>{failedInvoke=invoke;return {properties:new Element(),update(){},dispose(){}};}});
+try{
+ failedWater.mount({root:new Element(),document,invoke:(name,input)=>failedWater.operations[name](input)});
+ producerFailed=true;
+ await assert.rejects(failedWater.operations.sampleWater(),/Producer unavailable/);
+ assert.equal(failedWater.read().water.status,'failed');
+ const frozen=failedWater.read();
+ for(const [name,input]of [['play',{}],['replay',{}],['advance',{seconds:1}],['action',{kind:'wander'}]]){
+  await assert.rejects(async()=>failedInvoke(name,input),/Water receiver failed/,'Native '+name+' must respect the failed receiver');
+ }
+ assert.throws(()=>failedWater.operations.setRunning({running:true}),/Water receiver failed/);
+ assert.throws(()=>failedWater.operations.advance({seconds:1}),/Water receiver failed/);
+ producerFailed=false;
+ await assert.rejects(failedWater.operations.restartWater(),/Water receiver failed/,'Restart must not clear failure without restoring the subscription');
+ await assert.rejects(failedWater.operations.sampleWater(),/Water receiver failed/,'A diagnostic retry must not clear terminal failure');
+ assert.throws(()=>failedInvoke('play'),/Water receiver failed/);
+ for(const tick of [...ticks])tick({deltaSeconds:1});
+ const after=failedWater.read();
+ assert.equal(after.creature.action.time,frozen.creature.action.time);
+ assert.equal(after.creature.action.motion.path.distance,frozen.creature.action.motion.path.distance);
+ assert.deepEqual(after.task.custody,frozen.task.custody);
+ assert.equal(after.water.status,'failed');
+ assert.doesNotThrow(()=>failedInvoke('pause'));
+}finally{await failedWater.dispose();if(savedBufferUsage===undefined)delete globalThis.GPUBufferUsage;else globalThis.GPUBufferUsage=savedBufferUsage;}
+assert.ok(waterDisposed);assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 await assert.rejects(()=>createGoinPursuit({host,inputs:{...inputs,water:{finite:{resolution:11},receiver:{bone:'pelvis',offset:[0,0,0],radius:.5}}}},{loadSources:async()=>data}),/fluid capability/i,'Requested water must not silently fall back to the manual interruption route');
 let creatureInvoke;
 const previewed=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,0,100]}}},{loadSources:async()=>data,mountProperties:({invoke})=>{creatureInvoke=invoke;return {properties:new Element(),update(){},dispose(){}};}});

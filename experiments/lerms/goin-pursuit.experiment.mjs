@@ -22,7 +22,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const goin=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,.16,32),new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}));
  goin.name='Goin';goin.rotation.x=Math.PI/2;goin.position.fromArray(position);goin.castShadow=true;
  let asset,actor,seating,escapeAsset,stopCarry,stopPose,disposed=false,serial=0,revision=0,refresh=()=>{};
- let water,receiver,stopWater,waterPending=null,wet=false,waterState={status:waterInput?'opening':'not-requested'};
+ let water,receiver,stopWater,waterPending=null,waterFailure=null,wet=false,waterState={status:waterInput?'opening':'not-requested'};
  const escape=theft?new THREE.Mesh(new THREE.ConeGeometry(.2,.5,12),new THREE.MeshStandardMaterial({color:0x41b99a})):null;
  if(escape){escape.name='Escape point';escape.position.fromArray(theft.escape);}
  const task=createGoinTask({arrivalRadius:inputs.arrivalRadius??.45,theft:theft?{carrierId:inputs.lermId??goin.uuid,escape:()=>escape.getWorldPosition(new THREE.Vector3()).toArray()}:null,target:()=>{
@@ -37,8 +37,11 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   const world=new THREE.Vector3(...theft.socket.offset).applyMatrix4(new THREE.Matrix4().fromArray(snapshot.bones[0].matrix));
   goin.position.copy(goin.parent.worldToLocal(world));goin.updateMatrixWorld(true);session.redraw();
  }
- const steering={read:task.read,update(context){const intent=task.update(context);receipt();return intent;}};
+ const waterHealthy=()=>{if(waterFailure)throw Error('Water receiver failed; reopen before resuming');};
+ const steering={read:task.read,update(context){waterHealthy();const intent=task.update(context);receipt();return intent;}};
+ const invokeActor=(name,input)=>{active();if(name!=='pause')waterHealthy();return actor.operations[name](input);};
  function sampleWater(){
+  if(waterFailure)return Promise.reject(Error('Water receiver failed; reopen before resuming'));
   if(waterPending)return waterPending;
   if(disposed||!receiver)return Promise.resolve(waterState);
   const r=waterInput.receiver,pose=actor.pose({bones:[r.bone]}),matrix=new THREE.Matrix4().fromArray(pose.bones[0].matrix);
@@ -55,7 +58,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     presentCarry();task.interrupt(event);receipt();record({kind:'lerms.interruption',phase:'applied',event});
    }
    wet=hit;return waterState;
-  }).catch(error=>{if(!disposed){waterState={status:'failed',error:error.message};actor.operations.pause();stopWater?.();record({kind:'lerms.water',phase:'failed',error:error.message});}throw error;}).finally(()=>{waterPending=null;});
+  }).catch(error=>{if(!disposed){waterFailure=error;waterState={status:'failed',error:error.message};actor.operations.pause();stopWater?.();record({kind:'lerms.water',phase:'failed',error:error.message});}throw error;}).finally(()=>{waterPending=null;});
   return waterPending;
  }
  const active=()=>{if(disposed)throw Error('Goin pursuit is disposed');};
@@ -93,18 +96,18 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
    },
    moveEscape(input){active();if(!escape||!point(input?.position))throw Error('Escape point must be a finite world point');escape.position.fromArray(input.position);host.scene.refreshPresentation(escapeAsset);session.redraw();return read();},
    async sampleWater(){active();if(!receiver)throw Error('Water is not mounted');await sampleWater();return read();},
-   setWaterRunning(input){active();if(!water||typeof input?.running!=='boolean')throw Error('Mounted water and running boolean required');water.setPaused(!input.running);return read();},
-   async advanceWater(input){active();if(!water)throw Error('Water is not mounted');await water.advanceTo(input?.step);await sampleWater();return read();},
-   async restartWater(){active();if(!water)throw Error('Water is not mounted');if(waterPending)await waterPending;await water.restart();wet=false;task.setWaterExposure(false);waterState={status:'awaiting-sample'};return read();},
+   setWaterRunning(input){active();if(!water||typeof input?.running!=='boolean')throw Error('Mounted water and running boolean required');if(input.running)waterHealthy();water.setPaused(!input.running);return read();},
+   async advanceWater(input){active();waterHealthy();if(!water)throw Error('Water is not mounted');await water.advanceTo(input?.step);await sampleWater();return read();},
+   async restartWater(){active();waterHealthy();if(!water)throw Error('Water is not mounted');if(waterPending)await waterPending;await water.restart();wet=false;task.setWaterExposure(false);waterState={status:'awaiting-sample'};return read();},
    interruptTest(input={}){active();const event={id:`manual-${++serial}`,source:'explicit-test-operation',time:actor.read().action.time,seconds:input.seconds??1.5};
     presentCarry();task.interrupt(event);receipt();record({kind:'lerms.interruption',phase:'applied',event});return read();
    },
-   setRunning(input){active();if(typeof input?.running!=='boolean')throw Error('Running must be boolean');if(input.running&&waterState.status==='failed')throw Error('Water receiver failed; reopen before resuming');actor.operations[input.running?'play':'pause']();return read();},
-   advance(input){active();actor.operations.advance(input);return read();},
+   setRunning(input){active();if(typeof input?.running!=='boolean')throw Error('Running must be boolean');invokeActor(input.running?'play':'pause');return read();},
+   advance(input){invokeActor('advance',input);return read();},
    selectGoin(){active();globalThis.window?.selectSceneObject?.(asset.id);return read();},
   };
   if(inputs.view)session.setView(inputs.view);
-  if(inputs.running!==false)actor.operations.play();
+  if(inputs.running!==false)invokeActor('play');
   return {read,operations,dispose,inspect:actor.inspect,
    mount({root,document,invoke}){
     const properties=document.createElement('div'),status=document.createElement('output');
@@ -118,7 +121,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     }
     refresh=()=>{status.textContent=task.read().phase;};refresh();
     if(host.controls.mountObject)seating=host.controls.mountObject({asset,properties});else root.append(properties);
-    actor.mount({root,invoke:(name,input)=>actor.operations[name](input),reopen:recipe=>globalThis.window.kaminosWorkbenchExperiments.open('lerms/goin-pursuit',{
+    actor.mount({root,invoke:invokeActor,reopen:recipe=>globalThis.window.kaminosWorkbenchExperiments.open('lerms/goin-pursuit',{
      ...inputs,creature:recipe,goin:{position:goin.position.toArray()},running:recipe.play})});
     return {dispose(){seating?.dispose();refresh=()=>{};}};
    }
