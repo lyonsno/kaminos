@@ -26,7 +26,7 @@ test('constant radiance produces neutral Lambertian gray independent of normal',
   }
 });
 
-test('shared-scene comparison starts unverified, loads both probes, and releases only its objects', async () => {
+test('shared-scene comparison starts unverified, loads three probes, and releases only its objects', async () => {
   const scene=new THREE.Scene(), borrowed=new THREE.Group(); scene.add(borrowed);
   const rows=new Map(), events=[], callbacks=new Set();
   const host=createWorkbenchSceneHost({scene,camera:new THREE.PerspectiveCamera(),
@@ -43,7 +43,8 @@ test('shared-scene comparison starts unverified, loads both probes, and releases
   assert.equal(root.visible,false);
   instance.operations.loadReport(report()); assert.equal(root.visible,true);
   assert.equal(instance.read().effectiveDevice,'fixture');
-  assert.equal(root.children.length,2);
+  assert.deepEqual(root.children.map(mesh=>mesh.name),['Uniform neutral', 'Reference HDR', 'Estimated light']);
+  assert.equal(root.children.length,3);
   const before=root.children[0].geometry.attributes.color.getX(100);
   instance.operations.setExposure(1);
   assert.ok(Math.abs(root.children[0].geometry.attributes.color.getX(100)-2*before)<1e-5);

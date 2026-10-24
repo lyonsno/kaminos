@@ -12,12 +12,12 @@ export default {
     }
     const session = await host.scene.open();
     const root = new Group(); root.name = 'Inferred room light';
-    const probes = ['reference', 'estimated'].map((name, i) => {
+    const probes = ['neutral', 'reference', 'estimated'].map((name, i) => {
       const geometry = new SphereGeometry(.65, 48, 32);
       geometry.setAttribute('color', new Float32BufferAttribute(new Float32Array(geometry.attributes.normal.count*3), 3));
       const mesh = new Mesh(geometry, new MeshBasicMaterial({vertexColors:true}));
-      mesh.name = name === 'reference' ? 'Reference HDR' : 'Estimated light';
-      mesh.position.set(i ? .85 : -.85, .75, 0); root.add(mesh);
+      mesh.name = {neutral:'Uniform neutral',reference:'Reference HDR',estimated:'Estimated light'}[name];
+      mesh.position.set((i-1)*1.7, .75, 0); root.add(mesh);
       return {name, mesh, evaluate:null, matrix:null};
     });
     root.visible = false;
@@ -60,7 +60,8 @@ export default {
     }
     function load(value) {
       const next = validateLightingReport(value);
-      const evaluators = probes.map(p => makeDiffuseEvaluator(next.lights[p.name].sh));
+      const uniform = [[...Array(3).fill(Math.sqrt(4*Math.PI))], ...Array.from({length:8},()=>[0,0,0])];
+      const evaluators = probes.map(p => makeDiffuseEvaluator(p.name === 'neutral' ? uniform : next.lights[p.name].sh));
       report = next; probes.forEach((p,i) => {p.evaluate = evaluators[i];});
       root.visible = true; update(true); sync();
       const effective = read(); record({kind:'inferred-lighting.load',phase:'applied',target:asset.id,effective});
@@ -82,7 +83,7 @@ export default {
           yaw=value; update(true); sync();
           record({kind:'inferred-lighting.yaw',phase:'applied',effective:read()}); return read();
         },
-        frame() {return session.setView({position:[0, .75, 4.4],target:[0,.75,0]});},
+        frame() {return session.setView({position:[0, .75, 9],target:[0,.75,0]});},
       },
       mount({root:container,document,invoke}) {
         const status = document.createElement('p'); status.setAttribute('role','status');
@@ -100,7 +101,7 @@ export default {
           label.append(grip,input); container.append(label); host.controls.installNumberDrag({input,grip,step}); return input;
         };
         panel={status,image,exposure:field('Exposure (EV)','setExposure',.1),yaw:field('Light yaw (degrees)','setYaw',1)};
-        const labels=document.createElement('p'); labels.textContent='Reference HDR / Estimated light'; container.append(labels);
+        const labels=document.createElement('p'); labels.textContent='Uniform neutral / Reference HDR / Estimated light'; container.append(labels);
         const frame=document.createElement('button');frame.type='button';frame.textContent='Frame comparison';
         frame.addEventListener('click',()=>invoke('frame').catch(failed));container.append(frame);sync();
       },
