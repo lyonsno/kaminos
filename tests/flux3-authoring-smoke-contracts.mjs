@@ -8,6 +8,14 @@ const good=()=>({runtime:{flux3:{mounted:true,modelRoot:'/local/pack'}},expected
  load:{startedAt:1,finishedAt:90,stats:{cacheWeights:false,cachedBytes:0,downloadedBytes:100},cacheWrites:[]},
  expectedSize:512,output:{width:512,height:512,bytes:3000,distinctRgb:100},frames:{before:1,after:20,inference:{before:5,after:15,startedAt:100,finishedAt:200},compute:[{before:7,after:10,startedAt:125,finishedAt:175} ]},gpuErrors:[]});
 test('the smoke admits a retained FLUX.3 image from the requested local route',()=>{assert.doesNotThrow(()=>validate(good()));});
+test('reference smoke requires the selected source digest and actual conditioning route',()=>{
+ const r=good();r.reference={source:'/saved.png',sha256:'selected-digest'};
+ assert.throws(()=>validate(r),'text-only output cannot fulfill a reference request');
+ r.provenance.route='flux3-klein.image-and-text.authoring-shared-device.v0';
+ r.provenance.reference={source:r.reference.source,sha256:r.reference.sha256};
+ assert.doesNotThrow(()=>validate(r));
+ for(const change of [r=>delete r.provenance.reference,r=>r.provenance.reference.sha256='other',r=>r.provenance.reference.source='/other.png']){const bad=structuredClone(r);change(bad);assert.throws(()=>validate(bad));}
+});
 test('fallback model, wrong mount and substituted sampling cannot pass as FLUX.3 evidence',()=>{
  for(const mutate of [r=>r.provenance.model='FLUX.2 [klein] 4B',r=>r.provenance.route='flux2-klein.text-to-image.authoring-shared-device.v0',r=>r.runtime.flux3.mounted=false,r=>r.runtime.flux3.modelRoot='/wrong',r=>r.provenance.sampling.steps=16,r=>r.provenance.source.revision='wrong',r=>r.gpuErrors.push('validation error')]){
   const r=good();mutate(r);assert.throws(()=>validate(r));

@@ -13,7 +13,11 @@ export function validateFlux3AuthoringResult(r){
   assert.equal(r.runtime.flux3?.mounted,true,'local FLUX.3 pack is mounted');
   assert.equal(r.runtime.flux3.modelRoot,r.expectedModelRoot,'effective local package');
   assert.equal(r.provenance.model,'FLUX.3 Image Klein');
-  assert.equal(r.provenance.route,'flux3-klein.text-to-image.authoring-shared-device.v0');
+  assert.equal(r.provenance.route,r.reference?'flux3-klein.image-and-text.authoring-shared-device.v0':'flux3-klein.text-to-image.authoring-shared-device.v0');
+  if(r.reference){
+    assert.equal(r.provenance.reference?.source,r.reference.source,'selected reference source');
+    assert.equal(r.provenance.reference?.sha256,r.reference.sha256,'selected reference bytes');
+  }
   assert.equal(r.provenance.weights,'/flux3-weights');
   assert.equal(r.provenance.transformer,'/flux3-weights/dit');
   assert.deepEqual(r.provenance.sampling,r.manifest.sampling);
@@ -63,7 +67,7 @@ export async function waitForAuthoringGpuHost({read,wait}){
 }
 
 async function main(){
-  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'}}});
+  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'},'reference-source':{type:'string'},prompt:{type:'string'}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
   const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
   const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
@@ -95,7 +99,12 @@ async function main(){
       return {features:[...host.device.features],adapter:{vendor:host.adapter.info.vendor,architecture:host.adapter.info.architecture,device:host.adapter.info.device,description:host.adapter.info.description}};})()`),
       wait:async()=>{if(report.console.some(line=>line.startsWith('exception:')))throw Error('Page failed while constructing its GPU host');await write();await new Promise(resolve=>setTimeout(resolve,1000));}});
     assert.ok(report.device.features.includes('shader-f16'));
-    report.prompt='A copper kettle with a round handle, isolated on a plain white background, studio product photo';
+    report.prompt=v.prompt??'A copper kettle with a round handle, isolated on a plain white background, studio product photo';
+    if(v['reference-source']){
+      const response=await fetch(new URL(v['reference-source'],v.origin));assert.ok(response.ok,'selected reference exists');
+      const bytes=Buffer.from(await response.arrayBuffer());await fs.writeFile(path.join(out,'reference.png'),bytes);
+      report.reference={source:v['reference-source'],sha256:createHash('sha256').update(bytes).digest('hex')};
+    }
     report.seed=7006;report.expectedSize=Number(v.size);
     report.phase='generate';await write();
     // Observe the actual pipeline promise, excluding weight loading and PNG persistence.
@@ -138,8 +147,9 @@ async function main(){
         try{return await original.call(this,options);}
         finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();window.flux3SmokeFlameAfter=window.kaminosAssets.generationFlame.read().renderer;}
       };
-      window.kaminosAssets.open('generate');
+      await window.kaminosAssets.open('generate');
       const byId=id=>document.getElementById(id);byId('asset-image-model').value='flux3';byId('asset-image-model').dispatchEvent(new Event('change'));
+      if(${!!v['reference-source']}){window.kaminosAssets.select({kind:'image',name:'Reference image',source:${JSON.stringify(v['reference-source']??null)}});byId('asset-use-reference').checked=true;byId('asset-use-reference').dispatchEvent(new Event('change'));}
       if(${v['inspect-controls']}){const toggle=byId('asset-show-segmented');if(!toggle)throw Error('Missing segmented display control');toggle.checked=false;toggle.dispatchEvent(new Event('change'));}
       byId('asset-image-size').value=${JSON.stringify(v.size)};byId('asset-prompt').value=${JSON.stringify(report.prompt)};byId('asset-seed').value='7006';
       window.flux3SmokeFrames={before:(window.kaminosAppFrameSource()?.completedFrames??0),after:0};

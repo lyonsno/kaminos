@@ -6,8 +6,6 @@ Weights receive the same quantization as the browser package. Outputs and failur
 phase are retained under the caller's output directory.
 """
 import argparse, gc, hashlib, importlib.util, json, pathlib, subprocess, traceback
-import numpy as np
-import torch
 
 
 def main():
@@ -16,9 +14,7 @@ def main():
     ap.add_argument('--out',required=True)
     a=ap.parse_args();out=pathlib.Path(a.out);out.mkdir(parents=True,exist_ok=True)
     source=pathlib.Path(a.model_dir);here=pathlib.Path(__file__).resolve().parent
-    r={'ok':False,'phase':'imports','modelDir':str(source),'sourceRevision':source.name,
-       'loraSha256':hashlib.sha256(pathlib.Path(a.lora).read_bytes()).hexdigest(),
-       'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=here,text=True).strip(),
+    r={'ok':False,'phase':'source-identity','modelDir':str(source),'sourceRevision':source.name,
        'weights':{'format':'i4','globals_format':'i8','group':64},'tensors':{},'width':48,'height':32,'seed':9021}
     def write():(out/'manifest.json').write_text(json.dumps(r,indent=2))
     def save(name,t):
@@ -26,6 +22,11 @@ def main():
         (out/file).write_bytes(data);r['tensors'][name]={'file':file,'shape':list(x.shape),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
     write()
     try:
+        r['loraSha256']=hashlib.sha256(pathlib.Path(a.lora).read_bytes()).hexdigest()
+        r['sourceCommit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=here,text=True).strip()
+        r['phase']='imports';write()
+        import numpy as np
+        import torch
         import diffusers
         from diffusers import AutoencoderKLFlux2
         from diffusers.models.transformers.transformer_flux3 import Flux3Transformer2DModel
