@@ -34,15 +34,15 @@ export default {
    let reach=Number(inputs.minReachFraction??.001),smallArea=Number(inputs.minAreaFraction??.0001),cleanup=Number(inputs.cleanupAreaFraction??.0001),busy=false,error='';
    if(!Number.isInteger(selected)||selected< -1||!['regions','original'].includes(mode)||!Number.isFinite(explosion)||explosion<0||explosion>1||!Number.isInteger(detailLevel)||detailLevel<0||typeof showHiddenCuts!=='boolean')throw Error('Invalid shape presentation setup');
    let statusElement,selectedText,refineButton,keepButton,parentButton,resetButton,selectElement,localInput,localText,detailInput,detailText,hiddenInput,modeInput,separationInput,fieldDocument;const numericInputs={},numberDrags=[];
-   let thresholdTimer=null,requestedThresholds=null,requestedBoundary=null,filtering=false;
+   let thresholdTimer=null,requestedThresholds=null,requestedBoundaries=new Map(),filtering=false;
    let fixedCuts=structuredClone(inputs.fixedCuts??[]),familyCuts=structuredClone(inputs.familyCuts??null),boundaryInput,boundarySelect,boundaryHint,boundaryReset;const boundaryOriginals=new Map();
-   const isBusy=()=>busy||filtering||requestedThresholds!==null||requestedBoundary!==null;
+   const isBusy=()=>busy||filtering||requestedThresholds!==null||requestedBoundaries.size>0;
    worker=new Worker(new URL('../fracture-shape-partition.worker.mjs',import.meta.url),{type:'module'});
    worker.onerror=e=>{if(disposed)return;error=e.message||'Partition worker failed';busy=false;failAll(Error(error));sync();};
    worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data);};
    const request=(settings,first,extra={})=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});worker.postMessage({id,settings,...extra,...(first?{geometry:{positions:sourcePositions,indices:sourceIndices}}:{})});});
    const setup=()=>({source:inputs.source,minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,detailLevel,showHiddenCuts,mode,explosion,selected,localDetail:{...localDetail},fixedCuts:structuredClone(fixedCuts),familyCuts:structuredClone(familyCuts)});
-   const read=()=>({route:'kaminos.fracture.attachment-draft.v2',source:inputs.source,triangleCount:indices.length/3,settings:{method:'geodesic-neck',minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,maxCutRatio:4},pendingBoundary:requestedBoundary?{key:requestedBoundary.key,offsetFraction:requestedBoundary.offsetFraction}:null,fixedCuts:fixedCuts.map(c=>({key:c.key,offsetFraction:c.offsetFraction,variantKey:c.variantKey,triangles:c.faces.length,reassignedIslandTriangles:c.reassignedIslands?.length??0})),pendingSettings:requestedThresholds?{...requestedThresholds}:null,mode,explosion,selected,detailLevel,effectiveDetailLevel:result?Math.min(detailLevel,result.hierarchy.maxDepth):null,showHiddenCuts,busy:isBusy(),error,analysis:result?.analysis??null,localDetail:{...localDetail},setup:setup(),hierarchy:result?{schema:result.hierarchy.schema,nodes:result.hierarchy.nodes,maxDepth:result.hierarchy.maxDepth}:null,partition:view?{route:result.route,triangleCount:result.triangleCount,sourceComponents:result.sourceComponents,diagnostics:result.diagnostics,parts:view.parts,attachments:view.attachments,boundaryEdges:view.boundaries.length}:null,claim:'Nested surface grouping and geometric separation preview; no fracture physics'});
+   const read=()=>({route:'kaminos.fracture.attachment-draft.v2',source:inputs.source,triangleCount:indices.length/3,settings:{method:'geodesic-neck',minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,maxCutRatio:4},pendingBoundaries:Array.from(requestedBoundaries.values(),c=>({key:c.key,offsetFraction:c.offsetFraction})),fixedCuts:fixedCuts.map(c=>({key:c.key,offsetFraction:c.offsetFraction,variantKey:c.variantKey,triangles:c.faces.length,reassignedIslandTriangles:c.reassignedIslands?.length??0})),pendingSettings:requestedThresholds?{...requestedThresholds}:null,mode,explosion,selected,detailLevel,effectiveDetailLevel:result?Math.min(detailLevel,result.hierarchy.maxDepth):null,showHiddenCuts,busy:isBusy(),error,analysis:result?.analysis??null,localDetail:{...localDetail},setup:setup(),hierarchy:result?{schema:result.hierarchy.schema,nodes:result.hierarchy.nodes,maxDepth:result.hierarchy.maxDepth}:null,partition:view?{route:result.route,triangleCount:result.triangleCount,sourceComponents:result.sourceComponents,diagnostics:result.diagnostics,parts:view.parts,attachments:view.attachments,boundaryEdges:view.boundaries.length}:null,claim:'Nested surface grouping and geometric separation preview; no fracture physics'});
    const persist=()=>updateInputs(setup());
    const event=(kind,requested)=>{persist();const effective=read();record({kind:'fracture-shape.'+kind,phase:'applied',target:asset.id,requested,effective});return effective;};
    const belongs=(node,parent)=>{while(node!==null){if(node===parent)return true;node=result.hierarchy.nodes[node].parent;}return false;};
@@ -61,8 +61,8 @@ export default {
     if(selectedText)selectedText.textContent=node?`${node.kind==='component'?'Source component':node.kind==='branch'?'Attachment piece':'Surface patch'} ${node.id+1} · ${node.triangles.toLocaleString()} triangles${node.agreement?` · same boundary in ${node.agreement} of seven searches`:''}`:'Click a fitting in the view to work on it.';
     const branch=node?.kind==='branch'?node:null,proposal=branch?result.candidateBranches?.find(c=>c.key===branch.key&&c.status==='included'):null;
     if(proposal&&!boundaryOriginals.has(branch.key))boundaryOriginals.set(branch.key,Array.from(fixedCuts.find(c=>c.key===branch.key)?.originalFaces??proposal.faces));
-    const edit=branch?fixedCuts.find(c=>c.key===branch.key):null;
-    if(boundaryInput){boundaryInput.disabled=!proposal;boundaryInput.min=String((edit?.limits?.min??-1)*100);boundaryInput.max=String((edit?.limits?.max??1)*100);value(boundaryInput,(requestedBoundary&&requestedBoundary.key===branch?.key?requestedBoundary.offsetFraction:edit?.offsetFraction??0)*100);}
+    const edit=branch?(requestedBoundaries.get(branch.key)??fixedCuts.find(c=>c.key===branch.key)):null;
+    if(boundaryInput){boundaryInput.disabled=!proposal;boundaryInput.min=String((edit?.limits?.min??-1)*100);boundaryInput.max=String((edit?.limits?.max??1)*100);value(boundaryInput,(edit?.offsetFraction??0)*100);}
     if(boundarySelect){
      boundarySelect.disabled=!proposal;
      if(boundarySelect._result!==result||boundarySelect._key!==branch?.key){
@@ -113,18 +113,19 @@ export default {
      const changed=next.minReachFraction!==reach||next.minAreaFraction!==smallArea||next.cleanupAreaFraction!==cleanup;
      const persistentCuts=settings.resetBoundaries?[]:fixedCuts;
      let activeCuts=settings.resetBoundaries?[]:changed?persistentCuts:(familyCuts??persistentCuts);
-     if(settings.boundary&&!activeCuts.some(c=>c.key===settings.boundary.key))activeCuts=[...activeCuts,{key:settings.boundary.key,faces:settings.boundary.originalFaces}];
-     const response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts:persistentCuts,boundary:settings.boundary});if(disposed||generation!==serial)return read();
+     const boundaries=settings.boundaries??(settings.boundary?[settings.boundary]:[]);
+     for(const cut of boundaries)if(!activeCuts.some(c=>c.key===cut.key))activeCuts=[...activeCuts,{key:cut.key,faces:cut.originalFaces}];
+     const response=await request({method:'geodesic-neck',...next,maxCutRatio:4,fixedCuts:activeCuts},first,{fixedCuts:persistentCuts,boundaries});if(disposed||generation!==serial)return {...read(),requestApplied:false};
      const candidate=response.result;
      const selectedKey=result?.hierarchy.nodes[selected]?.key,grouping=Object.entries(localDetail).map(([id,level])=>({key:result?.hierarchy.nodes[id]?.key,level}));
      if(first){if(selected>=candidate.hierarchy.nodes.length)throw Error('Saved selected piece does not exist');shapeHierarchyView(candidate,Math.min(detailLevel,candidate.hierarchy.maxDepth),localDetail);}
      fixedCuts=response.fixedCuts??fixedCuts;
-     familyCuts=settings.boundary?candidate.candidateBranches.filter(c=>c.status==='included').map(c=>({key:c.key,faces:Array.from(c.faces)})):changed||settings.resetBoundaries?null:familyCuts;
+     familyCuts=boundaries.length?candidate.candidateBranches.filter(c=>c.status==='included').map(c=>({key:c.key,faces:Array.from(c.faces)})):changed||settings.resetBoundaries?null:familyCuts;
      result=candidate;viewDirty=true;reach=next.minReachFraction;smallArea=next.minAreaFraction;cleanup=next.cleanupAreaFraction;if(!first){
       if(changed&&!fixedCuts.length){selected=-1;localDetail={};}
       else {selected=selectedKey?result.hierarchy.nodes.find(n=>n.key===selectedKey)?.id??-1:selected;localDetail=Object.fromEntries(grouping.flatMap(g=>{const n=result.hierarchy.nodes.find(n=>n.key===g.key);return n?[[n.id,Math.max(n.depth,Math.min(g.level,result.hierarchy.maxDepth))]]:[];}));}
-     }busy=false;draw();return event(settings.boundary?'boundary':'partition',settings);
-    }catch(e){if(!disposed&&generation===serial){busy=false;error=e.message;sync();}throw e;}
+     }busy=false;draw();return {...event(boundaries.length?'boundary':'partition',settings),requestApplied:true};
+    }catch(e){if(disposed||generation!==serial)return {...read(),requestApplied:false};busy=false;error=e.message;sync();throw e;}
    }
    function frame(){const bounds=new Box3().setFromObject(sourceRoot),center=bounds.getCenter(new Vector3()),r=bounds.getSize(new Vector3()).length();return session.setView({position:center.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.8)).toArray(),target:center.toArray()});}
    await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);frame();
@@ -146,19 +147,19 @@ export default {
    };
    const boundaryRequest=(offsetFraction,variantKey)=>{
     const node=result.hierarchy.nodes[selected];if(node?.kind!=='branch')throw Error('Select an attachment branch');
-    const proposal=result.candidateBranches.find(c=>c.key===node.key&&c.status==='included'),edit=fixedCuts.find(c=>c.key===node.key);
+    const proposal=result.candidateBranches.find(c=>c.key===node.key&&c.status==='included'),edit=requestedBoundaries.get(node.key)??fixedCuts.find(c=>c.key===node.key);
     const originalFaces=boundaryOriginals.get(node.key)??Array.from(edit?.originalFaces??proposal.faces);
     boundaryOriginals.set(node.key,originalFaces);
     let anchorFaces=edit?.anchorFaces??originalFaces;
     if(variantKey!==undefined){if(variantKey==='original')anchorFaces=originalFaces;else{const variant=result.candidateBranches.find(c=>c.key===variantKey&&c.status==='boundary-variant'&&result.candidateBranches[c.variantOf]?.key===node.key);if(!variant)throw Error('Choose an available attachment boundary');anchorFaces=Array.from(variant.faces);}offsetFraction=0;}
-    const protectedKeys=[...new Set([...fixedCuts.filter(c=>c.key!==node.key).map(c=>c.key),...view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).map(p=>result.hierarchy.nodes[p.nodeId].key)])];
+    const protectedKeys=[...new Set([...[...fixedCuts,...requestedBoundaries.values()].filter(c=>c.key!==node.key).map(c=>c.key),...view.parts.filter(p=>p.nodeId!==node.id&&belongs(p.nodeId,node.id)).map(p=>result.hierarchy.nodes[p.nodeId].key)])];
     return {protectedKeys,key:node.key,anchorFaces:Array.from(anchorFaces),originalFaces:Array.from(originalFaces),variantKey:variantKey??edit?.variantKey??'original',offsetFraction};
    };
    const operations={
      partition:settings=>analyze(settings),
      boundary:value=>analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,boundary:boundaryRequest(value)}),
      boundaryVariant:key=>analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,boundary:boundaryRequest(0,key)}),
-     resetBoundaries:()=>{clearTimeout(thresholdTimer);thresholdTimer=null;requestedThresholds=null;requestedBoundary=null;return analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,resetBoundaries:true});},
+     resetBoundaries:()=>{clearTimeout(thresholdTimer);thresholdTimer=null;requestedThresholds=null;requestedBoundaries=new Map();return analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup,resetBoundaries:true});},
      detail:value=>{if(!Number.isInteger(value)||value<0||value>Math.max(detailLevel,result.hierarchy.maxDepth))throw Error('Choose an existing hierarchy detail level');detailLevel=value;localDetail={};viewDirty=true;while(selected>=0&&result.hierarchy.nodes[selected].depth>detailLevel)selected=result.hierarchy.nodes[selected].parent??-1;draw();return event('detail',value);},
      hiddenCuts:value=>{if(typeof value!=='boolean')throw Error('Hidden cuts requires a boolean');showHiddenCuts=value;draw();return event('hidden-cuts',value);},
      view:value=>{if(!['original','regions'].includes(value))throw Error('Choose original or regions');mode=value;draw();return event('view',value);},
@@ -196,13 +197,21 @@ export default {
       numberDrags.push(host.controls.installNumberDrag({input,grip:title,step,dragStep,onStart:()=>{before=input.value;}}));
      };
      const runThresholds=async()=>{
-      if(disposed||filtering||!requestedThresholds&&!requestedBoundary)return;
-      const next=requestedThresholds,cut=requestedBoundary;filtering=true;
-      try{await invoke('partition',{...(next??{minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup}),...(cut?{boundary:cut}:{})});}catch(e){if(!disposed)failed(e);}
+      if(disposed||filtering||!requestedThresholds&&!requestedBoundaries.size)return;
+      const next=requestedThresholds,cuts=requestedBoundaries;filtering=true;let applied=false;
+      try{
+       const response=await invoke('partition',{...(next??{minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup}),boundaries:Array.from(cuts.values()).sort((a,b)=>a.key.localeCompare(b.key))});
+       applied=response.requestApplied!==false;
+      }catch(e){applied=true;if(!disposed)failed(e);}
       finally{
        filtering=false;if(disposed)return;
-       if(requestedThresholds===next)requestedThresholds=null;if(requestedBoundary===cut)requestedBoundary=null;busy=false;
-       sync();if((requestedThresholds||requestedBoundary)&&!thresholdTimer)void runThresholds();
+       // A discarded response applied none of the batch. Carry every pending
+       // fitting forward, retaining the latest request for each attachment.
+       if(applied){
+        if(requestedThresholds===next)requestedThresholds=null;
+        requestedBoundaries=new Map(Array.from(requestedBoundaries).filter(([key,cut])=>cuts.get(key)!==cut));
+       }
+       busy=false;sync();if((requestedThresholds||requestedBoundaries.size)&&!thresholdTimer)void runThresholds();
       }
      };
      const queueThresholds=()=>{
@@ -212,7 +221,7 @@ export default {
       ++serial;error='';clearTimeout(thresholdTimer);
       thresholdTimer=setTimeout(()=>{thresholdTimer=null;void runThresholds();},150);sync();
      };
-     const queueBoundary=variant=>{try{requestedBoundary=boundaryRequest(Number(boundaryInput.value)/100,variant);++serial;error='';clearTimeout(thresholdTimer);thresholdTimer=setTimeout(()=>{thresholdTimer=null;void runThresholds();},150);sync();}catch(e){failed(e);}};
+     const queueBoundary=variant=>{try{const cut=boundaryRequest(Number(boundaryInput.value)/100,variant);requestedBoundaries=new Map(requestedBoundaries).set(cut.key,cut);++serial;error='';clearTimeout(thresholdTimer);thresholdTimer=setTimeout(()=>{thresholdTimer=null;void runThresholds();},150);sync();}catch(e){failed(e);}};
      selectElement=document.createElement('select');selectElement.addEventListener('change',()=>invoke('select',Number(selectElement.value)).catch(failed));row('Selected piece',selectElement);
      selectedText=document.createElement('p');panel.append(selectedText);
      localInput=document.createElement('input');Object.assign(localInput,{min:'0',max:'0',step:'1'});localInput.setAttribute('aria-label','Selected piece detail');localText=row('Selected piece detail',localInput);number(localInput,localText,1,()=>invoke('pieceDetail',Number(localInput.value)).catch(failed));
@@ -235,7 +244,7 @@ export default {
      hiddenInput=document.createElement('input');hiddenInput.type='checkbox';hiddenInput.setAttribute('aria-label','Show hidden cuts');hiddenInput.addEventListener('change',()=>invoke('hiddenCuts',hiddenInput.checked).catch(failed));row('Show hidden cuts (faint dashed lines)',hiddenInput,global);
      const framing=document.createElement('button');framing.textContent='Frame object';framing.addEventListener('click',()=>invoke('frame').catch(failed));statusElement=document.createElement('p');statusElement.style.whiteSpace='pre-line';statusElement.setAttribute('role','status');panel.append(framing,statusElement);sync();
     },
-    async dispose(){if(disposed)return;disposed=true;clearTimeout(thresholdTimer);requestedThresholds=null;requestedBoundary=null;numberDrags.forEach(d=>d.dispose());stopPick?.();worker.terminate();failAll(Error('Shape draft closed'));await session.dispose();},
+    async dispose(){if(disposed)return;disposed=true;clearTimeout(thresholdTimer);requestedThresholds=null;requestedBoundaries=new Map();numberDrags.forEach(d=>d.dispose());stopPick?.();worker.terminate();failAll(Error('Shape draft closed'));await session.dispose();},
    };
   }catch(e){disposed=true;worker?.terminate();failAll(e);await session.dispose();throw e;}
  },

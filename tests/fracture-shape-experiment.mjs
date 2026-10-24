@@ -219,3 +219,19 @@ test('local boundary movement preserves neighbors, survives global tuning and re
   assert.deepEqual(Array.from(editedFaces),saved.fixedCuts[0].faces,'global detection cannot erase the edited cut');
  }finally{for(const api of apis)await api.dispose();globalThis.Worker=old;}
 });
+
+test('switching fittings during pending work preserves both local cut requests',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const {createShapeProcessor}=await import('../fracture-shape-worker-core.mjs');
+ const f=setup(),old=globalThis.Worker,requests=[],positions=[],indices=[];
+ for(let x=0;x<=12;x++)positions.push(x,0,0,x,1,0);for(let x=0;x<12;x++){const i=x*2;indices.push(i,i+2,i+1,i+1,i+2,i+3);}
+ f.mesh.geometry=new THREE.BufferGeometry();f.mesh.geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));f.mesh.geometry.setIndex(indices);
+ globalThis.Worker=class{constructor(){this.process=createShapeProcessor();}postMessage(data){const reply=()=>{try{this.onmessage({data:this.process(data)});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}};if(data.geometry)queueMicrotask(reply);else requests.push({data,reply});}terminate(){}};
+ let api;try{
+  api=await definition.create({host:f.host,inputs:{source:'/strip.glb',familyCuts:[{key:'fitting',faces:Array.from({length:8},(_,i)=>i+16)},{key:'neighbor',faces:[0,1]}]},record(){}});const ui=mounted(api),field=ui.field('Cut position (% object extent)');
+  const select=key=>api.operations.select(api.read().hierarchy.nodes.find(n=>n.key===key).id);
+  select('fitting');ui.edit(field,'12');t.mock.timers.tick(200);await drain();assert.equal(requests.length,1);
+  select('neighbor');ui.edit(field,'8');t.mock.timers.tick(200);await drain();requests[0].reply();await drain();assert.equal(requests.length,2);requests[1].reply();await drain();
+  assert.deepEqual(api.read().fixedCuts.map(c=>c.key).sort(),['fitting','neighbor'],'an obsolete in-flight result cannot erase another fitting request');
+  assert.equal(api.read().fixedCuts.find(c=>c.key==='fitting').offsetFraction,.12);assert.equal(api.read().fixedCuts.find(c=>c.key==='neighbor').offsetFraction,.08);
+ }finally{await api?.dispose();globalThis.Worker=old;}
+});
