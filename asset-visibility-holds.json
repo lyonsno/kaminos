@@ -16,7 +16,7 @@
     {
       "id": "audit-20261023-637",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay normal",
+      "label": "Lirm 0087 \u00b7 preserve gestalt \u00b7 clay normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=2cc0691a35d2&file=output.png"
@@ -27,7 +27,7 @@
     {
       "id": "audit-20261023-638",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay depth normal",
+      "label": "Lirm 0032 \u00b7 prior forward \u00b7 clay depth normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=de7a9d3679a2&file=output.png"
@@ -38,7 +38,7 @@
     {
       "id": "audit-20261023-639",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay normal",
+      "label": "Lirm 0066 \u00b7 preserve gestalt \u00b7 clay normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=8f85ea972380&file=output.png"
@@ -49,7 +49,7 @@
     {
       "id": "audit-20261023-640",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay depth normal",
+      "label": "Lirm 0087 \u00b7 preserve gestalt \u00b7 clay depth normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=ffee52b5d263&file=output.png"
@@ -60,7 +60,7 @@
     {
       "id": "audit-20261023-641",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth",
+      "label": "Lirm 0066 \u00b7 preserve gestalt \u00b7 clay depth",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=c287e7029a01&file=output.png"
@@ -71,7 +71,7 @@
     {
       "id": "audit-20261023-642",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay depth",
+      "label": "Lirm 0087 \u00b7 preserve gestalt \u00b7 clay depth",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=9f0b87ddc6d4&file=output.png"
@@ -82,7 +82,7 @@
     {
       "id": "audit-20261023-643",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth normal",
+      "label": "Lirm 0066 \u00b7 preserve gestalt \u00b7 clay depth normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=278725b863b0&file=output.png"
@@ -93,7 +93,7 @@
     {
       "id": "audit-20261023-644",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay normal",
+      "label": "Lirm 0032 \u00b7 prior forward \u00b7 clay normal",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=f1b671e82228&file=output.png"
@@ -104,7 +104,7 @@
     {
       "id": "audit-20261023-645",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay depth",
+      "label": "Lirm 0032 \u00b7 prior forward \u00b7 clay depth",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=4ea0e6341688&file=output.png"
@@ -115,7 +115,7 @@
     {
       "id": "audit-20261023-646",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 prior forward",
+      "label": "Lirm 0087 \u00b7 prior forward",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=181a982a1308&file=output.png"
@@ -126,7 +126,7 @@
     {
       "id": "audit-20261023-647",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 lineage seed",
+      "label": "Lirm 0087 \u00b7 lineage seed",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=71acdfe325b9&file=output.png"
@@ -137,7 +137,7 @@
     {
       "id": "audit-20261023-648",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 preserve gestalt",
+      "label": "Lirm 0087 \u00b7 preserve gestalt",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=6ceeecc90e4e&file=output.png"
@@ -148,7 +148,7 @@
     {
       "id": "audit-20261023-649",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 prior forward",
+      "label": "Lirm 0066 \u00b7 prior forward",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=8a43f362b830&file=output.png"
@@ -159,7 +159,7 @@
     {
       "id": "audit-20261023-650",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 lineage seed",
+      "label": "Lirm 0066 \u00b7 lineage seed",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=bff342232d28&file=output.png"
@@ -170,7 +170,7 @@
     {
       "id": "audit-20261023-651",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 preserve gestalt",
+      "label": "Lirm 0066 \u00b7 preserve gestalt",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=5c7acd050127&file=output.png"
@@ -181,7 +181,7 @@
     {
       "id": "audit-20261023-652",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 prior forward",
+      "label": "Lirm 0032 \u00b7 prior forward",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=31ad39b0db45&file=output.png"
@@ -192,7 +192,7 @@
     {
       "id": "audit-20261023-653",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 lineage seed",
+      "label": "Lirm 0032 \u00b7 lineage seed",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=8632e626c91a&file=output.png"
@@ -203,7 +203,7 @@
     {
       "id": "audit-20261023-654",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 preserve gestalt",
+      "label": "Lirm 0032 \u00b7 preserve gestalt",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=9dd21cad6ec6&file=output.png"
@@ -214,7 +214,7 @@
     {
       "id": "audit-20261023-655",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 prior forward",
+      "label": "Lirm 0021 \u00b7 prior forward",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=f51e209237c2&file=output.png"
@@ -225,7 +225,7 @@
     {
       "id": "audit-20261023-656",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 lineage seed",
+      "label": "Lirm 0021 \u00b7 lineage seed",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=7dec4cbb021f&file=output.png"
@@ -236,7 +236,7 @@
     {
       "id": "audit-20261023-657",
       "kind": "image",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 preserve gestalt",
+      "label": "Lirm 0021 \u00b7 preserve gestalt",
       "basis": "visual-triage",
       "sources": [
         "/api/job-output?job_id=bf0f311ca03f&file=output.png"
@@ -247,7 +247,7 @@
     {
       "id": "audit-20261023-mesh-408143730b5e",
       "kind": "mesh",
-      "label": "Lirm 0032 sparse recovery 20260715 \u00b7 cfg 1p0",
+      "label": "Lirm 0032 \u00b7 sparse recovery \u00b7 cfg 1.0",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=408143730b5e&file=output.glb"
@@ -258,7 +258,7 @@
     {
       "id": "audit-20261023-mesh-cfaa31ef8666",
       "kind": "mesh",
-      "label": "Lirm 0032 sparse recovery 20260715 \u00b7 cfg 0p75",
+      "label": "Lirm 0032 \u00b7 sparse recovery \u00b7 cfg 0.75",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=cfaa31ef8666&file=output.glb"
@@ -269,7 +269,7 @@
     {
       "id": "audit-20261023-mesh-791f61ee1225",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p5",
+      "label": "Lirm 0087 \u00b7 sparse guidance \u00b7 cfg 0.5",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=791f61ee1225&file=output.glb"
@@ -280,7 +280,7 @@
     {
       "id": "audit-20261023-mesh-621ec0ff8e1a",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p25",
+      "label": "Lirm 0087 \u00b7 sparse guidance \u00b7 cfg 0.25",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=621ec0ff8e1a&file=output.glb"
@@ -291,7 +291,7 @@
     {
       "id": "audit-20261023-mesh-f3df4494fa60",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p0",
+      "label": "Lirm 0087 \u00b7 sparse guidance \u00b7 cfg 0.0",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=f3df4494fa60&file=output.glb"
@@ -302,7 +302,7 @@
     {
       "id": "audit-20261023-mesh-5b3455019187",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p5",
+      "label": "Lirm 0032 \u00b7 sparse guidance \u00b7 cfg 0.5",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=5b3455019187&file=output.glb"
@@ -313,7 +313,7 @@
     {
       "id": "audit-20261023-mesh-05501f23a0af",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p25",
+      "label": "Lirm 0032 \u00b7 sparse guidance \u00b7 cfg 0.25",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=05501f23a0af&file=output.glb"
@@ -324,7 +324,7 @@
     {
       "id": "audit-20261023-mesh-619722d00d51",
       "kind": "mesh",
-      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p0",
+      "label": "Lirm 0032 \u00b7 sparse guidance \u00b7 cfg 0.0",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=619722d00d51&file=output.glb"
@@ -335,7 +335,7 @@
     {
       "id": "audit-20261023-mesh-1d945dfb0771",
       "kind": "mesh",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay normal",
+      "label": "Lirm 0032 \u00b7 prior forward \u00b7 clay normal",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=1d945dfb0771&file=output.glb"
@@ -346,7 +346,7 @@
     {
       "id": "audit-20261023-mesh-3475f77bdec9",
       "kind": "mesh",
-      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth normal",
+      "label": "Lirm 0066 \u00b7 preserve gestalt \u00b7 clay depth normal",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=3475f77bdec9&file=output.glb"
@@ -357,7 +357,7 @@
     {
       "id": "audit-20261023-mesh-c2b2ac211b2a",
       "kind": "mesh",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 preserve gestalt",
+      "label": "Lirm 0087 \u00b7 preserve gestalt",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=c2b2ac211b2a&file=output.glb"
@@ -368,7 +368,7 @@
     {
       "id": "audit-20261023-mesh-548249eaddfc",
       "kind": "mesh",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 preserve gestalt",
+      "label": "Lirm 0066 \u00b7 preserve gestalt",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=548249eaddfc&file=output.glb"
@@ -379,7 +379,7 @@
     {
       "id": "audit-20261023-mesh-612443decf9e",
       "kind": "mesh",
-      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 prior forward",
+      "label": "Lirm 0032 \u00b7 prior forward",
       "basis": "related-generation-provenance",
       "sources": [
         "/api/job-output?job_id=612443decf9e&file=output.glb"
