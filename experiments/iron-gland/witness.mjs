@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { launchChrome } from '../../models/supermat/chrome-cdp.mjs';
 import { verifyVideoResponse } from '../../demos/hand-mesh/witness-input.js';
-import { verifyFrame } from './witness-checks.mjs';
+import { verifyFrame, missObserved } from './witness-checks.mjs';
 
 const { values: args } = parseArgs({ options: Object.fromEntries(['out', 'base', 'chrome', 'models', 'fixture-file', 'expected-root'].map(k => [k, { type: 'string' }])) });
 if (!args.out) throw Error('--out required');
@@ -77,7 +77,20 @@ try {
       await sleep(100);
     }
   };
-  const shot = async name => { const { data } = await call('Page.captureScreenshot', { format: 'png' }); await fs.writeFile(path.join(out, `${name}.png`), Buffer.from(data, 'base64')); };
+  const shot = async name => {
+    const { data } = await call('Page.captureScreenshot', { format: 'png' }); await fs.writeFile(path.join(out, `${name}.png`), Buffer.from(data, 'base64'));
+    const pixels = await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>{
+      const source=document.getElementById('kaminos-host-renderer-canvas'),c=document.createElement('canvas');
+      c.width=source.width;c.height=source.height;const ctx=c.getContext('2d');ctx.drawImage(source,0,0);
+      const bytes=ctx.getImageData(0,0,c.width,c.height).data;let min=255,max=0,nonzero=0;
+      for(let i=0;i<bytes.length;i+=4){const sum=bytes[i]+bytes[i+1]+bytes[i+2];if(sum)nonzero++;min=Math.min(min,bytes[i],bytes[i+1],bytes[i+2]);max=Math.max(max,bytes[i],bytes[i+1],bytes[i+2]);}
+      resolve({width:c.width,height:c.height,min,max,nonzero,png:c.toDataURL('image/png').split(',')[1]});
+    }))`);
+    const raw = Buffer.from(pixels.png,'base64'); delete pixels.png;
+    await fs.writeFile(path.join(out, `${name}-canvas.png`),raw);
+    (report.pixels??={})[name]={...pixels,sha256:createHash('sha256').update(raw).digest('hex')};await save();
+    if (!pixels.width || !pixels.height || !pixels.nonzero || pixels.max===pixels.min) throw Error(`blank canvas in ${name}`);
+  };
   const step = async (name, fn) => { report.phase = name; await save(); await fn(); report.steps.push({ name, state: await read() }); await save(); };
   const inputs = { models: '/scratch/iron-gland/models/', threshold: .18 };
   report.url = `${args.base}/?workspace=workbench&experiment=iron-gland&experiment_inputs=${encodeURIComponent(JSON.stringify(inputs))}`;
@@ -102,9 +115,23 @@ try {
     await evaluate(`kaminosWorkbenchExperiments.invoke('frame')`); await sleep(200); await shot('mobile');
     await call('Emulation.clearDeviceMetricsOverride');
   });
+  await step('source-ended', async () => {
+    // Media Capture from DOM Elements: ending playback ends the captured track.
+    // https://w3c.github.io/mediacapture-fromelement/#html-media-element-media-capture-extensions
+    await evaluate(`{const v=__ironWitness.videos.at(-1);v.loop=false;v.currentTime=v.duration;}`);
+    await wait(`__ironWitness.tracks.at(-1).readyState==='ended'`);
+    const s=await read();
+    if(s.running || s.cameraVisible || s.interaction.visible || !s.error) throw Error('ended source retained a live presentation');
+    await shot('source-ended');
+  });
+  await step('restart-after-source-end', async () => {
+    await evaluate(`kaminosWorkbenchExperiments.invoke('start')`);
+    await wait(`(async()=>{const s=await kaminosWorkbenchExperiments.read();if(s.error)throw Error(s.error);return s.frameCount>0 && s.interaction.visible})()`);
+    verifyFrame(await read(), {threshold:.18});
+  });
   await step('miss', async () => {
     await evaluate(`kaminosWorkbenchExperiments.invoke('setOptions', {threshold:1})`);
-    await wait(`(async()=>{const s=await kaminosWorkbenchExperiments.read();return s.frameCount>0 && !s.interaction.visible && s.lastAcquisition?.source==='no_detection'})()`);
+    await wait(`(async()=>(${missObserved.toString()})(await kaminosWorkbenchExperiments.read()))()`);
     await shot('no-hand');
   });
   await step('stop', async () => {
