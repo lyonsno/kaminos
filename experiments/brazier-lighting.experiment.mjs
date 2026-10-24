@@ -4,7 +4,11 @@ import {createDeferredSurfaceSplats} from '../deferred-surface-splats.mjs';
 
 export default {id:'brazier-lighting',title:'Two braziers · corridor lighting',async create({host,inputs,record}){
  if(!inputs.base||!inputs.shadow||!inputs.presetId)throw Error('Room, shadow geometry and saved flame basin are required');
+ if(globalThis.kaminosSceneAuthoring.read().objects.some(o=>o.type==='flame-emitter'))throw Error('Open the brazier assay in a scene without existing fire sources');
  const session=await host.scene.open();let splats,proxy,asset;const ids=[];
+ const removeSources=()=>{for(const id of ids){if(globalThis.kaminosSceneAuthoring.read().objects.some(o=>o.id===id)){host.scene.select(id);globalThis.kaminosSelection.remove();}}};
+ // Remove the unretained experiment registration before ordinary selection history snapshots.
+ const cleanup=async()=>{host.volume.get()?.setSimulationPaused(true);proxy?.geometry.dispose();proxy?.material.dispose();splats?.dispose();await session.dispose();removeSources();};
  const absolute=p=>new URL(p,host.controls.document.location.href).href;
  const read=()=>({representation:'splats',room:asset?.id,surface:splats?.read(),shadow:proxy?.userData.provenance,sources:globalThis.kaminosSceneAuthoring.read().objects.filter(o=>ids.includes(o.id)),lighting:globalThis.__kaminosSceneRadiance?.debugState(),gi:host.rendering.readGI(),runtime:host.volume.get()?.debugState()});
  const frame=()=>session.setView({position:[8.8,10.05,-12.8],target:[0,1.25,0]});
@@ -22,12 +26,14 @@ export default {id:'brazier-lighting',title:'Two braziers · corridor lighting',
   // Ordinary source authoring feeds both emitters into the shared simulation.
   globalThis.kaminosFlameDomain.set({position:[1.85,1.85,.60],rotation:[0,0,0],scale:[1.5,1.5,1.5]});
   const settings=host.fire.settings();
-  for(const [id,value] of [['volume-steps',8],['volume-render-scale',.5],['volume-adaptive-rays',1],['volume-immersed-radius',.17]]){if(settings.domControls[id]){settings.domControls[id].value=value;settings.domControls[id].rawValue=String(value);}}
+  for(const [id,value] of [['volume-steps',8],['volume-render-scale',.5],['volume-adaptive-rays',1],['volume-immersed-radius',.17],['volume-density',2],['volume-physical-kelvin-per-heat',1870],['volume-physical-smoke-extinction',.5],['volume-physical-smoke-albedo',.8]]){if(settings.domControls[id]){settings.domControls[id].value=value;settings.domControls[id].rawValue=String(value);}}
   await globalThis.kaminosFlameAuthoring.apply(settings,'Brazier assay preview');
   ids.push(await host.fire.add(inputs.presetId));
   for(const [i,id] of ids.entries())host.scene.setTransform(id,{position:i?[2.08,1.08,1.592]:[1.616,1.08,-.384],rotation:[0,0,0],scale:[1,1,1]});
+  globalThis.kaminosAuthoringParameters?.set('@parameter:env-intensity-slider',{value:.12});
+  globalThis.kaminosAuthoringParameters?.set('@parameter:fire-light-gain-stops',{value:2});
   host.rendering.gi({mode:'combined',steps:6,slices:2});frame();runtime.setSimulationPaused(false);
   const operations={frame,read,selectSource(index){if(!ids[index])throw Error('Unknown source');return host.scene.select(ids[index]);},setSource({index,enabled}){if(!ids[index]||typeof enabled!=='boolean')throw Error('Unknown source or enabled state');globalThis.kaminosSceneAuthoring.setFireSettings(ids[index],'emission',{enabled});record({kind:'brazier-source',index,enabled});return read();},pause(value){runtime.setSimulationPaused(!!value);return read();},muteLighting(value){globalThis.__kaminosSceneRadiance.setSurfaceGain(value?0:1);return read();}};
-  return {read,operations,mount({root,document,invoke}){for(let index=0;index<2;index++){const button=document.createElement('button');button.textContent=`Select brazier ${index+1}`;button.onclick=()=>invoke('selectSource',index);root.append(button);}const b=document.createElement('button');b.textContent='Frame room';b.onclick=()=>invoke('frame');root.append(b);},async dispose(){runtime.setSimulationPaused(true);for(const id of ids)globalThis.kaminosSceneAuthoring.setFireSettings(id,'emission',{enabled:false});proxy.geometry.dispose();proxy.material.dispose();splats.dispose();await session.dispose();}};
- }catch(error){host.volume.get()?.setSimulationPaused(true);proxy?.geometry.dispose();proxy?.material.dispose();splats?.dispose();await session.dispose();throw error;}
+  return {read,operations,mount({root,document,invoke}){for(let index=0;index<2;index++){const button=document.createElement('button');button.textContent=`Select brazier ${index+1}`;button.onclick=()=>invoke('selectSource',index);root.append(button);}const b=document.createElement('button');b.textContent='Frame room';b.onclick=()=>invoke('frame');root.append(b);},dispose:cleanup};
+ }catch(error){await cleanup();throw error;}
 }};
