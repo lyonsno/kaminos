@@ -14,7 +14,9 @@ export function checkRefinement(before,after,selected){
  return {status:saturated?'saturated':'refined',selected,changedTriangles:changed};
 }
 
-export function checkBoundaryChange(before,after,key,{requireChange=true}={}){
+export function checkBoundaryChange(before,after,key,{requireChange=true,expectedOffsetFraction}={}){
+ if(after.error)throw Error(`Boundary edit error: ${after.error}`);
+ if(expectedOffsetFraction!==undefined&&Math.abs((after.fixedCuts?.find(c=>c.key===key)?.offsetFraction??Infinity)-expectedOffsetFraction)>1e-9)throw Error('Effective boundary position does not match the requested position');
  if(before.triangleCount!==after.triangleCount||after.labels.length!==before.triangleCount)throw Error('Missing source triangle ownership during boundary edit');
  const a=before.candidateBranches.find(c=>c.key===key&&c.status==='included'),b=after.candidateBranches.find(c=>c.key===key&&c.status==='included');
  if(!a||!b)throw Error('Selected attachment boundary is missing');

@@ -41,11 +41,20 @@ export function moveShapeBoundary(graph,anchor,offsetFraction){
  }
  const {inside,neighbors,distance,diagonal,min,max}=entry,position=Math.max(min,Math.min(max,offsetFraction)),amount=position*diagonal;
  const moved=position===0?faces:allowedFaces.filter(f=>inside[f]?position>=0||distance[f]>=-amount:position>0&&distance[f]<amount);
- // A boundary may move only while the selected surface stays connected.
+ // Erosion can leave disconnected scraps on noisy generated surfaces. Keep
+ // the greatest-area connected fitting and return scraps to the parent. An
+ // explicitly protected child must remain in that component.
  const mask=new Uint8Array(graph.triangles.length);for(const f of moved)mask[f]=1;
- const seen=new Set([moved[0]]),stack=[moved[0]];while(stack.length){const f=stack.pop();for(const [g]of neighbors[f])if(mask[g]&&!seen.has(g)){seen.add(g);stack.push(g);}}
- if(!moved.length||seen.size!==moved.length)throw Error('This position disconnects the fitting; the previous cut is retained');
- return {faces:moved,offsetFraction:position,requestedOffsetFraction:offsetFraction,limits:{min,max},limited:position!==offsetFraction};
+ const seen=new Set(),components=[];
+ for(const start of moved){if(seen.has(start))continue;const members=[],stack=[start];seen.add(start);let area=0;
+  while(stack.length){const f=stack.pop();members.push(f);area+=graph.triangles[f].area;for(const [g]of neighbors[f])if(mask[g]&&!seen.has(g)){seen.add(g);stack.push(g);}}
+  components.push({members,area});
+ }
+ components.sort((a,b)=>b.area-a.area||a.members[0]-b.members[0]);
+ const kept=position===0?moved:components[0]?.members??[],retained=new Set(kept);
+ if(!kept.length||protectedFaces.some(f=>!retained.has(f)))throw Error('This position separates a protected child attachment; the previous cut is retained');
+ const reassignedIslands=moved.filter(f=>!retained.has(f));
+ return {faces:[...kept].sort((a,b)=>a-b),reassignedIslands,offsetFraction:position,requestedOffsetFraction:offsetFraction,limits:{min,max},limited:position!==offsetFraction};
 }
 
 export function boundaryAnchor(result,key,baselineFaces,{protectedKeys=null}={}){
