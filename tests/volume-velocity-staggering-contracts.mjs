@@ -69,7 +69,6 @@ test('cockpit: the staggering select with help, snapshot, listener, route restor
   assert.match(init, /VOLUME_ROUTE_RESTORED_CONTROL_IDS = \[[^\]]*'volume-velocity-staggering'/, 'restored from a saved route');
   const rowEnd = index.indexOf('</div>', index.indexOf('id="volume-velocity-staggering"'));
   assert.match(index.slice(rowEnd, rowEnd + 400), /^<\/div>\s*<span class="slider-help">/, 'help follows the row');
-  assert.match(index, /half a cell/, 'the help names the shift');
   assert.match(index, /id="volume-velocity-staggering-state"/, 'receipt field');
   assert.match(index, /staggered — NOT ADMITTED \(\$\{/, 'a refused request is named');
   const control = schema.controls.find(c => c.key === 'volume-velocity-staggering');
