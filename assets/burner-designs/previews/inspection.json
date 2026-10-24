@@ -1,0 +1,1415 @@
+{
+  "status": "passed",
+  "phase": "complete",
+  "blender_version": "5.1.2",
+  "effective_route": "Blender glTF importer; Cycles CPU, 2 threads, 24 samples",
+  "assets": [
+    {
+      "file": "annular-burner.glb",
+      "sha256": "3beb7226efc6a603af56a2b3538d83c5a321d94a79232ee92325aaf6b113a7f8",
+      "mesh_parts": 56,
+      "triangles": 74232,
+      "bounds_gltf": [
+        [
+          -0.36899998784065247,
+          0.0,
+          -0.48900002241134644
+        ],
+        [
+          0.36899998784065247,
+          0.2409999966621399,
+          0.36899998784065247
+        ]
+      ],
+      "aperture_checks": [
+        {
+          "outlet": "radial_slot_01",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_01",
+          "offset_gltf": [
+            0.023000000044703484,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_01",
+          "offset_gltf": [
+            -0.023000000044703484,
+            -0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_01",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_01",
+          "offset_gltf": [
+            -0.0,
+            -0.0,
+            0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_02",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_02",
+          "offset_gltf": [
+            0.022216293960809708,
+            0.0,
+            -0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_02",
+          "offset_gltf": [
+            -0.022216293960809708,
+            -0.0,
+            0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_02",
+          "offset_gltf": [
+            -0.001035276218317449,
+            0.0,
+            -0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_02",
+          "offset_gltf": [
+            0.001035276218317449,
+            -0.0,
+            0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_03",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_03",
+          "offset_gltf": [
+            0.01991858333349228,
+            0.0,
+            -0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_03",
+          "offset_gltf": [
+            -0.01991858333349228,
+            -0.0,
+            0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_03",
+          "offset_gltf": [
+            -0.0020000000949949026,
+            0.0,
+            -0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_03",
+          "offset_gltf": [
+            0.0020000000949949026,
+            -0.0,
+            0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_04",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_04",
+          "offset_gltf": [
+            0.016263455152511597,
+            0.0,
+            -0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_04",
+          "offset_gltf": [
+            -0.016263455152511597,
+            -0.0,
+            0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_04",
+          "offset_gltf": [
+            -0.0028284271247684956,
+            0.0,
+            -0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_04",
+          "offset_gltf": [
+            0.0028284271247684956,
+            -0.0,
+            0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_05",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_05",
+          "offset_gltf": [
+            0.011500000022351742,
+            0.0,
+            -0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_05",
+          "offset_gltf": [
+            -0.011500000022351742,
+            -0.0,
+            0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_05",
+          "offset_gltf": [
+            -0.0034641018137335777,
+            0.0,
+            -0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_05",
+          "offset_gltf": [
+            0.0034641018137335777,
+            -0.0,
+            0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_06",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_06",
+          "offset_gltf": [
+            0.005952837876975536,
+            0.0,
+            -0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_06",
+          "offset_gltf": [
+            -0.005952837876975536,
+            -0.0,
+            0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_06",
+          "offset_gltf": [
+            -0.0038637034595012665,
+            0.0,
+            -0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_06",
+          "offset_gltf": [
+            0.0038637034595012665,
+            -0.0,
+            0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_07",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_07",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.023000000044703484
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_07",
+          "offset_gltf": [
+            -0.0,
+            -0.0,
+            0.023000000044703484
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_07",
+          "offset_gltf": [
+            -0.004000000189989805,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_07",
+          "offset_gltf": [
+            0.004000000189989805,
+            -0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_08",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_08",
+          "offset_gltf": [
+            -0.005952837876975536,
+            0.0,
+            -0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_08",
+          "offset_gltf": [
+            0.005952837876975536,
+            -0.0,
+            0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_08",
+          "offset_gltf": [
+            -0.0038637034595012665,
+            0.0,
+            0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_08",
+          "offset_gltf": [
+            0.0038637034595012665,
+            -0.0,
+            -0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_09",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_09",
+          "offset_gltf": [
+            -0.011500000022351742,
+            0.0,
+            -0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_09",
+          "offset_gltf": [
+            0.011500000022351742,
+            -0.0,
+            0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_09",
+          "offset_gltf": [
+            -0.0034641018137335777,
+            0.0,
+            0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_09",
+          "offset_gltf": [
+            0.0034641018137335777,
+            -0.0,
+            -0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_10",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_10",
+          "offset_gltf": [
+            -0.016263455152511597,
+            0.0,
+            -0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_10",
+          "offset_gltf": [
+            0.016263455152511597,
+            -0.0,
+            0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_10",
+          "offset_gltf": [
+            -0.0028284271247684956,
+            0.0,
+            0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_10",
+          "offset_gltf": [
+            0.0028284271247684956,
+            -0.0,
+            -0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_11",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_11",
+          "offset_gltf": [
+            -0.01991858333349228,
+            0.0,
+            -0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_11",
+          "offset_gltf": [
+            0.01991858333349228,
+            -0.0,
+            0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_11",
+          "offset_gltf": [
+            -0.0020000000949949026,
+            0.0,
+            0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_11",
+          "offset_gltf": [
+            0.0020000000949949026,
+            -0.0,
+            -0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_12",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_12",
+          "offset_gltf": [
+            -0.022216293960809708,
+            0.0,
+            -0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_12",
+          "offset_gltf": [
+            0.022216293960809708,
+            -0.0,
+            0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_12",
+          "offset_gltf": [
+            -0.001035276218317449,
+            0.0,
+            0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_12",
+          "offset_gltf": [
+            0.001035276218317449,
+            -0.0,
+            -0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_13",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_13",
+          "offset_gltf": [
+            -0.023000000044703484,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_13",
+          "offset_gltf": [
+            0.023000000044703484,
+            -0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_13",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_13",
+          "offset_gltf": [
+            -0.0,
+            -0.0,
+            -0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_14",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_14",
+          "offset_gltf": [
+            -0.022216293960809708,
+            0.0,
+            0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_14",
+          "offset_gltf": [
+            0.022216293960809708,
+            -0.0,
+            -0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_14",
+          "offset_gltf": [
+            0.001035276218317449,
+            0.0,
+            0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_14",
+          "offset_gltf": [
+            -0.001035276218317449,
+            -0.0,
+            -0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_15",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_15",
+          "offset_gltf": [
+            -0.01991858333349228,
+            0.0,
+            0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_15",
+          "offset_gltf": [
+            0.01991858333349228,
+            -0.0,
+            -0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_15",
+          "offset_gltf": [
+            0.0020000000949949026,
+            0.0,
+            0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_15",
+          "offset_gltf": [
+            -0.0020000000949949026,
+            -0.0,
+            -0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_16",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_16",
+          "offset_gltf": [
+            -0.016263455152511597,
+            0.0,
+            0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_16",
+          "offset_gltf": [
+            0.016263455152511597,
+            -0.0,
+            -0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_16",
+          "offset_gltf": [
+            0.0028284271247684956,
+            0.0,
+            0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_16",
+          "offset_gltf": [
+            -0.0028284271247684956,
+            -0.0,
+            -0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_17",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_17",
+          "offset_gltf": [
+            -0.011500000022351742,
+            0.0,
+            0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_17",
+          "offset_gltf": [
+            0.011500000022351742,
+            -0.0,
+            -0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_17",
+          "offset_gltf": [
+            0.0034641018137335777,
+            0.0,
+            0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_17",
+          "offset_gltf": [
+            -0.0034641018137335777,
+            -0.0,
+            -0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_18",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_18",
+          "offset_gltf": [
+            -0.005952837876975536,
+            0.0,
+            0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_18",
+          "offset_gltf": [
+            0.005952837876975536,
+            -0.0,
+            -0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_18",
+          "offset_gltf": [
+            0.0038637034595012665,
+            0.0,
+            0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_18",
+          "offset_gltf": [
+            -0.0038637034595012665,
+            -0.0,
+            -0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_19",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_19",
+          "offset_gltf": [
+            -0.0,
+            0.0,
+            0.023000000044703484
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_19",
+          "offset_gltf": [
+            0.0,
+            -0.0,
+            -0.023000000044703484
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_19",
+          "offset_gltf": [
+            0.004000000189989805,
+            0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_19",
+          "offset_gltf": [
+            -0.004000000189989805,
+            -0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_20",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_20",
+          "offset_gltf": [
+            0.005952837876975536,
+            0.0,
+            0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_20",
+          "offset_gltf": [
+            -0.005952837876975536,
+            -0.0,
+            -0.022216293960809708
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_20",
+          "offset_gltf": [
+            0.0038637034595012665,
+            -0.0,
+            -0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_20",
+          "offset_gltf": [
+            -0.0038637034595012665,
+            0.0,
+            0.001035276218317449
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_21",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_21",
+          "offset_gltf": [
+            0.011500000022351742,
+            0.0,
+            0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_21",
+          "offset_gltf": [
+            -0.011500000022351742,
+            -0.0,
+            -0.01991858333349228
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_21",
+          "offset_gltf": [
+            0.0034641018137335777,
+            -0.0,
+            -0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_21",
+          "offset_gltf": [
+            -0.0034641018137335777,
+            0.0,
+            0.0020000000949949026
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_22",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_22",
+          "offset_gltf": [
+            0.016263455152511597,
+            0.0,
+            0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_22",
+          "offset_gltf": [
+            -0.016263455152511597,
+            -0.0,
+            -0.016263455152511597
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_22",
+          "offset_gltf": [
+            0.0028284271247684956,
+            -0.0,
+            -0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_22",
+          "offset_gltf": [
+            -0.0028284271247684956,
+            0.0,
+            0.0028284271247684956
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_23",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_23",
+          "offset_gltf": [
+            0.01991858333349228,
+            0.0,
+            0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_23",
+          "offset_gltf": [
+            -0.01991858333349228,
+            -0.0,
+            -0.011500000022351742
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_23",
+          "offset_gltf": [
+            0.0020000000949949026,
+            -0.0,
+            -0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_23",
+          "offset_gltf": [
+            -0.0020000000949949026,
+            0.0,
+            0.0034641018137335777
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_24",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_24",
+          "offset_gltf": [
+            0.022216293960809708,
+            0.0,
+            0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_24",
+          "offset_gltf": [
+            -0.022216293960809708,
+            -0.0,
+            -0.005952837876975536
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_24",
+          "offset_gltf": [
+            0.001035276218317449,
+            -0.0,
+            -0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "radial_slot_24",
+          "offset_gltf": [
+            -0.001035276218317449,
+            0.0,
+            0.0038637034595012665
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        }
+      ],
+      "apertures_clear": true,
+      "missing_parts": []
+    },
+    {
+      "file": "linear-burner.glb",
+      "sha256": "7fa3997ce090934ac61b91826f976032c72202464d24640442a0b96882a508ae",
+      "mesh_parts": 100,
+      "triangles": 37100,
+      "bounds_gltf": [
+        [
+          -0.5300000309944153,
+          0.0,
+          -0.14300000667572021
+        ],
+        [
+          0.6085000038146973,
+          0.25349998474121094,
+          0.14300000667572021
+        ]
+      ],
+      "aperture_checks": [
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            -0.4300000071525574,
+            -0.0,
+            -0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            -0.4300000071525574,
+            0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            -0.4300000071525574,
+            0.0,
+            0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.4300000071525574,
+            0.0,
+            -0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.4300000071525574,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "ribbon_slot",
+          "offset_gltf": [
+            0.4300000071525574,
+            0.0,
+            0.004000000189989805
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        }
+      ],
+      "apertures_clear": true,
+      "missing_parts": []
+    },
+    {
+      "file": "directional-nozzle.glb",
+      "sha256": "3bf44669ef84d1a38f4355d6e394bb26cf76db70145a96debe20cf8c3c637bc2",
+      "mesh_parts": 51,
+      "triangles": 77100,
+      "bounds_gltf": [
+        [
+          -0.1457500010728836,
+          0.0,
+          -0.24377702176570892
+        ],
+        [
+          0.16200000047683716,
+          0.4213223457336426,
+          0.22765274345874786
+        ]
+      ],
+      "aperture_checks": [
+        {
+          "outlet": "round_mouth",
+          "offset_gltf": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "round_mouth",
+          "offset_gltf": [
+            0.03500000014901161,
+            0.0,
+            -0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "round_mouth",
+          "offset_gltf": [
+            -0.03500000014901161,
+            -0.0,
+            0.0
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "round_mouth",
+          "offset_gltf": [
+            -0.0,
+            0.03396034985780716,
+            -0.008467266336083412
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        },
+        {
+          "outlet": "round_mouth",
+          "offset_gltf": [
+            0.0,
+            -0.03396034985780716,
+            0.008467266336083412
+          ],
+          "clear_50mm_inward": true,
+          "blocking_mesh": null
+        }
+      ],
+      "apertures_clear": true,
+      "missing_parts": []
+    }
+  ],
+  "rendering": "nozzle-bore"
+}

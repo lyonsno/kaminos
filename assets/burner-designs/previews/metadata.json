@@ -1,0 +1,21 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "a32e84e86e3f",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "annular-top.png",
+    "annular.png",
+    "comparison.png",
+    "inspection.json",
+    "kaminos-comparison.json",
+    "kaminos-comparison.png",
+    "linear.png",
+    "nozzle-bore.png",
+    "nozzle.png"
+  ],
+  "created_at": 1792834813.169726,
+  "duration_s": 133.1
+}

@@ -1,0 +1,1117 @@
+{
+  "schema": "kaminos.burner-design-outlets.v1",
+  "units": "metres",
+  "coordinates": {
+    "handedness": "right",
+    "up": "+Y",
+    "right": "+X",
+    "forward": "+Z",
+    "origin": "ground plane beneath each assembly",
+    "space": "individual assembly root local coordinates"
+  },
+  "purpose": "Visual proposals; proposed emitter attachment apertures; no simulation or fabrication claim",
+  "design_parameters": {
+    "annular": {
+      "radius": 0.275,
+      "slot_count": 24,
+      "slot_length": 0.068,
+      "slot_width": 0.014,
+      "outlet_height": 0.228
+    },
+    "linear": {
+      "length": 1.06,
+      "slot_length": 0.88,
+      "slot_width": 0.016,
+      "outlet_height": 0.252
+    },
+    "nozzle": {
+      "pitch_degrees": 14,
+      "mouth_radius": 0.059,
+      "pivot_height": 0.292,
+      "mouth_station": 0.215
+    }
+  },
+  "assets": {
+    "annular": {
+      "file": "annular-burner.glb",
+      "root_node": "annular_burner",
+      "mesh_parts": [
+        "barb_ridge_0.455",
+        "barb_ridge_0.465",
+        "barb_ridge_0.475",
+        "cast_pedestal_01",
+        "cast_pedestal_02",
+        "cast_pedestal_03",
+        "corona_identity_plate",
+        "corona_name",
+        "crown_fastener_01_hex_head",
+        "crown_fastener_01_washer",
+        "crown_fastener_02_hex_head",
+        "crown_fastener_02_washer",
+        "crown_fastener_03_hex_head",
+        "crown_fastener_03_washer",
+        "crown_fastener_04_hex_head",
+        "crown_fastener_04_washer",
+        "crown_fastener_05_hex_head",
+        "crown_fastener_05_washer",
+        "crown_fastener_06_hex_head",
+        "crown_fastener_06_washer",
+        "crown_fastener_07_hex_head",
+        "crown_fastener_07_washer",
+        "crown_fastener_08_hex_head",
+        "crown_fastener_08_washer",
+        "crown_fastener_09_hex_head",
+        "crown_fastener_09_washer",
+        "crown_fastener_10_hex_head",
+        "crown_fastener_10_washer",
+        "crown_fastener_11_hex_head",
+        "crown_fastener_11_washer",
+        "crown_fastener_12_hex_head",
+        "crown_fastener_12_washer",
+        "foot_01",
+        "foot_02",
+        "foot_03",
+        "foot_anchor_01_hex_head",
+        "foot_anchor_01_washer",
+        "foot_anchor_02_hex_head",
+        "foot_anchor_02_washer",
+        "foot_anchor_03_hex_head",
+        "foot_anchor_03_washer",
+        "hollow_bronze_plenum",
+        "inner_lid_seal",
+        "inner_polished_guard_lip",
+        "lower_machined_bead",
+        "outer_lid_seal",
+        "outer_polished_crown_rim",
+        "rear_hex_union",
+        "rear_hose_barb",
+        "rear_manifold_stub",
+        "removable_port_crown",
+        "teal_valve_handwheel",
+        "valve_spoke_0",
+        "valve_spoke_1",
+        "valve_spoke_2",
+        "valve_stem"
+      ],
+      "outlets": [
+        {
+          "id": "radial_slot_01",
+          "position": [
+            0.275,
+            0.228,
+            -0.0
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_02",
+          "position": [
+            0.2656296,
+            0.228,
+            -0.07117524
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.96592583,
+              0.0,
+              -0.25881905
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_03",
+          "position": [
+            0.23815699,
+            0.228,
+            -0.1375
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.8660254,
+              0.0,
+              -0.5
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_04",
+          "position": [
+            0.19445436,
+            0.228,
+            -0.19445436
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.70710678,
+              0.0,
+              -0.70710678
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_05",
+          "position": [
+            0.1375,
+            0.228,
+            -0.23815699
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.5,
+              0.0,
+              -0.8660254
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_06",
+          "position": [
+            0.07117524,
+            0.228,
+            -0.2656296
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.25881905,
+              0.0,
+              -0.96592583
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_07",
+          "position": [
+            0.0,
+            0.228,
+            -0.275
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_08",
+          "position": [
+            -0.07117524,
+            0.228,
+            -0.2656296
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.25881905,
+              0.0,
+              -0.96592583
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_09",
+          "position": [
+            -0.1375,
+            0.228,
+            -0.23815699
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.5,
+              0.0,
+              -0.8660254
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_10",
+          "position": [
+            -0.19445436,
+            0.228,
+            -0.19445436
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.70710678,
+              0.0,
+              -0.70710678
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_11",
+          "position": [
+            -0.23815699,
+            0.228,
+            -0.1375
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.8660254,
+              0.0,
+              -0.5
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_12",
+          "position": [
+            -0.2656296,
+            0.228,
+            -0.07117524
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.96592583,
+              0.0,
+              -0.25881905
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_13",
+          "position": [
+            -0.275,
+            0.228,
+            -0.0
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -1.0,
+              0.0,
+              -0.0
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_14",
+          "position": [
+            -0.2656296,
+            0.228,
+            0.07117524
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.96592583,
+              0.0,
+              0.25881905
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_15",
+          "position": [
+            -0.23815699,
+            0.228,
+            0.1375
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.8660254,
+              0.0,
+              0.5
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_16",
+          "position": [
+            -0.19445436,
+            0.228,
+            0.19445436
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.70710678,
+              0.0,
+              0.70710678
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_17",
+          "position": [
+            -0.1375,
+            0.228,
+            0.23815699
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.5,
+              0.0,
+              0.8660254
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_18",
+          "position": [
+            -0.07117524,
+            0.228,
+            0.2656296
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.25881905,
+              0.0,
+              0.96592583
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_19",
+          "position": [
+            -0.0,
+            0.228,
+            0.275
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              -0.0,
+              0.0,
+              1.0
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_20",
+          "position": [
+            0.07117524,
+            0.228,
+            0.2656296
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.25881905,
+              0.0,
+              0.96592583
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_21",
+          "position": [
+            0.1375,
+            0.228,
+            0.23815699
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.5,
+              0.0,
+              0.8660254
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_22",
+          "position": [
+            0.19445436,
+            0.228,
+            0.19445436
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.70710678,
+              0.0,
+              0.70710678
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_23",
+          "position": [
+            0.23815699,
+            0.228,
+            0.1375
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.8660254,
+              0.0,
+              0.5
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        },
+        {
+          "id": "radial_slot_24",
+          "position": [
+            0.2656296,
+            0.228,
+            0.07117524
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "capsule",
+            "length": 0.068,
+            "width": 0.014,
+            "major_axis": [
+              0.96592583,
+              0.0,
+              0.25881905
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "thickness": 0.025,
+            "open_into": "hollow_bronze_plenum"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        }
+      ],
+      "comparison_translation": [
+        -1.13,
+        0.0,
+        -0.0
+      ]
+    },
+    "linear": {
+      "file": "linear-burner.glb",
+      "root_node": "linear_burner",
+      "mesh_parts": [
+        "base_fixing_1_1_hex_head",
+        "base_fixing_1_1_washer",
+        "base_fixing_1_2_hex_head",
+        "base_fixing_1_2_washer",
+        "base_fixing_2_1_hex_head",
+        "base_fixing_2_1_washer",
+        "base_fixing_2_2_hex_head",
+        "base_fixing_2_2_washer",
+        "ceramic_lip_front",
+        "ceramic_lip_rear",
+        "chassis_wall_front",
+        "chassis_wall_rear",
+        "cooling_rib_-1_01",
+        "cooling_rib_-1_02",
+        "cooling_rib_-1_03",
+        "cooling_rib_-1_04",
+        "cooling_rib_-1_05",
+        "cooling_rib_-1_06",
+        "cooling_rib_-1_07",
+        "cooling_rib_-1_08",
+        "cooling_rib_-1_09",
+        "cooling_rib_-1_10",
+        "cooling_rib_-1_11",
+        "cooling_rib_-1_12",
+        "cooling_rib_-1_13",
+        "cooling_rib_-1_14",
+        "cooling_rib_-1_15",
+        "cooling_rib_-1_16",
+        "cooling_rib_-1_17",
+        "cooling_rib_1_01",
+        "cooling_rib_1_02",
+        "cooling_rib_1_03",
+        "cooling_rib_1_04",
+        "cooling_rib_1_05",
+        "cooling_rib_1_06",
+        "cooling_rib_1_07",
+        "cooling_rib_1_08",
+        "cooling_rib_1_09",
+        "cooling_rib_1_10",
+        "cooling_rib_1_11",
+        "cooling_rib_1_12",
+        "cooling_rib_1_13",
+        "cooling_rib_1_14",
+        "cooling_rib_1_15",
+        "cooling_rib_1_16",
+        "cooling_rib_1_17",
+        "crossfoot_1",
+        "crossfoot_2",
+        "end_cap_screw_1_1_hex_head",
+        "end_cap_screw_1_1_washer",
+        "end_cap_screw_1_2_hex_head",
+        "end_cap_screw_1_2_washer",
+        "end_cap_screw_2_1_hex_head",
+        "end_cap_screw_2_1_washer",
+        "end_cap_screw_2_2_hex_head",
+        "end_cap_screw_2_2_washer",
+        "end_slot_stop_1",
+        "end_slot_stop_2",
+        "front_identity_plate",
+        "inlet_ridge_0.58",
+        "inlet_ridge_0.59",
+        "inlet_ridge_0.6",
+        "internal_baffle_-1",
+        "internal_baffle_1",
+        "isolator_1_1",
+        "isolator_1_2",
+        "isolator_2_1",
+        "isolator_2_2",
+        "lip_retainer_-1",
+        "lip_retainer_1",
+        "plenum_floor",
+        "raised_saddle_1",
+        "raised_saddle_2",
+        "retainer_screw_-1_1_hex_head",
+        "retainer_screw_-1_1_washer",
+        "retainer_screw_-1_2_hex_head",
+        "retainer_screw_-1_2_washer",
+        "retainer_screw_-1_3_hex_head",
+        "retainer_screw_-1_3_washer",
+        "retainer_screw_-1_4_hex_head",
+        "retainer_screw_-1_4_washer",
+        "retainer_screw_-1_5_hex_head",
+        "retainer_screw_-1_5_washer",
+        "retainer_screw_1_1_hex_head",
+        "retainer_screw_1_1_washer",
+        "retainer_screw_1_2_hex_head",
+        "retainer_screw_1_2_washer",
+        "retainer_screw_1_3_hex_head",
+        "retainer_screw_1_3_washer",
+        "retainer_screw_1_4_hex_head",
+        "retainer_screw_1_4_washer",
+        "retainer_screw_1_5_hex_head",
+        "retainer_screw_1_5_washer",
+        "rift_name",
+        "right_fuel_union",
+        "right_inlet_barb",
+        "teal_end_block_1",
+        "teal_end_block_2",
+        "upper_stainless_trim_-1",
+        "upper_stainless_trim_1"
+      ],
+      "outlets": [
+        {
+          "id": "ribbon_slot",
+          "position": [
+            0.0,
+            0.252,
+            -0.0
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            -0.0
+          ],
+          "aperture": {
+            "shape": "rectangle",
+            "length": 0.88,
+            "width": 0.016,
+            "major_axis": [
+              1,
+              0,
+              0
+            ],
+            "minor_axis": [
+              0,
+              0,
+              1
+            ],
+            "endpoints": [
+              [
+                -0.44,
+                0.252,
+                0
+              ],
+              [
+                0.44,
+                0.252,
+                0
+              ]
+            ],
+            "open_into": "open_plenum_between_chassis_walls"
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        }
+      ],
+      "comparison_translation": [
+        0.0,
+        0.0,
+        -0.0
+      ]
+    },
+    "nozzle": {
+      "file": "directional-nozzle.glb",
+      "root_node": "directional_nozzle",
+      "mesh_parts": [
+        "aim_index_0",
+        "aim_index_1",
+        "aim_index_2",
+        "aim_index_3",
+        "aim_index_4",
+        "aim_index_5",
+        "aim_index_6",
+        "barrel_band_1",
+        "barrel_band_2",
+        "barrel_band_3",
+        "base_bolt_0_0_hex_head",
+        "base_bolt_0_0_washer",
+        "base_bolt_0_1_hex_head",
+        "base_bolt_0_1_washer",
+        "base_bolt_1_0_hex_head",
+        "base_bolt_1_0_washer",
+        "base_bolt_1_1_hex_head",
+        "base_bolt_1_1_washer",
+        "base_rubber_pad_0_0",
+        "base_rubber_pad_0_1",
+        "base_rubber_pad_1_0",
+        "base_rubber_pad_1_1",
+        "cast_yoke_-1",
+        "cast_yoke_1",
+        "cooling_fin_1",
+        "cooling_fin_2",
+        "cooling_fin_3",
+        "cooling_fin_4",
+        "cooling_fin_5",
+        "copper_outlet_lip",
+        "hollow_tapered_barrel",
+        "internal_throat_seat",
+        "lockwheel_hub",
+        "lockwheel_spoke_0",
+        "lockwheel_spoke_1",
+        "lockwheel_spoke_2",
+        "orange_aim_lockwheel",
+        "rear_fuel_hex_union",
+        "rear_fuel_tail",
+        "rear_hose_ridge_-0.215",
+        "rear_hose_ridge_-0.225",
+        "rear_hose_ridge_-0.235",
+        "rear_union_flange",
+        "teal_rear_jacket",
+        "trunnion_bearing_-1",
+        "trunnion_bearing_1",
+        "trunnion_cap_-1",
+        "trunnion_cap_1",
+        "vector_name",
+        "yoke_base_plate",
+        "yoke_bridge"
+      ],
+      "outlets": [
+        {
+          "id": "round_mouth",
+          "position": [
+            0.0,
+            0.34401321,
+            0.20861359
+          ],
+          "direction": [
+            0.0,
+            0.2419219,
+            0.97029573
+          ],
+          "aperture": {
+            "shape": "circle",
+            "radius": 0.059,
+            "diameter": 0.118,
+            "pitch_degrees": 14,
+            "yaw_degrees": 0,
+            "open_into": "hollow_tapered_barrel",
+            "bore_depth": 0.369
+          },
+          "space": "assembly_root_local",
+          "units": "metres"
+        }
+      ],
+      "comparison_translation": [
+        1.13,
+        0.0,
+        -0.0
+      ]
+    }
+  }
+}
