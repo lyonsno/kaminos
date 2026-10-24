@@ -36,9 +36,9 @@ export function createOwnerSceneSession(hooks) {
     return task;
   }
 
-  function onFrame(callback) {
+  function subscribe(hook,callback) {
     active();
-    if (typeof callback !== 'function') throw TypeError('Frame callback must be callable');
+    if (typeof callback !== 'function') throw TypeError('Scene callback must be callable');
     const entry = {enabled: true, unsubscribe: null};
     function cancel() {
       if (!entry.enabled) return;
@@ -47,8 +47,8 @@ export function createOwnerSceneSession(hooks) {
     }
     entry.cancel = cancel; frames.add(entry);
     try {
-      const unsubscribe = hooks.onFrame(frame => {if (!disposed && entry.enabled) callback(frame);});
-      if (typeof unsubscribe !== 'function') throw Error('Scene host onFrame must return unsubscribe');
+      const unsubscribe = hook(value => {if (!disposed && entry.enabled) callback(value);});
+      if (typeof unsubscribe !== 'function') throw Error('Scene host subscription must return unsubscribe');
       entry.unsubscribe = unsubscribe;
       if (!entry.enabled || disposed) unsubscribe();
     } catch (error) {cancel(); throw error;}
@@ -71,7 +71,15 @@ export function createOwnerSceneSession(hooks) {
     readView() {active(); return structuredClone(hooks.readView());},
     setView(view) {active(); return structuredClone(hooks.setView(structuredClone(view)));},
     redraw() {active(); return hooks.redraw();},
-    onFrame,
+    onFrame:callback=>subscribe(hooks.onFrame,callback),
+    onPick(callback){
+      active();
+      if(typeof hooks.onPick!=='function')throw Error('Scene host does not support surface picking');
+      if(typeof callback!=='function')throw TypeError('Pick callback must be callable');
+      return subscribe(hooks.onPick,hit=>{
+        for(let node=hit.object;node;node=node.parent){const handle=objects.get(node);if(handle&&handle.id===hit.id){callback(hit);break;}}
+      });
+    },
     dispose() {
       if (!disposed) {
         disposed = true;

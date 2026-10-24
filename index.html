@@ -6753,6 +6753,8 @@ function handleViewportSelectionClick(event) {
   // Geometry and emitter symbols own their pixels before helper outlines.
   if(record){
     window.selectSceneObject(record.id,{extend:!!event.shiftKey});
+    const surfaceHit=hits.find(hit=>hit.object.isMesh&&Number.isInteger(hit.faceIndex)&&sceneObjectRecordForDescendant(hit.object)?.id===record.id);
+    if(surfaceHit)document.dispatchEvent(new CustomEvent('kaminos-scene-surface-pick',{detail:{id:record.id,object:surfaceHit.object,faceIndex:surfaceHit.faceIndex,point:surfaceHit.point.toArray()}}));
     setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
   }
   if(pickFlameDomainFromViewportPointer(event)){
@@ -11559,6 +11561,7 @@ async function initScene() {
     removeObject:handle=>sceneMembership.removeOwned(handle,
       root=>disposeOwnedSceneTree(root,sceneResourceConsumers(),[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
+    onPick:callback=>{const listener=event=>callback(event.detail);document.addEventListener('kaminos-scene-surface-pick',listener);return ()=>document.removeEventListener('kaminos-scene-surface-pick',listener);},
   });
   window.kaminosWorkbenchSceneState=()=>{
     const info=renderer.backend.adapter?.info;
