@@ -1,7 +1,7 @@
 import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuForegroundService } from '../../webgpu-inference-kit/src/core.js';
 import { superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
 import { createSuperMatApp } from '../../models/supermat/supermat-app.js';
-import { MoGeInference } from './moge-producer.js';
+import { createMoGeApp } from '../../models/moge/moge-app.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
@@ -20,7 +20,7 @@ const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
 const weightsUrl=params.get('weights')??SUPERMAT_WEIGHTS_URL;
-const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-vendored-38539be0-supermat-f368906c.v1:${weightsUrl}`;
+const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-app-v1-supermat-f368906c.v1:${weightsUrl}`;
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
@@ -243,19 +243,18 @@ async function infer(){
     if(![512,768,1024].includes(size))throw Error('Choose a supported material resolution');
     await setup();
     const retained=await cache.get(geometryKey(key));
-    if(!retained&&!moge){
-      const candidate=new MoGeInference(gpu);
-      try{
-        await candidate.init((received,total)=>progressStatus(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
-        if(!candidate.useRealWeights)throw Error('MoGe real weights did not load; preview refuses stub inference');
-        moge=candidate;
-      }catch(error){await candidate.dispose();throw error;}
+    if(!retained){
+      moge??=await createMoGeApp({device:gpu.device,session,foreground,load:false});
+      await moge.load((received,total)=>progressStatus(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
+      if(!moge.model.useRealWeights)throw Error('MoGe real weights did not load; preview refuses stub inference');
     }
     progressStatus('1/2 Geometry: inferring depth & normals');
     let phase=performance.now();
-    const depth=retained?.depth??await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
+    const geometryFramesBefore=viewer.frameStats?.duringModel??0;
+    const depth=retained?.depth??await moge.infer({image:input});
     record.phases.geometryMs=performance.now()-phase;
-    record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
+    record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.model.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null,
+      renderCallbacks:(viewer.frameStats?.duringModel??0)-geometryFramesBefore};
     if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
@@ -408,6 +407,7 @@ for(const [id,key]of [['environment-rotation','rotation'],['environment-intensit
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
 window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,restoreCached,viewResult,
+  inferenceApps:()=>({geometry:moge,materials,session,foreground}),
   exampleEvidence:()=>({imageKey,source:state.source,sample:sampleKey,...results.snapshot(),record:state.runs.at(-1),identity:state.identity}),
   setEffects:value=>{viewer.setEffects(value);syncControls();return viewer.getEffects();},
   materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
