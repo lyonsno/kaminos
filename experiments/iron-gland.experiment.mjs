@@ -14,8 +14,8 @@ export default {
     sample.width = display.width = 640; sample.height = display.height = 480;
     const sampleContext = sample.getContext('2d'), displayContext = display.getContext('2d');
     const texture = new CanvasTexture(display); texture.colorSpace = SRGBColorSpace;
-    const plane = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ map: texture, toneMapped: false }));
-    plane.name = 'Camera'; plane.visible = false;
+    const plane = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ map: texture, toneMapped: false, depthTest: false, depthWrite: false }));
+    plane.name = 'Camera'; plane.visible = false; plane.renderOrder = -1000;
     const machine = createMechanism();
     machine.root.visible = false;
     let cameraAsset, machineAsset;
@@ -27,6 +27,11 @@ export default {
     const store = createModelStore(window.indexedDB);
     let controller = createHoverController(), state = controller.read();
     let route = null, stream = null, flight = null, startTask = null, loadTask = null, callback = null;
+    let unwatchCamera = () => {};
+    const releaseCamera = () => {
+      unwatchCamera(); unwatchCamera = () => {};
+      stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
+    };
     let disposed = false, running = false, starting = false, generation = 0, loading = false;
     let handedness = inputs.handedness ?? 'right', mirror = inputs.mirror ?? true, size = inputs.size ?? 1;
     if (!['left', 'right'].includes(handedness) || typeof mirror !== 'boolean' || !(Number.isFinite(size) && size > 0)) {
@@ -87,7 +92,7 @@ export default {
         })().catch(cause => {
           if (ticket !== generation || disposed) return;
           error = String(cause?.message ?? cause); running = false; generation++;
-          stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
+          releaseCamera();
           hide(); sync(); record({ kind: 'iron-gland.failure', phase: 'applied', effective: read() });
         }).finally(() => { if (flight === current) flight = null; schedule(ticket); });
         flight = current;
@@ -96,7 +101,7 @@ export default {
     const stop = async () => {
       generation++; running = false; starting = false;
       if (callback !== null) video.cancelVideoFrameCallback(callback); callback = null;
-      stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
+      releaseCamera();
       hide(); sync();
       if (flight) await flight.catch(() => {});
       record({ kind: 'iron-gland.stop', phase: 'applied', effective: read() });
@@ -113,15 +118,26 @@ export default {
         if (ticket !== generation || disposed) return read();
         const acquired = await window.navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
         if (ticket !== generation || disposed) { acquired.getTracks().forEach(track => track.stop()); return read(); }
-        stream = acquired; video.srcObject = acquired; await video.play();
+        stream = acquired; video.srcObject = acquired;
+        const tracks = acquired.getVideoTracks();
+        const ended = () => {
+          if (ticket !== generation || disposed) return;
+          error = 'Camera disconnected';
+          stop().catch(cause => { error = String(cause?.message ?? cause); sync(); });
+        };
+        for (const track of tracks) track.addEventListener('ended', ended);
+        unwatchCamera = () => { for (const track of tracks) track.removeEventListener('ended', ended); };
+        if (!tracks.length || tracks.some(track => track.readyState === 'ended')) throw Error('Camera disconnected');
+        await video.play();
         if (ticket !== generation || disposed) return read();
         running = true; controller = createHoverController(); lastFrameAt = null; frameCount = 0; missCount = 0;
         frame(); schedule(ticket);
         record({ kind: 'iron-gland.start', phase: 'applied', effective: read() });
         return read();
       })().catch(cause => {
+        if (ticket !== generation || disposed) return read();
         if (ticket === generation && !disposed) {
-          error = String(cause?.message ?? cause); stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null; hide();
+          error = String(cause?.message ?? cause); releaseCamera(); hide();
         }
         throw cause;
       }).finally(() => { if (ticket === generation) starting = false; if (startTask === task) startTask = null; sync(); });

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 
+export function missObserved(state) {
+  if (state.error) throw Error(state.error);
+  return state.frameCount > 0 && !state.interaction.visible && state.lastAcquisition?.source === 'no_detection';
+}
+
 export function verifyFrame(state, { after = 0, threshold }) {
   assert.equal(state.identity?.routeId, 'kaminos.browser-hand-mesh.webgpu-local.v0');
   assert.equal(state.identity?.backend, 'webgpu-local');
