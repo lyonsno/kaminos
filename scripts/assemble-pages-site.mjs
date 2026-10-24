@@ -70,7 +70,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   }
   for(const dir of ["images","examples","icons"])fs.cpSync(path.join(repoRoot,"demos","material-photo",dir),path.join(photograph,dir),{recursive:true});
   fs.writeFileSync(path.join(photograph,"deployment.js"),`export const GENERATION_AVAILABLE=${!!supermatWeightsUrl};\nexport const SUPERMAT_WEIGHTS_URL=${JSON.stringify(supermatWeightsUrl)};\n`);
-  for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs","scene-gi-history.mjs","scene-gi-convergence.mjs","scene-gi-source-comparison.mjs","scene-lighting-filter.mjs","scene-surface-lighting.mjs",
+  for(const file of ["models/moge/moge-app.js","models/moge/moge-inference.js","finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs","scene-gi-history.mjs","scene-gi-convergence.mjs","scene-gi-source-comparison.mjs","scene-lighting-filter.mjs","scene-surface-lighting.mjs",
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
     "lib/addons/tsl/display/SSGINode.js","lib/addons/tsl/display/SSGINode.LICENSE","lib/addons/tsl/display/DenoiseNode.js","lib/addons/math/SimplexNoise.js",
@@ -79,6 +79,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
     const target=path.join(out,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(repoRoot,file),target);
   }
   // The solver is shared by Material Photograph. Preserve its static module
+  fs.copyFileSync(path.join(repoRoot,'models/moge/THIRD_PARTY_NOTICES.txt'),path.join(out,'models/moge/THIRD_PARTY_NOTICES.txt'));
   // graph as the numerical owner splits reusable browser components.
   const pending=["finger-fluid-webgpu-core.js"],seen=new Set();
   while(pending.length){
