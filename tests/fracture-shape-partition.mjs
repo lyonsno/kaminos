@@ -137,3 +137,18 @@ test('local detail changes only the selected subtree and can keep its children t
  assert.deepEqual(owners(shapeHierarchyView(result,2,{1:1})),[1,1,1,0]);
  assert.throws(()=>shapeHierarchyView(result,1,{999:1}),/local detail/);
 });
+
+test('nearby cuts around one fitting remain alternatives rather than sliver subparts',async()=>{
+ const {chooseNeckFamily}=await import('../fracture-shape-partition.mjs');
+ assert.equal(typeof chooseNeckFamily,'function','attachment variants need distinct disposition from subparts');
+ const proposal=faces=>({faces:Uint32Array.from(faces),seeds:new Set([0]),area:faces.length,reach:1,cutRatio:1});
+ const outer=proposal(Array.from({length:12},(_,i)=>i)),near=proposal(Array.from({length:11},(_,i)=>i)),child=proposal([0,1,2]),cross=proposal([2,3,4,12]);
+ const selected=chooseNeckFamily([outer,near,child,cross],new Float64Array(13).fill(1));
+ assert.deepEqual(selected,[outer,child]);
+ assert.equal(outer.status,'included');assert.equal(near.status,'boundary-variant');
+ assert.equal(cross.status,'crossing-alternative');assert.equal(child.status,'included');
+ assert.equal(near.variantOf,0);
+ // Face count alone must not hide a child with a materially different surface area.
+ const weighted=new Float64Array(13).fill(1);weighted[11]=20;
+ assert.equal(chooseNeckFamily([proposal([...outer.faces]),proposal([...near.faces])],weighted).length,2);
+});
