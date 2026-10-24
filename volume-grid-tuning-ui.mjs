@@ -4,7 +4,7 @@ export function createGridTuningInspector({document,host,read,validate,apply}) {
  const root=document.createElement('section');root.id='flame-grid-tuning';root.className='flame-grid-tuning';
  const title=document.createElement('h3');title.textContent='Simulation grids';root.append(title);
  const intro=document.createElement('p');intro.className='flame-scope';intro.textContent='Material holds flame and smoke detail. Velocity carries motion. Pressure corrects the flow. Edit a draft, then apply the three regions together.';root.append(intro);
- const fields=new Map(),summaries=new Map();let baseline=null,draft=null,dirty=false,applying=false;
+ const fields=new Map(),summaries=new Map(),selectState=new Map();let baseline=null,draft=null,dirty=false,applying=false;
  const pick=c=>Object.fromEntries(GRID_TUNING_FIELDS.map(([key])=>[key,c[key]]));
  const signature=c=>JSON.stringify(pick(c));
  for(const group of GRID_TUNING_GROUPS){
@@ -42,12 +42,18 @@ export function createGridTuningInspector({document,host,read,validate,apply}) {
    input.disabled=(key.startsWith('intermediate')&&!independent)||(key.startsWith('worldSmoke')&&key!=='worldSmoke'&&candidate.worldSmoke!=='on');
    if(['fineVelocity','finePressure','worldSmokePressure'].includes(key)){
     let choices=[];try{choices=gridWidthChoices(candidate,key);}catch{}
-    const value=String(draft[key]??0);input.replaceChildren();
+    const value=String(draft[key]??0);
     const parent=key==='fineVelocity'?'material':key==='finePressure'?'velocity / legacy setting':'velocity';
-    for(const n of [0,...choices,...(!choices.includes(Number(value))&&Number(value)!==0?[Number(value)]:[])]){
-     const option=document.createElement('option');option.value=String(n);option.textContent=n===0?`Follow ${parent}`:`${n} cells${choices.includes(n)?'':' · incompatible'}`;input.append(option);
+    const options=[0,...choices,...(!choices.includes(Number(value))&&Number(value)!==0?[Number(value)]:[])].map(n=>[String(n),n===0?`Follow ${parent}`:`${n} cells${choices.includes(n)?'':' · incompatible'}`]);
+    const optionsKey=JSON.stringify(options),previous=selectState.get(key);
+    // Rebuilding a live select on each readout refresh disrupts its native menu.
+    // Preserve its options and pending selection unless the draft/domain changes.
+    if(previous?.optionsKey!==optionsKey){
+     input.replaceChildren();
+     for(const [value,label] of options){const option=document.createElement('option');option.value=value;option.textContent=label;input.append(option);}
     }
-    input.value=value;
+    if(previous?.optionsKey!==optionsKey||previous?.value!==value)input.value=value;
+    selectState.set(key,{optionsKey,value});
    }else if(document.activeElement!==input)input.value=String(draft[key]??'');
    if(input._suggestions){input._suggestions.replaceChildren();let choices=[];try{choices=gridWidthChoices(candidate,key);}catch{}for(const n of choices){const o=document.createElement('option');o.value=String(n);input._suggestions.append(o);}}
   }
