@@ -34,6 +34,19 @@ export function validateFlux3AuthoringResult(r){
   assert.ok(r.load.stats.downloadedBytes>0,'weight bytes were actually read');
   assert.deepEqual(r.load.cacheWrites,[],'no duplicate weight cache writes');
   assert.deepEqual(r.gpuErrors,[]);
+  if(r.inspectControls){
+    const ui=r.inspection;assert.ok(ui,'inspection observations are required');
+    assert.ok(ui.previews?.length>0,'actual partial previews must reach the canvas');
+    assert.ok(ui.previews.some(p=>p.visible&&p.distinctRgb>1&&p.at>=interval.startedAt&&p.at<=interval.finishedAt),'a visible nonblank preview during this inference');
+    assert.ok(ui.expandedHeight>ui.compactHeight&&ui.expandedPressed,'expansion increases the image area');
+    assert.equal(ui.originalSource,r.entry.source,'original display survives generation and selection');
+    assert.equal(ui.segmentedSource,ui.preparedSource,'checkbox displays the actual prepared cutout');
+    assert.notEqual(ui.preparedSource,ui.originalSource,'opaque generated input has a distinct cutout');
+    assert.equal(ui.preferenceAfterGeneration,false);assert.equal(ui.preferenceAfterReload,false);
+    assert.ok(ui.previews.some(p=>/^Generating .* s/.test(p.timer)),'elapsed time is visible while generating');
+    assert.ok(r.provenance.elapsed?.generationMs>0,'generation elapsed time is retained in the PNG');
+    assert.ok(ui.timerAfter.includes(`${(r.provenance.elapsed.generationMs/1000).toFixed(1)} s`),'completed elapsed time remains visible');
+  }
   return r;
 }
 
@@ -42,11 +55,12 @@ export async function waitForAuthoringGpuHost({read,wait}){
 }
 
 async function main(){
-  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'}}});
+  const {values:v}=parseArgs({options:{origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
   const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
   const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
   let browser;
+  report.inspectControls=v['inspect-controls'];
   await write();
   try{
     for(const field of ['origin','chrome','repo-root','weights-root'])assert.ok(v[field],`--${field} is required`);
@@ -103,19 +117,33 @@ async function main(){
       Flux3Pipeline.prototype.generate=async function(options){
         const interval={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
         window.flux3SmokeInference=interval;window.flux3SmokeCompute=[];
+        window.flux3SmokePreviews=[];
+        const receive=options.onPreview;
+        if(${v['inspect-controls']})options={...options,onPreview:frame=>{
+          if(typeof receive!=='function')throw Error('Authoring omitted the preview callback');receive(frame);
+          const canvas=document.getElementById('asset-step-preview'),rect=canvas.getBoundingClientRect();
+          const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,colors=new Set();
+          for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
+          window.flux3SmokePreviews.push({step:frame.step,steps:frame.steps,width:canvas.width,height:canvas.height,at:performance.now(),visible:!canvas.hidden&&rect.width>0&&rect.height>0,distinctRgb:colors.size,png:canvas.toDataURL('image/png').split(',')[1],timer:document.getElementById('asset-image-timing').textContent});
+        }};
         try{return await original.call(this,options);}
         finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();}
       };
       window.kaminosAssets.open('generate');
       const byId=id=>document.getElementById(id);byId('asset-image-model').value='flux3';byId('asset-image-model').dispatchEvent(new Event('change'));
+      if(${v['inspect-controls']}){const toggle=byId('asset-show-segmented');if(!toggle)throw Error('Missing segmented display control');toggle.checked=false;toggle.dispatchEvent(new Event('change'));}
       byId('asset-image-size').value=${JSON.stringify(v.size)};byId('asset-prompt').value=${JSON.stringify(report.prompt)};byId('asset-seed').value='7006';
       window.flux3SmokeFrames={before:(window.kaminosAppFrameSource()?.completedFrames??0),after:0};
       if(byId('asset-text-run').disabled)throw Error('Generate image is disabled');byId('asset-text-run').click();})()`);
     let last;
     for(;;){
-      const state=await browser.evaluate('window.kaminosAssets.images.read()');
+      const state=await browser.evaluate(`(()=>{const state=window.kaminosAssets.images.read();if(state.preview){const {rgba,...metadata}=state.preview;state.preview=metadata;}return state;})()`);
       if(['failed','stopped','unavailable'].includes(state.status))throw Error(JSON.stringify(state));
       if(JSON.stringify(state)!==last){report.state=state;last=JSON.stringify(state);await write();}
+      if(v['inspect-controls']&&state.preview?.kind==='partial'&&!report.partialScreenshot){
+        const shot=await browser.send('Page.captureScreenshot',{format:'png'});
+        report.partialScreenshot='partial-app.png';await fs.writeFile(path.join(out,report.partialScreenshot),Buffer.from(shot.result.data,'base64'));
+      }
       if(state.status==='complete')break;
       if(report.console.some(line=>line.startsWith('exception:')))throw Error('Uncaught page exception');
       await new Promise(resolve=>setTimeout(resolve,1000));
@@ -130,6 +158,23 @@ async function main(){
     const bytes=Buffer.from(saved.data,'base64');await fs.writeFile(path.join(out,'generated.png'),bytes);
     report.provenance=readPngProvenance(bytes);report.output={...saved.output,sha256:createHash('sha256').update(bytes).digest('hex')};
     report.entry=saved.entry;report.selected=saved.selected;report.frames=saved.frames;report.gpuErrors=saved.gpuErrors;report.load=saved.load;
+    if(v['inspect-controls']){
+      report.phase='inspection-controls';await write();
+      report.inspection=await browser.evaluate(`(async()=>{
+        const byId=id=>document.getElementById(id),tick=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        const preparation=await window.kaminosAssets.prepare();await tick();
+        const originalSource=byId('asset-step-source').getAttribute('src'),preferenceAfterGeneration=byId('asset-show-segmented').checked;
+        const compactHeight=byId('asset-step-source').getBoundingClientRect().height;byId('asset-image-expand').click();await tick();
+        const expandedHeight=byId('asset-step-source').getBoundingClientRect().height,expandedPressed=byId('asset-image-expand').getAttribute('aria-expanded')==='true';
+        byId('asset-show-segmented').click();await tick();const segmentedSource=byId('asset-step-source').getAttribute('src');
+        byId('asset-show-segmented').click();await tick();
+        return {previews:window.flux3SmokePreviews,originalSource,preparedSource:preparation.prepared.source,segmentedSource,preferenceAfterGeneration,compactHeight,expandedHeight,expandedPressed,timerAfter:byId('asset-image-timing').textContent};
+      })()`);
+      const screenshot=await browser.send('Page.captureScreenshot',{format:'png'});
+      await fs.writeFile(path.join(out,'expanded-app.png'),Buffer.from(screenshot.result.data,'base64'));
+      await browser.navigate(report.url,'!!window.kaminosAssets?.images && !!document.getElementById("asset-show-segmented")');
+      report.inspection.preferenceAfterReload=await browser.evaluate('document.getElementById("asset-show-segmented").checked');
+    }
     validateFlux3AuthoringResult(report);
     assert.equal(report.selected?.kind,'image','the saved image is selected for the mesh input');
     assert.equal(report.selected.source,report.entry.source,'mesh input uses this generated image');
@@ -141,6 +186,11 @@ async function main(){
   finally{
     try{
       if(browser){
+        if(v['inspect-controls']){
+          const previews=report.inspection?.previews??await browser.evaluate('window.flux3SmokePreviews??[]').catch(()=>[]);
+          for(const p of previews){if(p.png){p.file=`preview-step-${p.step}.png`;await fs.writeFile(path.join(out,p.file),Buffer.from(p.png,'base64'));delete p.png;}}
+          if(!report.inspection)report.partialPreviews=previews;
+        }
         if(!report.load)report.load=await browser.evaluate('window.flux3SmokeLoad??null').catch(()=>null);
         await browser.close();
       }
