@@ -3,6 +3,11 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readRawEvidence } from './witness-raw.mjs';
 
+export function renderingAdvanced({ before, counter, stopOnTerminal = false }) {
+  return Boolean((stopOnTerminal && window.__photoLifecycle.terminal) || window.__materialPhoto.gpuErrors?.length ||
+    window.__materialPhotoActions.presentation().renderCallbacks[counter] > before);
+}
+
 export function validateCancellation(row) {
   if (row.paused?.status !== 'paused' || !(row.frames > 0) || row.terminal?.status !== 'rejected' ||
       row.terminal.name !== 'AbortError' || !row.displayedBefore || row.displayedBefore !== row.displayedAfter ||
@@ -23,10 +28,10 @@ export async function exercisePhotoApplications(page, out, report, save) {
   const state = report.application = { phase: 'baseline', raw: {}, cancellations: [], retries: [] };
   const channels = ['geometry-depth', 'geometry-normals', 'geometry-points', 'geometry-colors',
     'image', 'albedo', 'roughness', 'metallic', 'orm', 'plane-albedo', 'plane-orm'];
-  const capture = async name => {
+  const capture = async (name, sourceName = name) => {
     const result = {}, manifest = state.raw[name] = {};
     for (const channel of channels) {
-      const raw = await readRawEvidence(expression => page.evaluate(expression), channel, `window.__photoLifecycle.${name}`);
+      const raw = await readRawEvidence(expression => page.evaluate(expression), channel, `window.__photoLifecycle.${sourceName}`);
       const file = path.join(out, `${name}-${channel}.bin`);
       await fs.writeFile(file, raw.bytes);
       const { bytes, ...layout } = raw;
@@ -73,8 +78,7 @@ export async function exercisePhotoApplications(page, out, report, save) {
       return t.apps[stage].snapshot().control;
     }, stage);
     const framesBefore = await page.evaluate(() => window.__materialPhotoActions.presentation().renderCallbacks.duringModel);
-    await page.waitForFunction(before => window.__photoLifecycle.terminal ||
-      window.__materialPhoto.gpuErrors.length || window.__materialPhotoActions.presentation().renderCallbacks.duringModel > before, framesBefore);
+    await page.waitForFunction(renderingAdvanced, { before: framesBefore, counter: 'duringModel', stopOnTerminal: true });
     const frames = await page.evaluate(before => window.__materialPhotoActions.presentation().renderCallbacks.duringModel - before, framesBefore);
     await page.evaluate(() => { window.__photoLifecycle.operation.stop('native application witness'); });
     await page.waitForFunction(() => Boolean(window.__photoLifecycle.terminal));
@@ -85,6 +89,8 @@ export async function exercisePhotoApplications(page, out, report, save) {
     }, stage);
     Object.assign(row, { paused, frames, displayedBefore }); state.cancellations.push(row); await save();
     validateCancellation(row);
+    const cancelledRetained = await capture(`${stage}CancelledRetained`, 'baseline');
+    for (const channel of channels) validateRetry(baseline[channel], cancelledRetained[channel]);
     if (stage === 'geometry' && row.progress.some(e => e.stage === 'materials')) throw Error('Cancelled geometry started materials');
 
     state.phase = `${stage}-retry`; await save();
@@ -104,6 +110,8 @@ export async function exercisePhotoApplications(page, out, report, save) {
     }
     const current = await capture(`${stage}Retry`);
     for (const channel of channels) validateRetry(baseline[channel], current[channel]);
+    const retriedRetained = await capture(`${stage}RetriedRetained`, 'baseline');
+    for (const channel of channels) validateRetry(baseline[channel], retriedRetained[channel]);
   }
   state.phase = 'borrowed-app-cleanup'; await save();
   state.cleanup = await page.evaluate(async () => {
@@ -112,8 +120,7 @@ export async function exercisePhotoApplications(page, out, report, save) {
     return { session: apps.session.snapshot().status, geometry: apps.geometry.snapshot(), materials: apps.materials.snapshot(),
       framesBefore: window.__materialPhotoActions.presentation().renderCallbacks.rendered };
   });
-  await page.waitForFunction(before => window.__materialPhoto.gpuErrors.length ||
-    window.__materialPhotoActions.presentation().renderCallbacks.rendered > before, state.cleanup.framesBefore);
+  await page.waitForFunction(renderingAdvanced, { before: state.cleanup.framesBefore, counter: 'rendered' });
   state.cleanup.frames = await page.evaluate(before => window.__materialPhotoActions.presentation().renderCallbacks.rendered - before, state.cleanup.framesBefore);
   if (state.cleanup.session !== 'active' || !(state.cleanup.frames > 0) ||
       !['geometry', 'materials'].every(name => state.cleanup[name].destroyed && !state.cleanup[name].loaded)) {
