@@ -4,6 +4,7 @@ const {Fn,If,Discard,attribute,vec2,vec3,vec4,float,bool,uv,screenUV,texture,uni
 // Surface kernels reconstruct coverage and material attributes independently.
 // Only the two resolved surfaces run physical lighting; source quads do not.
 class SurfaceMaterial extends MeshPhysicalNodeMaterial {
+ copy(source){super.copy(source);this.surfacePosition=source.surfacePosition;this.surfaceWorld=source.surfaceWorld;return this;}
  setupLighting(builder){
   positionView.assign(this.surfacePosition).toStack();
   positionViewDirection.assign(builder.camera.isOrthographicCamera?vec3(0,0,1):this.surfacePosition.negate().normalize()).toStack();
