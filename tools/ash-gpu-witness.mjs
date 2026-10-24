@@ -22,8 +22,13 @@ try{
  const invoke=async(name,input)=>{report.interventions.push({name,input});const result=await page.evaluate(([n,i])=>window.kaminosWorkbenchExperiments.invoke(n,i),[name,input]);write();return result;};
  await invoke('play',false);report.initial=await invoke('read');assert.equal(report.initial.backend,'webgpu-pair-exchange');assert.equal(report.initial.surface,'gpu-compacted-indirect-cells');assert.equal(report.initial.layout.cellSize,report.requested.cellSize);assert.equal(Number(await page.getByRole('spinbutton',{name:'Cell width (new patch)',exact:true,includeHidden:true}).inputValue()),report.requested.cellSize);assert.equal(Number(await page.getByRole('spinbutton',{name:'Patch width (new patch)',exact:true,includeHidden:true}).inputValue()),1.8);
  if(args.get('--negative-unmounted')==='yes'){await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await invoke('read');throw Error('Unmounted route accepted');}
+ if(args.get('--negative-pageerror')==='yes'){
+  report.phase='pageerror-negative';report.injectedPageError='injected GPU ash witness failure';write();
+  const failed=page.waitForEvent('pageerror');await page.evaluate(message=>setTimeout(()=>{throw Error(message);},0),report.injectedPageError);await failed;
+  assert.deepEqual(report.errors,[]);
+ }
  const capture=async(name)=>{await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const state=await invoke('read');assert.deepEqual(state.errors,[]);await page.screenshot({path:resolve(out,name+'.png')});report.frames.push({name,state});write();};
- await capture('00-empty');report.phase='deposit';await page.getByRole('button',{name:'Add ash',exact:true}).click();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).busy);
+ await capture('00-empty');report.phase='deposit';await page.getByRole('button',{name:'Add ash',exact:true}).click();await page.evaluate(async()=>{while((await window.kaminosWorkbenchExperiments.read()).busy)await new Promise(requestAnimationFrame);});
  await invoke('advance',{steps:8});const before=await invoke('snapshot');writeFileSync(resolve(out,'before.json'),JSON.stringify(before));
  const mass=state=>state.patch.values.reduce((a,b)=>a+b,0)*state.patch.layout.cellSize**3;
  assert.ok(Math.abs(mass(before)-.24)<.00001);assert.ok(before.patch.visibleCells>0);await capture('01-large-deposit');
@@ -46,7 +51,7 @@ try{
  report.phase='second-deposit';await invoke('deposit',{volume:.24,radius:.7,center:[0,ground,1]});await invoke('advance',{steps:12});const twice=await invoke('snapshot');writeFileSync(resolve(out,'second-deposit.json'),JSON.stringify(twice));report.secondVolume=mass(twice);assert.ok(Math.abs(report.secondVolume-(mass(checkpoint)+.24))<.00001);await capture('13-second-deposit');await invoke('restore',checkpoint);
  const bad=structuredClone(checkpoint);bad.patch.layout.cellSize*=2;await assert.rejects(()=>invoke('restore',bad));assert.deepEqual((await invoke('snapshot')).patch.values,checkpoint.patch.values);
  report.phase='scale-control';await page.getByText('New patch — clears this deposit',{exact:true}).click();const cellControl=page.getByRole('spinbutton',{name:'Cell width (new patch)',exact:true});await cellControl.click();await cellControl.fill('0.06');await cellControl.press('Tab');await page.getByRole('button',{name:'Create empty patch',exact:true}).click();await page.evaluate(async()=>{while((await window.kaminosWorkbenchExperiments.read()).busy)await new Promise(requestAnimationFrame);});report.rescaled=await invoke('read');assert.equal(report.rescaled.layout.cellSize,.06);assert.equal(report.rescaled.volume,0);
- if(args.get('--negative-pageerror')==='yes'){const failed=page.waitForEvent('pageerror');await page.evaluate(()=>setTimeout(()=>{throw Error('injected GPU ash witness failure');},0));await failed;}
+
  assert.deepEqual(report.errors,[]);assert.deepEqual((await invoke('read')).errors,[]);assert.deepEqual(report.consoleErrors,[]);
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);if(page){report.lastPage=await page.evaluate(()=>({text:document.body.innerText,mount:window.kaminosWorkbenchExperiments?.state()})).catch(String);await page.screenshot({path:resolve(out,'failed.png')}).catch(()=>{});}process.exitCode=1;
