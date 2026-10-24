@@ -2207,7 +2207,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
     </div>
-    <span class="slider-help">How the transport reads the stored velocity (a reading of the same stored field, not a different storage or solver). The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
+    <span class="slider-help">Staggered reconstructs motion from neighboring velocity faces and applies forces at those faces. It requires converged pressure and is required when Fine velocity is coarser than Fine material. Collocated remains available when those widths match. A rejected choice keeps the running setting and explains why.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
@@ -22397,6 +22397,8 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
+      const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver'}[control.id];
+      if(gridKey)volumePrototype?.validateGridControls({[gridKey]:state.value});
       if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
         const next=flameSettingsState();
         const axis=Object.hasOwn(next.rendererControls,control.id)?'rendererControls':'domControls';
@@ -22410,6 +22412,24 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...(fireControlOwner(control.id)==='source'?[]:document.querySelectorAll(`[data-authoring-alias="${control.id}"]`))],label,onError:error=>showFlameEditRefused(error)}));
+    if(['volume-velocity-staggering','volume-pressure-solver'].includes(control.id)) {
+      // Refuse before live handlers: dispatchEvent does not return listener
+      // exceptions to the inspector alias. Restore even without a focus gesture.
+      const gridKey=control.id==='volume-velocity-staggering'?'velocityStaggering':'pressureSolver';
+      const validateGridPreview=event=>{
+        try{check(read());}
+        catch(error){
+          event.stopImmediatePropagation();
+          setVolumeControlValue(control.id,volumePrototype.debugState().controls[gridKey]);
+          if(edits.state().active?.id==='@flame-settings')edits.cancel();
+          updateVolumeControlLabels();
+          flameInspector?.sync(true);
+          showFlameEditRefused(error);
+        }
+      };
+      control.addEventListener('input',validateGridPreview,true);
+      control.addEventListener('change',validateGridPreview,true);
+    }
     if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
       // DOM listener exceptions cannot reject dispatchEvent in the caller.
       // Refuse an invalid aperture before the live runtime handlers see it.
