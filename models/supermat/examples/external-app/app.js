@@ -1,6 +1,7 @@
 import { createSuperMatApp, decodeImageRgba } from '@kaminos/supermat';
 const $ = id => document.getElementById(id), q = new URLSearchParams(location.search);
-const state = window.supermatExample = { status: 'starting', frames: 0, gpuErrors: [], runs: [] };
+const state = window.supermatExample = { status: 'starting', frames: 0, gpuErrors: [], runs: [],
+  frameTiming: { lastSubmittedAt: null, lastGapMs: null, longestGapMs: null } };
 let app, image, stopped = false, busy = false;
 const show = text => { $('status').textContent = text; };
 const draw = (id, map) => {
@@ -15,6 +16,8 @@ function controls() {
 async function infer() {
   if (busy || stopped || !image) return;
   const framesBefore = state.frames;
+  state.frameTiming = { lastSubmittedAt: null, lastGapMs: null, longestGapMs: null };
+  $('frame-gap').textContent = 'Waiting for two draw submissions…';
   busy = true; state.status = 'running'; controls(); $('pause').textContent = 'Pause';
   try {
     const result = await app.infer({ image, size: Number($('size').value),
@@ -47,15 +50,54 @@ try {
     onProgress: p => show(`Loading ${p.resourceIndex + 1}/${p.resourceCount} weight resources…`) });
   app.device.addEventListener('uncapturederror', e => state.gpuErrors.push(e.error.message));
   const context = $('scene').getContext('webgpu');
-  context.configure({ device: app.device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({ device: app.device, format, alphaMode: 'opaque' });
+  const uniform = app.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const module = app.device.createShaderModule({ code: `
+    @group(0) @binding(0) var<uniform> u: vec4f;
+    @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+      return vec4f(array(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3))[i], 0, 1);
+    }
+    @fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
+      let margin = 28.0;
+      let span = u.y - margin * 2.0;
+      let x = p.x - margin;
+      var color = vec3f(0.07, 0.10, 0.12);
+      if (x >= 0 && x <= span) {
+        if (abs(p.y - 64.0) < 1.0) { color = vec3f(0.30, 0.38, 0.41); }
+        let tick = abs(x - round(x / (span / 10.0)) * (span / 10.0));
+        if (tick < 1.0 && p.y >= 57.0 && p.y <= 72.0) { color = vec3f(0.55, 0.65, 0.69); }
+      }
+      let marker = abs(p.xy - vec2f(margin + u.x * span, 37.0));
+      if (marker.x < 8.0 && marker.y < 19.0) { color = vec3f(1.0, 0.80, 0.28); }
+      if (marker.x < 2.0 && marker.y < 14.0) { color = vec3f(1.0); }
+      return vec4f(color, 1.0);
+    }` });
+  const pipeline = await app.device.createRenderPipelineAsync({ layout: 'auto', vertex: { module, entryPoint: 'vs' },
+    fragment: { module, entryPoint: 'fs', targets: [{ format }] } });
+  const binding = app.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }] });
+  const startedAt = performance.now();
   let sequence = 0;
-  const frame = time => {
+  const frame = () => {
     if (stopped) return;
     app.foreground.request({ requestId: `example:${++sequence}`, run: opportunity => {
+      // Wall-clock position, sampled when allowed to draw. A delayed opportunity
+      // jumps forward; it never slows the animation to conceal the missing draws.
+      const now = performance.now(), position = 1 - Math.abs(((now - startedAt) / 1500) % 2 - 1);
+      app.device.queue.writeBuffer(uniform, 0, new Float32Array([position, $('scene').width, 0, 0]));
       const encoder = app.device.createCommandEncoder();
-      const color = .2 + .15 * Math.sin(time / 350);
-      const pass = encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [color, .25, .35 + color, 1] }] });
+      const pass = encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
+      pass.setPipeline(pipeline); pass.setBindGroup(0, binding); pass.draw(3);
       pass.end(); opportunity.submit([encoder.finish()]);
+      // Submission spacing is observable here; GPU completion and screen
+      // presentation are not. Keep the readout literal, without FPS averaging.
+      const timing = state.frameTiming;
+      if (timing.lastSubmittedAt !== null) {
+        timing.lastGapMs = now - timing.lastSubmittedAt;
+        timing.longestGapMs = Math.max(timing.longestGapMs ?? 0, timing.lastGapMs);
+        $('frame-gap').textContent = `Draw submission gap: ${timing.lastGapMs.toFixed(1)} ms · Longest: ${timing.longestGapMs.toFixed(1)} ms`;
+      }
+      timing.lastSubmittedAt = now;
     } }).completion.then(receipt => { if (receipt.status === 'completed') { state.frames++; if (!stopped) requestAnimationFrame(frame); } });
   };
   requestAnimationFrame(frame); $('destroy').disabled = false;
