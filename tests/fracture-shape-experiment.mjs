@@ -42,7 +42,7 @@ test('hierarchy detail, parent selection and hidden cuts share the agent operati
   const api=await definition.create({host:f.host,inputs:{source:'/source.glb'},record:e=>f.events.push(e)});
   assert.equal(typeof api.operations.detail,'function');
   assert.equal(typeof api.operations.hiddenCuts,'function');
-  const initial=api.read();assert.equal(initial.showHiddenCuts,false);assert.equal(initial.settings.cleanupAreaFraction,.001);
+  const initial=api.read();assert.equal(initial.showHiddenCuts,false);assert.equal(initial.settings.cleanupAreaFraction,.0001);
   assert.ok(initial.hierarchy.nodes.length>0);
   api.operations.detail(0);assert.equal(api.read().partition.parts.length,initial.partition.sourceComponents);
   api.operations.select(0);api.operations.parent();assert.equal(api.read().selected,-1);
@@ -52,6 +52,28 @@ test('hierarchy detail, parent selection and hidden cuts share the agent operati
   assert.equal(visible.material.depthTest,true);assert.equal(hidden.material.depthTest,true);assert.notEqual(hidden.material.depthFunc,visible.material.depthFunc);
   assert.equal(hidden.material.isLineDashedMaterial,true);
   const exported=api.operations.export();assert.equal(exported.hierarchy.faceOwners.length,12);
+  await api.dispose();
+ }finally{globalThis.Worker=old;}
+});
+
+test('surface picking and keep-together use recorded, reconstructable piece operations',async()=>{
+ const f=setup(),old=globalThis.Worker;globalThis.Worker=f.Worker;let pick,retained;
+ f.host.scene.open=async()=>({async loadAsset(){return {id:'source',root:f.source};},setView:v=>v,redraw(){},onPick:callback=>{pick=callback;return ()=>{};},async dispose(){}});
+ try{
+  const api=await definition.create({host:f.host,inputs:{source:'/source.glb'},record:e=>f.events.push(e),updateInputs:s=>{retained=s;}});
+  assert.equal(typeof pick,'function','experiment must subscribe to actual scene picking');
+  const regions=f.source.children.find(n=>n.name==='Candidate shape regions');
+  pick({id:'source',object:regions,faceIndex:0});
+  assert.equal(api.read().selected,0);
+  assert.equal(typeof api.operations.keepTogether,'function');
+  api.operations.keepTogether();
+  assert.deepEqual(retained.localDetail,{'0':0});assert.equal(retained.selected,0);
+  assert.equal(api.read().analysis.builds,1);
+  const sourceLabels=api.operations.export().labels;
+  await api.operations.partition({minReachFraction:.01,minAreaFraction:0,cleanupAreaFraction:.001});
+  assert.equal(api.read().analysis.cacheHit,true);assert.deepEqual(api.read().setup.localDetail,{});
+  assert.equal(api.operations.export().labels.length,sourceLabels.length);
+  assert.ok(f.events.some(e=>e.kind==='fracture-shape.selection'));
   await api.dispose();
  }finally{globalThis.Worker=old;}
 });
