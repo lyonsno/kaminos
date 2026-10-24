@@ -8,6 +8,14 @@ import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { classifySam31MemoryAttentionAdapter } from '../src/sam31-memory-attention-evidence.js';
+
+export function requireNativeStreamAdapter(info) {
+  const classification = classifySam31MemoryAttentionAdapter({ vendor: info?.vendor,
+    architecture: info?.architecture, explicitFallback: info?.fallback });
+  if (classification.isFallbackAdapter !== false) throw new Error(`native stream exercise requires a verified non-fallback adapter: ${JSON.stringify(info)}`);
+  return classification;
+}
 
 export function validateStreamSmokeFrame(result, expected) {
   if (result.frameIndex !== expected.frameIndex || result.sourceImageSha256 !== expected.sourceImageSha256) throw new Error('frame source identity mismatch');
@@ -75,15 +83,29 @@ export async function runStreamSmoke(options) {
     page.on('pageerror', error => (report.pageErrors ||= []).push(String(error)));
     await page.goto(url); report.phase = 'tracking'; await saveReport();
     await page.exposeFunction('checkpoint', async frame => { report.frames.push(frame); report.lastTrustworthyFrame = frame.frameIndex; await saveReport(); });
-    report.execution = await page.evaluate(async ({ sequence, kernel, validator }) => {
+    await page.exposeFunction('adapterCheckpoint', async info => { report.effective.adapter = info; report.phase = 'adapter-selection'; await saveReport(); });
+    report.execution = await page.evaluate(async ({ sequence, kernel, validator, adapterValidator }) => {
       const validate = new Function(`return (${validator})`)();
+      const { classifySam31MemoryAttentionAdapter } = await import('/kit/src/sam31-memory-attention-evidence.js');
+      const requireNative = new Function('classifySam31MemoryAttentionAdapter', `return (${adapterValidator})`)(classifySam31MemoryAttentionAdapter);
       const { createSam31VideoTracker } = await import('/kit/src/sam31-video-tracker.js');
       const status = document.querySelector('#status');
       window.sam31StreamSmokeProgress = 'model-setup';
       const bytes = async path => { const r = await fetch(path); if (!r.ok) throw new Error(`input fetch failed ${r.status}: ${path}`); return new Uint8Array(await r.arrayBuffer()); };
       const hash = async value => 'sha256:' + Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', value)), n => n.toString(16).padStart(2, '0')).join('');
       const store = async (name, value) => { const r = await fetch(`/artifact/${name}`, { method: 'POST', body: value }); if (!r.ok) throw new Error(`artifact write failed: ${name}`); };
-      const tracker = await createSam31VideoTracker({ modelPackageRoot: '/model/tracker-model-root.json',
+      const gpu = { async requestAdapter(options) {
+        const adapter = await navigator.gpu.requestAdapter(options);
+        const info = { fallback: adapter?.isFallbackAdapter ?? adapter?.info?.isFallbackAdapter ?? null,
+          vendor: adapter?.info?.vendor ?? '', architecture: adapter?.info?.architecture ?? '',
+          device: adapter?.info?.device ?? '', description: adapter?.info?.description ?? '' };
+        Object.assign(info, classifySam31MemoryAttentionAdapter({ vendor: info.vendor, architecture: info.architecture, explicitFallback: info.fallback }));
+        window.sam31StreamSmokeProgress = 'adapter-selection';
+        await window.adapterCheckpoint(info);
+        requireNative(info);
+        return adapter;
+      } };
+      const tracker = await createSam31VideoTracker({ modelPackageRoot: '/model/tracker-model-root.json', gpu,
         memoryAttentionKernel: kernel, onProgress: phase => { status.textContent = phase; window.sam31StreamSmokeProgress = phase; } });
       const state = { packageId: tracker.packageId, adapterInfo: tracker.adapterInfo, frames: [] };
       try {
@@ -119,7 +141,8 @@ export async function runStreamSmoke(options) {
       } finally { state.teardown = await tracker.close(); }
       status.textContent = 'Sequential execution complete; visual and numerical acceptance remain separate.';
       return state;
-    }, { sequence, kernel: report.effective.memoryAttentionKernel, validator: validateStreamSmokeFrame.toString() });
+    }, { sequence, kernel: report.effective.memoryAttentionKernel, validator: validateStreamSmokeFrame.toString(),
+      adapterValidator: requireNativeStreamAdapter.toString() });
     if (report.frames.length !== sequence.frames.length || report.pageErrors?.length || report.consoleErrors?.length) throw new Error('incomplete or errored sequential execution');
     await page.screenshot({ path: resolve(out, 'sequence.png'), fullPage: true });
     report.status = 'executed'; report.phase = 'complete';

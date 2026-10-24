@@ -40,6 +40,13 @@ function fixture() {
 }
 const options = { modelPackageRoot: 'https://example.test/model.json', cache: {} };
 const input = timestamp => ({ rgba: new Uint8Array(16), timestamp });
+{
+  const f = fixture();
+  f.session.adapter.info = { vendor: 'google', architecture: 'swiftshader', description: '' };
+  const tracker = await createSam31VideoTrackerForTest({ ...options, inferenceSession: f.session }, f.deps);
+  assert.equal(tracker.adapterInfo.isFallbackAdapter, true, 'the video API must retain effective software-backend identity');
+  await tracker.close();
+}
 for (const borrowed of [false, true]) {
   const f = fixture();
   const tracker = await createSam31VideoTrackerForTest({ ...options, ...(borrowed ? { inferenceSession: f.session } : {}) }, f.deps);
