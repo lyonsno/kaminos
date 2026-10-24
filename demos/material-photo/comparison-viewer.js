@@ -6,19 +6,43 @@ import { chooseComparisonLayout } from './layout.js';
 const modes=['original','photo','relit','materials'];
 
 export class MaterialPhotoViewer {
-  async init(container,device) {
+  async init(container,device,{foreground=null,onError=error=>console.error(error)}={}) {
     this.container=container;this.views={};this.focus=null;this.cache=new Map();this.environmentTicket=0;
     const rig={orbit:new Vector2(),target:new Vector2(),current:new Vector2()};
     for(const mode of modes){
       const canvas=container.querySelector(`[data-canvas=${mode}]`),view=new PhotoViewer();
       this.views[mode]=view;
-      await view.init(canvas,device,{interactive:mode==='original',interactionTarget:container,rig});
+      await view.init(canvas,device,{interactive:mode==='original',interactionTarget:container,rig,autoRender:!foreground});
       view.mode=mode;
     }
     this.orbit=rig.orbit;this.target=rig.target;
     await this.loadEnvironment('studio');
     this.resizeObserver=new ResizeObserver(()=>this.layout());this.resizeObserver.observe(container);
-    this.showComparison();return this;
+    this.showComparison();
+    if(foreground)this.startFrames(foreground,onError);
+    return this;
+  }
+  startFrames(foreground,onError){
+    let sequence=0;
+    this.frameStats={rendered:0,duringModel:0};
+    const frame=time=>{
+      if(this.stopped)return;
+      try{
+        this.pendingFrame=foreground.request({requestId:`material-photo:${++sequence}`,run:opportunity=>{
+          let rendered=0;
+          if(!this.stopped)for(const view of Object.values(this.views))if(view.render(time))rendered++;
+          if(rendered){this.frameStats.rendered++;if(opportunity.runId)this.frameStats.duringModel++;}
+          return {renderedViews:rendered};
+        }});
+        this.pendingFrame.completion.then(receipt=>{
+          this.pendingFrame=null;
+          if(this.stopped)return;
+          if(receipt.status!=='completed')throw Error(receipt.failure?.error?.message??`Photograph frame ${receipt.status}`);
+          this.frameId=requestAnimationFrame(frame);
+        }).catch(onError);
+      }catch(error){onError(error);}
+    };
+    this.frameId=requestAnimationFrame(frame);
   }
   get primary(){return this.views.materials;}
   get selected(){return this.views[this.mode];}
@@ -105,10 +129,14 @@ export class MaterialPhotoViewer {
   }
   presentation(){
     const views=Object.fromEntries(modes.map(mode=>[mode,this.views[mode].presentation()]));
-    return {...views[this.mode],comparison:{enabled:this.comparison,focus:this.focus,views}};
+    return {...views[this.mode],comparison:{enabled:this.comparison,focus:this.focus,views},renderCallbacks:this.frameStats?{...this.frameStats}:null};
   }
   clear(){for(const mode of ['original','photo','relit','materials'])this.views[mode].clear();}
   async dispose(){
+    this.stopped=true;
+    if(this.frameId!=null)cancelAnimationFrame(this.frameId);
+    this.pendingFrame?.cancel('Photograph viewer disposed');
+    await this.pendingFrame?.completion;
     this.resizeObserver?.disconnect();
     this.environmentTicket++;
     const errors=[];

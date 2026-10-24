@@ -1,5 +1,6 @@
-import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
+import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuForegroundService } from '../../webgpu-inference-kit/src/core.js';
+import { superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
+import { createSuperMatApp } from '../../models/supermat/supermat-app.js';
 import { MoGeInference } from './moge-producer.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
@@ -23,7 +24,7 @@ const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-vendored-385
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
-let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
+let image,selection,active=false,viewer,gpu,session,foreground,moge,materials,setupPromise;
 let imageTicket=0;
 let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
@@ -159,7 +160,8 @@ async function setup(){
     status('Connecting shared WebGPU device');
     gpu=await requestBrowserWebGpuDevice(navigator.gpu,await superMatDeviceOptions(navigator.gpu,{adapterName:'material-photograph'}));
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
-    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
+    foreground=createWebGpuForegroundService({device:gpu.device,routeId:'material-photograph:foreground'});
+    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device,{foreground,onError:fail});
     await viewer.applyPreset(DEFAULT_PRESET);
     applyImageGlow();
     gpu.device.addEventListener('uncapturederror',event=>{
@@ -168,10 +170,10 @@ async function setup(){
     gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
   })().catch(async error=>{
-    for(const cleanup of [()=>viewer?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
+    for(const cleanup of [()=>viewer?.dispose(),()=>foreground?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
       try{await cleanup();}catch(cause){(state.cleanupErrors??=[]).push(String(cause));}
     }
-    viewer=session=gpu=null;setupPromise=null;
+    viewer=foreground=session=gpu=null;setupPromise=null;
     throw error;
   });
   return setupPromise;
@@ -254,33 +256,24 @@ async function infer(){
     if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
-    if(!materials){
-      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
-      weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
-      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl,weightLoading:'chunks',
-        ...superMatProductProfile(gpu.device),onProgress:event=>{
-          if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
-        }});
-    }
-    const route=await session.registerRoute({routeId:SUPERMAT_ROUTE_ID});
-    const control=createWebGpuInferenceControl({queue:gpu.device.queue});
+    materials??=await createSuperMatApp({device:gpu.device,session,foreground,load:false,weightsUrl,
+      adapterOptions:{weightLoading:'chunks',...superMatProductProfile(gpu.device)}});
+    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
+    await materials.load(event=>{
+      if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
+    });
     phase=performance.now();
-    let output;
-    try{
-      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
-      const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
-        schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
+    const modelFramesBefore=viewer.frameStats?.duringModel??0;
+    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
+    const output=await materials.infer({image:input,size,onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
           progressStatus(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
           if(progress.totalFlops)$('progress').value=progress.completedFlops/progress.totalFlops;else $('progress').removeAttribute('value');
-        }})});
-      const completion=await job.completion;
-      if(completion.status!=='succeeded')throw Error(completion.failure?.message??`SuperMat ${completion.status}`);
-      output=completion.output;
-    }finally{await control.close();await route.drain();session.unregisterRoute(route.routeId);}
+        }});
     record.phases.materialsMs=performance.now()-phase;
     if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
-    record.supermat={identity:materials.identity,size,timings:output.timings,dutyCount:output.dutyCount};
+    record.supermat={identity:materials.adapter.identity,size,timings:output.timings,dutyCount:output.dutyCount};
+    record.supermat.renderCallbacks=(viewer.frameStats?.duringModel??0)-modelFramesBefore;
     record.wallMs=performance.now()-started;record.status='done';
     const surface=visible()&&!retainDisplay?viewer.surface:buildPhotoSurface(depth,input.width/input.height);
     record.output={surfaceVertices:surface.position.length/3,triangles:surface.indices.length/3,materialSize:[output.width,output.height]};

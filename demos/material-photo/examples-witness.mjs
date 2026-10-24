@@ -19,8 +19,9 @@ try{
   if(values.image&&!values.generate)throw Error('Uploaded image requires --generate');
   if(values['hosted-weights']&&new URL(values.url).searchParams.has('weights'))throw Error('Hosted witness refuses a weight override');
   const executable=await fs.realpath(values.chrome);if(executable.includes('/Applications/Google Chrome.app/'))throw Error('Independent Chrome required');
-  const {chromium}=await import(values['playwright-module']);browser=await chromium.launch({executablePath:executable,headless:true});
-  report.browser={executable,version:browser.version(),args:[]};
+  const args=['--use-mock-keychain','--password-store=basic'];
+  const {chromium}=await import(values['playwright-module']);browser=await chromium.launch({executablePath:executable,headless:true,args});
+  report.browser={executable,version:browser.version(),args};
   const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
   report.hostedRequests=[];
   page.on('request',r=>{report.requests.push(r.url());if(values['hosted-weights']&&r.url().startsWith(values['hosted-weights'])){
