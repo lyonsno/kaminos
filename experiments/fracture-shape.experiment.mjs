@@ -123,7 +123,7 @@ export default {
      select:selectPiece,
      selectFace:face=>{if(!Number.isInteger(face)||face<0||face>=view.labels.length)throw Error('Choose an existing source triangle');return selectPiece(view.parts[view.labels[face]].nodeId);},
      pieceDetail:localLevel,
-     refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected];return localLevel(Math.min(subtreeDepth(selected),Math.max(node.depth,inheritedDetail(selected))+1));},
+     refine:()=>{if(selected<0)throw Error('Select a piece first');const node=result.hierarchy.nodes[selected],visibleDepth=view.parts.reduce((max,p)=>belongs(p.nodeId,selected)?Math.max(max,result.hierarchy.nodes[p.nodeId].depth):max,node.depth);return localLevel(Math.min(subtreeDepth(selected),Math.max(visibleDepth,inheritedDetail(selected))+1));},
      keepTogether:()=>{if(selected<0)throw Error('Select a piece first');return localLevel(result.hierarchy.nodes[selected].depth);},
      resetLocal:()=>{localDetail={};viewDirty=true;draw();return event('reset-local',null);},
      parent:()=>{selected=selected<0?-1:result.hierarchy.nodes[selected].parent??-1;draw();return event('parent-selection',selected);},
