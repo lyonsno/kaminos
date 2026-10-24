@@ -38,7 +38,7 @@ function validateLighting(value) {
 }
 
 export class MaterialPhotoViewer {
-  async init(canvas, device, {interactive=true,interactionTarget=canvas,rig=null}={}) {
+  async init(canvas, device, {interactive=true,interactionTarget=canvas,rig=null,autoRender=true}={}) {
     this.canvas = canvas;
     this.textures = [];
     this.renderer = new THREE.WebGPURenderer({ canvas, device, antialias: true });
@@ -97,7 +97,7 @@ export class MaterialPhotoViewer {
     this.interactionTarget=interactionTarget;
     if(interactive)for (const [event, handler] of Object.entries(this.listeners)) interactionTarget.addEventListener(event, handler);
     else this.listeners={};
-    this.renderer.setAnimationLoop(time => this.render(time));
+    if(autoRender)this.renderer.setAnimationLoop(time => this.render(time));
     return this;
   }
 
@@ -385,6 +385,7 @@ export class MaterialPhotoViewer {
       this.bloomPipelines[this.useGI?0:1].render();
     } else if (lit && this.useGI) this.pipeline.render();
     else this.renderer.render(this.scene,this.camera);
+    return true;
   }
   clear() {
     for (const mesh of [this.mesh,this.original]) if(mesh){this.scene.remove(mesh);if(mesh===this.original||!this.borrowedGeometry)mesh.geometry.dispose();}

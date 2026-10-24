@@ -1,5 +1,6 @@
-import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
+import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuForegroundService } from '../../webgpu-inference-kit/src/core.js';
+import { superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
+import { createSuperMatApp } from '../../models/supermat/supermat-app.js';
 import { MoGeInference } from './moge-producer.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
@@ -14,7 +15,7 @@ const $=id=>document.getElementById(id), params=new URLSearchParams(location.sea
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
 const displayCutouts=new WeakMap();
-const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
+const state=window.__materialPhoto={status:'loading-image',error:null,renderError:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
 const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
@@ -23,15 +24,18 @@ const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-vendored-385
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
-let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
+let image,selection,active=false,viewer,gpu,session,foreground,moge,materials,setupPromise;
 let imageTicket=0;
 let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
 const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
-function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function status(text,error=false){
+  if(state.renderError){state.status='error';state.error=state.renderError;text=`Rendering stopped: ${state.renderError}. Reload to recover.`;error=true;}
+  $('status').textContent=text;$('status').classList.toggle('error',error);
+}
 function provenance(text){$('provenance').textContent=text;}
-function runButton(){ $('run').disabled=!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status); }
+function runButton(){ $('run').disabled=!GENERATION_AVAILABLE||!!state.renderError||active||!image||['loading-image','restoring'].includes(state.status); }
 $('generation-controls').hidden=!GENERATION_AVAILABLE;
 $('local-generation').hidden=GENERATION_AVAILABLE;
 $('file').disabled=!GENERATION_AVAILABLE;
@@ -159,19 +163,20 @@ async function setup(){
     status('Connecting shared WebGPU device');
     gpu=await requestBrowserWebGpuDevice(navigator.gpu,await superMatDeviceOptions(navigator.gpu,{adapterName:'material-photograph'}));
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
-    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
+    foreground=createWebGpuForegroundService({device:gpu.device,routeId:'material-photograph:foreground'});
+    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device,{foreground,onError:failRendering});
     await viewer.applyPreset(DEFAULT_PRESET);
     applyImageGlow();
     gpu.device.addEventListener('uncapturederror',event=>{
-      (state.gpuErrors??=[]).push(event.error.message);fail(event.error);
+      (state.gpuErrors??=[]).push(event.error.message);failRendering(event.error);
     });
-    gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
+    gpu.device.lost.then(info=>{if(info.reason!=='destroyed')failRendering(Error(`WebGPU device lost: ${info.message}`));});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
   })().catch(async error=>{
-    for(const cleanup of [()=>viewer?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
+    for(const cleanup of [()=>viewer?.dispose(),()=>foreground?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
       try{await cleanup();}catch(cause){(state.cleanupErrors??=[]).push(String(cause));}
     }
-    viewer=session=gpu=null;setupPromise=null;
+    viewer=foreground=session=gpu=null;setupPromise=null;
     throw error;
   });
   return setupPromise;
@@ -223,7 +228,7 @@ async function restoreCached(ticket=++imageTicket){
   }else{provenance('Your cached depth');status(exampleError?'Example unavailable; depth restored; materials not yet computed at this resolution':'Depth restored; materials not yet computed at this resolution',exampleError);}
 }
 async function infer(){
-  if(!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status))return;
+  if(!GENERATION_AVAILABLE||state.renderError||active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
   const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
   const retainDisplay=!!viewer?.maps;
@@ -254,33 +259,24 @@ async function infer(){
     if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
-    if(!materials){
-      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
-      weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
-      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl,weightLoading:'chunks',
-        ...superMatProductProfile(gpu.device),onProgress:event=>{
-          if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
-        }});
-    }
-    const route=await session.registerRoute({routeId:SUPERMAT_ROUTE_ID});
-    const control=createWebGpuInferenceControl({queue:gpu.device.queue});
+    materials??=await createSuperMatApp({device:gpu.device,session,foreground,load:false,weightsUrl,
+      adapterOptions:{weightLoading:'chunks',...superMatProductProfile(gpu.device)}});
+    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
+    await materials.load(event=>{
+      if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
+    });
     phase=performance.now();
-    let output;
-    try{
-      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
-      const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
-        schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
+    const modelFramesBefore=viewer.frameStats?.duringModel??0;
+    if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
+    const output=await materials.infer({image:input,size,onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
           progressStatus(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
           if(progress.totalFlops)$('progress').value=progress.completedFlops/progress.totalFlops;else $('progress').removeAttribute('value');
-        }})});
-      const completion=await job.completion;
-      if(completion.status!=='succeeded')throw Error(completion.failure?.message??`SuperMat ${completion.status}`);
-      output=completion.output;
-    }finally{await control.close();await route.drain();session.unregisterRoute(route.routeId);}
+        }});
     record.phases.materialsMs=performance.now()-phase;
     if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
-    record.supermat={identity:materials.identity,size,timings:output.timings,dutyCount:output.dutyCount};
+    record.supermat={identity:materials.adapter.identity,size,timings:output.timings,dutyCount:output.dutyCount};
+    record.supermat.renderCallbacks=(viewer.frameStats?.duringModel??0)-modelFramesBefore;
     record.wallMs=performance.now()-started;record.status='done';
     const surface=visible()&&!retainDisplay?viewer.surface:buildPhotoSurface(depth,input.width/input.height);
     record.output={surfaceVertices:surface.position.length/3,triangles:surface.indices.length/3,materialSize:[output.width,output.height]};
@@ -396,6 +392,7 @@ $('preset-file').onchange=async()=>{
   $('preset-file').value='';
 };
 function fail(error){state.status='error';state.error=error.message;status(error.message,true);runButton();}
+function failRendering(error){state.renderError??=error.message;fail(error);}
 async function changeEnvironment(name){
   if(!viewer)return false;
   const ticket=++environmentTicket;

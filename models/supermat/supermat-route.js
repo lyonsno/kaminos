@@ -143,11 +143,15 @@ export async function createSuperMatAdapter(options = {}) {
   // size: square model resolution, a multiple of 64 (SuperMat recommends 512).
   // onRunProgress receives { phase, phaseIndex, phaseCount, dutyLabel, duties, completedFlops,
   // totalFlops (null until one cooperative run at this size has completed), lastDutyMs }.
-  async function run({ image, schedule = null, size = SUPERMAT_IMAGE_SIZE, onRunProgress = null } = {}) {
-    if (!Number.isSafeInteger(size) || size < 64 || size % 64) throw new Error('SuperMat size must be a positive multiple of 64');
-    if (released) throw new Error('SuperMat adapter is released');
+  async function run(options = {}) {
     if (busy) throw new Error('SuperMat adapter already has an active run');
     busy = true;
+    try { return await runImage(options); } finally { busy = false; }
+  }
+
+  async function runImage({ image, schedule = null, size = SUPERMAT_IMAGE_SIZE, onRunProgress = null } = {}) {
+    if (!Number.isSafeInteger(size) || size < 64 || size % 64) throw new Error('SuperMat size must be a positive multiple of 64');
+    if (released) throw new Error('SuperMat adapter is released');
     const timings = {};
     const phases = ['preprocess', 'encode', 'unet', 'decode-albedo', 'decode-orm', 'pack-maps'];
     const progress = { phase: 'preprocess', phaseIndex: 0, phaseCount: phases.length, dutyLabel: null, duties: 0,
@@ -231,7 +235,6 @@ export async function createSuperMatAdapter(options = {}) {
       throw caught;
     } finally {
       ops.setSchedule(null);
-      busy = false;
       const oom = await device.popErrorScope();
       const validation = await device.popErrorScope();
       const gpuError = oom ?? validation;

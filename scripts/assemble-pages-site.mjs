@@ -74,7 +74,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
     "lib/addons/tsl/display/SSGINode.js","lib/addons/tsl/display/SSGINode.LICENSE","lib/addons/tsl/display/DenoiseNode.js","lib/addons/math/SimplexNoise.js",
-    "models/supermat/supermat-route.js","models/supermat/supermat-ops.js","models/supermat/supermat-model.js",
+    "models/supermat/supermat-app.js","models/supermat/supermat-route.js","models/supermat/supermat-ops.js","models/supermat/supermat-model.js",
     "models/supermat/supermat-kernels.js","models/supermat/supermat-preprocess.js","models/supermat/supermat-maps.js","models/supermat/supermat-cpu-worker.js"]){
     const target=path.join(out,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(repoRoot,file),target);
   }

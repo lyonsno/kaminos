@@ -27,7 +27,7 @@ try {
   assert.equal(packed.version, '0.2.3');
   assert.equal(await fs.readFile(path.join(output, 'keep.txt'), 'utf8'), 'caller-owned output');
   const entries = execFileSync('tar', ['-tzf', packed.tarball], { encoding: 'utf8' }).trim().split('\n').sort();
-  assert.deepEqual(entries, ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js']
+  assert.deepEqual(entries, ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js', 'examples/external-app/app.js', 'examples/external-app/index.html']
     .map(file => `package/${file}`).sort());
 
   const app = path.join(scratch, 'app');
@@ -71,7 +71,7 @@ try {
   assert.equal(manifest.dependencies, undefined, 'the exercised standalone artifacts are self-contained');
   assert.equal(path.dirname(entry), path.dirname(worker));
   const api = await import(pathToFileURL(entry).href);
-  for (const key of ['createSuperMatAdapter', 'createWebGpuInferenceSession', 'requestBrowserWebGpuDevice']) {
+  for (const key of ['createSuperMatAdapter', 'createSuperMatApp', 'decodeImageRgba', 'createWebGpuInferenceSession', 'requestBrowserWebGpuDevice']) {
     assert.equal(typeof api[key], 'function', `installed package exports ${key}`);
   }
   const reference = path.join(scratch, 'reference');
