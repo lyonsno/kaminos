@@ -7,7 +7,7 @@ const finitePoint=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
 export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async create({host,inputs={},record}){
  const session=await host.scene.open(),renderer=host.scene.renderer(),device=renderer?.backend?.device;
  let producer,patch,asset,playing=true,busy=false,disposed=false,status,contactField,pauseButton,lastPose,lastTick=0;
- const gpuErrors=[];const onError=e=>gpuErrors.push(e.error.message);device?.addEventListener('uncapturederror',onError);
+ const controls=[];const gpuErrors=[];const onError=e=>gpuErrors.push(e.error.message);device?.addEventListener('uncapturederror',onError);
  try{
   if(!device)throw Error('This experiment requires the shared WebGPU renderer');
   const kiln=await session.loadAsset({url:`/api/read?root=generated-meshes&path=${kilnSha}.glb`,normalize:true,arrival:'append'});
@@ -62,16 +62,16 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
   };
   return {read,operations,mount({root:panel,document,invoke}){
    const intro=document.createElement('p');intro.textContent='Drag the amber sphere with the scene Move tool: ash reacts continuously on the GPU. This bounded patch holds seeded material; the kiln collision mask is static.';panel.append(intro);
-   const field=(label,value)=>{const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step='any';input.value=value;input.className='transform-input';input.setAttribute('aria-label',label);row.append(grip,input);panel.append(row);host.controls.installNumberDrag({input,grip,step:value/20});return input;};
+   const field=(label,value)=>{const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step='any';input.value=value;input.className='transform-input';input.setAttribute('aria-label',label);row.append(grip,input);panel.append(row);controls.push(host.controls.installNumberDrag({input,grip,step:value/20}));return input;};
    const volume=field('Ash volume',.24),spread=field('Spread radius',.7);contactField=field('Contact radius',marker.scale.x);
-   const failed=e=>{status.textContent=e.message;};contactField.addEventListener('change',()=>invoke('setContactRadius',Number(contactField.value)).catch(failed));
+   const failed=e=>{status.textContent=e.message;};contactField.addEventListener('input',()=>invoke('setContactRadius',Number(contactField.value)).catch(failed));
    const button=(title,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=title;b.addEventListener('click',()=>Promise.resolve().then(fn).catch(failed));panel.append(b);return b;};
    button('Add ash',()=>invoke('deposit',{volume:Number(volume.value),radius:Number(spread.value)}));pauseButton=button('Pause',()=>invoke('play',!playing));button('Frame kiln',()=>invoke('frame'));
    const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='New patch — clears this deposit';details.append(summary);panel.append(details);
-   const width=field('Patch width (new patch)',patch.layout.bounds.max[0]-patch.layout.bounds.min[0]),cell=field('Cell width (new patch)',patch.layout.cellSize);details.append(width.parentElement,cell.parentElement);
+   const width=field('Patch width (new patch)',patch.layout.bounds.max[0]-patch.layout.bounds.min[0]),cell=field('Cell width (new patch)',patch.layout.cellSize);details.append(width.closest('label'),cell.closest('label'));
    const newButton=button('Create empty patch',()=>invoke('newPatch',{width:Number(width.value),cellSize:Number(cell.value)}));details.append(newButton);
    button('Save ash',async()=>{const data=await invoke('snapshot'),url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='gpu-kiln-ash.json';a.click();URL.revokeObjectURL(url);});
    const file=document.createElement('input');file.type='file';file.accept='.json';file.hidden=true;file.addEventListener('change',async()=>{try{if(file.files[0])await invoke('restore',JSON.parse(await file.files[0].text()));}catch(e){failed(e);}finally{file.value='';}});panel.append(file);button('Load ash',()=>file.click());status=document.createElement('p');status.setAttribute('role','status');panel.append(status);sync();
-  },dispose:async()=>{disposed=true;await session.dispose();patch.dispose();device.removeEventListener('uncapturederror',onError);}};
+  },dispose:async()=>{disposed=true;for(const control of controls)control.dispose();patch.dispose();await session.dispose();device.removeEventListener('uncapturederror',onError);}};
  }catch(e){producer?.destroy();patch?.dispose();device?.removeEventListener('uncapturederror',onError);await session.dispose();throw e;}
 }};

@@ -101,9 +101,11 @@ export async function createGpuAshPatch({renderer,cellSize,bounds,solid}){
   async deposit(input){const previous=await readback();const next=seedPatch(p,solid,input,previous.values);upload(next);volume+=input.volume;return this.read();},
   async snapshot(){const state=await readback();return {schema:'kaminos.gpu-ash-patch.v1',layout:p,values:Array.from(state.values),steps,volume,lastContact,visibleCells:state.visibleCells,active:state.active};},
   restore(state){check();if(state?.schema!=='kaminos.gpu-ash-patch.v1'||JSON.stringify(state.layout)!==JSON.stringify(p)||!Array.isArray(state.values)||state.values.length!==count||state.values.some((v,i)=>!Number.isFinite(v)||v<0||v>1||(solid[i]&&v!==0))||!Number.isSafeInteger(state.steps)||state.steps<0||!Number.isFinite(state.volume)||state.volume<0)throw Error('Invalid GPU ash checkpoint or mapping');
-   const values=Float32Array.from(state.values);upload(values);steps=state.steps;volume=state.volume;lastContact=null;return this.read();},
-  read:()=>({backend:'webgpu-pair-exchange',surface:'gpu-compacted-indirect-cells',layout:p,steps,volume,explicitReadbacks:snapshots,runtimeReadbacks:0,allocatedBytes:count*24+16+20+6*80,boundary:'closed local patch; no silent discard',lastContact}),
-  dispose(){if(disposed)return;disposed=true;mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs){renderer.backend.destroyAttribute(a);}for(const b of owned)b.destroy();}
+   if(typeof state.active!=='boolean'||(state.lastContact!==null&&(!Array.isArray(state.lastContact)||state.lastContact.length!==4||!state.lastContact.every(Number.isFinite)||state.lastContact[3]<=0)))throw Error('Invalid GPU ash continuation state');
+   const values=Float32Array.from(state.values),actual=values.reduce((a,b)=>a+b,0)*cellSize**3;if(Math.abs(actual-state.volume)>Math.max(1e-9,state.volume*1e-5))throw Error('Checkpoint volume differs from stored material');
+   upload(values);device.queue.writeBuffer(dispatch,12,new Uint32Array([state.active?1:0]));steps=state.steps;volume=state.volume;lastContact=state.lastContact?.slice()??null;return this.read();},
+  read:()=>({backend:'webgpu-pair-exchange',surface:'gpu-compacted-indirect-cells',layout:p,steps,volume,explicitReadbacks:snapshots,runtimeReadbacks:0,allocatedBytes:count*24+16+12+20+6*80,boundary:'closed local patch; no silent discard',lastContact}),
+  dispose(){if(disposed)return;disposed=true;mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs){if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);}for(const b of owned)b.destroy();}
  };
- }catch(error){mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();throw error;}
+ }catch(error){mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs)if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();throw error;}
 }
