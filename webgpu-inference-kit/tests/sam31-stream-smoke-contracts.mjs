@@ -8,7 +8,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 const moduleUrl = new URL('../tools/sam31-stream-smoke.mjs', import.meta.url);
 assert.ok(existsSync(moduleUrl), 'sequential GPU exercise must reject incomplete or misbound frame evidence');
-const { validateStreamSmokeFrame } = await import(moduleUrl);
+const smoke = await import(moduleUrl);
+const { validateStreamSmokeFrame } = smoke;
+const observedAdapter = JSON.parse(await readFile(new URL('./fixtures/sam31-observed-software-adapter.json', import.meta.url), 'utf8'));
+assert.equal(typeof smoke.requireNativeStreamAdapter, 'function', 'native exercise must reject the observed software adapter before model materialization');
+assert.throws(() => smoke.requireNativeStreamAdapter(observedAdapter.adapter), /native.*adapter|software.*adapter/i);
+assert.throws(() => smoke.requireNativeStreamAdapter({ ...observedAdapter.adapter, fallback: false }), /adapter/i, 'software identity overrides a contradictory fallback flag');
+assert.throws(() => smoke.requireNativeStreamAdapter({ vendor: 'unknown' }), /adapter/i, 'missing fallback identity is not hardware proof');
+smoke.requireNativeStreamAdapter({ fallback: false, vendor: 'apple', architecture: 'metal-3' });
 const frame = () => ({ frameIndex: 2, sourceImageSha256: 'sha256:current', maskWidth: 1, maskHeight: 1,
   maskLogits: new Float32Array(16), objectScores: new Float32Array(16),
   receipts: [{ status: 'real', requestedRouteId: 'sam.real', effectiveRouteId: 'sam.real', fallbackReason: null,

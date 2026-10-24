@@ -3,6 +3,7 @@ import { createSam31BrowserTrackerPackageCache, loadSam31BrowserTrackerModelPack
 import { createSam31ResidentModelResources } from './sam31-resident-model-resources.js';
 import { createSam31StreamDriver } from './sam31-stream-driver.js';
 import { createSam31StreamEngine } from './sam31-stream-engine.js';
+import { classifySam31MemoryAttentionAdapter } from './sam31-memory-attention-evidence.js';
 
 const production = { loadRuntime: loadSam31BrowserTrackerModelPackageRuntime,
   createInferenceSession: createWebGpuInferenceSession, createResources: createSam31ResidentModelResources,
@@ -26,7 +27,11 @@ async function createTracker(options, dependencies) {
   const errors = [];
   const onError = event => errors.push(String(event.error?.message || event.error));
   const adapterInfo = { description: String(session.adapter?.info?.description || ''),
-    vendor: String(session.adapter?.info?.vendor || ''), architecture: String(session.adapter?.info?.architecture || '') };
+    vendor: String(session.adapter?.info?.vendor || ''), architecture: String(session.adapter?.info?.architecture || ''),
+    device: String(session.adapter?.info?.device || ''),
+    ...classifySam31MemoryAttentionAdapter({ vendor: session.adapter?.info?.vendor,
+      architecture: session.adapter?.info?.architecture,
+      explicitFallback: session.adapter?.isFallbackAdapter ?? session.adapter?.info?.isFallbackAdapter }) };
   function active(phase) {
     const state = session.snapshot();
     if (state.status !== 'active' || state.deviceLoss || errors.length) {
