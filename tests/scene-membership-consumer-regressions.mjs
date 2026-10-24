@@ -315,6 +315,7 @@ test('geometry replacement after membership Undo survives release of the old roo
     addSceneObjectFromSource(){throw Error('Undo must use its retained root');},
     scenePlacementTools:{edits, finish(){}}, meshDataTargets:new Set(),
     sceneNavigation:{prepare(){}}, sceneGiProxies:{release(){}},
+    applyGiProxySetting(){}, createSceneGroupForObjects(){},
     sceneCameras:null, currentMesh:null, transformControls:null,
     hybridSplatOverlayState:{}, splatCorrectionMode:null,
     sceneSaveBlockedByFailedRestore:false,
@@ -338,7 +339,7 @@ test('geometry replacement after membership Undo survives release of the old roo
     assert.ok(start>=0&&end>start, `production ${first} must be extractable`);
     vm.runInContext(html.slice(start,end),context);
   }
-  const membership=context.createPageSceneMembershipOperations();membership.attachHistory(edits);
+  const membership=context.createPageSceneMembershipOperations();context.sceneMembership=membership;membership.attachHistory(edits);
   const original=context.mountProceduralMesh({id:'cube',type:PROCEDURAL_MESH_TYPE,source:'kaminos:geometry',
     label:'Cube',transform:pose,geometry:{kind:'box',parameters:{width:1,height:1,depth:1}}});
   membership.remove('cube');await edits.undo();

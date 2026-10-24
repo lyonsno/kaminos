@@ -8,6 +8,7 @@ export const membershipEditTargetId = id => `@scene-membership:${encodeURICompon
 export function createSceneMembershipOperations({
   scene, records, roots, domains = {},
   select = (ids, activeId) => scene.select(ids, activeId),
+  createGroup = () => {},
   finishInteraction = () => {}, captureContext = () => ({}),
   changed = () => {}, status = () => {},
 }) {
@@ -22,6 +23,15 @@ export function createSceneMembershipOperations({
     if (release) release(entry);
     else roots.dispose(entry.object);
   };
+
+  function admit(entry, {index = null, activate = false, group = null, prepare = true} = {}) {
+    scene.put(entry, {index});
+    if (prepare) roots.prepare?.(entry);
+    if (group) createGroup([entry.id], group.label, group);
+    if (activate) select([entry.id], entry.id);
+    changed({operation:'admit', entry});
+    return entry;
+  }
 
   function releaseUnreferenced() {
     scene.releaseUnreferenced(hasHistory, (_root, entry) => dispose(entry));
@@ -63,22 +73,27 @@ export function createSceneMembershipOperations({
     ));
   }
 
-  async function restore(value) {
-    const {record, index, groups, selection} = value;
+  async function reconstruct(record, context = {record}) {
     if (scene.find(record.id)) throw Error(`Scene object "${record.id}" is already present`);
     const retained = scene.retained(record.id);
     let object;
     if (retained) {
       object = retained.object;
-      scene.put(retained);
+      admit(retained, {prepare:false});
       roots.attach(retained);
-      domain(retained).attach?.(retained, value);
+      domain(retained).attach?.(retained, context);
     } else {
       object = await records.load(record);
     }
     const entry = scene.find(record.id);
     if (!entry || entry.object !== object) throw Error(`Scene object "${record.id}" did not restore its retained identity`);
     roots.restore(entry, record);
+    return entry;
+  }
+
+  async function restore(value) {
+    const {record, index, groups, selection} = value;
+    const entry = await reconstruct(record, value);
     scene.move(entry.id, index);
     restoreGroups(entry, groups);
     domain(entry).restored?.(entry, value);
@@ -167,7 +182,7 @@ export function createSceneMembershipOperations({
   }
 
   return Object.freeze({
-    snapshot, check, restore, restoreGroups, ensureTarget, recordInsertion,
+    admit, reconstruct, snapshot, check, restore, restoreGroups, ensureTarget, recordInsertion,
     remove, removeOwned, releaseUnreferenced, hasHistory,
     retainForHistory(id, target) { compoundTargets.set(id, target); },
     attachHistory(history) {

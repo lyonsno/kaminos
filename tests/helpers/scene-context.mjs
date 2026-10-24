@@ -41,6 +41,7 @@ export function sceneContext(context, options) {
     context.workingScene=service;
   }
   context.sceneMembership ??= {
+    admit: (record,options) => context.workingScene.put(record,options),
     retainForHistory(id,target){context.compoundRetentionTargets?.set(id,target);},
     clearHistoryTargets(){for(const id of context.sceneMembershipEditTargets??[])context.scenePlacementTools.edits.unregister(id);context.sceneMembershipEditTargets?.clear();context.compoundRetentionTargets?.clear();},
   };

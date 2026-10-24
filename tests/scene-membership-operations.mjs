@@ -124,3 +124,34 @@ test('membership snapshots reject mismatched identity and malformed group proven
   const checked=f.operations.check(value,'one');checked.record.label='changed';assert.equal(value.record.label,'one');
   assert.equal(membershipEditTargetId('a/b'),'@scene-membership:a%2Fb');
 });
+
+test('admission owns ordering, grouping and optional selection for constructed domain records', () => {
+  const scene=createWorkingScene(), effects=[];
+  const operations=createSceneMembershipOperations({scene, records:{}, roots:{
+    prepare:entry=>effects.push(['prepare',scene.find(entry.id)===entry]),
+  }, createGroup:(ids,label)=>scene.setGroups([{id:'group',objectIds:ids,label}]),
+  changed:({operation})=>effects.push([operation])});
+  assert.equal(typeof operations.admit,'function','the membership service must admit constructed records');
+  const row=id=>({id,type:'fixture',object:{userData:{}}});
+  const one=row('one'),two=row('two');
+  operations.admit(one,{activate:true});
+  operations.admit(two,{index:0,group:{label:'Pair'}});
+  assert.deepEqual(scene.objects.map(entry=>entry.id),['two','one']);
+  assert.equal(scene.activeObjectId,'one','domain mounting must not steal selection');
+  assert.deepEqual(scene.groups[0].objectIds,['two']);
+  assert.deepEqual(effects,[['prepare',true],['admit'],['prepare',true],['admit']]);
+  assert.throws(()=>operations.admit({...row('duplicate'),object:one.object}),/unique object IDs and roots/);
+  assert.deepEqual(scene.objects.map(entry=>entry.id),['two','one']);
+  assert.equal(effects.length,4,'invalid admission must precede presentation effects');
+});
+
+test('record reconstruction can be consumed without creating history or changing selection', async () => {
+  const f=fixture(), entry=f.add('one');f.add('selected');f.scene.select(['selected']);
+  const record=f.operations.snapshot('one').record;
+  f.scene.forget('one');f.scene.retain(entry);entry.object.mounted=false;
+  assert.equal(typeof f.operations.reconstruct,'function','reconstruction must be an imported operation independent of Undo');
+  assert.equal(await f.operations.reconstruct(record),entry);
+  assert.equal(entry.object.mounted,true);assert.equal(f.scene.activeObjectId,'selected');
+  assert.equal(f.edits.state().undoCount,0);assert.equal(f.calls.includes('load'),false);
+  assert.deepEqual(f.calls,['admit','attach','restore']);
+});

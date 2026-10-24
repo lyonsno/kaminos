@@ -2874,6 +2874,7 @@ import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTE
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createWorkingScene } from './working-scene.mjs';
+import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
@@ -7053,66 +7054,15 @@ document.addEventListener('keydown', event => {
 });
 
 function registerSceneObject(object, metadata = {}) {
-  sceneSaveBlockedByFailedRestore = false;
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
   const sceneTransform = metadata.type === 'splat'
     ? cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object))
     : null;
-  const record = {
-    id,
-    object,
-    source: metadata.source ?? null,
-    type: metadata.type ?? null,
-    fileName: metadata.fileName ?? 'object',
-    label: metadata.label ?? metadata.fileName ?? id,
-    groupId: metadata.groupId ?? null,
-    createdAt: metadata.createdAt ?? new Date().toISOString(),
-    splat: metadata.splat ?? null,
-    image: metadata.image ?? null,
-    renderRoute: metadata.renderRoute ?? null,
-    renderCapabilities: metadata.renderCapabilities ?? null,
-    renderHandoffSchema: metadata.renderHandoffSchema ?? null,
-    sceneTransform,
-    generation:metadata.generation?structuredClone(metadata.generation):null,
-    assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
-    collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
-    localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
-    ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false,...(metadata.emission?{emission:structuredClone(metadata.emission)}:{})}:{}),
-    giProxy:giProxySettingFor({type:metadata.type,giProxy:metadata.giProxy}),
-    ...(metadata.repetition?{repetition:checkedRepetition(metadata.repetition)}:{}),
-  };
-  object.userData.kaminosSceneObject = {
-    id: record.id,
-    source: record.source,
-    type: record.type,
-    fileName: record.fileName,
-    label: record.label,
-    groupId: record.groupId,
-    createdAt: record.createdAt,
-    splat: record.splat,
-    image: record.image,
-    generation:record.generation,
-    collision:record.collision,
-    giProxy:record.giProxy?structuredClone(record.giProxy):null,
-    renderRoute: record.renderRoute,
-    renderCapabilities: record.renderCapabilities,
-    renderHandoffSchema: record.renderHandoffSchema,
-    sceneTransform: record.sceneTransform,
-    localLiquidEmitter: record.localLiquidEmitter,
-    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled,...(record.emission?{emission:record.emission}:{})}:{}),
-  };
-  workingScene.put(record);
-  sceneNavigation?.prepare(object);
-  applyGiProxySetting(record);
-  if (metadata.groupLabel) {
-    createSceneGroupForObjects([id], metadata.groupLabel, {
-      source: metadata.groupSource ?? metadata.source,
-      select: false,
-    });
-  }
-  setActiveSceneObject(id);
-  window._kaminosDirty?.();
-  return record;
+  const record = createSceneObjectRecord(object, metadata, {id, sceneTransform});
+  const admitted = sceneMembership.admit(record, {activate:true,
+    group:metadata.groupLabel?{label:metadata.groupLabel,source:metadata.groupSource??metadata.source,select:false}:null});
+  sceneSaveBlockedByFailedRestore = false;
+  return admitted;
 }
 
 window.selectSceneField=function(id,options={}) {
@@ -10212,6 +10162,7 @@ function createPageSceneMembershipOperations() {
     scene:workingScene,
     records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,load:addSceneObjectFromSource},
     roots:{
+      prepare(entry){sceneNavigation?.prepare(entry.object);applyGiProxySetting(entry);},
       attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneSaveBlockedByFailedRestore=false;},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
@@ -10248,10 +10199,11 @@ function createPageSceneMembershipOperations() {
       [FLAME_EMITTER_TYPE]:{retainRoot:true,remove:id=>window.kaminosBurnerAuthoring.remove(id),
         restored(){authoredFlamePresent=true;syncAuthoredFlameSources();}},
     },
+    createGroup:createSceneGroupForObjects,
     select:(ids,activeId)=>ids.length?setSceneSelection(ids,activeId):clearActiveSceneObjectSelection(),
     finishInteraction:()=>scenePlacementTools?.finish(false),
     captureContext:()=>({activeCameraId:sceneCameras?.read().settings.activeId??null}),
-    changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
+    changed({operation}){if(operation!=='admit'){renderSceneObjectList();updateTransformInspector();}window._kaminosDirty?.();},
     status:setInfo,
   });
 }
@@ -24895,7 +24847,7 @@ function writeAuthoredCameraView(view){
 }
 function mountAuthoredCamera(raw){
   const record=checkedCameraRecord(raw);let entry=workingScene.objects.find(o=>o.id===record.id);
-  if(!entry){const object=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xa2acb9}));object.userData.kaminosEditorOnly=true;entry={...record,object};workingScene.put(entry);scene.add(object);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
+  if(!entry){const object=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xa2acb9}));object.userData.kaminosEditorOnly=true;entry={...record,object};sceneMembership.admit(entry);scene.add(object);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   const aspect=sceneCameras?sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1]:16/9;
   const spec=cameraViewFromRecord(record,aspect),h=record.camera.projection==='orthographic'?spec.orthoScale/2:.65*Math.tan(spec.fov*Math.PI/360),w=h*aspect,z=-.65;
   const corners=[[-w,-h,z],[w,-h,z],[w,h,z],[-w,h,z]],points=[];
@@ -25248,7 +25200,7 @@ function mountSceneSpotLight(raw) {
   light.position.fromArray(record.transform.position);
   const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,record.light.aimDistance*record.transform.scale[2]);
   light.shadow.camera.updateProjectionMatrix();
-  if(!entry){entry={...record,object:marker};workingScene.put(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
+  if(!entry){entry={...record,object:marker};sceneMembership.admit(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   marker.userData.kaminosSceneObject={...record};window._kaminosDirty?.();return entry;
 }
 function bindingRimHideForRemoval(){if(rimLight)rimLight.visible=false;document.getElementById('rim-enabled').checked=false;}
@@ -26052,8 +26004,8 @@ function mountProceduralMesh(raw) {
   proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
-  workingScene.put(entry,{index:previous?workingScene.objects.indexOf(previous):null});
-  scene.add(bed.group);sceneNavigation?.prepare(bed.group);
+  sceneMembership.admit(entry,{index:previous?workingScene.objects.indexOf(previous):null});
+  scene.add(bed.group);
   if(workingScene.activeObjectId===record.id){currentMesh=bed.group;if(transformControls)attachViewportGizmo(bed.group);}
   return entry;
 }

@@ -25,7 +25,7 @@ existing chronological edit ledger drops its last reference,
 live. Workbench removal uses its existing scoped disposer so borrowed geometry,
 materials and textures remain with their owner.
 
-`scene-membership-operations.mjs` owns individual removal/insertion history,
+`scene-membership-operations.mjs` owns admission, individual removal/insertion history,
 retained-root restoration, group/selection recovery and owner-session removal.
 The page supplies source loading, root behavior and typed domain adapters,
 then attaches the existing chronological edit ledger. UI removal, generated
@@ -34,8 +34,19 @@ Domain adapters declare whether their roots survive in history and supply
 mount/removal/disposal behavior; adding a retained domain does not require
 changing a type whitelist inside the membership algorithm.
 
+Constructed records enter through `admit(record, {index, activate, group})`.
+Admission checks identity through the working-scene owner before navigation,
+grouping or selection effects. Domain constructors still own their roots and
+mounting. `scene-object-record.mjs` builds generic registration metadata using
+the existing domain validators; it does not mount or register the root.
+`reconstruct(record, context)` restores a retained root or uses the source
+adapter, then reapplies its saved properties without creating a history entry
+or selecting it. Individual Undo composes that operation with topology and
+selection recovery. Ordinary imports, Workbench registration and authored
+camera/light/procedural mounts consume the same admission operation.
+
 The composition page still connects domain adapters, render invalidation and UI
-projection. Registration, compound selection reconstruction and whole-scene
+projection. Compound selection reconstruction and whole-scene
 replacement remain page orchestration; this service does not extract those
 remaining application operations. `replaceObjects` and `clearMembership`
 are low-level operations for that composition layer; callers must also restore

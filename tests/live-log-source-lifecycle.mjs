@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {getSceneObjectRecords} from '../scene-persistence-core.js';
 import {FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
 
@@ -18,7 +19,7 @@ test('canonical scene normalization preserves disabled source state and refuses 
 test('disabled authored emission survives serialization and source registration',()=>{
   const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const context={structuredClone,sceneObjects:[],sceneNavigation:null,window:{},
-    LOCAL_LIQUID_EMITTER_TYPE:'water',FLAME_EMITTER_TYPE:'flame',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'mesh',
+    createSceneObjectRecord,LOCAL_LIQUID_EMITTER_TYPE:'water',FLAME_EMITTER_TYPE,CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'mesh',
     checkedObjectCollision:()=>null,canCollideWithFire:()=>false,setActiveSceneObject(){},giProxySettingFor:()=>null,applyGiProxySetting(){},
     sceneObjectMetadataFor:object=>object.userData.kaminosSceneObject,
     sceneObjectTransformState:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),getMaterialStateForObject:()=>[]};
@@ -26,12 +27,12 @@ test('disabled authored emission survives serialization and source registration'
   vm.runInContext(source.slice(source.indexOf('function registerSceneObject('),source.indexOf('window.selectSceneField='))+
     source.slice(source.indexOf('function serializeSceneObject('),source.indexOf('function readNumberControl(')),context);
   const object={userData:{}};
-  const original=context.registerSceneObject(object,{id:'flame-emitter',type:'flame',emissionEnabled:false});
+  const original=context.registerSceneObject(object,{id:'flame-emitter',type:FLAME_EMITTER_TYPE,emissionEnabled:false});
   const saved=context.serializeSceneObject(original);
   assert.equal(saved.emissionEnabled,false);
   const restored=context.registerSceneObject({userData:{}},JSON.parse(JSON.stringify(saved)));
   assert.equal(restored.emissionEnabled,false);assert.equal(restored.object.userData.kaminosSceneObject.emissionEnabled,false);
-  assert.equal(context.registerSceneObject({userData:{}},{id:'old-flame',type:'flame'}).emissionEnabled,true);
+  assert.equal(context.registerSceneObject({userData:{}},{id:'old-flame',type:FLAME_EMITTER_TYPE}).emissionEnabled,true);
 });
 
 test('actual experiment adapter restores a removed source without starting it',async()=>{
