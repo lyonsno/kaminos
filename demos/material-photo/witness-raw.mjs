@@ -1,12 +1,15 @@
-export async function readRawEvidence(evaluate, name) {
-  if (!['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm'].includes(name)) throw Error('Unknown raw evidence channel');
-  const source = `const {image,output}=window.__materialPhotoActions.materialEvidence();const name=${JSON.stringify(name)};
-    const value=name==='image'?image:name.startsWith('plane-')?{width:output.width,height:output.height,data:output.planes[name.slice(6)]}:output.maps[name];
+export async function readRawEvidence(evaluate, name, sourceExpression = 'window.__materialPhotoActions.materialEvidence()') {
+  if (!['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm',
+    'geometry-depth','geometry-normals','geometry-points','geometry-colors'].includes(name)) throw Error('Unknown raw evidence channel');
+  const source = `const {image,output,geometry}=${sourceExpression};const name=${JSON.stringify(name)};
+    const value=name==='image'?image:name.startsWith('geometry-')?{width:geometry.width,height:geometry.height,data:geometry[name.slice(9)]}:
+      name.startsWith('plane-')?{width:output.width,height:output.height,data:output.planes[name.slice(6)]}:output.maps[name];
     if(!value?.data)throw Error('Missing raw material evidence '+name);`;
   const raw = await evaluate(`(()=>{${source}return {width:value.width,height:value.height,type:value.data.constructor.name,byteLength:value.data.byteLength};})()`);
-  const plane = name.startsWith('plane-');
+  const plane = name.startsWith('plane-') || name.startsWith('geometry-');
+  const stride = name === 'geometry-depth' ? 4 : plane ? 12 : 4;
   if (!Number.isSafeInteger(raw?.width) || raw.width <= 0 || !Number.isSafeInteger(raw.height) || raw.height <= 0 ||
-      !Number.isSafeInteger(raw.byteLength) || raw.byteLength !== raw.width * raw.height * (plane ? 12 : 4) ||
+      !Number.isSafeInteger(raw.byteLength) || raw.byteLength !== raw.width * raw.height * stride ||
       !(plane ? raw.type === 'Float32Array' : ['Uint8Array','Uint8ClampedArray'].includes(raw.type))) throw Error('Invalid raw evidence layout');
   const bytes = Buffer.alloc(raw.byteLength);
   // A live Chrome/153 replay accepts 1 MiB replies but drops a 3 MiB reply.
