@@ -176,7 +176,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
-  let loaded=null,active=false,abort=null;
+  let loaded=null,active=false,abort=null,decodeRequested=false;
   let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null,preview:null,timing:null};
   let startedAt=null,generationStartedAt=null,generationFinished=false;
   const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt===null?{loadMs:clock()-startedAt}:{generationMs:clock()-generationStartedAt}):{})};
@@ -251,6 +251,10 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       catch(error){set({status:'failed',error:`persistence: ${errorIdentity(error).message}`});throw error;}
       finally{active=false;publish();}
     },
+    decodeNow(){
+      if(!active||state.status!=='running'||state.stage!=='Denoising'||decodeRequested||abort.signal.aborted)return false;
+      decodeRequested=true;set({canDecode:false,progress:'Decoding after the current diffusion step…'});return true;
+    },
     stop(){
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
@@ -267,9 +271,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const {width,height}=kleinImageDimensions(size,aspect);
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
-      active=true;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
+      active=true;decodeRequested=false;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
       startedAt=clock();generationStartedAt=null;generationFinished=false;
-      set({status:'loading',error:null,canStop:true,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
+      set({status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
@@ -299,8 +303,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         route=await session.registerRoute({routeId:spec.routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
         const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',
-          onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:{progress:'Swapping weights in from the browser cache…'});},
-          onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',percent:i/n*100,progress:`Denoising, step ${i} of ${n}`});},
+          shouldDecode:()=>decodeRequested,
+          onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
+          onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
           onPreview:frame=>{
             // GPU readback can land after Stop, save, or the next run. Only the
             // current inference may replace its own provisional image.
@@ -315,7 +320,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing()};
+        const provenance={schema:'kaminos.image-generation.v1',route:spec.routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{})};
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
@@ -330,7 +335,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(route){await route.drain();session.unregisterRoute(route.routeId);}
         if(frameRun)await frameRun.finish();
         if(previous&&previous!=='klein'&&previous!=='app'&&handoff?.has(previous))await handoff.activate(previous);
-        state.timing=timing();active=false;state.canStop=false;abort=null;publish();
+        state.timing=timing();active=false;state.canStop=false;state.canDecode=false;abort=null;publish();
       }
     },
   };
@@ -348,7 +353,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
+    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-decode" hidden>Decode now</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
@@ -369,6 +374,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;
     byId('asset-text-stop').hidden=!state.canStop&&state.status!=='stopping';byId('asset-text-stop').disabled=!state.canStop;
+    byId('asset-text-decode').hidden=!state.canDecode;
     byId('asset-text-stop').textContent=state.status==='stopping'?'Stopping…':'Stop';
     byId('asset-text-status').textContent=state.error||(state.status==='idle'?'':`${state.progress}${Number.isFinite(state.percent)&&state.status!=='complete'?` · ${Math.round(state.percent)}%`:''}`);
     const bar=byId('asset-text-progress');bar.hidden=!active;if(Number.isFinite(state.percent))bar.value=state.percent;else bar.removeAttribute('value');
@@ -379,6 +385,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     for(const option of levels.options)option.disabled=flux3&&option.value!=='4-bit';
     if(flux3)levels.value='4-bit';
   };
+  byId('asset-text-decode').onclick=()=>controller.decodeNow();
   byId('asset-text-stop').onclick=()=>controller.stop();
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{

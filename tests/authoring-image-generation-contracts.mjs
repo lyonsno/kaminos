@@ -373,3 +373,18 @@ test('elapsed labels distinguish running, completed and stopped generation',()=>
  assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'complete'),'Generated in 5.3 s');
  assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'stopped'),'Stopped after 5.3 s');
 });
+
+test('Decode now requests a saved early result without aborting and resets between runs',async()=>{
+ const gate=deferred(),h=harness({gate});
+ assert.equal(typeof h.service.decodeNow,'function','generation needs a separate decode action');
+ assert.equal(h.service.decodeNow(),false);
+ const run=h.service.run({prompt:'lantern',seed:1});
+ for(let i=0;i<20&&!h.generations.length;i++)await tick();
+ assert.equal(h.service.decodeNow(),true);
+ assert.equal(h.generations[0].shouldDecode(),true);
+ assert.equal(h.generations[0].schedule.signal.aborted,false);
+ gate.resolve();await run;assert.equal(h.delivered.length,1);
+ assert.equal(h.service.decodeNow(),false);
+ await h.service.run({prompt:'lantern',seed:2});
+ assert.equal(h.generations[1].shouldDecode(),false);
+});

@@ -398,11 +398,11 @@ export class KleinPipeline {
   // or 'fitN' for the prompt's own length plus N padding tokens (fewer tokens for the transformer).
   // onPreview({ width, height, rgba, step, steps }), if given, receives a rough image after each step:
   // the clean-image estimate at latent resolution (an eighth of the output), mapped linearly to RGB.
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, schedule = null }) {
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, shouldDecode = null, schedule = null }) {
     this.assertUsable();
     this.sched.setSchedule(schedule);
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview, shouldDecode });
     } catch (error) {
       await this.sched.discard();
       throw error;
@@ -411,7 +411,7 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, onPreview = null, dry = false }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, onPreview = null, shouldDecode = null, dry = false }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
@@ -471,13 +471,19 @@ export class KleinPipeline {
     const sched = this.denoiseSchedule(imgTokens, steps);
     onPhase?.('denoise');
     t.stepMs = [];
+    let earlyDecoded = false;
     for (let i = 0; i < steps; i++) {
       t0 = performance.now();
       await this.transformer.forward(sched.forwardArgs(i));
       if (onPreview || dry) await this.encodePreview(sched.sigmas[i], latH, latW, i + 1, steps, onPreview);
-      await this.transformer.eulerStep(Math.fround(sched.sigmas[i + 1] - sched.sigmas[i]));
+      // A full VAE decode of this step's clean-image estimate, using the same
+      // x0 = x_t - sigma*v projection as the live preview. This is an early
+      // estimate, not a claim that the remaining sampling schedule ran.
+      earlyDecoded = !dry && i + 1 < steps && !!shouldDecode?.();
+      await this.transformer.eulerStep(Math.fround((earlyDecoded ? 0 : sched.sigmas[i + 1]) - sched.sigmas[i]));
       t.stepMs.push(performance.now() - t0);
       onStep?.(i + 1, steps);
+      if (earlyDecoded) break;
     }
     t0 = performance.now();
     onPhase?.('decode');
@@ -504,6 +510,6 @@ export class KleinPipeline {
     t.totalMs = t.embeddingFetchMs + t.textEncodeMs + (t.swapMs ?? 0) + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
     const duties = this.sched.stats.history.splice(0);
     this.promptCache.key = promptKey;
-    return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties };
+    return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties, sampling: { stepsRequested: steps, stepsCompleted: t.stepMs.length, earlyDecoded } };
   }
 }

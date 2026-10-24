@@ -447,3 +447,8 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate:not([hidden]
 body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) min(68vh,calc(100vh - 222px));}
 @media(max-width:800px){body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) 180px min(60vh,calc(100vh - 402px));}}
 @container asset-pane (max-width:640px){#asset-generate[data-image-expanded=true]:not([hidden]){grid-template-columns:1fr;}#asset-generate[data-image-expanded=true] .asset-image-view{flex-basis:260px;}}
+
+.asset-image-view{touch-action:none;}
+.asset-image-view[data-zoomed=true]{cursor:grab;}
+.asset-image-view[data-zoomed=true]:active{cursor:grabbing;}
+.asset-image-view>img,.asset-image-view>canvas{transform-origin:center;user-select:none;}
