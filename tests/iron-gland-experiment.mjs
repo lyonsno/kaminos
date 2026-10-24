@@ -20,6 +20,7 @@ const result = pinch => {
 };
 async function fixture() {
   const tracks = [];
+  let modelData={},sessionData={},releases=0,routeCreations=0;
   class Track extends EventTarget {
     readyState = 'live'; listeners = new Set();
     addEventListener(type, listener, options) { if(type==='ended')this.listeners.add(listener); super.addEventListener(type,listener,options); }
@@ -31,22 +32,24 @@ async function fixture() {
     requestVideoFrameCallback(fn) { this.callback=fn; return 1; }, cancelVideoFrameCallback() { this.callback=null; } };
   const window = Object.assign(new EventTarget(), {innerWidth:1440,innerHeight:1000,indexedDB:{},
     navigator:{mediaDevices:{getUserMedia:async()=>{const t=new Track();tracks.push(t);return {getTracks:()=>[t],getVideoTracks:()=>[t]};}}},
-    kaminosAppGpu:async()=>({session:async()=>({})})});
+    kaminosAppGpu:async()=>({session:async()=>sessionData})});
   const document = {defaultView:window,getElementById:()=>null,createElement:tag=>{
     if(tag==='video')return video;
     if(tag==='canvas')return {width:0,height:0,getContext:()=>({drawImage(){},setTransform(){},resetTransform(){}})};
     throw Error(`unexpected element ${tag}`);
   }};
   let pending = result(.6), frameCallback, disposed=0;
-  const route = {identity:{routeId:'unit-fixture'},infer:()=>Promise.resolve(pending),release(){}};
+  const route = {identity:{routeId:'unit-fixture'},infer:()=>Promise.resolve(pending),release(){releases++;}};
   const definition = compile(THREE.Mesh,THREE.PlaneGeometry,THREE.MeshBasicMaterial,THREE.CanvasTexture,THREE.SRGBColorSpace,
-    async()=>route,async()=>({}),async()=>({}),()=>({get:async()=>({})}),handObservation,createHoverController,createMechanism);
+    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism);
   const attached=[],events=[];
   const scene = {attach:async(root,options)=>{attached.push({root,options});return {id:root.uuid,root};},
     setView:()=>{},redraw(){},onFrame:fn=>{frameCallback=fn;return()=>{frameCallback=null;};},dispose:async()=>{disposed++;}};
   const owner = await definition.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{},record:e=>events.push(e)});
   await owner.operations.loadModels();
   return {owner,tracks,attached,events,video,
+    setModelData:value=>{modelData=value;},setSessionData:value=>{sessionData=value;},
+    get releases(){return releases;},get routeCreations(){return routeCreations;},
     async frame(value) { pending=value;const cb=video.callback;video.callback=null;assert.ok(cb,'frame scheduled');cb();await flush(); },
     tick() { frameCallback?.({timestampMs:1000}); }, get disposed(){return disposed;}};
 }
@@ -64,6 +67,42 @@ test('camera background cannot depth-clip the closed, open or rotated mechanism'
     const box=new THREE.Box3().setFromObject(mechanism);
     assert.ok(box.min.z<plane.position.z,'fixture actually exercises geometry behind the camera plane');
   } finally { await f.owner.dispose(); }
+});
+
+test('model replacement is rejected while stopped inference drains, then succeeds', async () => {
+  const f=await fixture();let complete,stopping;
+  try {
+    await f.owner.operations.start();await f.frame(new Promise(resolve=>{complete=resolve;}));
+    stopping=f.owner.operations.stop();
+    await assert.rejects(async()=>f.owner.operations.loadModels(),/inference.*finish|drain/i);
+    assert.equal(f.releases,0,'active inference still owns the route resources');
+    complete(result(.6));await stopping;
+    await f.owner.operations.loadModels();
+    assert.equal(f.releases,1);assert.equal(f.routeCreations,2);
+  } finally {complete?.(result(.6));await stopping;await f.owner.dispose();}
+});
+
+test('Start cannot overlap an asynchronous model replacement', async () => {
+  const f=await fixture();let complete,loading;
+  try {
+    f.setModelData(new Promise(resolve=>{complete=resolve;}));
+    loading=f.owner.operations.loadModels();
+    assert.throws(()=>f.owner.operations.start(),/model.*load|loading/i);
+    assert.equal(f.tracks.length,0);
+    complete({});await loading;
+    await f.owner.operations.start();assert.equal(f.tracks.length,1);
+  } finally {complete?.({});await loading;await f.owner.dispose();}
+});
+
+test('disposal during asynchronous session acquisition never creates a new route', async () => {
+  const f=await fixture();let complete,loading,disposing;
+  try {
+    f.setSessionData(new Promise(resolve=>{complete=resolve;}));
+    loading=f.owner.operations.loadModels();await flush();
+    disposing=f.owner.dispose();complete({});await loading;await disposing;
+    assert.equal(f.routeCreations,1,'disposed consumer must not allocate another model route');
+    assert.equal(f.releases,1);
+  } finally {complete?.({});await loading;if(disposing)await disposing;else await f.owner.dispose();}
 });
 
 test('external camera end hides a held pinch and rejects its late inference', async () => {

@@ -41,7 +41,7 @@ export default {
     if (!(Number.isFinite(threshold) && threshold >= 0 && threshold <= 1)) { await scene.dispose(); throw Error('invalid detector threshold'); }
     let error = null, modelSource = null, frameCount = 0, missCount = 0, last = null, lastFrameAt = null;
     let startButton, loadButton, status, inputFiles;
-    const read = () => ({ running, starting, loading, error, modelSource, handedness, mirror, size, threshold, frameCount, missCount,
+    const read = () => ({ running, starting, loading, draining: !running && !!flight, error, modelSource, handedness, mirror, size, threshold, frameCount, missCount,
       identity: route?.identity ?? null, source: 'camera', geometryAuthority: 'camera-relative-2d-landmarks',
       interaction: structuredClone(state), cameraVisible: plane.visible, objectId: machineAsset.id,
       imageSize: [display.width, display.height], lastAcquisition: last?.acquisition ?? null,
@@ -50,7 +50,7 @@ export default {
       lighting: 'virtual-object-only', occlusion: 'camera-plane-only' });
     const sync = () => {
       if (startButton) { startButton.textContent = starting ? 'Cancel camera' : running ? 'Stop camera' : 'Start camera'; startButton.disabled = loading || disposed || !route; }
-      if (loadButton) loadButton.disabled = loading || disposed || running || starting;
+      if (loadButton) loadButton.disabled = loading || disposed || running || starting || !!flight;
       if (status) status.textContent = error ?? (loading ? 'Loading models' : starting ? 'Camera permission' : !route ? 'Models not loaded' : !running ? 'Camera off' : !state.visible ? 'No hand detected' : state.mode === 'grab' ? 'Pinch held' : 'Hover');
     };
     const frame = () => {
@@ -94,7 +94,7 @@ export default {
           error = String(cause?.message ?? cause); running = false; generation++;
           releaseCamera();
           hide(); sync(); record({ kind: 'iron-gland.failure', phase: 'applied', effective: read() });
-        }).finally(() => { if (flight === current) flight = null; schedule(ticket); });
+        }).finally(() => { if (flight === current) flight = null; sync(); schedule(ticket); });
         flight = current;
       });
     };
@@ -109,6 +109,7 @@ export default {
     };
     const start = () => {
       if (disposed) throw Error('experiment closed');
+      if (loading) throw Error('Wait for model loading to finish');
       if (!route) throw Error('load hand models first');
       if (running || starting) return startTask ?? Promise.resolve(read());
       const ticket = ++generation;
@@ -146,6 +147,7 @@ export default {
     const loadModels = ({ files, base } = {}) => {
       if (disposed) throw Error('experiment closed');
       if (running || starting) throw Error('stop camera before replacing models');
+      if (flight) throw Error('Wait for the current inference to finish before replacing models');
       if (loadTask) return loadTask;
       loading = true; error = null; sync();
       const task = (async () => {
@@ -153,11 +155,14 @@ export default {
         if (!models) throw Error('Choose a prepared hand model folder');
         if (disposed) return read();
         const appGpu = await window.kaminosAppGpu?.();
+        if (disposed) return read();
         if (!appGpu) throw Error('Workbench WebGPU host unavailable');
+        const session = await appGpu.session();
+        if (disposed) return read();
         // This consumer owns a single route lease. Replacing its files releases
         // that lease before re-registering on the same borrowed app session.
         route?.release(); route = null; modelSource = null;
-        const next = await createBrowserHandMeshRoute({ session: await appGpu.session(), mobreconPackageSource: models.mobrecon, detectorPackageSource: models.detector });
+        const next = await createBrowserHandMeshRoute({ session, mobreconPackageSource: models.mobrecon, detectorPackageSource: models.detector });
         if (disposed) { next.release(); return read(); }
         route = next; modelSource = files ? 'local-files' : base ? 'local-server' : 'browser-storage';
         if (files) await store.put(models).catch(() => {});
