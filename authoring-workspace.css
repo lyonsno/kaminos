@@ -447,6 +447,9 @@ body[data-workspace=workbench] #authoring-viewport-tools .selection-setting sele
 #asset-step-source-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;}
 #asset-generate[data-image-expanded=true]:not([hidden]){grid-template-columns:minmax(190px,1fr) minmax(300px,3fr) minmax(120px,.7fr);}
 #asset-generate[data-image-expanded=true] .asset-image-view{flex-basis:260px;min-height:260px;}
+/* Keep the whole compact preview above the scroll fold; larger manual drawer sizes still apply. */
+body[data-workspace=authoring].has-assets-panel:has(#asset-generate:not([hidden])){grid-template-rows:42px minmax(180px,1fr) min(max(var(--authoring-assets-height,0px),460px),calc(100vh - 222px));}
+@media(max-width:800px){body[data-workspace=authoring].has-assets-panel:has(#asset-generate:not([hidden])){grid-template-rows:42px minmax(180px,1fr) 180px min(max(var(--authoring-assets-height,0px),460px),calc(100vh - 402px));}}
 body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) min(68vh,calc(100vh - 222px));}
 @media(max-width:800px){body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-expanded=true]:not([hidden])){grid-template-rows:42px minmax(180px,1fr) 180px min(60vh,calc(100vh - 402px));}}
 @container asset-pane (max-width:640px){#asset-generate[data-image-expanded=true]:not([hidden]){grid-template-columns:1fr;}#asset-generate[data-image-expanded=true] .asset-image-view{flex-basis:260px;}}
