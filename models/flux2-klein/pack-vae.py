@@ -27,6 +27,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-dir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--encoder",action="store_true",help="Pack the reference-image encoder and BN statistics instead of the decoder")
     args = ap.parse_args()
     src = Path(args.model_dir) / "vae"
     out = Path(args.out)
@@ -49,7 +50,10 @@ def main():
         offset += len(data)
 
     for key in f.keys():
-        if key.startswith("encoder.") or key.startswith("quant_conv") or key == "bn.num_batches_tracked":
+        if key == "bn.num_batches_tracked":
+            continue
+        is_encoder=key.startswith(("encoder.","quant_conv"))
+        if not key.startswith("bn.") and is_encoder != args.encoder:
             continue
         w = f.get_tensor(key).to(torch.float32)
         if key.startswith("bn."):
@@ -62,9 +66,10 @@ def main():
         add(key, w.numpy(), np.float16)
 
     blob = b"".join(parts)
-    (out / "vae-decoder.bin").write_bytes(blob)
-    manifest = {"schema": "kaminos.flux2-klein.vae-decoder-weights.v0", "source": source_identity(src), "config": config,
-                "conv3x3_layout": "[Cout, ky, kx, Cin]", "bundle": {"file": "vae-decoder.bin", "bytes": len(blob),
+    filename = "vae-encoder.bin" if args.encoder else "vae-decoder.bin"
+    (out / filename).write_bytes(blob)
+    manifest = {"schema": "kaminos.flux2-klein.vae-encoder-weights.v0" if args.encoder else "kaminos.flux2-klein.vae-decoder-weights.v0", "source": source_identity(src), "config": config,
+                "conv3x3_layout": "[Cout, ky, kx, Cin]", "bundle": {"file": filename, "bytes": len(blob),
                 "sha256": hashlib.sha256(blob).hexdigest(), "tensors": entries}}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
     print(len(entries), "tensors", len(blob), "bytes")

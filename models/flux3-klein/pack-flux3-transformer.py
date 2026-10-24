@@ -52,11 +52,14 @@ FUSED_IN = ["attn.to_q.weight", "attn.to_k.weight", "attn.to_v.weight", "ff.line
 FUSED_OUT = ["attn.to_out.0.weight", "ff.linear_out.weight"]
 
 
-def block_prefixes(config):
+def block_prefixes(config, include_reference=False):
     for i in range(config["num_layers"]):
         yield f"txt{i:02d}", f"txt_mode_blocks.{i}."
     for i in range(config["num_layers"]):
         yield f"img{i:02d}", f"mode_blocks.image.{i}."
+    if include_reference:
+        for i in range(config["num_layers"]):
+            yield f"ref{i:02d}", f"mode_blocks.image_cond.{i}."
     for i in range(config["num_single_layers"]):
         yield f"single{i:02d}", f"single_transformer_blocks.{i}."
 
@@ -68,6 +71,7 @@ def main():
     ap.add_argument("--format", default="i4", choices=["f16", "i8", "i4", "i3", "i2"])
     ap.add_argument("--globals-format", default="i8", choices=["f16", "i8", "i4", "i3", "i2"])
     ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--include-reference", action="store_true")
     ap.add_argument("--lora")
     ap.add_argument("--lora-strength", type=float, default=1.0)
     ap.add_argument("--shift", type=float, default=None)
@@ -84,7 +88,7 @@ def main():
     if args.lora:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from flux3_lora import lora_deltas
-        deltas = lora_deltas(args.lora, args.lora_strength)
+        deltas = lora_deltas(args.lora, args.lora_strength, keep_image_cond=args.include_reference)
     used = set()
     weight_map = json.loads((src / "diffusion_pytorch_model.safetensors.index.json").read_text())["weight_map"]
     handles = {}
@@ -101,7 +105,9 @@ def main():
 
     D = config["num_attention_heads"] * config["attention_head_dim"]
     bundles = {"globals": [(n, t(p)) for n, p in GLOBALS if flow_map or not n.startswith("target_")]}
-    for bname, p in block_prefixes(config):
+    if args.include_reference:
+        bundles["globals"] += [(n,t(p)) for n,p in [("reference_embedder","x_embedders.image_cond.weight"),("mod_early_ref","early_stream_modulations.image_cond.linear.weight"),("mod_single_ref","single_stream_modulations.image_cond.linear.weight")]]
+    for bname, p in block_prefixes(config,args.include_reference):
         ins = [t(p + n) for n in FUSED_IN]
         outs = [t(p + n) for n in FUSED_OUT]
         assert D % args.group == 0, "a quantization group would straddle the to_out fusion boundary"
@@ -110,7 +116,7 @@ def main():
 
     manifest = {"schema": "kaminos.flux3-klein.transformer-weights.v1", "format": args.format,
                 "globals_format": args.globals_format, "group": args.group, "globals_group": args.group,
-                "layout": "row-major [out, in]", "mode": "text-to-image", "source": source_identity(src),
+                "layout": "row-major [out, in]", "mode": "text-and-image" if args.include_reference else "text-to-image", "source": source_identity(src),
                 "config": config, "bundles": {}, "conversion": {},
                 "sampling": {"shift": args.shift if args.shift is not None else (6.93 if flow_map else 3.0),
                              "steps": args.steps if args.steps is not None else (16 if flow_map else 4)}}
