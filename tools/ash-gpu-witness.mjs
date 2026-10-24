@@ -1,0 +1,46 @@
+// Capture the actual GPU consumer, preserving interventions and every captured frame.
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';
+import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
+const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
+const out=resolve(args.get('--out')),origin=args.get('--url'),repo=resolve(args.get('--repo'));
+mkdirSync(out,{recursive:true});let browser,page;
+const report={status:'running',phase:'identity',requested:{origin,repo,cellSize:Number(args.get('--cell-size')??.012)},errors:[],consoleErrors:[],interventions:[],frames:[]};
+const write=()=>writeFileSync(resolve(out,'report.json'),JSON.stringify(report,null,2));write();
+try{
+ report.server=await verifyAuthoringServer({origin,repoRoot:repo});report.sources={};
+ for(const file of ['ash/gpu-plan.mjs','ash/gpu-patch.mjs','experiments/ash-gpu-deposition.experiment.mjs']){const response=await fetch(new URL(file,origin));assert.ok(response.ok);const hash=b=>createHash('sha256').update(b).digest('hex'),served=hash(Buffer.from(await response.arrayBuffer()));assert.equal(served,hash(readFileSync(resolve(repo,file))));report.sources[file]=served;}
+ report.launch=fluidBrowserLaunch({executable:args.get('--browser'),debugPort:0,userDataDir:resolve(out,'profile'),width:1440,height:1000});
+ const {chromium}=await import(args.get('--playwright'));
+ browser=await chromium.launchPersistentContext(resolve(out,'profile'),{executablePath:report.launch.executable,headless:true,viewport:{width:1440,height:1000},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--disable-gpu-sandbox','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+ page=browser.pages()[0];await page.addInitScript(()=>{const original=console.error;console.error=(...args)=>{if(String(args[0]).includes('Object3D.add'))original(new Error('Object3D.add call site').stack);original(...args);};});page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
+ report.phase='mount';write();const url=new URL('/?workspace=workbench&experiment=ash-gpu-deposition',origin);url.searchParams.set('experiment_inputs',JSON.stringify({cellSize:report.requested.cellSize}));await page.goto(url.href);
+ await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='ash-gpu-deposition'||document.body.innerText.includes('Experiments unavailable:'));assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id),'ash-gpu-deposition');
+ const invoke=async(name,input)=>{report.interventions.push({name,input});const result=await page.evaluate(([n,i])=>window.kaminosWorkbenchExperiments.invoke(n,i),[name,input]);write();return result;};
+ await invoke('play',false);report.initial=await invoke('read');assert.equal(report.initial.backend,'webgpu-pair-exchange');assert.equal(report.initial.surface,'gpu-compacted-indirect-cells');assert.equal(report.initial.layout.cellSize,report.requested.cellSize);
+ if(args.get('--negative-unmounted')==='yes'){await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await invoke('read');throw Error('Unmounted route accepted');}
+ const capture=async(name)=>{await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const state=await invoke('read');assert.deepEqual(state.errors,[]);await page.screenshot({path:resolve(out,name+'.png')});report.frames.push({name,state});write();};
+ await capture('00-empty');report.phase='deposit';await page.getByRole('button',{name:'Add ash',exact:true}).click();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).busy);
+ await invoke('advance',{steps:8});const before=await invoke('snapshot');writeFileSync(resolve(out,'before.json'),JSON.stringify(before));
+ const mass=state=>state.patch.values.reduce((a,b)=>a+b,0)*state.patch.layout.cellSize**3;
+ assert.ok(Math.abs(mass(before)-.24)<.00001);assert.ok(before.patch.visibleCells>0);await capture('01-large-deposit');
+ report.phase='drag';const ground=report.initial.identity.groundY;
+ await invoke('moveContact',{position:[-.65,ground+.10,1.1],radius:.18});
+ for(let i=0;i<=8;i++){
+  await invoke('moveContact',{position:[-.65+i*.16,ground+.10,1.1]});await invoke('advance',{steps:4});
+  await capture(`drag-${String(i).padStart(2,'0')}`);
+ }
+ const after=await invoke('snapshot');writeFileSync(resolve(out,'after.json'),JSON.stringify(after));assert.ok(Math.abs(mass(after)-mass(before))<.00001);assert.notDeepEqual(after.patch.values,before.patch.values);report.mass={before:mass(before),after:mass(after)};
+ // Exercise ordinary host frame evolution, not only explicit advance.
+ report.phase='live';await invoke('play',true);const step=(await invoke('read')).steps;await invoke('moveContact',{position:[.4,ground+.1,.9]});await page.waitForFunction(async s=>(await window.kaminosWorkbenchExperiments.read()).steps>s+2,step);await invoke('play',false);await capture('11-live-contact');
+ const checkpoint=await invoke('snapshot');writeFileSync(resolve(out,'checkpoint.json'),JSON.stringify(checkpoint));
+ report.phase='restore';await page.reload();await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='ash-gpu-deposition'||document.body.innerText.includes('Experiments unavailable:'));assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id),'ash-gpu-deposition');await invoke('play',false);await invoke('restore',checkpoint);const restored=await invoke('snapshot');assert.deepEqual(restored.patch.values,checkpoint.patch.values);assert.deepEqual(restored.contact,checkpoint.contact);await capture('12-restored');
+ const bad=structuredClone(checkpoint);bad.patch.layout.cellSize*=2;await assert.rejects(()=>invoke('restore',bad));assert.deepEqual((await invoke('snapshot')).patch.values,checkpoint.patch.values);
+ if(args.get('--negative-pageerror')==='yes'){const failed=page.waitForEvent('pageerror');await page.evaluate(()=>setTimeout(()=>{throw Error('injected GPU ash witness failure');},0));await failed;}
+ assert.deepEqual(report.errors,[]);assert.deepEqual((await invoke('read')).errors,[]);assert.deepEqual(report.consoleErrors,[]);
+ report.status='passed';report.phase='complete';
+}catch(error){report.status='failed';report.error=String(error.stack??error);if(page){report.lastPage=await page.evaluate(()=>({text:document.body.innerText,mount:window.kaminosWorkbenchExperiments?.state()})).catch(String);await page.screenshot({path:resolve(out,'failed.png')}).catch(()=>{});}process.exitCode=1;
+}finally{await browser?.close();report.browserClosed=true;write();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:resolve(out,'report.json')}));}

@@ -77,3 +77,8 @@ test('an absent repetition begins, previews, cancels and undoes through the real
  let settings=null;const record={id:'source'},edits=createSceneEdits({read(){throw Error('unexpected pose read');},write(){throw Error('unexpected pose write');}}),context={repetitionOwner:()=>({id:'source',record}),polyEdit:null,repetitionEditTargets:new Set(),scenePlacementTools:{edits},checkedRepetition,writeSceneRepetition:(id,value)=>{settings=value;record.repetition=value;}};vm.createContext(context);vm.runInContext(source,context);
  const id=context.ensureRepetitionTarget('source');edits.begin(id,'Array');edits.preview({settings:config()});assert.equal(settings.count,6);edits.cancel();assert.equal(settings,null);edits.apply(id,{settings:config()});assert.equal(settings.count,6);edits.apply(id,{settings:null});assert.equal(settings,null);edits.undo();assert.equal(settings.count,6);edits.undo();assert.equal(settings,null);
 });
+
+test('inspecting a root with no repetition copies does not add an undefined child',()=>{
+ const root=new T.Group();const original=root.add;const calls=[];root.add=function(...nodes){calls.push(nodes);return original.apply(this,nodes);};
+ assert.equal(withoutRepetitionCopies(root,()=>42),42);assert.equal(calls.length,0);
+});
