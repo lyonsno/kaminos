@@ -33,8 +33,10 @@ fn load_in(m: u32, k: u32) -> f32 {
   let oy = m / p.Wout; let ox = m % p.Wout;
   let tap = k / p.Cin; let ci = k % p.Cin;
   if (p.taps == 1u) { return f32(x[m * p.Cin + ci]); }
-  let iy = i32(oy) + i32(tap / 3u) - 1; let ix = i32(ox) + i32(tap % 3u) - 1;
-  if (iy < 0 || ix < 0 || iy >= i32(p.Hout) || ix >= i32(p.Wout)) { return 0.0; }
+  let down = p.up == 2u;
+  let iy = select(i32(oy) + i32(tap / 3u) - 1, i32(oy * 2u + tap / 3u), down);
+  let ix = select(i32(ox) + i32(tap % 3u) - 1, i32(ox * 2u + tap % 3u), down);
+  if (iy < 0 || ix < 0 || iy >= i32(select(p.Hout,p.Hin,down)) || ix >= i32(select(p.Wout,p.Win,down))) { return 0.0; }
   var sy = u32(iy); var sx = u32(ix);
   if (p.up == 1u) { sy = sy / 2u; sx = sx / 2u; }
   return f32(x[(sy * p.Win + sx) * p.Cin + ci]);
@@ -94,8 +96,10 @@ fn load4(m: u32, k: u32) -> vec4<f32> {
   let tap = k / p.Cin; let ci = k % p.Cin;
   if (p.taps == 1u) { return vec4<f32>(x[(m * p.Cin + ci) / 4u]); }
   let oy = m / p.Wout; let ox = m % p.Wout;
-  let iy = i32(oy) + i32(tap / 3u) - 1; let ix = i32(ox) + i32(tap % 3u) - 1;
-  if (iy < 0 || ix < 0 || iy >= i32(p.Hout) || ix >= i32(p.Wout)) { return vec4<f32>(0.0); }
+  let down = p.up == 2u;
+  let iy = select(i32(oy) + i32(tap / 3u) - 1, i32(oy * 2u + tap / 3u), down);
+  let ix = select(i32(ox) + i32(tap % 3u) - 1, i32(ox * 2u + tap % 3u), down);
+  if (iy < 0 || ix < 0 || iy >= i32(select(p.Hout,p.Hin,down)) || ix >= i32(select(p.Wout,p.Win,down))) { return vec4<f32>(0.0); }
   var sy = u32(iy); var sx = u32(ix);
   if (p.up == 1u) { sy = sy / 2u; sx = sx / 2u; }
   return vec4<f32>(x[((sy * p.Win + sx) * p.Cin + ci) / 4u]);
@@ -280,16 +284,16 @@ export class KleinVaeDecoder {
   // Under a cooperative schedule a convolution above the duty budget runs as pixel-row
   // ranges (conv v2 only) with a split point between them.
   // xType/cType: storage types of x and out (default: the activation type).
-  async conv(enc, x, out, name, { Hin, Win, Cin, up = false, epilogue = 'bias', xType = this.actType, cType = this.actType }) {
+  async conv(enc, x, out, name, { Hin, Win, Cin, up = false, down = false, epilogue = 'bias', xType = this.actType, cType = this.actType }) {
     const wt = this.t(`${name}.weight`), bt = this.t(`${name}.bias`);
     const [Cout, K] = wt.shape; const taps = K / Cin;
-    const Hout = up ? Hin * 2 : Hin, Wout = up ? Win * 2 : Win, M = Hout * Wout;
+    const Hout = up ? Hin * 2 : down ? Math.floor(Hin/2) : Hin, Wout = up ? Win * 2 : down ? Math.floor(Win/2) : Win, M = Hout * Wout;
     const v2 = (this.convVersion ?? 2) === 2 && Cin % 4 === 0;
     const st = this.sharedType ?? 'f32';
     const pipe = v2 ? this.pipeline(`conv2-${epilogue}-${st}-${xType}-${cType}`, convShaderV2(epilogue, st, xType, cType))
       : this.pipeline(`conv-${epilogue}-${xType}-${cType}`, convShader(epilogue, xType, cType));
     const issue = (mBase, mCount) => {
-      this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, up ? 1 : 0, mBase, 0, 0, 0])],
+      this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, down ? 2 : up ? 1 : 0, mBase, 0, 0, 0])],
         Math.ceil(Cout / 64), Math.ceil(mCount / 64));
       this.sched.addFlops(2 * mCount * Cout * K);
     };

@@ -1,5 +1,5 @@
-// FLUX.3 Klein transformer forward on WebGPU, text-to-image only.
-// Mirrors diffusers Flux3Transformer2DModel (flow_map true or false) without the reference-image mode:
+// FLUX.3 Klein transformer forward on WebGPU, with optional reference image tokens.
+// Mirrors diffusers Flux3Transformer2DModel (flow_map true or false) including the optional reference-image mode:
 // timestep and flow-map target embeddings, per-mode modulation, text and image per-mode blocks
 // (each mode attends within itself), joint single blocks over [txt; img] with per-mode
 // modulation, AdaLN output norm and projection. Every block is one LayerNorm feeding parallel
@@ -14,10 +14,10 @@ export const FLUX3_ROPE_THETA = 10000;
 export const FLUX3_IMAGE_ROPE_SCALE = 0.5;
 
 // (t=0, h*0.5, w*0.5, l=0) for each latent-grid token, row-major (Flux3 _prepare_image_ids).
-export function flux3ImageIds(h, w) {
+export function flux3ImageIds(h, w, imageIndex = 0) {
   const ids = new Float64Array(h * w * 4);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const i = (y * w + x) * 4; ids[i + 1] = y * FLUX3_IMAGE_ROPE_SCALE; ids[i + 2] = x * FLUX3_IMAGE_ROPE_SCALE;
+    const i = (y * w + x) * 4; ids[i + 1] = y * FLUX3_IMAGE_ROPE_SCALE; ids[i + 2] = x * FLUX3_IMAGE_ROPE_SCALE; ids[i + 3] = imageIndex;
   }
   return ids;
 }
@@ -30,31 +30,32 @@ export function flux3TextIds(n) {
 }
 
 export class Flux3Transformer extends KleinTransformer {
-  allocate(imgTokens, txtTokens) {
+  allocate(imgTokens, txtTokens, refTokens = 0) {
     this.release();
-    const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens, W = 3 * D + 2 * F;
+    const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens + refTokens, W = 3 * D + 2 * F;
     const f = n => this.buffer(n * 4);
     // Attention runs over the text mode, the image mode and the joint sequence; the scores buffer
     // holds the largest head group any of them uses.
-    const scores = Math.max(...[L, imgTokens, txtTokens].map(n => Math.min(H, scoreHeads(n)) * n * n));
-    this.shape = { imgTokens, txtTokens, L };
+    const scores = Math.max(...[L, imgTokens, txtTokens, refTokens || 1].map(n => Math.min(H, scoreHeads(n)) * n * n));
+    this.shape = { imgTokens, txtTokens, refTokens, L };
     this.act = {
-      latents: f(imgTokens * 128), promptEmbeds: f(txtTokens * this.cfg.joint_attention_dim),
+      reference: f(Math.max(1, refTokens) * 128), latents: f(imgTokens * 128), promptEmbeds: f(txtTokens * this.cfg.joint_attention_dim),
       tproj: f(256), tmp: f(D), temb: f(D), target: f(D), tembImg: f(D), tembZero: f(D), siluImg: f(D), siluZero: f(D),
-      mods: f(4 * 3 * D + 2 * D), // early img | early txt | single img | single txt | norm_out
+      mods: f((refTokens ? 20 : 14) * D), // early img | early txt | single img | single txt | norm_out
       hs: f(L * D), norm: f(L * D), proj: f(L * W), rope: f(L * HEAD * 2),
       q: f(H * L * HEAD), k: f(H * L * HEAD), vt: f(H * L * HEAD), o: f(H * L * HEAD), scores: f(scores),
       cat: f(L * (D + F)), outNorm: f(imgTokens * D), velocity: f(imgTokens * 128),
     };
-    this.modOff = { earlyImg: 0, earlyTxt: 3 * D, singleImg: 6 * D, singleTxt: 9 * D, out: 12 * D };
+    this.modOff = { earlyImg: 0, earlyTxt: 3 * D, singleImg: 6 * D, singleTxt: 9 * D, out: 12 * D, earlyRef: 14 * D, singleRef: 17 * D };
   }
 
-  prepare({ latents, promptEmbeds, imgIds, txtIds }) {
+  prepare({ latents, promptEmbeds, imgIds, txtIds, reference = null, referenceIds = null }) {
     const dev = this.device, a = this.act;
-    const { txtTokens: Lt, L } = this.shape;
+    const { txtTokens: Lt, imgTokens: Li, refTokens: Lr, L } = this.shape;
     dev.queue.writeBuffer(a.latents, 0, latents);
     if (promptEmbeds) dev.queue.writeBuffer(a.promptEmbeds, 0, promptEmbeds);
     const allIds = new Float64Array(L * 4); allIds.set(txtIds, 0); allIds.set(imgIds, Lt * 4);
+    if(Lr){if(reference?.length!==Lr*128||referenceIds?.length!==Lr*4)throw Error('Reference latent or position shape mismatch');dev.queue.writeBuffer(a.reference,0,reference);allIds.set(referenceIds,(Lt+Li)*4);}
     dev.queue.writeBuffer(a.rope, 0, ropeTable(allIds, FLUX3_ROPE_THETA));
   }
 
@@ -110,7 +111,7 @@ export class Flux3Transformer extends KleinTransformer {
   // `tModel`: this step's sigma * 1000; `targetModel`: the sigma this step jumps to, * 1000 (flow maps only).
   async forward({ tModel, targetModel }, taps = null) {
     const a = this.act, D = this.D, enc = this.sched;
-    const { imgTokens: Li, txtTokens: Lt, L } = this.shape;
+    const { imgTokens: Li, txtTokens: Lt, refTokens: Lr, L } = this.shape;
     const silu = this.pipeline('silu', siluShader()), add = this.pipeline('axpy', axpyShader());
     const flush = async (name, buf, rows, cols, byteOffset = 0) => {
       if (taps) { await this.sched.flush(name); await taps(name, buf, rows, cols, byteOffset); return; }
@@ -139,13 +140,18 @@ export class Flux3Transformer extends KleinTransformer {
     await this.linear(enc, a.siluImg, 1, this.w('globals', 'mod_single_img'), a.mods, { cOff: m.singleImg });
     await this.linear(enc, a.siluZero, 1, this.w('globals', 'mod_single_txt'), a.mods, { cOff: m.singleTxt });
     await this.linear(enc, a.siluImg, 1, this.w('globals', 'norm_out'), a.mods, { cOff: m.out });
-    await flush('model/mods', a.mods, 1, 14 * D);
+    if(Lr){
+      await this.linear(enc,a.siluZero,1,this.w('globals','mod_early_ref'),a.mods,{cOff:m.earlyRef});
+      await this.linear(enc,a.siluZero,1,this.w('globals','mod_single_ref'),a.mods,{cOff:m.singleRef});
+    }
+    await flush('model/mods', a.mods, 1, (Lr?20:14) * D);
 
     // Embedders write the joint stream: text rows [0, Lt), image rows [Lt, L).
     await this.linear(enc, a.promptEmbeds, Lt, this.w('globals', 'context_embedder'), a.hs);
     await this.linear(enc, a.latents, Li, this.w('globals', 'x_embedder'), a.hs, { cOff: Lt * D });
     await flush('model/context_embedder', a.hs, Lt, D);
     await flush('model/x_embedder', a.hs, Li, D, Lt * D * 4);
+    if(Lr){await this.linear(enc,a.reference,Lr,this.w('globals','reference_embedder'),a.hs,{cOff:(Lt+Li)*D});await flush('model/reference_embedder',a.hs,Lr,D,(Lt+Li)*D*4);}
 
     for (let i = 0; i < this.cfg.num_layers; i++) {
       const blk = `txt${String(i).padStart(2, '0')}`;
@@ -157,9 +163,14 @@ export class Flux3Transformer extends KleinTransformer {
       await this.block(enc, blk, [{ row: Lt, rows: Li, mod: m.earlyImg }], split);
       await flush(blk, a.hs, Li, D, Lt * D * 4);
     }
+    if(Lr)for(let i=0;i<this.cfg.num_layers;i++){
+      const blk=`ref${String(i).padStart(2,'0')}`;
+      await this.block(enc,blk,[{row:Lt+Li,rows:Lr,mod:m.earlyRef}],split);
+      await flush(blk,a.hs,Lr,D,(Lt+Li)*D*4);
+    }
     for (let i = 0; i < this.cfg.num_single_layers; i++) {
       const blk = `single${String(i).padStart(2, '0')}`;
-      await this.block(enc, blk, [{ row: 0, rows: Lt, mod: m.singleTxt }, { row: Lt, rows: Li, mod: m.singleImg }], split);
+      await this.block(enc, blk, [{ row: 0, rows: Lt, mod: m.singleTxt }, { row: Lt, rows: Li, mod: m.singleImg }, ...(Lr?[{row:Lt+Li,rows:Lr,mod:m.singleRef}]:[])], split);
       await flush(blk, a.hs, L, D);
     }
 
