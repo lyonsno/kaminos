@@ -1,6 +1,7 @@
 // Offline boundary replay: serving sampler/runtime, recorded model predictions.
 import { createWebGpuInferenceRuntime, WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
 import { createTrellisSparseSamplerAdapter } from './sparse-sampler.js';
+import { prefixAdapterName } from './sparse-prefix-witness-checks.js';
 
 export const CFG_OUTPUTS = ['positive', 'negative', 'guided', 'x0Positive', 'x0Guided', 'stds', 'rescaled', 'mixed', 'final', 'sampleNext'];
 export function compareFrozenCfgArray(actual, expected) {
@@ -32,7 +33,7 @@ export async function runFrozenCfgCase(manifest, trial) {
     if (backend.vendor !== 'apple' || !backend.architecture.includes('metal') || backend.isFallbackAdapter !== false) throw Error('native Apple Metal required');
     device = await adapter.requestDevice();
     device.addEventListener('uncapturederror', e => errors.push(e.error.message));
-    runtime = await createWebGpuInferenceRuntime({ adapter, device, routeId, gpuTiming: false });
+    runtime = await createWebGpuInferenceRuntime({ adapter, device, adapterName: prefixAdapterName(adapter.info), routeId, gpuTiming: false });
     const shape = [manifest.config.tokenRows, 32];
     const tensor = name => runtime.createTensor({ name, shape, dtype: 'f32', usage: U.storage | U.copySrc | U.copyDst });
     const sample = tensor('recorded sample'), prediction = tensor('recorded prediction');
