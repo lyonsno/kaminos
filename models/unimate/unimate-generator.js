@@ -180,7 +180,8 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
     execute: async ({ text, match, seed, onEvaluation, onStep, onPartial, rtol, atol, cfgScale, encodeOnly = false }, schedule) => {
       const encodeStart = performance.now();
       // The prompt encoder belongs to the admitted run, before its solver duties.
-      const caption = t5 ? (await t5.encode(text)).pooled : arrays[bundle.prompts[match].caption];
+      const encoding = t5 ? await t5.encode(text, { schedule }) : null;
+      const caption = encoding ? encoding.pooled : arrays[bundle.prompts[match].caption];
       schedule?.signal.throwIfAborted();
       if (encodeOnly) return caption;
       const encodeMs = performance.now() - encodeStart;
@@ -194,6 +195,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
       result.seed = seed;
       result.textEncoder = t5 ? 'browser T5' : 'captured embedding';
       result.encodeMs = encodeMs;
+      result.encodeDuties = encoding?.duties ?? [];
       result.noise = seed === null ? 'reference (accepted CPU run)' : `browser seed ${seed}`;
       result.wallMs = performance.now() - started;
       result.cooperative = Boolean(schedule);

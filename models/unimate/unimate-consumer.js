@@ -131,7 +131,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       const out = {
         glb, motion: result.motion, skeleton: sk, restFrame: data?.restFrame ? structuredClone(data.restFrame) : null,
         rig: rig ? { names: rig.names, pruned: rig.pruned, labels: labels.clean, face: labels.face, restRotation: rig.restRotation ?? null, mesh: Boolean(data?.mesh) } : null,
-        report: { prompt, seed, solver: result.solver, solverProgress: { ...solverProgress }, solverSteps: result.steps, solverEvaluations, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
+        report: { prompt, seed, solver: result.solver, solverProgress: { ...solverProgress }, solverSteps: result.steps, solverEvaluations, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, encodeMs: result.encodeMs, encodeDuties: result.encodeDuties, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
       };
       state.last = { prompt, seed, skeleton: sk.name, glbBytes: glb.byteLength, evaluations: result.evaluations };
       report('done', null, `${sk.name}: ${prompt}`);

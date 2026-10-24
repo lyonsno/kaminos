@@ -14,7 +14,7 @@ class Buffer {
 }
 globalThis.GPUBuffer = Buffer;
 globalThis.GPUMapMode = { READ: 1 };
-const device = { queue: { writeBuffer() {}, submit() {} }, createBuffer: d => new Buffer(d),
+const device = { queue: { writeBuffer() {}, submit() {}, async onSubmittedWorkDone() {} }, createBuffer: d => new Buffer(d),
   createCommandEncoder: () => ({ beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }),
     copyBufferToBuffer() {}, finish: () => ({}) }),
   createShaderModule: () => ({}), createComputePipeline: () => ({ getBindGroupLayout: () => ({}) }),

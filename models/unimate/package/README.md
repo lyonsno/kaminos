@@ -54,7 +54,7 @@ const { glb, motion, rig } = await consumer.run({ asset: { bytes, name: 'fox' },
 
 `consumer.read()` reports the stage (`download`, `label`, `encode`, `solve`, `bake`), byte counts while the model downloads, and solver progress. `acceptedT` tracks accepted solver time separately from attempted evaluations and rejected steps. The returned report retains solver steps and evaluations.
 
-Reuse the consumer for sequential calls. An overlapping call rejects. `await consumer.togglePause()` switches an admitted cooperative run between `paused` and `running`, returning `null` before its control is available. `consumer.stop()` cancels queued work without taking another model's renderer and stops admitted work at its next cooperative boundary. Prompt encoding settles before cancellation returns. Stopping during the initial load prevents generation after that load completes.
+Reuse the consumer for sequential calls. An overlapping call rejects. `await consumer.togglePause()` switches an admitted cooperative run between `paused` and `running`, returning `null` before its control is available. `consumer.stop()` cancels queued work without taking another model's renderer and stops admitted work at its next cooperative boundary. Prompt encoding offers rendering, pause and stop between transformer blocks, and settles submitted work before cancellation returns. Stopping during the initial load prevents generation after that load completes.
 
 Call `await consumer.destroy()` when finished. It stops and awaits pending work, releases model buffers and closes its labelling worker. The host's device, session and foreground service remain yours. A destroyed consumer rejects further runs.
 

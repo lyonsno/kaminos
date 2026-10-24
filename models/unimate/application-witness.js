@@ -2,14 +2,25 @@
 // inference uses createUniMateConsumer, sharing that renderer's device and kit host.
 import { createUniMateConsumer } from '@kaminos/unimate-webgpu';
 import { createUniMateDemo } from '@kaminos/unimate-webgpu/demo';
+import { T5Encoder } from '@kaminos/unimate-webgpu/unimate-t5.js';
 import { bundleArrays } from '@kaminos/unimate-webgpu/unimate-generator.js';
 
-const state = window.unimateApplication = { phase: 'starting', runs: [], progress: [], partials: [], gpuErrors: [] };
+const state = window.unimateApplication = { phase: 'starting', runs: [], progress: [], partials: [], gpuErrors: [], encodings: [] };
 const status = document.querySelector('#status');
 const fail = error => { state.phase = 'failed'; state.error = String(error.stack ?? error); status.textContent = state.error; };
 const plain = value => JSON.parse(JSON.stringify(value, (_key, v) => ArrayBuffer.isView(v) ? Array.from(v) : v));
 try {
   const demo = window.unimateRenderer = await createUniMateDemo({ canvas: document.querySelector('canvas') });
+  demo.scene.submissions = [];
+  // Observe the actual installed encoder without changing its input or schedule.
+  const encode = T5Encoder.prototype.encode;
+  T5Encoder.prototype.encode = async function(text, options) {
+    const row = { startedAt: performance.now(), cooperative: Boolean(options?.schedule) };
+    state.encodings.push(row);
+    try { const result = await encode.call(this, text, options); row.duties = plain(result.duties); return result; }
+    catch (error) { row.error = String(error); throw error; }
+    finally { row.finishedAt = performance.now(); row.frameSubmissions = demo.scene.submissions.filter(t => t >= row.startedAt && t <= row.finishedAt); }
+  };
   demo.device.addEventListener('uncapturederror', event => state.gpuErrors.push(event.error.message));
   const consumer = window.unimateConsumer = createUniMateConsumer({ device: demo.device, session: demo.session,
     beginRun: (id, options) => demo.foreground.beginRun(id, options) }, {
@@ -34,7 +45,7 @@ try {
         }, onPartial: sample => state.partials.push(plain(sample)) });
       window.unimateOutput = result;
       state.runs.push({ ...plain(result.report), framesDuring: demo.scene.frames - framesBefore,
-        frames: result.motion.frames, joints: result.motion.joints, skeleton: result.skeleton.name,
+        encoding: plain(state.encodings.at(-1)), frames: result.motion.frames, joints: result.motion.joints, skeleton: result.skeleton.name,
         glbBytes: result.glb.byteLength, positions: Array.from(result.motion.positions) });
       demo.showClip({ skeleton: result.skeleton, positions: result.motion.positions, frames: result.motion.frames, fps: result.skeleton.fps });
       state.display = 'generated animation'; state.phase = 'done'; status.textContent = 'Generated animation — drag to orbit.';

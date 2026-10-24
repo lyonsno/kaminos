@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { launchChrome, startServer, sourceIdentity } from '../flux2-klein/cdp-harness.mjs';
-import { checkUniMateApplicationWitness } from './application-witness-checks.mjs';
+import { checkUniMateApplicationWitness, readBrowserJson } from './application-witness-checks.mjs';
 import { parseGlb, readAccessor } from './unimate-rig-glb.js';
 
 const args = process.argv.slice(2), opt = name => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
@@ -61,13 +61,13 @@ try {
     '/skeletons/': report.modelSources.skeletons.root, '/': app });
   report.pageUrl = `${server.origin}/index.html`;
   await phase('browser');
-  browser = await launchChrome(executable, ['--window-size=1120,900'], report.browser);
+  browser = await launchChrome(executable, ['--window-size=1120,1100'], report.browser);
   await browser.navigate(report.pageUrl, 'Boolean(window.unimateApplication)');
   await terminal("window.unimateApplication.phase === 'idle'");
   report.input = await browser.evaluate('window.unimateApplication.input');
   await phase('first-generation');
   await browser.evaluate("document.getElementById('generate').click();true", false);
-  await terminal("window.unimateConsumer.read().stage === 'solve'");
+  await terminal("window.unimateConsumer.read().stage === 'solve' && window.unimateConsumer.read().progress.evaluations > 0");
   report.paused = await browser.evaluate(`(async()=>{let paused;while(!(paused=await window.unimateConsumer.togglePause())){if(window.unimateApplication.phase!=='running')throw Error('generation settled before pause');await new Promise(requestAnimationFrame);}window.__pausedFrames=window.unimateRenderer.scene.frames;return paused;})()`);
   await terminal('window.unimateRenderer.scene.frames >= window.__pausedFrames + 2');
   report.pausedFrames = await browser.evaluate('window.unimateRenderer.scene.frames - window.__pausedFrames');
@@ -76,23 +76,33 @@ try {
   await capture('first-animation');
   await phase('stop-retry');
   await browser.evaluate("document.getElementById('generate').click();true", false);
-  await terminal("window.unimateConsumer.read().stage === 'solve'");
+  await terminal("window.unimateConsumer.read().stage === 'solve' && window.unimateConsumer.read().progress.evaluations > 0");
   await browser.evaluate('window.unimateConsumer.stop();true');
   await terminal("window.unimateApplication.phase === 'stopped'");
   report.stopped = true;
   await browser.evaluate("document.getElementById('generate').click();true", false);
   await terminal("window.unimateApplication.phase === 'done'");
   await capture('repeated-animation');
-  const raw = await browser.evaluate('window.unimateApplication');
+  await phase('consumer-state-readback');
+  const raw = await readBrowserJson(browser.evaluate, 'window.unimateApplication');
   await fs.writeFile(path.join(out, 'consumer-state.json'), JSON.stringify(raw, null, 2));
   report.runs = raw.runs; report.gpuErrors = raw.gpuErrors;
   report.repeatMaxDifference = report.runs[0].positions.reduce((worst, value, i) => Math.max(worst, Math.abs(value - report.runs[1].positions[i])), 0);
+  if (opt('--baseline')) {
+    const bytes = await fs.readFile(opt('--baseline')), baseline = JSON.parse(bytes);
+    const before = baseline.runs[0].positions, after = report.runs[0].positions;
+    if (before.length !== after.length) throw Error('baseline motion shape differs');
+    report.baseline = { path: path.resolve(opt('--baseline')), sha256: createHash('sha256').update(bytes).digest('hex'),
+      maxDifference: after.reduce((worst, value, i) => Math.max(worst, Math.abs(value - before[i])), 0) };
+  }
+  await phase('export-readback');
   const glb = Uint8Array.from(await browser.evaluate('Array.from(window.unimateOutput.glb)'));
   await fs.writeFile(path.join(out, 'animation.glb'), glb);
   const gltf = parseGlb(glb.buffer), animation = gltf.json.animations[0];
   const tracks = animation.samplers.map(sample => readAccessor(gltf, sample.output));
   report.export = { channels: animation.channels.length, frames: readAccessor(gltf, animation.samplers[0].input).length,
     allFinite: tracks.every(track => Array.from(track).every(Number.isFinite)) };
+  await phase('playback-capture');
   // Keep two distinct playback frames as a visual inspection surface.
   await browser.evaluate('window.unimateRenderer.seek(0);true'); await browser.evaluate('new Promise(requestAnimationFrame)'); await capture('frame-0');
   await browser.evaluate('window.unimateRenderer.seek(30);true'); await browser.evaluate('new Promise(requestAnimationFrame)'); await capture('frame-30');

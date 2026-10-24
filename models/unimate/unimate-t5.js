@@ -8,6 +8,7 @@
 // comes from the packed table (HF's own _relative_position_bucket).
 
 import * as K from './unimate-kernels.js';
+import { WebGpuCommandDutyScheduler } from '../../webgpu-inference-kit/src/command-duty-scheduler.js';
 import { tensorFloat32Bytes, uploadWeightTensors } from './unimate-weights.js';
 import { createT5Tokenizer } from './unimate-t5-tokenizer.js';
 
@@ -70,10 +71,12 @@ export class T5Encoder {
   static grid(n, per) { const g = Math.ceil(n / per); return g <= 65535 ? [g, 1] : [65535, Math.ceil(g / 65535)]; }
 
   // Encode text -> { ids, hidden: Float32Array [L, D], pooled: Float32Array [D] }.
-  async encode(text) {
+  async encode(text, { schedule = null } = {}) {
     const ids = this.tokenizer.encode(text);
     const L = ids.length, { D, H, HD, FF, device } = this;
     const keep = [];
+    const scheduler = new WebGpuCommandDutyScheduler(device, { label: 'unimate.t5' });
+    scheduler.setSchedule(schedule);
     const buf = floats => { const buffer = this.buf(floats); keep.push(buffer); return buffer; };
     try {
       const idsBuf = buf(L); device.queue.writeBuffer(idsBuf, 0, new Uint32Array(ids));
@@ -87,7 +90,7 @@ export class T5Encoder {
       const X = buf(L * D), N = buf(L * D), QKV = buf(L * 3 * D), A = buf(L * D), P = buf(L * D),
         U = buf(L * 2 * FF), G = buf(L * FF), out = buf(L * D);
       const W = n => this.w.get(n).buffer;
-      const enc = device.createCommandEncoder(), pass = enc.beginComputePass();
+      let enc = scheduler.encoder(), pass = enc.beginComputePass();
       const linear = (Xb, w, Y, M, Nn, Kd) => this.dispatch(pass, 'LINEAR', [Xb, W(w), this.dummy, Y],
         [['u', M], ['u', Nn], ['u', Kd], ['u', 0]], [Math.ceil(Nn / 64), Math.ceil(M / 64)], keep);
       const norm = (Xb, w, Y) => this.dispatch(pass, 'RMSNORM_MOD', [Xb, W(w), this.dummy, Y],
@@ -107,19 +110,29 @@ export class T5Encoder {
         this.dispatch(pass, 'GEGLU_TANH', [U, G], [['u', L], ['u', FF]], T5Encoder.grid(L * FF, 256), keep);
         linear(G, `block${l}.wo`, P, L, D, FF);
         addInto(P);
+        if (schedule) {
+          // A complete transformer block is a lawful cooperative boundary.
+          // Keep the same kernels and state; render/pause/stop may run between blocks.
+          pass.end();
+          scheduler.addFlops(2 * L * (4 * D * D + 3 * D * FF) + 4 * H * L * L * HD);
+          await scheduler.boundary(`unimate.t5.block${l}`, { force: true });
+          enc = scheduler.encoder(); pass = enc.beginComputePass();
+        }
       }
       norm(X, 'final_layer_norm', out);
       pass.end();
       const rb = device.createBuffer({ size: L * D * 4, usage: SU.COPY_DST | SU.MAP_READ });
       keep.push(rb);
       enc.copyBufferToBuffer(out, 0, rb, 0, L * D * 4);
-      device.queue.submit([enc.finish()]);
+      await scheduler.flush('unimate.t5.readback');
       await rb.mapAsync(GPUMapMode.READ);
       const hidden = new Float32Array(rb.getMappedRange().slice(0));
       rb.unmap();
       const pooled = new Float32Array(D);
       for (let d = 0; d < D; d++) { let s = 0; for (let i = 0; i < L; i++) s += hidden[i * D + d]; pooled[d] = s / L; }
-      return { ids, hidden, pooled };
-    } finally { keep.forEach(buffer => buffer.destroy()); }
+      return { ids, hidden, pooled, duties: scheduler.stats.history.slice() };
+    } finally {
+      try { await scheduler.discard(); } finally { keep.forEach(buffer => buffer.destroy()); }
+    }
   }
 }

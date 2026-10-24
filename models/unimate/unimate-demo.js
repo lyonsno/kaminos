@@ -536,7 +536,7 @@ async function createSkeletonScene({ device, canvas, foreground }) {
   };
   const requestFrame = time => {
     if (!state.running) return;
-    const handle = foreground.request({ requestId: `scene:${++frameSeq}`, run(opportunity) { opportunity.submit([draw(time)]); } });
+    const handle = foreground.request({ requestId: `scene:${++frameSeq}`, run(opportunity) { const receipt = opportunity.submit([draw(time)]); state.submissions?.push(receipt.submittedAtMs); } });
     handle.completion.then(receipt => {
       const now = performance.now();
       if (receipt.status === 'completed') {
