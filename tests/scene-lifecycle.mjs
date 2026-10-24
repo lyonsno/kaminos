@@ -65,3 +65,15 @@ test('domain startup failure during replacement retires the loaded roots',async(
  await assert.rejects(f.lifecycle.replace([{id:'loaded'}],{setup:{}}),/domain startup failed/);
  assert.equal(f.state.objects.length,0,'failed domain setup must not leave a selectable partial scene');assert.equal(f.disposed.length,1);
 });
+
+for(const parked of [false,true])test(`presentation owner cleanup protects authored comparison resources (parked=${parked})`,async()=>{
+ const {createWorkbenchSceneHost}=await import('../workbench-scene-host.mjs');const f=fixture();
+ const geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial(),unique=new THREE.BoxGeometry(),events=[];
+ const authored=f.add('authored');authored.object.add(new THREE.Mesh(geometry,material));
+ for(const [resource,name]of [[geometry,'shared-geometry'],[material,'shared-material'],[unique,'unique']])resource.addEventListener('dispose',()=>events.push(name));
+ const host=createWorkbenchSceneHost({scene:f.world,camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3()},findObject:root=>f.state.findRoot(root),redraw(){},onFrame:()=>()=>{},
+   resourceConsumers:()=>[f.world,...f.state.retainedObjects().map(row=>row.object),...f.state.suspendedObjects().map(row=>row.object)]});
+ const owner=host.open(),presentation=new THREE.Group();presentation.add(new THREE.Mesh(geometry,material),new THREE.Mesh(unique,material));await owner.attach(presentation,{owned:true,presentation:true});
+ if(parked)f.lifecycle.suspendPreview();await owner.dispose();assert.deepEqual(events,['unique'],'presentation cleanup must preserve the parked or mounted authored consumer');
+ if(parked)f.lifecycle.resumePreview({});assert.equal(authored.object.parent,f.world);assert.equal(presentation.parent,null);
+});

@@ -11552,11 +11552,12 @@ async function initScene() {
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
-  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
+  const sceneResourceConsumers=()=>[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)];
+  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,resourceConsumers:sceneResourceConsumers,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
     registerObject:registerSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
     removeObject:handle=>sceneMembership.removeOwned(handle,
-      root=>disposeOwnedSceneTree(root,[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)],[scene.environment,scene.background])),
+      root=>disposeOwnedSceneTree(root,sceneResourceConsumers(),[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
   window.kaminosWorkbenchSceneState=()=>{
@@ -25208,6 +25209,7 @@ function attachSceneObject(id,groupId) {
   },groupId?'Parent object':'Unparent object');
 }
 function assertSceneConstructionAvailable() {
+  if(workingScene.isSuspended)throw Error('Finish preview before editing the scene');
   if(authoringBusy||sceneSaveBlockedByFailedRestore)throw Error('Wait for the document to finish loading');
   const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying||scenePlacementTools.edits.isSettling())throw Error('Finish the current edit first');
 }
