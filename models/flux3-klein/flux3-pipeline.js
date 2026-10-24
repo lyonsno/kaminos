@@ -4,8 +4,7 @@
 // hooks (transformer class, prompt framing, RoPE ids, schedule) is KleinPipeline's: weight caching
 // and progress, lean residency, pipeline precompile, prompt-embedding reuse, live previews (the
 // latent space is the same) and decoding. Noise comes from KleinPipeline's seeded Gaussian.
-import { KleinPipeline, getWeightBytes } from '../flux2-klein/klein-pipeline.js';
-import { Flux3VaeEncoder } from './flux3-vae-encoder.js';
+import { KleinPipeline } from '../flux2-klein/klein-pipeline.js';
 import { Flux3Transformer, flux3ImageIds, flux3TextIds } from './flux3-transformer.js';
 import { flux3Schedule } from './flux3-schedule.js';
 import { transformerTime } from '../flux2-klein/klein-schedule.js';
@@ -24,25 +23,10 @@ export class Flux3Pipeline extends KleinPipeline {
 
   async encodeReference({rgb,width,height}) {
     if (this.ditManifest.mode !== 'text-and-image') throw Error('This FLUX.3 weight package omits reference conditioning; mount a package built with --include-reference');
-    const {fits,cap}=super.sizeLimits(width,height);
-    if (!fits) throw Error(`Reference ${width} × ${height} exceeds this device's GPU buffer limit (${Math.round(cap/2**20)} MiB); choose a smaller reference image`);
-    if (!this.referenceEncoder) {
-      const response=await fetch(`${this.encoderUrl}/manifest.json`,this.cacheWeights?undefined:{cache:'no-store'});
-      if (!response.ok) throw Error(`Reference encoder manifest: ${response.status}`);
-      const manifest=await response.json();
-      if (manifest.schema !== 'kaminos.flux2-klein.vae-encoder-weights.v0') throw Error('Invalid reference encoder weight manifest');
-      const encoder=new Flux3VaeEncoder(this.device,manifest);
-      encoder.actType=this.kernels.vaeActType;encoder.sharedType=this.kernels.sharedType;encoder.sched=this.sched;
-      try {
-        const stats={cacheWeights:this.cacheWeights,cachedBytes:0,downloadedBytes:0,cacheErrors:[]};
-        await encoder.load(await getWeightBytes(`${this.encoderUrl}/${manifest.bundle.file}`,manifest.bundle,stats));
-        this.referenceEncoder=encoder;
-      } catch(error) {encoder.destroy();throw error;}
-    }
-    return {latents:await this.referenceEncoder.encode(rgb,width,height),ids:flux3ImageIds(height/16,width/16,-1)};
+    return super.encodeReference({rgb,width,height});
   }
 
-  async destroy() {await super.destroy();this.referenceEncoder?.destroy();this.referenceEncoder=null;}
+  referenceIds(height,width) {return flux3ImageIds(height,width,-1);}
 
   createTransformer(manifest) { return new Flux3Transformer(this.device, manifest); }
 

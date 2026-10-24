@@ -216,13 +216,13 @@ export class KleinTransformer {
     this.dispatch(enc, pipe, [x, y, this.uniform([rows, F, xRs, srcOff, yRs, dstOff, 0, 0])], Math.ceil(F / 256), rows);
   }
 
-  allocate(imgTokens, txtTokens) {
+  allocate(imgTokens, txtTokens, refTokens = 0) {
     this.release();
-    const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens;
+    const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens + refTokens;
     const f = n => this.buffer(n * 4);
-    this.shape = { imgTokens, txtTokens, L };
+    this.shape = { imgTokens, txtTokens, refTokens, L };
     this.act = {
-      latents: f(imgTokens * 128), promptEmbeds: f(txtTokens * this.cfg.joint_attention_dim),
+      reference: f(Math.max(1,refTokens) * 128), latents: f(imgTokens * 128), promptEmbeds: f(txtTokens * this.cfg.joint_attention_dim),
       tproj: f(256), temb: f(D), tmp: f(D), siluTemb: f(D),
       mods: f(2 * 6 * D + 3 * D + 2 * D), // double img | double txt | single | norm_out
       hs: f(L * D), norm: f(L * D), proj: f(L * (3 * D + 2 * F)), rope: f(L * HEAD * 2),
@@ -247,12 +247,13 @@ export class KleinTransformer {
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.
   // Upload per-image inputs once: initial latents, prompt embeddings, RoPE table.
-  prepare({ latents, promptEmbeds, imgIds, txtIds }) {
+  prepare({ latents, promptEmbeds, imgIds, txtIds, reference = null, referenceIds = null }) {
     const dev = this.device, a = this.act;
-    const { txtTokens: Lt, L } = this.shape;
+    const { imgTokens: Li, txtTokens: Lt, refTokens: Lr, L } = this.shape;
     dev.queue.writeBuffer(a.latents, 0, latents);
     if (promptEmbeds) dev.queue.writeBuffer(a.promptEmbeds, 0, promptEmbeds);
     const allIds = new Float64Array(L * 4); allIds.set(txtIds, 0); allIds.set(imgIds, Lt * 4);
+    if(Lr){if(reference?.length!==Lr*128||referenceIds?.length!==Lr*4)throw Error('Reference latent or position shape mismatch');dev.queue.writeBuffer(a.reference,0,reference);allIds.set(referenceIds,(Lt+Li)*4);}
     dev.queue.writeBuffer(a.rope, 0, ropeTable(allIds));
   }
 
@@ -266,7 +267,8 @@ export class KleinTransformer {
 
   async forward({ tModel }, taps = null) {
     const dev = this.device, a = this.act, D = this.D, F = this.F;
-    const { imgTokens: Li, txtTokens: Lt, L } = this.shape;
+    const { imgTokens: generatedTokens, txtTokens: Lt, refTokens: Lr, L } = this.shape;
+    const Li = generatedTokens + Lr;
     dev.queue.writeBuffer(a.tproj, 0, timestepProjection(tModel));
     const silu = this.pipeline('silu', siluShader());
     const enc = this.sched;
@@ -294,7 +296,8 @@ export class KleinTransformer {
 
     // Embedders write the joint stream: text rows [0, Lt), image rows [Lt, L).
     await this.linear(enc, a.promptEmbeds, Lt, this.w('globals', 'context_embedder'), a.hs);
-    await this.linear(enc, a.latents, Li, this.w('globals', 'x_embedder'), a.hs, { cOff: Lt * D });
+    await this.linear(enc, a.latents, generatedTokens, this.w('globals', 'x_embedder'), a.hs, { cOff: Lt * D });
+    if(Lr)await this.linear(enc, a.reference, Lr, this.w('globals', 'x_embedder'), a.hs, { cOff: (Lt+generatedTokens)*D });
     await flush('model/context_embedder', a.hs, Lt, D);
     await flush('model/x_embedder', a.hs, Li, D, Lt * D * 4);
 
@@ -342,11 +345,11 @@ export class KleinTransformer {
 
     // AdaLayerNormContinuous: emb = [scale | shift]; image rows only.
     const mo = this.modOff.out;
-    this.layerNormModulate(enc, a.hs, Lt * D, Li, a.outNorm, 0, a.mods, mo + D, mo);
-    await flush('model/norm_out', a.outNorm, Li, D);
-    await this.linear(enc, a.outNorm, Li, this.w('globals', 'proj_out'), a.velocity);
+    this.layerNormModulate(enc, a.hs, Lt * D, generatedTokens, a.outNorm, 0, a.mods, mo + D, mo);
+    await flush('model/norm_out', a.outNorm, generatedTokens, D);
+    await this.linear(enc, a.outNorm, generatedTokens, this.w('globals', 'proj_out'), a.velocity);
     await this.sched.flush('epilogue');
-    if (taps) await taps('velocity', a.velocity, Li, 128, 0);
+    if (taps) await taps('velocity', a.velocity, generatedTokens, 128, 0);
   }
 
   qkvPrepRows(enc, src, srcRs, rowBase, rows, normQ, normK, L) {

@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const opt = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
 const out = path.resolve(opt('--out') ?? fail('--out <staging dir> is required'));
 const KIT_ENTRY = '@kaminos/webgpu-inference-kit/core';
-const FILES = ['klein-app.js', 'klein-pipeline.js', 'klein-transformer.js', 'klein-text-encoder.js', 'klein-vae.js', 'klein-kernels.js',
+const FILES = ['klein-app.js', 'klein-pipeline.js', 'klein-transformer.js', 'klein-text-encoder.js', 'klein-vae.js', 'klein-vae-encoder.js', 'klein-kernels.js',
   'klein-duties.js', 'klein-schedule.js', 'klein-latent-preview.js', 'klein-weights.js', 'qwen-tokenizer.js'];
 
 function fail(message) { console.error(`pack-klein: ${message}`); process.exit(1); }

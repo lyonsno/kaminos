@@ -67,3 +67,7 @@ test('early-decode evidence rejects an unchanged full schedule or a frozen flame
  assert.doesNotThrow(()=>validate(r));
  for(const mutate of [r=>r.provenance.completion.earlyDecoded=false,r=>r.provenance.completion.stepsCompleted=4,r=>r.flame.after=r.flame.before,r=>r.flame.stopped=false,r=>r.flame.simGrid=128]){const bad=structuredClone(r);mutate(bad);assert.throws(()=>validate(bad));}
 });
+
+test('a FLUX2 request cannot be certified by a FLUX3 output',()=>{
+ const r=good();r.model='flux2';assert.throws(()=>validate(r));
+});

@@ -10,25 +10,28 @@ import argparse, gc, hashlib, importlib.util, json, pathlib, subprocess, traceba
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument('--model-dir',required=True);ap.add_argument('--lora',required=True)
+    ap.add_argument('--model-dir',required=True);ap.add_argument('--lora')
+    ap.add_argument('--model',choices=['flux2','flux3'],default='flux3')
     ap.add_argument('--out',required=True)
     a=ap.parse_args();out=pathlib.Path(a.out);out.mkdir(parents=True,exist_ok=True)
     source=pathlib.Path(a.model_dir);here=pathlib.Path(__file__).resolve().parent
     r={'ok':False,'phase':'source-identity','modelDir':str(source),'sourceRevision':source.name,
-       'weights':{'format':'i4','globals_format':'i8','group':64},'tensors':{},'width':48,'height':32,'seed':9021}
+       'model':a.model,'weights':{'format':'i4','globals_format':'i4' if a.model=='flux2' else 'i8','group':128 if a.model=='flux2' else 64},'tensors':{},'width':48,'height':32,'seed':9021}
     def write():(out/'manifest.json').write_text(json.dumps(r,indent=2))
     def save(name,t):
         x=np.ascontiguousarray(t.detach().float().cpu().numpy());data=x.tobytes();file=name+'.f32'
         (out/file).write_bytes(data);r['tensors'][name]={'file':file,'shape':list(x.shape),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
     write()
     try:
-        r['loraSha256']=hashlib.sha256(pathlib.Path(a.lora).read_bytes()).hexdigest()
+        if a.model=='flux3':r['loraSha256']=hashlib.sha256(pathlib.Path(a.lora or '').read_bytes()).hexdigest()
+        else:(source/'transformer'/'config.json').read_bytes()
         r['sourceCommit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=here,text=True).strip()
         r['phase']='imports';write()
         import numpy as np
         import torch
         import diffusers
-        from diffusers import AutoencoderKLFlux2
+        from diffusers import AutoencoderKLFlux2, Flux2KleinPipeline
+        from diffusers.models.transformers.transformer_flux2 import Flux2Transformer2DModel
         from diffusers.models.transformers.transformer_flux3 import Flux3Transformer2DModel
         from diffusers.modular_pipelines.flux3.encoders import Flux3VaeEncoderStep
         from diffusers.modular_pipelines.flux3.before_denoise import _prepare_image_ids
@@ -38,6 +41,9 @@ def main():
         r['oracleFiles']={}
         import inspect
         for cls in [AutoencoderKLFlux2,Flux3Transformer2DModel,Flux3VaeEncoderStep]:
+            f=pathlib.Path(inspect.getfile(cls));r['oracleFiles'][cls.__name__]={'path':str(f),'sha256':hashlib.sha256(f.read_bytes()).hexdigest()}
+        Model=Flux2Transformer2DModel if a.model=='flux2' else Flux3Transformer2DModel
+        for cls in [Model,Flux2KleinPipeline]:
             f=pathlib.Path(inspect.getfile(cls));r['oracleFiles'][cls.__name__]={'path':str(f),'sha256':hashlib.sha256(f.read_bytes()).hexdigest()}
         r['phase']='vae';write()
         vae=AutoencoderKLFlux2.from_pretrained(source/'vae',torch_dtype=torch.float32).eval()
@@ -55,8 +61,8 @@ def main():
             save('reference',reference[0])
         del vae;gc.collect()
         r['phase']='transformer-load';write()
-        tr=Flux3Transformer2DModel.from_pretrained(source/'transformer',torch_dtype=torch.float32).eval()
-        deltas=lora_deltas(a.lora,keep_image_cond=True)
+        tr=Model.from_pretrained(source/'transformer',torch_dtype=torch.float32).eval()
+        deltas=lora_deltas(a.lora,keep_image_cond=True) if a.model=='flux3' else {}
         params=dict(tr.named_parameters())
         with torch.no_grad():
             for name,d in deltas.items():params[name].add_(d)
@@ -66,18 +72,26 @@ def main():
         with torch.no_grad():
             for name,p in tr.named_parameters():
                 w=p.numpy()
-                if w.ndim==2 and w.shape[1]%64==0:p.copy_(torch.from_numpy(pack.quantize(w,'i8' if name in globals_names else 'i4',64)[2]))
+                if w.ndim==2 and w.shape[1]%r['weights']['group']==0:p.copy_(torch.from_numpy(pack.quantize(w,'i8' if a.model=='flux3' and name in globals_names else 'i4',r['weights']['group'])[2]))
                 else:p.copy_(p.half().float())
         r['phase']='transformer-forward';write()
         gen=torch.Generator('cpu').manual_seed(r['seed'])
         latents=torch.randn(1,6,128,generator=gen)
         prompt=torch.randn(1,2,tr.config.joint_attention_dim,generator=gen)
-        img_ids=_prepare_image_ids(2,3,.5);ref_ids=img_ids.clone();ref_ids[:,3]=-1
+        if a.model=='flux3':
+            img_ids=_prepare_image_ids(2,3,.5);ref_ids=img_ids.clone();ref_ids[:,3]=-1
+        else:
+            dummy=torch.zeros(1,128,2,3)
+            img_ids=Flux2KleinPipeline._prepare_latent_ids(dummy)[0].float()
+            ref_ids=Flux2KleinPipeline._prepare_image_ids([dummy])[0].float()
         txt_ids=torch.zeros(2,4);txt_ids[:,3]=torch.arange(2)
         for name,t in [('latents',latents[0]),('prompt',prompt[0]),('image_ids',img_ids),('reference_ids',ref_ids),('text_ids',txt_ids)]:save(name,t)
         with torch.no_grad():
             kwargs=dict(hidden_states=latents,encoder_hidden_states=prompt,timestep=torch.ones(1),img_ids=img_ids,txt_ids=txt_ids,return_dict=False)
-            velocity=tr(**kwargs,image_cond_hidden_states=reference,image_cond_ids=ref_ids)[0]
+            if a.model=='flux3':velocity=tr(**kwargs,image_cond_hidden_states=reference,image_cond_ids=ref_ids)[0]
+            else:
+                conditioned={**kwargs,'hidden_states':torch.cat([latents,reference],dim=1),'img_ids':torch.cat([img_ids,ref_ids],dim=0)}
+                velocity=tr(**conditioned)[0][:,:6]
             save('velocity',velocity[0])
             unconditioned=tr(**kwargs)[0];save('velocity_without_reference',unconditioned[0])
             r['referenceEffectL2']=float((velocity-unconditioned).norm()/velocity.norm())
