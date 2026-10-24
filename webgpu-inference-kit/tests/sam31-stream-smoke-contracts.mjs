@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -34,5 +34,24 @@ try {
   assert.deepEqual(report.frames, []);
   assert.equal(report.numericalParity, null);
   assert.deepEqual(JSON.parse(await readFile(join(output, 'report.json'), 'utf8')), report);
+  for (const populated of [true, false]) {
+    const directory = join(temp, populated ? 'retained' : 'greenroom-created');
+    const terminal = join(temp, populated ? 'retained-primary.json' : 'empty-primary.json');
+    await mkdir(directory);
+    if (populated) await writeFile(join(directory, 'sentinel'), 'retained evidence');
+    const child = spawnSync(process.execPath, [fileURLToPath(moduleUrl), '--out', directory, '--model', join(temp, 'absent'),
+      '--sequence', temp, '--chrome', '/absent/chrome', '--playwright', '/absent/playwright.mjs'],
+    { env: { ...process.env, EPISTAXIS_JOB_PRIMARY_OUTPUT: terminal }, encoding: 'utf8' });
+    assert.equal(child.status, 1);
+    const failure = JSON.parse(await readFile(terminal, 'utf8'));
+    assert.equal(failure.status, 'failed');
+    assert.equal(failure.phase, populated ? 'output-initialization' : 'inputs');
+    assert.equal(failure.browserLaunched, false);
+    assert.deepEqual(failure.frames, []);
+    if (populated) {
+      assert.equal(await readFile(join(directory, 'sentinel'), 'utf8'), 'retained evidence');
+      assert.equal(existsSync(join(directory, 'report.json')), false, 'rejected output evidence remains untouched');
+    }
+  }
 } finally { await rm(temp, { recursive: true, force: true }); }
 console.log('Sequential SAM smoke rejects stale, partial, nonfinite and fallback frame evidence');
