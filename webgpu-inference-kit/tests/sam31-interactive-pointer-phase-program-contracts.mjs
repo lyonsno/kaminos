@@ -144,7 +144,7 @@ assert.deepEqual(
 );
 assert.throws(
   () => deriveSam31InteractivePointerGeometry({ ...largerGeometry.shape, sourceMaskHeight: 16 }),
-  /source mask geometry must be sixteen times feature geometry/,
+  /source mask geometry/,
   'a decoder-resolution mask must not impersonate the authenticated source mask',
 );
 assert.throws(

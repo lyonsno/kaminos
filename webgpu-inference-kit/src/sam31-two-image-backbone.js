@@ -365,6 +365,110 @@ async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, 
   };
 }
 
+async function createSingleFrameBackbone({ manifest, loadWeights, runTrunk, runNeck: neckRunner,
+  runHighResolution: projectionRunner, errors, ...context }) {
+  let weights = await loadWeights();
+  let status = 'open';
+  return Object.freeze({
+    async run({ rgba, frameIndex, conditioning, invocationTag }) {
+      if (status !== 'open') throw new Error(`single-frame backbone is ${status}`);
+      if (!Number.isSafeInteger(frameIndex) || frameIndex < 0) throw new Error('frameIndex must be a nonnegative safe integer');
+      if (typeof conditioning !== 'boolean') throw new Error('conditioning must be boolean');
+      if (typeof invocationTag !== 'string' || !invocationTag) throw new Error('invocationTag is required');
+      if (!(rgba instanceof Uint8Array) || rgba.length !== manifest.shape.imageHeight * manifest.shape.imageWidth * 4) {
+        throw new Error('single-frame RGBA geometry does not match the model');
+      }
+      const captured = new Uint8Array(rgba);
+      status = 'running';
+      const started = performance.now();
+      try {
+        if (errors.length) throw new Error(`single-frame backbone WebGPU errors: ${errors.join('; ')}`);
+        const sourceImageSha256 = await sha256Bytes(captured);
+        // An indexed object avoids allocating a frame-index-sized sparse array for a live stream.
+        const currentManifest = { ...manifest, sourceImages: { [frameIndex]: { rgbaSha256: sourceImageSha256 } } };
+        const requestIds = [];
+        const input = { ...context, ...weights, manifest: currentManifest, frameIndex,
+          rgba: captured, invocationTag, requestIds, verificationAttached: false,
+          tensorsByRole: new Map() };
+        const trunk = await runTrunk(input);
+        const propagation = await neckRunner({ ...input, branch: 'propagation', weights: weights.propagationWeights, backbone: trunk });
+        const receipts = [...trunk.receipts, propagation.result.receipt];
+        const requestedRouteIds = [...trunk.routes, propagation.route.routeId];
+        const frame = { propagationEmbedding: propagation.features[2], propagationPosition: propagation.position2 };
+        const timing = { kind: 'host-wall', trunk: trunk.timing, propagationNeckMs: propagation.durationMs };
+        if (conditioning) {
+          const interactive = await neckRunner({ ...input, branch: 'interactive', weights: weights.interactiveWeights, backbone: trunk });
+          frame.interactiveEmbedding = interactive.features[2];
+          frame.interactivePosition = interactive.position2;
+          receipts.push(interactive.result.receipt);
+          requestedRouteIds.push(interactive.route.routeId);
+          timing.interactiveNeckMs = interactive.durationMs;
+        } else {
+          const high = await projectionRunner({ ...input, branch: 'propagation', weights: weights.projectionWeights, neck: propagation });
+          frame.highResolutionS0 = high.highResolutionS0;
+          frame.highResolutionS1 = high.highResolutionS1;
+          receipts.push(high.result.receipt);
+          requestedRouteIds.push(high.route.routeId);
+          timing.highResolutionMs = high.durationMs;
+        }
+        const routeChainPassed = receipts.length === requestIds.length
+          && receipts.length === requestedRouteIds.length
+          && receipts.every((r, i) => r.status === 'real' && r.fallbackReason == null
+            && r.requestedRouteId === requestedRouteIds[i] && r.effectiveRouteId === requestedRouteIds[i]
+            && r.outputs?.length > 0 && r.outputs.every(output => output.artifactId.endsWith(`:${invocationTag}`)));
+        if (!routeChainPassed) throw new Error('single-frame backbone route chain failed');
+        if (errors.length) throw new Error(`single-frame backbone WebGPU errors: ${errors.join('; ')}`);
+        timing.wallMs = performance.now() - started;
+        return { frameIndex, sourceImageSha256, frame, timing, receipts, requestIds, requestedRouteIds,
+          effectiveRouteIds: receipts.map(r => r.effectiveRouteId), routeChainPassed,
+          verificationAttached: false, parityPassed: null };
+      } finally { status = 'open'; }
+    },
+    close() {
+      if (status === 'running') throw new Error('single-frame backbone is running');
+      weights = null;
+      status = 'closed';
+      return { status };
+    },
+  });
+}
+
+export async function createSam31SingleFrameBackbone({ packageRuntime, adapter, device, errors,
+  commit = null, update = () => {}, userAgent = 'unknown-browser' }) {
+  if (!packageRuntime || typeof packageRuntime.loadFloat32 !== 'function') throw new Error('single-frame backbone requires a model package runtime');
+  if (!adapter || !device || !Array.isArray(errors)) throw new Error('single-frame backbone requires a WebGPU execution context');
+  const manifest = packageRuntime.manifests?.ingress || packageRuntime.modelPackage?.components?.ingress;
+  if (manifest?.schema !== 'kaminos.sam31-two-image-ingress-meta-packet.v0') throw new Error('unsupported single-frame ingress model');
+  const weightsByRole = entryMap(manifest.weights);
+  const loadFloat32 = entry => packageRuntime.loadFloat32(entry);
+  return createSingleFrameBackbone({ manifest, adapter, device, errors, commit, update, userAgent,
+    weightsByRole, loadFloat32, residentTensorResolver: packageRuntime.residentTensorResolver || null,
+    runTrunk: runFrameTrunk, runNeck, runHighResolution,
+    async loadWeights() {
+      const patchProjection = await loadFloat32(weightsByRole.get('patch-embed-projection-weight'));
+      const positionEntry = weightsByRole.get('vit-position-embeddings');
+      const spatial = resolveSam31SpatialPositionEmbeddings({ values: await loadFloat32(positionEntry),
+        shape: positionEntry.shape, hiddenSize: manifest.shape.visionHiddenSize });
+      const prefixWeights = { pretrainGridSize: spatial.pretrainGridSize, values: {
+        positionEmbeddings: spatial.positionEmbeddings,
+        layerNormWeight: await loadFloat32(weightsByRole.get('vit-backbone-layernorm-weight')),
+        layerNormBias: await loadFloat32(weightsByRole.get('vit-backbone-layernorm-bias')),
+      } };
+      const blockWeights = await loadBlockWeights(loadFloat32, weightsByRole);
+      const blockWeightsHash = await sha256Text(blockWeightRoles().map(role => `${role}:${weightsByRole.get(role).sha256}`).join('\n'));
+      const interactiveWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'interactive');
+      const propagationWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'propagation');
+      const projectionWeights = {
+        s0: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-bias')) },
+        s1: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-bias')) },
+      };
+      return { patchProjection, prefixWeights, blockWeights, blockWeightsHash, interactiveWeights, propagationWeights, projectionWeights };
+    },
+  });
+}
+
+export const createSam31SingleFrameBackboneForTest = createSingleFrameBackbone;
+
 export async function runSam31TwoImageBackbone({
   packageRuntime,
   adapter,
