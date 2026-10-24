@@ -181,6 +181,33 @@ try{
    }
   }finally{await motivated?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
  }
+ // A light change behind the body is sensed locally. It must lead to actual
+ // reacquisition, and a later ignition must work even with a resident atlas.
+ for(const cached of [false,true]){
+  let wary,poll;const saved=[globalThis.setInterval,globalThis.clearInterval];
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:cached||fire.active?700:0},values:points.map(()=>({luminance:(cached||fire.active)?0.2:0}))})};
+   wary=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();await wary.operations.action({kind:'wander'});
+   let count=0;const tick=async()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});if(count++%15===0)await poll();return wary.read();};
+   for(let i=0;i<6;i++)await tick();fire.active=true;notify();
+   const first=[];for(let i=0;i<180;i++)first.push(await tick());
+   assert.ok(first.some(r=>r.attention.startle),'rearward ignition is sensed through local illumination, including a retained atlas');
+   const late=first.slice(90);
+   assert.ok(late.filter(r=>r.attention.perceived.some(x=>x.id==='flame-emitter')).length>late.length*.9,'wary escape recruits body turning to regain actual sight within 1.5 seconds');
+   assert.ok(late.filter(r=>r.attention.focus?.id==='flame-emitter').length>late.length*.85,'after reacquisition the cause retains gaze apart from brief checks');
+   fire.active=false;notify();for(let i=0;i<180;i++)await tick();
+   // Turn the source off and relocate it behind the actual head. Its hidden
+   // transform is not an observation; the later local light change is.
+   const h=new THREE.Matrix4().fromArray(wary.inspect().boneWorld.find(b=>b.name==='head').matrix);
+   const forward=new THREE.Vector3(...wary.read().attention.profile.forward).transformDirection(h);
+   emitter.position.setFromMatrixPosition(h).addScaledVector(forward,-3);emitter.updateMatrixWorld(true);
+   for(let i=0;i<30;i++)await tick();
+   fire.active=true;notify();const again=[];for(let i=0;i<180;i++)again.push(await tick());
+   assert.ok(again.some(r=>r.attention.startle),'another sensed ignition rearms after cessation even when source state was not visually watched');
+  }finally{await wary?.dispose();[globalThis.setInterval,globalThis.clearInterval]=saved;delete window.kaminosFireLightProbe;}
+ }
  // V-1: an ordinary retained-motion edit must preserve travel versus facing,
  // including a Wander temporarily held while the source clip is previewed.
  for(const held of [false,true]){
