@@ -56,11 +56,11 @@ test('unknown totals remain unknown and imported recipes do not mutate the curre
  f.response.operations.restore(saved);assert.deepEqual(f.author.read(),before);assert.deepEqual(f.response.operations.export(),saved);f.response.dispose();
 });
 test('following waits at zero and lets the finished look settle after the terminal event',()=>{
- const f=fixture();f.response.operations.assign({stage:'complete',recipe});f.response.operations.follow();f.tick(5);
+ const f=fixture();f.response.operations.assign({stage:'complete',recipe:{...recipe,a:recipe.b}});f.response.operations.follow();f.tick(5);
  assert.equal(f.response.read().position,0);
  const run=f.source.begin({kind:'fixture'});run.finish('complete');
  assert.equal(f.response.read().live,false);assert.equal(f.response.read().playing,true);
  f.tick(1);assert.equal(f.response.read().playing,false);
- assert.equal(f.author.read().domControls['volume-physical-thermal'].value,2);
+ assert.equal(f.author.read().domControls['volume-physical-thermal'].value,10);
  f.response.dispose();
 });
