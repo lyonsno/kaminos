@@ -1,5 +1,6 @@
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { checkedSelection } from './scene-selection.mjs';
+import { checkedGroupTopology, pruneGroupTopology } from './scene-group-topology.mjs';
 
 // The authored registry and its live roots share one lifetime. Domain records
 // remain domain-owned; membership, group topology, selection and admission do
@@ -36,17 +37,9 @@ export function createWorkingScene() {
     return Object.freeze([...rows]);
   }
   function setGroups(next) {
-    const ids = new Set(), members = new Set(), present = new Set(objects.map(row=>row.id));
-    const checked = next.map(group => {
-      if (!group || typeof group.id !== 'string' || !group.id || ids.has(group.id) || !Array.isArray(group.objectIds)) throw Error('Invalid scene group identity');
-      ids.add(group.id);
-      const objectIds = [...new Set(group.objectIds)];
-      for (const id of objectIds) {
-        if (!present.has(id) || members.has(id)) throw Error('Scene group contains an absent or already grouped object');
-        members.add(id);
-      }
-      return freezeData({...structuredClone(group),objectIds});
-    }).filter(group=>group.objectIds.length);
+    const present=objects.map(row=>row.id);
+    checkedGroupTopology(next,present);
+    const checked=pruneGroupTopology(next,present).map(freezeData);
     groups = Object.freeze(checked);
     for (const row of objects) {
       row.groupId = groups.find(group=>group.objectIds.includes(row.id))?.id ?? null;

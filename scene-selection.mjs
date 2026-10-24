@@ -1,6 +1,7 @@
 import { Box3, Vector3 } from './lib/three.core.js';
 import { checkedPose } from './scene-edit-session.mjs';
 import { moveGroupMembers } from './scene-group.mjs';
+import {groupDescendants,groupObjectIds} from './scene-group-topology.mjs';
 
 export function checkedSelection(ids, activeId = ids.at(-1) ?? null) {
   if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'||!id))throw Error('Selection requires scene IDs');
@@ -20,7 +21,7 @@ export function changeSelection(previous,id,{extend=false}={}) {
 }
 export function selectionTransformRoots(ids,groups) {
   const selectedGroups=groups.filter(g=>ids.includes(`@group:${g.id}`));
-  const children=new Set(selectedGroups.flatMap(g=>g.objectIds));
+  const children=new Set(selectedGroups.flatMap(g=>[...groupObjectIds(groups,g.id),...groupDescendants(groups,g.id).map(child=>'@group:'+child.id)]));
   return ids.filter(id=>!children.has(id));
 }
 export function selectionFrame(poses,activeId,{pivot='median',orientation='world',activePose=null}={}) {

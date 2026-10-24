@@ -1,3 +1,4 @@
+import {pruneGroupTopology} from './scene-group-topology.mjs';
 // Reconstructible membership is history-owned. Live-only roots are references:
 // history neither serializes their evolving state nor acquires their lifetime.
 export function captureSceneMembership(records, isReloadable) {
@@ -21,12 +22,9 @@ export function resolveSceneMembershipTopology(value, current) {
     else if (index < authoredIds.length) ids.push(authoredIds[index++]);
   }
   ids.push(...authoredIds.slice(index));
-  const groups = value.groups.map(group => ({
-    ...structuredClone(group), objectIds: group.objectIds.filter(id => authored.has(id)),
-  })).filter(group => group.objectIds.length);
-  for (const group of current.groups) {
-    const objectIds = group.objectIds.filter(id => live.has(id));
-    if (!objectIds.length) continue;
+  const groups = pruneGroupTopology(value.groups,authored);
+  for (const group of pruneGroupTopology(current.groups,live)) {
+    const objectIds = group.objectIds;
     const restored = groups.find(row => row.id === group.id);
     if (restored) restored.objectIds.push(...objectIds);
     else groups.push({...structuredClone(group), objectIds});

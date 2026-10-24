@@ -24,4 +24,4 @@ export function moveGroupMembers(before,after,members,{pivot='median',orientatio
   return [id,pose];
  }));
 }
-export function checkedGroupEdit(raw){const pose=checkedGroupPose(raw),frame=checkedGroupPose(raw.frame);if(!raw.members||typeof raw.members!=='object'||Array.isArray(raw.members))throw Error('Group edit requires member poses');return {...pose,frame,members:Object.fromEntries(Object.entries(raw.members).map(([id,p])=>[id,checkedPose(p)]))};}
+export function checkedGroupEdit(raw){const pose=checkedGroupPose(raw),frame=checkedGroupPose(raw.frame);if(!raw.members||typeof raw.members!=='object'||Array.isArray(raw.members))throw Error('Group edit requires member poses');return {...pose,frame,...(raw.groups?{groups:Object.fromEntries(Object.entries(raw.groups).map(([id,p])=>[id,checkedGroupPose(p)]))}:{}),members:Object.fromEntries(Object.entries(raw.members).map(([id,p])=>[id,checkedPose(p)]))};}

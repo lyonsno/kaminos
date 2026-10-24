@@ -2,7 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
-import {checkedRepetition,repetitionMatrices,createRepetitionView} from '../scene-repetition.mjs';
+import {checkedRepetition,repetitionMatrices,createRepetitionView,withoutRepetitionCopies} from '../scene-repetition.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import {createSceneColliderCollection} from '../scene-collider.mjs';
 import {collectStaticSceneGeometry} from '../scene-light-geometry.mjs';
@@ -71,4 +71,10 @@ test('an absent repetition begins, previews, cancels and undoes through the real
  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('function ensureRepetitionTarget('),end=html.indexOf('\nfunction ',start+1),source=html.slice(start,end);
  let settings=null;const record={id:'source'},edits=createSceneEdits({read(){throw Error('unexpected pose read');},write(){throw Error('unexpected pose write');}}),context={repetitionOwner:()=>({id:'source',record}),polyEdit:null,repetitionEditTargets:new Set(),scenePlacementTools:{edits},checkedRepetition,writeSceneRepetition:(id,value)=>{settings=value;record.repetition=value;}};vm.createContext(context);vm.runInContext(source,context);
  const id=context.ensureRepetitionTarget('source');edits.begin(id,'Array');edits.preview({settings:config()});assert.equal(settings.count,6);edits.cancel();assert.equal(settings,null);edits.apply(id,{settings:config()});assert.equal(settings.count,6);edits.apply(id,{settings:null});assert.equal(settings,null);edits.undo();assert.equal(settings.count,6);edits.undo();assert.equal(settings,null);
+});
+
+ test('inspecting a source without repetition never adds an undefined child',()=>{
+ const root=mesh(),errors=[],original=console.error;console.error=(...args)=>errors.push(args);
+ try{assert.equal(withoutRepetitionCopies(root,()=>root.children.length),0);assert.throws(()=>withoutRepetitionCopies(root,()=>{throw Error('inspection failed');}),/inspection failed/);}finally{console.error=original;}
+ assert.deepEqual(errors,[]);assert.equal(root.children.length,0);
 });

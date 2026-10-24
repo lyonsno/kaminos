@@ -4,16 +4,26 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import * as T from 'three';import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {exportCloneInWorld} from '../scene-export.mjs';import {checkedRepetition,createRepetitionView,withoutRepetitionCopies} from '../scene-repetition.mjs';
 import {createWorkingScene} from '../working-scene.mjs';
+import * as groupTopology from '../scene-group-topology.mjs';
+import {selectionTransformRoots} from '../scene-selection.mjs';
 import {canRepeatSceneObject,createSceneRepetitionController} from '../scene-repetition-controller.mjs';import {createSceneEdits,checkedPose} from '../scene-edit-session.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const fn=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\nfunction ',a+1);assert.ok(a>=0&&b>a);return html.slice(a,b);};
 const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},repetition=checkedRepetition({mode:'circle',count:6});
 
-test('shared selection duplication carries the group relationship into interactive and direct copies',()=>{
+test('shared selection duplication preserves nested roles, repetition and cancellation',()=>{
  for(const interactive of [false,true]){
-  const group={id:'ring',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition},created=[];
-  const h={structuredClone,checkedRepetition,sceneSelection:{ids:['@group:ring'],activeId:'@group:ring'},sceneGroups:[group],sceneObjects:[{id:'baffle',type:'procedural-mesh'}],compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},selectedRootIds:()=>['@group:ring'],sceneSelectionMembers:()=>['baffle'],canDuplicateObject:()=>true,checkSelectionMembership:x=>x,readSelectionMembership:()=>({groups:[group],selection:{ids:['@group:ring'],activeId:'@group:ring'}}),duplicateSceneObject:()=> 'copy',makeSceneObjectId:()=> 'ring-copy',createSceneGroupForObjects:(ids,label,options)=>created.push({...options,objectIds:ids,label}),setSceneSelection(){},detachSelectionMember(){},scenePlacementTools:{start:()=>true,edits:{discard(){},recordApplied(){}}}};
-  sceneContext(h);vm.runInContext(fn('duplicateSelectedSceneObjects'),h);h.duplicateSelectedSceneObjects({interactive});assert.equal(created.length,1);assert.equal(created[0].repetition?.count,6);assert.equal(created[0].repetition?.mode,'circle');
+  const workingScene=createWorkingScene();workingScene.put({id:'baffle',type:'procedural-mesh',object:{userData:{}}});
+  workingScene.setGroups([{id:'assembly',objectIds:[],transform:pose},{id:'ring',parentId:'assembly',label:'Baffle ring',objectIds:['baffle'],transform:pose,repetition}]);workingScene.select(['@group:assembly']);
+  const before=()=>({groups:structuredClone(workingScene.groups),selection:structuredClone(workingScene.selection)});let nextId=0,completion,recorded=0;
+  const h={...groupTopology,workingScene,structuredClone,checkedRepetition,compoundRetentionTargets:new Map(),assertSceneConstructionAvailable(){},selectedRootIds:()=>selectionTransformRoots(workingScene.selection.ids,workingScene.groups),canDuplicateObject:()=>true,checkSelectionMembership:x=>x,readSelectionMembership:before,
+   duplicateSceneObject(id){const original=workingScene.find(id);workingScene.put({...original,id:'copy',object:{userData:{}}});workingScene.updateGroup(original.groupId,{objectIds:[id,'copy']});return 'copy';},
+   makeSceneObjectId:()=> 'group-copy-'+(++nextId),ensureGroupTarget(){},setSceneSelection:(ids,id)=>workingScene.select(ids,id),detachSelectionMember:id=>workingScene.forget(id),releaseUnreferencedSceneMembershipObjects(){},
+   scenePlacementTools:{start:(_mode,done)=>{completion=done;return true;},edits:{discard(){},recordApplied(){recorded++;}}}};
+  vm.createContext(h);vm.runInContext(fn('sceneSelectionMembers')+'\n'+fn('duplicateSelectedSceneObjects'),h);const result=h.duplicateSelectedSceneObjects({interactive});
+  const outer=workingScene.groups.find(g=>'@group:'+g.id===result[0]),role=workingScene.groups.find(g=>g.parentId===outer.id);
+  assert.deepEqual([...outer.objectIds],[]);assert.equal(role.repetition.count,6);assert.equal(role.repetition.mode,'circle');assert.deepEqual([...role.objectIds],['copy']);assert.equal(workingScene.find('baffle').groupId,'ring');assert.equal(workingScene.find('copy').groupId,role.id);
+  if(interactive){completion({commit:false});assert.deepEqual(workingScene.groups.map(g=>g.id),['assembly','ring']);assert.equal(workingScene.find('copy'),undefined);assert.equal(workingScene.selection.activeId,'@group:assembly');assert.equal(recorded,0);}else assert.equal(recorded,1);
  }
 });
 
@@ -48,7 +58,7 @@ function realGroupConsumer(settings=null){
  const controller=createSceneRepetitionController({objects:()=>workingScene.objects,groups:()=>workingScene.groups,readPose});
  const read=()=>({objects:workingScene.objects.map(e=>({id:e.id,repetition:structuredClone(e.repetition),pose:readPose(e.object)})),groups:structuredClone(workingScene.groups),selection:structuredClone(workingScene.selection)});
  const restore=value=>{workingScene.replaceObjects(value.objects.map(row=>{const e=roots.get(row.id);e.repetition=structuredClone(row.repetition);e.object.position.fromArray(row.pose.position);return e;}));workingScene.setGroups(value.groups);workingScene.select(value.selection.ids,value.selection.activeId);controller.sync();};
- const h=vm.createContext({THREE:T,workingScene,checkedRepetition,canRepeatSceneObject,sceneObjectTransformState:readPose,
+ const h=vm.createContext({...groupTopology,THREE:T,workingScene,checkedRepetition,canRepeatSceneObject,sceneObjectTransformState:readPose,
   sceneRepetitionController:controller,sceneRepetitionInspector:null,repetitionEditTargets:new Set(),polyEdit:null,scenePlacementTools:{edits},
   compoundRetentionTargets:new Map(),window:{},assertSceneConstructionAvailable(){},updateSelectionFeedback(){},setInfo(){},
   readSelectionMembership:read,checkSelectionMembership:value=>value,writeSelectionMembership:restore,
@@ -81,4 +91,11 @@ test('making repeated group copies editable preserves group topology through Und
  assert.deepEqual(workingScene.groups[0].objectIds,['baffle',...copies]);assert.equal(edits.state().undoCount,1);
  await edits.undo();assert.equal(workingScene.objects.length,1);assert.equal(workingScene.find('baffle').object,original);assert.equal(workingScene.groups[0].repetition.count,3);
  await edits.redo();assert.equal(workingScene.objects.length,3);assert.equal(workingScene.groups[0].repetition,null);assert.deepEqual(workingScene.groups[0].objectIds,['baffle',...copies]);controller.clearAll();
+});
+
+test('baking a nested role refuses an inherited array before changing the assembly',async()=>{
+ const {h,workingScene,edits,controller}=realGroupConsumer();
+ workingScene.setGroups([{id:'assembly',objectIds:[],transform:pose,repetition:checkedRepetition({mode:'line',count:2,step:[3,0,0]})},...workingScene.groups.map(g=>({...g,parentId:'assembly'}))]);
+ const before=JSON.stringify(workingScene.groups);await assert.rejects(h.makeSceneRepetitionReal('@group:ring'),/parent group/);
+ assert.equal(JSON.stringify(workingScene.groups),before);assert.equal(workingScene.objects.length,1);assert.equal(edits.state().undoCount,0);controller.clearAll();
 });

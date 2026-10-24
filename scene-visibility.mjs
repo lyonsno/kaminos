@@ -1,3 +1,4 @@
+import {groupDescendants,groupObjectIds} from './scene-group-topology.mjs';
 // Viewport visibility is editor state; source enablement and collision remain
 // with their owners. The shared edit ledger owns history for every entry point.
 export function checkedHiddenIds(ids = []) {
@@ -5,7 +6,7 @@ export function checkedHiddenIds(ids = []) {
  return [...new Set(ids)];
 }
 export function visibilityParents(id,{objects=[],groups=[]}) {
- const entry=objects.find(item=>item.id===id),parents=groups.filter(group=>group.objectIds.includes(id)).map(group=>'@group:'+group.id);
+ const entry=objects.find(item=>item.id===id),parents=groups.filter(group=>id.startsWith('@group:')?groupDescendants(groups,group.id).some(g=>'@group:'+g.id===id):groupObjectIds(groups,group.id).includes(id)).map(group=>'@group:'+group.id);
  if(entry?.type==='flame-emitter')parents.push('flame-field');
  if(entry?.type==='local-liquid-emitter')parents.push('water-field');
  return parents;
@@ -51,7 +52,7 @@ export function installSceneVisibility({document,viewport,outliner,edits,scene,r
    return apply([...hidden],show?'Show in viewport':'Hide in viewport');},
   hideSelected(){const ids=selection().ids;if(!ids.length)return false;return apply([...readHidden(),...ids],'Hide selected');},
   hideUnselected(){const ids=selection().ids;if(!ids.length)return false;const s=scene(),keep=new Set(ids);
-   for(const group of s.groups)if(keep.has('@group:'+group.id))for(const member of group.objectIds)keep.add(member);
+   for(const group of s.groups)if(keep.has('@group:'+group.id)){for(const member of groupObjectIds(s.groups,group.id))keep.add(member);for(const child of groupDescendants(s.groups,group.id))keep.add('@group:'+child.id);}
    for(const field of s.fields)if(keep.has(field.id))for(const entry of s.objects)if(visibilityParents(entry.id,s).includes(field.id))keep.add(entry.id);
    for(const key of [...keep])for(const parent of visibilityParents(key,s))keep.add(parent);
    return apply([...new Set([...readHidden(),...targets().filter(key=>!keep.has(key))])],'Hide unselected');},

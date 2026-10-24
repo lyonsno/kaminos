@@ -35,7 +35,7 @@ export function repetitionMatrices(raw,rawFrame){
 export const isRepetitionCopy=node=>node?.userData?.kaminosRepetitionCopy===true;
 export function withoutRepetitionCopies(root,fn){
  const copies=root.children.filter(isRepetitionCopy);for(const copy of copies)root.remove(copy);
- try{return fn();}finally{root.add(...copies);}
+ try{return fn();}finally{for(const copy of copies)root.add(copy);}
 }
 function cloneBorrowed(node){
  if(node.isSkinnedMesh||node.isInstancedMesh||node.morphTargetInfluences?.length)throw Error('Repetition requires a static mesh');

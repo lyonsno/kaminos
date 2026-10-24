@@ -19,11 +19,17 @@ export function buildSceneOutline({fields = [], groups = [], objects = [], emitt
     push('field', field.id, 0, null, children.length);
     for (const object of children) { push('object', object.id, 1, `field:${field.id}`); placed.add(object.id); }
   }
-  for (const group of groups) {
+  const visitedGroups=new Set();
+  function addGroup(group,depth,parentKey){
+    if(visitedGroups.has(group.id))return;visitedGroups.add(group.id);
     const members = (group.objectIds || []).filter(id => present.has(id) && groupOf.get(id) === group.id && !placed.has(id));
-    push('group', group.id, 0, null, members.length);
-    for (const id of members) { push('object', id, 1, `group:${group.id}`); placed.add(id); }
+    const children=groups.filter(g=>g.parentId===group.id);
+    push('group', group.id, depth, parentKey, members.length+children.length);
+    for(const child of children)addGroup(child,depth+1,`group:${group.id}`);
+    for (const id of members) { push('object', id, depth+1, `group:${group.id}`); placed.add(id); }
   }
+  for(const group of groups)if(!group.parentId)addGroup(group,0,null);
+  for(const group of groups)if(!visitedGroups.has(group.id))addGroup(group,0,null);
   for (const object of objects) if (!placed.has(object.id)) { push('object', object.id, 0, null); placed.add(object.id); }
   return rows;
 }

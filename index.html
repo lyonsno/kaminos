@@ -2873,6 +2873,7 @@ import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTE
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createWorkingScene } from './working-scene.mjs';
+import {checkedGroupTopology,pruneGroupTopology,groupDescendants,groupObjectIds} from './scene-group-topology.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
@@ -6123,6 +6124,7 @@ function serializeSceneGroups() {
     id: group.id,
     label: sceneGroupDisplayLabel(group),
     objectIds: [...group.objectIds],
+    ...(group.parentId?{parentId:group.parentId}:{}),
     ...(group.repetition?{repetition:checkedRepetition(group.repetition)}:{}),
     ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
     source: group.source ?? null,
@@ -6138,7 +6140,7 @@ function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
   const members = [...new Set([...(previous?.objectIds||[]),...ids])];
   const group = {
     id, label:label||previous?.label||`Group ${workingScene.groups.length+1}`,
-    objectIds:members, source:metadata.source??previous?.source??null,
+    objectIds:members, parentId:metadata.parentId===undefined?(previous?.parentId??null):metadata.parentId, source:metadata.source??previous?.source??null,
     createdAt:metadata.createdAt??previous?.createdAt??new Date().toISOString(),
     repetition:checkedRepetition(metadata.repetition??previous?.repetition),
     type:GROUP_TYPE,transform:checkedGroupPose(metadata.transform||previous?.transform||groupPivotPose(members)),
@@ -6152,17 +6154,8 @@ function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
 }
 
 function setSceneGroupsFromRecords(groups = [], activeGroupId = null) {
-  workingScene.setGroups([]);
-  for (const group of groups) {
-    createSceneGroupForObjects(group.objectIds, group.label, {
-      id: group.id,
-      source: group.source,
-      createdAt: group.createdAt,
-      type: group.type, transform: group.transform, repetition:group.repetition,
-      select: false,
-    });
-  }
-  pruneSceneGroups();
+  workingScene.setGroups(checkedSceneGroups(groups));
+  for(const group of workingScene.groups)ensureGroupTarget(group);
   if(activeGroupId && workingScene.groups.some(group=>group.id===activeGroupId))workingScene.select(['@group:'+activeGroupId],'@group:'+activeGroupId);
   else workingScene.pruneSelection({fields:['flame-field','water-field']});
   renderSceneObjectList();
@@ -6600,7 +6593,7 @@ function renderSceneGroupRow(group, outline = null) {
     <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
         ${outline ? sceneOutlineToggle(outline) + sceneOutlineGlyph('group') : ''}<input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
-        <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
+        <span class="scene-object-meta">${groupObjectIds(workingScene.groups,group.id).length} objects</span>
       </span>
       <span class="scene-object-actions">
         ${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">group</span>
@@ -10225,7 +10218,7 @@ function sceneObjectMembershipSnapshot(id) {
   return {
     record,
     index,
-    groups: workingScene.groups.flatMap((group, groupIndex) => group.objectIds.includes(id)
+    groups: workingScene.groups.flatMap((group, groupIndex) => groupObjectIds(workingScene.groups,group.id).includes(id)
       ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
       : []),
     selection: { objectId: workingScene.activeObjectId, groupId: workingScene.activeGroupId },
@@ -10240,7 +10233,7 @@ function checkedSceneObjectMembership(value, id) {
       || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
       || value.groups.some(group => !group || typeof group.id !== 'string'
         || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
-        || !Array.isArray(group.objectIds) || !group.objectIds.includes(id))
+        || !Array.isArray(group.objectIds) || !groupObjectIds(value.groups,group.id).includes(id))
       || !value.selection
       || !(value.selection.objectId === null || typeof value.selection.objectId === 'string')
       || !(value.selection.groupId === null || typeof value.selection.groupId === 'string')) {
@@ -11593,8 +11586,8 @@ async function initScene() {
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
       if(event.id==='@flame-domain'){settleAuthoredFlameDomain(event);return;}
-      if(event.id==='@selection-transform'&&Object.keys(event.after.roots).some(id=>id===FLAME_EMITTER_ID||workingScene.groups.find(g=>'@group:'+g.id===id)?.objectIds.includes(FLAME_EMITTER_ID)))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
-      if (workingScene.groups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
+      if(event.id==='@selection-transform'&&sceneSelectionMembers(Object.keys(event.after.roots)).includes(FLAME_EMITTER_ID))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
+      if (groupObjectIds(workingScene.groups,workingScene.groups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.id).includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
@@ -23228,7 +23221,7 @@ const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', CAMERA_TYPE, FLAME_E
 
 function selectionForExport() {
   const group = selectedSceneGroupEntry();
-  if (group) return { label: sceneGroupDisplayLabel(group), entries: workingScene.objects.filter(entry => group.objectIds.includes(entry.id)) };
+  if (group) return { label: sceneGroupDisplayLabel(group), entries: workingScene.objects.filter(entry => groupObjectIds(workingScene.groups,group.id).includes(entry.id)) };
   const entry = selectedSceneObjectEntry();
   if (entry) return { label: sceneObjectDisplayLabel(entry), entries: [entry] };
   if (currentMesh && !currentMesh.userData?.kaminosEditorHelper) return { label: glbFileName || 'model', entries: [{ object: currentMesh, type: 'glb' }] };
@@ -25383,12 +25376,10 @@ function groupPivotPose(ids) {
 }
 function checkedSceneGroups(groups) {
   if(!Array.isArray(groups))throw Error('Groups must be an array');
-  const ids=new Set(workingScene.objects.map(o=>o.id)),assigned=new Set(),names=new Set();
-  return groups.map(raw=>{
-    if(!raw.id||names.has(raw.id)||!Array.isArray(raw.objectIds)||!raw.objectIds.length)throw Error('Invalid group');names.add(raw.id);
-    for(const id of raw.objectIds){if(!ids.has(id)||assigned.has(id))throw Error('Invalid group member');assigned.add(id);}
-    if(raw.repetition){checkedRepetition(raw.repetition);if(raw.objectIds.some(id=>!canRepeatSceneObject(workingScene.objects.find(o=>o.id===id))))throw Error('Repeated groups support static mesh objects only');}
-    return {...structuredClone(raw),type:GROUP_TYPE,transform:checkedGroupPose(raw.transform||groupPivotPose(raw.objectIds))};
+  checkedGroupTopology(groups,workingScene.objects.map(o=>o.id));
+  return pruneGroupTopology(groups,workingScene.objects.map(o=>o.id)).map(raw=>{
+    if(raw.repetition){checkedRepetition(raw.repetition);if(groupObjectIds(groups,raw.id).some(id=>!canRepeatSceneObject(workingScene.find(id))))throw Error('Repeated groups support static mesh objects only');}
+    return {...structuredClone(raw),type:GROUP_TYPE,transform:checkedGroupPose(raw.transform||groupPivotPose(groupObjectIds(groups,raw.id)))};
   });
 }
 function writeSceneGroups(groups) {
@@ -25409,9 +25400,15 @@ function editSceneGroups(change,label) {
   scenePlacementTools.edits.apply('@scene-groups',{groups:checkedSceneGroups(next)},label);return result;
 }
 function groupSceneObjects(ids,label='Group') {
-  const members=[...new Set(ids)];if(!members.length)throw Error('Choose objects to group');
+  const roots=selectionTransformRoots([...new Set(ids)],workingScene.groups),members=sceneSelectionMembers(roots);
+  if(!members.length)throw Error('Choose objects to group');
+  const direct=roots.filter(id=>!id.startsWith('@group:')),children=new Set(roots.filter(id=>id.startsWith('@group:')).map(id=>id.slice(7)));
   const id=makeSceneObjectId('group');
-  editSceneGroups(groups=>{for(const g of groups)g.objectIds=g.objectIds.filter(member=>!members.includes(member));groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));groups.push({id,label,type:GROUP_TYPE,transform:groupPivotPose(members),objectIds:members,createdAt:new Date().toISOString()});},'Group objects');
+  editSceneGroups(groups=>{
+    for(const group of groups){group.objectIds=group.objectIds.filter(member=>!direct.includes(member));if(children.has(group.id))group.parentId=id;}
+    groups.push({id,label,type:GROUP_TYPE,transform:groupPivotPose(members),objectIds:direct,createdAt:new Date().toISOString()});
+    groups.splice(0,groups.length,...pruneGroupTopology(groups,workingScene.objects.map(o=>o.id)));
+  },'Group objects');
   setActiveSceneGroup(id);return id;
 }
 function attachSceneObject(id,groupId) {
@@ -25419,7 +25416,7 @@ function attachSceneObject(id,groupId) {
     if(!workingScene.objects.some(o=>o.id===id))throw Error('Choose a scene object');
     const target=groups.find(g=>g.id===groupId);if(groupId&&!target)throw Error('Group is absent');
     for(const g of groups)g.objectIds=g.objectIds.filter(member=>member!==id);
-    if(target)target.objectIds.push(id);groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));
+    if(target)target.objectIds.push(id);groups.splice(0,groups.length,...pruneGroupTopology(groups,workingScene.objects.map(o=>o.id)));
   },groupId?'Parent object':'Unparent object');
 }
 function assertSceneConstructionAvailable() {
@@ -25482,42 +25479,9 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
 }
 const compoundInsertionTargets=new Set(),compoundRetentionTargets=new Map();
 function duplicateSceneGroup(id,{interactive=false}={}) {
-  assertSceneConstructionAvailable();const original=workingScene.groups.find(g=>g.id===id);
-  if(!original)throw Error('Choose a group');
-  const members=original.objectIds.map(member=>workingScene.objects.find(o=>o.id===member));
-  if(members.some(entry=>!canDuplicateObject(entry)))throw Error('This group contains an emitter whose duplication is not supported; duplicate its mesh members instead');
-  const groupId=makeSceneObjectId('group'),copies=[];
-  try{
-    for(const entry of members)copies.push(duplicateSceneObject(entry.id,{deferRecord:true}));
-    createSceneGroupForObjects(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition)});
-  }catch(error){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});throw error;}
-  const target=`@group-insertion:${groupId}`;
-  function snapshot(){
-    const group=workingScene.groups.find(g=>g.id===groupId),present=copies.filter(copy=>workingScene.objects.some(o=>o.id===copy));
-    if(!group&&!present.length)return null;
-    if(!group||present.length!==copies.length)throw Error('Incomplete group insertion');
-    return {objects:copies.map(copy=>serializeSceneObject(workingScene.objects.find(o=>o.id===copy))),group:structuredClone(group)};
-  }
-  scenePlacementTools.edits.register(target,{allowMissing:true,read:snapshot,
-    check:value=>{if(value===null)return null;if(!Array.isArray(value.objects)||value.objects.length!==copies.length||value.objects.some(r=>!copies.includes(r.id)||!isReloadableSceneObjectRecord(r))||value.group?.id!==groupId)throw Error('Invalid group insertion');return structuredClone(value);},
-    write:async value=>{
-      if(value===null){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false,preserveForMembershipHistory:true});setActiveSceneGroup(id);return;}
-      for(const record of value.objects){
-        const retained=workingScene.retained(record.id);
-        if(retained){scene.add(retained.object);workingScene.put(retained);}else await addSceneObjectFromSource(record);
-        const entry=workingScene.objects.find(o=>o.id===record.id);applySceneObjectTransformState(entry.object,record.transform);applyMaterialStateToObject(entry.object,record.materials);
-      }
-      createSceneGroupForObjects(copies,value.group.label,{...value.group,id:groupId});
-    }});
-  compoundInsertionTargets.add(target);for(const copy of copies)compoundRetentionTargets.set(copy,target);
-  const complete=({commit})=>{
-    scenePlacementTools.edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);
-    if(commit)scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
-    else {for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});setActiveSceneGroup(id);}
-  };
-  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start group placement');}}
-  else scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
-  return groupId;
+  assertSceneConstructionAvailable();if(!workingScene.groups.some(g=>g.id===id))throw Error('Choose a group');
+  setSceneSelection(['@group:'+id],'@group:'+id);
+  return duplicateSelectedSceneObjects({interactive})[0].slice(7);
 }
 function duplicateSceneSelection(id,options={}){if(workingScene.selection.ids.length>1)return duplicateSelectedSceneObjects(options);return workingScene.groups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
@@ -25617,19 +25581,19 @@ function syncSceneDataInspector() {
     for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
   }
   document.getElementById('selected-group-properties').hidden=!group;
-  const groupDuplicate=document.getElementById('group-duplicate');if(groupDuplicate)groupDuplicate.disabled=!group||group.objectIds.some(id=>!canDuplicateObject(workingScene.objects.find(o=>o.id===id)));
+  const groupDuplicate=document.getElementById('group-duplicate');if(groupDuplicate)groupDuplicate.disabled=!group||groupObjectIds(workingScene.groups,group.id).some(id=>!canDuplicateObject(workingScene.find(id)));
 }
 function repetitionOwner(id){
  const groupId=id?.startsWith('@group:')?id.slice(7):id,group=workingScene.groups.find(g=>g.id===groupId);
  const record=group||workingScene.objects.find(o=>o.id===id);if(!record)throw Error('Select a mesh or mesh group for repetition');
- const entries=group?group.objectIds.map(id=>workingScene.objects.find(o=>o.id===id)):[record];
+ const entries=group?groupObjectIds(workingScene.groups,group.id).map(id=>workingScene.find(id)):[record];
  if(!entries.length||entries.some(entry=>!canRepeatSceneObject(entry)))throw Error('Repetition supports static mesh objects and mesh groups');
  return {id:group?'@group:'+group.id:record.id,record,entries,frame:group?.transform||sceneObjectTransformState(record.object),group};
 }
 function repetitionInspectorTarget(){
  const id=workingScene.activeGroupId?'@group:'+workingScene.activeGroupId:workingScene.activeObjectId;if(!id)return null;
  let owner;try{owner=repetitionOwner(id);}catch{return null;}
- const parent=!owner.group?workingScene.groups.find(g=>g.objectIds.includes(id)&&g.repetition):null;
+ const parent=!owner.group?workingScene.groups.find(g=>groupObjectIds(workingScene.groups,g.id).includes(id)&&g.repetition):null;
  const bounds=new THREE.Box3();for(const entry of owner.entries)withoutRepetitionCopies(entry.object,()=>bounds.expandByObject(entry.object));
  const width=Math.max(.1,bounds.getSize(new THREE.Vector3()).x);
  return {id:owner.id,label:owner.record.label||owner.id,settings:owner.record.repetition,frame:owner.frame,editId:'@repetition:'+owner.id,parent,suggestedCenter:[owner.frame.position[0]-width*2,owner.frame.position[1],owner.frame.position[2]],effectiveCount:owner.entries[0].object.children.filter(o=>o.userData.kaminosRepetitionCopy).length+1};
@@ -25654,12 +25618,12 @@ function setSceneRepetition(id,value){assertSceneConstructionAvailable();const t
 function addSceneArray(mode){const target=repetitionInspectorTarget();if(!target)throw Error('Select a static mesh or mesh group');const settings={...(checkedRepetition(target.settings)||repetitionDefaults()),mode};if(mode==='circle'&&settings.space==='world'&&new THREE.Vector3(...settings.center).distanceTo(new THREE.Vector3(...target.frame.position))<1e-8)settings.center=target.suggestedCenter;return setSceneRepetition(target.id,settings);}
 async function makeSceneRepetitionReal(id){
  assertSceneConstructionAvailable();const owner=repetitionOwner(id);
- if(!owner.group&&workingScene.groups.some(g=>g.objectIds.includes(owner.id)&&g.repetition))throw Error('Select the parent group to make its repeated copies editable');
+ if(workingScene.groups.some(g=>g.repetition&&(owner.group?groupDescendants(workingScene.groups,g.id).some(child=>child.id===owner.group.id):groupObjectIds(workingScene.groups,g.id).includes(owner.id))))throw Error('Select the parent group to make its repeated copies editable');
  sceneRepetitionController.sync();const before=checkSelectionMembership(readSelectionMembership()),copies=[];
  const plans=owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,false);return {id:entry.id,world:entry.object.matrixWorld.clone(),deltas:sceneRepetitionController.matrices(entry)};});
  if(plans.every(plan=>plan.deltas.length===1))return [];
  try{
-  if(owner.group)workingScene.updateGroup(owner.group.id,{repetition:null});
+  if(owner.group){const ids=new Set([owner.group.id,...groupDescendants(workingScene.groups,owner.group.id).map(g=>g.id)]);workingScene.setGroups(workingScene.groups.map(g=>ids.has(g.id)?{...g,repetition:null}:g));}
   for(const entry of owner.entries){entry.repetition=null;entry.object.userData.kaminosSceneObject.repetition=null;sceneRepetitionController.clear(entry.object);}
   for(const plan of plans)for(const delta of plan.deltas.slice(1)){
    const copy=duplicateSceneObject(plan.id,{deferRecord:true}),world=delta.clone().multiply(plan.world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();world.decompose(position,rotation,scale);const euler=new THREE.Euler().setFromQuaternion(rotation);
@@ -25737,7 +25701,7 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
-    ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
+    ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');const parent=groups[i].parentId??null;for(const child of groups)if(child.parentId===id)child.parentId=parent;groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
     setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
@@ -25772,7 +25736,7 @@ let selectionTransforms=null,selectionProxy=null;
 let transformPreferences={orientation:'world',pivot:'median',explicit:true};
 let viewportHelpersVisible=true;
 const selectionBoxes=new Map();
-function sceneSelectionMembers(ids=workingScene.selection.ids){return [...new Set(ids.flatMap(id=>id==='flame-field'||id==='water-field'?[]:id.startsWith('@group:')?workingScene.groups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id]))];}
+function sceneSelectionMembers(ids=workingScene.selection.ids){return [...new Set(ids.flatMap(id=>id==='flame-field'||id==='water-field'?[]:id.startsWith('@group:')?groupObjectIds(workingScene.groups,id.slice(7)):[id]))];}
 function selectionRootState(id){
   if(id.startsWith('@group:')){const group=workingScene.groups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');return groupEditState(group);}
   const entry=workingScene.objects.find(o=>o.id===id);if(!entry)throw Error(`Selected object ${id} is absent`);
@@ -25782,7 +25746,7 @@ function checkSelectionRoot(id,state){
   if(id.startsWith('@group:')){
     const group=workingScene.groups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');
     const members=moveGroupMembers(state.frame,state,state.members);
-    if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Selected group membership changed');
+    if(Object.keys(members).sort().join()!==groupObjectIds(workingScene.groups,group.id).sort().join())throw Error('Selected group membership changed');
     for(const [member,pose] of Object.entries(members))checkSelectionRoot(member,pose);return;
   }
   const entry=workingScene.objects.find(o=>o.id===id);if(!entry)throw Error('Selected object is absent');
@@ -25819,12 +25783,12 @@ function updateSelectionFeedback(){
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
   const ids=new Set(sceneSelectionMembers());
-  const activeIds=workingScene.activeGroupId?workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds||[]:[workingScene.activeObjectId];
+  const activeIds=workingScene.activeGroupId?groupObjectIds(workingScene.groups,workingScene.activeGroupId):[workingScene.activeObjectId];
   selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
   for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
-    box.object=entry.object;box.update();box.material.color.set(id===workingScene.activeObjectId||workingScene.activeGroupId&&workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
+    box.object=entry.object;box.update();box.material.color.set(activeIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
     const emitter=[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type);
     box.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&entry.object.visible&&(viewportBoundsVisible||emitter&&viewportHelpersVisible&&viewportDisplay.overlays&&viewportDisplay.outlines&&viewportDisplay.outlineOpacity>0);
@@ -25898,7 +25862,7 @@ function checkSelectionMembership(raw){
   const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
   if(value.liveIds!==undefined&&!Array.isArray(value.liveIds))throw Error('Live scene references must be an array');
   for(const id of value.liveIds??[]){if(typeof id!=='string'||!id||ids.has(id))throw Error('Invalid live scene reference');ids.add(id);}
-  for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
+  checkedGroupTopology(value.groups,ids);for(const group of value.groups)checkedGroupPose(group.transform);
   checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
 }
 function detachSelectionMember(id){
@@ -26047,10 +26011,13 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
   const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
   try{
     for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);compoundRetentionTargets.set(copy,'@selection-membership');}
-    for(const id of roots){
-      if(id.startsWith('@group:')){const group=workingScene.groups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
-      else newRoots.push(copies.get(id));
-    }
+    const groupIds=new Set(roots.filter(id=>id.startsWith('@group:')).flatMap(id=>[id.slice(7),...groupDescendants(before.groups,id.slice(7)).map(g=>g.id)]));
+    const groupCopies=new Map([...groupIds].map(id=>[id,makeSceneObjectId('group')]));
+    const groupedCopies=new Set(before.groups.filter(g=>groupIds.has(g.id)).flatMap(g=>g.objectIds.map(id=>copies.get(id))));
+    const nextGroups=workingScene.groups.map(g=>({...g,objectIds:g.objectIds.filter(id=>!groupedCopies.has(id))}));
+    for(const group of before.groups)if(groupIds.has(group.id))nextGroups.push({...structuredClone(group),id:groupCopies.get(group.id),label:`${group.label} copy`,parentId:groupCopies.get(group.parentId)||null,objectIds:group.objectIds.map(id=>copies.get(id))});
+    workingScene.setGroups(nextGroups);for(const group of workingScene.groups)ensureGroupTarget(group);
+    for(const id of roots)newRoots.push(id.startsWith('@group:')?'@group:'+groupCopies.get(id.slice(7)):copies.get(id));
     setSceneSelection(newRoots,newRoots.at(-1));
   }catch(error){for(const id of copies.values())detachSelectionMember(id);workingScene.setGroups(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
   const complete=({commit})=>{
@@ -26063,13 +26030,18 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
 }
 function groupSelectedObjects(label='Group'){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
-  const ids=sceneSelectionMembers();if(!ids.length)throw Error('Choose objects to group');setSceneSelection(ids,ids.at(-1));return groupSceneObjects(ids,label);
+  const ids=selectedRootIds();if(!ids.length)throw Error('Choose objects to group');return groupSceneObjects(ids,label);
 }
 function ungroupSelectedObjects(){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
-  const ids=sceneSelectionMembers();setSceneSelection(ids,ids.at(-1));
-  editSceneGroups(groups=>{for(const group of groups)group.objectIds=group.objectIds.filter(id=>!ids.includes(id));groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));},'Unparent selected');
-  setSceneSelection(ids,ids.at(-1));
+  const roots=selectedRootIds(),removed=new Set(roots.filter(id=>id.startsWith('@group:')).map(id=>id.slice(7))),direct=roots.filter(id=>!id.startsWith('@group:')),nextSelection=[...direct];
+  editSceneGroups(groups=>{
+    const previous=structuredClone(groups);
+    for(const group of previous)if(removed.has(group.id)){nextSelection.push(...group.objectIds,...previous.filter(g=>g.parentId===group.id).map(g=>'@group:'+g.id));}
+    for(const group of groups){group.objectIds=group.objectIds.filter(id=>!direct.includes(id));if(removed.has(group.parentId))group.parentId=previous.find(g=>g.id===group.parentId)?.parentId??null;}
+    groups.splice(0,groups.length,...pruneGroupTopology(groups.filter(g=>!removed.has(g.id)),workingScene.objects.map(o=>o.id)));
+  },'Ungroup selected');
+  setSceneSelection(nextSelection,nextSelection.at(-1));
 }
 function syncSelectionInspector(){
   let summary=document.getElementById('selection-properties-summary');if(!summary){summary=document.createElement('p');summary.id='selection-properties-summary';summary.className='selection-summary';document.getElementById('transform-inspector').prepend(summary);}
@@ -26124,11 +26096,11 @@ function frameAuthoredSelection() {
   if(workingScene.activeFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);
   if(workingScene.selection.ids.length>1)return frameObjects(workingScene.objects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
-  return group ? frameObjects(workingScene.objects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
+  return group ? frameObjects(workingScene.objects.filter(entry=>groupObjectIds(workingScene.groups,group.id).includes(entry.id)).map(entry=>entry.object),camera,controls)
     : frameSceneObjectRecord(selectedSceneObjectEntry(),camera,controls);
 }
 function groupEditState(group) {
-  return {...structuredClone(group.transform),frame:structuredClone(group.transform),members:Object.fromEntries(group.objectIds.map(id=>{
+  return {...structuredClone(group.transform),frame:structuredClone(group.transform),groups:Object.fromEntries(groupDescendants(workingScene.groups,group.id).map(g=>[g.id,structuredClone(g.transform)])),members:Object.fromEntries(groupObjectIds(workingScene.groups,group.id).map(id=>{
     const entry=workingScene.objects.find(entry=>entry.id===id);if(!entry)throw Error(`Missing group member ${id}`);
     return [id,sceneObjectTransformState(entry.object)];
   }))};
@@ -26145,7 +26117,11 @@ function writeGroupPose(id,value) {
   const group=workingScene.groups.find(group=>group.id===id);if(!group)throw Error('Group is absent');
   const before=groupEditState(group),next=checkedGroupPose(value);
   const members=moveGroupMembers(value.frame||before.frame,next,value.members||before.members);
-  if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Group membership changed during placement');
+  const frames=moveGroupMembers(value.frame||before.frame,next,value.groups||before.groups);
+  if(Object.keys(frames).sort().join()!==Object.keys(before.groups).sort().join())throw Error('Group hierarchy changed during placement');
+  const nextGroups=workingScene.groups.map(g=>g.id===id?{...g,transform:next}:frames[g.id]?{...g,transform:frames[g.id]}:g);
+  checkedGroupTopology(nextGroups,workingScene.objects.map(o=>o.id));
+  if(Object.keys(members).sort().join()!==groupObjectIds(workingScene.groups,group.id).sort().join())throw Error('Group membership changed during placement');
   for(const [id,pose] of Object.entries(members)) {
     const entry=workingScene.objects.find(entry=>entry.id===id);
     if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:pose});
@@ -26154,7 +26130,8 @@ function writeGroupPose(id,value) {
   }
   try {for(const [id,pose] of Object.entries(members))applyAuthoredScenePose(id,pose);}
   catch(error){for(const [id,pose] of Object.entries(before.members))applyAuthoredScenePose(id,pose);throw error;}
-  workingScene.updateGroup(id,{transform:next});
+  workingScene.setGroups(nextGroups);
+  for(const g of workingScene.groups)if(frames[g.id])groupProxy(g);
   applySceneObjectTransformState(groupProxy(group),next);
   updateTransformInspector();window._kaminosDirty?.();return next;
 }
@@ -26189,12 +26166,8 @@ function checkBurnerGraph(value) {
     else throw Error('Unsupported burner object');
   }
   const sceneIds=new Set([...ids,...workingScene.objects.filter(entry=>![PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(entry=>entry.id)]);
-  const assigned=new Set(),groupIds=new Set();
-  for(const group of result.groups){
-    if(!group.id||groupIds.has(group.id)||!Array.isArray(group.objectIds)||!group.objectIds.length)throw Error('Invalid scene group');groupIds.add(group.id);
-    if(group.type===GROUP_TYPE)group.transform=checkedGroupPose(group.transform);
-    for(const id of group.objectIds){if(!sceneIds.has(id)||assigned.has(id))throw Error('Invalid group membership');assigned.add(id);}
-  }
+  checkedGroupTopology(result.groups,sceneIds);
+  for(const group of result.groups)if(group.type===GROUP_TYPE)group.transform=checkedGroupPose(group.transform);
   return result;
 }
 function writeBurnerGraphUnchecked(next) {
@@ -26272,7 +26245,7 @@ function addBurnerObject(kind) {
     if(kind==='flame-source'){selectedId=FLAME_EMITTER_ID;return;}
     const bed=newBedRecord(BURNER_DEFAULTS,bedPoseBelowSource());next.objects.push(bed);selectedId=bed.id;
     if(kind==='burner-assembly'){
-      next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>id!==FLAME_EMITTER_ID)})).filter(group=>group.objectIds.length);
+      next.groups=pruneGroupTopology(next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>id!==FLAME_EMITTER_ID)})),[...next.objects.map(o=>o.id),...workingScene.objects.filter(o=>![PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(o.type)).map(o=>o.id)]);
       const group={id:makeSceneObjectId('burner'),label:'Burner setup',type:GROUP_TYPE,transform:structuredClone(flameEmitterPose),objectIds:[bed.id,FLAME_EMITTER_ID],createdAt:new Date().toISOString()};
       next.groups.push(group);selectedId=group.id;
     }
@@ -26292,7 +26265,7 @@ function syncBurnerInspector() {
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   panel.hidden=entry?.type!==PROCEDURAL_MESH_TYPE || entry.geometry?.kind!=='annular';
   const assembly=document.getElementById('selected-assembly-properties');assembly.hidden=true;
-  if(!assembly.hidden)document.getElementById('assembly-members').textContent=`${group.objectIds.length} members · Transform the group to carry them together. Select a child to adjust its offset.`;
+  if(!assembly.hidden)document.getElementById('assembly-members').textContent=`${groupObjectIds(workingScene.groups,group.id).length} members · Transform the group to carry them together. Select a child to adjust its offset.`;
   if(panel.hidden)return;
   const binding=document.getElementById('annular-response-field');if(binding)binding.value=entry.surface.fieldBinding||'';
   const choice=document.getElementById('bed-assembly-choice');
@@ -26336,7 +26309,7 @@ function installBurnerAuthoring() {
   window.kaminosBurnerAuthoring={
     read:()=>structuredClone(readBurnerGraph()),add:addBurnerObject,
     setBed:(id,patch)=>{assertSceneConstructionAvailable();const bed=serializeSceneObject(workingScene.objects.find(o=>o.id===id));if(bed.geometry?.kind!=='annular')throw Error('Choose annular geometry');const next=checkedProceduralMesh({...bed,geometry:{kind:'annular',parameters:{...bed.geometry.parameters,...patch}},surface:{...bed.surface,...Object.fromEntries(Object.entries(patch).filter(([key])=>key in bed.surface))}});return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),next,'Edit geometry');},
-    remove:id=>burnerEdit(next=>{const group=next.groups.find(group=>group.id===id);const ids=group?group.objectIds:[id];if(!next.objects.some(record=>ids.includes(record.id)))throw Error('Burner object is absent');next.objects=next.objects.filter(record=>!ids.includes(record.id));next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>!ids.includes(id))})).filter(group=>group.objectIds.length);},'Remove burner object'),
+    remove:id=>burnerEdit(next=>{const group=next.groups.find(group=>group.id===id);const ids=group?groupObjectIds(next.groups,group.id):[id];if(!next.objects.some(record=>ids.includes(record.id)))throw Error('Burner object is absent');next.objects=next.objects.filter(record=>!ids.includes(record.id));next.groups=pruneGroupTopology(next.groups,[...next.objects.map(o=>o.id),...workingScene.objects.filter(o=>![PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(o.type)).map(o=>o.id)]);},'Remove burner object'),
     duplicate:duplicateSceneObject,
     attach:attachSceneObject,
   };

@@ -6,6 +6,7 @@ import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,checkedFireSourceRecord,authorF
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
+import {checkedGroupTopology,pruneGroupTopology} from './scene-group-topology.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
@@ -15,7 +16,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 11;
+export const SCENE_VERSION = 12;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -78,6 +79,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
+    ...(record.parentId!=null?{parentId:String(record.parentId)}:{}),
     type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
     source: record.source ?? null,
@@ -125,13 +127,14 @@ export function getSceneObjectRecords(data) {
 export function getSceneGroupRecords(data, objectRecords = getSceneObjectRecords(data)) {
   if (!Array.isArray(data?.groups)) return [];
   const objectIds = new Set(objectRecords.map(record => record.id));
-  return data.groups
+  const groups=data.groups
     .map(normalizeSceneGroupRecord)
     .map(group => ({
       ...group,
       objectIds: group.objectIds.filter(id => objectIds.has(id)),
-    }))
-    .filter(group => group.objectIds.length > 0);
+    }));
+  checkedGroupTopology(groups,objectIds);
+  return pruneGroupTopology(groups,objectIds);
 }
 
 export function hasVolumePrimitives(data) {
@@ -262,7 +265,7 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
+    version: sceneGroups.some(g=>g.parentId)?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?11:fireSettings?10:8,
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

@@ -10,7 +10,11 @@ group data are immutable; registered object IDs and root references cannot be
 assigned through a read. Domain properties and the Three objects remain owned
 by their existing adapters. Use `put`, `forget`, `reorder`, `move`, `setGroups`
 and `select` for topology changes. `setGroups` checks all membership before
-publishing and synchronizes each record's serialized group reference.
+publishing and synchronizes each record's serialized group reference. A group's
+`objectIds` are its direct members; optional `parentId` names its parent group.
+The owner rejects missing parents, duplicate membership and cycles. Empty ancestors
+remain while they contain descendants. `scene-group-topology.mjs` supplies the
+shared descendant traversal used by selection, history, visibility and persistence.
 
 `arrival()` captures the current scene lifetime. A caller captures it before
 asynchronous preparation and checks it before publishing a result. Scene

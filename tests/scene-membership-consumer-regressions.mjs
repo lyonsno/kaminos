@@ -308,6 +308,6 @@ test('duplicating a grouped light changes membership through the real scene owne
   const start=html.indexOf('function duplicateSceneObject('),end=html.indexOf('\n}',start)+2;
   vm.runInContext(html.slice(start,end),context);
   assert.equal(context.duplicateSceneObject('lamp'),'copy');
-  assert.deepEqual(workingScene.groups[0].objectIds,['lamp','copy']);
+  assert.deepEqual(Array.from(workingScene.groups[0].objectIds),['lamp','copy']);
   assert.equal(workingScene.find('copy').groupId,'pair');
 });
