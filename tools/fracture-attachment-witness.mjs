@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {checkRefinement} from './fracture-refinement-check.mjs';
+import {checkRefinement,checkBoundaryChange} from './fracture-refinement-check.mjs';
 const [url,out,playwright,executable,objectSpec]=process.argv.slice(2);
 if(!url||!out||!playwright||!executable)throw Error('URL, output directory, Playwright module and independent browser executable required');
 fs.mkdirSync(out,{recursive:true});
@@ -30,7 +30,7 @@ try{
  report.phase='source-conformance';report.effectiveURL=page.url();report.runtime=await page.evaluate(async()=>({config:await(await fetch('/api/runtime-config')).json(),scene:window.kaminosWorkbenchSceneState?.()}));report.initial=await read();save();
  assert(report.runtime.config.source.commit===commit,'Effective served revision differs from inspected checkout');
  assert(report.initial.triangleCount===object.triangles,'Wrong source triangle count');if(object.source)assert(report.initial.source===object.source,'Wrong requested source route');
- report.sourceFiles={};for(const name of ['fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs','scene-control-history.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
+ report.sourceFiles={};for(const name of ['fracture-boundary-edit.mjs','fracture-shape-worker-core.mjs','fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs','scene-control-history.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
  const asset=await page.request.get(new URL(report.initial.source,page.url()).href);report.assetDigest=createHash('sha256').update(await asset.body()).digest('hex');assert(asset.ok()&&report.assetDigest===object.sha256,'Wrong asset bytes');
  assert(report.initial.analysis.passes===7&&report.initial.analysis.cacheHit===false,'Seven-origin initial preparation missing');
  await invoke('frame');await capture('initial');
@@ -76,7 +76,7 @@ try{
  await localSlider.click();await localSlider.fill(String(maximum));await localSlider.press('Tab');report.sliderResult=await read();assert(report.sliderResult.localDetail[parent.id]===maximum,'Selected piece slider did not set explicit detail');
  report.phase='friendly-controls';save();
  await page.getByText('Global detection settings',{exact:true}).click();
- const names=['Selected piece detail','Preview separation','Grouping detail','Minimum branch reach (% object extent)','Minimum branch area (% surface)','Merge surface patches below (% surface)'];
+ const names=['Selected piece detail','Preview separation','Grouping detail','Minimum branch reach (% object extent)','Minimum branch area (% surface)','Merge surface patches below (% surface)','Cut position (% object extent)'];
  for(const name of names){const field=page.getByRole('spinbutton',{name,exact:true});assert(await field.evaluate(e=>e.classList.contains('authoring-number')&&e.parentElement.classList.contains('authoring-number-wrap')),`Shared number-drag missing: ${name}`);}
  assert(await page.getByRole('button',{name:'Apply global thresholds',exact:true}).count()===0,'Tuning still requires an Apply button');
  const reachField=page.getByRole('spinbutton',{name:names[3],exact:true}),areaField=page.getByRole('spinbutton',{name:names[4],exact:true});
@@ -96,6 +96,30 @@ try{
  const invalid=await page.evaluate(async()=>{try{await window.kaminosWorkbenchExperiments.invoke('partition',{minReachFraction:NaN,minAreaFraction:0});return false;}catch{return true;}});assert(invalid,'Invalid threshold accepted');
  await invoke('partition',report.initial.settings);await invoke('detail',1);await invoke('select',-1);await invoke('separate',.06);await capture('separated');await invoke('separate',0);await invoke('view','original');await capture('textured');await invoke('view','regions');await capture('final');report.final=await invoke('export');
  assert(report.final.labels.length===object.triangles&&report.final.hierarchy.faceOwners.length===object.triangles,'Missing source triangle ownership');assert(!report.errors.length,'Uncaught browser errors');
+ report.phase='attachment-boundary';save();
+ await invoke('select',nested.id);await invoke('keepTogether');report.boundaryBase=await invoke('export');const targetKey=report.boundaryBase.hierarchy.nodes[nested.id].key;
+ const candidateFaces=r=>r.candidateBranches.find(c=>c.key===targetKey&&c.status==='included').faces;
+ const choice=page.getByRole('combobox',{name:'Attachment boundary',exact:true});
+ report.boundaryChoices=await choice.locator('option').evaluateAll(items=>items.map(e=>({value:e.value,text:e.textContent})));
+ if(object.name==='kiln')assert(report.boundaryChoices.length>1,'No alternative attachment boundary available on the kiln fitting');
+ await invoke('separate',.035);await capture('boundary-original');await invoke('separate',0);
+ if(report.boundaryChoices.length>1){
+  await choice.selectOption(report.boundaryChoices[1].value);await settled();report.boundaryAlternative=await invoke('export');
+  report.alternativeCheck=checkBoundaryChange(report.boundaryBase,report.boundaryAlternative,targetKey);
+  await invoke('separate',.035);await capture('boundary-alternative');await invoke('separate',0);
+  await choice.selectOption('original');await settled();assert(JSON.stringify(candidateFaces(await invoke('export')))===JSON.stringify(candidateFaces(report.boundaryBase)),'Original boundary choice did not restore membership');
+ }
+ const cutField=page.getByRole('spinbutton',{name:'Cut position (% object extent)',exact:true});
+ await type(cutField,.2);await settled();report.boundaryOutward=await invoke('export');report.outwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryOutward,targetKey);
+ await invoke('separate',.035);await capture('boundary-outward');await invoke('separate',0);
+ await type(cutField,-.2);await settled();report.boundaryInward=await invoke('export');report.inwardCheck=checkBoundaryChange(report.boundaryBase,report.boundaryInward,targetKey);
+ await invoke('separate',.035);await capture('boundary-inward');await invoke('separate',0);
+ await type(cutField,.2);await settled();report.boundaryRepeated=await invoke('export');assert(JSON.stringify(candidateFaces(report.boundaryRepeated))===JSON.stringify(candidateFaces(report.boundaryOutward)),'Cut position depends on edit history');
+ const cutSetup=(await read()).setup;await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-shape',setup),cutSetup);report.boundaryReopened=await invoke('export');
+ assert(JSON.stringify(candidateFaces(report.boundaryReopened))===JSON.stringify(candidateFaces(report.boundaryRepeated)),'Reopen lost edited boundary');
+ await invoke('partition',{...report.initial.settings,minAreaFraction:1});report.boundaryAfterGlobal=await invoke('export');assert(JSON.stringify(candidateFaces(report.boundaryAfterGlobal))===JSON.stringify(candidateFaces(report.boundaryRepeated)),'Global detection erased an edited cut');
+ await invoke('partition',report.initial.settings);await invoke('boundary',0);await capture('boundary-controls');
+ assert(!report.errors.length,'Uncaught browser errors after boundary editing');
  await page.setViewportSize({width:390,height:844});await capture('narrow');report.narrow=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth}));assert(report.narrow.documentWidth===390,'Narrow viewport overflow');report.status='passed';
 }catch(error){report.status='failed';report.failure={message:error.message,stack:error.stack};if(context)try{await context.pages()[0].screenshot({path:path.join(out,'failure.png')});}catch{}process.exitCode=1;}
 finally{report.lastPhase=report.phase;report.phase='terminal';try{save();}finally{await context?.close();}}

@@ -81,7 +81,7 @@ test('surface picking and keep-together use recorded, reconstructable piece oper
 for(const counts of [[1,3,4,2,2],[1,0,7,2,2]])test(`descendant refinement inherits detail, including an empty parent remainder (${counts[1]})`,async()=>{
  const f=setup(),old=globalThis.Worker;
  // A small explicit ownership tree tests local controls, not geometry detection.
- const nodes=counts.map((ownTriangles,id)=>({id,parent:id? id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
+ const nodes=counts.map((ownTriangles,id)=>({id,key:`node:${id}`,parent:id? id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
  const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
  const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}})).filter(p=>p.triangles);parts.forEach((p,id)=>{p.id=id;});
  const result={hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:Uint32Array.from(faceOwners,node=>parts.findIndex(p=>p.nodeId===node)),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
@@ -100,7 +100,7 @@ for(const counts of [[1,3,4,2,2],[1,0,7,2,2]])test(`descendant refinement inheri
 });
 
 function controlTree(){
- const counts=[1,3,4,2,2],nodes=counts.map((ownTriangles,id)=>({id,parent:id?id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
+ const counts=[1,3,4,2,2],nodes=counts.map((ownTriangles,id)=>({id,key:`node:${id}`,parent:id?id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
  const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
  const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}}));
  return {hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:faceOwners.slice(),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
@@ -164,11 +164,11 @@ function mounted(api){
  return {elements,field:name=>elements.find(e=>e.attributes['aria-label']===name)??elements.find(e=>e.tag==='label'&&e.children[0]?.textContent===name)?.children[1],edit(input,value){input.value=value;input.dispatchEvent(new Event('input'));}};
 }
 const drain=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
-test('all six tuning controls use shared number drags and automatic thresholds coalesce',async t=>{
+test('all seven tuning controls use shared number drags and automatic thresholds coalesce',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  await withControlTree(async create=>{
   const api=await create(),ui=mounted(api),fields=ui.elements.filter(e=>e.tag==='input'&&e.type!=='checkbox');
-  assert.equal(fields.length,6);assert.ok(fields.every(e=>e.type==='number'&&e.sharedDrag),'every numeric control must use the shared number drag');
+  assert.equal(fields.length,7);assert.ok(fields.every(e=>e.type==='number'&&e.sharedDrag),'every numeric control must use the shared number drag');
   assert.ok(!ui.elements.some(e=>e.textContent==='Apply global thresholds'));
   const reach=ui.field('Minimum branch reach (% object extent)'),area=ui.field('Minimum branch area (% surface)');
   ui.edit(reach,'0.2');ui.edit(reach,'0.3');ui.edit(area,'0.02');
@@ -192,4 +192,30 @@ test('pending typed thresholds survive an older result and the latest edit wins'
   requests[0].reply();await drain();assert.equal(reach.value,'0.3');assert.equal(api.read().settings.minReachFraction,.001,'obsolete result must not replace current preview');
   assert.equal(requests.length,2);requests[1].reply();await drain();assert.equal(api.read().settings.minReachFraction,.003);assert.equal(api.read().busy,false);
  }finally{await api?.dispose();globalThis.Worker=old;}
+});
+
+test('local boundary movement preserves neighbors, survives global tuning and reconstructs exactly',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const {createShapeProcessor}=await import('../fracture-shape-worker-core.mjs');
+ const f=setup(),old=globalThis.Worker,positions=[],indices=[];
+ for(let x=0;x<=12;x++)positions.push(x,0,0,x,1,0);
+ for(let x=0;x<12;x++){const i=x*2;indices.push(i,i+2,i+1,i+1,i+2,i+3);}
+ f.mesh.geometry=new THREE.BufferGeometry();f.mesh.geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));f.mesh.geometry.setIndex(indices);
+ globalThis.Worker=class{constructor(){this.process=createShapeProcessor();}postMessage(data){queueMicrotask(()=>{try{this.onmessage({data:this.process(data)});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}});}terminate(){}};
+ const familyCuts=[{key:'fitting',faces:Array.from({length:8},(_,i)=>i+16)},{key:'neighbor',faces:[0,1]}],apis=[];
+ const create=async inputs=>{const fresh=setup();fresh.mesh.geometry=f.mesh.geometry.clone();const api=await definition.create({host:fresh.host,inputs:{source:'/strip.glb',familyCuts,...inputs},record(){}});apis.push(api);return api;};
+ const owners=api=>{const r=api.operations.export();return r.hierarchy.faceOwners.map(id=>r.hierarchy.nodes[id].key);};
+ try{
+  const api=await create(),ui=mounted(api);api.operations.select(api.read().hierarchy.nodes.find(n=>n.key==='fitting').id);api.operations.keepTogether();
+  const before=owners(api),field=ui.field('Cut position (% object extent)');assert.ok(field.sharedDrag&&!field.disabled);
+  ui.edit(field,'12');t.mock.timers.tick(200);await drain();
+  const grown=owners(api);assert.notDeepEqual(grown,before);assert.deepEqual(grown.slice(0,2),before.slice(0,2));assert.equal(api.read().fixedCuts.length,1);
+  await api.operations.boundary(0);assert.deepEqual(owners(api),before);
+  await api.operations.boundary(.12);assert.deepEqual(owners(api),grown,'absolute cut setting is independent of traversal');
+  const saved=api.read().setup,reopened=await create(saved);assert.deepEqual(owners(reopened),grown,'reopening preserves the whole chosen family');assert.deepEqual(reopened.read().localDetail,api.read().localDetail);
+  await api.operations.partition({...api.read().settings,minReachFraction:1,minAreaFraction:1});
+  assert.equal(api.read().fixedCuts[0].key,'fitting');assert.equal(api.read().selected,api.read().hierarchy.nodes.find(n=>n.key==='fitting').id);
+  const editedFaces=api.operations.export().candidateBranches.find(c=>c.key==='fitting').faces;
+  assert.deepEqual(Array.from(editedFaces),saved.fixedCuts[0].faces,'global detection cannot erase the edited cut');
+ }finally{for(const api of apis)await api.dispose();globalThis.Worker=old;}
 });
