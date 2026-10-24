@@ -34,3 +34,7 @@ test('surface dirtiness drains, no unrelated chunks rebuild, invalid restore fai
  assert.ok(d.takeDirtyBlocks().every(k=>Number(k.split(',')[0])<2));
  const bad=d.snapshot();bad.cells[0][3]=-1;assert.throws(()=>AshDeposit.restore(bad),/amount/);
 });
+test('small positive residues fall to support rather than sleeping in the air',()=>{
+ const d=new AshDeposit();d.add([0,4,0],1e-12);settle(d);
+ assert.equal(d.amount([0,4,0]),0);assert.equal(d.amount([0,0,0]),1e-12);
+});

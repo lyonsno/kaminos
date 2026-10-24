@@ -23,7 +23,7 @@ export class AshDeposit {
   for(const delta of neighbors){const q=plus(p,delta);this.wake(q);this.dirty.add(this.block(q));}
  }
  add(p,n){check(p);if(!Number.isFinite(n)||n<=0||this.amount(p)+n>1+1e-12)throw Error('Cell amount must be positive and fit available capacity');if(this.solid(p))throw Error('Cannot deposit inside solid');this.set(p,this.amount(p)+n);}
- transfer(p,q,n){if(n<=1e-9)return 0;this.set(p,this.amount(p)-n);this.set(q,this.amount(q)+n);return n;}
+ transfer(p,q,n){if(n<=0)return 0;this.set(p,this.amount(p)-n);this.set(q,this.amount(q)+n);return n;}
  step(){
   if(!this.active.size)return {visited:0,moved:0,...this.read()};
   const work=this.active;this.active=new Set();let moved=0;
@@ -35,7 +35,7 @@ export class AshDeposit {
    if(this.amount(p)>0&&(this.solid(below)||this.amount(below)>1-1e-9)){
     const lateral=[[-1,0,0],[0,0,-1],[1,0,0],[0,0,1]];
     for(let j=0;j<4;j++){const q=plus(p,lateral[(j+this.tick)%4]);if(this.solid(q))continue;
-     moved+=this.transfer(p,q,Math.max(0,(this.amount(p)-this.amount(q)-.5)/2));
+     const n=(this.amount(p)-this.amount(q)-.5)/2;if(n>1e-9)moved+=this.transfer(p,q,n);
     }
    }
   }
