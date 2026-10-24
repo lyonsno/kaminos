@@ -83,3 +83,13 @@ test('boundary witness rejects retained old geometry after a failed inward reque
  assert.throws(()=>checkBoundaryChange(before,outward,'target',{expectedOffsetFraction:-.002}),/error|position/i);
  assert.throws(()=>checkBoundaryChange(before,{...outward,error:''},'target',{expectedOffsetFraction:-.002}),/position/i);
 });
+
+test('boundary witness rejects loss of a child exposed through visible patches',async()=>{
+ const {checkBoundaryChange}=await import('../tools/fracture-refinement-check.mjs');
+ const before={triangleCount:4,labels:[0,1,2,3],hierarchy:{nodes:[{id:0,parent:null,key:'body'},{id:1,parent:0,key:'target'},{id:2,parent:1,key:'child'},{id:3,parent:2,key:'patch-a'},{id:4,parent:2,key:'patch-b'}]},partition:{parts:[{nodeId:0},{nodeId:1},{nodeId:3},{nodeId:4}]},candidateBranches:[{key:'target',status:'included',faces:[1,2,3]},{key:'child',status:'included',faces:[2,3]}]};
+ const after={...before,candidateBranches:[{key:'target',status:'included',faces:[3]}]};
+ assert.throws(()=>checkBoundaryChange(before,after,'target'),/child|protected/i);
+ const hidden={...before,labels:[0,1,1,1],partition:{parts:[{nodeId:0},{nodeId:1}]}};
+ assert.equal(checkBoundaryChange(hidden,after,'target').changedTriangles,2,'hidden unedited proposals may recompose');
+ assert.throws(()=>checkBoundaryChange({...hidden,fixedCuts:[{key:'child'}]},after,'target'),/child|protected/i,'an explicit child edit remains protected while hidden');
+});

@@ -23,9 +23,13 @@ export function checkBoundaryChange(before,after,key,{requireChange=true,expecte
  const old=new Set(a.faces),now=new Set(b.faces),changed=a.faces.filter(f=>!now.has(f)).length+b.faces.filter(f=>!old.has(f)).length;
  if(requireChange&&!changed)throw Error('Attachment boundary did not move');
  let preserved=0;
- for(const c of before.candidateBranches){if(c.status!=='included'||c.key===key||c.faces.every(f=>old.has(f)))continue;
+ for(const c of before.candidateBranches){
+  if(c.status!=='included'||c.key===key)continue;
+  const child=before.hierarchy?.nodes.find(n=>n.key===c.key),explicit=before.fixedCuts?.some(edit=>edit.key===c.key);
+  const visible=child&&before.partition?.parts.some(part=>{for(let id=part.nodeId;id!==null;id=before.hierarchy.nodes[id].parent)if(id===child.id)return true;return false;});
+  if(c.faces.every(f=>old.has(f))&&!visible&&!explicit)continue;
   const next=after.candidateBranches.find(n=>n.key===c.key&&n.status==='included');
-  if(!next||JSON.stringify(next.faces)!==JSON.stringify(c.faces))throw Error(`Changed neighboring attachment ${c.key}`);preserved++;
+  if(!next||JSON.stringify(next.faces)!==JSON.stringify(c.faces))throw Error(`Changed neighboring or protected child attachment ${c.key}`);preserved++;
  }
  return {changedTriangles:changed,preservedOtherCuts:preserved};
 }

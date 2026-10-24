@@ -235,3 +235,22 @@ test('switching fittings during pending work preserves both local cut requests',
   assert.equal(api.read().fixedCuts.find(c=>c.key==='fitting').offsetFraction,.12);assert.equal(api.read().fixedCuts.find(c=>c.key==='neighbor').offsetFraction,.08);
  }finally{await api?.dispose();globalThis.Worker=old;}
 });
+
+test('parent movement preserves a child attachment exposed through refined surface patches',async()=>{
+ const {createShapeProcessor}=await import('../fracture-shape-worker-core.mjs');
+ const f=setup(),old=globalThis.Worker,positions=[],indices=[];
+ for(let x=0;x<=12;x++)positions.push(x,0,Math.max(0,x-10),x,1,Math.max(0,x-10));
+ for(let x=0;x<12;x++){const i=x*2;indices.push(i,i+2,i+1,i+1,i+2,i+3);}
+ f.mesh.geometry=new THREE.BufferGeometry();f.mesh.geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));f.mesh.geometry.setIndex(indices);
+ globalThis.Worker=class{constructor(){this.process=createShapeProcessor();}postMessage(data){queueMicrotask(()=>{try{this.onmessage({data:this.process(data)});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}});}terminate(){}};
+ const childFaces=Array.from({length:8},(_,i)=>i+16);let api;
+ try{
+  api=await definition.create({host:f.host,inputs:{source:'/bent-strip.glb',minReachFraction:1,minAreaFraction:1,cleanupAreaFraction:0,detailLevel:3,familyCuts:[{key:'parent',faces:Array.from({length:16},(_,i)=>i+8)},{key:'child',faces:childFaces}]},record(){}});
+  const before=api.operations.export(),child=before.hierarchy.nodes.find(n=>n.key==='child');
+  assert.ok(before.partition.parts.filter(p=>before.hierarchy.nodes[p.nodeId].parent===child.id).length>=2,'the child must be represented by visible patches');
+  api.operations.select(before.hierarchy.nodes.find(n=>n.key==='parent').id);
+  await assert.rejects(api.operations.boundary(-.45),/reaches another attachment cut/);
+  const after=api.operations.export();assert.deepEqual(after.candidateBranches.find(c=>c.key==='child'&&c.status==='included')?.faces,childFaces,'refinement cannot silently remove the child cut during parent motion');
+  assert.deepEqual(after.labels,before.labels,'a rejected collision retains the accepted grouping');
+ }finally{await api?.dispose();globalThis.Worker=old;}
+});
