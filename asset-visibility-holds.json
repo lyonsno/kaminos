@@ -1,0 +1,392 @@
+{
+  "schema": "kaminos.asset-visibility-holds.v1",
+  "purpose": "Known suspect assets retained in Authoring with previews and actions withheld pending review. This is a manual hold list, not a classifier or an approval list.",
+  "holds": [
+    {
+      "id": "audit-20261023-599",
+      "kind": "image",
+      "label": "Skull head 0814 \u00b7 runs \u00b7 skull flesh skin seed81401",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=49a2dc63f41d&file=output.png"
+      ],
+      "sha256": "e1208e5c5204f1c7e6fd13d646862d39fb82b2f36b02eb5d7cc45a3d5f6d292f",
+      "size": 380509
+    },
+    {
+      "id": "audit-20261023-637",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=2cc0691a35d2&file=output.png"
+      ],
+      "sha256": "b611b2ce80f24a2fce72fb62fda025ca4a51642e9f4fbaa13956aaf2a8b0a412",
+      "size": 303473
+    },
+    {
+      "id": "audit-20261023-638",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay depth normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=de7a9d3679a2&file=output.png"
+      ],
+      "sha256": "52ad5cb81bdf046272bbb6808a39aafaee39148a2235fb9f9b3ff1ce70597ecf",
+      "size": 259524
+    },
+    {
+      "id": "audit-20261023-639",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=8f85ea972380&file=output.png"
+      ],
+      "sha256": "127aee2928f2f0c02233c48761a64307b82aa10788beb4954b63def070667734",
+      "size": 286052
+    },
+    {
+      "id": "audit-20261023-640",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay depth normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=ffee52b5d263&file=output.png"
+      ],
+      "sha256": "0fe6b3c56c4dfd2f7649fe1d5a553847a6dd1b9a589e5a86e582731fb60f383f",
+      "size": 275550
+    },
+    {
+      "id": "audit-20261023-641",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=c287e7029a01&file=output.png"
+      ],
+      "sha256": "e612ba273586da8adc26f5677bc2683e1eed24161ad7b7bda2c84241a24b971e",
+      "size": 279113
+    },
+    {
+      "id": "audit-20261023-642",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0087 preserve gestalt clay depth",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=9f0b87ddc6d4&file=output.png"
+      ],
+      "sha256": "6cf339e644f341916d57ccab259371af4077424100162b8c3900c8b80fc5dc5a",
+      "size": 284600
+    },
+    {
+      "id": "audit-20261023-643",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=278725b863b0&file=output.png"
+      ],
+      "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+      "size": 288739
+    },
+    {
+      "id": "audit-20261023-644",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay normal",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=f1b671e82228&file=output.png"
+      ],
+      "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+      "size": 262363
+    },
+    {
+      "id": "audit-20261023-645",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay depth",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=4ea0e6341688&file=output.png"
+      ],
+      "sha256": "73486303709c57d0aeb55e58e41c69efb0b3247059d975cc5c022ce5d941b657",
+      "size": 252416
+    },
+    {
+      "id": "audit-20261023-646",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 prior forward",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=181a982a1308&file=output.png"
+      ],
+      "sha256": "abd86deed01c4f732cab4ffd6b820281551a07c5efead73d50c29262e6b9afbb",
+      "size": 258921
+    },
+    {
+      "id": "audit-20261023-647",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 lineage seed",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=71acdfe325b9&file=output.png"
+      ],
+      "sha256": "7736087d77b8bcefcb3ef64c2ac5647ab83cf96da0c539595c19597b4e669c5e",
+      "size": 254109
+    },
+    {
+      "id": "audit-20261023-648",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 preserve gestalt",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=6ceeecc90e4e&file=output.png"
+      ],
+      "sha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+      "size": 271394
+    },
+    {
+      "id": "audit-20261023-649",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 prior forward",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=8a43f362b830&file=output.png"
+      ],
+      "sha256": "04e8e103ae8a612459a6ed13f4a0819314da9470816bc4f561f66f0c8b76b953",
+      "size": 180542
+    },
+    {
+      "id": "audit-20261023-650",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 lineage seed",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=bff342232d28&file=output.png"
+      ],
+      "sha256": "8e4a73f242bd321f84f87e7e7ff29f621cb84ea3df2f15670930b0613f0849fb",
+      "size": 277060
+    },
+    {
+      "id": "audit-20261023-651",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 preserve gestalt",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=5c7acd050127&file=output.png"
+      ],
+      "sha256": "f0604bb7e5b911b8dd7ff7b4ffba3349b0a11a1be2e5a8823dd45bbca21d97e2",
+      "size": 248822
+    },
+    {
+      "id": "audit-20261023-652",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 prior forward",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=31ad39b0db45&file=output.png"
+      ],
+      "sha256": "9875b7206be0860ca79c77c7b5584d81a246db5fe3d7ff00fc018a3daa20c6d2",
+      "size": 242533
+    },
+    {
+      "id": "audit-20261023-653",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 lineage seed",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=8632e626c91a&file=output.png"
+      ],
+      "sha256": "d25d0a9b40f21bc96ffc4e7f0821c631ae6b945a11fc12d39055c29a120a79e9",
+      "size": 242863
+    },
+    {
+      "id": "audit-20261023-654",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 preserve gestalt",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=9dd21cad6ec6&file=output.png"
+      ],
+      "sha256": "6ad223b54dd74a1388400bf9bb0de2c2cdbec13b0ffcf5c3abe01a8b14f86460",
+      "size": 268727
+    },
+    {
+      "id": "audit-20261023-655",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 prior forward",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=f51e209237c2&file=output.png"
+      ],
+      "sha256": "8398401876e4f568673970b0413ae440fb8f08d1e419f40f209a6d3ed0e5b752",
+      "size": 228781
+    },
+    {
+      "id": "audit-20261023-656",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 lineage seed",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=7dec4cbb021f&file=output.png"
+      ],
+      "sha256": "9b3a0aaf8db8aa9f29fbfdfb5fbe7923a913a09231b291cc14da60f47031c082",
+      "size": 218064
+    },
+    {
+      "id": "audit-20261023-657",
+      "kind": "image",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0021 preserve gestalt",
+      "basis": "visual-triage",
+      "sources": [
+        "/api/job-output?job_id=bf0f311ca03f&file=output.png"
+      ],
+      "sha256": "e1d5658f4fa54c5081a18ad5f0fd1a9e7b057139e86e61a3b6224edf6749f37f",
+      "size": 222979
+    },
+    {
+      "id": "audit-20261023-mesh-408143730b5e",
+      "kind": "mesh",
+      "label": "Lirm 0032 sparse recovery 20260715 \u00b7 cfg 1p0",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=408143730b5e&file=output.glb"
+      ],
+      "sha256": "1c5018ae16201db8a8ff43dde70aa427326238759eca687274fcb2d44d41fecb",
+      "size": 8879424
+    },
+    {
+      "id": "audit-20261023-mesh-cfaa31ef8666",
+      "kind": "mesh",
+      "label": "Lirm 0032 sparse recovery 20260715 \u00b7 cfg 0p75",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=cfaa31ef8666&file=output.glb"
+      ],
+      "sha256": "4f046e671a62bceb6f704bf19983c57699837ea7c9a5626700d3365c6c99a7b8",
+      "size": 8754348
+    },
+    {
+      "id": "audit-20261023-mesh-791f61ee1225",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p5",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=791f61ee1225&file=output.glb"
+      ],
+      "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+      "size": 9578748
+    },
+    {
+      "id": "audit-20261023-mesh-621ec0ff8e1a",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p25",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=621ec0ff8e1a&file=output.glb"
+      ],
+      "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+      "size": 9437544
+    },
+    {
+      "id": "audit-20261023-mesh-f3df4494fa60",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0087 \u00b7 cfg 0p0",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=f3df4494fa60&file=output.glb"
+      ],
+      "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+      "size": 9311904
+    },
+    {
+      "id": "audit-20261023-mesh-5b3455019187",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p5",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=5b3455019187&file=output.glb"
+      ],
+      "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+      "size": 8684524
+    },
+    {
+      "id": "audit-20261023-mesh-05501f23a0af",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p25",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=05501f23a0af&file=output.glb"
+      ],
+      "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+      "size": 8606004
+    },
+    {
+      "id": "audit-20261023-mesh-619722d00d51",
+      "kind": "mesh",
+      "label": "Lirm multisource sparse guidance 20260715 \u00b7 source 0032 \u00b7 cfg 0p0",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=619722d00d51&file=output.glb"
+      ],
+      "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+      "size": 8664440
+    },
+    {
+      "id": "audit-20261023-mesh-1d945dfb0771",
+      "kind": "mesh",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0032 prior forward clay normal",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=1d945dfb0771&file=output.glb"
+      ],
+      "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+      "size": 9410972
+    },
+    {
+      "id": "audit-20261023-mesh-3475f77bdec9",
+      "kind": "mesh",
+      "label": "Lirm beta01 gestalt4 flux2 multiref 20260715 \u00b7 prior shape 0066 preserve gestalt clay depth normal",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=3475f77bdec9&file=output.glb"
+      ],
+      "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+      "size": 9998996
+    },
+    {
+      "id": "audit-20261023-mesh-c2b2ac211b2a",
+      "kind": "mesh",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0087 preserve gestalt",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=c2b2ac211b2a&file=output.glb"
+      ],
+      "sha256": "0d44087935f750137a2bd1c6a451492c61f17f6b18a2c0877ee43e301ea5f94a",
+      "size": 9108932
+    },
+    {
+      "id": "audit-20261023-mesh-548249eaddfc",
+      "kind": "mesh",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0066 preserve gestalt",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=548249eaddfc&file=output.glb"
+      ],
+      "sha256": "116330bf1875ce107ffd9136943dba3b4fe00f5dd1a0e4597f51f771c4d5f8dc",
+      "size": 8966672
+    },
+    {
+      "id": "audit-20261023-mesh-612443decf9e",
+      "kind": "mesh",
+      "label": "Lirm beta01 gestalt4 flux2 3stance 20260715 \u00b7 prior shape 0032 prior forward",
+      "basis": "related-generation-provenance",
+      "sources": [
+        "/api/job-output?job_id=612443decf9e&file=output.glb"
+      ],
+      "sha256": "f1763d32e849661d77a8d90e47ce439398d5988cfbf20c3c5f7cb586416a1286",
+      "size": 8838556
+    }
+  ],
+  "recordedAt": "2026-10-24"
+}

@@ -39,13 +39,13 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   if(controls)controls.hidden=true;
   // Masks on the selected image (SAM); a saved cutout comes back selected.
   const masks=document.createElement('button');masks.type='button';masks.id='asset-open-masks';masks.textContent='Masks…';masks.hidden=true;
-  masks.onclick=()=>{const selected=controller.read().selected;if(selected?.kind==='image')openMasks?.(selected);};
+  masks.onclick=()=>{const selected=controller.read().selected;if(selected?.kind==='image'&&selected.visibility?.status!=='withheld')openMasks?.(selected);};
   byId('asset-use-image')?.before(masks);
   let chipKey=null;
   // Double-click: a mesh goes into the scene, an image goes to Generate.
   byId('asset-entries').addEventListener('dblclick',event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
-    const selected=controller.read().selected;if(!selected)return;
+    const selected=controller.read().selected;if(!selected||selected.visibility?.status==='withheld')return;
     if(selected.kind==='mesh')controller.add().catch(()=>{});
     else if(selected.kind==='image')open('generate');
   });
@@ -60,7 +60,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
         chip.onclick=()=>controller.browse(root.id).catch?.(()=>{});return chip;
       }));
     }
-    masks.hidden=!openMasks||state.selected?.kind!=='image';
+    masks.hidden=!openMasks||state.selected?.kind!=='image'||state.selected.visibility?.status==='withheld';
     const present=inScene();
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry')){
       const span=button.querySelector(':scope > span');if(!span)continue;

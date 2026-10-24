@@ -1,10 +1,59 @@
 """Authoring projection over existing asset and generator output records."""
-import json,re
+import hashlib,json,re
+from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode,urlsplit,parse_qsl
 
 COLLECTIONS = {'generated-meshes','image-inbox','greenroom','trellis2mlx','pixal3d'}
 IMAGE_SUFFIXES = {'.png','.jpg','.jpeg','.webp'}
+HOLDS_PATH = Path(__file__).with_name('asset-visibility-holds.json')
+
+def source_key(source):
+    url=urlsplit(source)
+    return url.path,tuple(sorted(parse_qsl(url.query)))
+
+@lru_cache(maxsize=None)
+def content_digest(path,size,mtime_ns,ctime_ns):
+    digest=hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda:handle.read(1024*1024),b''):digest.update(chunk)
+    after=path.stat()
+    if (after.st_size,after.st_mtime_ns,after.st_ctime_ns)!=(size,mtime_ns,ctime_ns):
+        raise OSError('Asset changed while checking its visibility hold')
+    return digest.hexdigest()
+
+def visibility_holds():
+    # A missing/broken hold list fails the catalog request, never silently exposes it.
+    manifest=json.loads(HOLDS_PATH.read_text())
+    if not isinstance(manifest,dict) or manifest.get('schema')!='kaminos.asset-visibility-holds.v1' or not isinstance(manifest.get('holds'),list):
+        raise ValueError('Invalid asset visibility hold list')
+    sources={};digests={};sizes=set()
+    for hold in manifest['holds']:
+        if (not isinstance(hold,dict) or hold.get('kind') not in ('image','mesh')
+            or not all(isinstance(hold.get(key),str) and hold[key] for key in ('id','label','basis'))
+            or not re.fullmatch(r'[a-f0-9]{64}',str(hold.get('sha256','')))
+            or not isinstance(hold.get('size'),int) or hold['size']<0
+            or not isinstance(hold.get('sources'),list) or not hold['sources']
+            or not all(isinstance(source,str) and source.startswith('/api/') for source in hold['sources'])):
+            raise ValueError('Invalid asset visibility hold record')
+        digests[hold['sha256']]=hold;sizes.add(hold['size'])
+        for source in hold['sources']:sources[source_key(source)]=hold
+    def apply(entry,path):
+        hold=sources.get(source_key(entry['source']))
+        if not hold:
+            # Only candidate byte lengths need hashing. Cache by file identity so browsing
+            # other collections finds renamed/copied aliases without rereading unchanged bytes.
+            try:
+                path=path.resolve();stat=path.stat()
+                if stat.st_size in sizes:hold=digests.get(content_digest(path,stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns))
+            except OSError:
+                entry['visibility']={'status':'withheld','reason':'Asset could not be checked. Awaiting further review.'}
+                return entry
+        if hold:
+            entry['label']=hold['label']
+            entry['visibility']={'status':'withheld','reason':'Hostile to eyesight. Awaiting further review.','holdId':hold['id'],'basis':hold['basis']}
+        return entry
+    return apply
 
 def asset_kind(path):
     suffix=Path(path).suffix.lower()
@@ -22,20 +71,21 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
     if collection not in COLLECTIONS:raise ValueError('Unknown authoring asset collection')
     root=roots.get(collection)
     if root is None or not Path(root).is_dir():raise FileNotFoundError('Asset collection is not mounted')
-    root=Path(root).resolve();entries=[];warnings=[];unavailable=0
+    root=Path(root).resolve();entries=[];warnings=[];unavailable=0;apply_hold=visibility_holds()
     def warn(identity,error):warnings.append({'source':str(identity),'reason':str(error)})
     def append(path,source,*,name=None,title=None,job=None,generation=None):
         kind=asset_kind(path)
         if not kind:return
         stat=path.stat()
-        entries.append({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
+        entries.append(apply_hold({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
             'name':name or path.name,'label':title or label(name or path.name), 'source':source,'size':stat.st_size,'mtime':stat.st_mtime,
             **({'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route'),'assetOrigin':{'source':source,'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route')}} if job else {}),
-            **({'generation':generation} if generation else {})})
+            **({'generation':generation} if generation else {})},path))
     if collection=='image-inbox':
         for entry in image_entries():
             if entry['root_id']!='image-inbox':continue
-            entries.append({**entry,'root':collection,'label':entry['name'],'id':entry['source']})
+            path=root/dict(parse_qsl(urlsplit(entry['source']).query))['path']
+            entries.append(apply_hold({**entry,'root':collection,'label':entry['name'],'id':entry['source']},path))
     elif collection=='greenroom':
         done=root/'done'
         for directory in sorted(done.iterdir()) if done.is_dir() else []:
