@@ -67,8 +67,9 @@ export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySource
  return loaded;
 }
 
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,encounterContext=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,encounterContext=null,steering=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
+ if(steering!==null&&(typeof steering.update!=='function'||typeof steering.read!=='function'))throw Error('Game steering requires update and read');
  const choices=[...checkRecipeInputs(inputs)];
  const data=await loadCreatureFlesh(inputs.flesh,await loadSources(inputs)),document=host.controls.document;
  let workspace=null,assigned=null;const sessionChoices=new Map();
@@ -111,7 +112,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
-  action:{engagement:{...engagement.read(),enabled:chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
+  action:{steering:steering?.read()??null,engagement:{...engagement.read(),enabled:!steering&&chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
 
 
@@ -165,7 +166,16 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    resolvedOverlay=poseOverlay.resolve(wander.frame(wander.read().frame),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
   }
   let moving=delta;
-  if(attention&&chosenInputs.attention.engage===true){
+  if(steering){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);
+   const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
+   const intent=steering.update({time:clock/1000,deltaSeconds:delta,position,arrived:path.status==='arrived',attention:attention?.read()??null});
+   if(!intent||typeof intent.source!=='string'||!intent.source||typeof intent.hold!=='boolean'||intent.destination!==null&&(!Array.isArray(intent.destination)||intent.destination.length!==3||!intent.destination.every(Number.isFinite)))throw Error('Invalid game steering intent');
+   const local=intent.destination===null?null:frame.worldToLocal(new THREE.Vector3(...intent.destination));
+   const next=local?[local.x,local.z]:null,old=wander.snapshot().path.destination??null;
+   if(next===null?old!==null:!old||next.some((v,i)=>Math.abs(v-old[i])>1e-8))wander.setDestination(next);
+   if(intent.hold)moving=0;
+  }else if(attention&&chosenInputs.attention.engage===true){
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
    const prior=engagement.read();

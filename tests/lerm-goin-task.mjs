@@ -1,0 +1,20 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {createGoinTask} from '../experiments/lerms/goin-task.mjs';
+let target={id:'goin-a',position:[2,0,0]};
+const task=createGoinTask({target:()=>target,arrivalRadius:.2});
+const step=(time,position=[0,0,0])=>task.update({time,position});
+assert.deepEqual(step(0),{source:'lerms.goin-task.v1',destination:[2,0,0],hold:false});
+step(300);assert.equal(task.read().phase,'approaching','Task must not expire like curiosity');
+target.position=[-2,0,1];assert.deepEqual(step(301).destination,[-2,0,1]);
+assert.equal(step(302,[-2,0,1]).hold,true);assert.equal(task.read().phase,'at-goin');
+target.position=[2,0,1];assert.equal(step(303,[-2,0,1]).hold,false);
+task.interrupt({id:'hit-1',source:'manual-test',seconds:2});assert.equal(step(304).hold,true);
+task.interrupt({id:'hit-1',source:'manual-test',seconds:200});assert.equal(step(305).hold,false,'Duplicate contact must not restart interruption');
+assert.equal(task.read().target,'goin-a','Interruption must preserve task identity');
+target=null;assert.deepEqual(step(306),{source:'lerms.goin-task.v1',destination:null,hold:true});
+assert.equal(task.read().phase,'waiting-target');
+target={id:'goin-a',position:[1,0,0]};assert.equal(step(307).hold,false);
+target.position=[Infinity,0,0];assert.throws(()=>step(308),/observation/);
+assert.throws(()=>step(2),/monotonic/);assert.throws(()=>task.interrupt({seconds:2}),/event/);
+console.log('Persistent goin intent follows current target, holds at arrival, resumes after sourced interruption and stops on target loss');
