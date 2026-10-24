@@ -3,6 +3,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
+import {assertWorkerDrained} from './hand-browser-witness-contract.mjs';
 const {values:a}=parseArgs({options:Object.fromEntries(['url','fixture','fixture-sha','output','browser','playwright'].map(k=>[k,{type:'string'}]))});
 const out=resolve(a.output);mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'browser_launch',input:'retained_camera_not_operator_live',url:a.url,fixture:a.fixture,fixtureSha256:a['fixture-sha'],browser:a.browser,errors:[],consoleErrors:[]};
@@ -64,8 +65,7 @@ try{
   report.reacquired=await read();
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('stop'));
   report.stopped=await read();assert.equal(report.stopped.running,false);
-  assert.equal(report.stopped.retention?.pending??0,0);
-  assert.equal(report.stopped.retention?.error??null,null);
+  assertWorkerDrained(report.stopped);
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=5);
   report.restarted=await read();assert.notEqual(report.restarted.sessionId,report.live.sessionId);
