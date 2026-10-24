@@ -33,7 +33,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const expand=document.createElement('button');expand.type='button';expand.id='asset-image-expand';expand.textContent='Expand image';expand.setAttribute('aria-expanded','false');expand.setAttribute('aria-controls','asset-step-mesh');
   const caption=document.createElement('span');caption.id='asset-image-view-label';
   tools.append(toggleLabel,expand);mesh.append(tools,frame,caption);
-  const timing=byId('asset-image-timing');if(timing)mesh.insertBefore(timing,frame);
+  const timing=image.querySelector('#asset-image-timing');if(timing)mesh.insertBefore(timing,frame);
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');
