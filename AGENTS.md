@@ -24,6 +24,33 @@ buttons for every script step, fixed value or named test case.
 
 Spatial manipulation of scene objects and their components belongs to the native editor. Domain features should make their objects participate in that editor. A separate experiment interface must not become the owner of selection and transforms merely because the feature introduced the object.
 
+### Numeric Controls And Live Tuning
+
+Use Kaminos's shared number-drag controls for adjustable numeric values. In a
+Workbench experiment, mount a labeled `input[type="number"]` with
+`class="transform-input"`, then call `host.controls.installNumberDrag` after
+attaching it. This gives relative dragging, click-to-type, Shift fine adjustment
+and the shared value/range presentation. Do not introduce raw range sliders or
+plain numeric fields as a substitute. Outside Workbench, use the same
+`installRelativeNumberDrag` implementation from `scene-control-history.mjs` or
+the existing domain adapter. See the [control recipe](docs/workbench-common-main.md#numeric-controls-and-live-tuning).
+
+Reversible tuning updates the scene as the value changes through the same
+operation used by agents. Do not require an Apply, Update or Run button after
+each parameter adjustment. Expensive recomputation may debounce/coalesce input:
+retain the newest settings, discard obsolete results, show when the displayed
+result is still pending, and stop owned work when the surface closes. Preserve
+direct numeric precision and valid bounds; set a useful drag scale when the
+interesting values occupy a small part of the range. Verify real dragging,
+typing and fine adjustment in the mounted UI, including edits during a pending
+update. Explicit commands remain appropriate for consequential actions such as
+export or starting an external generation job.
+
+Operator direction: Noah, October24,2026, Codex thread
+`01a16696-7d72-7840-9c5f-15b924a6a49b`: use Kaminos friendly sliders throughout
+the fracture controls, make this the Kaminos policy, and apply tuning changes
+automatically (debouncing is acceptable).
+
 Fixtures are useful when a controlled setup is part of the experiment. Keep that
 setup explicit and give its controls a clear purpose. When one-off machinery
 reaches the operator, usually make the small extra investment that lets them

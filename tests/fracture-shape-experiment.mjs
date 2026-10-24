@@ -13,7 +13,7 @@ function setup(){
   terminate(){terminated=true;}
  }
  const session={async loadAsset(){return {id:'source',root:source};},setView(v){return v;},redraw(){assert.equal(removed,false);},async dispose(){removed=true;source.removeFromParent();}};
- return {Worker,host:{scene:{open:async()=>session}},source,mesh,events:[],get terminated(){return terminated;},get removed(){return removed;}};
+ return {Worker,host:{scene:{open:async()=>session},controls:{installNumberDrag:({input})=>{input.sharedDrag=true;return {dispose(){input.dragDisposed=true;}};}}},source,mesh,events:[],get terminated(){return terminated;},get removed(){return removed;}};
 }
 
 test('experiment compares exact source, retains all triangles and closes its worker',async()=>{
@@ -155,3 +155,41 @@ test('mounted parent refinement remains available above a kept-together child',(
  const prior=new Map();for(let f=0;f<after.labels.length;f++){const id=after.labels[f];if(prior.has(id))assert.equal(prior.get(id),before.labels[f]);else prior.set(id,before.labels[f]);}
  assert.equal(button.disabled,true,'fully exposed subtree has no further grouping to reveal');
 }));
+
+function mounted(api){
+ const elements=[],document={activeElement:null,createElement(tag){
+  const e=new EventTarget();Object.assign(e,{tag,style:{},dataset:{},children:[],attributes:{},value:'',append(...c){this.children.push(...c);},replaceChildren(...c){this.children=c;},setAttribute(k,v){this.attributes[k]=v;},focus(){document.activeElement=this;this.dispatchEvent(new Event('focus'));},blur(){document.activeElement=null;this.dispatchEvent(new Event('blur'));}});elements.push(e);return e;
+ }};
+ api.mount({root:document.createElement('div'),document,invoke:async(n,v)=>api.operations[n](v)});
+ return {elements,field:name=>elements.find(e=>e.attributes['aria-label']===name)??elements.find(e=>e.tag==='label'&&e.children[0]?.textContent===name)?.children[1],edit(input,value){input.value=value;input.dispatchEvent(new Event('input'));}};
+}
+const drain=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
+test('all six tuning controls use shared number drags and automatic thresholds coalesce',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ await withControlTree(async create=>{
+  const api=await create(),ui=mounted(api),fields=ui.elements.filter(e=>e.tag==='input'&&e.type!=='checkbox');
+  assert.equal(fields.length,6);assert.ok(fields.every(e=>e.type==='number'&&e.sharedDrag),'every numeric control must use the shared number drag');
+  assert.ok(!ui.elements.some(e=>e.textContent==='Apply global thresholds'));
+  const reach=ui.field('Minimum branch reach (% object extent)'),area=ui.field('Minimum branch area (% surface)');
+  ui.edit(reach,'0.2');ui.edit(reach,'0.3');ui.edit(area,'0.02');
+  assert.equal(api.read().settings.minReachFraction,.001,'pending edits must not masquerade as applied');
+  assert.equal(api.read().busy,true);assert.equal(api.read().pendingSettings.minReachFraction,.003);
+  t.mock.timers.tick(200);await drain();
+  assert.equal(api.read().settings.minReachFraction,.003);assert.equal(api.read().settings.minAreaFraction,.0002);assert.equal(api.read().busy,false);
+  ui.edit(area,'');t.mock.timers.tick(200);await drain();assert.equal(api.read().settings.minAreaFraction,.0002,'incomplete typing must not apply zero');
+  area.blur();assert.equal(Number(area.value),.02);
+  ui.edit(reach,'0.4');await api.dispose();t.mock.timers.tick(200);await drain();assert.ok(fields.every(e=>e.dragDisposed));
+ });
+});
+test('pending typed thresholds survive an older result and the latest edit wins',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const f=setup(),old=globalThis.Worker,requests=[];
+ globalThis.Worker=class{postMessage(message){const reply=()=>this.onmessage({data:{id:message.id,result:structuredClone(controlTree())}});if(message.geometry)queueMicrotask(reply);else requests.push({message,reply});}terminate(){}};
+ let api;try{
+  api=await definition.create({host:f.host,inputs:{source:'/source.glb'},record(){}});const ui=mounted(api),reach=ui.field('Minimum branch reach (% object extent)');
+  ui.edit(reach,'0.2');t.mock.timers.tick(200);await drain();assert.equal(requests.length,1);
+  reach.focus();ui.edit(reach,'0.3');t.mock.timers.tick(200);await drain();assert.equal(requests.length,1,'one worker filter at a time');
+  requests[0].reply();await drain();assert.equal(reach.value,'0.3');assert.equal(api.read().settings.minReachFraction,.001,'obsolete result must not replace current preview');
+  assert.equal(requests.length,2);requests[1].reply();await drain();assert.equal(api.read().settings.minReachFraction,.003);assert.equal(api.read().busy,false);
+ }finally{await api?.dispose();globalThis.Worker=old;}
+});
