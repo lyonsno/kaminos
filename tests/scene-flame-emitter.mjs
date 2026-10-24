@@ -110,7 +110,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
 
 test('switching to cluster removes the analytic member from scene membership', () => {
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=html.indexOf('function ensureAuthoredFlameEmitter(metadata = {}) {');
+  const start=html.indexOf('function ensureAuthoredFlameEmitter(');
   const end=html.indexOf('function acceptedFlameDomainPose()',start);
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
@@ -127,7 +127,7 @@ test('switching to cluster removes the analytic member from scene membership', (
 
 test('a source-free analytic family retains the flame handle for editing and saving', () => {
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=html.indexOf('function ensureAuthoredFlameEmitter(metadata = {}) {');
+  const start=html.indexOf('function ensureAuthoredFlameEmitter(');
   const end=html.indexOf('function acceptedFlameDomainPose()',start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   let removed=0,updated=0;
