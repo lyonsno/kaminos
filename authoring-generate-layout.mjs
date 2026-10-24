@@ -1,6 +1,7 @@
 // Generate tab as three steps across the drawer: 1 Image (text -> image), 2 Mesh (the
 // image that will be used, model choice, Generate mesh), 3 Results (meshes to Add).
 // Existing controls are moved, not rebuilt, so their ids and handlers stay as they are.
+import {installImageZoom} from './authoring-image-zoom.mjs';
 import {assetSource,assetWithheld} from './authoring-assets.mjs';
 
 export function generationImageView({selected,preparedSource=null,showSegmented=true,preview=null}){
@@ -21,7 +22,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const text=byId('asset-text-image');
   if(text){text.querySelector(':scope > p')?.remove();image.append(...text.childNodes);text.remove();}
   const imageHelp=document.createElement('p');imageHelp.className='asset-help';imageHelp.textContent='Or pick an image in Browse, or open one from disk.';image.append(imageHelp);
-  let showSegmented=true,expanded=false,painted=null;
+  let showSegmented=true,expanded=false,painted=null,viewIdentity=null;
   const preference='kaminos.generate-image-view.v1';
   try{showSegmented=JSON.parse(document.defaultView.localStorage.getItem(preference))?.showSegmented!==false;}catch{/* unavailable storage keeps the page-local choice */}
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
@@ -32,7 +33,9 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   toggleLabel.append(toggle,document.createTextNode('Show segmented'));toggleLabel.title='Changes the displayed image; mesh generation still uses its prepared input.';
   const expand=document.createElement('button');expand.type='button';expand.id='asset-image-expand';expand.textContent='Expand image';expand.setAttribute('aria-expanded','false');expand.setAttribute('aria-controls','asset-step-mesh');
   const caption=document.createElement('span');caption.id='asset-image-view-label';
-  tools.append(toggleLabel,expand);mesh.append(tools,frame,caption);
+  const fit=document.createElement('button');fit.type='button';fit.id='asset-image-fit';fit.hidden=true;
+  const zoom=installImageZoom({frame,targets:[preview,canvas],resetButton:fit});
+  tools.append(toggleLabel,fit,expand);mesh.append(tools,frame,caption);
   const timing=image.querySelector('#asset-image-timing');if(timing)mesh.insertBefore(timing,frame);
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
@@ -57,6 +60,8 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     // Mesh step shows it, at the stage generation will actually use.
     const source=byId('asset-image'),state=imageState();
     const view=generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
+    const identity=view.preview?.runId||selected()?.source||selected()?.path||null;
+    if(identity!==viewIdentity){zoom.reset();viewIdentity=identity;}
     const showing=!!(view.source||view.preview);frame.hidden=!showing;preview.hidden=!view.source;canvas.hidden=!view.preview;
     if(view.source&&preview.getAttribute('src')!==view.source)preview.src=view.source;
     if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=view.label;caption.hidden=!showing;
