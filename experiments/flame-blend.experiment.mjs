@@ -5,7 +5,7 @@ export default {
   async create({host,inputs,record}) {
     if(!host.flame?.open)throw Error('Flame authoring host is unavailable');
     const flame=await host.flame.open();
-    if(!flame.beginPreview||!flame.readBasin)throw Error('This host does not support flame endpoint blending');
+    if(!flame.beginPreview||!flame.readBasin||!flame.initialize)throw Error('This host does not support flame endpoint blending');
     const scene=await host.scene.open();
     let sync=()=>{},stop=()=>{},alive=true;
     const blend=createFlameBlend({flame,onFrame:scene.onFrame,record,changed:()=>sync()});
@@ -15,9 +15,10 @@ export default {
       async mount({root,document,invoke}) {
         const el=(tag,text,className)=>{const node=document.createElement(tag);if(text)node.textContent=text;if(className)node.className=className;return node;};
         const style=el('style');style.textContent=`
-          .flame-blend-cockpit {display:grid;gap:12px;padding:4px 0;font-size:12px;}
+          .flame-blend-cockpit {display:grid;gap:8px;padding:4px 0;font-size:12px;}
+          .flame-blend-cockpit [hidden] {display:none!important;}
           .flame-blend-cockpit p {margin:0;color:var(--muted,#aaa);line-height:1.5;}
-          .flame-blend-endpoint {display:grid;gap:6px;padding:10px;border:1px solid #ffffff20;border-radius:6px;}
+          .flame-blend-endpoint {display:grid;gap:4px;padding:6px;border:1px solid #ffffff20;border-radius:6px;}
           .flame-blend-cockpit select {width:100%;min-width:0;}
           .flame-blend-actions {display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
           .flame-blend-cockpit input[type=range] {width:100%;}
@@ -29,7 +30,7 @@ export default {
           .flame-blend-status {min-height:2.5em;line-height:1.4;color:var(--muted,#bbb);}
         `;
         const panel=el('div',null,'flame-blend-cockpit');panel.dataset.flameBlend='true';root.append(style,panel);
-        panel.append(el('p','Author a look in Properties, capture it, then blend toward another. The flame keeps evolving.'));
+        panel.append(el('p','Author in Properties. Capture A and B, then choose what moves together.'));
         const status=el('div',null,'flame-blend-status');status.setAttribute('role','status');
         let message='',lastChoices='';
         const failed=error=>{message=error.message;sync();};
@@ -62,7 +63,7 @@ export default {
         const durationLabel=el('label','Seconds '),duration=el('input');duration.type='number';duration.step='any';duration.min='0';duration.setAttribute('aria-label','Blend duration in seconds');duration.className='transform-input';
         duration.addEventListener('change',()=>run('setDuration',Number(duration.value)));durationLabel.append(duration);
         host.controls.installNumberDrag({input:duration,grip:durationLabel,step:.1});editing.push(duration);
-        actions.append(play,pause,cancel,durationLabel);panel.append(actions);
+        actions.append(play,pause,cancel,durationLabel);panel.insertBefore(blendLabel,panel.children[1]);panel.insertBefore(actions,panel.children[2]);
         const fields=el('div');panel.append(fields);
         panel.append(el('p','Checked parameters travel between A and B. Unchecked values, modes and grid settings stay at their scene values.'));
         const files=el('div',null,'flame-blend-actions');
@@ -76,7 +77,7 @@ export default {
           const state=blend.read(),busy=state.previewing||state.loading;
           for(const name of ['a','b'])endpointLabels[name].textContent=name.toUpperCase()+' · '+(state[name]?.label||'Choose or capture a look');
           for(const node of editing)node.disabled=busy;
-          useA.hidden=state.active;useA.disabled=busy||!state.a?.settings.source?.presetId;
+          useA.hidden=state.active||state.present;useA.disabled=busy||!state.a?.settings.source?.presetId;
           amount.disabled=!state.active||!state.fields.length||!state.a||!state.b||state.playing||state.loading;
           if(!dragging)amount.value=String(state.amount);progress.textContent=Math.round(state.amount*100)+'%';
           if(document.activeElement!==duration)duration.value=String(state.duration);
@@ -99,7 +100,7 @@ export default {
             }
             lastChoices=signature;
           }
-          status.textContent=message||state.error||(state.loading?'Loading endpoint…':!state.active?'Choose A, then add its flame to the scene.':!state.a||!state.b?'Capture or choose both endpoints.':state.playing?'Blending · flame simulation remains live':state.previewing?'Release to keep this blend; Escape cancels.':state.fields.length+' parameters linked · edit endpoint looks in Properties');
+          status.textContent=message||state.error||(state.loading?'Loading endpoint…':!state.active?(state.present?'Enable the existing flame in Properties to blend.':'Choose A, then add its flame to the scene.'):!state.a||!state.b?'Capture or choose both endpoints.':state.playing?'Blending · flame simulation remains live':state.previewing?'Release to keep this blend; Escape cancels.':state.fields.length+' parameters linked · edit endpoint looks in Properties');
         };
         stop=flame.subscribe(sync);sync();
         try {const index=await flame.listBasins();if(!alive)return;

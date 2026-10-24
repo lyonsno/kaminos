@@ -81,3 +81,15 @@ test('failed preview restores the previous frame and cancellation restores gestu
  next.domControls.flow.value=2;assert.throws(()=>preview.update(next),/runtime rejected/);
  assert.equal(flame.read().domControls.flow.value,3);preview.cancel();assert.equal(flame.read().domControls.flow.value,1);assert.equal(edits.state().undoCount,0);
 });
+
+test('preview prepares native control representation before transactional write',()=>{
+ let live={domControls:{gain:{value:1}}};
+ const edits=createSceneEdits({read:()=>null,write:()=>{}});
+ // Observed Chrome range serialization from the live cockpit scrub witness.
+ const native=value=>value===13.83333333333335?13.8333333333334:value;
+ const flame=createFlameAuthoring({edits,read:()=>structuredClone(live),
+  write:next=>{if(next.domControls.gain.value!==native(next.domControls.gain.value))throw Error('non-native control value');live=next;},check:next=>next,
+  preparePreview:next=>{const result=structuredClone(next);result.domControls.gain.value=native(result.domControls.gain.value);return result;}});
+ const preview=flame.beginPreview();preview.update({domControls:{gain:{value:13.83333333333335}}});preview.commit();
+ assert.equal(live.domControls.gain.value,13.8333333333334);edits.undo();assert.equal(live.domControls.gain.value,1);
+});

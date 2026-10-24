@@ -39,7 +39,7 @@ export function flamePresetForLocalControls(preset,localScale) {
 
 // One whole-settings operation over the existing runtime and chronological ledger.
 // Presets contain authored coefficients, never a checkpoint of the evolving fluid.
-export function createFlameAuthoring({ edits, read, write, check, load, canApply = () => {}, changed = () => {} }) {
+export function createFlameAuthoring({ edits, read, write, check, load, preparePreview = state => state, canApply = () => {}, changed = () => {} }) {
   const id = '@flame-settings';
   function restore(next) {
     const checked = check(structuredClone(next));
@@ -80,7 +80,7 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
         update(next) {
           if (!active) throw Error('Flame preview has ended');
           canApply();
-          return edits.preview(check(structuredClone(next)));
+          return edits.preview(preparePreview(check(structuredClone(next))));
         },
         commit() { if (active) edits.commit(); },
         cancel() { if (active) edits.cancel(); },
