@@ -84,7 +84,7 @@ for(const counts of [[1,3,4,2,2],[1,0,7,2,2]])test(`descendant refinement inheri
  const nodes=counts.map((ownTriangles,id)=>({id,key:`node:${id}`,parent:id? id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
  const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
  const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}})).filter(p=>p.triangles);parts.forEach((p,id)=>{p.id=id;});
- const result={hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:Uint32Array.from(faceOwners,node=>parts.findIndex(p=>p.nodeId===node)),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
+ const result={candidateBranches:[],hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:Uint32Array.from(faceOwners,node=>parts.findIndex(p=>p.nodeId===node)),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
  globalThis.Worker=class {postMessage({id}){queueMicrotask(()=>this.onmessage({data:{id,result:structuredClone(result)}}));}terminate(){}};
  try{
   const api=await definition.create({host:f.host,inputs:{source:'/source.glb'},record(){}});
@@ -103,7 +103,7 @@ function controlTree(){
  const counts=[1,3,4,2,2],nodes=counts.map((ownTriangles,id)=>({id,key:`node:${id}`,parent:id?id-1:null,kind:id?'branch':'component',depth:id,children:id<4?[id+1]:[],ownTriangles,triangles:counts.slice(id).reduce((a,b)=>a+b,0),area:counts.slice(id).reduce((a,b)=>a+b,0)}));
  const faceOwners=Uint32Array.from(counts.flatMap((count,id)=>Array(count).fill(id)));
  const parts=counts.map((triangles,id)=>({id,nodeId:id,triangles,area:triangles,center:[0,0,0],bounds:{min:[0,0,0],max:[1,1,1]}}));
- return {hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:faceOwners.slice(),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
+ return {candidateBranches:[],hierarchy:{schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:4},labels:faceOwners.slice(),parts,boundaries:[],attachments:[],sourceComponents:1,triangleCount:12};
 }
 async function withControlTree(run){
  const old=globalThis.Worker,tree=controlTree();
