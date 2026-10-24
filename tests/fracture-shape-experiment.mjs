@@ -136,3 +136,8 @@ test('reapplying identical thresholds preserves explicit local grouping',()=>wit
  await api.operations.partition(api.read().settings);
  assert.deepEqual(faceOwnership(api),before);assert.deepEqual(api.read().setup,setup);
 }));
+
+test('Finer here on a parent preserves a more detailed child',()=>withControlTree(async create=>{
+ const api=await create({detailLevel:2});api.operations.select(2);api.operations.pieceDetail(4);const before=api.operations.export();api.operations.select(1);api.operations.refine();const after=api.operations.export(),prior=new Map();
+ for(let f=0;f<after.labels.length;f++){const id=after.labels[f];if(prior.has(id))assert.equal(prior.get(id),before.labels[f],'Finer here must not merge a previously refined child');else prior.set(id,before.labels[f]);}
+}));
