@@ -118,6 +118,7 @@ async function main(){
         if(!active||active.finishedAt!==undefined)return forward.apply(this,args);
         const stage={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
         window.flux3SmokeCompute.push(stage);
+        if(window.flux3SmokeCompute.length===${report.decodeAfter}){const button=document.getElementById('asset-text-decode');if(button.hidden||button.disabled)throw Error('Decode now is unavailable');button.click();}
         try{return await forward.apply(this,args);}
         finally{stage.after=window.kaminosAppFrameSource()?.completedFrames??0;stage.finishedAt=performance.now();}
       };
@@ -132,7 +133,6 @@ async function main(){
           const canvas=document.getElementById('asset-step-preview'),rect=canvas.getBoundingClientRect();
           const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,colors=new Set();
           for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
-          if(frame.step===${report.decodeAfter}){const button=document.getElementById('asset-text-decode');if(button.hidden||button.disabled)throw Error('Decode now is unavailable');button.click();}
           window.flux3SmokePreviews.push({step:frame.step,steps:frame.steps,width:canvas.width,height:canvas.height,at:performance.now(),visible:!canvas.hidden&&rect.width>0&&rect.height>0,distinctRgb:colors.size,png:canvas.toDataURL('image/png').split(',')[1],timer:document.getElementById('asset-image-timing').textContent});
         }};
         try{return await original.call(this,options);}
