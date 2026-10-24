@@ -7,6 +7,7 @@ export function createShapeProcessor(){let graph;return data=>{
    motion=moveShapeBoundary(graph,boundaryAnchor(result,key,anchorFaces,{protectedKeys}),offsetFraction);
    const moved=new Set(motion.faces),original=new Set(result.candidateBranches.find(c=>c.key===key).faces);
    const family=result.candidateBranches.filter(c=>{if(c.status!=='included')return false;if(c.key===key||!Array.from(c.faces).every(f=>original.has(f)))return true;const count=Array.from(c.faces).filter(f=>moved.has(f)).length;return count===0||count===c.faces.length;}).map(c=>({key:c.key,faces:c.key===key?motion.faces:Array.from(c.faces)}));
+   if(family.some(c=>c.key!==key&&c.faces.length===motion.faces.length&&c.faces.every(f=>moved.has(f))))throw Error('This position reaches another attachment cut; the previous cut is retained');
    result=geodesicNeckPartition(graph,{...data.settings,fixedCuts:family});
    fixedCuts=[...fixedCuts.filter(c=>c.key!==key),{key,faces:motion.faces,anchorFaces,originalFaces,variantKey,offsetFraction:motion.offsetFraction,limits:motion.limits,reassignedIslands:motion.reassignedIslands}];
   }
