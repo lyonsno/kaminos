@@ -141,3 +141,17 @@ test('Finer here on a parent preserves a more detailed child',()=>withControlTre
  const api=await create({detailLevel:2});api.operations.select(2);api.operations.pieceDetail(4);const before=api.operations.export();api.operations.select(1);api.operations.refine();const after=api.operations.export(),prior=new Map();
  for(let f=0;f<after.labels.length;f++){const id=after.labels[f];if(prior.has(id))assert.equal(prior.get(id),before.labels[f],'Finer here must not merge a previously refined child');else prior.set(id,before.labels[f]);}
 }));
+
+test('mounted parent refinement remains available above a kept-together child',()=>withControlTree(async create=>{
+ const api=await create({detailLevel:4}),elements=[];
+ const document={createElement(tag){const e={tag,style:{},dataset:{},children:[],handlers:{},append(...c){this.children.push(...c);},replaceChildren(...c){this.children=c;},setAttribute(){},addEventListener(n,f){this.handlers[n]=f;}};elements.push(e);return e;}};
+ api.mount({root:document.createElement('div'),document,invoke:async(n,v)=>api.operations[n](v)});
+ const button=elements.find(e=>e.textContent==='Finer here');
+ api.operations.select(2);api.operations.keepTogether();api.operations.select(1);
+ const before=api.operations.export();
+ assert.equal(button.disabled,false,'parent must expose the coarser child through its mounted button');
+ button.handlers.click();const after=api.operations.export();
+ assert.ok(after.partition.parts.length>before.partition.parts.length);
+ const prior=new Map();for(let f=0;f<after.labels.length;f++){const id=after.labels[f];if(prior.has(id))assert.equal(prior.get(id),before.labels[f]);else prior.set(id,before.labels[f]);}
+ assert.equal(button.disabled,true,'fully exposed subtree has no further grouping to reveal');
+}));
