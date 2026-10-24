@@ -20,7 +20,15 @@ try{
   const fail=error=>{report.errors.push(String(error));reject(Error(String(error)));};
   page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
   const guard=promise=>Promise.race([promise,failure]);
-  await page.addInitScript(()=>{const error=console.error.bind(console);console.error=(...args)=>error(...args,new Error('Console error origin').stack);});
+  await page.addInitScript(()=>{
+    const error=console.error.bind(console);console.error=(...args)=>error(...args,new Error('Console error origin').stack);
+    window.__burnLabelDraws=0;
+    const fillText=CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText=function(text,...args){
+      if(['Burning','Not burning - warm','Not burning - cold'].includes(text))window.__burnLabelDraws++;
+      return fillText.call(this,text,...args);
+    };
+  });
   report.url=origin+'/volume-settings-preset.html?preset=vsp-5d3c953814884ed597721350fde28d275a00af04a087d8bb5ec8127984c92bcc#workspace=workbench&volume_light_field=1&volume_light_field_scene_depth=1&volume_light_field_test_scene=0&volume_collision=kiln';
   report.phase='load';await save();await guard(page.goto(report.url));
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring&&window.__kaminosVolumeEmitterReceipt&&window.__kaminosVolumePrototype?.debugState().active));
@@ -42,6 +50,8 @@ try{
   report.effective=await page.evaluate(()=>{const r=window.__kaminosVolumePrototype.debugState();return {backend:r.backend,grid:r.simGrid,rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value),gi:{steps:Number(document.getElementById('scene-gi-steps').value),slices:Number(document.getElementById('scene-gi-slices').value)},consumer:window.__kaminosVolumePrototype.thermalConsumerState()?.identity};});
   assert.deepEqual(report.effective.gi,{steps:4,slices:3});
   assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.consumer,'kaminos.scene-burning.v1');
+  report.burnLabelDraws=await page.evaluate(()=>window.__burnLabelDraws);await save();
+  assert.equal(report.burnLabelDraws,0,'Ordinary burning must not create floating burn-state labels');
   report.sources=[];
   for(const name of ['index.html','authoring-workspace.mjs','scene-burning.mjs','scene-burn-body.mjs','scene-burning-settings.mjs','scene-repetition.mjs','scene-repetition-controller.mjs','scene-radiance.mjs','burn-table-material.mjs','scene-persistence-core.js','live-log-indicator.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','live-log-heat-gpu.mjs','live-log-gas-source.mjs']){
     const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.equal(response.ok(),true);
