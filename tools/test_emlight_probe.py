@@ -1,13 +1,63 @@
 import unittest
 import json
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 import numpy as np
 import emlight_probe as probe
 from emlight_probe import camera_to_native, panorama_grid, project_sh, validate_prediction, main
 
 
 class LightingMath(unittest.TestCase):
+    def test_producer_accepts_reference_energy_missed_by_preview(self):
+        rgb = np.zeros((512, 1024, 3)); rgb[100, 100] = [10000, 5000, 1000]
+        preview_directions, _ = panorama_grid(128, 256)
+        self.assertEqual(probe.sample_panorama(rgb, preview_directions).max(), 0)
+
+        class Tensor:
+            def __init__(self, value): self.value = np.asarray(value)
+            def to(self, *_): return self
+            def unsqueeze(self, *_): return self
+            def detach(self): return self
+            def cpu(self): return self
+            def numpy(self): return self.value
+
+        class Model:
+            def eval(self): return self
+            def load_state_dict(self, *_, **__): pass
+            def to(self, *_): return self
+            def parameters(self): return []
+            def __call__(self, _):
+                return {key:Tensor(value) for key,value in {
+                    'distribution':np.ones(96)/96, 'intensity':[1],
+                    'rgb_ratio':[1,1,1], 'ambient':[.1,.1,.1]}.items()}
+
+        torch = SimpleNamespace(__version__='deterministic-test-stub',
+                                load=lambda *a, **kw:{}, from_numpy=Tensor,
+                                inference_mode=nullcontext)
+        spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module:None))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'RegressionNetwork').mkdir()
+            for path in ['checkpoint.pth','source.hdr','RegressionNetwork/DenseNet.py']:
+                (root/path).write_bytes(b'test-only')
+            with patch.dict('sys.modules', {'torch':torch}), \
+                 patch.object(probe.importlib.util, 'spec_from_file_location', return_value=spec), \
+                 patch.object(probe.importlib.util, 'module_from_spec', return_value=SimpleNamespace(DenseNet=Model)), \
+                 patch.object(probe.subprocess, 'check_output', return_value='test-revision'), \
+                 patch.object(probe, 'read_environment', return_value=rgb):
+                main(['--source-root',tmp,'--checkpoint',str(root/'checkpoint.pth'),
+                      '--environment',str(root/'source.hdr'),'--output-dir',tmp,'--device','cpu'])
+            state = json.loads((root/'lighting.json').read_text())
+            self.assertEqual(state['status'], 'complete')
+            self.assertEqual(state['effectiveDevice'], 'cpu')
+            expected, mean = probe.environment_coefficients(rgb, 0)
+            np.testing.assert_allclose(state['lights']['reference']['sh'], expected)
+            self.assertEqual(state['lights']['reference']['meanLuminanceBeforeNormalization'], mean)
+            self.assertGreater(mean, 0)
+
     def test_reference_keeps_a_small_bright_emitter_between_preview_samples(self):
         self.assertTrue(callable(getattr(probe, 'environment_coefficients', None)), 'reference SH must integrate original HDR pixels')
         rgb = np.zeros((256, 512, 3)); rgb[100, 100] = [10000, 5000, 1000]

@@ -205,12 +205,13 @@ def main(argv=None):
                                               'degree-2 SH diffuse comparison, not sharp specular relighting']}
         report['lights'] = {}
         for name, env in [('reference',reference), ('estimated',estimated)]:
-            mean = np.einsum('hwc,hw,c->',env,weights,np.array([.2126,.7152,.0722]))/weights.sum()
-            if not np.isfinite(mean) or mean <= 0:
-                raise ValueError(f'{name} has no positive finite energy')
-            coefficients = project_sh(env / mean, native_to_camera(native), weights)
             if name == 'reference':
                 coefficients, mean = environment_coefficients(environment, args.view_yaw)
+            else:
+                mean = np.einsum('hwc,hw,c->',env,weights,np.array([.2126,.7152,.0722]))/weights.sum()
+                if not np.isfinite(mean) or mean <= 0:
+                    raise ValueError(f'{name} has no positive finite energy')
+                coefficients = project_sh(env / mean, native_to_camera(native), weights)
             report['lights'][name] = {'sh':coefficients.tolist(), 'meanLuminanceBeforeNormalization':float(mean),
                                       'preview':png_url(tone(env))}
         report['interpretation']['referenceIntegration'] = 'original HDR pixels and solid angles; preview downsampling does not set lighting'
