@@ -1,6 +1,7 @@
 import {Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide} from '../lib/three.core.js';
 import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
 import {openCaptureStore} from './hand-live-retention.mjs';
+import {openBrowserCaptureStore} from './hand-browser-retention.mjs';
 import {nativeFingerPacket,idleFingerPacket,fingerFluidLoad} from './hand-live-fluid.mjs';
 
 export default {
@@ -36,7 +37,7 @@ export default {
     let acquisitionMode=inputs.acquisitionMode ?? 'manual', cropPadding=Number(inputs.cropPadding ?? 1.4), detectorThreshold=Number(inputs.detectorThreshold ?? .18);
     if (!['manual','detector'].includes(acquisitionMode) || (acquisitionMode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
     scene = await host.scene.open();
-    captures = await openCaptureStore(browserBackend?.retain);
+    if(!browser)captures = await openCaptureStore();
     const geometry = new BufferGeometry();
     geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
     geometry.setIndex(health.faces.flat());
@@ -47,7 +48,7 @@ export default {
     const video = document.createElement('video'); video.muted=true; video.autoplay=true; video.playsInline=true;
     video.style.cssText='width:100%;display:block';
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
-    let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
+    let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight, stopping;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
     let particleCount=Number(inputs.particleCount??2400),sourceFlux=Number(inputs.sourceFlux??360);
     if(!Number.isSafeInteger(particleCount)||particleCount<1)throw Error('Invalid particle capacity');
@@ -72,6 +73,7 @@ export default {
       fluidState=runtime;
       return {authority:browser?'browser_webgpu_diagnostic_not_interaction':'live_native_diagnostic_not_interaction',interactionAuthority:false,
       identity:health.identity,endpoint:browser?null:endpoint.href,sessionId,running,starting,error,received,
+      retention:browser?captures?.read()??null:null,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
@@ -108,17 +110,24 @@ export default {
           width:`${(x1-x0)/video.videoWidth*100}%`,height:`${(y1-y0)/video.videoHeight*100}%`});
       }
     };
-    const emit = value => api('/event',{sessionId,...value});
-    const stop = async () => {
+    const emit = async value => {
+      const event={sessionId,...value};
+      if(browser){captures.event(event);return;}
+      return api('/event',event);
+    };
+    const stop = () => stopping??=(async () => {
       running=false; generation++;
       if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
       stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;
       updateFluid();useFluid(live=>live.setPaused(true));sync();
       if (flight) await flight.catch(()=>{});
-      await browserBackend?.stopRecording();
-      if (sessionId) await emit({kind:'stop',epochMs:Date.now(),lastCaptureId:last?.captureId ?? null});
+      try {await browserBackend?.stopRecording();}
+      finally {
+        try {if (sessionId) await emit({kind:'stop',epochMs:Date.now(),lastCaptureId:last?.captureId ?? null});}
+        finally {if(browser)await captures?.flush();}
+      }
       record({kind:'hand-live.stop',phase:'applied',effective:read()});return read();
-    };
+    })().finally(()=>{stopping=null;});
     const schedule = ticket => {
       if (!running || ticket!==generation || disposed) return;
       frameCallback=video.requestVideoFrameCallback((now,metadata) => {
@@ -127,26 +136,43 @@ export default {
           updateFluid();useFluid(live=>live.setPaused(true));
           if(sessionId) await emit({kind:'failure',error,epochMs:Date.now(),submission:lastSubmission}).catch(()=>{});
           await browserBackend?.stopRecording().catch(cause=>{error+=`; ${cause}`;sync();});
+          if(browser)await captures?.flush().catch(cause=>{error+=`; ${cause}`;sync();});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
     };
     const infer = async (ticket,metadata) => {
-      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      if(canvas.width!==video.videoWidth)canvas.width=video.videoWidth;
+      if(canvas.height!==video.videoHeight)canvas.height=video.videoHeight;
       const capture={captureId:crypto.randomUUID(),captureEpochMs:Date.now(),acquisitionMode,cropPadding,detectorThreshold};
       context.drawImage(video,0,0);
       const request={...capture,sessionId,handedness,pixelBasis:'unmirrored_camera',
         clock:'browser_sample_not_sensor_exposure',videoFrameMetadata:metadata,
         cropBox:cameraCrop(canvas.width,canvas.height,cropX,cropY,cropSize),
-        imageMime:browser?'image/png':'image/jpeg',image:canvas.toDataURL(browser?'image/png':'image/jpeg',.95).split(',')[1]};
+        ...(browser?{}:{imageMime:'image/jpeg',image:canvas.toDataURL('image/jpeg',.95).split(',')[1]})};
       lastSubmission={captureId:capture.captureId,database:'hand-live-diagnostic',store:'captures',origin:document.location.origin};
       const retained={captureId:capture.captureId,request,identity:health.identity,outcome:{state:'submitted'}};
-      await captures.put(retained);
+      if(!browser)await captures.put(retained);
       let result;
+      let bitmap,submitted=false;
       try {
-        result=await api('/frame',request,canvas);
-        await captures.put({...retained,outcome:{state:'computed',serverOutput:result.output,...(browser?{prediction:result}:{})}});
+        if(browser) {
+          captures.check();
+          bitmap=await createImageBitmap(canvas);
+          // The route synchronously uploads this snapshot before its first await.
+          const inference=api('/frame',request,bitmap);
+          try{captures.begin(retained,bitmap);submitted=true;bitmap=null;}
+          catch(cause){await inference.catch(()=>{});throw cause;}
+          result=await inference;
+          captures.finish(capture.captureId,{state:'computed',prediction:result});
+        } else {
+          result=await api('/frame',request,canvas);
+          await captures.put({...retained,outcome:{state:'computed',serverOutput:result.output}});
+        }
       } catch(cause) {
-        await captures.put({...retained,outcome:{state:'failed',error:String(cause),epochMs:Date.now()}});
+        bitmap?.close();
+        const outcome={state:'failed',error:String(cause),epochMs:Date.now()};
+        if(browser){if(submitted)captures.finish(capture.captureId,outcome);}
+        else await captures.put({...retained,outcome});
         throw cause;
       }
       if(ticket!==generation || disposed) {
@@ -208,8 +234,15 @@ export default {
       if(running || starting) return read();
       if(disposed) throw Error('experiment closed');
       if(flight) await flight;
+      if(stopping)await stopping.catch(()=>{});
       starting=true;error=null;sync();const ticket=++generation;
       try {
+        if(browser) {
+          if(captures?.read().error){await captures.close().catch(()=>{});captures=null;}
+          captures??=await openBrowserCaptureStore({onFailure:cause=>{
+            error=String(cause);stop().catch(cleanup=>{error=String(cleanup);sync();});
+          }});
+        }
         if(fingerJuice)await queueWater(async()=>{if(!fluid)await mountWater(particleCount);});
         if(disposed||ticket!==generation)return read();
         const created=await api('/session',{source:'browser_camera',handedness,pixelBasis:'unmirrored_camera'});
@@ -284,13 +317,12 @@ export default {
         finally {
           await waterChanges;
           const owned=fluid;fluid=null;
-          try{await owned?.dispose();}finally{captures.close();try{await browserBackend?.close();}finally{await scene.dispose();}}
+          try{await owned?.dispose();}finally{try{await captures?.close();}finally{try{await browserBackend?.close();}finally{await scene.dispose();}}}
         }
       },
     };
     } catch(cause) {
-      captures?.close();
-      try{await scene?.dispose();}finally{await browserBackend?.close();}
+      try{await captures?.close();}finally{try{await scene?.dispose();}finally{await browserBackend?.close();}}
       throw cause;
     }
   },
