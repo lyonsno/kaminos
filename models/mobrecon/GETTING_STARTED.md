@@ -4,6 +4,20 @@
 
 Use the existing [one-command model setup](../../demos/hand-mesh/README.md#model-setup) to prepare the files locally. Model terms, including MANO-derived topology terms, apply separately from the JavaScript code. The application accepts prepared package URLs or the verified file sources used by the demo; it does not acquire a camera or upload your input.
 
+The setup command writes four files to `~/.local/share/kaminos/hand-demo/models/` by default. To use the URL example below, place them under your app's static files with this layout (rename the two metadata files to `package.json`):
+
+```text
+models/
+  mobrecon/
+    package.json    ← mobrecon.package.json
+    mobrecon.bin
+  detector/
+    package.json    ← detector.package.json
+    hand-detector.bin
+```
+
+Keep each metadata file with its unchanged bundle. If you chose `KAMINOS_HAND_HOME`, use that directory's `models/` instead. The demo's verified local-file path can also be passed directly as `{ mobreconPackageSource: { metadata, bundle }, detectorPackageSource: { metadata, bundle } }`, where each `bundle` is a Blob.
+
 From a Kaminos checkout, import the module into your served application or bundle it with your existing bundler:
 
 ```js

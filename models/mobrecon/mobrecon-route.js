@@ -12,14 +12,18 @@ export const MOBRECON_PACKAGE_SCHEMA = 'mobrecon.browser-weight-package.v0';
 
 async function readU32(device, tensor) {
   const staging = device.createBuffer({ size: tensor.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-  const encoder = device.createCommandEncoder();
-  encoder.copyBufferToBuffer(tensor.buffer, tensor.bufferOffset, staging, 0, tensor.byteLength);
-  device.queue.submit([encoder.finish()]);
-  await staging.mapAsync(GPUMapMode.READ);
-  const values = new Uint32Array(staging.getMappedRange().slice(0));
-  staging.unmap();
-  staging.destroy();
-  return values;
+  let mapped = false;
+  try {
+    const encoder = device.createCommandEncoder();
+    encoder.copyBufferToBuffer(tensor.buffer, tensor.bufferOffset, staging, 0, tensor.byteLength);
+    device.queue.submit([encoder.finish()]);
+    await staging.mapAsync(GPUMapMode.READ);
+    mapped = true;
+    return new Uint32Array(staging.getMappedRange().slice(0));
+  } finally {
+    try { if (mapped) staging.unmap(); }
+    finally { staging.destroy(); }
+  }
 }
 
 // route: a kit session route (session.registerRoute). packageUrl: directory
@@ -34,9 +38,10 @@ export async function loadMobRecon({ route, packageUrl, packageSource, signal, o
     manifest: defineWebGpuModelResourceManifest(row.manifest), source, signal,
     onProgress: event => onProgress?.({ phase: 'weights', loadedBytes: event.loadedBytes, totalBytes: event.totalBytes }),
   });
+  let network;
   try {
     const device = route.runtime.device;
-    const network = createMobReconNetwork({ device, tensors: lease.tensors });
+    network = createMobReconNetwork({ device, tensors: lease.tensors });
     const faces = await readU32(device, lease.tensors['topology.faces']);
     if (faces.length !== 1538 * 3 || faces.some(v => v >= MOBRECON_VERTICES) || new Set(faces).size !== MOBRECON_VERTICES) {
       throw new Error('MobRecon faces must index all 778 vertices in 1538 triangles');
@@ -59,7 +64,8 @@ export async function loadMobRecon({ route, packageUrl, packageSource, signal, o
       },
     });
   } catch (error) {
-    lease.release();
+    try { network?.dispose(); }
+    finally { lease.release(); }
     throw error;
   }
 }

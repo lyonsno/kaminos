@@ -2,6 +2,8 @@
 
 Klein and SuperMat provide application entry points over their existing producers. The application handles session admission, foreground ownership, cancellation and retirement. It returns the model's complete output and keeps the producer accessible for hosts that need direct control.
 
+The [hand application guide](../../models/mobrecon/GETTING_STARTED.md) applies the same shared runner to WiLoR detection and MobRecon reconstruction. Its `createHandMeshApp()` entry point takes browser frames and returns hand presence, vertices and landmarks; the standalone hand demo consumes it. That port currently uses checkout/bundler imports and locally prepared models, with model terms handled by its one-command setup. Its guide explains fresh input after admission and whole-operation waiting when sharing a session.
+
 ## Install the source packages
 
 Build the kit and model packages from the same Kaminos checkout. This recipe exercises the application APIs in this source revision; it does not require a matching npm release. Choose a new artifact directory outside the checkout. From Kaminos:
