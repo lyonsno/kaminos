@@ -112,7 +112,9 @@ try{
  await invoke('partition',report.initial.settings);await invoke('detail',1);await invoke('select',-1);await invoke('separate',.06);await capture('separated');await invoke('separate',0);await invoke('view','original');await capture('textured');await invoke('view','regions');await capture('final');report.final=await invoke('export');
  assert(report.final.labels.length===object.triangles&&report.final.hierarchy.faceOwners.length===object.triangles,'Missing source triangle ownership');assert(!report.errors.length,'Uncaught browser errors');
  report.phase='attachment-boundary';save();
- await invoke('select',nested.id);await invoke('keepTogether');report.boundaryBase=await invoke('export');const targetKey=report.boundaryBase.hierarchy.nodes[nested.id].key;
+ const variantKeys=new Set(report.automatic.candidateBranches.filter(c=>c.status==='boundary-variant').map(c=>report.automatic.candidateBranches[c.variantOf].key));
+ const boundaryNode=report.initial.hierarchy.nodes.filter(n=>n.kind==='branch'&&variantKeys.has(n.key)).sort((a,b)=>b.triangles-a.triangles)[0]??nested;
+ report.boundaryNode=boundaryNode;await invoke('select',boundaryNode.id);await invoke('keepTogether');report.boundaryBase=await invoke('export');const targetKey=report.boundaryBase.hierarchy.nodes[boundaryNode.id].key;
  const candidateFaces=r=>r.candidateBranches.find(c=>c.key===targetKey&&c.status==='included').faces;
  const choice=page.getByRole('combobox',{name:'Attachment boundary',exact:true});
  report.boundaryChoices=await choice.locator('option').evaluateAll(items=>items.map(e=>({value:e.value,text:e.textContent})));
