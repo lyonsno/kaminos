@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {createLivingScene} from '../experiments/creature-motion/living-scene.experiment.mjs';
+import {createLivingScene,openLivingSetup} from '../experiments/creature-motion/living-scene.experiment.mjs';
 class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene(),callbacks=new Set();let serial=0;
 const host={controls:{document},scene:{refreshPresentation(){},objects:()=>[],async open(){const owned=new Set(),stops=new Set();return {async attach(root){owned.add(root);scene.add(root);return {id:'object-'+(++serial),root};},onFrame(fn){callbacks.add(fn);const stop=()=>callbacks.delete(fn);stops.add(stop);return stop;},redraw(){},readView:()=>({}),setView(){},async dispose(){for(const stop of stops)stop();for(const root of owned)root.removeFromParent();}};}}};
@@ -33,3 +33,13 @@ assert.deepEqual(reopened.read().actors[1].state.action.motion,current.actors[1]
 await reopened.dispose();assert.equal(scene.children.length,0);
 await assert.rejects(()=>createLivingScene({host,inputs:{...setup,actors:[{...setup.actors[0],places:[{zoneId:'missing',enabled:true,preference:1}]}]}},deps),/zone/i);assert.equal(scene.children.length,0,'Invalid references leaked a scene');
 console.log('Scene run gate, persistent local hold, shared zones, missing/all-disabled references and exact continuation');
+const exact=async reverse=>{
+ const actors=structuredClone(setup.actors);actors[1].creature.transform.position[0]=.2;
+ const r=await createLivingScene({host,inputs:{...setup,actors:reverse?actors.reverse():actors,encounters:{avoidance:true}}},deps);
+ await r.operations.actor({id:'one',operation:'advance',input:{seconds:.1}});
+ await r.operations.advance({seconds:.1});
+ const result=r.read().actors.map(a=>({id:a.id,motion:a.state.action.motion})).sort((a,b)=>a.id.localeCompare(b.id));await r.dispose();return result;
+};
+assert.deepEqual(await exact(false),await exact(true),'Divergent actor clocks must share a pre-movement room observation in either iteration order');
+let replaced=false;const badPhysical=structuredClone(setup);badPhysical.actors[0].creature.flesh={preparations:[]};
+await assert.rejects(()=>openLivingSetup({entry:{open(){replaced=true;}},inputs:badPhysical,loadSources:deps.loadSources}),/matching physical preparation/);assert.equal(replaced,false,'Invalid physical Open must preserve current room');

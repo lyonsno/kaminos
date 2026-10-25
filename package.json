@@ -10,7 +10,8 @@
   "dependencies": {
     "@kaminos/fluid-webgpu": "https://raw.githubusercontent.com/lyonsno/kaminos/9a119c12778f34bb691df301addc89973913390e/artifacts/fluid/kaminos-fluid-webgpu-0.3.0.tgz",
     "@kaminos/webgpu-inference-kit": "^0.1.6",
-    "three-mesh-bvh": "0.8.3"
+    "three-mesh-bvh": "0.8.3",
+    "cannon-es": "0.20.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

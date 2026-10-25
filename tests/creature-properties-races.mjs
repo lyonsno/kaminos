@@ -34,3 +34,6 @@ test('an unrelated mode change cannot hide the still-current cast failure',async
 test('setup-open warnings survive ordinary presentation refresh and clear on a successful open',async()=>{
  const f=await fixture();try{f.file.files=[{text:async()=>'{'}];await f.file.onchange();const warning=f.error.textContent;assert.ok(warning);f.update();assert.equal(f.error.textContent,warning,'Presentation refresh erased the current setup-open error');f.file.files=[{text:async()=>JSON.stringify((await f.api.read()).recipe)}];await f.file.onchange();assert.equal(f.error.textContent,'');}finally{await f.api.dispose();}
 });
+test('Open rejects an unmatched physical preparation before replacing a valid creature',async()=>{
+ const f=await fixture();try{const recipe=(await f.api.read()).recipe;recipe.deformation='gpu';recipe.flesh={preparations:[]};f.file.files=[{text:async()=>JSON.stringify(recipe)}];await f.file.onchange();assert.match(f.error.textContent,/matching physical preparation/);}finally{await f.api.dispose();}
+});

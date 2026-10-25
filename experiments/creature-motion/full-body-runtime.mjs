@@ -3,7 +3,7 @@ import {registerExportGeometrySnapshot} from '../../scene-export-geometry.mjs';
 
 // The verified Mushfinger body/weights and same rigid DQ transport, with scene
 // attachment left to Hotwet's owner session. No renderer or frame loop here.
-export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,retainPoses=false,deformerFactory=null,rotationSigns='dominant'}) {
+export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fleshPrepared=null,retainPoses=false,deformerFactory=null,rotationSigns='dominant'}) {
  if(typeof retainPoses!=='boolean')throw Error('Pose retention must be boolean');
  if(!['dominant','tree-coherent'].includes(rotationSigns))throw Error('Unknown deformation rotation-sign policy');
  const rig=manifest.bones.map(b=>({name:b.name,parent:b.parent,restMatrix:b.restMatrix.flat()})),channels=[...manifest.channels];
@@ -12,7 +12,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   const p=b.parent==null?0:channels.indexOf(b.parent);if(p<0)throw Error('Missing rotation hierarchy parent');return p;
  })]:null;
  const transport=(rest,weights,matrices)=>skinTransport(rest,weights,matrices,{rotationParents});
- let skin={manifest,rest,triangles,weights},disposed=false,skinRevision=0;
+ let skin={manifest,rest,triangles,weights,fleshPrepared},disposed=false,skinRevision=0;
  const cleanupFailures=[];
  function validate(candidate){
   const m=candidate?.manifest;
@@ -39,7 +39,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;Object.assign(marker.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'bones'});bone.add(marker);
  }
  let cached='',updates=0,lastUpdateMs=0,deformations=0,cacheHits=0,cacheBytes=0;
- let deformer=null,cpuKey='',cpuGeometry=null;
+ let deformer=null,cpuKey='',cpuGeometry=null,physicalRunning=false;
  const makeDeformer=(target,data)=>{
   if(!deformerFactory)return null;
   const next=deformerFactory({geometry:target,...data,channels:channels.length,rotationParents});
@@ -73,13 +73,14 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
  // Picking, held-pose bounds, export and diagnostics are explicit CPU consumers.
  // Updating the CPU mirror does not mark GPU-owned output buffers for upload.
  function syncCpuGeometry(){
-  active();if(!deformer)return geometry;if(cpuKey===cached)return cpuGeometry;
-  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(transport(skin.rest,skin.weights,palette()),3));deformations++;
+  active();if(!deformer)return geometry;const key=cached+':'+(deformer.mirrorKey?.()??'');if(cpuKey===key)return cpuGeometry;
+  const base=transport(skin.rest,skin.weights,palette()),points=deformer.cpuPositions?.(base)??base;
+  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(points,3));deformations++;
   mirror.setIndex(new THREE.BufferAttribute(skin.triangles,1));mirror.computeVertexNormals();mirror.computeBoundingSphere();mirror.computeBoundingBox();
   geometry.boundingSphere=mirror.boundingSphere.clone();geometry.boundingBox=mirror.boundingBox.clone();
-  cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=cached;return mirror;
+  cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=key;return mirror;
  }
- if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
+ if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){if(deformer.raycast)return deformer.raycast(...args,this);const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
  registerExportGeometrySnapshot(mesh,syncCpuGeometry);
  function replaceSkin(candidate){
   active();validate(candidate);
@@ -90,7 +91,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   try{
    next.setAttribute('position',new THREE.Float32BufferAttribute(result,3));next.setIndex(new THREE.BufferAttribute(candidate.triangles,1));
    next.computeVertexNormals();next.computeBoundingSphere();next.computeBoundingBox();
-   nextDeformer=makeDeformer(next,candidate);nextDeformer?.update(matrices);
+   nextDeformer=makeDeformer(next,candidate);nextDeformer?.setRunning?.(physicalRunning);nextDeformer?.update(matrices);
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
@@ -98,6 +99,16 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ // Proposal query: compute only small support geometry from the given pose.
+ // No live Bone, attention state, skin buffer, or physical state is touched.
+ runtime.flesh.project=pose=>{
+  active();const specs=new Map(pose.bones.map(b=>[b.name,b])),world=new Map();
+  const at=name=>{if(!world.has(name)){const b=specs.get(name);if(!b)throw Error('Missing proposed Bone');const m=new THREE.Matrix4().fromArray(b.localMatrix);if(b.parent)m.premultiply(at(b.parent));world.set(name,m);}return world.get(name);};
+  const matrices=[new THREE.Matrix4().toArray(),...channels.slice(1).map(name=>at(name).clone().multiply(inverseRest.get(name)).toArray())];
+  return {capsules:deformer?.capsules?.(matrices)??[],nodes:deformer?.contactNodes?.(matrices)??[],movementCores:deformer?.movementCores?.(matrices)??[]};
+ };
+ runtime.flesh.contactNodes=()=>deformer?.contactNodes?.()??[];
+ runtime.flesh.movementCores=()=>deformer?.movementCores?.()??[];
  update();return runtime;
 }
