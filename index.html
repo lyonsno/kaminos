@@ -3274,6 +3274,7 @@ import { installPolyEditMode } from './poly-edit-host.mjs';
 import { createViewProjection } from './view-projection.mjs';
 import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
 import { captureSceneMembership, resolveSceneMembershipTopology } from './scene-membership-history.mjs';
+import {createSceneComponentEdit} from './scene-component-edit.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -3378,7 +3379,7 @@ function escapeHtml(s) {
 }
 
 // --- State ---
-let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let scene, camera, renderer, controls, pmremGenerator, transformControls,sceneComponents;
 let sceneExposureControls=null;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
@@ -3386,7 +3387,9 @@ let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible
 function attachViewportGizmo(target) {
   if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemVisible(id))){transformControls.detach();return;}
   const directEmitter=workingScene.selection.ids.length===1&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE;
-  if(selectionTransforms&&workingScene.selection.ids.length&&!workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field')&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat'&&!directEmitter)target=selectionTransformProxy();
+  const component=sceneComponents?.target();
+  if(component)target=component.object;
+  else if(selectionTransforms&&workingScene.selection.ids.length&&!workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field')&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat'&&!directEmitter)target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
@@ -6336,6 +6339,9 @@ function updateTransformInspector() {
   inspector.dataset.selectionCount=String(workingScene.selection.ids.length);
   inspector.dataset.selectedFieldId=workingScene.activeFieldId||'';
   inspector.hidden=!!workingScene.activeFieldId;
+  inspector.dataset.componentEditing=String(!!sceneComponents?.active());
+  document.body.dataset.componentEditing=inspector.dataset.componentEditing;
+  for(const button of document.querySelectorAll('#transform-bar button[onclick]'))if(/snapToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
@@ -6700,7 +6706,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || sceneComponents?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -6710,7 +6716,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || sceneComponents?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -6769,7 +6775,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || sceneComponents?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -10201,7 +10207,7 @@ window.removeSceneObject = function(id) {
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
-  if (polyEdit?.active()) return true;
+  if (polyEdit?.active()||sceneComponents?.active()) return true;
   const target = e.target;
   const tagName = target?.tagName;
   if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
@@ -11278,6 +11284,8 @@ async function initScene() {
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
+      const component=sceneComponents?.target();
+      if(component&&transformControls.object===component.object&&transformControls.dragging){const active=scenePlacementTools?.edits.state().active;if(!scenePlacementTools?.state().gizmoEditing||!active)return;try{scenePlacementTools.edits.preview({...active.before,...sceneObjectTransformState(component.object)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(workingScene.activeFieldId==='flame-field'&&transformControls.object===flameDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(flameDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
@@ -11367,12 +11375,13 @@ async function initScene() {
     controls,
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
-    prepare:()=>{if(workingScene.selection.ids.length&&!workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))selectionTransforms?.prepare();},
+    prepare:()=>{if(!sceneComponents?.active()&&workingScene.selection.ids.length&&!workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))selectionTransforms?.prepare();},
     overlaysVisible:()=>viewportDisplay.overlays&&!selectionCaptureSuspended,
     viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
     transformSettings:()=>transformPreferences,
-    localOrientation:()=>workingScene.activeFieldId?[0,0,0]:workingScene.selection.activeId?selectionRootState(workingScene.selection.activeId).rotation:[0,0,0],
+    localOrientation:()=>sceneComponents?.active()?sceneComponents.target()?.localOrientation??[0,0,0]:workingScene.activeFieldId?[0,0,0]:workingScene.selection.activeId?selectionRootState(workingScene.selection.activeId).rotation:[0,0,0],
     read: id => {
+      const component=sceneComponents?.resolve(id);if(component)return component.read();
       if(id==='@flame-domain')return structuredClone(flameDomainDraft||acceptedFlameDomainPose());
       if(id==='@selection-transform')return selectionTransforms.pose();
       if (id?.startsWith('@group:')) return structuredClone(workingScene.groups.find(group=>`@group:${group.id}`===id)?.transform || null);
@@ -11380,7 +11389,7 @@ async function initScene() {
       return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
     },
     write: applyAuthoredScenePose,
-    object: id => id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object,
+    object: id => sceneComponents?.resolve(id)?.object??(id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object),
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
     busy: () => authoringBusy,
@@ -11482,7 +11491,8 @@ async function initScene() {
   const cameraViewAction=id=>{if(id==='camera'){viewProjection.setOrthographic(false);sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);viewProjection.setOrthographic(true,{auto:true});};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
-  polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,
+  sceneComponents=createSceneComponentEdit({selected:()=>workingScene.selection.ids.length===1?workingScene.selection.activeId:null,cancel:()=>scenePlacementTools.finish(false),refresh:()=>{const entry=selectedPlacementEntry();currentMesh=entry?.object??null;if(currentMesh)attachViewportGizmo(currentMesh);else transformControls.detach();updateTransformInspector();markDirty();}});
+  polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,ownerComponents:sceneComponents,
     objectFor:id=>{const record=workingScene.objects.find(item=>item.id===id);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
@@ -12805,7 +12815,7 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},fluid:{
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
       const generation=localLiquidGeneration;
@@ -25570,7 +25580,7 @@ function updateSelectionFeedback(){
   if(localLiquidDomainGuide)styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');
   syncSceneHelperVisibility(workingScene.objects.map(entry=>entry.object),viewportDisplay,selectionCaptureSuspended);
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
-  selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
+  selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines||!!sceneComponents?.active());
   const ids=new Set(sceneSelectionMembers());
   const activeIds=workingScene.activeGroupId?workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds||[]:[workingScene.activeObjectId];
   selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
@@ -25834,6 +25844,7 @@ function installSelectionInput(){
 }
 
 function selectedPlacementEntry() {
+  if(sceneComponents?.active())return sceneComponents.target();
   if(workingScene.selection.ids.length>1&&workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))return null;
   if(workingScene.activeFieldId==='flame-field')return {id:'@flame-domain',type:'simulation-domain',label:'Fire & smoke domain',object:flameDomainEditObject()};
   if(workingScene.selection.ids.length>1)return {id:'@selection-transform',type:'selection',label:`${workingScene.selection.ids.length} selected · ${selectedSceneObjectEntry()?.label||selectedSceneGroupEntry()?.label||''}`,object:selectionTransformProxy()};
@@ -25843,6 +25854,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
+  if(sceneComponents?.active()){const objects=sceneComponents.target()?.frameObjects;if(objects?.length)return frameObjects(objects,camera,controls);return;}
   if(workingScene.selection.ids.length>1&&workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field')){const box=new THREE.Box3();for(const id of workingScene.selection.ids){if(id==='flame-field'&&flameDomainGuide)box.union(flameDomainGuide.box);else if(id==='water-field'&&localLiquidDomainGuide)box.union(localLiquidDomainGuide.box);}for(const entry of workingScene.objects.filter(o=>sceneSelectionMembers().includes(o.id)))box.expandByObject(entry.object);return !box.isEmpty()&&frameBox(box,camera,controls);}
   if(workingScene.activeFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
   if(workingScene.activeFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);

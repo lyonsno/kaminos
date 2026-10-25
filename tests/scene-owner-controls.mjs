@@ -11,6 +11,7 @@ const relatedAssets=[];
 const handle=registry.mount({asset:{id:'animal',root},relatedAssets,properties,playback,onSelected:()=>updates++});
 assert.equal(properties.hidden,true);selected={id:'animal',object:root};registry.update();assert.equal(properties.hidden,false);assert.equal(playback.parent,viewport);assert.equal(playback.hidden,false);
 selected={id:'bone',object:child};registry.update();assert.equal(playback.hidden,false,'a selected child stays with the owning creature');
+selected={id:'@components',object:{},ownerId:'animal'};registry.update();assert.equal(properties.hidden,false,'a world-space component proxy keeps its owning inspector');
 selected={id:'other',object:other};registry.update();assert.equal(properties.hidden,true);assert.equal(playback.hidden,true);
 const area={};relatedAssets.push({id:'wander-area',root:area});selected={id:'wander-area',object:area};registry.update();
 assert.equal(playback.hidden,false,'Selecting the real wander area must keep its creature playback controls');
