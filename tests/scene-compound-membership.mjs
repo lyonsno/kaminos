@@ -55,7 +55,7 @@ test('failed group Redo rolls back partial reconstruction and permits retry',asy
 test('group Redo republishes restored flame sources through the production domain adapters',async()=>{
  const state=createWorkingScene(),scene=new THREE.Scene(),edits=createSceneEdits({read:()=>null,write(){}}),published=[];let next=0;
  const serialize=row=>({id:row.id,type:row.type,label:row.label,source:row.source,transform:pose,emission:row.emission});
- const h=vm.createContext({structuredClone,createSceneMembershipOperations,createSceneMembershipBatch,workingScene:state,scene,scenePlacementTools:{edits},checkedRepetition,
+ const h=vm.createContext({writeObjectBurnable(){},structuredClone,createSceneMembershipOperations,createSceneMembershipBatch,workingScene:state,scene,scenePlacementTools:{edits},checkedRepetition,
  FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',LOCAL_LIQUID_EMITTER_TYPE:'water',GROUP_TYPE:'group',
  serializeSceneObject:serialize,isReloadableSceneObjectRecord:()=>true,sceneNavigation:null,sceneCameras:null,transformControls:null,currentMesh:null,splatCorrectionMode:null,hybridSplatOverlayState:{},
  applyGiProxySetting(){},sceneGiProxies:{release(){}},applySceneObjectTransformState(){},applyMaterialStateToObject(){},canCollideWithFire:()=>false,disposeObjectTree(){},renderSceneObjectList(){},updateTransformInspector(){},setInfo(){},
