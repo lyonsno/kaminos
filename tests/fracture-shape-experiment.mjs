@@ -279,12 +279,12 @@ for(const offset of [-.45,.12])test(`a delayed boundary reply respects current g
  }finally{await api?.dispose();globalThis.Worker=old;}
 });
 
-test('fresh mount selects an explicit body target and surface patches pick their editable container',async()=>{
+test('fresh mount shows all automatic pieces and picking preserves grouping',async()=>{
  const f=setup(),old=globalThis.Worker;globalThis.Worker=f.Worker;
  try{
   const api=await definition.create({host:f.host,inputs:{source:'/box.glb'},record(){}});const ui=mounted(api);
-  assert.equal(api.read().hierarchy.nodes[api.read().selected]?.kind,'component','initial local controls need an explicit selected body');
-  assert.equal(ui.elements.find(e=>e.textContent==='Keep together').disabled,false);
+  assert.equal(api.read().selected,-1,'initial comparison must show all automatic pieces, without requiring a tree selection');
+  assert.equal(ui.elements.find(e=>e.textContent==='Keep together').disabled,true);
   const before=api.operations.export();api.operations.selectFace(0);
   assert.equal(api.read().hierarchy.nodes[api.read().selected]?.kind,'component');assert.deepEqual(api.operations.export().labels,before.labels);
   await api.dispose();
