@@ -122,6 +122,11 @@ def main():
                 model=onnx.load(str(src),load_external_data=False)
                 report['lowered']=browser_compatible(model)
                 dst.write_bytes(model.SerializeToString())
+            elif src.name=='preprocessor_config.json':
+                from prepare_package import browser_processor_metadata
+                config=browser_processor_metadata(json.loads(src.read_text()),json.loads((a.package/'processor_config.json').read_text()))
+                dst.write_text(json.dumps(config,indent=2)+'\n')
+                report['processor_metadata']='Qwen3VLProcessor in the legacy preprocessor config'
             elif src.name=='provenance.json':continue
             else:os.link(src,dst)
         report.update(status='complete',phase='package-written',claim='lowered graph construction; real browser generation remains to be exercised')
