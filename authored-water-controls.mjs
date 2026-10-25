@@ -97,7 +97,8 @@ export function mountAuthoredWaterControls({document,root,viewport=null,sourceRo
  $('[data-stop]').onclick=()=>{stopTimer('source');revision++;dirty=false;return call(()=>api.edit(selected.id,{mode:'continuous',rate:0}),{error:sourceError});};
  $('[data-match]').onclick=()=>call(()=>api.match(selected?.id??api.read().simulation?.compatibility?.match?.referenceId),{error:$('[data-match-error]')});
  $('[data-fit-bounds]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.fitBounds();});
- $('[data-reset]').onclick=()=>call(()=>api.reset());
+ const reset=()=>{playback?.invalidate();return api.reset();};
+ $('[data-reset]').onclick=()=>call(reset);
  async function restart(paused=false){if(!await flush('source')||!await flush('simulation'))throw Error('Complete the water properties before playback');await api.release(selected?.id??api.read().sources?.[0]?.id,{paused});if(api.read().sources?.every(r=>r.mode==='finite_drop'))api.setPlaybackRate?.(playbackRate);}
  $('[data-release]').onclick=()=>call(()=>restart());
  $('[data-pause]').onclick=()=>call(async()=>{if(api.read().runtime)return api.pause();return restart();});
@@ -171,14 +172,15 @@ export function mountAuthoredWaterControls({document,root,viewport=null,sourceRo
    if(name==='play'){if(api.readStatus().runtime)return api.setPaused(false);return restart(false);}
    if(name==='replay')return restart(false);
    if(name==='rate'){playbackRate=input.rate;if(api.readStatus().runtime)api.setPlaybackRate(playbackRate);return;}
-   const r=api.readStatus().runtime,dt=r?.dt??cachedState.simulation.settings.simulationStepSeconds??1/240;
-   const target=name==='step'?Math.max(0,(r?.step??0)+input.direction):Math.round(input.seconds/dt);
-   if(!Number.isSafeInteger(target)||target<0)throw Error('Playback target must be a representable simulation tick');
-   if(!r||target<r.step)await restart(true);else api.setPaused(true);
+   const version=runRevision,r=api.readStatus().runtime,dt=r?.dt??cachedState.simulation.settings.simulationStepSeconds??1/240;
+   const seconds=name==='step'?Math.max(0,(r?.step??0)+input.direction)*dt:input.seconds;
+   const tick=dt=>{const n=Math.round(seconds/dt);if(!Number.isSafeInteger(n)||n<0)throw Error('Playback target must be a representable simulation tick');return n;};
+   let target=tick(dt);
+   if(!r||target<r.step){await restart(true);if(version!==runRevision||disposed)return;target=tick(api.readStatus().runtime.dt);}else api.setPaused(true);
    await api.advanceTo(target);
   }});
   playback.node.style.cssText='position:absolute;bottom:0;left:0;right:0;z-index:35';
-  const reset=document.createElement('button');reset.type='button';reset.textContent='Reset';reset.onclick=()=>call(()=>api.reset());playback.elements.replay.before(reset);
+  const resetButton=document.createElement('button');resetButton.type='button';resetButton.textContent='Reset';resetButton.onclick=()=>call(reset);playback.elements.replay.before(resetButton);
   playback.elements.play.setAttribute('aria-label','Play or pause water');
  }
  if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot){simulationPanel.prepend($('[data-run]'),runError);simulationRoot.append(simulationPanel);}

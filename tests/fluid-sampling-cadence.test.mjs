@@ -34,3 +34,10 @@ let expected=0;for(let z=0;z<24;z++)for(let y=0;y<24;y++)for(let x=0;x<24;x++){
 }assert.equal(slice.neighbors,expected);
 console.log('Allocation-free proposed counts, live scalar population identity and exact initial support counts pass');
 assert.throws(()=>lazarusFiniteSetup({resolution:32,blockWidth:.25}),/at least 1024/,'existing backend minimum must be rejected before replacement');
+
+for(const dt of [1/30,1/15,1/480]){
+ const proposal=describeLazarusFiniteSetup({dt});assert.equal(proposal.inputs.dt,dt);
+ const executable=lazarusFiniteSetup({dt,resolution:16});assert.equal(executable.dt,dt);
+ assert.equal(JSON.parse(new URL(lazarusFiniteReplayURL('http://localhost',proposal.inputs)).searchParams.get('experiment_inputs')).dt,dt);
+}
+for(const dt of [0,-1,NaN,Infinity,1e-100,1e100])assert.throws(()=>describeLazarusFiniteSetup({dt}),/timestep/i);

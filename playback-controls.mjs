@@ -34,7 +34,7 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
  if(extra)more.append(extra);details.append(summary,more);options.append(rate,details);
  const error=make('div',undefined,{role:'alert'});error.className='playback-error';error.textContent='';
  node.append(style,actions,track,options,error);root.append(node);
- let disposed=false,working=0,scrubbing=false,pendingSeek=null,seekTask=null;
+ let disposed=false,generation=0,working=0,scrubbing=false,pendingSeek=null,seekTask=null;
  const buttons=[replay,play,back,forward,rate,go];
  const state=()=>{
   const s=read();if(!s||typeof s.playing!=='boolean'||!Number.isFinite(s.time)||s.time<0||!Number.isFinite(s.rate)||s.rate<=0||(s.duration!=null&&(!Number.isFinite(s.duration)||s.duration<0)))throw Error('Effective playback clock is unavailable');return s;
@@ -60,8 +60,8 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   }catch(e){showError(e);for(const c of [...buttons,timeline])c.disabled=true;}
  }
  async function call(name,input){
-  if(disposed)return;working++;error.textContent='';update();
-  try{return await invoke(name,input);}catch(e){showError(e);}finally{working--;update();}
+  if(disposed)return;const own=generation;working++;error.textContent='';update();
+  try{return await invoke(name,input);}catch(e){if(!disposed&&own===generation)showError(e);}finally{if(own===generation){working--;update();}}
  }
  // Pointer previews may supersede earlier unstarted previews, never producer
  // operations already in flight. The final requested position is always held.
@@ -70,11 +70,11 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   const target=Number(value);if(!Number.isFinite(target)||target<0){showError(Error('Seek time must be finite and nonnegative'));return Promise.resolve();}
   pendingSeek=target;
   if(!seekTask)seekTask=(async()=>{
-   working++;error.textContent='';
+   const own=generation;working++;error.textContent='';
    try{
     await invoke('pause');
-    while(pendingSeek!==null&&!disposed){const target=pendingSeek;pendingSeek=null;await invoke('seek',{seconds:target});}
-   }catch(e){pendingSeek=null;showError(e);}finally{working--;seekTask=null;update();}
+    while(pendingSeek!==null&&!disposed&&own===generation){const target=pendingSeek;pendingSeek=null;await invoke('seek',{seconds:target});}
+   }catch(e){if(!disposed&&own===generation){pendingSeek=null;showError(e);}}finally{if(own===generation){working--;seekTask=null;update();}}
   })();
   return seekTask;
  }
@@ -86,5 +86,5 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
  timeline.onpointerup=e=>{scrubbing=false;timeline.releasePointerCapture?.(e.pointerId);return seekTo(timeline.value);};
  timeline.onpointercancel=()=>{scrubbing=false;update();};
  update();
- return {node,elements:{replay,play,back,forward,timeline,time,rate,seconds,go,error,details,more},update,dispose(){disposed=true;pendingSeek=null;node.remove();}};
+ return {node,elements:{replay,play,back,forward,timeline,time,rate,seconds,go,error,details,more},update,invalidate(){generation++;working=0;pendingSeek=null;seekTask=null;scrubbing=false;error.textContent='';update();},dispose(){disposed=true;generation++;pendingSeek=null;node.remove();}};
 }

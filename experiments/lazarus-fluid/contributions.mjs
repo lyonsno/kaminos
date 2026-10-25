@@ -1,3 +1,4 @@
+import {validateFluidTimeStep} from '../../fluid-time-step.mjs';
 import {resolveFingerFluidParticleCount} from '../../finger-fluid-webgpu-core.js';
 import {createFingerFluidBoxReference,describeFingerFluidBoxReference} from '../../finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from '../../finger-fluid-viscosity-scale.mjs';
@@ -5,7 +6,7 @@ import {validateMaterialControls} from '../../finger-fluid-material-controls.mjs
 export function describeLazarusFiniteSetup(input={}){
  const values={scene:'block_drop',resolution:24,blockWidth:1,dt:1/240,rate:1,playbackMode:'wall_time',scaling:'nominal_diffusion',particleRepulsionStrength:.62,densityIterations:3,capillaryStrength:.48,freeFlightViscosityBoost:.30,...input};
  for(const key of Object.keys(input))if(!Object.hasOwn({scene:1,resolution:1,blockWidth:1,dt:1,rate:1,playbackMode:1,scaling:1,particleRepulsionStrength:1,densityIterations:1,capillaryStrength:1,freeFlightViscosityBoost:1},key))throw Error('Unknown finite PBF setting: '+key);
- if(![1/240,1/120,1/60].includes(values.dt))throw Error('Unsupported physics timestep');
+ validateFluidTimeStep(values.dt);
  if(!Number.isFinite(values.rate)||values.rate<=0)throw Error('Playback rate must be finite and positive');
  if(!['wall_time','render_cadence'].includes(values.playbackMode))throw Error('Unknown playback mode');
  const fixture=describeFingerFluidBoxReference(values),h=fixture.supportRadius;

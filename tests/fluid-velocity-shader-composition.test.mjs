@@ -9,5 +9,5 @@ assert.equal(composeFingerFluidVelocityReads(velocity,'pbf'),velocity,'PBF prese
 const ipbf=composeFingerFluidVelocityReads(velocity,'ipbf');
 assert.ok(ipbf.includes('var velocity = particle.delta.xyz;'));
 assert.ok(ipbf.includes('particles[neighborIndex].velocity.xyz'));
-assert.ok(!ipbf.includes('((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / params.dt)')); 
+assert.ok(!ipbf.includes('((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / params.dt)'));
 assert.throws(()=>composeFingerFluidVelocityReads('renamed shader','pbf'),/anchor missing/,'Unknown source must fail instead of silently composing the wrong velocity');
