@@ -1,6 +1,6 @@
 # Autoregressive generation primitives
 
-The optional `@kaminos/webgpu-inference-kit/generation` entry point supplies a request-scoped token loop and a CPU reference sampler. It does not load or execute a language model. The Qwen3.5 text adapter in `models/qwen3_5/text-model.js` implements that interface for the retained affine4 BFL prompt-upsample model. Its model-owned source loader, hybrid state and application policy stay separate from these generic primitives.
+The optional `@kaminos/webgpu-inference-kit/generation` entry point supplies a request-scoped token loop and a CPU reference sampler. Build the kit from this checkout to use it. Model loading and execution belong to the adapter: the [Qwen3.5 text adapter](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) implements this interface for BFL's affine4 prompt-upsampler weights. Its source loader, hybrid state and application policy stay separate from these generic primitives.
 
 ```js
 import { generateTokens, sampleToken, createSeededRandom }
@@ -56,4 +56,4 @@ Focused contracts run from the repository root:
 npm test -- --only tests/token-sampling.mjs,tests/autoregressive-generation.mjs,tests/qwen35-input.mjs
 ```
 
-These tests establish CPU orchestration, input handling and state-accounting behavior. The model-owned witnesses separately exercise actual WebGPU affine4/hybrid kernels and composed 32-layer prefill, cached decode and full-prefix logits against native MLX FP32 computation over the retained Q4 weights. The composed witness also uses this token loop and sampler. Application-level BFL prompt behavior, vision/reference support, host integration and useful performance have their own subsequent evidence boundaries; the CPU tests above do not establish them.
+These tests establish CPU orchestration, input handling and state-accounting behavior. The model-owned witnesses separately exercise actual WebGPU affine4/hybrid kernels and composed 32-layer prefill, cached decode, full-prefix and split-prefix logits against native MLX FP32 computation over the retained Q4 weights. The composed witness also uses this token loop and sampler. A complete BFL text expansion has consumed 743 input tokens and generated 302 tokens through EOS using the shipped system prompt and settings. That application exercise is separate from these CPU tests. Vision/reference support, host integration and useful performance remain subsequent work.

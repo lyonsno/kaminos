@@ -8,6 +8,7 @@ import { sampleToken } from '../../webgpu-inference-kit/src/token-sampling.js';
 import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
 import { createPupTextInput } from './pup-input.js';
 import { expandPupText } from './pup-text.js';
+import { withModelProfile } from './serving-profile.js';
 
 window.qwenModelReady = true;
 const result = window.qwenModelPartial = { backend: 'webgpu', errors: [], rows: [], lengths: {}, cleanup: {} };
@@ -31,13 +32,16 @@ window.qwenModelResult = (async () => {
     device.addEventListener('uncapturederror', e => result.errors.push(String(e.error?.message ?? e.error)));
     device.lost.then(info => { if (info.reason !== 'destroyed') result.errors.push(`device lost: ${info.message}`); });
     control = createWebGpuInferenceControl({ queue: device.queue });
+    const servingProfile = window.qwenWitnessMode === 'serving-profile';
     let current = null, layerRows = [];
-    model = new Qwen35TextModel(device, manifest, { control,
+    model = new Qwen35TextModel(device, manifest, { control, ...(servingProfile ? {} : {
       onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
       onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
-    });
+    }) });
     stage = 'weights'; window.qwenModelProgress = { stage };
+    const loadStarted = performance.now();
     await model.load(new URL('/model/', location.href), { onProgress: progress => { window.qwenModelProgress = { stage, ...progress }; } });
+    const loadMs = performance.now() - loadStarted;
     result.residentWeightBytes = [...model.owned].reduce((s, b) => s + b.size, 0);
     const capacity = meta.inputIds.length + 1;
     async function run(label, ids, state, operation) {
@@ -49,6 +53,7 @@ window.qwenModelResult = (async () => {
       if (layerRows.length !== model.config.numLayers) throw new Error('partial decoder trace');
       capture(label + '.layers', joined); result.lengths[label] = state.length; current = null;
     }
+    if (!servingProfile) {
     let state = await model.createState({ capacity });
     try { await run('prefill', meta.inputIds, state, 'prefill'); await run('decode', meta.continuationIds, state, 'decode'); } finally { await model.disposeState(state); }
     state = await model.createState({ capacity });
@@ -62,9 +67,11 @@ window.qwenModelResult = (async () => {
     } finally { await model.disposeState(state); }
     stage = 'autoregressive-generation'; window.qwenModelProgress = { stage }; current = null;
     result.generation = await generateTokens({ model, inputIds: meta.inputIds, capacity, maxNewTokens: 2, control, sample: logits => sampleToken(logits, { temperature: 0 }) });
+    }
     if (window.qwenPupRequest) {
       stage = 'pup-expansion'; window.qwenModelProgress = { stage };
       const request = window.qwenPupRequest;
+      const inputStarted = performance.now();
       const tokenizerBytes = await (await fetch('/model/tokenizer.json')).arrayBuffer(), promptsBytes = await (await fetch('/model/system_prompts.json')).arrayBuffer();
       const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
       const tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes))), systemPrompt = JSON.parse(new TextDecoder().decode(promptsBytes)).t2i;
@@ -72,11 +79,17 @@ window.qwenModelResult = (async () => {
       const expansion = result.expansion = { prompt: request.prompt, inputIds: null, settings: input.generation,
         tokenizerSha256: await hash(tokenizerBytes), systemPromptsSha256: await hash(promptsBytes), stream: [] };
       if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
+      const inputPreparationMs = performance.now() - inputStarted;
       const prefill = model.prefill.bind(model);
       model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill(ids, ...rest); };
       try {
-        expansion.output = await expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
-          maxNewTokens: request.maxNewTokens, onText: (delta, text) => { expansion.stream.push(delta); window.qwenModelProgress = { stage, text }; } });
+        const profile = result.profile = { loadMs, inputPreparationMs, firstTextMs: null };
+        const expand = () => expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
+          maxNewTokens: request.maxNewTokens, onText: (delta, text) => {
+            if (servingProfile && profile.firstTextMs === null) profile.firstTextMs = performance.now()-profile.startedMs;
+            expansion.stream.push(delta); window.qwenModelProgress = { stage, text };
+          } });
+        expansion.output = servingProfile ? await withModelProfile(model, expand, { profile }) : await expand();
       } finally { model.prefill = prefill; }
     }
   } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
