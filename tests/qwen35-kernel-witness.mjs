@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as contract from '../models/qwen3_5/kernel-witness-contract.js';
+import { collectKernelWitness } from '../models/qwen3_5/run-kernel-witness.mjs';
 
 // Local admission-policy fixture, not evidence about an external GPU runtime.
 function fixture() {
@@ -43,4 +44,15 @@ test('host adjudication refuses short and nonfinite raw data with falsely passin
     const liar = structuredClone(result); liar.rows[0].data = Buffer.from(value.buffer).toString('base64');
     assert.throws(() => contract.adjudicateKernelReadbacks(liar, meta, arrays), /partial|mismatch/);
   }
+});
+test('readback collection preserves every row when the combined result exceeds a transport message', async () => {
+  const source = { rows: Array.from({ length: 5 }, (_, index) => ({ name: String(index), data: 'x'.repeat(1024 * 1024) })) };
+  const window = { qwenKernelResult: Promise.resolve(source) }, received = [];
+  const browser = { async evaluate(expression) {
+    const value = await Function('window', `return (${expression})`)(window);
+    if (JSON.stringify(value).length > 4 * 1024 * 1024) throw new Error('transport frame rejected');
+    return structuredClone(value);
+  } };
+  const result = await collectKernelWitness(browser, async row => received.push(row));
+  assert.deepEqual(result.rows, source.rows); assert.deepEqual(received, source.rows);
 });
