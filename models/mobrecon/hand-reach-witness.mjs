@@ -63,10 +63,14 @@ async function main() {
     },a.fixture);
     const invoke=(name,arg)=>page.evaluate(([name,arg])=>window.kaminosWorkbenchExperiments.invoke(name,arg),[name,arg]);
     const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
-    const wait=async condition=>page.waitForFunction(async condition=>{
-      if(window.__reachWitness.errors.length)throw Error(window.__reachWitness.errors.join('\n'));
-      const r=await window.kaminosWorkbenchExperiments?.read();
-      if(r?.error)throw Error(r.error);return r && Function('r',`return (${condition})`)(r);
+    const wait=async condition=>page.evaluate(async condition=>{
+      for(;;) {
+        if(window.__reachWitness.errors.length)throw Error(window.__reachWitness.errors.join('\n'));
+        const r=await window.kaminosWorkbenchExperiments?.read();
+        if(r?.error)throw Error(r.error);
+        if(r && Function('r',`return (${condition})`)(r))return;
+        await new Promise(requestAnimationFrame);
+      }
     },condition);
     const capture=async name=>{
       await page.screenshot({path:path.join(out,`${name}.png`)});
