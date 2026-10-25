@@ -61,15 +61,17 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   async function load(){
     if(model)return;
     onProgress({phase:'model'});
-    model=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
+    let candidate;
+    try{
+      candidate=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
       device:'webgpu',dtype:{embed_tokens:'q4f16',vision_encoder:'fp16',decoder_model_merged:'q4f16'},
       progress_callback:e=>onProgress({phase:'model',...e}),
     });
-    for(const [name,session] of Object.entries(model.sessions)){
+    for(const [name,session] of Object.entries(candidate.sessions)){
       if(session.config?.device!=='webgpu')throw Error(`${name} did not select the WebGPU session.`);
     }
     // The exported single-image graph takes source-equivalent position inputs.
-    model.encode_image=async({pixel_values,image_grid_thw})=>{
+    candidate.encode_image=async({pixel_values,image_grid_thw})=>{
       const grids=image_grid_thw.tolist(),features=[];
       let offset=0;
       for(const grid of grids){
@@ -79,7 +81,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
           position_ids:new tf.Tensor('int64',p.positionIds,[count,2]),
           interp_indices:new tf.Tensor('int64',p.interpIndices,[count,4]),
           interp_weights:new tf.Tensor('float32',p.interpWeights,[count,4])};
-        try{features.push(await model._encode_input('vision_encoder',feeds,'image_features'));}
+        try{features.push(await candidate._encode_input('vision_encoder',feeds,'image_features'));}
         finally{for(const t of Object.values(feeds))t.dispose();}
         offset+=count;
       }
@@ -87,6 +89,8 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
       if(features.length===1)return features[0];
       const merged=tf.cat(features,0);for(const f of features)f.dispose();return merged;
     };
+      model=candidate;
+    }catch(error){await candidate?.dispose();throw error;}
   }
   return {
     backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,
