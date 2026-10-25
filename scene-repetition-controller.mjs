@@ -2,6 +2,7 @@ import {Matrix4} from './lib/three.core.js';
 import {checkedRepetition,createRepetitionView,repetitionMatrices,isRepetitionCopy} from './scene-repetition.mjs';
 export function canRepeatSceneObject(entry){
  if(!entry?.object||!['glb','pbr','procedural-mesh'].includes(entry.type))return false;
+ if(entry.burnable?.enabled)return false;
  let valid=true;function inspect(node){if(isRepetitionCopy(node))return;if(node.isSkinnedMesh||node.isInstancedMesh||node.morphTargetInfluences?.length)valid=false;for(const c of node.children)inspect(c);}inspect(entry.object);return valid;
 }
 export function createSceneRepetitionController({objects,groups,readPose}){
