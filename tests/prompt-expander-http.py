@@ -99,6 +99,8 @@ class PromptExpanderHttp(unittest.TestCase):
         self.assertEqual(manifest['repo_root'], str(serve.ROOT))
         self.assertIn(str(run / 'request.json'), manifest['argv'])
         self.assertEqual(self.call('/runs/' + body['id'])[1]['status'], 'queued')
+        with urlopen(self.base + '/runs/' + body['id'] + '/references/0') as response:
+            self.assertEqual(response.read(), source)
         (run / 'report.json').write_text('{"status":"complete","output":"","effective_backend":"mlx-metal"}')
         self.assertNotEqual(self.call('/runs/' + body['id'])[1]['status'], 'complete', 'blank output is never a completed expansion')
 

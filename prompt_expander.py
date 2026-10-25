@@ -174,6 +174,20 @@ def handle(handler, method, path, repo_root):
                 raise ValueError('Expected a JSON object.')
             return handler.send_json(submit(config, payload, repo_root), 202)
         if method == 'GET' and path.startswith('/api/prompt-expander/runs/'):
+            reference = re.fullmatch(r'/api/prompt-expander/runs/([a-f0-9]{32})/references/([0-9]+)', path)
+            if reference:
+                run_id, index = reference.groups()
+                request = read(Path(config['state_dir']) / run_id / 'request.json')
+                if int(index) >= len(request['images']):
+                    raise ValueError('Reference index is out of range.')
+                data = Path(request['images'][int(index)]['path']).read_bytes()
+                handler.send_response(200)
+                handler.send_header('Content-Type', 'application/octet-stream')
+                handler.send_header('Content-Length', str(len(data)))
+                handler.send_header('Cache-Control', 'no-store')
+                handler.end_headers()
+                handler.wfile.write(data)
+                return
             return handler.send_json(run_status(config, path.rsplit('/', 1)[-1]))
         return handler.send_json(dict(error='Unknown helper route.'), 404)
     except FileNotFoundError as error:

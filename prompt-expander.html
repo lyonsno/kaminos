@@ -59,7 +59,7 @@ let files = [], active = null, available = false, busy = false, pollToken = 0;
 let history;
 try { history = JSON.parse(localStorage.getItem('kaminos-pup-history') || '[]'); } catch { history = []; }
 function status(text, error=false) { $('status').textContent=text; $('status').className=error?'error':''; }
-function controls() { $('expand').disabled=!available||busy; $('copy').disabled=!$('output').value.trim(); }
+function controls() { $('expand').disabled=!available||busy; $('copy').disabled=!$('output').value.trim(); $('output').readOnly=busy; }
 async function json(path, payload) {
   const response = await fetch(api+path, payload===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const data = await response.json();
@@ -91,12 +91,22 @@ function retain(id,prompt) {
 }
 async function follow(id, restore=false) {
   active=id;const token=++pollToken;historyReplace(id);
+  $('output').value='';$('details').textContent='Loading run…';
   busy=true;controls();
   try {
     let first=true;
     while(token===pollToken) {
       const r=await json('/runs/'+id); if(token!==pollToken) return;
-      if(first&&restore) { $('prompt').value=r.prompt; status(r.images.length?'Saved run: add its original references again before making a new request.':'Loading saved run…'); }
+      if(first&&restore) {
+        const restored=await Promise.all(r.images.map(async(image,index)=>{
+          const response=await fetch(`${api}/runs/${id}/references/${index}`);
+          if(!response.ok) throw Error('Could not restore this run’s reference images.');
+          const file=new File([await response.blob()],image.name);
+          return {file,url:URL.createObjectURL(file)};
+        }));
+        if(token!==pollToken) { restored.forEach(x=>URL.revokeObjectURL(x.url));return; }
+        files.forEach(x=>URL.revokeObjectURL(x.url));files=restored;paintFiles();$('prompt').value=r.prompt;
+      }
       first=false; retain(id,r.prompt);
       if(r.output!==undefined) $('output').value=r.output;
       $('details').textContent=JSON.stringify(r,null,2);
