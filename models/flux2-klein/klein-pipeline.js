@@ -252,7 +252,7 @@ export class KleinPipeline {
     // Projection and at least one materialized attention head span the whole
     // sequence. Reference tokens consume that same device capacity.
     const maxJointTokens = Math.min(Math.floor(cap / ((3 * D + 2 * F) * 4)), Math.floor(Math.sqrt(cap / 4)));
-    const maxTextTokens = Math.min(512, maxJointTokens - imgTokens - referenceTokens);
+    const maxTextTokens = Math.min(this.maxPromptTokens, maxJointTokens - imgTokens - referenceTokens);
     const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
     // The decoder's attention scores are chunked by query rows (at least 64 at a time).
     const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
@@ -261,6 +261,7 @@ export class KleinPipeline {
 
   // Model hooks: FLUX.2 Klein's choices here; another model on the same kernels and decoder (FLUX.3
   // Klein's Flux3Pipeline) overrides them.
+  get maxPromptTokens() { return 512; }
   referenceIds(height,width) {
     const ids=new Float64Array(height*width*4);
     for(let y=0;y<height;y++)for(let x=0;x<width;x++)ids.set([10,y,x,0],(y*width+x)*4);

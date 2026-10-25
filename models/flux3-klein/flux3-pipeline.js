@@ -8,7 +8,7 @@ import { KleinPipeline } from '../flux2-klein/klein-pipeline.js';
 import { Flux3Transformer, flux3ImageIds, flux3TextIds } from './flux3-transformer.js';
 import { flux3Schedule } from './flux3-schedule.js';
 import { transformerTime } from '../flux2-klein/klein-schedule.js';
-import { flux3PromptIds, FLUX3_PAD_MULTIPLE } from './flux3-prompt.js';
+import { flux3PromptIds, FLUX3_MAX_TOKENS } from './flux3-prompt.js';
 
 export const FLUX3_DEFAULT_STEPS = 16;
 
@@ -29,11 +29,12 @@ export class Flux3Pipeline extends KleinPipeline {
   referenceIds(height,width) {return flux3ImageIds(height,width,-1);}
 
   createTransformer(manifest) { return new Flux3Transformer(this.device, manifest); }
+  get maxPromptTokens() { return FLUX3_MAX_TOKENS; }
 
   // FLUX.3 pads to the next multiple of 80 and attends to the padding, so the length is the model's,
   // not the caller's; textLength is ignored.
   requestedTextTokens(prompt) {
-    return Math.ceil(this.framePrompt(prompt).length / FLUX3_PAD_MULTIPLE) * FLUX3_PAD_MULTIPLE;
+    return this.framePrompt(prompt).inputIds.length;
   }
 
   framePrompt(prompt, maxLength = undefined) { return flux3PromptIds(this.tokenizer, prompt, maxLength ? { maxLength } : {}); }
