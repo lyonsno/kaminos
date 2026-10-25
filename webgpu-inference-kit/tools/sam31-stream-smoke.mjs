@@ -89,7 +89,7 @@ export async function runStreamSmoke(options) {
       const validate = new Function(`return (${validator})`)();
       const { classifySam31MemoryAttentionAdapter } = await import('/kit/src/sam31-memory-attention-evidence.js');
       const requireNative = new Function('classifySam31MemoryAttentionAdapter', `return (${adapterValidator})`)(classifySam31MemoryAttentionAdapter);
-      const { createSam31VideoTracker } = await import('/kit/src/sam31-video-tracker.js');
+      const { createSam31VideoTracker } = await import('/kit/src/sam.js');
       const status = document.querySelector('#status');
       window.sam31StreamSmokeProgress = 'model-setup';
       const bytes = async path => { const r = await fetch(path); if (!r.ok) throw new Error(`input fetch failed ${r.status}: ${path}`); return new Uint8Array(await r.arrayBuffer()); };

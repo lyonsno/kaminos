@@ -52,6 +52,11 @@ for (const name of ['createWebGpuInferenceSession', 'createWebGpuForegroundServi
 assert.equal(typeof sam.createSam3BrowserServingResources, 'function');
 assert.equal(typeof sam.createSam31BrowserTrackerSession, 'function');
 assert.equal(typeof sam.createSam3BrowserImageRuntime, 'function');
+assert.equal(typeof sam.createSam31VideoTracker, 'function', 'sequential tracking is available through the supported SAM entrypoint');
+const { createSam31VideoTracker } = await import('../src/sam31-video-tracker.js');
+assert.equal(sam.createSam31VideoTracker, createSam31VideoTracker, 'the package uses the exercised production tracker binding');
+assert.equal('createSam31VideoTrackerForTest' in sam, false, 'test dependency injection stays internal');
+await assert.rejects(sam.createSam31VideoTracker(), /stream model package root is required/);
 assert.equal(typeof sam.createSam3SourceMask, 'function');
 assert.equal(typeof sam.resizeSam3MaskLogits, 'function');
 for (const name of ['createSharpImageToSplatRouteDefinition', 'createSf3dImageToMeshRouteDefinition',
