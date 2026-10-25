@@ -21,6 +21,34 @@ def write(path, value):
     temporary.replace(path)
 
 
+def fp16_weight_storage(model, parameter_shapes):
+    """Store parameter tensors as FP16 while retaining FP32 vision arithmetic."""
+    import numpy as np
+    from onnx import TensorProto, helper, numpy_helper
+    casts = []
+    for tensor in model.graph.initializer:
+        if tensor.data_type != TensorProto.FLOAT or tuple(tensor.dims) not in parameter_shapes:
+            continue
+        original_name = tensor.name
+        half = numpy_helper.to_array(tensor).astype(np.float16)
+        if not np.isfinite(half).all():
+            raise ValueError(f'Vision parameter {original_name} overflows FP16 storage.')
+        tensor.CopyFrom(numpy_helper.from_array(half, original_name + '.fp16'))
+        casts.append(helper.make_node('Cast', [tensor.name], [original_name], to=TensorProto.FLOAT,
+                                      name=original_name + '.restore-fp32'))
+    nodes = list(model.graph.node)
+    del model.graph.node[:]
+    model.graph.node.extend(casts + nodes)
+    for node in model.graph.node:
+        for index, name in enumerate(node.output):
+            if name == 'image_features':
+                node.output[index] = 'image_features.float32'
+    model.graph.node.append(helper.make_node('Cast', ['image_features.float32'], ['image_features'],
+                                             to=TensorProto.FLOAT16, name='image_features.fp16'))
+    model.graph.output[0].type.tensor_type.elem_type = TensorProto.FLOAT16
+    return model
+
+
 def export_vision(source, out, config, report, save):
     import numpy as np
     import onnx
@@ -37,7 +65,7 @@ def export_vision(source, out, config, report, save):
     with torch.device('meta'):
         vision = Qwen3_5VisionModel(vc)
     with safe_open(str(source / 'model.safetensors'), framework='pt', device='cpu') as weights:
-        state = {key.removeprefix('model.visual.'): weights.get_tensor(key).to(torch.float16)
+        state = {key.removeprefix('model.visual.'): weights.get_tensor(key).to(torch.float32)
                  for key in weights.keys() if key.startswith('model.visual.')}
     vision.load_state_dict(state, strict=True, assign=True)
     vision.rotary_pos_emb = Qwen3_5VisionRotaryEmbedding(vc)
@@ -72,14 +100,20 @@ def export_vision(source, out, config, report, save):
             save()
         report['phase'] = 'vision-export'
         save()
-        target = out / 'vision_encoder_fp16.onnx'
-        torch.onnx.export(wrapper, inputs(4, 4), target, input_names=names,
+        raw = out / 'vision_encoder_float32.onnx'
+        torch.onnx.export(wrapper, inputs(4, 4), raw, input_names=names,
             output_names=['image_features'], opset_version=17, dynamo=False,
             dynamic_axes={**{name: {0: 'patches' if name != 'grid_thw' else 'images'} for name in names},
                           'image_features': {0: 'features'}})
 
     # Normalize the external-data filename to Transformers.js's component convention.
-    graph = onnx.load(str(target))
+    graph = onnx.load(str(raw))
+    parameter_shapes = {tuple(value.shape) for value in vision.parameters()}
+    parameter_shapes.update(tuple(reversed(shape)) for shape in list(parameter_shapes) if len(shape) == 2)
+    patch = vision.patch_embed.proj.weight
+    parameter_shapes.add((patch.flatten(1).shape[1], patch.shape[0]))
+    graph = fp16_weight_storage(graph, parameter_shapes)
+    target = out / 'vision_encoder_fp16.onnx'
     onnx.save_model(graph, str(target), save_as_external_data=True, all_tensors_to_one_file=True,
                     location=target.name + '_data', size_threshold=1024)
     report['phase'] = 'vision-onnx-reference'
@@ -96,7 +130,8 @@ def export_vision(source, out, config, report, save):
             raise ValueError(f'Vision ONNX disagrees with source: relative L2 {relative}')
         save()
     report['vision_contract'] = dict(per_call='one image; concatenate features in reference order',
-        inputs=[item.name for item in session.get_inputs()], output='image_features', storage='fp16')
+        inputs=[item.name for item in session.get_inputs()], output='image_features', storage='fp16',
+        arithmetic='float32', output_dtype='float16')
     return target
 
 
