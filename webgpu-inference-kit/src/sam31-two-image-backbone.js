@@ -350,7 +350,7 @@ async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, 
     }, {}, requestIds),
     route, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...modelFor(manifest), weightsHash }, kernel: route.kernel,
-    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, residentTensorResolver, includeReadback: true,
+    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, residentTensorResolver, includeReadback: true, schedule,
   });
   const durationMs = performance.now() - started;
   const highResolutionS0 = new Float32Array(result.debugReadback.highResolutionS0);

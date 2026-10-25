@@ -26,8 +26,9 @@ export function validateStreamSmokeFrame(result, expected) {
   if (!result.receipts?.length || result.receipts.some(r => r.status !== 'real' || r.fallbackReason != null
       || !r.requestedRouteId || r.requestedRouteId !== r.effectiveRouteId || !r.outputs?.length)) throw new Error('frame route evidence is incomplete or fallback');
   if (expected.foreground) {
-    const f = result.foreground;
-    if (f?.status !== 'succeeded' || !f.runId || !f.routeId || !f.receipts?.length
+    const f = result.foreground, invocation = result.applicationInvocation;
+    if (f?.status !== 'succeeded' || !invocation?.invocationId || invocation.frameIndex !== expected.frameIndex
+        || f.runId !== invocation.invocationId || f.routeId !== invocation.routeId || !f.receipts?.length
         || ['pendingRequestCount', 'activeRequestCount', 'activeServiceCount', 'queuedServiceCount'].some(key => f[key] !== 0)
         || f.receipts.some(r => r.status !== 'completed' || r.failure != null || r.runId !== f.runId
           || r.routeId !== f.routeId || !r.boundary?.phase)) throw new Error('foreground frame evidence is missing, stale or failed');
@@ -166,7 +167,8 @@ export async function runStreamSmoke(options) {
           await store(`frame-${frameIndex}.scores.f32`, result.objectScores);
           const record = { frameIndex, sourceImageSha256: result.sourceImageSha256, maskWidth: result.maskWidth,
             maskHeight: result.maskHeight, objectScores: [...result.objectScores], timing: result.timing,
-            receipts: result.receipts, snapshot, foreground: 0, foregroundRun: result.foreground ?? null };
+            receipts: result.receipts, snapshot, foreground: 0, foregroundRun: result.foreground ?? null,
+            applicationInvocation: result.applicationInvocation ?? null };
           const canvas = document.createElement('canvas'); canvas.width = sequence.width; canvas.height = sequence.height;
           const drawing = canvas.getContext('2d'), pixels = new Uint8ClampedArray(rgba);
           for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {

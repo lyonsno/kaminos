@@ -108,7 +108,9 @@ async function createTracker(options, dependencies) {
         assertOpen: () => active('frame admission'), getError: () => fatal,
         onFatal: error => { fatal = error; }, prepare: async () => {},
         settle: () => session.device.queue.onSubmittedWorkDone(),
-        execute: ({ frame }, schedule) => driver.execute({ ...frame, schedule }),
+        execute: async ({ frame }, schedule) => ({ ...await driver.execute({ ...frame, schedule }),
+          applicationInvocation: { invocationId: schedule.invocation.invocationId,
+            routeId: schedule.invocation.routeId, frameIndex: frame.frameIndex } }),
       });
     }
     const engine = createSam31StreamEngine({ ...driver, async execute(input) {

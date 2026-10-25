@@ -24,10 +24,15 @@ const expected = { frameIndex: 2, sourceImageSha256: 'sha256:current' };
 validateStreamSmokeFrame(frame(), expected);
 assert.throws(() => validateStreamSmokeFrame(frame(), { ...expected, foreground: true }), /foreground/);
 const scheduled = frame();
+scheduled.applicationInvocation = { invocationId: 'current', routeId: 'sam:frame', frameIndex: 2 };
 scheduled.foreground = { status: 'succeeded', runId: 'current', routeId: 'sam:frame',
   pendingRequestCount: 0, activeRequestCount: 0, activeServiceCount: 0, queuedServiceCount: 0,
   receipts: [{ status: 'completed', runId: 'current', routeId: 'sam:frame', boundary: { phase: 'attention' } }] };
 validateStreamSmokeFrame(scheduled, { ...expected, foreground: true });
+const replayed = structuredClone(scheduled);
+replayed.foreground.runId = replayed.foreground.receipts[0].runId = 'previous-frame-run';
+assert.throws(() => validateStreamSmokeFrame(replayed, { ...expected, foreground: true }), /foreground/,
+  'a whole internally consistent previous-frame report cannot certify the current invocation');
 for (const mutate of [f => f.receipts = [], f => f.receipts[0].runId = 'stale',
   f => f.receipts[0].status = 'failed', f => f.activeRequestCount = 1, f => f.status = 'incomplete']) {
   const value = structuredClone(scheduled); mutate(value.foreground);
