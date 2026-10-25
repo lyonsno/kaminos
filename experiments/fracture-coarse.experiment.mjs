@@ -8,7 +8,7 @@ export default {
  async create({host,inputs,record,updateInputs=()=>{}}){
   if(typeof inputs.source!=='string'||!inputs.source)throw Error('Choose a source mesh');
   const session=await host.scene.open(),workers=new Set(),drags=[],owned=new Group();owned.name='Coarse fracture';
-  let disposed=false,model=null,prepared=null,preparedPart=null,selectedPart=0,busy=true,error='',running=false,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,partition,view,surface,asset,meshes=[],restMesh,partSelect,status,pullInput,strengthInput,playButton,prepareButton,marker,grip=null,pullPercent=0,strength=Number(inputs.strength??200),unpick,unframe;
+  let disposed=false,model=null,prepared=null,preparedPart=null,selectedPart=0,busy=true,error='',running=false,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,partition,view,surface,asset,meshes=[],restMesh,partSelect,status,pullInput,strengthInput,playButton,prepareButton,marker,grip=null,pullPercent=0,strength=Number(inputs.strength??2000),unpick,unframe;
   const capMaterial=new MeshStandardMaterial({color:0xa57850,roughness:1});
   const workerCalls=new Map();
   function callWorker(file,data){return new Promise((resolve,reject)=>{const worker=new Worker(new URL(file,import.meta.url),{type:'module'}),id=++workerId;workers.add(worker);workerCalls.set(worker,reject);const finish=()=>{workers.delete(worker);workerCalls.delete(worker);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(Error(data.error)):resolve(data);};worker.onerror=e=>{finish();reject(Error(e.message));};worker.postMessage({id,...data});});}

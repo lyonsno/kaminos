@@ -18,7 +18,7 @@ export function createCoarseSurfaceMesh(arrays,materials,center=[0,0,0]){
  let material=-1,start=0;for(let f=0;f<=arrays.indices.length/3;f++){const next=f<arrays.indices.length/3?arrays.faceMaterial[f]:-1;if(next!==material){if(material>=0)g.addGroup(start*3,(f-start)*3,material);material=next;start=f;}}
  g.computeBoundingBox();g.computeBoundingSphere();const mesh=new Mesh(g,materials);mesh.position.fromArray(center);mesh.castShadow=true;mesh.receiveShadow=true;return mesh;
 }
-export function coarseFixture(prepared,{strength=200}={}){
+export function coarseFixture(prepared,{strength=2000}={}){
  if(!(strength>0&&Number.isFinite(strength)))throw Error('Positive finite cohesion required');
  const {area,center,normal}=prepared.interface,cells=prepared.pieces.map((p,index)=>({index,id:`coarse:${index}`,pinned:index===0,position:p.center,halfExtents:p.halfExtents,mass:index===0?0:p.volume,volume:p.volume,column:index,row:0,layer:0}));
  return {cells,bonds:[{id:'coarse-interface:0',a:0,b:1,area,normal,anchorA:center.map((v,k)=>v-cells[0].position[k]),anchorB:center.map((v,k)=>v-cells[1].position[k])}],dimensions:{dx:Math.min(...cells.map(c=>c.halfExtents[0]*2)),dy:Math.min(...cells.map(c=>c.halfExtents[1]*2)),dz:Math.min(...cells.map(c=>c.halfExtents[2]*2))},floorY:Math.min(...cells.map(c=>c.position[1]-c.halfExtents[1]))-10,config:{gravity:0,timeStep:1/60,substeps:1,solverIterations:20,stiffness:10000,strength,friction:0,gripStiffness:250,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true}};
