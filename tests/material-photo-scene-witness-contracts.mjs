@@ -46,8 +46,25 @@ for(const defect of ['invisible','missing maps','no pixel contribution'])test(`s
   const material={map:texture,metalnessMap:texture,roughnessMap:texture};
   const object={visible:defect!=='invisible',traverse(cb){cb({isMesh:true,visible:true,material});}};
   const window={__photoWitnessObject:()=>object,_kaminosDirty(){},__kaminosRenderSceneForInspection(){}};
+  const document={querySelector:()=>({toDataURL:()=> 'data:image/png;base64,AAEA'})};
   const page={evaluate:async(fn,arg)=>fn(arg),screenshot:async()=>Buffer.from('page'),locator:()=>({screenshot:async()=>Buffer.from('environment')})};
-  const shot=new Function('page','window','settle','decodeScreenshotPngRgb','hash','path','out','assert','report',code+';return shot;')(
-    page,window,async()=>{},()=>({pixels:new Uint8Array([0,255,0]),width:1,height:1,channels:3}),hash,path,'unused',assert,{id:'photo',observations:{}});
+  const shot=new Function('page','window','document','settle','decodeScreenshotPngRgb','hash','path','out','assert','report','fs',code+';return shot;')(
+    page,window,document,async()=>{},()=>({pixels:new Uint8Array([0,255,0]),width:1,height:1,channels:3}),hash,path,'unused',assert,{id:'photo',observations:{}},{writeFile:async()=>{}});
   await assert.rejects(shot('front'),defect==='invisible'?/visible/:defect==='missing maps'?/map|texture/i:/visible canvas pixels/);
+});
+test('changing DOM overlays cannot satisfy the photograph rotation comparison',async()=>{
+  const start=witness.indexOf('const shot=async name=>');
+  const code=witness.slice(start,witness.indexOf('\n  report.front=',start));
+  const texture={isTexture:true},material={map:texture,metalnessMap:texture,roughnessMap:texture};
+  const object={visible:true,traverse(cb){cb({isMesh:true,visible:true,material});}};
+  let overlay=0,draws=0;
+  const pixels=()=>Buffer.alloc(100*3,object.visible?90:0);
+  const window={__photoWitnessObject:()=>object,_kaminosDirty(){},__kaminosRenderSceneForInspection(){draws++;}};
+  const document={querySelector:()=>({toDataURL:()=> 'data:image/png;base64,'+pixels().toString('base64')})};
+  const page={evaluate:async(fn,arg)=>fn(arg),screenshot:async()=>{overlay++;},locator:()=>({screenshot:async()=>{const bytes=pixels();bytes[0]=overlay;return bytes;}})};
+  const shot=new Function('page','window','document','settle','decodeScreenshotPngRgb','hash','path','out','assert','report','fs',code+';return shot;')(
+    page,window,document,async()=>{},bytes=>({pixels:bytes,width:10,height:10,channels:3}),hash,path,'unused',assert,{id:'photo',observations:{}},{writeFile:async()=>{}});
+  const front=await shot('front'),unchanged=await shot('oblique');
+  assert.equal(front,unchanged,'UI-only changes falsely established a changed render');
+  assert.equal(draws,4,'capture must request a current renderer frame, including hidden controls');
 });

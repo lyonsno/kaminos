@@ -98,12 +98,21 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
     assert.ok(observed.visible&&observed.meshes.some(m=>m.visible),'photograph is not visible');
     assert.ok(observed.meshes.every(m=>m.maps.length&&m.maps.every(t=>t.albedo&&t.metalness&&t.roughness)),'imported photograph lost material texture maps');
     await settle();await page.screenshot({path:path.join(out,name+'.png')});
-    const canvas=page.locator('#kaminos-host-renderer-canvas');
-    const crop=await canvas.screenshot({path:path.join(out,name+'-canvas.png')}),shown=decodeScreenshotPngRgb(crop);
+    // Element screenshots include overlaid DOM; read the rendered bitmap itself.
+    const capture=async suffix=>{
+      const url=await page.evaluate(()=>{
+        window.__kaminosRenderSceneForInspection();
+        return document.querySelector('#kaminos-host-renderer-canvas').toDataURL('image/png');
+      });
+      assert.ok(url.startsWith('data:image/png;base64,'),'renderer capture returned no PNG');
+      const bytes=Buffer.from(url.slice('data:image/png;base64,'.length),'base64');
+      await fs.writeFile(path.join(out,name+suffix+'.png'),bytes);return decodeScreenshotPngRgb(bytes);
+    };
+    const shown=await capture('-canvas');
     let hidden;
     try{
       await page.evaluate(id=>{window.__photoWitnessObject(id).visible=false;window._kaminosDirty();},report.id);await settle();
-      hidden=decodeScreenshotPngRgb(await canvas.screenshot({path:path.join(out,name+'-hidden.png')}));
+      hidden=await capture('-hidden');
     }finally{await page.evaluate(id=>{window.__photoWitnessObject(id).visible=true;window._kaminosDirty();},report.id);await settle();}
     assert.equal(hidden.width,shown.width);assert.equal(hidden.height,shown.height);
     let changedPixels=0;for(let i=0;i<shown.width*shown.height;i++){
