@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>BFL browser helper computation witness</title>
+<pre id="status">Idle</pre><pre id="output"></pre>
+<script type="module">
+import {createBrowserPromptHelper} from './browser-backend.mjs';
+window.pupRun=async(options)=>{
+ const progress=e=>document.getElementById('status').textContent=JSON.stringify(e);
+ const helper=await createBrowserPromptHelper({modelUrl:options.modelUrl,onProgress:progress});
+ try{return await helper.expand({...options,onText:text=>document.getElementById('output').textContent=text});}
+ finally{await helper.dispose();}
+};
+window.pupPageReady=true;
+</script>
