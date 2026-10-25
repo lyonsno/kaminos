@@ -1,6 +1,6 @@
 # Autoregressive generation primitives
 
-The optional `@kaminos/webgpu-inference-kit/generation` entry point supplies a request-scoped token loop and a CPU reference sampler. It does not load or execute a language model. The first consumer under construction is Qwen3.5-9B's BFL prompt upsampler; its WebGPU adapter is not implemented yet.
+The optional `@kaminos/webgpu-inference-kit/generation` entry point supplies a request-scoped token loop and a CPU reference sampler. It does not load or execute a language model. The Qwen3.5 text adapter in `models/qwen3_5/text-model.js` implements that interface for the retained affine4 BFL prompt-upsample model. Its model-owned source loader, hybrid state and application policy stay separate from these generic primitives.
 
 ```js
 import { generateTokens, sampleToken, createSeededRandom }
@@ -42,7 +42,7 @@ The result contains `tokenIds` (excluding EOS), `finishReason` (`eos`, `length`,
 
 ## Qwen3.5 foundation and existing encoders
 
-The source modules in `models/qwen3_5/` read dense Qwen3.5 geometry and plan full-attention KV plus DeltaNet recurrent/convolution state. Planning is allocation accounting, not model execution or measured browser memory. KV defaults to FP16; recurrent matrices and the planned convolution buffers use FP32. The adapter will still need to honor actual device limits and select buffer layouts.
+The source modules in `models/qwen3_5/` read dense Qwen3.5 geometry and plan full-attention KV plus DeltaNet recurrent/convolution state. Planning is allocation accounting, not model execution or measured browser memory. KV defaults to FP16; recurrent matrices and the planned convolution buffers use FP32. The implemented text adapter currently uses FP32 KV, recurrent state, convolution history and activations; its binding/scratch/dispatch plans follow the supplied device limits. Long prefill is chunked without dropping input tokens, and only the final chunk computes logits.
 
 The text-only PUP input module uses the existing `models/flux2-klein/qwen-tokenizer.js`, with separate BFL system/user framing and task defaults. It passes all encoded input through; the Klein-specific padding/truncation wrapper remains unchanged for its existing consumer. The tokenizer's new incremental decoder retains incomplete UTF-8 across token boundaries, preserves a literal leading BOM and skips only tokens marked special when requested. Decode lookup tables are created lazily.
 
@@ -56,4 +56,4 @@ Focused contracts run from the repository root:
 npm test -- --only tests/token-sampling.mjs,tests/autoregressive-generation.mjs,tests/qwen35-input.mjs
 ```
 
-These tests establish CPU orchestration, input handling and state-accounting behavior. The next implementation boundary is Qwen's actual GPU math: real weight-layout interpretation, full-attention cache append/read, DeltaNet convolution/recurrence, then whole-model logits and generation.
+These tests establish CPU orchestration, input handling and state-accounting behavior. The model-owned witnesses separately exercise actual WebGPU affine4/hybrid kernels and composed 32-layer prefill, cached decode and full-prefix logits against native MLX FP32 computation over the retained Q4 weights. The composed witness also uses this token loop and sampler. Application-level BFL prompt behavior, vision/reference support, host integration and useful performance have their own subsequent evidence boundaries; the CPU tests above do not establish them.
