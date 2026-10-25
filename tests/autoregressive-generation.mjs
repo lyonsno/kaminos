@@ -77,3 +77,42 @@ test('existing kit control can park generation and resume it without a separate 
   await control.resume(); await running; await control.close();
   assert.equal(fixture.calls.at(-1), 'dispose');
 });
+test('request abort interrupts an independently paused control before and after state allocation', async () => {
+  for (const allocated of [false, true]) {
+    const fixture = modelFixture(), abort = new AbortController(), streamed = [];
+    const control = createWebGpuInferenceControl({ queue: { onSubmittedWorkDone: async () => {} } });
+    let reached;
+    const parked = new Promise(resolve => { reached = resolve; });
+    if (allocated) {
+      const prefill = fixture.model.prefill;
+      fixture.model.prefill = async (...args) => { const out = await prefill(...args); await control.pause(); reached(); return out; };
+    } else { await control.pause(); reached(); }
+    let settled = false, reason;
+    const running = generateTokens({ ...request(fixture.model), control, signal: abort.signal, onToken: id => streamed.push(id) })
+      .then(() => { settled = true; }, error => { settled = true; reason = error; });
+    try {
+      await parked; await new Promise(resolve => setImmediate(resolve));
+      abort.abort('request stopped');
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(settled, true, 'request abort must settle without resuming the borrowed control');
+      assert.equal(reason?.name, 'AbortError'); assert.deepEqual(streamed, []);
+      assert.equal(fixture.calls.filter(x => x === 'dispose').length, allocated ? 1 : 0);
+      assert.equal(control.snapshot().status, 'paused', 'request cancellation preserves borrowed control');
+    } finally { await control.resume(); await running; await control.close(); }
+    assert.equal(fixture.calls.filter(x => x === 'dispose').length, allocated ? 1 : 0);
+  }
+});
+test('falsy rejection reasons remain failures, including when state cleanup also fails', async () => {
+  for (const reason of [undefined, null, false, 0, '']) {
+    const fixture = modelFixture();
+    const result = await generateTokens({ ...request(fixture.model), sample: () => Promise.reject(reason) })
+      .then(value => ({ rejected: false, value }), error => ({ rejected: true, reason: error }));
+    assert.equal(result.rejected, true); assert.equal(result.reason, reason);
+    assert.equal(fixture.calls.filter(x => x === 'dispose').length, 1);
+  }
+  const fixture = modelFixture();
+  fixture.model.disposeState = () => Promise.reject(false);
+  await assert.rejects(generateTokens({ ...request(fixture.model), sample: () => Promise.reject(null) }), error => {
+    assert.ok(error instanceof AggregateError); assert.deepEqual(error.errors, [null, false]); return true;
+  });
+});

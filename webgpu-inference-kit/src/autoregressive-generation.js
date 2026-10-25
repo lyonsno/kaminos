@@ -9,6 +9,23 @@ function checkAbort(signal) {
   throw Object.assign(new Error(String(signal.reason?.message ?? signal.reason ?? 'generation stopped')), { name: 'AbortError' });
 }
 
+function abortableAdmission(admission, signal) {
+  if (!signal) return admission;
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    const abort = () => {
+      cleanup();
+      try { checkAbort(signal); } catch (error) { reject(error); }
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    // Keep handlers attached even after abort: a borrowed control may later
+    // admit/reject the parked no-op. It must neither resume model work nor
+    // produce an unhandled rejection after this request has disposed its state.
+    Promise.resolve(admission).then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
+    if (signal.aborted) abort();
+  });
+}
+
 /**
  * One request over model-owned state. prefill(ids,state) predicts the first new
  * token; decode(id,state) consumes one selected token and predicts the next.
@@ -35,10 +52,10 @@ export async function generateTokens({ model, inputIds, capacity, maxNewTokens,
   if (control != null && typeof control.runDuty !== 'function') throw new TypeError('control.runDuty is required');
   const gate = async () => {
     checkAbort(signal);
-    if (control) await control.runDuty(() => {});
+    if (control) await abortableAdmission(control.runDuty(() => checkAbort(signal)), signal);
     checkAbort(signal);
   };
-  let state, allocated = false, result, failure;
+  let state, allocated = false, result, failure, failed = false;
   try {
     await gate();
     state = await model.createState({ capacity, signal, control }); allocated = true;
@@ -63,14 +80,14 @@ export async function generateTokens({ model, inputIds, capacity, maxNewTokens,
       await gate();
       logits = await model.decode(id, state, { signal, control }); consumed++;
     }
-  } catch (error) { failure = error; }
+  } catch (error) { failure = error; failed = true; }
   if (allocated) {
     try { await model.disposeState(state); }
     catch (error) {
-      if (failure) throw new AggregateError([failure, error], 'generation and state cleanup failed');
+      if (failed) throw new AggregateError([failure, error], 'generation and state cleanup failed');
       throw error;
     }
   }
-  if (failure) throw failure;
+  if (failed) throw failure;
   return result;
 }
