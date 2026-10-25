@@ -72,6 +72,14 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   }
   return read();
  }
+ function contact(before,{position,direction}){
+  const start=before.path,prior=createWanderPath({snapshot:start}).read(),proposed=path.read();
+  const wanted=proposed.position.map((x,i)=>x-prior.position[i]),actual=position.map((x,i)=>x-prior.position[i]);
+  const length2=wanted.reduce((n,x)=>n+x*x,0),fraction=length2>1e-16?Math.max(0,Math.min(1,actual.reduce((n,x,i)=>n+x*wanted[i],0)/length2)):0;
+  // A shove does not speed up the gait; failed forward progress slows it.
+  elapsed=before.elapsed+(elapsed-before.elapsed)*fraction;heldFrame=fraction===0?before.heldFrame:null;
+  path.contact(position,direction,start.distance+(proposed.distance-start.distance)*fraction);return read();
+ }
  function frame(index,proposedPath=null) {
   const pose=walking.frame(index,{mode:'cycle',cycle:0}),state=proposedPath??path.read(),point=roots[index];
   const yaw=Math.atan2(state.direction[0],state.direction[1])-Math.atan2(forward[0],forward[1]);
@@ -83,5 +91,5 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;return read();
  }
  function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,travel,path:path.snapshot()};}
- return Object.freeze({frame,read,advance,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
+ return Object.freeze({frame,read,advance,contact,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
 }

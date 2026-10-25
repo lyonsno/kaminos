@@ -146,7 +146,17 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   if(handle<1e-10)return read();
   points=[pair(current.position),current.position.map((v,i)=>v+heading[i]*handle),end];offset=0;fallback=heading;lookup=curveTable(points,area);segments++;return read();
  }
+ // Rebuild the remaining curve from the physically accepted root. Keep the
+ // chosen destination and RNG: contact is not a new behavioral decision.
+ function contact(position,direction,distance){
+  if(!finitePair(position)||!Number.isFinite(distance)||distance<0)throw Error('Invalid physical path result');
+  const heading=normalized(direction),end=pair(points[2]),reach=length(minus(end,position));
+  const handle=Math.min(reach*.4,Math.min(...area.radii)*.5);
+  points=[pair(position),position.map((x,i)=>x+heading[i]*handle),end];
+  offset=0;total=distance;fallback=heading;entry=!inside(position,area);segments++;
+  lookup=curveTable(points,area,true);return read();
+ }
  function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal);return read();}
  function save() {return {schema:'kaminos.creature-wander-path.v1',...(destination?{destination:pair(destination)}:{}),...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
- return Object.freeze({read,advance,redirect,setArea,setAreas,setDestination,snapshot:save});
+ return Object.freeze({read,advance,redirect,contact,setArea,setAreas,setDestination,snapshot:save});
 }

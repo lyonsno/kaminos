@@ -94,6 +94,14 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   return runtime.read();
  }
  const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ // Proposal query: compute only small support geometry from the given pose.
+ // No live Bone, attention state, skin buffer, or physical state is touched.
+ runtime.flesh.project=pose=>{
+  active();const specs=new Map(pose.bones.map(b=>[b.name,b])),world=new Map();
+  const at=name=>{if(!world.has(name)){const b=specs.get(name);if(!b)throw Error('Missing proposed Bone');const m=new THREE.Matrix4().fromArray(b.localMatrix);if(b.parent)m.premultiply(at(b.parent));world.set(name,m);}return world.get(name);};
+  const matrices=[new THREE.Matrix4().toArray(),...channels.slice(1).map(name=>at(name).clone().multiply(inverseRest.get(name)).toArray())];
+  return {capsules:deformer?.capsules?.(matrices)??[],nodes:deformer?.contactNodes?.(matrices)??[],movementCores:deformer?.movementCores?.(matrices)??[]};
+ };
  runtime.flesh.contactNodes=()=>deformer?.contactNodes?.()??[];
  runtime.flesh.movementCores=()=>deformer?.movementCores?.()??[];
  update();return runtime;

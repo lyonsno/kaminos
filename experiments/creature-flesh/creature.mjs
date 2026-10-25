@@ -75,9 +75,9 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
    setRunning(value){if(typeof value!=='boolean')throw Error('Boolean flesh run state required');running=value;},
    setEnabled(value){if(typeof value!=='boolean')throw Error('Boolean flesh response required');enabled=value;volume.setEnabled(value);skin.invalidate();},
    setContacts:contacts=>volume.setCapsules(contacts),
-   contactNodes:()=>volume.targets().filter((_,i)=>!prepared.pinned[i]),
-   movementCores(){if(!palette)return[];const p=skinTransport(supportRest,support.weights,palette);return support.positions.map((_,i)=>({a:Array.from(p.subarray(i*3,i*3+3)),b:Array.from(p.subarray(i*3,i*3+3)),radius:support.radii[i],part:support.parts[i]}));},
-   capsules(){const p=volume.targets(),c=prepared.construction.crossSection,s=prepared.construction.sections,m=(c-1)/2,centers=[],radii=[];for(let k=0;k<s;k++){const center=p[(k*c+m)*c+m];centers.push(center);radii.push(Math.max(...[p[(k*c+m)*c],p[(k*c+m)*c+c-1],p[(k*c)*c+m],p[(k*c+c-1)*c+m]].map(q=>Math.hypot(...q.map((v,a)=>v-center[a])))));}return [{a:centers[1],b:centers[s-2],radius:radii[Math.floor(s/2)]}];},
+   contactNodes:(matrices=null)=>{const p=matrices?skinTransport(nodeRest,weights,matrices):null;return (p?prepared.positions.map((_,i)=>Array.from(p.subarray(i*3,i*3+3))):volume.targets()).filter((_,i)=>!prepared.pinned[i]);},
+   movementCores(matrices=palette){if(!matrices)return[];const p=skinTransport(supportRest,support.weights,matrices);return support.positions.map((_,i)=>({a:Array.from(p.subarray(i*3,i*3+3)),b:Array.from(p.subarray(i*3,i*3+3)),radius:support.radii[i],part:support.parts[i]}));},
+   capsules(matrices=null){const raw=matrices?skinTransport(nodeRest,weights,matrices):null,p=raw?prepared.positions.map((_,i)=>Array.from(raw.subarray(i*3,i*3+3))):volume.targets(),c=prepared.construction.crossSection,s=prepared.construction.sections,m=(c-1)/2,centers=[],radii=[];for(let k=0;k<s;k++){const center=p[(k*c+m)*c+m];centers.push(center);radii.push(Math.max(...[p[(k*c+m)*c],p[(k*c+m)*c+c-1],p[(k*c)*c+m],p[(k*c+c-1)*c+m]].map(q=>Math.hypot(...q.map((v,a)=>v-center[a])))));}return [{a:centers[1],b:centers[s-2],radius:radii[Math.floor(s/2)]}];},
    snapshot,mirrorKey:()=>volume.read().epoch+':'+poseKey,
    cpuPositions(base){if(volume.read().steps>0&&!current())throw Error('Pause the creature for an exact physical snapshot/export');return addFleshOffsets(base,embedding,offsets);},
    // Selection uses small rig-supported hit shapes, never a dense CPU skin

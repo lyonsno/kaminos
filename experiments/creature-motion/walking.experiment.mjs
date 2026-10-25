@@ -1,3 +1,4 @@
+import {createWanderPath} from './wander-path.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
@@ -90,7 +91,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
  const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
- let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null,admissionPath=null;
+ let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
  const relatedAssets=[];
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
@@ -174,29 +175,36 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    constraint=encounterContext.steer({time:frameStamp,seconds:physicalSeconds,direction:[direction.x,direction.z],speed:wander.read().travel.unitsPerSecond*scale});
    const local=new THREE.Vector3(constraint.direction[0],0,constraint.direction[1]).transformDirection(frame.matrixWorld.clone().invert());constraint={...constraint,direction:[local.x,local.z]};
   }
-  if(encounterContext){
+  if(encounterContext&&encounterContext.response!=='physical'){
    const body=contactState(),frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone();
    const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
    constraint={...constraint,admit:({from,to,turnOnly})=>{const pivot=point(from.position),end=point(to.position),a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
     let nextBody=null;
-    if(body.movementCores?.length){admissionPath=to;try{player.seek(wander.read().frame);nextBody=contactState();}finally{admissionPath=null;}}
+    if(body.movementCores?.length)nextBody=contactState(wander.frame(wander.read().frame,to));
     return encounterContext.limit({time:frameStamp,body,nextBody,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
   }
   const before=wander.snapshot();let state;
-  try{state=wander.advance(moving,constraint);}catch(error){admissionPath=null;wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
-  cycle=state.cycle;source.presentation.cycle=cycle;
-  player.seek(state.frame);if(playing)player.play();
-  encounterContext?.commit(frameStamp,contactState());
-  stepFlesh(physicalSeconds);
-  if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
+  try{state=wander.advance(moving,constraint);}catch(error){wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
+  const present=()=>{cycle=state.cycle;source.presentation.cycle=cycle;player.seek(state.frame);if(playing)player.play();};
+  const after=()=>{stepFlesh(physicalSeconds);if(guideSegment!==state.path.segments)refreshGuide();refresh();};
+  if(encounterContext?.response==='physical'&&physicalSeconds>0){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone(),inverse=matrix.clone().invert(),from=createWanderPath({snapshot:before.path}).read(),to=state.path;
+   const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),pivot=point(from.position),end=point(to.position),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
+   const a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
+   encounterContext.stage({time:frameStamp,seconds:physicalSeconds,nextBody:contactState(wander.frame(state.frame)),motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis},accept:motion=>{
+    const position=pivot.clone().add(new THREE.Vector3(...motion.translation)).applyMatrix4(inverse),worldDirection=new THREE.Vector3(from.direction[0],0,from.direction[1]).transformDirection(matrix).applyAxisAngle(new THREE.Vector3(0,-1,0),motion.angle).transformDirection(inverse);
+    state=wander.contact(before,{position:[position.x,position.z],direction:[worldDirection.x,worldDirection.z]});present();
+   },after});return read();
+  }
+  present();encounterContext?.commit(frameStamp,contactState());after();return read();
  }
  function startClock(){
   if(stop)return;
   runtime.flesh.setRunning(true);
-  stop=session.onFrame(({deltaSeconds,timestampMs})=>{
+  stop=session.onFrame(({deltaSeconds,timestampMs,observation})=>{
    if(disposed||!stop)return;
    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Walking clock requires a finite nonnegative host delta');
-   frameStamp=Number.isFinite(timestampMs)?timestampMs:clock+deltaSeconds*1000;const from=clock/1000;clock+=deltaSeconds*1000*rate;
+   frameStamp=observation??(Number.isFinite(timestampMs)?timestampMs:clock+deltaSeconds*1000);const from=clock/1000;clock+=deltaSeconds*1000*rate;
    const motionDelta=attention?.motionSeconds(from,clock/1000)??deltaSeconds*rate;
    motionClock+=motionDelta*1000;
    try{
@@ -237,18 +245,18 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
-  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index,admissionPath):walking.frame(index,{mode,cycle})};
+  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
    poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
- function contactState(){
-  placement.updateMatrixWorld(true);const matrix=runtime.group.matrixWorld,scale=runtime.group.getWorldScale(new THREE.Vector3());
+ function contactState(pose=null){
+  placement.updateMatrixWorld(true);const projected=pose?runtime.flesh.project(pose):null,matrix=pose?authoredPlacement().matrixWorld.clone().multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)):runtime.group.matrixWorld,scale=new THREE.Vector3().setFromMatrixScale(matrix);
   if(inputs.flesh&&(!(scale.x>0)||Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5))throw Error('Physical creature requires positive uniform world scale');
-  let capsules=runtime.flesh.capsules().map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
+  let capsules=(projected?.capsules??runtime.flesh.capsules()).map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
   if(!capsules.length){const a=runtime.bones.get('pelvis'),b=runtime.bones.get('spine-chest');if(!a||!b)return {mounted:false};capsules=[{a:a.getWorldPosition(new THREE.Vector3()).toArray(),b:b.getWorldPosition(new THREE.Vector3()).toArray(),radius:.4*scale.x}];}
   const c=capsules[0],position=[(c.a[0]+c.b[0])*.5,(c.a[2]+c.b[2])*.5],radius=c.radius+Math.hypot(c.b[0]-c.a[0],c.b[2]-c.a[2])*.35,path=wander?.read(),frame=authoredPlacement(),dir=path?new THREE.Vector3(path.path.direction[0],0,path.path.direction[1]).transformDirection(frame.matrixWorld):new THREE.Vector3(0,0,1);
-  const nodes=runtime.flesh.contactNodes().map(p=>new THREE.Vector3(...p).applyMatrix4(matrix).toArray());
-  const movementCores=runtime.flesh.movementCores().map(c=>({...c,a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
+  const nodes=(projected?.nodes??runtime.flesh.contactNodes()).map(p=>new THREE.Vector3(...p).applyMatrix4(matrix).toArray());
+  const movementCores=(projected?.movementCores??runtime.flesh.movementCores()).map(c=>({...c,a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));
   return {mounted:Boolean(placement.parent),position,radius,direction:[dir.x,dir.z],speed:player?.read().status==='playing'&&path?path.travel.unitsPerSecond*scale.x:0,capsules,nodes,movementCores};
  }
  function stepFlesh(seconds){
@@ -355,7 +363,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
-   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=input.observation??clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false,input.seconds);host.scene.refreshPresentation?.(asset);return state;}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;frameStamp=input.observation??clock;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;presentWander(delta,false,input.seconds);if(!input.observation)encounterContext?.finishStep?.();host.scene.refreshPresentation?.(asset);return read();}),
    flesh:operation('flesh',input=>{if(!chosenInputs.flesh||typeof input?.enabled!=='boolean')throw Error('Physical creature and boolean response required');runtime.flesh.setEnabled(input.enabled);chosenInputs={...chosenInputs,flesh:{...chosenInputs.flesh,enabled:input.enabled}};session.redraw();return read();}),
    physicalSnapshot:operation('physicalSnapshot',async()=>{if(player.read().status==='playing')throw Error('Pause the creature before capturing exact physical geometry');await runtime.flesh.snapshot();return read();}),
    encounterBody:()=>contactState(),

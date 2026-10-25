@@ -1,3 +1,4 @@
+import {createPhysicalEncounterWorld} from './physical-body.mjs';
 const unit=p=>{const n=Math.hypot(...p);return n?p.map(v=>v/n):[0,1];};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
 const dot3=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -95,15 +96,29 @@ export function encounterSteering(self,others,{seconds,avoidance=true}={}){
 
 // One timestamp means one shared observation, independent of actor callback
 // order. No timer, pose authority or private simulation is owned here.
-export function createEncounterWorld({avoidance=true}={}){
+export function createEncounterWorld({avoidance=true,response='admission'}={}){
+ if(!['physical','admission'].includes(response))throw Error('Unknown encounter response');
+ const physics=response==='physical'?createPhysicalEncounterWorld():null;let staged=new Map();
  const actors=new Map();let stamp=null,snapshot=[],last=new Map(),committed=new Map();
- function observe(time){if(time!==stamp){snapshot=[...actors].map(([id,stack])=>({id,...stack.at(-1)()})).filter(a=>a.mounted);committed=new Map();stamp=time;}return snapshot;}
- return {beginStep(){const observation={};observe(observation);return observation;},setAvoidance(value){if(typeof value!=='boolean')throw Error('Boolean avoidance required');avoidance=value;stamp=null;},read:()=>({avoidance,actors:actors.size,last:[...last].map(([id,state])=>({id,...state}))}),
-  actor(id){return {register(get){const stack=actors.get(id)??[];stack.push(get);actors.set(id,stack);stamp=null;return()=>{const i=stack.indexOf(get);if(i>=0)stack.splice(i,1);if(!stack.length){actors.delete(id);last.delete(id);}stamp=null;};},
+ function observe(time){if(time!==stamp){snapshot=[...actors].map(([id,stack])=>({id,...stack.at(-1)()})).filter(a=>a.mounted);committed=new Map();staged=new Map();stamp=time;}return snapshot;}
+ function finishStep(){
+  if(!physics||!staged.size)return;
+  const commands=[...staged.values()],seconds=commands[0].seconds;
+  if(commands.some(c=>Math.abs(c.seconds-seconds)>1e-9))throw Error('Encounter actors must share physical elapsed time');
+  const result=physics.solve(snapshot,commands,seconds);staged=new Map();
+  // Apply every root before any actor samples colliders or advances flesh.
+  for(const c of commands)c.accept(result.motions.get(c.id));
+  committed=new Map([...actors].map(([id,stack])=>[id,{id,...stack.at(-1)()}]));
+  for(const c of commands)c.after();
+ }
+ return {finishStep,beginStep(){const observation={};observe(observation);return observation;},setAvoidance(value){if(typeof value!=='boolean')throw Error('Boolean avoidance required');avoidance=value;stamp=null;},read:()=>({avoidance,response,physics:physics?.read()??null,actors:actors.size,last:[...last].map(([id,state])=>({id,...state}))}),
+  actor(id){return {response,finishStep,stage(command){observe(command.time);if(staged.has(id))throw Error('Duplicate physical command');staged.set(id,{...command,id});},register(get){const stack=actors.get(id)??[];stack.push(get);actors.set(id,stack);stamp=null;return()=>{const i=stack.indexOf(get);if(i>=0)stack.splice(i,1);if(!stack.length){actors.delete(id);last.delete(id);}stamp=null;};},
    steer({time,seconds,direction,speed}){const rows=observe(time),self=rows.find(r=>r.id===id);if(!self)return {direction,distanceScale:1};const result=encounterSteering({...self,direction,speed},rows,{seconds,avoidance});last.set(id,result);return result;},
    limit({time,body,motion,nextBody=null,turnOnly=false}){const rows=observe(time).map(r=>committed.get(r.id)??r),result=limitTorsoMotion({id,...body},rows,motion,nextBody),prior=last.get(id);last.set(id,{...prior,motion:{...prior?.motion,[turnOnly?'turn':'travel']:{...result,...motion,shape:body.movementCores?.length?'axial-inner-spheres':'torso-material-targets',proposedPose:Boolean(nextBody)}}});return result;},
    commit(time,body){observe(time);committed.set(id,{id,...body});},
-   contacts(time){return observe(time).filter(r=>r.id!==id).flatMap(r=>r.capsules);},
-  };},dispose(){actors.clear();snapshot=[];last.clear();},
+   contacts(time){return observe(time).map(r=>committed.get(r.id)??r).filter(r=>r.id!==id).flatMap(r=>r.capsules);},
+  };},dispose(){physics?.dispose();staged.clear();actors.clear();snapshot=[];last.clear();},
  };
 }
+
+export {createPhysicalEncounterWorld} from './physical-body.mjs';
