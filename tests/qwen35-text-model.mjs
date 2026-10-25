@@ -93,3 +93,13 @@ test('concurrent disposal callers both wait for the state retirement fence', asy
   release(); await first; await second; await model.destroy(); await control.close();
   assert.equal(retiredEarly, false); assert.equal(state.buffers.size, 0);
 });
+test('prefill splits only at device capacity and consumes every input token before predicting', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture(); device.limits.maxStorageBufferBindingSize = 32768;
+  const control = createWebGpuInferenceControl({ queue: device.queue }), model = new Qwen35TextModel(device, manifest, { control });
+  await model.load('http://localhost/model/', { fetchImpl }); const state = await model.createState({ capacity: 65 }), calls = [];
+  model.forward = async (ids, s, context, predict) => { calls.push({ ids, predict }); s.length += ids.length; return predict ? new Float32Array(64) : null; };
+  const input = Array.from({ length: 65 }, (_, i) => i % 64); await model.prefill(input, state);
+  await model.destroy(); await control.close();
+  assert.deepEqual(calls.map(c => c.ids.length), [32, 32, 1]); assert.deepEqual(calls.flatMap(c => c.ids), input);
+  assert.deepEqual(calls.map(c => c.predict), [false, false, true]); assert.equal(state.length, 65);
+});

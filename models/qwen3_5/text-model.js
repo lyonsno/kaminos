@@ -54,6 +54,11 @@ export class Qwen35TextModel {
     this.owned = new Set(); this.states = new Set(); this.loaded = false; this.closed = false; this.active = null;
     this.lifetime = new AbortController();
     this.bindingBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
+    const c = this.config, deltaWidth = 2 * c.linearKeyHeads * c.linearKeyDim + c.linearValueHeads * c.linearValueDim;
+    const widest = Math.max(2 * c.intermediateSize, deltaWidth + 2 * c.linearValueHeads, 2 * c.queryHeads * c.headDim, c.hiddenSize, c.linearValueHeads * c.linearValueDim);
+    this.chunkTokens = Math.min(Math.floor(this.bindingBytes / (widest * 4)), device.limits.maxComputeWorkgroupsPerDimension,
+      Math.floor(device.limits.maxComputeWorkgroupsPerDimension * 256 / Math.max(deltaWidth, c.queryHeads * c.headDim, c.hiddenSize)));
+    positive(this.chunkTokens, 'device prefill capacity');
   }
   buffer(bytes, target = this.owned, usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC) {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > this.device.limits.maxBufferSize || ((usage & GPUBufferUsage.STORAGE) && bytes > this.bindingBytes)) throw new RangeError('buffer exceeds device capacity');
@@ -175,10 +180,17 @@ export class Qwen35TextModel {
     if (state.length + tokens > state.capacity) throw new RangeError('generation state capacity exhausted');
     const requestedSignal = options.signal ?? state.signal;
     const ctx = { signal: AbortSignal.any([state.abort.signal, this.lifetime.signal, ...(requestedSignal ? [requestedSignal] : [])]), control: options.control ?? state.control };
-    const work = this.forward(ids, state, ctx); this.active = work; this.activeState = state;
+    const work = (async () => {
+      let logits;
+      for (let start = 0; start < ids.length; start += this.chunkTokens) {
+        const end = Math.min(start + this.chunkTokens, ids.length);
+        logits = await this.forward(ids.slice(start, end), state, ctx, end === ids.length);
+      }
+      return logits;
+    })(); this.active = work; this.activeState = state;
     try { return await work; } catch (error) { state.failed = true; throw error; } finally { this.active = null; this.activeState = null; }
   }
-  async forward(ids, state, ctx) {
+  async forward(ids, state, ctx, predict = true) {
     const c = this.config, tokens = ids.length, scratch = new Set(), f = n => this.buffer(n * 4, scratch);
     const norm = (input, weight, output, width = c.hiddenSize) => this.dispatch('rms', rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], ctx);
     const add = (hidden, update) => this.dispatch('axpy', axpyShader(), [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], ctx);
@@ -221,6 +233,7 @@ export class Qwen35TextModel {
         await this.linear(root + '.mlp.down_proj', activation, update, tokens, ctx); await add(hidden, update);
         if (this.onLayer) await this.onLayer({ index, buffer: hidden, tokens, context: ctx });
       }
+      if (!predict) { state.length += tokens; return null; }
       await norm(hidden, 'model.norm.weight', normalized);
       if (this.onNorm) await this.onNorm({ buffer: normalized, tokens, context: ctx });
       const logits = f(c.vocabSize); await this.linear('lm_head', normalized, logits, 1, ctx, { inputOffset: (tokens - 1) * c.hiddenSize });
