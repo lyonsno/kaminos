@@ -37,3 +37,10 @@ test('invalid layer and object edits preserve the accepted arrangement',()=>{
  assert.throws(()=>o.updateLayer({stage:'decode',id:before.score.stacks.decode[0].id,scale:0}));assert.deepEqual(o.export(),before);
  assert.throws(()=>o.updateObject({id:'r',recipe:{...recipe,duration:NaN}}));assert.deepEqual(o.export(),before);f.response.dispose();
 });
+
+test('stack arrangements use a distinct schema so older readers cannot silently omit their effects',()=>{
+ const f=fixture();assert.equal(f.response.operations.export().schema,'kaminos.inference-flame.v2');f.response.dispose();
+});
+test('disjoint state layers combine their parameter sets',()=>{
+ const f=fixture(),o=f.response.operations;o.load(recording);o.saveObject({id:'heat',kind:'state',recipe});o.saveObject({id:'wind',kind:'state',recipe:{...recipe,fields:[wind],b:{label:'Wind',settings:settings(99,70)}}});o.addLayer({stage:'decode',objectId:'heat'});o.addLayer({stage:'decode',objectId:'wind'});o.seek(500);assert.equal(f.get(),10);assert.equal(evaluateInferenceFlame(recording,500,o.export().score,settings(2)).settings.domControls[wind].value,70);f.response.dispose();
+});

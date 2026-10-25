@@ -23,7 +23,7 @@ export function migrateScore(value){
  const score=structuredClone(value);score.objects??=[];score.stacks??={};score.timeScale??=1;
  for(const [stage,recipe] of Object.entries(score.stages)){
   let id='import-'+stage;while(score.objects.some(o=>o.id===id))id+='-copy';
-  score.objects.push({id,label:recipe.a.label+' → '+recipe.b.label,kind:'ramp',recipe});
+  score.objects.push({id,label:stage[0].toUpperCase()+stage.slice(1)+' · '+recipe.a.label+' → '+recipe.b.label,kind:'ramp',recipe});
   (score.stacks[stage]??=[]).unshift({id:id+'-layer',objectId:id,timing:stage==='complete'?'seconds':'phase',scale:1,enabled:true});
  }
  score.stages={};return score;

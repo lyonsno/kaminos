@@ -89,9 +89,9 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   seek(value){if(!recording)throw Error('Load a recording first');if(!Number.isFinite(value)||value<0||value>playbackEnd())throw Error('Choose a position inside the recording');if(live)stop();begin();playing=false;position=value;apply();notify();return read();},
   pause(){stop();return read();},cancel(){stop(true);return read();},
   follow(){stop();live=true;recording=null;invalidate();baseline=null;position=0;lastView=null;unsubscribe=source.subscribe(receive,{previews:true});notify();return read();},
-  export(){return {schema:'kaminos.inference-flame.v1',recording:recording&&clone(recording),score:clone(score)};},
+  export(){return {schema:'kaminos.inference-flame.v2',recording:recording&&clone(recording),score:clone(score)};},
   restore(value){
-   if(value?.schema!=='kaminos.inference-flame.v1'||!value.score?.stages)throw Error('Choose an inference flame arrangement');
+   if(!['kaminos.inference-flame.v1','kaminos.inference-flame.v2'].includes(value?.schema)||!value.score?.stages)throw Error('Choose an inference flame arrangement');
    const next=value.recording?validateRecording(value.recording):null;
    const nextScore=value.score.objects?clone(value.score):migrateScore(value.score);
    validateScore(nextScore,flame.settings());stop();baseline=null;score=nextScore;scoreRevision++;invalidate();recording=next;position=0;lastView=null;notify();return read();

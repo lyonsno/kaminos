@@ -14,7 +14,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
  }
  const initialBlend=inputs.blend??arrangement?.score?.objects?.[0]?.recipe??Object.values(arrangement?.score?.stages??{})[0];
  const blend=await blendDefinition.create({...context,inputs:{}}),flame=await host.flame.open(),scene=await host.scene.open();
- let sync=()=>{},alive=true;
+ let sync=()=>{},alive=true;const numberDrags=new Set();
  const response=createInferenceFlame({flame,source:inferenceEvents,onFrame:scene.onFrame,changed:()=>sync()});
  response.operations.load(inferenceFlameDemo());
  try{if(arrangement)response.operations.restore(arrangement);if(initialBlend)blend.operations.restore(initialBlend);}catch(e){response.dispose();await blend.dispose();await scene.dispose();throw e;}
@@ -63,6 +63,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
   root.append(style,panel);const status=el('p');status.setAttribute('role','status');let message='',selectedObject=null;
   const run=async(name,value)=>{message='';try{return await invoke(name,value);}catch(error){message=error.message;}finally{sync();}};
   const btn=(label,name,value)=>{const button=el('button',label);button.className='btn';button.type='button';if(name)button.onclick=()=>run(name,value);return button;};
+  const dragNumber=(input,grip)=>{const drag=host.controls.installNumberDrag({input,grip,step:.1});numberDrags.add(drag);return drag;};
   const actions=(...nodes)=>{const row=el('div');row.className='actions';row.append(...nodes);return row;};
   const number=(label,value,change)=>{const input=el('input');input.type='number';input.min='0';input.step='any';input.value=String(value);input.setAttribute('aria-label',label);input.onchange=()=>change(Number(input.value));return input;};
   panel.append(el('strong','Give the generation a flame'),status);
@@ -87,7 +88,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
   const stackHint=el('p','Layers play together. Lower layers take precedence for any shared parameters.');panel.append(stackHint);
   const addSelected=btn('Add selected to phase');addSelected.onclick=()=>run('response.addLayer',{stage:stage.value,objectId:selectedObject});
   const clearPhase=btn('Clear phase');clearPhase.onclick=()=>run('response.clearStage',stage.value);panel.append(actions(addSelected,clearPhase));
-  const scaleLabel=el('label','Authored duration × '),scale=number('Authored duration multiplier',1,value=>run('response.timeScale',value));scaleLabel.append(scale);panel.append(scaleLabel);
+  const scaleLabel=el('label','Transition duration × '),scale=number('Transition duration multiplier',1,value=>run('response.timeScale',value));scaleLabel.append(scale);panel.append(scaleLabel);dragNumber(scale,scaleLabel);
   panel.append(el('p','Fit phase uses its recorded span. Authored seconds keeps the saved duration; Finished gets its full transition. Live phases with unknown length use authored seconds. Fit ×1 fills the phase; longer settings may be interrupted by its successor.'));
 
   const library=el('details');library.open=true;library.append(el('summary','Saved states & effects'));
@@ -112,7 +113,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
   const attack=number('Preview flare attack seconds',.12,()=>{}),settle=number('Preview flare settle seconds',.9,()=>{});
   const attackLabel=el('label','Attack seconds '),settleLabel=el('label','Settle seconds ');attackLabel.append(attack);settleLabel.append(settle);
   const peak=btn('Capture current flame as peak');peak.onclick=()=>run('response.capturePeak',{attackMs:Number(attack.value)*1000,settleMs:Number(settle.value)*1000});
-  flare.append(attackLabel,settleLabel,peak,btn('Remove flare','response.clearFlare'));panel.append(flare);
+  flare.append(attackLabel,settleLabel,peak,btn('Remove flare','response.clearFlare'));panel.append(flare);dragNumber(attack,attackLabel);dragNumber(settle,settleLabel);
   panel.append(el('p','Replay repeats inference events, not the evolved fluid. Follow records ImageGen stages and approximate latent previews.'));
 
   let lastPreview=null,lastRevision=null,lastStage=null,lastSelection=null,cachedScore=null;
@@ -126,7 +127,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
    if(!list.length)objects.append(el('p','Capture or choose A and B, then save a state, transition or effect.'));
    for(const object of list){
     const card=el('article');card.className='object-card';card.dataset.selected=String(selectedObject===object.id);card.dataset.objectId=object.id;
-    card.append(el('strong',object.label),el('span',`${kinds[object.kind]??object.kind} · ${object.recipe.fields.length} parameters · ${object.recipe.duration}s`));
+    card.append(el('strong',object.label),el('span',`${kinds[object.kind]??object.kind} · ${object.recipe.fields.length} parameters${object.kind==='state'?'':` · ${object.recipe.duration}s`}`));
     const select=btn(selectedObject===object.id?'Selected':'Select');select.onclick=()=>{selectedObject=object.id;kind.value=object.kind;objectName.value=object.label;invalidate();};
     const edit=btn('Edit A/B');edit.onclick=()=>editObject(object);
     const add=btn('Add to '+names[stage.value]);add.onclick=()=>run('response.addLayer',{stage:stage.value,objectId:object.id});
@@ -137,7 +138,9 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
    }
    addSelected.disabled=!selectedObject;updateObject.disabled=!selectedObject;
   }
+  let stackDrags=[];
   function renderStack(score){
+   for(const drag of stackDrags){drag?.dispose?.();numberDrags.delete(drag);}stackDrags=[];
    stack.replaceChildren();const layers=score.stacks?.[stage.value]??[],objectsById=new Map((score.objects??[]).map(object=>[object.id,object]));
    if(!layers.length)stack.append(el('p','No response assigned to '+names[stage.value]+'. Add a saved object below.'));
    layers.forEach((layer,index)=>{
@@ -149,7 +152,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
     for(const [value,label] of [['phase','Fit phase'],['seconds','Authored seconds'],['progress','Observed progress']]){const option=el('option',label);option.value=value;timing.append(option);}timing.value=layer.timing;
     timing.onchange=()=>run('response.updateLayer',{stage:stage.value,id:layer.id,timing:timing.value});
     const factor=number('Duration multiplier for '+(object?.label??layer.id),layer.scale??1,value=>run('response.updateLayer',{stage:stage.value,id:layer.id,scale:value}));
-    const multiplier=el('label','× ');multiplier.append(factor);card.append(actions(timing,multiplier));
+    const multiplier=el('label','× ');multiplier.append(factor);if(object?.kind!=='state'){card.append(actions(timing,multiplier));stackDrags.push(dragNumber(factor,multiplier));}
     const up=btn('↑','response.moveLayer',{stage:stage.value,id:layer.id,direction:-1}),down=btn('↓','response.moveLayer',{stage:stage.value,id:layer.id,direction:1});up.disabled=index===0;down.disabled=index===layers.length-1;
     up.setAttribute('aria-label','Move layer up');down.setAttribute('aria-label','Move layer down');
     const edit=btn('Edit');edit.disabled=!object;edit.onclick=()=>editObject(object);
@@ -170,5 +173,5 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
    if(state.preview&&`${state.recording.runId}:${state.preview.atMs}`!==lastPreview){lastPreview=`${state.recording.runId}:${state.preview.atMs}`;preview.width=state.preview.width;preview.height=state.preview.height;preview.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(state.preview.rgba),state.preview.width,state.preview.height),0,0);}
    preview.hidden=!state.preview;caption.textContent=state.preview?(state.preview.kind==='illustrated-demo'?'Illustrated demo · not a generated image':'Approximate latent preview'):'';
   };sync();
- },async dispose(){alive=false;response.dispose();await blend.dispose();await scene.dispose();}};
+ },async dispose(){alive=false;for(const drag of numberDrags)drag?.dispose?.();numberDrags.clear();response.dispose();await blend.dispose();await scene.dispose();}};
 }};
