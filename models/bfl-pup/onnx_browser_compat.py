@@ -21,6 +21,11 @@ def browser_compatible(model):
     counts={}
     for original in model.graph.node:
         op=original.op_type
+        if original.domain=='com.microsoft' and op in {'CausalConvWithState','LinearAttention'}:
+            window=next((a for a in original.attribute if a.name=='state_window'),None)
+            if window is not None:
+                if window.i!=0:raise ValueError('The browser runtime cannot represent a nonzero state window.')
+                original.attribute.remove(window)
         if original.domain!='com.microsoft' or op not in {'LinearAttentionGate','GatedRMSNorm','MRotaryEmbedding'}:
             nodes.append(original);continue
         counts[op]=counts.get(op,0)+1
