@@ -4,6 +4,7 @@ export function createWorkerPromptHelper({modelUrl,onProgress=()=>{},WorkerClass
  if(!modelUrl)throw Error('A model package URL is required.');
  let active=null,disposed=false;
  return {
+  get busy(){return active!==null;},
   expand({prompt,images=[],signal,onText=()=>{},onProgress:requestProgress=onProgress}){
    if(disposed)return Promise.reject(Error('Prompt helper is disposed.'));
    if(active)return Promise.reject(Error('Prompt helper is already generating.'));
