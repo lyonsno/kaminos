@@ -126,8 +126,11 @@ for (const borrowed of [false, true]) {
     frameReceipt = foregroundService.request({ requestId: 'host-frame', run() {} }).completion;
     await schedule.runtime.prepareCommandDutyAtBoundary({ phase: 'mask', kind: 'compute' }, schedule.invocation);
   });
-  await tracker.initialize({ ...input(0), mask: new Uint8Array([1, 0, 0, 0]) });
+  const initialized = await tracker.initialize({ ...input(0), mask: new Uint8Array([1, 0, 0, 0]) });
   assert.equal((await frameReceipt).status, 'completed');
+  assert.equal(initialized.applicationInvocation.invocationId, initialized.foreground.runId);
+  assert.equal(initialized.applicationInvocation.routeId, initialized.foreground.routeId);
+  assert.equal(initialized.applicationInvocation.frameIndex, 0);
   assert.equal(tracker.snapshot().completedFrames, 1);
   assert.equal(tracker.snapshot().scheduling.lastRun.status, 'succeeded');
   assert.equal(foregroundService.snapshot().activeRun, null);

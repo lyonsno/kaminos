@@ -26,10 +26,10 @@ export async function mountSamVideoPage(document) {
   const paint = document.createElement('canvas'), brush = paint.getContext('2d', { willReadFrequently: true });
   const resultCanvas = byId('result'), resultContext = resultCanvas.getContext('2d');
   let device, session, foreground, preview, tracker, loop, running, seed, last, stream, objectUrl, drawing = false;
-  let loading = false, closed = false, captureSequence = 0, view = 'overlay';
+  let loading = false, closed = false, captureSequence = 0, view = 'overlay', pendingSetup = null, closing = null;
   const status = message => { byId('status').textContent = message; };
   function controls() {
-    const busy = loading || !!running;
+    const busy = closed || loading || !!running;
     for (const id of ['camera', 'file', 'load', 'model']) byId(id).disabled = busy;
     byId('capture').disabled = busy || !tracker || !video.videoWidth;
     byId('clear').disabled = busy || !seed;
@@ -40,8 +40,10 @@ export async function mountSamVideoPage(document) {
     byId('save').disabled = !last;
   }
   async function initialize() {
+    if (closed) throw new Error('video application is closed');
     if (device) return;
     const acquired = await requestBrowserWebGpuDevice(navigator.gpu, { label: 'sam-video-example' });
+    if (closed) { acquired.device.destroy(); throw new Error('video application is closed'); }
     device = acquired.device;
     try {
       session = await createWebGpuInferenceSession({ sessionId: `sam-video:${crypto.randomUUID()}`,
@@ -50,7 +52,16 @@ export async function mountSamVideoPage(document) {
       preview = await createSamVideoPreview({ canvas: byId('source'), device, foreground,
         onError(error) { loop?.stop(error.message); status(`Failed: ${error.message}`); } });
       device.lost.then(info => { if (!closed) { loop?.stop('device lost'); status(`Device lost: ${info.message}`); } });
-    } catch (error) { await foreground?.dispose(); session?.close(); device.destroy(); device = null; throw error; }
+    } catch (error) {
+      await preview?.close(); await foreground?.dispose(); session?.close(); device.destroy();
+      preview = null; foreground = null; session = null; device = null; throw error;
+    }
+  }
+  function configure(work) {
+    if (closed || loading || running) throw new Error(closed ? 'video application is closed' : 'video application is busy');
+    loading = true; controls();
+    pendingSetup = Promise.resolve().then(work).finally(() => { loading = false; pendingSetup = null; controls(); });
+    return pendingSetup;
   }
   function releaseMedia() {
     stream?.getTracks().forEach(track => track.stop()); stream = null;
@@ -60,11 +71,23 @@ export async function mountSamVideoPage(document) {
     seedContext.clearRect(0, 0, seedCanvas.width, seedCanvas.height);
     resultContext.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
   }
-  async function useMedia(file) {
-    await initialize(); releaseMedia();
-    if (file) { objectUrl = URL.createObjectURL(file); video.src = objectUrl; }
-    else { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); video.srcObject = stream; }
-    await video.play(); preview.setSource(video); status(file ? file.name : 'Camera live'); controls();
+  function useMedia(file) {
+    return configure(async () => {
+      await initialize();
+      if (closed) throw new Error('video application is closed');
+      releaseMedia();
+      try {
+        if (file) { objectUrl = URL.createObjectURL(file); video.src = objectUrl; }
+        else {
+          const acquired = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          if (closed) { acquired.getTracks().forEach(track => track.stop()); throw new Error('video application is closed'); }
+          stream = acquired; video.srcObject = stream;
+        }
+        await video.play();
+        if (closed) throw new Error('video application is closed');
+        preview.setSource(video); status(file ? file.name : 'Camera live');
+      } catch (error) { releaseMedia(); throw error; }
+    });
   }
   function capture() {
     if (!tracker || !video.videoWidth) throw new Error('load the tracker and a video source first');
@@ -86,18 +109,16 @@ export async function mountSamVideoPage(document) {
   const handle = work => Promise.resolve().then(work).catch(error => status(`Failed: ${error.message}`)).finally(controls);
   byId('camera').onclick = () => handle(() => useMedia());
   byId('file').onchange = event => { const file = event.target.files[0]; if (file) handle(() => useMedia(file)); event.target.value = ''; };
-  byId('load').onclick = () => handle(async () => {
-    loading = true; controls();
-    try {
+  byId('load').onclick = () => handle(() => configure(async () => {
       await initialize(); await tracker?.close(); tracker = null;
       const root = new URL(byId('model').value, location.href);
       if (root.origin !== location.origin) throw new Error('model root must be same-origin');
       tracker = await createSam31VideoTracker({ modelPackageRoot: root.href, inferenceSession: session, foregroundService: foreground,
         memoryAttentionKernel: 'flash', onProgress: status });
+      if (closed) throw new Error('video application is closed');
       status(`Model loaded: ${tracker.imageWidth} x ${tracker.imageHeight}`);
       byId('identity').textContent = tracker.packageId;
-    } finally { loading = false; }
-  });
+  }));
   byId('capture').onclick = () => handle(async () => {
     if (tracker.snapshot().status === 'tracking') tracker.reset();
     seed = capture(); paint.width = seedCanvas.width = seed.width; paint.height = seedCanvas.height = seed.height;
@@ -148,14 +169,19 @@ export async function mountSamVideoPage(document) {
     const a = document.createElement('a'); a.href = url; a.download = `sam-video-frame-${last.result.frameIndex}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   };
-  async function close() {
+  function close() {
+    if (closing) return closing;
     closed = true;
+    closing = (async () => {
+    try { await pendingSetup; } catch { /* The setup operation retains its own failure. */ }
     const errors = [];
     for (const work of [stop, releaseMedia, () => tracker?.close(), () => preview?.close(), () => foreground?.dispose(),
       () => session?.drain(), () => session?.close(), () => device?.destroy()]) {
       try { await work(); } catch (error) { errors.push(error); }
     }
     if (errors.length) throw new AggregateError(errors, 'SAM video cleanup failed');
+    })();
+    return closing;
   }
   globalThis.addEventListener('pagehide', () => { close().catch(console.error); }, { once: true });
   byId('model').value = new URLSearchParams(location.search).get('model') || '/model/tracker-model-root.json';
