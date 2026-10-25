@@ -51,6 +51,7 @@ test('model layout requires all projections and direct source norm shapes', () =
   assert.equal(layout.projections.size, 17); assert.equal(layout.vectors.size, 11);
   const missing = structuredClone(manifest); delete missing.tensors['lm_head.biases']; assert.throws(() => qwen35ModelLayout(missing), /lm_head.biases/);
   const wrong = structuredClone(manifest); wrong.tensors['model.layers.1.self_attn.k_norm.weight'].shape = [32]; assert.throws(() => qwen35ModelLayout(wrong), /k_norm/);
+  const quant = structuredClone(manifest); quant.config.quantization.bits = 8; assert.throws(() => qwen35ModelLayout(quant), /quantization/);
 });
 test('request validation precedes allocation and model teardown preserves borrowed device/control', async () => {
   const { manifest, fetchImpl } = fixture(), { device, buffers } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });

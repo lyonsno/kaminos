@@ -2,6 +2,8 @@ import { readQwen35Config } from './config.js';
 
 export function qwen35ModelLayout(manifest) {
   if (manifest?.schema !== 'kaminos.qwen35-text-weights.v1') throw new Error('expected Qwen text weight manifest');
+  const quant = manifest.config?.quantization;
+  if (quant?.bits !== 4 || quant.group_size !== 64 || quant.mode !== 'affine') throw new Error('unsupported source quantization');
   const config = readQwen35Config(manifest.config), raw = manifest.config.text_config ?? manifest.config;
   if (raw.attention_bias !== false || raw.tie_word_embeddings !== false || raw.hidden_act !== 'silu' || raw.attn_output_gate !== true) throw new Error('unsupported dense text-model variant');
   if (!Number.isFinite(raw.rms_norm_eps) || raw.rms_norm_eps <= 0) throw new Error('rms_norm_eps is required');
