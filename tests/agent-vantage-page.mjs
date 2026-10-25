@@ -561,7 +561,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
   document.createElement = tag => new FakeElement(tag);
   document.getElementById = id => (id === 'viewport' ? viewport : null);
   let selection = [];
-  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, vantageCaptureHeld: true, controls: {enabled: true},
+  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, sceneComponents:null, vantageCaptureHeld: true, controls: {enabled: true},
     scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
     greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, sceneSelectionHistory:{set:ids=>{selection=ids;}}, setSceneSelection: ids => { selection = ids; },
@@ -589,7 +589,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
 
 test('click selection waits while a picture holds the viewport', () => {
   const calls = [];
-  const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
+  const scope = {polyEdit: null, sceneComponents:null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
     pickWaterDomainFromViewportPointer: () => false,

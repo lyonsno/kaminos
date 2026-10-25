@@ -6,12 +6,12 @@ import {createGivenPaletteMotion} from './given-palette-motion.mjs';
 import {createCreatureArticulation} from './articulation.mjs';
 import {boneWorldPose,checkedBoneWorldPose,applyBoneWorldPose} from './posed-bone-transform.mjs';
 
-export async function createPosedSkeleton({host,inputs,record=()=>{}}){
+export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSources=loadFullBodySources}={}){
  const document=host.controls.document,win=document.defaultView,edits=win.kaminosSceneEdits;if(!edits||!host.controls.components)throw Error('Native scene component editing is required');
- const data=await loadFullBodySources(inputs),session=await host.scene.open();
+ const data=await loadSources(inputs),session=await host.scene.open();
  const root=new THREE.Group();root.name=inputs.label??'Creature · pose skeleton';
  const proxy=new THREE.Object3D(),target='@posed-bone:'+root.uuid,whole='@posed-rig:'+root.uuid;
- let runtime,asset,seat,controls,unsubscribe,disposed=false,editing=false,selected=inputs.joint??'forelimb-left-shoulder',refresh=()=>{},model;
+ let runtime,asset,floorAsset,floor,seat,controls,unsubscribe,disposed=false,editing=false,selected=inputs.joint??'forelimb-left-shoulder',refresh=()=>{},model;
  const markers=new Map(),base={kind:'rest',frame:0};let restoreGround=()=>{};
  function active(){if(disposed||!root.parent)throw Error('Posed creature is no longer mounted');}
  function putProxy(){if(!runtime)return;const p=boneWorldPose(runtime.bones.get(selected));proxy.position.fromArray(p.position);proxy.rotation.set(...p.rotation);proxy.scale.fromArray(p.scale);proxy.updateMatrixWorld(true);}
@@ -29,9 +29,9 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}}){
   const points=new Float32Array((runtime.bones.size-1)*6),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(points,3));
   const lines=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:0x43d8e9,depthTest:false,transparent:true,opacity:.8}));lines.renderOrder=99;Object.assign(lines.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true});runtime.group.add(lines);
   const drawLines=()=>{let i=0;const inv=runtime.group.matrixWorld.clone().invert();for(const bone of runtime.bones.values()){if(!bone.parent?.isBone)continue;for(const node of [bone.parent,bone]){points.set(node.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv).toArray(),i);i+=3;}}geometry.attributes.position.needsUpdate=true;geometry.computeBoundingSphere();lines.visible=editing;};
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.MeshStandardMaterial({color:0x808080,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.position.y=Math.min(...Array.from(data.rest).filter((_,i)=>i%3===1))-.04;floor.receiveShadow=true;root.add(floor);
+  floor=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.MeshStandardMaterial({color:0x808080,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.position.y=Math.min(...Array.from(data.rest).filter((_,i)=>i%3===1))-.04;floor.receiveShadow=true;floor.name='Pose reference floor';
   const ground=document.getElementById('composition-ground-visible');if(ground){const previous=ground.checked;ground.checked=false;ground.dispatchEvent(new Event('change'));restoreGround=()=>{if(!ground.checked){ground.checked=previous;ground.dispatchEvent(new Event('change'));}};}
-  asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:inputs.case}});root.parent.add(proxy);
+  asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:inputs.case}});root.parent.add(proxy);floorAsset=await session.attach(floor,{owned:true,metadata:{label:floor.name,type:'experiment',source:'pose-reference-floor'}});
   const read=()=>({objectId:asset.id,status:editing?'posing-joints':'object',joint:selected,source:structuredClone(data.source),base:{...base},joints:[...runtime.bones].map(([name,b])=>({name,parent:b.parent?.isBone?b.parent.name:null,world:boneWorldPose(b)})),deformation:runtime.read().deformation,view:session.readView(),pose:model.snapshot()});
   function changed(){runtime.group.updateMatrixWorld(true);drawLines();update();}
   const applySaved=value=>{model.restore(value);changed();};
@@ -71,7 +71,7 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}}){
    button('Save pose…',async()=>{const value=await invoke('snapshot'),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)+'\n'],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='creature-pose.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
    const file=document.createElement('input');file.type='file';file.accept='.json,application/json';file.hidden=true;file.setAttribute('aria-label','Open creature pose');file.onchange=async()=>{try{if(file.files?.[0])await invoke('restore',JSON.parse(await file.files[0].text()));}catch(e){error.textContent=e.message;}finally{file.value='';}};button('Open pose…',()=>file.click());properties.append(file,error);
    refresh=()=>{status.textContent=editing?selected.replaceAll('-',' ')+' · native Move / Rotate · Undo / Redo':'Tab enters Pose Mode. Pose edits preserve the binding and rest skeleton.';};controls=host.controls.mountObject({asset,properties});refresh();
-  },async dispose(){if(disposed)return;seat?.dispose();unsubscribe?.();edits.discard(e=>[target,whole,asset.id].includes(e.id));edits.unregister(target);edits.unregister(whole);controls?.dispose();proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime.dispose();}};
- }catch(error){seat?.dispose();unsubscribe?.();edits.discard(e=>[target,whole,asset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime?.dispose();throw error;}
+  },async dispose(){if(disposed)return;seat?.dispose();unsubscribe?.();edits.discard(e=>[target,whole,asset.id,floorAsset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);controls?.dispose();proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime.dispose();floor.geometry.dispose();floor.material.dispose();}};
+ }catch(error){seat?.dispose();unsubscribe?.();edits.discard(e=>[target,whole,asset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime?.dispose();floor?.geometry.dispose();floor?.material.dispose();throw error;}
 }
 export default {id:'marionette/posed-skeleton',title:'Creature · pose skeleton',create:createPosedSkeleton};

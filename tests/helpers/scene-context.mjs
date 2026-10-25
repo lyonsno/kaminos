@@ -4,6 +4,8 @@ import vm from 'node:vm';
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.sceneComponents ??= null;
+  if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {
     context.sceneObjects ??= [];
     context.sceneGroups ??= [];

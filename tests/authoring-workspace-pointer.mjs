@@ -6,7 +6,7 @@ const source=fs.readFileSync(`${root}/index.html`,'utf8');
 const start=source.indexOf('function viewportEventHitsInteractiveOverlay(');
 const end=source.indexOf('function handleViewportDoubleClick(',start);
 assert.ok(start>=0 && end>start);
-const context={polyEdit:null,renderer:{domElement:{getBoundingClientRect:()=>({left:0,top:42,right:800,bottom:700})}},viewportPointerDown:null,vantageCaptureHeld:false,viewportSuppressedClick:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:{dragging:false},performance:{now:()=>0},pickFlameDomainFromViewportPointer:()=>null,pickWaterDomainFromViewportPointer:()=>false,pickSceneObjectFromViewportPointer:()=>null,clearActiveSceneObjectSelection:()=>context.clears++,setInfo:()=>{},window:{_kaminosDirty:()=>{}},clears:0};
+const context={polyEdit:null,sceneComponents:null,renderer:{domElement:{getBoundingClientRect:()=>({left:0,top:42,right:800,bottom:700})}},viewportPointerDown:null,vantageCaptureHeld:false,viewportSuppressedClick:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:{dragging:false},performance:{now:()=>0},pickFlameDomainFromViewportPointer:()=>null,pickWaterDomainFromViewportPointer:()=>false,pickSceneObjectFromViewportPointer:()=>null,clearActiveSceneObjectSelection:()=>context.clears++,setInfo:()=>{},window:{_kaminosDirty:()=>{}},clears:0};
 context.window.kaminosSelection={clear:()=>context.clearActiveSceneObjectSelection()};
 vm.createContext(context);vm.runInContext(source.slice(start,end),context);
 context.sceneHitsFromViewportPointer=()=>[];context.pickVisibleFlameFromViewportPointer=()=>null;

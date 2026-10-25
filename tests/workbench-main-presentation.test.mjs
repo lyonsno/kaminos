@@ -12,7 +12,7 @@ function fixture(){
  const rows=[{id:'body',object:root,label:'Creature'},{id:'other',object:other,label:'Other'}];
  const fields=new Map();for(const group of ['position','rotation','scale'])for(const axis of ['x','y','z'])fields.set(group+'.'+axis,{value:group==='scale'?'1':'0'});
  const nodes=new Map(['transform-inspector','transform-inspector-empty','transform-inspector-fields','transform-inspector-name','transform-inspector-id'].map(id=>[id,{dataset:{},hidden:false}]));
- const document={activeElement:null,getElementById:id=>nodes.get(id),querySelector:q=>fields.get(q.match(/data-transform-field="(.+)"/)?.[1])};
+ const document={activeElement:null,querySelectorAll:()=>[],getElementById:id=>nodes.get(id),querySelector:q=>fields.get(q.match(/data-transform-field="(.+)"/)?.[1])};
  let selected=rows[0],refreshes=0,redraws=0;
  const c={authoredWaterControls:null,document,sceneOwnerControls:null,sceneObjects:rows,flameDomainGuide:null,activeSceneObjectId:'body',activeSceneGroupId:null,activeSceneFieldId:null,FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',flameEmitterInjectionSuspended:false,
   sceneSelection:{ids:['body']},selectionProxy:null,updateSelectionFeedback(){c.feedbackRefreshes=(c.feedbackRefreshes??0)+1;},syncEditorHelperVisibility(){},syncSelectionInspector(){},syncLevelingButton(){},setTransformInspectorFieldsDisabled(){},updateSplatCorrectionPanel(){},selectedPlacementEntry:()=>selected,
