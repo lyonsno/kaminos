@@ -5,7 +5,7 @@ try{
  const {chromium}=await import('/Users/noahlyons/.local/state/sammy-kaminos-masks-0922/browser-tools/node_modules/playwright/index.mjs');
  report.executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell';
  context=await chromium.launchPersistentContext(path.join(out,'browser-profile'),{headless:true,executablePath:report.executable,viewport:{width:1440,height:1100},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});context.setDefaultTimeout(0);context.setDefaultNavigationTimeout(0);
- const page=context.pages()[0];page.on('pageerror',e=>{report.errors.push(e.message);save();});page.on('console',m=>{report.console.push({type:m.type(),text:m.text()});save();});
+ const page=context.pages()[0];await page.addInitScript(()=>{const original=console.error;console.error=(...args)=>{original(...args);original(new Error('Console error origin').stack);};});page.on('pageerror',e=>{report.errors.push(e.message);save();});page.on('console',m=>{report.console.push({type:m.type(),text:m.text()});save();});
  const requested=new URL(url),setup=JSON.parse(requested.searchParams.get('experiment_inputs')??'{}'),entry=new URL(url);entry.searchParams.delete('experiment');entry.searchParams.delete('experiment_inputs');
  await page.goto(entry.href,{waitUntil:'domcontentloaded'});report.phase='experiment-load';save();
  await page.waitForFunction(()=>Boolean(window.kaminosWorkbenchExperiments));await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-coarse',setup),setup);report.effectiveURL=page.url();
