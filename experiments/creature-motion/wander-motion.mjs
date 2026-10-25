@@ -80,7 +80,9 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
  function contact(before,{position,direction}){
   const start=before.path,prior=createWanderPath({snapshot:start}).read(),proposed=path.read();
   const wanted=proposed.position.map((x,i)=>x-prior.position[i]),actual=position.map((x,i)=>x-prior.position[i]);
-  const length2=wanted.reduce((n,x)=>n+x*x,0),fraction=length2>1e-16?Math.max(0,Math.min(1,actual.reduce((n,x,i)=>n+x*wanted[i],0)/length2)):0;
+  const length2=wanted.reduce((n,x)=>n+x*x,0),fraction=length2>1e-16?Math.max(0,Math.min(1,actual.reduce((n,x,i)=>n+x*wanted[i],0)/length2)):1;
+  // A stationary source interval has no travel to obstruct; allow its next
+  // frame to arrive. Actual holds still govern advance() before this feedback.
   // Never change the pose after contacts have been solved against it. A shove
   // does not accelerate the gait; lost progress slows the following step.
   contactRate=fraction;

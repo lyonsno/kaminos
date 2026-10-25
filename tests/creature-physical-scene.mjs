@@ -50,3 +50,25 @@ for(const blocked of [false,true]){
   }
  }finally{await probe.dispose();}
 }
+
+// A clip's stationary interval is not failed travel. It must remain able to
+// reach its later moving frames, even when physical feedback controls gait.
+const plateau=structuredClone(data),z=[0,.01,.01,.01,.02,.03];
+plateau.motion.frames=z.length;plateau.motion.positions=z.flatMap(value=>[0,.2,value,0,.2,value+1]);
+plateau.motion.localRotations=Array.from({length:z.length*2},()=>[1,0,0,0]).flat();
+const plateauRoom=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:[recipe.actors[0]]}},{loadSources:async()=>plateau});
+try{
+ for(let i=0;i<12;i++){await plateauRoom.operations.advance({seconds:1/30});assert.equal(plateauRoom.read().encounters.physics.contacts.length,0);}
+ assert.ok(plateauRoom.read().actors[0].state.action.motion.elapsed>3/30,'PHYSICAL-03: unobstructed motion must advance beyond its stationary source interval');
+}finally{await plateauRoom.dispose();}
+
+const blockedRoom=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:[
+ {id:'a',label:'A',creature:{...recipe.actors[0].creature,deformation:'gpu'}},
+ {id:'b',label:'B',creature:{...recipe.actors[0].creature,action:'preview',deformation:'gpu',transform:{position:[0,0,.2],quaternion:[0,0,0,1],scale:[1,1,1]}}}
+]}},{loadSources:async()=>data,loadGpuDeformer:async()=>supportFactory});
+try{
+ let contacts=0;
+ for(let i=0;i<3;i++){await blockedRoom.operations.advance({seconds:1/30});contacts+=blockedRoom.read().encounters.physics.contacts.length;}
+ assert.ok(contacts>0,'Blocked control must actually encounter a physical obstacle');
+ assert.ok(blockedRoom.read().actors[0].state.action.motion.elapsed<1/30,'Actual obstruction must slow the gait during contact');
+}finally{await blockedRoom.dispose();}
