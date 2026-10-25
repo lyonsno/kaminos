@@ -1,0 +1,17 @@
+// kaminos-test: node
+import assert from'node:assert/strict';
+import{createPagePromptHelper}from'../models/bfl-pup/page-helper.mjs';
+const calls=[];let loads=0,disposed=0,provider;
+const factory=()=>{loads++;return provider={busy:false,async expand(){this.busy=true;calls.push('model');this.busy=false;return{text:'blue',totalMs:12,generationMs:8};},async dispose(){disposed++;this.busy=false;}};};
+const helper=createPagePromptHelper({modelUrl:'/model',providerFactory:factory,post:async request=>{calls.push(request.action);return request.action==='claim'?{status:'held',leaseId:'test',ttlSeconds:120}:{};}});
+const result=await helper.expand({prompt:'blue'});
+assert.deepEqual(calls,['claim','model','release']);assert.equal(loads,1);assert.equal(disposed,1);
+assert.equal(result.backendExpandMs,12);assert.equal(result.gpuLease.status,'held');assert.equal(result.timingScope,'page request including GPU wait, setup and model disposal');
+assert.ok(Number.isFinite(result.totalMs)&&result.totalMs>=0);
+const controller=new AbortController();let waitingLoads=0;
+const waiting=createPagePromptHelper({modelUrl:'/model',providerFactory:()=>{waitingLoads++;return factory();},post:async()=>{controller.abort(Error('stop GPU wait'));return{status:'waiting',heldBy:['other-job']};}});
+await assert.rejects(waiting.expand({prompt:'x',signal:controller.signal}),/stop GPU wait|stopped/);
+assert.equal(waitingLoads,0,'waiting or cancelled admission must not load model weights');
+const failed=createPagePromptHelper({modelUrl:'/model',providerFactory:factory,post:async request=>request.action==='claim'?{status:'held',leaseId:'test',ttlSeconds:120}:Promise.reject(Error('release broke'))});
+await assert.rejects(failed.expand({prompt:'x'}),error=>error.message.includes('release broke')&&error.result.text==='blue');
+console.log('Prompt page admission, model disposal, handback and timing pass');

@@ -7,3 +7,6 @@ scenes/*
 artifacts/volume-captures/
 test-results/
 .venv
+
+# Local derived prompt-helper package, mounted by the serving host.
+/models/bfl-pup-onnx/
