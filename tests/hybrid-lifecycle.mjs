@@ -34,7 +34,7 @@ assert(hostFrame,'distributed smoke remains live');assert.throws(()=>mount.readP
 mount.setSurfaceEnabled(true);
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
 assert.equal(batches[0],batches[1]);
-assert.equal(mount.debugState().frame.pointRegions.partition,'energy');
+assert.equal(mount.debugState().frame.pointRegions.partition,'spatial');
 const twoSourceMaterialKey=mesh.material.customProgramCacheKey();
 mount.setPointCount(1);assert.equal(mount.canRender(),false,'changed source layout must await current reduction');consume(field);
 assert.notEqual(mesh.material.customProgramCacheKey(),twoSourceMaterialKey,'replacement irradiance graph must invalidate Three shader cache, not only material version');
@@ -43,7 +43,7 @@ mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointCount
 mount.setPointCount(4);consume(field);
 assert(patterns.slice(-4).every(p=>p===patterns.at(-1)),'all four sources share pattern storage');
 assert(batches.slice(-4).every(b=>b===batches.at(-1)),'all four fresh captures share current preparation');
-assert.equal(mount.debugState().frame.pointRegions.partition,'energy','four regions must partition emission, not empty geometric bands');
+assert.equal(mount.debugState().frame.pointRegions.partition,'spatial','four regions must partition emission, not empty geometric bands');
 assert.equal(mount.debugState().shadows.length,4);
 mount.setPointSampling('paired');consume(field);
 const priorQualityKey=mesh.material.customProgramCacheKey();
