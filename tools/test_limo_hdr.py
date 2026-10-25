@@ -1,0 +1,83 @@
+import importlib
+import os
+import json
+from pathlib import Path
+import sys
+import unittest
+import tempfile
+from unittest.mock import patch
+
+import torch
+from PIL import Image
+
+from emlight_probe import digest
+import limo_hdr
+from limo_hdr import validate_probe
+
+
+class LimoHdrInputTests(unittest.TestCase):
+    def test_pre_output_failure_has_durable_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'out'
+            argv=['--source-root',directory,'--probe',str(Path(directory)/'missing.json'),
+                '--output-dir',str(output)]
+            with patch.object(limo_hdr,'fit',side_effect=RuntimeError('route rejected')):
+                with self.assertRaisesRegex(RuntimeError,'route rejected'): limo_hdr.main(argv)
+            report=json.loads((output/'fit.json').read_text())
+            self.assertEqual(report['status'],'failed')
+            self.assertEqual(report['phase'],'initialization')
+            self.assertNotIn('route',report)
+            self.assertIn('route rejected',report['error'])
+
+    def test_partial_exposure_set_cannot_be_joint_fit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'probe.json'
+            path.write_text(json.dumps({'status':'complete','estimator':'LiMo-image','passes':[]}))
+            with self.assertRaisesRegex(ValueError,'complete eight-pass'):
+                validate_probe(path)
+
+    def test_changed_image_cannot_silently_become_fit_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'probe.json'; image=Path(directory)/'image.png'
+            Image.new('RGB',(512,512),'gray').save(image)
+            entries=[{'target':target,'ev':ev,'effectiveSteps':20,'path':str(image),'sha256':digest(image)}
+                for target in ('sphere_0','sphere_1') for ev in (0,-3,-6,-9)]
+            path.write_text(json.dumps({'status':'complete','estimator':'LiMo-image','passes':entries}))
+            result=validate_probe(path)
+            self.assertEqual(len(result['passes']),8)
+            Image.new('RGB',(512,512),'white').save(image)
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                validate_probe(path)
+
+
+@unittest.skipUnless(os.environ.get('LIMO_HDR_SOURCE_ROOT'),'set LIMO_HDR_SOURCE_ROOT for source renderer tests')
+class LimoHdrTests(unittest.TestCase):
+    def test_source_renderer_keeps_device_and_environment_gradient(self):
+        root=Path(os.environ['LIMO_HDR_SOURCE_ROOT'])
+        sys.path.insert(0,str(root))
+        source=importlib.import_module('HDRMerge.batch_optimization_pol_manual_gt')
+        position=torch.zeros(3,2,2); position[2]=-2
+        normal=torch.zeros_like(position); normal[2]=1
+        env=torch.full((3,8,16),2.,requires_grad=True)
+        actual=source.render(position,torch.eye(4),normal,env,mode='mirror')
+        self.assertEqual(tuple(actual.shape),(3,2,2))
+        torch.testing.assert_close(actual,torch.full_like(actual,2.))
+        actual.sum().backward()
+        self.assertGreater(env.grad.abs().sum().item(),0)
+        self.assertEqual(actual.device.type,'cpu')
+
+    def test_source_diffuse_renderer_and_nongraphed_pyramid(self):
+        root=Path(os.environ['LIMO_HDR_SOURCE_ROOT']); sys.path.insert(0,str(root))
+        source=importlib.import_module('HDRMerge.batch_optimization_pol_manual_gt')
+        torch.manual_seed(0)
+        pol=source.PoL(torch.full((1,3,8,16),.5),padding_mode='circular',graphed=False)
+        env=pol().squeeze(0).exp2()
+        position=torch.zeros(3,2,2); position[2]=-2
+        normal=torch.zeros_like(position); normal[2]=1
+        actual=source.render(position,torch.eye(4),normal,env,mode='diffuse',num_samples=64)
+        self.assertTrue(torch.isfinite(actual).all())
+        actual.sum().backward()
+        self.assertTrue(any(group['params'].grad.abs().sum()>0 for group in pol.parameters()))
+
+
+if __name__=='__main__': unittest.main()
