@@ -61,3 +61,51 @@ Source implementations:
 [BFL's fine-tune](https://huggingface.co/black-forest-labs/flux-3-image-klein-pup),
 [Transformers Qwen3.5](https://github.com/huggingface/transformers/tree/main/src/transformers/models/qwen3_5),
 and [ONNX Runtime GenAI builder](https://github.com/microsoft/onnxruntime-genai/tree/6b7ff3ca3efa15da219050fdb4ecf8bed67875af/src/python/py/models).
+
+## Browser adapter and local trial
+
+`browser-backend.mjs` exposes `createBrowserPromptHelper({modelUrl})`, whose
+`expand({prompt, images, signal, onText})` returns editable text, termination,
+model/session identity and observed timing. Images stay in attachment order.
+Only a fully initialized and validated WebGPU model is retained; rejected
+candidates are disposed and every retry validates a fresh candidate.
+
+`worker-client.mjs` wraps the same operation in a per-request module worker.
+The prompt studio at `/prompt-expander-browser.html?model=/mounted-pup-package`
+uses that worker, streams text into an editable field, and terminates loading
+or generation on Cancel. Worker termination also discards the model between
+requests. The same-origin package must be mounted by the serving host; no
+Python model server participates. This local trial does not yet establish
+portable public weight distribution or Generate integration.
+
+The package has original BFL tokenizer/config/template/system prompts. For
+Transformers.js4.2 the original processor class is additionally exposed in
+`preprocessor_config.json`, matching that version's actual AutoProcessor
+lookup. This prevents silently constructing an image-only processor without
+its tokenizer. The adapter checks that contract before model weight loading.
+
+`onnx_browser_compat.py --package <prepared> --out <fresh> --report <report>`
+lowers the newer GenAI `LinearAttentionGate`, `GatedRMSNorm` and
+`MRotaryEmbedding` fusions to standard ONNX arithmetic and the source's exact
+rotary caches. It removes only `state_window=0`; nonzero windows reject rather
+than change behavior. Learned Q4 tensors remain unchanged. The pinned browser
+runtime is `onnxruntime-web@1.26.0-dev.20260416-b7804b056c`, bundled by
+Transformers.js4.2. Its source already supports the 9B model's inverse grouped
+attention; the adapter preserves those heads and scale.
+
+Reference sizing matches BFL's Python geometry, including tie-to-even
+rounding, aspect-ratio validation and count-dependent budgets. Browser Canvas
+composites onto white, resizes and JPEG-encodes at quality .92. Canvas/Pillow
+pixels are not claimed byte-identical. Per-image learned-position and rotary
+inputs match canonical Transformers5.20.2 fixtures for square, landscape and
+portrait patch grids.
+
+The small optional `tests/bfl-pup-onnx-compat.py` checks canonical gate, norm,
+multiaxis rotary and untouched head tails, plus unwindowed compatibility and
+native grouped recurrence. `tests/bfl-pup-package.py` checks complete external
+tensor bytes and binding/shape rewrites. Node input tests use recorded canonical
+fixtures; backend/worker lifecycle stubs establish rejection, cancellation and
+ownership only. None substitutes for the actual whole-helper browser witness.
+The active trial still needs successful text and image-aware browser generation,
+inspection of those full captions, and consumer composition before the original
+full-precision source can be retired.
