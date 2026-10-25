@@ -56,6 +56,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   tf.env.allowLocalModels=true;
   onProgress({phase:'processor'});
   const processor=await tf.AutoProcessor.from_pretrained(packagePath);
+  if(!processor.tokenizer)throw Error('The browser package must identify Qwen3VLProcessor, including its tokenizer.');
   let model=null,busy=false;
   async function load(){
     if(model)return;
