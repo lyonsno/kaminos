@@ -59,15 +59,22 @@ class TurboContract(unittest.TestCase):
 
     def test_both_adapters_load_through_real_diffusers_offline_resolver(self):
         import torch
-        from diffusers import StableDiffusionXLControlNetInpaintPipeline as Pipeline
+        from diffusers import StableDiffusionXLControlNetInpaintPipeline as Pipeline, UNet2DConditionModel
         from safetensors.torch import save_file
         loaded={}
         class LoadingProbe:
             scheduler=SimpleNamespace(config={})
+            def __init__(self):
+                self.unet=UNet2DConditionModel(sample_size=8,in_channels=4,out_channels=4,
+                    down_block_types=('CrossAttnDownBlock2D',),up_block_types=('CrossAttnUpBlock2D',),
+                    block_out_channels=(8,),layers_per_block=1,cross_attention_dim=8,
+                    attention_head_dim=2,norm_num_groups=4)
             def to(self, device):
                 return self
             def load_lora_weights(self, path, adapter_name, **kwargs):
-                loaded[adapter_name]=Pipeline.lora_state_dict(path, **kwargs)[0]
+                state,alphas=Pipeline.lora_state_dict(path, **kwargs)
+                Pipeline.load_lora_into_unet(state,alphas,self.unet,adapter_name=adapter_name)
+                loaded[adapter_name]=state
             def prepare_mask_latents(self, *args, **kwargs):
                 raise AssertionError('inference is outside this loading test')
             def encode_prompt(self, prompt):
@@ -75,24 +82,36 @@ class TurboContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             models={name:{'path':tmp} for name in ['depth','base','control']}
-            key='unet.test.to_q.lora_A.weight'
+            target='down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q'
+            key=f'unet.unet.{target}.lora.down.weight'
+            up_key=f'unet.unet.{target}.lora.up.weight'
             for value,name in enumerate(['turbo','exposure'],1):
                 folder=root/name; folder.mkdir()
-                save_file({key:torch.full((2,2),float(value))},folder/'pytorch_lora_weights.safetensors')
+                save_file({key:torch.full((4,8),float(value)),up_key:torch.full((8,4),float(value))},
+                    folder/'pytorch_lora_weights.safetensors')
                 models[name]={'path':str(folder)}
+            pipe=LoadingProbe()
+            original_weight=pipe.unet.get_submodule(target).weight.detach().clone()
             with (patch.object(self.probe,'require_mps'),
                   patch('torch.mps.empty_cache'),
                   patch('transformers.pipeline',return_value=lambda image:{'depth':Image.new('L',(1024,1024),20)}),
                   patch('diffusers.ControlNetModel.from_pretrained',return_value=object()),
-                  patch.object(Pipeline,'from_pretrained',return_value=LoadingProbe()),
+                  patch.object(Pipeline,'from_pretrained',return_value=pipe),
                   patch('diffusers.UniPCMultistepScheduler.from_config',return_value=object()),
                   patch('diffusers.loaders.lora_base.HF_HUB_OFFLINE',True)):
                 with self.assertRaisesRegex(RuntimeError,'adapters-observed'):
                     self.probe.run_inference(models,Image.new('RGB',(1024,1024)),
                         root,{},root/'loading.json')
             self.assertEqual(set(loaded),{'turbo','exposure'})
-            torch.testing.assert_close(loaded['turbo'][key],torch.ones(2,2))
-            torch.testing.assert_close(loaded['exposure'][key],torch.full((2,2),2.))
+            layer=pipe.unet.get_submodule(target)
+            for value,name in enumerate(['turbo','exposure'],1):
+                torch.testing.assert_close(layer.lora_A[name].weight,torch.full((4,8),float(value)))
+                torch.testing.assert_close(layer.lora_B[name].weight,torch.full((8,4),float(value)))
+                pipe.unet.set_adapters(name)
+                pipe.unet.fuse_lora(adapter_names=[name],lora_scale=1.)
+                torch.testing.assert_close(layer.base_layer.weight,original_weight+4*value**2)
+                pipe.unet.unfuse_lora()
+                torch.testing.assert_close(layer.base_layer.weight,original_weight,atol=2e-6,rtol=1e-5)
 
     def test_absent_assets_leave_durable_failure_not_stale_success(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,6 +124,52 @@ class TurboContract(unittest.TestCase):
             self.assertEqual(report['status'],'failed')
             self.assertEqual(report['phase'],'source-validation')
             self.assertNotIn('lights',report)
+
+    def test_adapter_prefix_conversion_preserves_values_and_rejects_ambiguity(self):
+        import torch
+        from safetensors.torch import save_file
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'pytorch_lora_weights.safetensors'
+            for prefix in ['unet.','unet.unet.']:
+                tensor=torch.arange(8,dtype=torch.float32).reshape(2,4)
+                save_file({prefix+'layer.lora.down.weight':tensor},path)
+                before=self.probe.digest(path)
+                state,receipt=self.probe.adapter_weights(tmp)
+                self.assertEqual(set(state),{'unet.layer.lora.down.weight'})
+                torch.testing.assert_close(state['unet.layer.lora.down.weight'],tensor)
+                self.assertEqual(self.probe.digest(path),before)
+                self.assertEqual(receipt['removedPrefix'],'unet.' if prefix=='unet.unet.' else None)
+            for keys in [[],['text_encoder.layer'],['unet.layer','unet.unet.layer'],['unet.unet.unet.layer']]:
+                save_file({key:torch.ones(1) for key in keys},path)
+                with self.assertRaisesRegex(ValueError,'adapter'):
+                    self.probe.adapter_weights(tmp)
+
+    @unittest.skipUnless(os.environ.get('DIFFUSIONLIGHT_MODELS'), 'requires pinned acquired adapters')
+    def test_acquired_adapters_match_all_full_sdxl_target_shapes(self):
+        from accelerate import init_empty_weights
+        from diffusers import UNet2DConditionModel
+        from diffusers.utils.state_dict_utils import convert_unet_state_dict_to_peft
+        models=json.loads(Path(os.environ['DIFFUSIONLIGHT_MODELS']).read_text())['models']
+        config=UNet2DConditionModel.load_config(Path(models['base']['path'])/'unet',local_files_only=True)
+        with init_empty_weights():
+            unet=UNet2DConditionModel.from_config(config)
+        for name in ['turbo','exposure']:
+            state,receipt=self.probe.adapter_weights(models[name]['path'])
+            self.assertEqual(receipt['removedPrefix'],'unet.')
+            state=convert_unet_state_dict_to_peft({key.removeprefix('unet.'):value for key,value in state.items()})
+            targets={}
+            for key,value in state.items():
+                target,kind=key.rsplit('.lora_',1)
+                layer=unet.get_submodule(target)
+                self.assertEqual(value.ndim,2)
+                self.assertIn(kind,['A.weight','B.weight'])
+                dimension=1 if kind=='A.weight' else 0
+                self.assertEqual(value.shape[dimension],layer.weight.shape[dimension],key)
+                targets.setdefault(target,{})[kind]=value.shape
+            self.assertTrue(targets)
+            for target,pair in targets.items():
+                self.assertEqual(set(pair),{'A.weight','B.weight'},target)
+                self.assertEqual(pair['A.weight'][0],pair['B.weight'][1],target)
 
     def test_unavailable_mps_and_fallback_cannot_be_silent(self):
         import torch

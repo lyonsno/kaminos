@@ -119,6 +119,21 @@ def interpolate_prompt(bright, dark, ev):
     return bright*ratio+dark*(1-ratio)
 
 
+def adapter_weights(path):
+    from safetensors.torch import load_file
+    state=load_file(str(Path(path)/'pytorch_lora_weights.safetensors'),device='cpu')
+    if not state or not all(k.startswith('unet.') for k in state):
+        raise ValueError('expected nonempty UNet-only adapter')
+    repeated=[k.startswith('unet.unet.') for k in state]
+    if any(repeated) and (not all(repeated) or any(k.startswith('unet.unet.unet.') for k in state)):
+        raise ValueError('ambiguous adapter UNet prefixes')
+    # Both pinned releases have an extra wrapper prefix; Diffusers strips one.
+    if all(repeated):
+        state={k[len('unet.'):]:v for k,v in state.items()}
+    return state,{'removedPrefix':'unet.' if all(repeated) else None,
+        'tensorCount':len(state),'installed':False}
+
+
 def import_source(root, name):
     spec=importlib.util.spec_from_file_location(f'diffusionlight_{name}',root/f'{name}.py')
     module=importlib.util.module_from_spec(spec)
@@ -178,10 +193,15 @@ def run_inference(models, image, output, report, report_path):
     pipe=StableDiffusionXLControlNetInpaintPipeline.from_pretrained(models['base']['path'],
         controlnet=control,variant='fp16',torch_dtype=torch.float16,add_watermarker=False,
         local_files_only=True).to('mps')
-    pipe.load_lora_weights(models['turbo']['path'],adapter_name='turbo',
-        weight_name='pytorch_lora_weights.safetensors',local_files_only=True)
-    pipe.load_lora_weights(models['exposure']['path'],adapter_name='exposure',
-        weight_name='pytorch_lora_weights.safetensors',local_files_only=True)
+    report['adapterLoading']={}
+    phase('sdxl-adapter-loading')
+    for name in ('turbo','exposure'):
+        weights,receipt=adapter_weights(models[name]['path'])
+        report['adapterLoading'][name]=receipt
+        save_json(report_path,report)
+        pipe.load_lora_weights(weights,adapter_name=name,local_files_only=True)
+        receipt['installed']=True
+        save_json(report_path,report)
     pipe.scheduler=UniPCMultistepScheduler.from_config(pipe.scheduler.config)
     original=pipe.prepare_mask_latents
     def prepare(self, *args, **kwargs):
