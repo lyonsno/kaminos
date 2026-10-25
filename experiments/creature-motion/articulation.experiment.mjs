@@ -9,7 +9,7 @@ export default {
  id:'marionette/creature-articulation',title:'Creature articulation',
  async create({host,inputs,record}) {
   const data=await loadFullBodySources(inputs),session=await host.scene.open();
-  let runtime,asset,disposed=false,refresh=()=>{},cleanupPicking=()=>{},selected=inputs.joint??'forelimb-left-shoulder';
+  let runtime,asset,disposed=false,refresh=()=>{},cleanupPicking=()=>{},selected=inputs.joint??'forelimb-left-shoulder',restoreGround=()=>{},restoreGizmos=()=>{};
   const root=new THREE.Group();root.name=inputs.label??'Creature · articulation study';
   const state={base:'rest',frame:0};
   try{
@@ -29,9 +29,12 @@ export default {
    };
    const model=createCreatureArticulation({THREE,group:runtime.group,bones:runtime.bones,caseSha256:data.source.caseSha256,update});
    const floor=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.MeshStandardMaterial({color:0x808080,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.position.y=new THREE.Box3().setFromBufferAttribute(new THREE.BufferAttribute(data.rest,3)).min.y-.04;floor.receiveShadow=true;root.add(floor);
+   const document=host.controls.document,visible=document.getElementById('composition-ground-visible'),gizmos=document.getElementById('viewport-show-gizmos');
+   if(visible){const previous=visible.checked;visible.checked=false;visible.dispatchEvent(new Event('change'));restoreGround=()=>{if(!visible.checked){visible.checked=previous;visible.dispatchEvent(new Event('change'));}};}
+   if(gizmos){const previous=gizmos.checked;gizmos.checked=false;gizmos.dispatchEvent(new Event('change'));restoreGizmos=()=>{if(!gizmos.checked){gizmos.checked=previous;gizmos.dispatchEvent(new Event('change'));}};}
    asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:inputs.case}});
    const active=()=>{if(disposed||!root.parent)throw Error('Articulation study is no longer mounted');};
-   const read=()=>({objectId:asset.id,source:structuredClone(data.source),joint:selected,...model.read(),reference:{...state,frames:adapter.frames,fps:adapter.fps,prompt:data.motion.prompt},deformation:runtime.read().deformation,view:session.readView(),pose:model.snapshot()});
+   const read=()=>({objectId:asset.id,source:structuredClone(data.source),joint:selected,...model.read(),referenceFloor:{height:floor.position.y,animated:false},reference:{...state,frames:adapter.frames,fps:adapter.fps,prompt:data.motion.prompt},deformation:runtime.read().deformation,view:session.readView(),pose:model.snapshot()});
    const done=(kind,requested)=>{const effective=read();record({kind:'creature.articulation.'+kind,phase:'applied',target:asset.id,requested,effective:{joint:selected,base:effective.base,rotations:effective.rotations,reference:effective.reference}});refresh();return effective;};
    const frame=()=>{
     root.updateMatrixWorld(true);const box=runtime.syncCpuGeometry().boundingBox.clone().applyMatrix4(runtime.group.matrixWorld),center=box.getCenter(new THREE.Vector3()),d=Math.max(...box.getSize(new THREE.Vector3()).toArray());
@@ -55,7 +58,7 @@ export default {
    return {read,operations,
     mount({root:panel,document,invoke,reopen=recipe=>globalThis.window.kaminosWorkbenchExperiments.open('marionette/creature-articulation',recipe)}) {
      const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
-     const style=el('style',`.articulation-study{display:grid;gap:12px;padding:10px 0;color:#d9e2e5;font:12px system-ui}.articulation-study label{display:grid;gap:5px}.articulation-study select,.articulation-study input{box-sizing:border-box;width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #536168;border-radius:4px}.articulation-study button{padding:7px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.articulation-axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.articulation-study p{margin:0;line-height:1.45}.articulation-study [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}`);
+     const style=el('style',`.articulation-study{display:grid;gap:12px;padding:10px 0;color:#d9e2e5;font:12px system-ui}.articulation-study [hidden]{display:none}.articulation-study label{display:grid;gap:5px}.articulation-study select,.articulation-study input{box-sizing:border-box;width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #536168;border-radius:4px}.articulation-study button{padding:7px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.articulation-axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.articulation-study p{margin:0;line-height:1.45}.articulation-study [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}`);
      const body=el('section');body.className='articulation-study';body.append(style,el('h3','Articulate the creature'),el('p','Click a cyan joint or choose one below. Drag a rotation value; click to type. Rotations follow the joint’s local axes.'));
      const error=el('p');error.setAttribute('role','alert');
      const call=(name,arg)=>invoke(name,arg).then(value=>{error.textContent='';return value;}).catch(e=>{error.textContent=e.message;refresh();});
@@ -79,8 +82,8 @@ export default {
      const start=e=>{down={x:e.clientX,y:e.clientY};};canvas?.addEventListener('pointerdown',start);canvas?.addEventListener('pointerup',pick);cleanupPicking=()=>{canvas?.removeEventListener('pointerdown',start);canvas?.removeEventListener('pointerup',pick);};refresh();
      return {dispose(){cleanupPicking();refresh=()=>{};body.remove();}};
     },
-    async dispose(){disposed=true;cleanupPicking();refresh=()=>{};try{await session.dispose();}finally{runtime.dispose();}},
+    async dispose(){disposed=true;restoreGround();restoreGizmos();cleanupPicking();refresh=()=>{};try{await session.dispose();}finally{runtime.dispose();}},
    };
-  }catch(e){try{await session.dispose();}finally{runtime?.dispose();}throw e;}
+  }catch(e){restoreGround();restoreGizmos();try{await session.dispose();}finally{runtime?.dispose();}throw e;}
  },
 };
