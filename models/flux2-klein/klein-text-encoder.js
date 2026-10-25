@@ -114,17 +114,41 @@ export class KleinTextEncoder {
       c: out, cRs: N, M: rows, N, K, epilogue, label: 'te.linear' });
   }
 
+  scoreBufferBytes(L) {
+    return Math.max(16, Math.ceil(Math.min(this.QH, scoreHeads(L, this.QH / this.KVH)) * L * L * 4 / 16) * 16);
+  }
+
+  // One allocation plan serves both device admission and actual allocation.
+  activationBufferBytes(L) {
+    const D = this.D, F = this.F, QH = this.QH, KVH = this.KVH;
+    const f = n => Math.max(16, Math.ceil(n * 4 / 16) * 16);
+    return {
+      hidden: f(L * D), norm: f(L * D), proj: f(L * Math.max((QH + 2 * KVH) * HEAD, 2 * F)), ffAct: f(L * F),
+      q: f(QH * L * HEAD), k: f(KVH * L * HEAD), vt: f(KVH * L * HEAD), o: f(QH * L * HEAD), scores: this.scoreBufferBytes(L),
+      attn: f(L * QH * HEAD), rope: f(L * HEAD * 2), mask: f(L),
+    };
+  }
+
+  maxTokensForBufferLimit(cap, maximum) {
+    const { scores, ...linear } = this.activationBufferBytes(1);
+    const alignedCap = Math.floor(cap / 16) * 16;
+    let length = Math.max(0, Math.min(maximum, Math.floor(alignedCap / Math.max(...Object.values(linear)))));
+    // scoreHeads changes in whole grouped-query head blocks; check its actual
+    // allocation rather than assuming the nominal score budget is a hard bound.
+    while (length > 0 && this.scoreBufferBytes(length) > alignedCap) length--;
+    return length;
+  }
+
+  assertActivationFits(L, cap) {
+    const largest = Math.max(...Object.values(this.activationBufferBytes(L)));
+    if (largest > cap) throw Error(`the prompt needs a ${largest}-byte text-encoder buffer; this device allows ${cap}`);
+  }
+
   // `positions` (optional, length L): RoPE position per row, for pipelines that place padding specially.
   allocate(L, positions = null) {
     for (const b of Object.values(this.act ?? {})) b.destroy();
-    const D = this.D, F = this.F, QH = this.QH, KVH = this.KVH;
-    const f = n => this.buffer(n * 4);
     this.L = L;
-    this.act = {
-      hidden: f(L * D), norm: f(L * D), proj: f(L * Math.max((QH + 2 * KVH) * HEAD, 2 * F)), ffAct: f(L * F),
-      q: f(QH * L * HEAD), k: f(KVH * L * HEAD), vt: f(KVH * L * HEAD), o: f(QH * L * HEAD), scores: f(Math.min(QH, scoreHeads(L, QH / KVH)) * L * L),
-      attn: f(L * QH * HEAD), rope: f(L * HEAD * 2), mask: this.buffer(L * 4),
-    };
+    this.act = Object.fromEntries(Object.entries(this.activationBufferBytes(L)).map(([name, bytes]) => [name, this.buffer(bytes)]));
     this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta, positions));
   }
 
