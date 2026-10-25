@@ -2,7 +2,7 @@ import {Mesh,BufferGeometry,Float32BufferAttribute,MeshStandardMaterial,LineSegm
 import {shapeHierarchyView} from '../fracture-shape-partition.mjs';
 
 export default {
- id:'fracture-shape',title:'Fracture · attachment draft',
+ id:'fracture-shape',title:'Fracture · automatic pieces',
  async create({host,inputs,record,updateInputs=()=>{}}){
   if(typeof inputs.source!=='string'||!inputs.source.trim())throw Error('Choose a source mesh URL');
   const session=await host.scene.open();let worker,asset,disposed=false,serial=0;const pending=new Map();
@@ -50,7 +50,7 @@ export default {
    const subtreeDepth=id=>result.hierarchy.nodes.reduce((max,node)=>belongs(node.id,id)?Math.max(max,node.depth):max,0);
    function sync(force=false){
     const value=(input,v)=>{if(input&&(force||fieldDocument.activeElement!==input||input.readOnly))input.value=String(v);};
-    if(statusElement)statusElement.textContent=isBusy()?(result?'Updating pieces… Showing the previous result until the latest settings finish.':'Finding attachments from seven surface starting points…'):error||`${view?.parts.length??0} visible pieces · ${view?.attachments.length??0} shared boundaries · ${(indices.length/3).toLocaleString()} source triangles\n${result?.sourceComponents??0} source components. Attachment search retained for threshold changes. ${Object.keys(localDetail).length} local grouping edits. Separation is a geometric preview.`;
+    if(statusElement)statusElement.textContent=isBusy()?(result?'Updating pieces… Showing the previous result until the latest settings finish.':'Finding parts and shortening their attachment boundaries…'):error||`${view?.parts.length??0} visible pieces · ${view?.attachments.length??0} shared boundaries · ${(indices.length/3).toLocaleString()} source triangles\n${result?.sourceComponents??0} source components. Attachment search retained for threshold changes. ${Object.keys(localDetail).length} local grouping edits. Separation is a geometric preview.`;
     if(selectElement&&result&&selectElement._result!==result){
      selectElement._result=result;
      selectElement.replaceChildren();const all=fieldDocument.createElement('option');all.value='-1';all.textContent='All pieces';selectElement.append(all);
@@ -142,7 +142,6 @@ export default {
    }
    function frame(){const bounds=new Box3().setFromObject(sourceRoot),center=bounds.getCenter(new Vector3()),r=bounds.getSize(new Vector3()).length();return session.setView({position:center.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.8)).toArray(),target:center.toArray()});}
    await analyze({minReachFraction:reach,minAreaFraction:smallArea,cleanupAreaFraction:cleanup},true);
-   if(inputs.selected===undefined)selected=result.hierarchy.nodes.filter(n=>n.kind==='component').sort((a,b)=>b.triangles-a.triangles)[0]?.id??-1;
    frame();
    const selectPiece=value=>{if(!Number.isInteger(value)||value< -1||value>=result.hierarchy.nodes.length)throw Error('Choose an existing hierarchy piece');selected=value;draw();return event('selection',value);};
    const localLevel=level=>{
@@ -204,8 +203,10 @@ export default {
     read,operations,
     mount({root:panel,document,invoke}){
      fieldDocument=document;
-     const paragraph=document.createElement('p');paragraph.textContent='Click a fitting to select its editable piece. Finer here reveals its subparts; Keep together joins them. The body is selected initially.';panel.append(paragraph);
-     const row=(text,element,parent=panel)=>{const label=document.createElement('label');label.style.cssText='display:grid;gap:6px;margin:10px 0';const title=document.createElement('span');title.textContent=text;label.append(title,element);parent.append(label);return title;};
+     const paragraph=document.createElement('p');paragraph.textContent='Parts are found automatically from the original surface. Preview their separation or compare the textured source. Local adjustments are optional.';panel.append(paragraph);
+     const optional=document.createElement('details'),optionalTitle=document.createElement('summary');optionalTitle.textContent='Local adjustments (optional)';optional.append(optionalTitle);
+     let rowParent=optional;
+     const row=(text,element,parent=rowParent)=>{const label=document.createElement('label');label.style.cssText='display:grid;gap:6px;margin:10px 0';const title=document.createElement('span');title.textContent=text;label.append(title,element);parent.append(label);return title;};
      const failed=e=>{error=e.message;sync();};
      const number=(input,title,step,apply,dragStep)=>{
       input.type='number';input.className='transform-input';let before=input.value;
@@ -244,19 +245,21 @@ export default {
      };
      const queueBoundary=variant=>{try{const cut=boundaryRequest(Number(boundaryInput.value)/100,variant);requestedBoundaries=new Map(requestedBoundaries).set(cut.key,cut);++serial;error='';clearTimeout(thresholdTimer);thresholdTimer=setTimeout(()=>{thresholdTimer=null;void runThresholds();},150);sync();}catch(e){failed(e);}};
      selectElement=document.createElement('select');selectElement.addEventListener('change',()=>invoke('select',Number(selectElement.value)).catch(failed));row('Selected piece',selectElement);
-     selectedText=document.createElement('p');panel.append(selectedText);
+     selectedText=document.createElement('p');optional.append(selectedText);
      localInput=document.createElement('input');Object.assign(localInput,{min:'0',max:'0',step:'1'});localInput.setAttribute('aria-label','Selected piece detail');localText=row('Selected piece detail',localInput);number(localInput,localText,1,()=>invoke('pieceDetail',Number(localInput.value)).catch(failed));
-     const actions=document.createElement('div');actions.style.cssText='display:flex;flex-wrap:wrap;gap:6px';panel.append(actions);
+     const actions=document.createElement('div');actions.style.cssText='display:flex;flex-wrap:wrap;gap:6px';optional.append(actions);
      const action=(text,operation)=>{const button=document.createElement('button');button.textContent=text;button.addEventListener('click',()=>invoke(operation).catch(failed));actions.append(button);return button;};
      refineButton=action('Finer here','refine');keepButton=action('Keep together','keepTogether');parentButton=action('Select larger piece','parent');resetButton=action('Reset local grouping','resetLocal');
      boundarySelect=document.createElement('select');boundarySelect.setAttribute('aria-label','Attachment boundary');boundarySelect.addEventListener('change',()=>queueBoundary(boundarySelect.value));row('Attachment boundary',boundarySelect);
      boundaryInput=document.createElement('input');Object.assign(boundaryInput,{min:'-100',max:'100',step:'any',value:'0'});boundaryInput.setAttribute('aria-label','Cut position (% object extent)');number(boundaryInput,row('Cut position (% object extent)',boundaryInput),.01,()=>queueBoundary(),.01);
-     boundaryHint=document.createElement('p');boundaryHint.style.fontSize='12px';panel.append(boundaryHint);
+     boundaryHint=document.createElement('p');boundaryHint.style.fontSize='12px';optional.append(boundaryHint);
      boundaryReset=action('Reset edited cuts','resetBoundaries');
+     rowParent=panel;
      separationInput=document.createElement('input');Object.assign(separationInput,{min:'0',max:'1',step:'any',value:String(explosion)});separationInput.setAttribute('aria-label','Preview separation');number(separationInput,row('Preview separation',separationInput),.005,()=>invoke('separate',Number(separationInput.value)).catch(failed));
      modeInput=document.createElement('select');for(const [value,text]of [['regions','Colored pieces + visible cuts'],['original','Original textured surface']]){const option=document.createElement('option');option.value=value;option.textContent=text;modeInput.append(option);}modeInput.addEventListener('change',()=>invoke('view',modeInput.value).catch(failed));row('Compare',modeInput);
+     rowParent=optional;
      detailInput=document.createElement('input');Object.assign(detailInput,{min:'0',max:String(result.hierarchy.maxDepth),step:'1',value:String(detailLevel)});detailInput.setAttribute('aria-label','Grouping detail');detailText=row('Grouping detail',detailInput);number(detailInput,detailText,1,()=>invoke('detail',Number(detailInput.value)).catch(failed));
-     const detailHint=document.createElement('p');detailHint.textContent='Global detail replaces all local grouping edits. Selecting a piece only highlights it.';detailHint.style.fontSize='12px';panel.append(detailHint);
+     const detailHint=document.createElement('p');detailHint.textContent='Global detail replaces all local grouping edits. Selecting a piece only highlights it.';detailHint.style.fontSize='12px';optional.append(detailHint);panel.append(optional);
      const global=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Global detection settings';global.append(summary);panel.append(global);
      const hint=document.createElement('p');hint.textContent='Changes update automatically. Drag a value, click to type, or hold Shift for fine adjustment. Edited attachment cuts survive detection changes. Unedited local grouping resets when thresholds change.';hint.style.fontSize='12px';global.append(hint);
      for(const [key,text,value]of [['minReachFraction','Minimum branch reach (% object extent)',reach],['minAreaFraction','Minimum branch area (% surface)',smallArea],['cleanupAreaFraction','Merge surface patches below (% surface)',cleanup]]){

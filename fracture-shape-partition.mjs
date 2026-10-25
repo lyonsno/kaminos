@@ -1,3 +1,5 @@
+import {refineAttachmentBoundary} from './fracture-boundary-search.mjs';
+export {refineAttachmentBoundary} from './fracture-boundary-search.mjs';
 import {checkedFaces,faceKey} from './fracture-boundary-edit.mjs';
 export {moveShapeBoundary,boundaryAnchor} from './fracture-boundary-edit.mjs';
 // Geometry-only draft. Every source triangle keeps its identity and geometry.
@@ -140,11 +142,15 @@ export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,
  if(!cacheHit)neckAnalysisCache.set(graph,prepareNeckAnalysis(graph));
  const analysis=neckAnalysisCache.get(graph),proposals=new Map();
  analysis.passes.forEach((pass,seed)=>{for(const c of pass.candidates){
-  if(c.reach<analysis.diagonal*minReachFraction||c.area<graph.totalArea*minAreaFraction||c.cutRatio>maxCutRatio)continue;
-  const faces=pass.leaves.slice(pass.begin[c.node],pass.end[c.node]).sort(),signature=faces.join(',');
-  const previous=proposals.get(signature);
-  if(previous){previous.seeds.add(seed);previous.reach=Math.max(previous.reach,c.reach);previous.cutRatio=Math.min(previous.cutRatio,c.cutRatio);}
-  else proposals.set(signature,{key:faceKey(faces),faces,seeds:new Set([seed]),area:c.area,reach:c.reach,cutRatio:c.cutRatio});
+  if(c.reach<analysis.diagonal*minReachFraction||c.area<graph.totalArea*minAreaFraction)continue;
+  const original=pass.leaves.slice(pass.begin[c.node],pass.end[c.node]).sort();
+  const refined=c.reach>0?refineAttachmentBoundary(graph,original,{reach:c.reach}):null;
+  for(const variant of [{faces:original,area:c.area,cutRatio:c.cutRatio},...(refined?.reason==='shorter-boundary'?[refined]:[])]){
+   if(variant.cutRatio>maxCutRatio||variant.area<graph.totalArea*minAreaFraction)continue;
+   const faces=Uint32Array.from(variant.faces),signature=faces.join(','),previous=proposals.get(signature);
+   if(previous){previous.seeds.add(seed);previous.reach=Math.max(previous.reach,c.reach);previous.cutRatio=Math.min(previous.cutRatio,variant.cutRatio);}
+   else proposals.set(signature,{key:faceKey(faces),faces,seeds:new Set([seed]),area:variant.area,reach:c.reach,cutRatio:variant.cutRatio,boundarySearch:variant===refined});
+  }
  }});
  // Agreement is exact membership agreement, not a claim of semantic confidence.
  // Choose narrow, repeated proposals first. Cross-cutting proposals remain in
@@ -167,7 +173,7 @@ export function geodesicNeckPartition(graph,{minReachFraction=.04,maxCutRatio=4,
  const hierarchy={schema:'kaminos.fracture.part-hierarchy.v1',nodes,faceOwners,maxDepth:nodes.reduce((m,n)=>Math.max(m,n.depth),0)};
  const fine=summarizeOwners(graph,faceOwners);
  return {route:'kaminos.fracture.multi-origin-neck-hierarchy.v1',settings:{minReachFraction,maxCutRatio,minAreaFraction,cleanupAreaFraction},triangleCount:graph.triangles.length,sourceComponents:graph.sourceComponents,diagnostics:graph.diagnostics,...fine,hierarchy,
-  analysis:{builds:1,cacheHit,seedPolicy:'centroid-and-six-axis-extrema',boundaryVariantAreaOverlap:.9,passes:analysis.passes.length,distinctSeeds:new Set(analysis.seedSets.flat()).size,rawProposals:analysis.passes.reduce((sum,p)=>sum+p.candidates.length,0)},
+  analysis:{builds:1,cacheHit,seedPolicy:'centroid-and-six-axis-extrema',boundarySearch:'local-perimeter-minimum',boundaryVariantAreaOverlap:.9,passes:analysis.passes.length,distinctSeeds:new Set(analysis.seedSets.flat()).size,rawProposals:analysis.passes.reduce((sum,p)=>sum+p.candidates.length,0)},
   candidateBranches:catalog.map(({faces,seeds,...c},id)=>({id,...c,faces,triangles:faces.length,seeds:[...seeds]})),claim:'Nested surface branch and patch proposals from seven geodesic origins; exact membership agreement is geometric evidence, not a solid volume or fracture model'};
 }
 
