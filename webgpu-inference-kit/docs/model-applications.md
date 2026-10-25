@@ -111,3 +111,15 @@ To borrow your renderer's device, pass `{ device, load: false }`. Klein requires
 The runner returns `run`, `pause`, `resume`, `stop`, `snapshot` and a `pending` promise getter for destruction to await. It acquires foreground ownership only after its queued job is admitted, serializes CPU foreground windows with pause, closes control, unregisters the transient model route, and finishes foreground work before releasing admission. Cancellation while queued never takes another job's foreground ownership. Cleanup errors reach `onFatal` and reject the run.
 
 Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices remain model-specific. See [Klein's wrapper](../../models/flux2-klein/klein-app.js), [SuperMat's wrapper](../../models/supermat/supermat-app.js) and [UniMate's generator](../../models/unimate/unimate-generator.js) for the complete integrations.
+
+## U2Net background removal
+
+`createU2NetApp` turns opaque RGB/RGBA pixels into the existing rembg-style cutout, with the shared application's queued admission, pause/resume, stop/retry and resource lifetime. It accepts the host's session and foreground service, exposes its loaded low-level runner, and preserves the producer's segment size and output provenance. See [the U2Net application](../../models/u2net/README.md) for a source-package install and the image input contract.
+
+```sh
+node scripts/pack-u2net-module.mjs --out /absolute/path/to/artifacts
+# Run from the external application directory:
+npm install /absolute/path/to/artifacts/kaminos-u2net-0.1.0.tgz
+```
+
+U2Net keeps its existing 320×320 network and rembg preparation semantics. The application offers foreground service at its real GPU segments and CPU preparation windows; it does not change the mask model or guarantee a particular display cadence.

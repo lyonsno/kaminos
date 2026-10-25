@@ -92,9 +92,13 @@ const SEGMENT=32;
 
 export async function loadU2NetPackage(baseUrl,{fetchImpl=globalThis.fetch,signal}={}){
   const base=new URL(baseUrl.endsWith('/')?baseUrl:baseUrl+'/',globalThis.location?.href);
-  const graph=await (await fetchImpl(new URL('graph.json',base),{signal})).json();
+  const graphResponse=await fetchImpl(new URL('graph.json',base),{signal});
+  if(!graphResponse.ok)throw Error(`U2Net graph: HTTP ${graphResponse.status}`);
+  const graph=await graphResponse.json();
   if(graph.schema!=='kaminos.u2net-package.v0')throw Error('kaminos.u2net-package.v0 graph required');
-  const bytes=await (await fetchImpl(new URL(graph.weights.file,base),{signal})).arrayBuffer();
+  const weightResponse=await fetchImpl(new URL(graph.weights.file,base),{signal});
+  if(!weightResponse.ok)throw Error(`U2Net weights: HTTP ${weightResponse.status}`);
+  const bytes=await weightResponse.arrayBuffer();
   if(bytes.byteLength!==graph.weights.floats*4)throw Error('complete U2Net weights required');
   const digest=await crypto.subtle.digest('SHA-256',bytes);
   const hex=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -121,7 +125,7 @@ export function createU2NetRunner({device,graph,weights}){
   const steps=[];
   const grid3=(x,y,z,wg=[8,8,4])=>[Math.ceil(x/wg[0]),Math.ceil(y/wg[1]),Math.ceil(z/wg[2])];
   const grid1=n=>{const groups=Math.ceil(n/256);return [Math.min(groups,65535),Math.ceil(groups/65535),1];};
-  ops.forEach((op,i)=>{
+  try { ops.forEach((op,i)=>{
     const out=take(elements(op.outShape)*4);buffers.set(op.output,out);
     const bind=(p,entries)=>device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map((buffer,binding)=>({binding,resource:{buffer}}))});
     const [,c,oh,ow]=op.outShape;
@@ -145,7 +149,7 @@ export function createU2NetRunner({device,graph,weights}){
     }else throw Error('unsupported U2Net op '+op.op);
     for(const name of readsOf(op))if(lastUse.get(name)===i){const b=buffers.get(name),bytes=elements(shapes.get(name))*4;
       if(!pool.has(bytes))pool.set(bytes,[]);pool.get(bytes).push(b);}
-  });
+  }); } catch(error) { for(const buffer of owned)buffer.destroy();throw error; }
   let disposed=false;
   return Object.freeze({
     planned:{buffers:owned.length,steps:steps.length},
@@ -157,40 +161,50 @@ export function createU2NetRunner({device,graph,weights}){
     // page gets a before-encode boundary ahead of each one; Stop (`signal`) is
     // honoured between segments.
     // Without it, one submission. Same dispatches and order either way.
-    async run(input,{capture=[],foreground,signal,invocationId='u2net',segmentSize=SEGMENT}={}){
+    async run(input,{capture=[],foreground,schedule,signal=schedule?.signal,invocationId='u2net',segmentSize=SEGMENT}={}){
       if(disposed)throw Error('U2Net runner disposed');
       if(!(input instanceof Float32Array)||input.length!==elements(graph.input.shape))throw TypeError('1x3x320x320 F32 input required');
+      if(foreground&&schedule)throw Error('use either a U2Net foreground run or application schedule');
       const serviceAtBoundary=foreground?.foregroundOpportunities?.serviceAtBoundary;
       if(foreground!==undefined&&typeof serviceAtBoundary!=='function')throw TypeError('foreground run with foregroundOpportunities.serviceAtBoundary required');
+      if(schedule&&(!schedule.invocation||typeof schedule.runtime?.prepareCommandDutyAtBoundary!=='function'))throw TypeError('U2Net schedule requires its runtime and invocation');
       if(!Number.isSafeInteger(segmentSize)||segmentSize<1)throw RangeError('segmentSize must be a positive integer, got '+String(segmentSize));
       const stop=()=>{if(signal?.aborted)throw signal.reason?.name==='AbortError'?signal.reason:new DOMException('U2Net stopped','AbortError');};
       stop();
       device.queue.writeBuffer(buffers.get(inputName),0,input);
       const encode=(enc,list)=>{for(const [p,b,[x,y,z]] of list){const pass=enc.beginComputePass();pass.setPipeline(p);pass.setBindGroup(0,b);pass.dispatchWorkgroups(x,y,z);pass.end();}};
-      const segments=serviceAtBoundary?[]:[steps];
-      if(serviceAtBoundary)for(let i=0;i<steps.length;i+=segmentSize)segments.push(steps.slice(i,i+segmentSize));
-      let enc;
-      for(let i=0;i<segments.length;i++){
-        if(serviceAtBoundary){
-          await serviceAtBoundary.call(foreground.foregroundOpportunities,{invocationId,boundaryId:`${invocationId}:u2net:${i}`,
-            dutyId:`${invocationId}:u2net-segment:${i}`,phase:'u2net-inference',position:'before-encode'});
-          stop();
+      const cooperative=Boolean(serviceAtBoundary||schedule),segments=[];
+      for(let i=0;i<steps.length;i+=cooperative?segmentSize:steps.length)segments.push(steps.slice(i,cooperative?i+segmentSize:steps.length));
+      const reads=[];
+      try {
+        for(let i=0;i<segments.length;i++){
+          const duty=async()=>{
+            stop();
+            if(schedule){
+              const descriptor=await schedule.runtime.prepareCommandDutyAtBoundary({phase:'u2net-inference',kind:'compute',metadata:{segment:i,dispatches:segments[i].length}},schedule.invocation);
+              stop();schedule.runtime.settleCommandDuty(descriptor,{status:'encoded'});
+            }else if(serviceAtBoundary){
+              await serviceAtBoundary.call(foreground.foregroundOpportunities,{invocationId,boundaryId:`${invocationId}:u2net:${i}`,
+                dutyId:`${invocationId}:u2net-segment:${i}`,phase:'u2net-inference',position:'before-encode'});stop();
+            }
+            const enc=device.createCommandEncoder();encode(enc,segments[i]);
+            if(i===segments.length-1)for(const name of [outputName,...capture]){
+              const bytes=elements(shapes.get(name))*4,staging=device.createBuffer({size:bytes,usage:U.MAP_READ|U.COPY_DST});
+              reads.push([name,staging]);enc.copyBufferToBuffer(buffers.get(name),0,staging,0,bytes);
+            }
+            device.queue.submit([enc.finish()]);
+            // One segment in flight preserves the original producer boundary.
+            if(cooperative)await device.queue.onSubmittedWorkDone();
+          };
+          if(schedule?.control)await schedule.control.runDuty(duty);else await duty();
         }
-        enc=device.createCommandEncoder();encode(enc,segments[i]);
-        if(i<segments.length-1){
-          device.queue.submit([enc.finish()]);
-          // One segment in flight: let it finish before the next boundary, so a
-          // page frame (or Stop) arriving meanwhile is serviced between segments
-          // instead of queueing behind the whole network.
-          if(serviceAtBoundary)await device.queue.onSubmittedWorkDone();
-        }
+        const out={};
+        for(const [name,staging] of reads){await staging.mapAsync(1);out[name]=new Float32Array(staging.getMappedRange().slice(0));staging.unmap();}
+        stop();return {mask:out[outputName],tensors:out};
+      }finally{
+        // Failed/partial mapping must retire all staging allocations as well.
+        try{await device.queue.onSubmittedWorkDone();}finally{for(const [,staging] of reads)staging.destroy();}
       }
-      const reads=[outputName,...capture].map(name=>{const bytes=elements(shapes.get(name))*4;
-        const staging=device.createBuffer({size:bytes,usage:U.MAP_READ|U.COPY_DST});enc.copyBufferToBuffer(buffers.get(name),0,staging,0,bytes);return [name,staging];});
-      device.queue.submit([enc.finish()]);
-      const out={};
-      for(const [name,staging] of reads){await staging.mapAsync(1);out[name]=new Float32Array(staging.getMappedRange().slice(0));staging.unmap();staging.destroy();}
-      return {mask:out[outputName],tensors:out};
     },
     dispose(){if(disposed)return;disposed=true;for(const b of owned)b.destroy();}
   });

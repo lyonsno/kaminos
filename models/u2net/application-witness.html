@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>U2Net installed application</title>
+<style>body{font:18px system-ui;background:#141718;color:#eee;margin:32px}h1{margin-bottom:8px}.images{display:flex;gap:24px}.images figure{margin:16px 0;width:46%}.images canvas{width:100%;height:auto;max-height:650px;object-fit:contain;background:repeating-conic-gradient(#737373 0% 25%,#999 0% 50%) 0/24px 24px}#activity{width:100%;max-width:800px;height:100px}p{color:#bbb}</style>
+<h1>Background removal beside a live renderer</h1><p id="status">Loading model…</p>
+<canvas id="activity" width="800" height="100"></canvas><p id="gap">Waiting for draw submissions.</p>
+<div class="images"><figure><figcaption>Original image</figcaption><canvas id="source"></canvas></figure><figure><figcaption>U2Net cutout</figcaption><canvas id="cutout"></canvas></figure></div>
+<script type="module" src="./app.js"></script></html>

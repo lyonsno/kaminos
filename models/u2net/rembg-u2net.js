@@ -55,7 +55,7 @@ export function naiveCutoutRgba(rgb,mask){
 // the alpha-cutout route instead). runner: createU2NetRunner(...).
 // foreground: the page's kit foreground run ({foregroundOpportunities, withForeground}),
 // so inference yields at GPU boundaries and the CPU resizes run in foreground windows.
-export async function removeForegroundU2Net({pixels,width,height,channels=3,runner,signal,foreground}={}){
+export async function removeForegroundU2Net({pixels,width,height,channels=3,runner,schedule,signal=schedule?.signal,foreground,segmentSize,onPhase}={}){
   if(!runner?.run)throw TypeError('U2Net runner required');
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1)throw RangeError('image size required');
   if(!(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==width*height*channels||![3,4].includes(channels))
@@ -68,12 +68,18 @@ export async function removeForegroundU2Net({pixels,width,height,channels=3,runn
       if(pixels[i*4+3]!==255)throw Error('image has alpha; use the alpha-cutout preparation, not foreground removal');
       rgb[i*3]=pixels[i*4];rgb[i*3+1]=pixels[i*4+1];rgb[i*3+2]=pixels[i*4+2];}
   }
-  const cpu=(phase,work)=>foreground?.withForeground?foreground.withForeground(phase,async()=>work()):work();
+  const windows=schedule??foreground;
+  const cpu=async(phase,work)=>{
+    const run=()=>{const task=async()=>{stopped(signal);await onPhase?.(phase);stopped(signal);return work();};
+      return windows?.withForeground?windows.withForeground(phase,task):task();};
+    return schedule?.control?schedule.control.runDuty(run):run();
+  };
   const pre=await cpu('u2net-pre-resize',()=>sourcePreResize(rgb,width,height));stopped(signal);
   const input=await cpu('u2net-input',()=>rembgInputTensor(pre.rgb,pre.width,pre.height));stopped(signal);
-  const {mask:pred}=await runner.run(input,{foreground,signal});stopped(signal);
+  const {mask:pred}=await runner.run(input,{foreground,schedule,signal,segmentSize});stopped(signal);
   const mask=await cpu('u2net-mask',()=>rembgMaskFromPrediction(pred,pre.width,pre.height));
-  return {rgba:naiveCutoutRgba(pre.rgb,mask),width:pre.width,height:pre.height,
+  const rgba=await cpu('u2net-cutout',()=>naiveCutoutRgba(pre.rgb,mask));stopped(signal);
+  return {rgba,width:pre.width,height:pre.height,
     provenance:{schema:'trellis2.browser-foreground-removal.v0',route:FOREGROUND_ROUTE,source:{width,height,channels},
       preResized:pre.width!==width||pre.height!==height,size:[pre.width,pre.height],
       reference:'TRELLIS2MLX preprocess rembg-u2net (itself a known divergence from upstream RMBG-2.0)',
