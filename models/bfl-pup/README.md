@@ -109,3 +109,15 @@ ownership only. None substitutes for the actual whole-helper browser witness.
 The active trial still needs successful text and image-aware browser generation,
 inspection of those full captions, and consumer composition before the original
 full-precision source can be retired.
+
+The adapter explicitly loads BFL's `chat_template.jinja`: the pinned Qwen3VL
+processor does not load that file by default. Preparation precedes model
+residency. An actual browser processor comparison matches all retained native
+BFL framing fixtures (732,731,2328 tokens), including the complete IDs.
+
+`text-rope-compat.mjs` corrects the pinned runtime's text-only continuation
+delta. Its actual browser method returned delta6 and next-position9 after a
+three-token prompt; canonical Transformers5.20.2 returns delta0 and position3.
+The browser replay after the shim matches those canonical positions. This is
+an input/cache position correction for this pinned runtime, not evidence of
+whole-model output quality. The model's image-aware position path is retained.
