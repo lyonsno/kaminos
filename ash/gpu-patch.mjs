@@ -1,5 +1,7 @@
 import * as THREE from '../lib/three.webgpu.js';
 import {patchLayout,seedPatch} from './gpu-plan.mjs';
+import {createGpuAshFall} from './fall-gpu.mjs';
+import {retainedVolume} from './fall-plan.mjs';
 export const ASH_PATCH_WGSL=`
 struct Params {dims:vec4<u32>,origin:vec4<f32>,contact:vec4<f32>,previous:vec4<f32>,mode:vec4<u32>}
 struct Surface {cell:vec4<f32>}
@@ -53,7 +55,7 @@ export async function createGpuAshPatch({renderer,cellSize,bounds,solid}){
  for(const bytes of [count*4,count*16])if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Requested ash patch exceeds effective device buffer capacity; choose a coarser cell width or smaller patch');
  if(Math.ceil(count/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Requested ash patch exceeds dispatch dimension');
  const owned=[],buffer=(label,size,usage)=>{const b=device.createBuffer({label,size,usage});owned.push(b);return b;};
- const attrs=[];let mesh,disposed=false,steps=0,snapshots=0,lastContact=null,volume=0;
+ const attrs=[];let mesh,fall,disposed=false,steps=0,snapshots=0,lastContact=null,volume=0;
  try{
  const module=device.createShaderModule({label:'ash conservative voxel pair exchange',code:ASH_PATCH_WGSL});
  const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('; '));
@@ -67,6 +69,7 @@ export async function createGpuAshPatch({renderer,cellSize,bounds,solid}){
  const surfaceAttr=new THREE.StorageBufferAttribute(new Float32Array(count*4),4);renderer.backend.createStorageAttribute(surfaceAttr);attrs.push(surfaceAttr);
  const drawAttr=new THREE.IndirectStorageBufferAttribute(new Uint32Array([36,0,0,0,0]),1);renderer.backend.createIndirectStorageAttribute(drawAttr);attrs.push(drawAttr);
  const surface=renderer.backend.get(surfaceAttr).buffer,draw=renderer.backend.get(drawAttr).buffer;
+ fall=await createGpuAshFall({renderer,layout:p,density,collision,wake:dispatch});
  const uniforms=[],groups=[];
  for(let phase=0;phase<6;phase++){
   const uniform=buffer('ash pair phase',80,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);uniforms.push(uniform);
@@ -77,7 +80,7 @@ export async function createGpuAshPatch({renderer,cellSize,bounds,solid}){
  const {storage,instanceIndex,positionGeometry,vec3}=THREE.TSL;
  const cell=storage(surfaceAttr,'vec4',count).toReadOnly().element(instanceIndex);
  material.positionNode=positionGeometry.add(vec3(.5)).mul(vec3(1,cell.w,1)).add(cell.xyz).mul(cellSize).add(vec3(...origin));
- mesh=new THREE.Mesh(geometry,material);mesh.name='GPU accumulated ash';mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.castShadow=true;
+ mesh=new THREE.Mesh(geometry,material);mesh.name='GPU accumulated ash';mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.castShadow=true;mesh.add(fall.root);
  const writeParams=(contact,previous,wake)=>{
   for(let phase=0;phase<6;phase++){
    const bytes=new ArrayBuffer(80),u=new Uint32Array(bytes),f=new Float32Array(bytes);
@@ -92,20 +95,28 @@ export async function createGpuAshPatch({renderer,cellSize,bounds,solid}){
   try{const e=device.createCommandEncoder();e.copyBufferToBuffer(density,0,staging,0,count*4);e.copyBufferToBuffer(draw,0,staging,count*4,20);e.copyBufferToBuffer(dispatch,0,staging,count*4+20,16);device.queue.submit([e.finish()]);await staging.mapAsync(GPUMapMode.READ);const bytes=staging.getMappedRange();return {values:new Float32Array(bytes.slice(0,count*4)),visibleCells:new Uint32Array(bytes,count*4,5)[1],active:new Uint32Array(bytes,count*4+20,4)[3]!==0};}finally{staging.unmap();staging.destroy();owned.splice(owned.indexOf(staging),1);}};
  const upload=values=>{device.queue.writeBuffer(density,0,values);compactOnly();};
  return {root:mesh,layout:p,
-  step(contact=null){check();if(contact&&(!Array.isArray(contact)||contact.length!==4||!contact.every(Number.isFinite)||contact[3]<=0))throw Error('Invalid contact');
+  step(contact=null,source=null,timing=null){check();if(contact&&(!Array.isArray(contact)||contact.length!==4||!contact.every(Number.isFinite)||contact[3]<=0))throw Error('Invalid contact');
    const moved=JSON.stringify(contact)!==JSON.stringify(lastContact);writeParams(contact,lastContact?.slice(0,3),moved);lastContact=contact?.slice()??null;
-   const e=device.createCommandEncoder();let pass=e.beginComputePass();pass.setPipeline(pipelines[0]);pass.setBindGroup(0,groups[0]);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(dispatch,0,args,0,12);
+   const e=device.createCommandEncoder();if(source)fall.encode(e,{...source,contact,timestampWrites:timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.begin}:undefined});let pass=e.beginComputePass({label:'ash sleep admission',...(!source&&timing?{timestampWrites:{querySet:timing.querySet,beginningOfPassWriteIndex:timing.begin}}:{})});pass.setPipeline(pipelines[0]);pass.setBindGroup(0,groups[0]);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(dispatch,0,args,0,12);
    for(let phase=0;phase<6;phase++){pass=e.beginComputePass();pass.setPipeline(pipelines[1]);pass.setBindGroup(0,groups[phase]);pass.dispatchWorkgroupsIndirect(args,0);pass.end();}
-   pass=e.beginComputePass();pass.setPipeline(pipelines[2]);pass.setBindGroup(0,groups[0]);pass.dispatchWorkgroupsIndirect(args,0);pass.end();device.queue.submit([e.finish()]);steps++;
+   pass=e.beginComputePass({label:'ash visible surface',...(timing?{timestampWrites:{querySet:timing.querySet,endOfPassWriteIndex:timing.end}}:{})});pass.setPipeline(pipelines[2]);pass.setBindGroup(0,groups[0]);pass.dispatchWorkgroupsIndirect(args,0);pass.end();device.queue.submit([e.finish()]);steps++;
   },
   async deposit(input){const previous=await readback();const next=seedPatch(p,solid,input,previous.values);upload(next);volume+=input.volume;return this.read();},
-  async snapshot(){const state=await readback();return {schema:'kaminos.gpu-ash-patch.v1',layout:p,values:Array.from(state.values),steps,volume,lastContact,visibleCells:state.visibleCells,active:state.active};},
+  burst(value){fall.request(value);return this.read();},
+  async snapshot(){const state=await readback(),air=await fall.snapshot();const pendingUnits=new Float32Array(new Uint32Array(air.state).buffer)[0];return {falling:air,seededVolume:volume,depositedVolume:state.values.reduce((a,b)=>a+b,0)*cellSize**3,retainedVolume:retainedVolume({density:state.values,parcels:air.particles,pendingUnits,cellSize})+air.queuedVolume,schema:'kaminos.gpu-ash-patch.v1',layout:p,values:Array.from(state.values),steps,volume:volume+air.requestedVolume,lastContact,visibleCells:state.visibleCells,active:state.active};},
   restore(state){check();if(state?.schema!=='kaminos.gpu-ash-patch.v1'||JSON.stringify(state.layout)!==JSON.stringify(p)||!Array.isArray(state.values)||state.values.length!==count||state.values.some((v,i)=>!Number.isFinite(v)||v<0||v>1||(solid[i]&&v!==0))||!Number.isSafeInteger(state.steps)||state.steps<0||!Number.isFinite(state.volume)||state.volume<0)throw Error('Invalid GPU ash checkpoint or mapping');
    if(typeof state.active!=='boolean'||(state.lastContact!==null&&(!Array.isArray(state.lastContact)||state.lastContact.length!==4||!state.lastContact.every(Number.isFinite)||state.lastContact[3]<=0)))throw Error('Invalid GPU ash continuation state');
-   const values=Float32Array.from(state.values),actual=values.reduce((a,b)=>a+b,0)*cellSize**3;if(Math.abs(actual-state.volume)>Math.max(1e-9,state.volume*1e-5))throw Error('Checkpoint volume differs from stored material');
-   upload(values);device.queue.writeBuffer(dispatch,12,new Uint32Array([state.active?1:0]));steps=state.steps;volume=state.volume;lastContact=state.lastContact?.slice()??null;return this.read();},
-  read:()=>({backend:'webgpu-pair-exchange',surface:'gpu-compacted-indirect-cells',layout:p,steps,volume,explicitReadbacks:snapshots,runtimeReadbacks:0,allocatedBytes:count*24+16+12+20+6*80,boundary:'closed local patch; no silent discard',lastContact}),
-  dispose(){if(disposed)return;disposed=true;mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs){if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);}for(const b of owned)b.destroy();}
+   const values=Float32Array.from(state.values);if(state.falling)fall.validate(state.falling);const pending=state.falling?new Float32Array(new Uint32Array(state.falling.state).buffer)[0]:0;const actual=retainedVolume({density:values,parcels:state.falling?.particles??[],pendingUnits:pending,cellSize})+(state.falling?.queuedVolume??0);if(Math.abs(actual-state.volume)>Math.max(1e-9,state.volume*1e-4))throw Error('Checkpoint volume differs from retained material');if(state.falling&&(!Number.isFinite(state.seededVolume)||state.seededVolume<0||Math.abs(state.seededVolume+state.falling.requestedVolume-state.volume)>1e-8))throw Error('Checkpoint source ledger differs');
+   upload(values);device.queue.writeBuffer(dispatch,12,new Uint32Array([state.active?1:0]));steps=state.steps;volume=state.seededVolume??state.volume;if(state.falling)fall.restore(state.falling);else fall.clear();lastContact=state.lastContact?.slice()??null;return this.read();},
+  async profile({samples=24,contact=null,source=null,motion=false}={}){
+   if(!Number.isSafeInteger(samples)||samples<1)throw Error('Invalid profiling sample count');
+   if(!device.features.has('timestamp-query'))return {status:'unsupported',reason:'shared device lacks timestamp-query'};
+   if(samples*2>4096)throw Error('Requested samples exceed WebGPU query-set capacity');
+   const querySet=device.createQuerySet({type:'timestamp',count:samples*2}),resolved=buffer('ash timing resolve',samples*16,GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC),read=buffer('ash timing read',samples*16,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
+   try{for(let i=0;i<samples;i++){const pose=contact?.slice()??null;if(motion&&pose)pose[0]+=Math.sin(i*.4)*.3;this.step(pose,source,{querySet,begin:i*2,end:i*2+1});await device.queue.onSubmittedWorkDone();}const e=device.createCommandEncoder();e.resolveQuerySet(querySet,0,samples*2,resolved,0);e.copyBufferToBuffer(resolved,0,read,0,samples*16);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const times=new BigUint64Array(read.getMappedRange()),milliseconds=[];for(let i=0;i<samples;i++){if(times[i*2+1]<=times[i*2])throw Error('Invalid ash GPU timestamp interval');milliseconds.push(Number(times[i*2+1]-times[i*2])/1e6);}return {status:'measured',route:'shared-renderer GPU timestamps; solver, transport and surface compaction; excludes drawing',milliseconds,features:[...device.features]};}finally{read.unmap();querySet.destroy();for(const b of [resolved,read]){b.destroy();owned.splice(owned.indexOf(b),1);}}
+  },
+  read:()=>({backend:'webgpu-pair-exchange',surface:'gpu-compacted-indirect-cells',layout:p,steps,volume:volume+fall.read().requestedVolume,volumeMeaning:'total introduced, including airborne and pending',falling:fall.read(),explicitReadbacks:snapshots,runtimeReadbacks:0,allocatedBytes:fall.description.bytes+16+80+count*24+16+12+20+6*80,boundary:'closed local patch; no silent discard',lastContact}),
+  dispose(){if(disposed)return;disposed=true;fall?.dispose();mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs){if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);}for(const b of owned)b.destroy();}
  };
- }catch(error){mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs)if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();throw error;}
+ }catch(error){fall?.dispose();mesh?.geometry.dispose();mesh?.material.dispose();for(const a of attrs)if(renderer.backend.get(a).buffer)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();throw error;}
 }
