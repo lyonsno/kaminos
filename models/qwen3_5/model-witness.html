@@ -1,0 +1,64 @@
+<!doctype html><meta charset="utf-8"><title>Qwen text-model numerical witness</title>
+<body>Qwen text-model numerical witness</body>
+<script type="module">
+import { Qwen35TextModel } from './text-model.js';
+import { createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/inference-control.js';
+import { generateTokens } from '../../webgpu-inference-kit/src/autoregressive-generation.js';
+import { sampleToken } from '../../webgpu-inference-kit/src/token-sampling.js';
+
+window.qwenModelReady = true;
+const result = window.qwenModelPartial = { backend: 'webgpu', errors: [], rows: [], lengths: {}, cleanup: {} };
+window.qwenModelResult = (async () => {
+  let device, model, control, stage = 'source-admission';
+  function capture(name, data) {
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength); let text = '';
+    for (const b of bytes) text += String.fromCharCode(b);
+    result.rows.push({ name, elements: data.length, data: btoa(text) });
+  }
+  try {
+    const meta = await (await fetch('/fixture/meta.json')).json(), rawManifest = await (await fetch('/fixture/weights.json')).arrayBuffer();
+    result.weightsManifestSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', rawManifest))].map(b => b.toString(16).padStart(2, '0')).join('');
+    if (result.weightsManifestSha256 !== meta.weightsManifestSha256) throw new Error('wrong weight manifest');
+    const manifest = JSON.parse(new TextDecoder().decode(rawManifest));
+    stage = 'adapter'; const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('WebGPU unavailable');
+    result.adapter = Object.fromEntries(['vendor', 'architecture', 'device', 'description'].map(k => [k, adapter.info?.[k] ?? '']));
+    result.adapter.isFallbackAdapter = adapter.isFallbackAdapter ?? adapter.info?.isFallbackAdapter ?? null;
+    device = await adapter.requestDevice(); result.limits = { maxBufferSize: device.limits.maxBufferSize, maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize };
+    device.addEventListener('uncapturederror', e => result.errors.push(String(e.error?.message ?? e.error)));
+    device.lost.then(info => { if (info.reason !== 'destroyed') result.errors.push(`device lost: ${info.message}`); });
+    control = createWebGpuInferenceControl({ queue: device.queue });
+    let current = null, layerRows = [];
+    model = new Qwen35TextModel(device, manifest, { control,
+      onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
+      onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
+    });
+    stage = 'weights'; window.qwenModelProgress = { stage };
+    await model.load(new URL('/model/', location.href), { onProgress: progress => { window.qwenModelProgress = { stage, ...progress }; } });
+    result.residentWeightBytes = [...model.owned].reduce((s, b) => s + b.size, 0);
+    const capacity = meta.inputIds.length + 1;
+    async function run(label, ids, state, operation) {
+      stage = label; window.qwenModelProgress = { stage }; current = label; layerRows = [];
+      const logits = await model[operation](operation === 'decode' ? ids[0] : ids, state);
+      capture(label + '.logits', logits);
+      const joined = new Float32Array(model.config.numLayers * model.config.hiddenSize);
+      layerRows.forEach((data, index) => joined.set(data, index * model.config.hiddenSize));
+      if (layerRows.length !== model.config.numLayers) throw new Error('partial decoder trace');
+      capture(label + '.layers', joined); result.lengths[label] = state.length; current = null;
+    }
+    let state = await model.createState({ capacity });
+    try { await run('prefill', meta.inputIds, state, 'prefill'); await run('decode', meta.continuationIds, state, 'decode'); } finally { await model.disposeState(state); }
+    state = await model.createState({ capacity });
+    try { await run('full-prefix', [...meta.inputIds, ...meta.continuationIds], state, 'prefill'); } finally { await model.disposeState(state); }
+    stage = 'autoregressive-generation'; window.qwenModelProgress = { stage }; current = null;
+    result.generation = await generateTokens({ model, inputIds: meta.inputIds, capacity, maxNewTokens: 2, control, sample: logits => sampleToken(logits, { temperature: 0 }) });
+  } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
+  finally {
+    try { await model?.destroy(); result.cleanup.states = model?.states.size; result.cleanup.weights = model?.owned.size; } catch (error) { result.errors.push(`model cleanup: ${error}`); }
+    result.cleanup.borrowedControl = control?.snapshot().status;
+    try { await control?.close(); } catch (error) { result.errors.push(`control cleanup: ${error}`); }
+    device?.destroy(); result.lastPhase = stage;
+  }
+  return result;
+})();
+</script>
