@@ -386,7 +386,247 @@
       ],
       "sha256": "f1763d32e849661d77a8d90e47ce439398d5988cfbf20c3c5f7cb586416a1286",
       "size": 8838556
+    },
+    {
+      "id": "research-20261025-91ab331d3d41",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Broad Smooth Lobes S102504",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=91ab331d3d41&file=output.png"
+      ],
+      "sha256": "606ea5a589436a30284446d4b1045c328b9bd775519fe20b7fee58f0c12493b2",
+      "size": 64432
+    },
+    {
+      "id": "research-20261025-5ef3b4e72d59",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Flat Painted Dots S102504",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=5ef3b4e72d59&file=output.png"
+      ],
+      "sha256": "5b4f3bc7419bd2878c2031d0e26ba0160ab226a2a8e33170dc0b4b3e61a1f1c3",
+      "size": 65252
+    },
+    {
+      "id": "research-20261025-80f1e50af5fc",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Clustered Growths S102504",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=80f1e50af5fc&file=output.png"
+      ],
+      "sha256": "8dccddeabf61e9c744d919e833a7806fe208a7753310672f6174339a460c13d7",
+      "size": 80743
+    },
+    {
+      "id": "research-20261025-75a269278dee",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Clustered Holes S102504",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=75a269278dee&file=output.png"
+      ],
+      "sha256": "681080bf1bc4817f494792ed49994b233aa2e7588a37f1ba54b75d2dc6fcbd29",
+      "size": 77900
+    },
+    {
+      "id": "research-20261025-34ce4f1db1d8",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Smooth S102504",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=34ce4f1db1d8&file=output.png"
+      ],
+      "sha256": "50c706deba37da975b98486d2683aecf080704ba00e43dacd633372b6e1d03a5",
+      "size": 57477
+    },
+    {
+      "id": "research-20261025-859429bf81a2",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Broad Smooth Lobes S102502",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=859429bf81a2&file=output.png"
+      ],
+      "sha256": "6ffe74866cb75cb825985e33ee34a120fa5e22888291c44fe6594cacb32816e1",
+      "size": 68706
+    },
+    {
+      "id": "research-20261025-761a647435dd",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Flat Painted Dots S102502",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=761a647435dd&file=output.png"
+      ],
+      "sha256": "2c0f4d50675609787925f584f606ffb507942cd22f26eb586996327a9c8116c2",
+      "size": 71053
+    },
+    {
+      "id": "research-20261025-bb0a87643a8b",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Clustered Holes S102502",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=bb0a87643a8b&file=output.png"
+      ],
+      "sha256": "11304e5c718dd69b8b29b13e0bda355566d544f7676073dd0b25093346e02074",
+      "size": 85869
+    },
+    {
+      "id": "research-20261025-85e0519e3c38",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Broad Smooth Lobes S102503",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=85e0519e3c38&file=output.png"
+      ],
+      "sha256": "8186f6c866af5af0e173149acbb76d4db997e496a78fbdcd82e3e58314607c6e",
+      "size": 63562
+    },
+    {
+      "id": "research-20261025-982676723aed",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Flat Painted Dots S102503",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=982676723aed&file=output.png"
+      ],
+      "sha256": "17d18e0f26b6c13bfb54e5bb54b468e1d93d1bf1a023d55dd9c627cb9fad94cf",
+      "size": 66992
+    },
+    {
+      "id": "research-20261025-61165e26229d",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Clustered Growths S102503",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=61165e26229d&file=output.png"
+      ],
+      "sha256": "20bde3823a9cbee2a31572998f540abbe665395db49db0514875f917bd702f5f",
+      "size": 85531
+    },
+    {
+      "id": "research-20261025-514a7aa59fbf",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Clustered Holes S102503",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=514a7aa59fbf&file=output.png"
+      ],
+      "sha256": "80e12fcb481a391d9a761a9cc4ddf2a92996dc8ebd85beb402741c9d2e9537e9",
+      "size": 86497
+    },
+    {
+      "id": "research-20261025-72e776c6d49e",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Smooth S102503",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=72e776c6d49e&file=output.png"
+      ],
+      "sha256": "0c9319626e4ed44085888006d11812e8142bd9f4b36b1b961327f30ee1790e41",
+      "size": 59449
+    },
+    {
+      "id": "research-20261025-fc6bc79047bb",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Broad Smooth Lobes S102501",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=fc6bc79047bb&file=output.png"
+      ],
+      "sha256": "5c71897fa976073cd3b132e777ed9d95743a793c43b5f77d4e040e625398f22e",
+      "size": 67116
+    },
+    {
+      "id": "research-20261025-ec7baa503807",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Flat Painted Dots S102501",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=ec7baa503807&file=output.png"
+      ],
+      "sha256": "c8ff4eced5aad5c7e023dd14e4962b13fb2b9678282f9151596d13d4d6a0ff13",
+      "size": 69334
+    },
+    {
+      "id": "research-20261025-3cc480d083f5",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Clustered Growths S102501",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=3cc480d083f5&file=output.png"
+      ],
+      "sha256": "b3df7d3a98c528bad8e42909a119c14d8a8c49af265ed9bd8f3b71e17249a504",
+      "size": 84430
+    },
+    {
+      "id": "research-20261025-6b0d362ddff9",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Clustered Growths",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=6b0d362ddff9&file=output.png"
+      ],
+      "sha256": "19f2bbba8dac252fd0ae1020a054c73c02e2c77bd479e546de9c98b06d42029d",
+      "size": 90504
+    },
+    {
+      "id": "research-20261025-ba39b4f8bbde",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Ceramic Vase Smooth",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=ba39b4f8bbde&file=output.png"
+      ],
+      "sha256": "feaa2bef64f54cbbe703af5418ceda05face70ea63d85ca6732a46ef4fea17a1",
+      "size": 59909
+    },
+    {
+      "id": "research-20261025-47b2238eb9dd",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Clustered Holes",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=47b2238eb9dd&file=output.png"
+      ],
+      "sha256": "17b8352735849d9b9d5a8edda2251cfe1f46b05473a6a5747a8fc4748424a8b8",
+      "size": 80687
+    },
+    {
+      "id": "research-20261025-c0d27ec02fed",
+      "kind": "image",
+      "label": "Dunwich research \u00b7 Rounded Toy Smooth",
+      "basis": "producer-research-set-not-admitted-for-browsing",
+      "reason": "Research image. Awaiting browsing review.",
+      "sources": [
+        "/api/job-output?job_id=c0d27ec02fed&file=output.png"
+      ],
+      "sha256": "448c39c1496cddd8e542014a556a995cd6938f0936b7aa22eb51af32e4eaa949",
+      "size": 61582
     }
   ],
-  "recordedAt": "2026-10-24"
+  "recordedAt": "2026-10-25"
 }

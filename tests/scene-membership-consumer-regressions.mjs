@@ -33,7 +33,7 @@ function makeSceneContext({reloadObject = () => ({}), reloadableType = 'glb'} = 
   };
   // VM remains only for the unrelated page presenter and mesh repair callers.
   // Membership operations themselves are imported and run outside that context.
-  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,
+  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,sceneBurning:null,
     window:{_kaminosDirty(){}},setInfo(){},renderSceneObjectList(){},sceneNavigation:{invalidate(){}},
     applyMaterialStateToObject(){},applySceneObjectTransformState(){},
   });
@@ -308,7 +308,7 @@ test('geometry replacement after membership Undo survives release of the old roo
     return structuredClone(record);
   };
   const context = vm.createContext({
-    structuredClone, THREE, workingScene, scene, proceduralMeshes, edits,
+    structuredClone, THREE, workingScene, scene, proceduralMeshes, edits,sceneBurning:null,writeObjectBurnable(){},
     createSceneMembershipOperations, checkedProceduralMesh, createProceduralMesh,
     PROCEDURAL_MESH_TYPE, CAMERA_TYPE:'camera', LOCAL_LIQUID_EMITTER_TYPE:'water', FLAME_EMITTER_TYPE:'flame',
     serializeSceneObject, isReloadableSceneObjectRecord, mergeGeometries:null,

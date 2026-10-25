@@ -98,7 +98,7 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   material.colorNode=mix(material.colorNode,vec3(0),inspection.greaterThan(.5));
   material.emissiveNode=mix(material.emissiveNode,diagnostic,inspection.greaterThan(.5));
   material.outputNode=inspection.greaterThan(.5).select(THREE.TSL.vec4(diagnostic,1),THREE.TSL.output);
-  return {material,update(seconds){clock.value=seconds;},setView(next){if(!['beauty','char','heat'].includes(next))throw Error('Invalid burn view');view=next;inspection.value=['beauty','char','heat'].indexOf(next);},set(next){if(stateNode)throw Error('Live thermal state is GPU-owned');const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
+  return {material,update(seconds,displayed=material){clock.value=seconds;for(const target of new Set([material,displayed])){target.color.copy(original.color);target.roughness=original.roughness;target.metalness=original.metalness;}},setView(next){if(!['beauty','char','heat'].includes(next))throw Error('Invalid burn view');view=next;inspection.value=['beauty','char','heat'].indexOf(next);},set(next){if(stateNode)throw Error('Live thermal state is GPU-owned');const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
     read:()=>({appearanceModel:'char-facet-crust-v1',sourceMaterial:original.uuid,
       view,coverage:stateNode?'resident':coverage,
       stateAuthority:stateIdentity||'synthetic-held-exposure-v1',

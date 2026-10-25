@@ -20,6 +20,14 @@ assert.equal(next.localBuilds,first.localBuilds,'Consumption changes GPU visibil
 assert.equal(next.geometry.coverage.revision,1);
 mesh.position.x=3;
 assert.equal(visibility.snapshot(scene).geometry.matrices[12],3);
+const second=mesh.clone();second.geometry=mesh.geometry.clone();scene.add(second);
+const secondDescriptor={...descriptor,texture:{},initial:new Uint32Array([0,1,0,0,0,0,0,0])};
+const multiple=createLocalSceneVisibility({readCoverage:m=>m===mesh?coverage:m===second?{owner:second,read:()=>({...secondDescriptor,revision:7})}:null});
+const both=multiple.snapshot(scene);
+assert.equal(both.geometry.triangleCount,36);
+assert.deepEqual(both.geometry.coverages.map(c=>[c.triangleStart,c.triangleCount,c.revision]),[[0,24,revision],[24,12,7]]);
+assert.notEqual(both.geometry.coverages[0].texture,both.geometry.coverages[1].texture);
+scene.remove(second);
 assert.throws(()=>createLocalSceneVisibility().snapshot(scene),/transparent-caster/,'Unregistered cutouts remain unsupported rather than leaving ghost geometry');
 mesh.material.transparent=true;
 assert.throws(()=>visibility.snapshot(scene),/opaque/,'Binary material coverage cannot authorize blended transparency');
