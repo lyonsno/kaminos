@@ -36,3 +36,12 @@ test('an empty provider result is a visible failure, never a completed expansion
  const c=prompt.createAuthoringPromptExpansion({createHelper:()=>({expand:async()=>({text:'  ',partial:false}),dispose:async()=>{}})});
  await assert.rejects(c.expand({prompt:'blue',model:'flux3'}),/empty/);assert.equal(c.read().status,'failed');
 });
+
+test('weight download callbacks do not redraw the application when visible operation state is unchanged',async()=>{
+ let notifications=0,callbacks;const gate=deferred();
+ const c=prompt.createAuthoringPromptExpansion({changed:()=>{notifications++;},createHelper:x=>{callbacks=x;return{expand:()=>gate.promise,dispose:async()=>{}};}});
+ const run=c.expand({prompt:'blue',model:'flux3'});await tick();const before=notifications;
+ for(let i=0;i<1000;i++)callbacks.onProgress({phase:'model',status:'progress',loaded:i});
+ assert.equal(notifications,before,'unchanged status must not trigger whole-app redraw per download chunk');
+ gate.resolve({text:'blue enamel kettle',partial:false});await run;assert.equal(c.read().status,'complete');
+});

@@ -9,7 +9,7 @@ export function promptExpansionMatches(request,current){
 // A provider expands {prompt,images,signal,onText} and disposes its own resources.
 export function createAuthoringPromptExpansion({createHelper,changed=()=>{},blocked=()=>null,clock=()=>performance.now()}){
  let active=false,abort=null,helper=null,started=null,state={status:'idle',draft:'',request:null,result:null,error:null};
- const set=patch=>{state={...state,...patch};changed();};
+ const set=patch=>{if(Object.entries(patch).every(([key,value])=>Object.is(state[key],value)))return;state={...state,...patch};changed();};
  return {
   busy:()=>active,
   read:()=>({...state,elapsedMs:started===null?null:active?clock()-started:state.elapsedMs}),
