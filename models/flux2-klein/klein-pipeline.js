@@ -243,7 +243,7 @@ export class KleinPipeline {
   sizeLimits(width, height = width) {
     const cap = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize);
     const { D, F } = this.transformer, imgTokens = (width / 16) * (height / 16);
-    const maxTextTokens = Math.min(512, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
+    const maxTextTokens = Math.min(this.maxPromptTokens, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
     const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
     // The decoder's attention scores are chunked by query rows (at least 64 at a time).
     const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
@@ -252,6 +252,7 @@ export class KleinPipeline {
 
   // Model hooks: FLUX.2 Klein's choices here; another model on the same kernels and decoder (FLUX.3
   // Klein's Flux3Pipeline) overrides them.
+  get maxPromptTokens() { return 512; }
   createTransformer(manifest) { return new KleinTransformer(this.device, manifest); }
   // The text length a generation asks for before device limits: the reference's padding (512) or
   // 'fitN', the prompt's own length plus N padding tokens.

@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import { flux3Schedule } from '../models/flux3-klein/flux3-schedule.js';
 import { flux3ImageIds, flux3TextIds } from '../models/flux3-klein/flux3-transformer.js';
 import { flux3PromptIds } from '../models/flux3-klein/flux3-prompt.js';
+import { Flux3Pipeline } from '../models/flux3-klein/flux3-pipeline.js';
+import { KleinPipeline } from '../models/flux2-klein/klein-pipeline.js';
 
 const REF16 = [1.0, 0.9904716610908508, 0.9798020720481873, 0.9677731394767761, 0.954107403755188, 0.9384464025497437,
   0.920318603515625, 0.899091899394989, 0.873896598815918, 0.8435055017471313, 0.8061264157295227, 0.7590360641479492,
@@ -49,5 +51,31 @@ const long = flux3PromptIds(stub, 'x'.repeat(200));
 assert.equal(long.inputIds.length % 80, 0);
 assert.ok(long.inputIds.length >= long.length && long.inputIds.length - long.length < 80);
 assert.equal(flux3PromptIds(stub, 'x'.repeat(9000)).inputIds.length, 8192);
+
+// Exercise the model's actual preflight with the same 3072/9216 projection dimensions
+// as the mounted Klein package. A device limit remains a limit; FLUX.2's 512-token
+// training recipe must not become FLUX.3's model limit through inheritance.
+function preflight(prototype, cap) {
+  const pipeline = Object.create(prototype);
+  pipeline.device = { limits: { maxStorageBufferBindingSize: cap, maxBufferSize: cap } };
+  pipeline.transformer = { D: 3072, F: 9216 };
+  pipeline.kernels = { vaeActType: 'f16' };
+  pipeline.tokenizer = stub;
+  return pipeline;
+}
+const roomyFlux3 = preflight(Flux3Pipeline.prototype, 2 ** 32 - 4);
+assert.equal(roomyFlux3.sizeLimits(512).maxTextTokens, 8192,
+  'FLUX.3 admits its existing 8192-token model limit when GPU buffers permit it');
+const expanded = 'x'.repeat(700);
+const requested = roomyFlux3.requestedTextTokens(expanded);
+assert.ok(requested > 512 && requested <= roomyFlux3.sizeLimits(512).maxTextTokens);
+assert.equal(roomyFlux3.framePrompt(expanded, requested).length,
+  stub.encode(roomyFlux3.framePrompt(expanded).text).length,
+  'the expanded prompt survives admission and framing in full');
+assert.equal(roomyFlux3.requestedTextTokens('x'.repeat(9000)), 8192,
+  'maximum-length framing requests its actual clipped padding, not 8240 tokens');
+assert.equal(preflight(KleinPipeline.prototype, 2 ** 32 - 4).sizeLimits(512).maxTextTokens, 512);
+assert.equal(preflight(Flux3Pipeline.prototype, 128 * 2 ** 20).sizeLimits(512).maxTextTokens, 189,
+  'the real projection buffer limit still constrains a smaller GPU');
 
 console.log('flux3-klein contracts ok');
