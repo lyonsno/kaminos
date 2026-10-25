@@ -1,4 +1,5 @@
-import {Group,HemisphereLight,DirectionalLight,FogExp2,Color} from '../lib/three.webgpu.js';
+import {Group,HemisphereLight,DirectionalLight,FogExp2,Color,TSL} from '../lib/three.webgpu.js';
+const {fog:fogNode,densityFogFactor,color,float}=TSL;
 import {createWorld,advance,checkpoint,restore,setConditions,summary} from '../mineral-worlds/state.mjs';
 import {createSurface} from '../mineral-worlds/surface.mjs';
 
@@ -20,9 +21,9 @@ export default {
   let asset;
   try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'mineral-worlds:reduced-process-v1',type:'experiment'}});}catch(error){surface.dispose();if(env&&env.value==='0.12'){env.value=oldEnv;env.dispatchEvent(new win.Event('input',{bubbles:true}));}session.setView(beforeView);await session.dispose();throw error;}
   let scene=root.parent;while(scene&&!scene.isScene)scene=scene.parent;
-  const previousFog=scene?.fog,previousBackground=scene?.background,previousBackgroundNode=scene?.backgroundNode;
-  const fog=new FogExp2(0xa7b5ba,.065),background=new Color(0xa7b5ba);
-  if(scene){scene.fog=fog;scene.background=background;scene.backgroundNode=null;}
+  const previousFog=scene?.fog,previousFogNode=scene?.fogNode,previousBackground=scene?.background,previousBackgroundNode=scene?.backgroundNode;
+  const fog=new FogExp2(0x26343c,.045),background=new Color(0x26343c),distanceFog=fogNode(color(0x26343c),densityFogFactor(float(.08)));
+  if(scene){scene.fog=fog;scene.fogNode=distanceFog;scene.background=background;scene.backgroundNode=null;}
   const ground=document.getElementById('composition-ground-visible'),priorGround=ground?.checked;
   if(ground&&ground.checked){ground.checked=false;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}
 
@@ -48,7 +49,7 @@ export default {
     if(value?.schema!=='kaminos.mineral-world.v1')throw Error('Unsupported mineral world file');
     const next=restore(value.state),nextLight=value.lightMode??lightMode;
     if(!['cool','kiln'].includes(nextLight))throw Error('Unknown light');
-    const candidate=createSurface(next,inputs.surface);
+    const candidate=createSurface(next,value.surface??inputs.surface);
     // Host validates the view atomically before applying it. No retained state
     // is replaced until both material and presentation have been accepted.
     try{if(value.view)session.setView(value.view);}catch(error){candidate.dispose();throw error;}
@@ -61,7 +62,7 @@ export default {
     advance:grow,
     conditions(patch){if(busy)throw Error('Wait for current advance');setConditions(state,patch);return changed('conditions',patch);},
     rate(value){if(!Number.isFinite(value)||value<0)throw Error('Growth rate must be nonnegative');stepsPerSecond=value;return read();},
-    checkpoint(){if(busy)throw Error('Wait for current advance');return {schema:'kaminos.mineral-world.v1',state:checkpoint(state),view:session.readView(),lightMode};},
+    checkpoint(){if(busy)throw Error('Wait for current advance');return {schema:'kaminos.mineral-world.v1',state:checkpoint(state),surface:surface.read().configuration,view:session.readView(),lightMode};},
     restore:replace,
     view(value){session.setView(value);session.redraw();return read();},
     light(value){if(!['cool','kiln'].includes(value))throw Error('Unknown light');lightMode=value;key.color.set(value==='kiln'?0xffa654:0xfff1d4);key.intensity=value==='kiln'?5:3.2;fill.intensity=value==='kiln'?.6:1.8;key.position.set(-12,value==='kiln'?1.8:5,-8);session.redraw();sync();return read();},
@@ -85,7 +86,7 @@ export default {
       const detail=document.createElement('details'),heading=document.createElement('summary');heading.textContent='About this study';const note=document.createElement('p');note.textContent='Authored starting relief and reduced mineral dynamics. Save/Open retains the evolved material; ordinary scene save does not yet reconstruct this simulation. Salt uses shallow subsurface transport; polygon formation is not yet established.';detail.append(heading,note);panel.append(detail);
       status=document.createElement('p');status.setAttribute('role','status');panel.append(status);sync();
     },
-    async dispose(){disposed=true;playing=false;stop();if(scene?.fog===fog)scene.fog=previousFog;if(scene?.background===background){scene.background=previousBackground;if(scene.backgroundNode===null)scene.backgroundNode=previousBackgroundNode;}
+    async dispose(){disposed=true;playing=false;stop();if(scene?.fog===fog)scene.fog=previousFog;if(scene?.fogNode===distanceFog)scene.fogNode=previousFogNode;if(scene?.background===background){scene.background=previousBackground;if(scene.backgroundNode===null)scene.backgroundNode=previousBackgroundNode;}
       if(ground&&ground.checked===false){ground.checked=priorGround;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}if(env&&env.value==="0.12"){env.value=oldEnv;env.dispatchEvent(new win.Event("input",{bubbles:true}));}session.setView(beforeView);await session.dispose();},
   };
  },

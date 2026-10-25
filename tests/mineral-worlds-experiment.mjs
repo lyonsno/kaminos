@@ -45,3 +45,18 @@ for(const mode of ['invalid-view','attach-rejection'])test(`${mode} preserves bo
 test('missing saved process identity rejects without changing the open world',async()=>{
  const f=await fixture();try{const before=f.instance.operations.checkpoint(),broken=structuredClone(before);delete broken.state.kind;assert.throws(()=>f.instance.operations.restore(broken),/identity/);assert.deepEqual(f.instance.operations.checkpoint(),before);}finally{await f.instance.dispose();}
 });
+
+test('distance uses an owned fog node and restores a prior node',async()=>{
+ const scene=new Scene(),prior={priorFog:true};scene.fogNode=prior;const f=await fixture({},scene);
+ assert.notEqual(scene.fogNode,prior);assert.equal(scene.fogNode.isNode,true);
+ await f.instance.dispose();assert.equal(scene.fogNode,prior);
+});
+test('surface dimensions and height scales round trip with a world file',async()=>{
+ const f=await fixture({surface:{samples:12,extent:20,bedScale:3,depositScale:.4}});
+ try{const saved=f.instance.operations.checkpoint();assert.deepEqual(saved.surface,{samples:12,extent:20,bedScale:3,depositScale:.4});
+ const changed=structuredClone(saved);changed.surface.depositScale=.9;f.instance.operations.restore(changed);
+ assert.equal(f.instance.operations.read().surface.configuration.depositScale,.9);
+ f.instance.operations.restore(saved);assert.deepEqual(f.instance.operations.checkpoint(),saved);
+ const invalid=structuredClone(saved);invalid.surface.depositScale=NaN;assert.throws(()=>f.instance.operations.restore(invalid),/scale/);assert.deepEqual(f.instance.operations.checkpoint(),saved);
+ }finally{await f.instance.dispose();}
+});
