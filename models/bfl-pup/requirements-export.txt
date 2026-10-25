@@ -1,0 +1,8 @@
+torch==2.14.1
+transformers==5.20.2
+onnx==1.23.2
+onnx-ir==1.1.0
+onnxruntime==1.31.0
+accelerate==1.15.0
+safetensors==0.8.0
+pillow==13.0.0
