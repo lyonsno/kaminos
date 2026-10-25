@@ -128,6 +128,52 @@ test('stop waits for the captured trial frame and records the superseded result'
   assert.equal(f.instance.read().visible,false);await f.instance.dispose();
 });
 
+for(const variant of ['storage-abort','config-changed'])test(`active trial stops after ${variant}`,async()=>{
+  const pending=deferred(),frames=[];
+  const f=await fixture({inputs:{retainTrial:true},
+    createRetention:async()=>({id:variant,append:async row=>{frames.push(row);if(frames.length===2)await pending.promise;},finish:async()=>{},close(){}}),
+    captureInput:()=>({source:{},image:Promise.resolve(new Blob(['png']))}),
+  });
+  await f.instance.operations.start();await f.videoFrame();await f.videoFrame();
+  if(variant==='config-changed')f.instance.operations.setThreshold(.9);
+  pending.reject(new DOMException('Storage failure',variant==='storage-abort'?'AbortError':'QuotaExceededError'));
+  await settle();
+  assert.equal(f.instance.read().running,false);assert.equal(f.instance.read().visible,false);
+  assert.match(f.instance.read().error,/Storage failure/);assert.equal(f.tracks[0].stops,1);
+  assert.equal(frames[0].prediction.hasHand,true,'previous recorded row remains available');
+  await f.instance.dispose();
+});
+
+for(const mutation of ['stop','focal'])test(`PNG delay preserves presented state across ${mutation}`,async()=>{
+  const pending=deferred(),frames=[];
+  const f=await fixture({inputs:{retainTrial:true},
+    createRetention:async()=>({id:mutation,append:async row=>frames.push(row),finish:async()=>{},close(){}}),
+    captureInput:()=>({source:{},image:pending.promise}),
+  });
+  await f.instance.operations.start();await f.videoFrame();const presented=f.instance.read();
+  const stopping=mutation==='stop'?f.instance.operations.stop():null;
+  if(mutation==='focal')f.instance.operations.setFocalRatio(2);
+  pending.resolve(new Blob(['png']));await settle();await stopping;
+  assert.equal(frames[0].effective.presentation,presented.presentation);
+  assert.equal(frames[0].effective.focalRatio,presented.focalRatio);
+  assert.deepEqual(frames[0].effective.state,presented.state);
+  assert.equal(frames[0].failure,null);await f.instance.dispose();
+});
+
+test('an old trial storage failure cannot stop a restarted camera',async()=>{
+  const pending=deferred();let count=0;
+  const f=await fixture({inputs:{retainTrial:true},
+    createRetention:async()=>{const first=count++===0;return{id:`trial-${count}`,append:async()=>{if(first)await pending.promise;},finish:async()=>{},close(){}};},
+    captureInput:()=>({source:{},image:Promise.resolve(new Blob(['png']))}),
+  });
+  await f.instance.operations.start();await f.videoFrame();
+  const stopping=f.instance.operations.stop(),restarting=f.instance.operations.start();
+  pending.reject(new DOMException('Old store failed','AbortError'));
+  await stopping;await restarting;
+  assert.equal(f.instance.read().running,true);assert.equal(f.instance.read().retention.id,'trial-2');
+  assert.equal(f.tracks[1].stops,0);await f.instance.dispose();
+});
+
 test('scene mounts without loading models; owns registered geometry and uses operator view', async () => {
   const f = await fixture();
   assert.ok(f.rows.size > 0, 'scene mounts before any model loading');

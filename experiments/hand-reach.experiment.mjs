@@ -142,7 +142,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (!trial) return trialFinish;
     const owned=trial; trial=null;
     trialFinish=(async()=>{
-      try {await owned.finish({error,endedAt:new Date().toISOString(),state:state.read()}); retention.status=retention.error?'failed':'retained';}
+      try {await owned.finish({error:retention.error??error,endedAt:new Date().toISOString(),state:state.read()}); retention.status=retention.error?'failed':'retained';}
       catch(cause){retention.status='failed';retention.error=message(cause);throw cause;}
       finally{owned.close();sync();}
     })();
@@ -237,16 +237,24 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const infer = ticket => {
     if (!current(ticket) || !sourceFresh() || flight || !app || sourceFrame === lastRequestedFrame) return;
     const revision = configRevision;
-    let capture, frozen, result, retaining = trial, retentionAttempted=false;
+    let capture, frozen, result, retaining = trial, retentionAttempted=false, recordingError=null;
     const retain = async failure => {
       if (!retaining || !capture) return;
       retentionAttempted=true;
-      let image=null, captureError;
-      try{image=await frozen.image;}catch(cause){captureError=cause;}
-      await retaining.append({frameId:capture.frameId,image,inputSource:capture,
-        prediction:result??null,failure:captureError?message(captureError):failure?message(failure):null,effective:read()});
-      retention.frames++;
-      if(captureError)throw captureError;
+      // This is the presentation/rejection state, not the state after PNG encoding.
+      const effective=read();
+      try {
+        let image=null, captureError;
+        try{image=await frozen.image;}catch(cause){captureError=cause;}
+        await retaining.append({frameId:capture.frameId,image,inputSource:capture,
+          prediction:result??null,failure:captureError?message(captureError):failure?message(failure):null,effective});
+        retention.frames++;
+        if(captureError)throw captureError;
+      } catch(cause) {
+        recordingError=cause;
+        if(trial===retaining){retention.error=message(cause);retention.status='failed';}
+        throw cause;
+      }
     };
     const task = (async () => {
       result = await app.infer({handedness, acquisition: {mode: 'detector', threshold: detectorThreshold, padding: 1.4, onMiss: 'skip'},
@@ -270,8 +278,13 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       await retain();
     })().catch(async cause => {
       try {if (!retentionAttempted && frozen) await retain(cause);}
-      catch(failure){retention.error=message(failure);retention.status='failed';}
-      if(retaining && retentionAttempted && !retention.error){retention.error=message(cause);retention.status='failed';}
+      catch(failure){recordingError=failure;}
+      if(recordingError){
+        // Storage aborts are failures, not inference cancellation. Only their
+        // owning trial may stop acquisition, even if inference settings changed.
+        if(trial===retaining && running)failCamera(recordingError);
+        return;
+      }
       if (!current(ticket) || revision !== configRevision || cause?.name === 'AbortError') return;
       failCamera(cause);
     }).finally(async () => {
@@ -343,19 +356,19 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const operations = {
     load, start, stop, frame,
     setRetainTrial(value) {assertOpen();if(running||starting)throw Error('Stop camera before changing trial recording');retainTrial=Boolean(value);remember();return applied('retain-trial');},
-    async readTrial() {
-      if(!retention.id)throw Error('No recorded trial');
+    async readTrial(id=retention.id) {
+      if(!id)throw Error('No recorded trial');
       const {readHandReachTrial}=await import('../models/mobrecon/hand-reach-retention.js');
-      return readHandReachTrial({id:retention.id});
+      return readHandReachTrial({id});
     },
     async exportTrial() {
-      let stopError=null;
+      const id=retention.id;let stopError=null;
       try {await stop();}catch(cause){stopError=message(cause);}
-      const retained=await operations.readTrial();
+      const retained=await operations.readTrial(id);
       for(const row of retained.frames) if(row.image) row.image=await new Promise((resolve,reject)=>{
         const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(row.image);
       });
-      return {filename:`hand-reach-${retention.id}.json`,text:JSON.stringify({...retained,stopError},(_key,value)=>ArrayBuffer.isView(value)?Array.from(value):value)};
+      return {filename:`hand-reach-${id}.json`,text:JSON.stringify({...retained,stopError},(_key,value)=>ArrayBuffer.isView(value)?Array.from(value):value)};
     },
     setHandedness(value) {assertOpen(); handedness = side(value); configRevision++; lose('awaiting-frame'); remember(); return applied('hand');},
     setThreshold(value) {assertOpen(); detectorThreshold = thresholdValue(value); configRevision++; lose('awaiting-frame'); remember(); return applied('threshold');},
