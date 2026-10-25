@@ -19,7 +19,7 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
   try {
     const storage=(label,size)=>{const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});owned.push(b);return b;};
     const weights=storage('prepared smoke static receiver weights',plan.weightBytes);
-    const masks=storage('prepared smoke clear support radii',plan.maskBytes);
+    const masks=storage('prepared smoke packed clear support box extents',plan.maskBytes);
     const texture=device.createTexture({label:'prepared geometry-aware smoke incident radiance',dimension:'3d',size:plan.dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});owned.push(texture);
     const grid=plan.dimensions[0],coarse=coarseDimensions[0],width=device.limits.maxComputeWorkgroupsPerDimension*64;
     const constants=`const FINE:vec3<u32>=vec3<u32>(${plan.dimensions.map(n=>n+'u').join(',')});
@@ -31,12 +31,12 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     const prepare=device.createComputePipeline({label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}});
     const update=device.createComputePipeline({label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}});
     const prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}}))});
-    const updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:3,resource:{buffer:masks}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
+    const updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
     const dispatch=count=>{const groups=Math.ceil(count/64),limit=device.limits.maxComputeWorkgroupsPerDimension;
       if(groups>limit*limit)throw new Error('prepared smoke dispatch exceeds device capacity');
       return [Math.min(groups,limit),Math.ceil(groups/limit)];};
     let prepared=false,updates=0;
-    const metadata={identity:'prepared-clear-support-v2',texture,masks,dimensions:plan.dimensions,
+    const metadata={identity:'prepared-clear-box-support-v3',texture,masks,dimensions:plan.dimensions,
       coarseDimensions:coarseDimensions.slice(),refinement:factor,weightBytes:plan.weightBytes,maskBytes:plan.maskBytes,
       cameraTriangleTests:0,boundaryPolicy:'continuous-clear-box-support-with-low-coverage-fade',
       staticPreparations:0,updates:0};
@@ -116,7 +116,7 @@ fn prepareSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
   if(id>=FINE_COUNT){return;}
   let cell=smokeCell(id,FINE);let lo=vec3<f32>(-1)+vec3<f32>(cell)*FINE_PITCH;
   let p=lo+vec3<f32>(FINE_PITCH*0.5);
-  // Each donor has a certified geometry-free support cube. The camera's
+  // Each donor has a certified geometry-free support box. The camera's
   // compact tent never extends outside that cube, including oblique walls.
   // Common clear-space samples need one box query; only boundary samples
   // refine the clearance. Search always retains the proven-clear lower bound.
@@ -129,7 +129,25 @@ fn prepareSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
     }
     radius=low;
   }
-  masks[id]=bitcast<u32>(radius/FINE_PITCH);
+  // A flat wall constrains its normal extent, not the two tangents. Expand
+  // each axis while retaining an entirely clear box. Oblique corners remain
+  // conservative; no interpolation donor can reach across a triangle.
+  var support=vec3<f32>(radius);
+  if(radius>0.0&&radius<FINE_PITCH){
+    for(var axis=0u;axis<3u;axis++){
+      var trial=support;trial[axis]=FINE_PITCH;
+      if(!occupiedBox(p-trial,p+trial)){support=trial;continue;}
+      var low=support[axis];var high=FINE_PITCH;
+      for(var j=0u;j<8u;j++){
+        let mid=(low+high)*0.5;trial[axis]=mid;
+        if(occupiedBox(p-trial,p+trial)){high=mid;}else{low=mid;}
+      }
+      support[axis]=low;
+    }
+  }
+  // Quantize downward: unpacking must never enlarge the certified support.
+  let packed=vec3<u32>(floor(clamp(support/FINE_PITCH,vec3<f32>(0),vec3<f32>(1))*1023.0));
+  masks[id]=packed.x|(packed.y<<10u)|(packed.z<<20u);
   let q=(p+vec3<f32>(1))/COARSE_PITCH-vec3<f32>(0.5);
   let base=vec3<i32>(floor(q));let w=fract(q);var total=0.0;
   for(var i=0u;i<8u;i++){
@@ -152,6 +170,6 @@ fn updateSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
     let offset=vec3<i32>(i32(i&1u),i32((i>>1u)&1u),i32((i>>2u)&1u));
     let c=clamp(base+offset,vec3<i32>(0),vec3<i32>(COARSE)-vec3<i32>(1));sum+=textureLoad(incident,c,0).rgb*weight;
   }
-  textureStore(preparedIncident,vec3<i32>(cell),vec4<f32>(sum,bitcast<f32>(masks[id])));
+  textureStore(preparedIncident,vec3<i32>(cell),vec4<f32>(sum,1));
 }
 `;
