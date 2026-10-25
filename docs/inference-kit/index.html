@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Explore relightable photographs, generate images with FLUX, and build browser AI with Kaminos WebGPU Inference Kit: image, 3D, segmentation, motion and material model ports.">
+  <meta name="description" content="Generate images and 3D meshes, animate skeletons, reconstruct hands and relight photographs with Kaminos WebGPU Inference Kit. Reusable model applications share your browser GPU.">
   <title>Kaminos WebGPU Inference Kit</title>
   <link rel="canonical" href="https://lyonsno.github.io/kaminos/inference-kit/">
   <style>
@@ -69,12 +69,18 @@
   <main>
     <div class="intro">
       <h1>Kaminos WebGPU Inference Kit</h1>
-      <p class="lead">Run generative and vision models locally in responsive browser applications.</p>
-      <p>A shared runtime for GPU devices, model loading, queued inference and cooperative scheduling. Try a model below, or use the kit to build your own application.</p>
+      <p class="lead">Generate images and 3D meshes, animate skeletons, reconstruct hands and relight photographs in responsive browser applications.</p>
+      <p>Try a model below, then bring it into your own application. The model guides cover installation, inputs and outputs; the shared runtime handles GPU coordination and cooperative scheduling.</p>
     </div>
     <section aria-labelledby="try-heading">
       <h2 id="try-heading">Try it in your browser</h2>
       <div class="demos">
+        <article class="demo">
+          <h3>Animate a skeleton with UniMate</h3>
+          <p>Describe a motion, choose a skeleton or bring your own rig, and export the animation as a GLB. Text encoding and motion generation run on your GPU.</p>
+          <div class="actions"><a class="action" href="./unimate/">Generate motion</a><a href="https://github.com/lyonsno/kaminos/tree/main/models/unimate">Model guide</a></div>
+          <p class="detail">WebGPU required. Model weights download on first use; model terms apply.</p>
+        </article>
         <article class="demo">
           <h3>Your hand, reconstructed live</h3>
           <p>Open, point and turn your hand. MobRecon reconstructs a 3D mesh from your camera, with hand detection and reconstruction running on your own GPU.</p>
@@ -112,23 +118,26 @@
     <section class="models" aria-labelledby="models-heading">
       <h2 id="models-heading">One runtime, different models</h2>
       <dl>
-        <div class="model"><dt>MoGe</dt><dd>Depth, surface normals and point maps from a photograph.</dd><dd class="route"><a href="https://lyonsno.github.io/moge-webgpu/">Reveal depth</a> &middot; <a href="https://github.com/lyonsno/moge-webgpu">Model guide</a></dd></div>
-        <div class="model"><dt>SHARP</dt><dd>A Gaussian-splat scene from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sharp-webgpu">Model guide</a></dd></div>
-        <div class="model"><dt>Stable Fast 3D</dt><dd>A textured, UV-unwrapped GLB mesh from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sf3d-webgpu">Model guide</a></dd></div>
-        <div class="model"><dt>Kimodo</dt><dd>Skeletal motion from a text prompt. Text embeddings use an external server.</dd><dd class="route"><a href="https://github.com/lyonsno/kimodo-webgpu">Model guide</a></dd></div>
-        <div class="model"><dt>SAM 3</dt><dd>Instance masks and transparent cutouts from an image and text prompt.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/sam-image-example.md">Example guide</a></dd></div>
-        <div class="model"><dt>TRELLIS 2</dt><dd>A textured 3D mesh from an image, with local tools for preparation and finishing.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/trellis2">Model guide</a></dd></div>
         <div class="model"><dt>FLUX.2 [klein] 4B</dt><dd>Images from a prompt, with the full generation pipeline on WebGPU.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein">Model guide</a></dd></div>
-        <div class="model"><dt>SuperMat</dt><dd>Albedo, roughness and metallic material maps from an image.</dd><dd class="route"><a href="./material-photo/">Explore materials</a> &middot; <a href="https://github.com/lyonsno/kaminos/tree/main/models/supermat">Port source</a></dd></div>
+        <div class="model"><dt>TRELLIS 2</dt><dd>A textured 3D mesh from an image, with local tools for preparation and finishing.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/trellis2">Model guide</a></dd></div>
         <div class="model"><dt>UniMate</dt><dd>Skeletal animation from a text prompt for different rigged skeletons.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/unimate">Model guide</a></dd></div>
+        <div class="model"><dt>Hand reconstruction</dt><dd>Live hand meshes and landmarks from camera frames, using WiLoR and MobRecon.</dd><dd class="route"><a href="./hand-mesh/">Hand demo</a> &middot; <a href="https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md">Application guide</a></dd></div>
+        <div class="model"><dt>SuperMat</dt><dd>Albedo, roughness and metallic material maps from an image.</dd><dd class="route"><a href="./material-photo/">Explore materials</a> &middot; <a href="https://github.com/lyonsno/kaminos/tree/main/models/supermat">Port source</a></dd></div>
+        <div class="model"><dt>U2Net</dt><dd>Foreground cutouts from opaque RGB or RGBA images.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/u2net">Application guide</a></dd></div>
+        <div class="model"><dt>SAM 3</dt><dd>Instance masks and transparent cutouts from an image and text prompt.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/sam-image-example.md">Example guide</a></dd></div>
+        <div class="model"><dt>MoGe</dt><dd>Depth, surface normals and point maps from a photograph.</dd><dd class="route"><a href="https://lyonsno.github.io/moge-webgpu/">Reveal depth</a> &middot; <a href="https://github.com/lyonsno/moge-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>Stable Fast 3D</dt><dd>A textured, UV-unwrapped GLB mesh from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sf3d-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>SHARP</dt><dd>A Gaussian-splat scene from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sharp-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>Kimodo</dt><dd>Skeletal motion from a text prompt. Text embeddings use an external server.</dd><dd class="route"><a href="https://github.com/lyonsno/kimodo-webgpu">Model guide</a></dd></div>
       </dl>
     </section>
     <section class="build" aria-labelledby="build-heading">
       <h2 id="build-heading">Build with the kit</h2>
-      <p>Start with a worked photograph example, then connect a model to the same session, route and invocation lifecycle. Model guides cover weights, device requirements and embedding each port.</p>
+      <p>Start with a model application for image generation, material maps, skeletal animation or background removal. It handles loading, queued inference, controls and cleanup. Keep your model-specific options and lower-level access, and connect your renderer through the shared foreground service.</p>
       <p><code>npm install @kaminos/webgpu-inference-kit</code></p>
       <div class="actions">
-        <a class="action" href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit/docs/getting-started.md">Getting started</a>
+        <a class="action" href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/model-applications.md">Build with a model application</a>
+        <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit/docs/getting-started.md">Small rendering example</a>
         <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Runtime and architecture</a>
         <a href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/integration-reference.md">API reference</a>
       </div>

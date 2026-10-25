@@ -2,15 +2,13 @@
 
 Turn an opaque RGB or RGBA image into a cutout on your application's WebGPU device. `createU2NetApp` handles model loading, queued execution, pause/resume, cancellation and cleanup through the inference kit's shared application runner. Its output retains the existing rembg-compatible RGBA bytes, dimensions and provenance.
 
-Build a local installable package from a Kaminos checkout:
+Install the browser application package:
 
 ```sh
-node scripts/pack-u2net-module.mjs --out /absolute/path/to/artifacts
-# In your application's directory:
-npm install /absolute/path/to/artifacts/kaminos-u2net-0.1.0.tgz
+npm install @kaminos/u2net@^0.1.0
 ```
 
-This source package contains browser code and the kit runtime. Weights are downloaded separately from the pinned BasinShapers U2Net package. A package built here is not a registry release.
+The package contains browser code and the kit runtime. Weights download separately from the pinned BasinShapers U2Net package. To build the same package from a Kaminos checkout, run `node scripts/pack-u2net-module.mjs --out /absolute/path/to/artifacts` and install the printed tarball in your application.
 
 ```js
 import { createU2NetApp } from '@kaminos/u2net';

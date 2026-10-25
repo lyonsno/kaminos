@@ -3,7 +3,7 @@
 // ../../webgpu-inference-kit/src/*.js to the kit's published entry, @kaminos/webgpu-inference-kit/core,
 // adds index.js with the public API, writes package.json and runs npm pack. Fails when a staged file
 // still imports anything outside the package other than that entry.
-// Usage: node pack-klein.mjs --out <staging dir> [--version 0.1.1] [--json]
+// Usage: node pack-klein.mjs --out <staging dir> [--version 0.1.2] [--json]
 // MIT-licensed; publish the staged directory with npm publish (publishConfig makes the scoped package public).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -42,7 +42,7 @@ fs.copyFileSync(path.join(here, 'LICENSE'), path.join(out, 'LICENSE'));
 fs.copyFileSync(path.join(here, 'THIRD_PARTY_NOTICES.txt'), path.join(out, 'THIRD_PARTY_NOTICES.txt'));
 const manifest = {
   name: '@kaminos/flux2-klein',
-  version: opt('--version', '0.1.1'),
+  version: opt('--version', '0.1.2'),
   description: 'FLUX.2 [klein] 4B text-to-image in the browser on WebGPU: text encoder, transformer and decoder as compute shaders.',
   license: 'MIT',
   repository: { type: 'git', url: 'git+https://github.com/lyonsno/kaminos.git', directory: 'models/flux2-klein' },

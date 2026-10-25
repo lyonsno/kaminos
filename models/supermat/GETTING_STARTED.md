@@ -5,7 +5,7 @@ SuperMat turns an RGBA image into albedo, roughness, and metallic maps on your a
 ## Install
 
 ```sh
-npm install @kaminos/supermat
+npm install @kaminos/supermat@^0.1.1
 ```
 
 ```js

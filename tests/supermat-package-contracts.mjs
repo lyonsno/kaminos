@@ -61,7 +61,8 @@ try {
   await fs.symlink(path.dirname(buildRequire.resolve('esbuild/package.json')),
     path.join(app, 'node_modules', 'esbuild'), 'dir');
   execFileSync(process.execPath, [buildScript], { cwd: app, stdio: 'pipe' });
-  assert.equal(manifest.private, true, 'publication remains a separate operator decision');
+  assert.equal(manifest.private, false, 'the release archive must be publishable');
+  assert.deepEqual(manifest.publishConfig, { access: 'public' });
   assert.equal(manifest.license, 'MIT');
   assert.deepEqual(await fs.readFile(path.join(path.dirname(entry), 'LICENSE')),
     await fs.readFile(new URL('../models/supermat/LICENSE', import.meta.url)));
