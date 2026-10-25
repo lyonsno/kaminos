@@ -48,7 +48,8 @@ async function expand(){
   $('timing').textContent=`${(result.generationMs/1000).toFixed(1)} s generation · ${(result.totalMs/1000).toFixed(1)} s total`;
  }catch(error){
   lastResult={status:'failed',phase,error:String(error),modelUrl,partialText:$('output').value};
-  status(String(error?.message||error),true);
+  const message=String(error?.message||error).split('\n')[0].replace(/^(Error:\s*)+/,'');
+  status(/Model provenance HTTP/.test(message)?message.replace('Model provenance','Could not load the prompt model ·'):message,true);
   $('timing').textContent=`Stopped after ${((performance.now()-started)/1000).toFixed(1)} s`;
  }finally{
   clearInterval(timer);
