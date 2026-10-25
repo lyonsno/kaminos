@@ -5,8 +5,8 @@ const {Fn,mrt,vec4,vec3,uniform,screenUV,positionView,normalView,positionViewDir
 // flame irradiance once, then reuse it only in that camera's receiving pass.
 // Other cameras and surfaces retain the producer's original material lighting.
 export default class SceneSurfaceLighting {
-  constructor(source,camera,{enabled=true}={}){
-    this.source=source;this.camera=camera;this.enabled=uniform(enabled,'bool');
+  constructor(source,camera,{enabled=true,captureEnabled=true}={}){
+    this.source=source;this.camera=camera;this.captureEnabled=captureEnabled;this.enabled=uniform(enabled,'bool');
     this.bindings=new WeakMap();this.materials=new Set();this.capture=null;
     this.proxyRoots=new Set();this.proxyMaterialAdapter=null;
   }
@@ -25,7 +25,7 @@ export default class SceneSurfaceLighting {
   bind(material,raw,prepare=()=>{}){
     const value=raw.toVar('flameSurfaceIrradiance');
     this.bindings.set(material,{value,prepare});this.materials.add(material);
-    if(!this.capture){
+    if(!this.capture&&this.captureEnabled){
       const exported=Fn(([],builder)=>{
         const entry=this.bindings.get(builder.material);
         return entry?vec4(entry.value,1):vec4(0);
@@ -40,9 +40,10 @@ export default class SceneSurfaceLighting {
     return value;
   }
   unbind(material){this.bindings.delete(material);this.materials.delete(material);}
+  prepareMaterial(material){this.bindings.get(material)?.prepare();}
   forMaterial(builder,material,raw){
     const entry=this.bindings.get(material),node=entry?.value??raw;
-    if(builder.context.sceneSurfaceLighting!==this||builder.camera!==this.camera||
+    if(!this.capture||builder.context.sceneSurfaceLighting!==this||builder.camera!==this.camera||
       builder.renderer.getRenderTarget()===this.source.renderTarget||builder.renderer.logarithmicDepthBuffer===true||
       material.transparent||material.transmission>0)return node;
     const source=this.source,depth=source.getTextureNode('depth'),normal=source.getTextureNode('normal');

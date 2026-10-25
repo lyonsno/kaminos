@@ -4,11 +4,12 @@ import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
 import SceneSurfaceLighting from './scene-surface-lighting.mjs';
+import SceneShadingCache from './scene-shading-cache.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
-export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,filterImplementation='shared',surfaceReuse=true,sourceComparison=false}={}) {
+export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,filterImplementation='shared',surfaceReuse=true,sourceComparison=false,shadingReuse=false}={}) {
   if(!['shared','separate'].includes(filterImplementation))throw Error('Unknown lighting filter implementation');
   // The screen-space field samples one depth/normal per pixel on both device routes.
   // Keep MSAA on the receiving beauty pass, not on the GI source attachments.
@@ -17,7 +18,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   source.transparent = false;
   const visibleNormal = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
   source.setMRT(mrt({output, normal:visibleNormal}));
-  const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
+  const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse,captureEnabled:!shadingReuse});
   const depth = source.getTextureNode('depth');
   const normal = source.getTextureNode('normal');
   const effect = ssgi(source.getTextureNode('output'),depth,normal,camera);
@@ -39,6 +40,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material)):vec3(0),1))();
   source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal,...(bounceProbe?{probeDiffuseResponse}:{})}));
   if(bounceProbe)source.getTextureNode('probeDiffuseResponse');
+  const shadingCache=shadingReuse?new SceneShadingCache(source,camera):null;
   const comparison=sourceComparison?createGISourceComparison(scene,camera,source,visibleNormal,reason=>history.reset(reason),surfaceLighting):null;
   if(comparison)comparison.source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
   if(comparison)effect.sourceOverride=comparison.inputs;
@@ -88,7 +90,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     beauty.name='SSGI material receiving '+(filtered?'filtered':'raw');
     beauty.contextNode=context({
       sceneSurfaceLighting:surfaceLighting,
-      ...builtinAOContext(ao).getFlowContextData(),
+      ...(shadingCache?shadingCache.receiverContext(ao,surfaceLighting):builtinAOContext(ao).getFlowContextData()),
       getOutput(node,{material}) {
         const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
         const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
@@ -113,7 +115,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
-    depth, source, surfaceLighting, sourceComparison:comparison,
+    depth, source, surfaceLighting, shadingCache, sourceComparison:comparison,
     setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
     output() { return route().output; },
@@ -178,7 +180,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1+(comparison?.read().additionalSourcePasses??0),sourceComparison:comparison?.read()??null,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
-      surfaceLighting:surfaceLighting.state(),
+      surfaceLighting:surfaceLighting.state(),shadingReuse:shadingCache?.state()??{enabled:false},
       standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
       viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
   };

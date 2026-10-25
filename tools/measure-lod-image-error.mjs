@@ -19,11 +19,11 @@ const SHA = /^[a-f0-9]{64}$/;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Opens one page per call in a single isolated browser; returns {title, result, error, png, console}.
-export async function launchBrowser({executable, timeoutMs = 900000}) {
+export async function launchBrowser({executable, timeoutMs = 900000, args = []}) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'kaminos-lod-image-error-'));
   const port = 9500 + Math.floor(Math.random() * 400);
   const launch = fluidBrowserLaunch({executable, debugPort: port, userDataDir: profile, width: 1200, height: 900});
-  const child = spawn(launch.executable, ['--headless=new', '--hide-scrollbars', ...launch.args], {stdio: 'ignore'});
+  const child = spawn(launch.executable, ['--headless=new', '--hide-scrollbars', ...args, ...launch.args], {stdio: 'ignore'});
   // A browser that cannot start reports through 'error' (and may never 'exit'); turn it into a failure.
   let spawnError = null; const exited = new Promise(r => child.once('close', r));
   child.once('error', error => { spawnError = error; });

@@ -1,0 +1,40 @@
+<!doctype html><html><meta charset="utf-8"><title>Shading reuse conformance</title>
+<style>body{margin:0;background:#202024}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import * as T from '../lib/three.webgpu.js';
+import {createSceneGI} from '../scene-gi.mjs';
+import {measureSceneGpu} from '../scene-light-timing.mjs';
+const params=new URLSearchParams(location.search),benchmark=params.get('measure')==='1',reuse=!benchmark||params.get('reuse')==='1';
+T.Node.captureStackTrace=!benchmark;
+try {
+ const renderer=new T.WebGPURenderer({antialias:true,requiredLimits:{maxColorAttachmentBytesPerSample:40}});await renderer.init();renderer.setSize(benchmark?960:640,benchmark?640:480);renderer.setPixelRatio(1);document.body.append(renderer.domElement);
+ const device=renderer.backend.device,errors=[],shaders=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
+ const original=device.createShaderModule.bind(device);device.createShaderModule=d=>{shaders.push({label:d.label,code:d.code});return original(d);};
+ const scene=new T.Scene();scene.background=new T.Color(.08,.08,.08);
+ const camera=new T.PerspectiveCamera(45,benchmark?960/640:640/480,.1,30);camera.position.set(4,3,6);camera.lookAt(0,.6,0);
+ const floor=new T.Mesh(new T.PlaneGeometry(8,8),new T.MeshStandardNodeMaterial({color:0xaabbcc,roughness:1}));floor.rotation.x=-Math.PI/2;scene.add(floor);
+ for(let i=0;i<3;i++){const m=new T.MeshStandardNodeMaterial({color:0xcc5522,metalness:i/2,roughness:.2+i*.3});m.aoNode=T.TSL.float(.6);const mesh=new T.Mesh(new T.SphereGeometry(.6,24,16),m);mesh.position.set(i*1.5-1.5,.6,0);scene.add(mesh);}
+ const sun=new T.DirectionalLight(0xffffff,2);sun.position.set(3,6,4);scene.add(sun);scene.add(new T.HemisphereLight(0xbbeeff,0x665533,1.5));
+ const ao=T.TSL.uniform(1),gi=createSceneGI(scene,camera,ao,{shadingReuse:reuse});gi.setSettings({mode:'combined',gain:2,temporal:false,denoise:0,slices:2,steps:3});
+ const pipeline=new T.RenderPipeline(renderer);pipeline.outputNode=gi.output();
+ const frame=async()=>{pipeline.render();await device.queue.onSubmittedWorkDone();if(errors.length)throw Error(errors.join('\n'));};
+ const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,640,480),T.DataUtils.fromHalfFloat);
+ if(benchmark){
+  if(params.get('lights')==='16')for(let i=0;i<15;i++){const light=new T.PointLight(0xffffff,4);light.position.set(Math.sin(i)*3,2,Math.cos(i)*3);scene.add(light);}
+  gi.setSettings({mode:'combined',gain:5,temporal:true,denoise:1,slices:2,steps:7,resolutionScale:.5});pipeline.outputNode=gi.output();
+  for(let i=0;i<8;i++)await frame();
+  const signature=JSON.stringify({reuse,lights:params.get('lights')||'1',width:960,height:640,gi:gi.debugState()});
+  const result=await measureSceneGpu(renderer,{samples:24,getSignature:()=>signature,drawFrame(){const start=performance.now();pipeline.render();return {drawn:true,frame:renderer.info.frame,submitMs:performance.now()-start};}});
+  if(result.status!=='measured')throw Error(JSON.stringify(result));
+  window.__result={backend:renderer.backend.isWebGPUBackend?'WebGPU':'fallback',reuse,lights:params.get('lights')||'1',result,state:gi.debugState(),errors};document.title='done';
+ }else{
+ const results=[];
+ for(const strength of [0,1,2]){ao.value=strength;gi.shadingCache.enabled.value=false;await frame();await frame();const before=await read();gi.shadingCache.enabled.value=true;await frame();await frame();const after=await read();let sum=0,max=0,signal=0;const differences=[];
+  for(let i=0;i<before.length;i++)if(i%4<3){const d=Math.abs(after[i]-before[i]);differences.push(d);sum+=d;max=Math.max(max,d);signal+=Math.abs(before[i]);}differences.sort((a,b)=>a-b);results.push({strength,sum,max,mean:sum/differences.length,p99:differences[Math.floor(.99*differences.length)],signal});}
+ gi.setSettings({mode:'combined',gain:0,temporal:false,denoise:0,slices:2,steps:3});pipeline.outputNode=gi.output();gi.shadingCache.debugHits.value=true;await frame();await frame();const hits=await read();const hitPixels=hits.filter((v,i)=>i%4===0&&v>.9).length;gi.shadingCache.debugHits.value=false;await frame();
+ window.__result={hitPixels,backend:renderer.backend.isWebGPUBackend?'WebGPU':'fallback',features:[...device.features],state:gi.debugState(),results,errors,shaders};
+ document.title='done';
+ }
+}catch(error){window.__error=String(error.stack??error);document.title='error';}
+</script></html>
