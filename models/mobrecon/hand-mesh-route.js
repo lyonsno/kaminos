@@ -22,14 +22,17 @@ function prediction(vertices, uv, handedness) {
 
 async function read(device, buffer, offset, bytes, Type = Float32Array) {
   const staging = device.createBuffer({ size: bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-  const encoder = device.createCommandEncoder();
-  encoder.copyBufferToBuffer(buffer, offset, staging, 0, bytes);
-  device.queue.submit([encoder.finish()]);
-  await staging.mapAsync(GPUMapMode.READ);
-  const out = new Type(staging.getMappedRange().slice(0));
-  staging.unmap();
-  staging.destroy();
-  return out;
+  let mapped = false;
+  try {
+    const encoder = device.createCommandEncoder();
+    encoder.copyBufferToBuffer(buffer, offset, staging, 0, bytes);
+    device.queue.submit([encoder.finish()]);
+    await staging.mapAsync(GPUMapMode.READ);
+    mapped = true;
+    return new Type(staging.getMappedRange().slice(0));
+  } finally {
+    try { if (mapped) staging.unmap(); } finally { staging.destroy(); }
+  }
 }
 
 // session: a kit inference session (for example the page's app GPU host session).
@@ -83,9 +86,17 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
     // In detector mode a frame without a detection falls back to manualBox,
     // reported as such. handedness chooses the MobRecon input flip; the
     // detector's class is reported, not applied.
-    async infer({ source, width, height, handedness, acquisition, schedule = null }) {
+    // capture: opt-in named network views; offsets are float32 element offsets.
+    async infer({ source, width, height, handedness, acquisition, schedule = null, capture = [] }) {
       if (released) throw new Error('browser hand mesh route released');
       if (busy) throw new Error('browser hand mesh route already has an inference in flight');
+      if (!Array.isArray(capture) || capture.some(name => typeof name !== 'string')) throw new TypeError('capture must be an array of tensor name strings');
+      if (new Set(capture).size !== capture.length) throw new Error('capture must not contain duplicate tensor names');
+      const captureViews = capture.map(name => {
+        const view = mobrecon.network.view(name);
+        if (!view) throw new Error(`no MobRecon tensor named ${name}`);
+        return { name, buffer: view.buffer, offset: view.offset, shape: [...view.shape] };
+      });
       if (!['left', 'right'].includes(handedness)) throw new Error('handedness must be left or right');
       const { mode, padding = 1.4, threshold = 0.18, manualBox, onMiss = 'manual' } = acquisition ?? {};
       if (!['detector', 'manual'].includes(mode)) throw new Error('acquisition mode must be detector or manual');
@@ -112,6 +123,7 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
         };
         const result = { identity, handedness, interactionAuthority: false, authority: 'browser_webgpu_diagnostic_not_interaction',
           acquisition: { mode, padding, threshold, detections: [], selectedDetection: null, fallback: false, source: 'operator_selected_crop_no_detector' } };
+        if (captureViews.length) result.captures = {};
         let box = manualBox;
         if (mode === 'detector') {
           const detections = await runPhase('hand-detector', () => {
@@ -145,7 +157,16 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
           mobrecon.network.encode(encoder);
           device.queue.submit([encoder.finish()]);
           const { mesh, uv } = mobrecon.network.outputs;
-          return Promise.all([read(device, mesh.buffer, mesh.offset * 4, 778 * 12), read(device, uv.buffer, uv.offset * 4, 21 * 8)]);
+          // Settle every map before releasing the busy guard, even on a failure.
+          const outputs = await Promise.allSettled([read(device, mesh.buffer, mesh.offset * 4, 778 * 12), read(device, uv.buffer, uv.offset * 4, 21 * 8)]);
+          const failed = outputs.find(output => output.status === 'rejected');
+          if (failed) throw failed.reason;
+          for (const { name, buffer, offset, shape } of captureViews) {
+            const data = await read(device, buffer, offset * 4, shape.reduce((a, b) => a * b, 1) * 4);
+            if (!data.every(Number.isFinite)) throw new Error(`non-finite MobRecon capture ${name}`);
+            Object.defineProperty(result.captures, name, { value: { shape, data }, enumerable: true, configurable: true, writable: true });
+          }
+          return outputs.map(output => output.value);
         });
         if (!vertices.every(Number.isFinite) || !landmarks.every(Number.isFinite)) throw new Error('non-finite MobRecon output');
         Object.assign(result, prediction(vertices, landmarks, handedness));

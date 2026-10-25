@@ -7,13 +7,14 @@ import { handObservation, createHoverController } from '../experiments/iron-glan
 import { createMechanism } from '../experiments/iron-gland/mechanism.mjs';
 import { createVirtualHand } from '../experiments/iron-gland/virtual-hand.mjs';
 import { installOwnerExperimentEntry } from '../owner-experiment-entry.mjs';
+import { createGestureCapture } from '../experiments/iron-gland/capture.mjs';
 
 // Exercise the actual experiment, substituting only camera, model loading and host I/O.
 const source = (await fs.readFile(new URL('../experiments/iron-gland.experiment.mjs', import.meta.url), 'utf8'))
   .replace(/^import .*;$/gm, '').replace('export default', 'return');
 const compile = new Function('Mesh', 'PlaneGeometry', 'MeshBasicMaterial', 'CanvasTexture', 'SRGBColorSpace',
   'createBrowserHandMeshRoute', 'readLocalModels', 'readServedModels', 'createModelStore',
-  'handObservation', 'createHoverController', 'createMechanism', 'createVirtualHand', source);
+  'handObservation', 'createHoverController', 'createMechanism', 'createVirtualHand', 'createGestureCapture', 'mountCaptureControls', source);
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = pinch => {
   const uv = new Float32Array(42).fill(.5);
@@ -47,7 +48,7 @@ async function fixture() {
   let pending = result(.6), frameCallback, disposed=0;
   const route = {identity:{routeId:'unit-fixture'},faces:new Uint16Array([0,1,2]),infer:()=>Promise.resolve(pending),release(){releases++;}};
   const definition = compile(THREE.Mesh,THREE.PlaneGeometry,THREE.MeshBasicMaterial,THREE.CanvasTexture,THREE.SRGBColorSpace,
-    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand);
+    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand,createGestureCapture,()=>({update(){},dispose(){}}));
   const attached=[],events=[];
   const scene = {attach:async(root,options)=>{attached.push({root,options});return {id:root.uuid,root};},
     setView:()=>{},redraw(){},onFrame:fn=>{frameCallback=fn;return()=>{frameCallback=null;};},dispose:async()=>{disposed++;}};
@@ -110,6 +111,16 @@ test('asynchronous camera denial remains visible after Start acknowledges initia
     assert.equal(f.owner.read().starting,false);assert.equal(f.owner.read().running,false);
     assert.equal(f.owner.read().cameraVisible,false);assert.match(f.owner.read().error,/permission denied/);
   } finally {deny?.(Error('camera permission denied'));await f.owner.dispose();}
+});
+
+test('capture is an explicit operation and cannot start without an active camera',async()=>{
+  const f=await fixture();
+  try{
+    assert.equal(typeof f.owner.operations.beginCapture,'function');
+    assert.equal(f.owner.read().capture.status,'idle');
+    await assert.rejects(async()=>f.owner.operations.beginCapture(),/camera/i);
+    assert.equal(f.tracks.length,0);
+  }finally{await f.owner.dispose();}
 });
 
 test('the visible scene contains the reconstructed hand, never a camera background', async () => {

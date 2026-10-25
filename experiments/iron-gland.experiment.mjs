@@ -3,6 +3,8 @@ import { readLocalModels, readServedModels, createModelStore } from '../demos/ha
 import { handObservation, createHoverController } from './iron-gland/interaction.mjs';
 import { createMechanism } from './iron-gland/mechanism.mjs';
 import { createVirtualHand } from './iron-gland/virtual-hand.mjs';
+import { createGestureCapture } from './iron-gland/capture.mjs';
+import { mountCaptureControls } from './iron-gland/capture-controls.mjs';
 
 export default {
   id: 'iron-gland', title: 'Iron Gland',
@@ -52,25 +54,36 @@ export default {
     if (!(Number.isFinite(threshold) && threshold >= 0 && threshold <= 1)) { await scene.dispose(); throw Error('invalid detector threshold'); }
     prepareStage();
     let error = null, modelSource = null, frameCount = 0, missCount = 0, last = null, lastFrameAt = null;
-    let startButton, loadButton, status, inputFiles;
+    let startButton, loadButton, status, inputFiles, captureControls, captureStarting;
+    const capture = createGestureCapture({fetch:(...args)=>window.fetch(...args),MediaRecorder:window.MediaRecorder,
+      changed:()=>captureControls?.update()});
     const read = () => ({ running, starting, loading, draining: !running && !!flight, error, modelSource, handedness, size, threshold, frameCount, missCount,
       identity: route?.identity ?? null, source: 'camera', geometryAuthority: 'inferred-hand-mesh-unregistered-stage', view: 'opposite-camera',
       interaction: structuredClone(state), cameraVisible: false, handVisible: handSurface.root.visible, handObjectId: handAsset.id, objectId: machineAsset.id,
       imageSize: [sample.width, sample.height], lastAcquisition: last?.acquisition ?? null,
       lastPrediction: last ? { hasHand: last.hasHand, handedness: last.handedness, cropBox: last.cropBox, cropUV: last.cropUV ? Array.from(last.cropUV) : null } : null,
-      cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off',
+      cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off', capture:capture.read(),
       lighting: 'virtual-core-and-scene', occlusion: 'virtual-hand-depth', placement: 'palm-anchored-view-relative-hover' });
     const sync = () => {
       if (startButton) { startButton.textContent = starting ? 'Cancel camera' : running ? 'Stop camera' : 'Start camera'; startButton.disabled = loading || disposed || !route; }
       if (loadButton) loadButton.disabled = loading || disposed || running || starting || !!flight;
       if (status) status.textContent = error ?? (loading ? 'Loading models' : starting ? 'Camera permission' : !route ? 'Models not loaded' : !running ? 'Camera off' : !state.visible ? 'No hand detected' : state.mode === 'grab' ? 'Pinch held' : 'Hover');
+      captureControls?.update();
     };
     const frame = () => {
       const viewport = document.getElementById('viewport');
       const bounds = viewport?.getBoundingClientRect();
       const aspect = bounds?.height ? bounds.width / bounds.height : window.innerWidth / window.innerHeight;
-      const distance = Math.max(3.5, 4.4 / aspect) / (2 * Math.tan(35 * Math.PI / 360)) * 1.14;
-      return scene.setView({ position: [0, 2.75, distance], target: [0, 2.75, 0], up: [0, 1, 0], fov: 35, zoom: 1 });
+      const tangent=Math.tan(35*Math.PI/360);
+      let distance = Math.max(3.5, 4.4 / aspect) / (2*tangent) * 1.14, targetY=2.75;
+      const cue=document.querySelector?.('[data-iron-capture-cue]');
+      if(capture.read().status==='recording'&&cue&&!cue.hidden&&bounds?.height){
+        const top=cue.offsetTop+cue.offsetHeight+12,bottom=bounds.height-70;
+        const available=Math.max(60,bottom-top);
+        distance=Math.max(distance,3.5*bounds.height/(2*tangent*available));
+        targetY+=(Math.min(bounds.height-35,(top+bottom)/2)/bounds.height-.5)*2*distance*tangent;
+      }
+      return scene.setView({ position: [0, targetY, distance], target: [0, targetY, 0], up: [0, 1, 0], fov: 35, zoom: 1 });
     };
     const hide = () => { state = controller.update(null, 0); machine.root.visible = false; handSurface.root.visible = false; scene.redraw(); };
     const present = (result, now) => {
@@ -93,19 +106,21 @@ export default {
     };
     const schedule = ticket => {
       if (!running || disposed || ticket !== generation) return;
-      callback = video.requestVideoFrameCallback(() => {
+      callback = video.requestVideoFrameCallback((_, metadata) => {
         callback = null;
         if (!running || disposed || ticket !== generation) return;
         const current = (async () => {
           if (sample.width !== video.videoWidth || sample.height !== video.videoHeight) { sample.width = video.videoWidth; sample.height = video.videoHeight; }
           sampleContext.drawImage(video, 0, 0);
-          const result = await route.infer({ source: sample, width: sample.width, height: sample.height, handedness,
-            acquisition: { mode: 'detector', threshold, padding: 1.4, onMiss: 'skip' } });
+          const result = await capture.observe({canvas:sample,metadata,
+            infer:features=>route.infer({ source: sample, width: sample.width, height: sample.height, handedness,capture:features,
+              acquisition: { mode: 'detector', threshold, padding: 1.4, onMiss: 'skip' } })});
           if (!running || disposed || ticket !== generation) return;
           present(result, performance.now());
         })().catch(cause => {
           if (ticket !== generation || disposed) return;
           error = String(cause?.message ?? cause); running = false; generation++;
+          void capture.finish('failed',error);
           releaseCamera();
           hide(); sync(); record({ kind: 'iron-gland.failure', phase: 'applied', effective: read() });
         }).finally(() => { if (flight === current) flight = null; sync(); schedule(ticket); });
@@ -118,6 +133,8 @@ export default {
       releaseCamera();
       hide(); sync();
       if (flight) await flight.catch(() => {});
+      if (captureStarting) await captureStarting.catch(()=>{});
+      await capture.finish('partial',error??'camera-stopped');
       record({ kind: 'iron-gland.stop', phase: 'applied', effective: read() });
       return read();
     };
@@ -186,6 +203,7 @@ export default {
       loadTask = task; return task;
     };
     const setOptions = async options => {
+      if (['starting','recording','saving'].includes(capture.read().status)||captureStarting) throw Error('Finish the take before changing hand or model settings');
       const next = { handedness, size, threshold, ...options };
       if (!['left', 'right'].includes(next.handedness)
           || !(Number.isFinite(next.size) && next.size > 0) || !(Number.isFinite(next.threshold) && next.threshold >= 0 && next.threshold <= 1)) throw Error('invalid Iron Gland options');
@@ -203,6 +221,22 @@ export default {
       if (resumeOptions) { resumeOptions = false; start(); }
       return read();
     };
+    const beginCapture = ({label=''}={}) => {
+      if (!running || !stream) throw Error('Start the camera before recording a take');
+      if(captureStarting) return captureStarting;
+      const ticket=generation;
+      const task=(async()=>{
+        const response=await window.fetch('/api/runtime-config');
+        if(!response.ok)throw Error('Cannot identify the capture runtime');
+        const runtime=await response.json();
+        if(ticket!==generation||disposed)throw Error('Camera stopped before capture began');
+        const result=await capture.begin({stream,identity:route.identity,faces:route.faces,runtime,
+          settings:{handedness,size,threshold,label},source:inputs.captureSource??{kind:'live-camera'}});
+        frame();return result;
+      })().finally(()=>{if(captureStarting===task)captureStarting=null;sync();});
+      captureStarting=task;return task;
+    };
+    const finishCapture = async () => {const result=await capture.finish(capture.read().protocolComplete?'complete':'partial','operator-finished');frame();return result;};
     frame();
     const unsubscribe = scene.onFrame(({ timestampMs }) => {
       if (!state.visible) return;
@@ -211,7 +245,8 @@ export default {
     const pagehide = () => { stop().catch(() => {}); };
     window.addEventListener('pagehide', pagehide);
     return {
-      read, operations: { start, stop, frame, loadModels, setOptions },
+      read, operations: { start, stop, frame, loadModels, setOptions,beginCapture,finishCapture,
+        pauseCapture:()=>capture.pause(),repeatCapture:()=>capture.repeat() },
       mount({ root, document, invoke }) {
         root.style.setProperty('letter-spacing', '0');
         const fail = cause => { error = String(cause?.message ?? cause); sync(); };
@@ -235,11 +270,13 @@ export default {
           host.controls.installNumberDrag?.({input:field,grip,step});
         }
         status = document.createElement('div'); status.setAttribute('role', 'status'); status.dataset.ironGlandStatus = ''; status.style.overflowWrap = 'anywhere'; root.append(status); sync();
+        captureControls=mountCaptureControls({root,document,invoke,read,tick:()=>capture.tick()});
         loadModels({ base: inputs.models }).catch(fail);
       },
       async dispose() {
         disposed = true; window.removeEventListener('pagehide', pagehide); unsubscribe();
         await stop();
+        captureControls?.dispose();captureControls=null;
         // A permission prompt may remain open: its generation guard stops a
         // late stream, so disposal need not wait for the human to answer it.
         if (loadTask) await loadTask.catch(() => {});
