@@ -48,6 +48,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   // a successful result from another backend. Disable duplicate browser disk cache
   // for the local conversion trial; deployment can opt into a published asset cache.
   tf.env.useBrowserCache=false;
+  tf.env.allowLocalModels=true;
   onProgress({phase:'processor'});
   const processor=await tf.AutoProcessor.from_pretrained(base);
   let model=null,busy=false;
