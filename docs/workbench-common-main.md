@@ -24,6 +24,8 @@ supplies their visible working context.
 
 ## Design For Interaction
 
+Spatial manipulation of scene objects and their components belongs to the native editor. Domain features should make their objects participate in that editor. A separate experiment interface must not become the owner of selection and transforms merely because the feature introduced the object.
+
 Start with what the person wants to do to an object or scene. Reuse selection,
 placement, the relevant inspector, camera navigation and shared playback where
 they fit. Present domain-specific controls in the context of their target, using

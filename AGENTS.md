@@ -22,6 +22,8 @@ meaningful feature operations through the same agent-callable path. Keep the
 visible UI focused on what the person is manipulating; avoid a panel of bespoke
 buttons for every script step, fixed value or named test case.
 
+Spatial manipulation of scene objects and their components belongs to the native editor. Domain features should make their objects participate in that editor. A separate experiment interface must not become the owner of selection and transforms merely because the feature introduced the object.
+
 Fixtures are useful when a controlled setup is part of the experiment. Keep that
 setup explicit and give its controls a clear purpose. When one-off machinery
 reaches the operator, usually make the small extra investment that lets them
