@@ -37,13 +37,22 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   const physical=physics?.read();
   return {id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray(),claimable:!physical?.active||physical.contactCount>0||physical.phase==='settled'};
  }});
- const worldPose=()=>({position:goin.getWorldPosition(new THREE.Vector3()).toArray(),quaternion:goin.getWorldQuaternion(new THREE.Quaternion()).toArray()});
+ const worldPose=()=>({position:goin.getWorldPosition(new THREE.Vector3()).toArray(),quaternion:goin.getWorldQuaternion(new THREE.Quaternion()).toArray(),scale:goin.getWorldScale(new THREE.Vector3()).toArray()});
+ function physicalPose(){
+  const pose=worldPose(),rebuilt=new THREE.Matrix4().compose(new THREE.Vector3(...pose.position),new THREE.Quaternion(...pose.quaternion),new THREE.Vector3(...pose.scale));
+  if(goin.matrixWorld.elements.some((x,i)=>Math.abs(x-rebuilt.elements[i])>1e-6))throw Error('Sheared goin transform is unsupported');return pose;
+ }
  const receipt=()=>{const state=task.read();if(state.custody&&state.custody.revision!==revision){
-  if(physics&&state.transition.kind==='drop')physics.release({time:state.transition.time,...worldPose()});
+  if(physics&&state.transition.kind==='drop')physicsCall(()=>physics.release({time:state.transition.time,...physicalPose()}));
   revision=state.custody.revision;record({kind:'lerms.goin.custody',phase:'applied',revision,...state.transition});}refresh();};
- function advancePhysics(time){
+ function physicsCall(action){
   if(!physics)return;
-  try{
+  if(physicsFailure)throw Error('Goin physics failed; reopen before resuming');
+  try{return action();}catch(error){physicsFailure=error;actor?.operations.pause();throw error;}
+ }
+ function advancePhysics(time){
+  return physicsCall(()=>{
+   physics.setScale(physicalPose().scale);
    const state=physics.advance(time);
    if(state.active){
     if(!goin.parent)throw Error('Dynamic goin was removed');
@@ -51,7 +60,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     goin.quaternion.copy(goin.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(new THREE.Quaternion(...state.quaternion)));
     goin.updateMatrixWorld(true);session.redraw();
    }
-  }catch(error){physicsFailure=error;actor?.operations.pause();throw error;}
+  });
  }
  function presentCarry(){
   if(disposed||!actor||!theft||physicsFailure)return;
@@ -60,7 +69,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   const snapshot=actor.pose({bones:[theft.socket.bone]});
   const world=new THREE.Vector3(...theft.socket.offset).applyMatrix4(new THREE.Matrix4().fromArray(snapshot.bones[0].matrix));
   goin.position.copy(goin.parent.worldToLocal(world));goin.updateMatrixWorld(true);session.redraw();
-  physics?.carried({time:actor.read().action.time,...worldPose()});
+  physicsCall(()=>physics.carried({time:actor.read().action.time,...physicalPose()}));
  }
  const waterHealthy=()=>{if(waterFailure)throw Error('Water receiver failed; reopen before resuming');};
  const healthy=()=>{waterHealthy();if(physicsFailure)throw Error('Goin physics failed; reopen before resuming');};
@@ -136,7 +145,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
    moveGoin(input){active();if(!point(input?.position))throw Error('Goin position must be a finite world point');
     healthy();
     if(task.read().custody?.carrierId)throw Error('A carried goin is placed by its carrier; interrupt before moving it');
-    physics?.reset(actor.read().action.time);
+    physicsCall(()=>physics.reset(actor.read().action.time));
     goin.position.fromArray(input.position);host.scene.refreshPresentation(asset);session.redraw();
     const result=read();record({kind:'lerms.goin.move',phase:'applied',effective:result.goin});return result;
    },

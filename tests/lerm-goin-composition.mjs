@@ -58,6 +58,25 @@ assert.throws(()=>physical.operations.advance({seconds:.1}),/mounted visible box
 assert.throws(()=>physical.operations.setRunning({running:true}),/physics failed/);
 physicalSupport.visible=true;assert.throws(()=>physical.operations.advance({seconds:.1}),/physics failed/,'Restoring a removed support must not silently clear failure');
 await physical.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
+let physicsInvoke;
+const physicalInputs={...inputs,goin:{position:[0,.35,0]},theft:{escape:[0,0,20],socket:{bone:'pelvis',offset:[0,3,0]}},physics:{support:{size:[30,.2,30],position:[0,-.1,0]}}};
+const carriedFailure=await createGoinPursuit({host,inputs:physicalInputs},{loadSources:async()=>data,mountProperties:({invoke})=>{physicsInvoke=invoke;return {properties:new Element(),update(){},dispose(){}};}});
+carriedFailure.mount({root:new Element(),document,invoke:(name,input)=>carriedFailure.operations[name](input)});
+carriedFailure.operations.advance({seconds:0});const badSupport=scene.children.find(r=>r.name==='Goin support');badSupport.visible=false;
+assert.throws(()=>{for(const tick of [...ticks])tick({deltaSeconds:0});},/mounted visible box/);
+assert.ok(carriedFailure.read().physics.failure,'Carried frame failure must latch');badSupport.visible=true;
+assert.throws(()=>physicsInvoke('play'),/physics failed/);assert.throws(()=>carriedFailure.operations.advance({seconds:.1}),/physics failed/);
+await carriedFailure.dispose();
+const scaled=await createGoinPursuit({host,inputs:physicalInputs},{loadSources:async()=>data});
+scaled.operations.advance({seconds:0});const scaledGoin=scene.children.find(r=>r.name==='Goin');scaledGoin.scale.setScalar(3);
+scaled.operations.interruptTest({seconds:10});scaled.operations.advance({seconds:2});scaledGoin.updateWorldMatrix(true,false);
+const vertices=scaledGoin.geometry.getAttribute('position');let minY=Infinity;
+for(let i=0;i<vertices.count;i++)minY=Math.min(minY,new THREE.Vector3().fromBufferAttribute(vertices,i).applyMatrix4(scaledGoin.matrixWorld).y);
+assert.ok(minY>-.04,'Scaled visible cylinder must not penetrate support: '+minY);
+assert.ok(scaled.read().physics.contactSteps>0);assert.ok(minY<.08,'Scaled goin must have reached support');assert.ok(scaled.read().physics.scale.every(x=>Math.abs(x-3)<1e-9));
+scaledGoin.scale.set(3,3,1);assert.throws(()=>scaled.operations.advance({seconds:.1}),/radial scale/);
+assert.ok(scaled.read().physics.failure,'Unsupported native transform must fail explicitly');await scaled.dispose();
+assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 // A producer failure is terminal for this composition, including native controls.
 const savedBufferUsage=globalThis.GPUBufferUsage;
 globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2,STORAGE:4,COPY_SRC:8,MAP_READ:16};
