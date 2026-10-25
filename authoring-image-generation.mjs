@@ -261,7 +261,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
@@ -324,7 +324,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{})};
+        const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
@@ -355,7 +355,7 @@ export function imageGenerationTimeLabel(timing,status){
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
-export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null}){
+export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
@@ -375,7 +375,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     else if(!controller.busy()&&timer!==null){clearTimeout(timer);timer=null;}
   }
   function render(){
-    const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status);
+    const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status)||!!promptExpansion?.busy();
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
     const selected=assets.read().selected,reference=byId('asset-use-reference');
@@ -405,7 +405,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const useReference=byId('asset-use-reference').checked;
     const selected=assets.read().selected;
     if(useReference&&selected?.kind!=='image'){byId('asset-text-status').textContent='Choose a source image in Browse or Open file first.';return;}
-    controller.run({reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    controller.run({promptExpansion:promptProvenance(),reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});
