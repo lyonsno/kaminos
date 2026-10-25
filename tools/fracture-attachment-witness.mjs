@@ -30,13 +30,16 @@ try{
  report.phase='source-conformance';report.effectiveURL=page.url();report.runtime=await page.evaluate(async()=>({config:await(await fetch('/api/runtime-config')).json(),scene:window.kaminosWorkbenchSceneState?.()}));report.initial=await read();save();
  assert(report.runtime.config.source.commit===commit,'Effective served revision differs from inspected checkout');
  assert(report.initial.triangleCount===object.triangles,'Wrong source triangle count');if(object.source)assert(report.initial.source===object.source,'Wrong requested source route');
- report.sourceFiles={};for(const name of ['fracture-boundary-edit.mjs','fracture-shape-worker-core.mjs','fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs','scene-control-history.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
+ report.sourceFiles={};for(const name of ['fracture-boundary-edit.mjs','fracture-boundary-search.mjs','fracture-shape-worker-core.mjs','fracture-shape-partition.mjs','fracture-shape-partition.worker.mjs','experiments/fracture-shape.experiment.mjs','scene-control-history.mjs']){const expected=createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'),response=await page.request.get(new URL(name,page.url()).href),actual=createHash('sha256').update(await response.body()).digest('hex');assert(response.ok()&&expected===actual,`Wrong served source: ${name}`);report.sourceFiles[name]=actual;}
  const asset=await page.request.get(new URL(report.initial.source,page.url()).href);report.assetDigest=createHash('sha256').update(await asset.body()).digest('hex');assert(asset.ok()&&report.assetDigest===object.sha256,'Wrong asset bytes');
  assert(report.initial.analysis.passes===7&&report.initial.analysis.cacheHit===false,'Seven-origin initial preparation missing');
  await invoke('frame');await capture('initial');
  report.phase='human-selection';save();
- assert(report.initial.hierarchy.nodes[report.initial.selected]?.kind==='component','Fresh page has no explicit body target for local controls');
- assert(await page.getByRole('button',{name:'Keep together',exact:true}).isEnabled(),'Initial Keep together control unavailable');
+ assert(report.initial.selected===-1,'Fresh page must show all automatic pieces');
+ report.automatic=await invoke('export');await invoke('separate',.06);await capture('automatic-separated');await invoke('separate',0);
+ await invoke('detail',report.initial.hierarchy.maxDepth);report.automaticFine=await invoke('export');await capture('automatic-fine');await invoke('separate',.06);await capture('automatic-fine-separated');await invoke('separate',0);await invoke('detail',report.initial.detailLevel);
+ await page.getByText('Local adjustments (optional)',{exact:true}).click();
+ assert(!await page.getByRole('button',{name:'Keep together',exact:true}).isEnabled(),'An unselected piece must not imply a grouping target');
  const initialViewport=await page.locator('#viewport').boundingBox();
  await page.mouse.click(initialViewport.x+initialViewport.width*click[0],initialViewport.y+initialViewport.height*click[1]);
  report.humanPicked=await read();
