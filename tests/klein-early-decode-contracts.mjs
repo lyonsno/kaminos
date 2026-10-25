@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {KleinPipeline} from '../models/flux2-klein/klein-pipeline.js';
+import {KleinTextEncoder} from '../models/flux2-klein/klein-text-encoder.js';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,MAP_READ:8};
 globalThis.GPUMapMode={READ:1};
 function fixture(){
@@ -9,8 +10,8 @@ function fixture(){
  const p=Object.create(KleinPipeline.prototype);
  p.device={queue:{submit(){}},createCommandEncoder:()=>({copyBufferToBuffer(){},finish(){}}),createBuffer:({size})=>({size,mapAsync:async()=>{},getMappedRange:()=>new ArrayBuffer(size),unmap(){},destroy(){}})};
  p.sched={encoder:()=>({copyBufferToBuffer(){}}),flush:async()=>{},stats:{history:[]}};
- p.requestedTextTokens=()=>1;p.sizeLimits=()=>({fits:true,maxTextTokens:1});p.framePrompt=()=>({inputIds:[1],length:1});p.tokenIds=()=>({imgIds:[],txtIds:[]});
- p.promptCache={key:'1\u0000test',buffer:{size:4}};p.textEncoder={allocate(){}};
+ p.requestedTextTokens=()=>1;p.sizeLimits=()=>({fits:true,maxTextTokens:1,cap:2**30});p.framePrompt=()=>({inputIds:[1],length:1});p.tokenIds=()=>({imgIds:[],txtIds:[]});
+ p.promptCache={key:'1\u0000test',buffer:{size:4}};p.textEncoder=Object.assign(Object.create(KleinTextEncoder.prototype),{D:2560,F:9728,QH:32,KVH:8,allocate(){}});
  p.transformer={cfg:{joint_attention_dim:1},act:{latents:{},promptEmbeds:{}},allocate(){},prepare(){},release(){},forward:async()=>{forwards++;},eulerStep:async dt=>{latent+=dt*2;}};
  p.denoiseSchedule=()=>({sigmas:[1,.75,.5,.25,0],forwardArgs:i=>({i})});
  p.vae={allocateInput(){},prepLatents(){decoded=latent;},allocate(){},decode:async()=>{},release(){}};

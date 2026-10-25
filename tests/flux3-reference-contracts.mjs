@@ -2,12 +2,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {Flux3Transformer,flux3ImageIds} from '../models/flux3-klein/flux3-transformer.js';
 import {KleinPipeline} from '../models/flux2-klein/klein-pipeline.js';
+import {KleinTextEncoder} from '../models/flux2-klein/klein-text-encoder.js';
 for(const {cap,width,reference,accepted} of [
   {cap:536870912,width:512,reference:1024,accepted:false},
   {cap:4294967292,width:1024,reference:2800,accepted:false},
   {cap:536870912,width:256,reference:256,accepted:true},
  ])test(`combined admission: ${width} output + ${reference} reference`,()=>{
-  const p={device:{limits:{maxBufferSize:cap,maxStorageBufferBindingSize:cap}},transformer:{D:3072,F:9216},kernels:{vaeActType:'f16'}};
+  const p=Object.assign(Object.create(KleinPipeline.prototype),{device:{limits:{maxBufferSize:cap,maxStorageBufferBindingSize:cap}},transformer:{D:3072,F:9216},kernels:{vaeActType:'f16'},textEncoder:Object.assign(Object.create(KleinTextEncoder.prototype),{D:2560,F:9728,QH:32,KVH:8})});
   const limits=KleinPipeline.prototype.sizeLimits.call(p,width,width,(reference/16)**2);
   assert.equal(limits.fits&&limits.maxTextTokens>=80,accepted,`${width} output + ${reference} reference`);
   if(accepted){const sizes=[];Flux3Transformer.prototype.allocate.call({D:3072,F:9216,H:24,cfg:{joint_attention_dim:20480},release(){},buffer:n=>{sizes.push(n);return {size:n};}},(width/16)**2,80,(reference/16)**2);assert.ok(sizes.every(n=>n<=cap));}

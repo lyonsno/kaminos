@@ -107,3 +107,12 @@ await assert.rejects(middle.generateScheduled({ prompt: tooLong, width: 64, heig
 assert.equal(allocations, 0, 'an unsupported real prompt fails before transformer activation allocation');
 
 console.log('flux3-klein contracts ok');
+
+// Composition: reference capacity and long-text encoder capacity constrain the
+// same admitted request; neither independently reviewed change erases the other.
+const withReference = preflight(Flux3Pipeline.prototype, 768 * 2 ** 20);
+const referenceLimit = withReference.sizeLimits(64,64,400);
+const jointLimit = Math.min(Math.floor(referenceLimit.cap / ((3*3072+2*9216)*4)),Math.floor(Math.sqrt(referenceLimit.cap/4)));
+assert.equal(referenceLimit.maxTextTokens,Math.min(8192,jointLimit-16-400));
+withReference.textEncoder.assertActivationFits(referenceLimit.maxTextTokens,referenceLimit.cap);
+assert.ok(referenceLimit.maxTextTokens < middleLimit.maxTextTokens);
