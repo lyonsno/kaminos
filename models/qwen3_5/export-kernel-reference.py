@@ -18,6 +18,33 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def read_tensor_range(file, base, meta, start=0, count=None):
+    shape = list(meta["shape"])
+    rows = shape[0]
+    count = rows - start if count is None else count
+    if start < 0 or count < 1 or start + count > rows:
+        raise ValueError("bad tensor row range")
+    begin, end = meta["data_offsets"]
+    row_bytes = (end - begin) // rows
+    with file.open("rb") as f:
+        f.seek(base + begin + start * row_bytes)
+        data = f.read(count * row_bytes)
+    if len(data) != count * row_bytes:
+        raise ValueError("partial source tensor")
+    record = {"file": str(file), "sourceShape": list(shape), "rowStart": start,
+              "rowCount": count, "dtype": meta["dtype"], "sha256": sha(data)}
+    shape[0] = count
+    return data, shape, record
+
+
+def reference_source(model_dir, config_bytes, used, implementation, effective):
+    return {"localRoot": str(model_dir.resolve()), "configSha256": sha(config_bytes),
+            "upstreamHint": {"model": "mlx-community/flux-3-image-klein-pup-4bit",
+                "revision": "34abfa0769000d6a542169b0e61a04059697467c",
+                "authority": "intended acquisition source; exporter observes local files and hashes, not upstream identity"},
+            "usedTensors": used, "implementation": implementation, "effective": effective}
+
+
 def export(model_dir, output, report):
     report["phase"] = "source-config"
     if not model_dir.is_dir():
@@ -61,21 +88,7 @@ def export(model_dir, output, report):
 
     def tensor(name, start=0, count=None):
         file, base, meta = tensors[name]
-        shape = list(meta["shape"])
-        rows = shape[0]
-        count = rows - start if count is None else count
-        if start < 0 or count < 1 or start + count > rows:
-            raise ValueError(f"bad row range for {name}")
-        begin, end = meta["data_offsets"]
-        row_bytes = (end - begin) // rows
-        with file.open("rb") as f:
-            f.seek(base + begin + start * row_bytes)
-            data = f.read(count * row_bytes)
-        if len(data) != count * row_bytes:
-            raise ValueError(f"partial source tensor {name}")
-        used[name] = {"file": str(file), "sourceShape": shape, "rowStart": start,
-                      "rowCount": count, "dtype": meta["dtype"], "sha256": sha(data)}
-        shape[0] = count
+        data, shape, used[name] = read_tensor_range(file, base, meta, start, count)
         if meta["dtype"] == "U32":
             return np.frombuffer(data, "<u4").reshape(shape).copy()
         if meta["dtype"] == "BF16":
@@ -198,9 +211,8 @@ def export(model_dir, output, report):
                         ("norms", np.concatenate([qnorm, knorm])), ("q", q[0].transpose(1, 0, 2)),
                         ("key-cache", kc), ("value-cache", vc), ("output", attention[0]), ("gated", gated[0])]:
         save(f"attention.{name}", value)
-    meta = {"schema": "kaminos.qwen35-kernel-reference.v1", "source": {"model": "mlx-community/flux-3-image-klein-pup-4bit",
-            "revision": "34abfa0769000d6a542169b0e61a04059697467c", "configSha256": sha(config_bytes),
-            "usedTensors": used, "implementation": report["implementation"], "effective": report["effective"]},
+    meta = {"schema": "kaminos.qwen35-kernel-reference.v1", "source": reference_source(
+            model_dir, config_bytes, used, report["implementation"], report["effective"]),
             "affine": affine, "gdn": gdn_cases, "attention": {"tokens": tokens, "queryHeads": qh, "kvHeads": kvh,
             "headDim": dim, "rotaryDim": 64, "ropeTheta": cfg["rope_parameters"]["rope_theta"], "capacity": capacity},
             "chunks": [2, 1, 2], "arrays": arrays}
