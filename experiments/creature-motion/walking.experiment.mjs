@@ -2,6 +2,7 @@ import {createWanderPath} from './wander-path.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
+import {createPoseOverlay} from './pose-overlay.mjs';
 import {loadCreatureFlesh,createCreatureFleshDeformer,validateCreatureFleshPoses} from '../creature-flesh/creature.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
@@ -98,6 +99,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
  let releaseEncounter=()=>{},frameStamp=0;
+ const poseOverlay=createPoseOverlay({THREE});let resolvedOverlay=null;
+ const composedPose=pose=>resolvedOverlay?resolvedOverlay(pose):pose;
  let readingZoneState=false;
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();runtime?.flesh.setRunning(false);};
  function read(){
@@ -157,6 +160,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function presentWander(delta,playing,physicalSeconds=delta){
   if(!syncArea())return read();
+  if(attention&&encounterContext){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);
+   resolvedOverlay=poseOverlay.resolve(wander.frame(wander.read().frame),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
+  }
   let moving=delta;
   if(attention&&chosenInputs.attention.engage===true){
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
@@ -183,9 +190,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(body.movementCores?.length)nextBody=contactState(wander.frame(wander.read().frame,to));
     return encounterContext.limit({time:frameStamp,body,nextBody,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
   }
+  if(encounterContext?.response==='physical')constraint={...constraint,gaitScale:wander.read().contactRate};
   const before=wander.snapshot();let state;
-  try{state=wander.advance(moving,constraint);}catch(error){wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
-  const present=()=>{cycle=state.cycle;source.presentation.cycle=cycle;player.seek(state.frame);if(playing)player.play();};
+  try{state=wander.advance(moving,constraint);}catch(error){resolvedOverlay=null;wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
+  const present=()=>{try{cycle=state.cycle;source.presentation.cycle=cycle;player.seek(state.frame);attention?.positionReticle(placement);if(playing)player.play();}finally{resolvedOverlay=null;}};
   const after=()=>{stepFlesh(physicalSeconds);if(guideSegment!==state.path.segments)refreshGuide();refresh();};
   if(encounterContext?.response==='physical'&&physicalSeconds>0){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone(),inverse=matrix.clone().invert(),from=createWanderPath({snapshot:before.path}).read(),to=state.path;
@@ -245,11 +253,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
-  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
+  const derivedAdapter={...adapter,frame:index=>composedPose(wander?wander.frame(index):walking.frame(index,{mode,cycle}))};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
-   poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+   poseModifier:attention?state=>{if(!resolvedOverlay)attention.modify({...state,time:clock/1000,placement});}:null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  function contactState(pose=null){
+  if(pose)pose=composedPose(pose);
   placement.updateMatrixWorld(true);const projected=pose?runtime.flesh.project(pose):null,matrix=pose?authoredPlacement().matrixWorld.clone().multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)):runtime.group.matrixWorld,scale=new THREE.Vector3().setFromMatrixScale(matrix);
   if(inputs.flesh&&(!(scale.x>0)||Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5))throw Error('Physical creature requires positive uniform world scale');
   let capsules=(projected?.capsules??runtime.flesh.capsules()).map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(matrix).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(matrix).toArray(),radius:c.radius*scale.x}));

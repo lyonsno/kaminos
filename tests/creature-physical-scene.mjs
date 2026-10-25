@@ -26,3 +26,27 @@ try{
 }finally{await room.dispose();}
 assert.equal(callbacks.size,0);assert.equal(scene.children.length,0);
 console.log('Actual scene batches root response, exact advance, clocks, pause and saved physical route');
+
+// Engine supports must agree with the presented articulation, including while
+// the root motor is accelerating below requested speed and beside an obstacle.
+const articulated=structuredClone(data);articulated.motion.positions[9]=1;
+const supportFactory=()=>{let palette;return {
+ update(m){palette=m;},flush(){},dispose(){},read:()=>({backend:'instrumented-support'}),
+ movementCores(m=palette){const p=new THREE.Vector3(0,0,1).applyMatrix4(new THREE.Matrix4().fromArray(m[2])).toArray();return [{a:p,b:[...p],radius:.1}];}
+};};
+for(const blocked of [false,true]){
+ const a={id:'a',label:'A',creature:{...recipe.actors[0].creature,deformation:'gpu'}};
+ const b={id:'b',label:'Blocker',creature:{...recipe.actors[0].creature,action:'preview',deformation:'gpu',transform:{position:[1.15,0,0],quaternion:[0,0,0,1],scale:[1,1,1]}}};
+ const probe=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:blocked?[a,b]:[a]}},{loadSources:async input=>input.label==='Blocker'?data:articulated,loadGpuDeformer:async()=>supportFactory});
+ try{
+  await probe.operations.advance({seconds:1/30});
+  const state=probe.read(),body=await probe.operations.actor({id:'a',operation:'encounterBody'}),shapes=state.encounters.physics.shapes.filter(s=>s.id==='a');
+  assert.equal(shapes.length,body.movementCores.length);
+  for(let i=0;i<shapes.length;i++)assert.ok(Math.hypot(...shapes[i].position.map((x,j)=>x-body.movementCores[i].a[j]))<1e-7,'PHYSICAL-01: solved support differs from the presented articulation');
+  if(blocked){
+   const obstacle=await probe.operations.actor({id:'b',operation:'encounterBody'});
+   assert.ok(state.encounters.physics.contacts.length,'Articulated motion must actually contact the obstacle');
+   const distance=Math.hypot(...body.movementCores[0].a.map((x,j)=>x-obstacle.movementCores[0].a[j]));assert.ok(distance>.19,`Displayed support must stay outside the obstacle (${distance})`);
+  }
+ }finally{await probe.dispose();}
+}
