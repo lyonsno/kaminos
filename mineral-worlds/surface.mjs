@@ -3,17 +3,26 @@ export function sample(field,n,u,v){
  const x=Math.max(0,Math.min(n-1,u*(n-1))),z=Math.max(0,Math.min(n-1,v*(n-1))),a=Math.floor(x),b=Math.floor(z),fx=x-a,fz=z-b;
  return (field[b*n+a]*(1-fx)+field[b*n+Math.min(n-1,a+1)]*fx)*(1-fz)+(field[Math.min(n-1,b+1)*n+a]*(1-fx)+field[Math.min(n-1,b+1)*n+Math.min(n-1,a+1)]*fx)*fz;
 }
-// Independent curved surfel patches, retained between domain updates. The fan
-// rasterizes each patch's footprint; there is no connected terrain mesh or
-// extraction, raymarch, transparency, or camera-facing billboard rotation.
-export function createSurface(state,{samples=160,extent=64}={}){
+function grainNoise(x,z){
+ const ix=Math.floor(x),iz=Math.floor(z),fx=x-ix,fz=z-iz;
+ const hash=(a,b)=>{let h=Math.imul(a,374761393)^Math.imul(b,668265263);h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967295;};
+ const a=fx*fx*(3-2*fx),b=fz*fz*(3-2*fz);
+ return (hash(ix,iz)*(1-a)+hash(ix+1,iz)*a)*(1-b)+(hash(ix,iz+1)*(1-a)+hash(ix+1,iz+1)*a)*b;
+}
+// Retained local surface patches. Adjacent patches share exact boundary positions
+// while keeping independent storage. Fixed surface topology; no extraction,
+// raymarch, transparency, or camera-facing billboard rotation.
+export function createSurface(state,{samples=320,extent=64,bedScale=2.5,depositScale=state.kind==='salt'?.12:1.6}={}){
  if(!Number.isInteger(samples)||samples<4||!Number.isFinite(extent)||extent<=0)throw Error('Invalid surface resolution or extent');
+ if(![bedScale,depositScale].every(v=>Number.isFinite(v)&&v>=0))throw Error('Invalid surface height scale');
+ const configuration={samples,extent,bedScale,depositScale};
  const root=new Group();root.name=state.kind==='salt'?'Salt plain':'Flowstone reach';
- const segments=8,stride=segments+1,count=samples*samples,coords=new Float32Array(count*stride*2),indices=new Uint32Array(count*segments*3);
- const warp=t=>extent*.5*(.25*t+.75*t*t*t),grid=i=>warp(2*i/(samples-1)-1);
+ const segments=4,stride=segments+1,count=samples*samples,coords=new Float32Array(count*stride*2),indices=new Uint32Array(count*segments*3);
+ const warp=t=>extent*.5*(.12*t+.88*t*t*t),grid=i=>warp(2*i/(samples-1)-1);
  for(let z=0;z<samples;z++)for(let x=0;x<samples;x++){
-  const site=z*samples+x,cx=grid(x),cz=grid(z),rx=(grid(x+.5)-grid(x-.5))*.87,rz=(grid(z+.5)-grid(z-.5))*.87;
-  for(let k=0;k<=segments;k++){const j=site*stride+k,a=(k-1)/segments*Math.PI*2;coords[j*2]=cx+(k?rx*Math.cos(a):0);coords[j*2+1]=cz+(k?rz*Math.sin(a):0);}
+  const site=z*samples+x,cx=grid(x),cz=grid(z);
+  const corners=[[cx,cz],[grid(x-.5),grid(z-.5)],[grid(x+.5),grid(z-.5)],[grid(x+.5),grid(z+.5)],[grid(x-.5),grid(z+.5)]];
+  for(let k=0;k<=segments;k++){const j=site*stride+k;coords[j*2]=corners[k][0];coords[j*2+1]=corners[k][1];}
   for(let k=0;k<segments;k++)indices.set([site*stride,site*stride+1+(k+1)%segments,site*stride+1+k],(site*segments+k)*3);
  }
  const geometry=new BufferGeometry();geometry.setIndex(new Uint32BufferAttribute(indices,1));
@@ -26,8 +35,9 @@ export function createSurface(state,{samples=160,extent=64}={}){
   const u=x/extent+.5,v=z/extent+.5,dep=sample(s.solid,s.size,u,v);
   // Stable authored microrelief. Growth modulates its prominence; it is not
   // labelled as resolved individual-crystal dynamics.
-  const grain=.004*Math.sin(x*22+Math.sin(z*7)) *Math.sin(z*19+x*3)+.008*Math.sin(x*5-z*8)*Math.sin(z*6);
-  return sample(s.bed,s.size,u,v)*2.5+dep*1.6+grain*(s.kind==='salt'?1.5:1)*(1+Math.min(2,dep*5));
+  const grain=.003*(grainNoise(x*35,z*35)-.5)+.007*(grainNoise(x*8,z*8)-.5)+.007*(grainNoise(x*1.7,z*1.7)-.5);
+  return sample(s.bed,s.size,u,v)*bedScale+dep*depositScale+grain*(s.kind==='salt'?2:1.5);
+
  };
  function update(s){
   if(s.tick===lastTick&&uploads)return;
@@ -45,5 +55,5 @@ export function createSurface(state,{samples=160,extent=64}={}){
   geometry.computeBoundingBox();geometry.computeBoundingSphere();uploads++;lastTick=s.tick;
  }
  update(state);
- return {root,update,read:()=>({representation:'opaque-curved-surfel-patches',elements:count,uploads,tick:lastTick,extent,samples,topology:'fixed attached surface sites; evolving relief and material'}),dispose(){geometry.dispose();material.dispose();}};
+ return {root,update,read:()=>({representation:'opaque-boundary-matched-surface-patches',configuration:{...configuration},elements:count,uploads,tick:lastTick,extent,samples,topology:'fixed attached surface sites; evolving relief and material'}),dispose(){geometry.dispose();material.dispose();}};
 }
