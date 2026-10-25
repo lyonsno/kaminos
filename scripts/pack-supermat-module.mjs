@@ -8,7 +8,7 @@ import { buildSuperMatModule } from './build-supermat-module.mjs';
 
 const exec = promisify(execFile);
 
-export async function packSuperMatModule({ out, version = '0.1.0' } = {}) {
+export async function packSuperMatModule({ out, version = '0.1.1' } = {}) {
   if (typeof out !== 'string' || !out.trim()) throw new Error('SuperMat package output directory is required');
   const destination = path.resolve(out);
   await fs.mkdir(destination, { recursive: true });
@@ -20,7 +20,7 @@ export async function packSuperMatModule({ out, version = '0.1.0' } = {}) {
     await fs.copyFile(new URL('../models/supermat/LICENSE', import.meta.url), path.join(stage, 'LICENSE'));
     await fs.copyFile(new URL('../webgpu-inference-kit/THIRD_PARTY_NOTICES.txt', import.meta.url), path.join(stage, 'THIRD_PARTY_NOTICES.txt'));
     const manifest = {
-      name: '@kaminos/supermat', version, private: true, type: 'module', license: 'MIT',
+      name: '@kaminos/supermat', version, private: false, publishConfig: { access: 'public' }, type: 'module', license: 'MIT',
       description: "SuperMat turns an RGBA image into albedo, roughness, and metallic maps on your application's GPU.",
       main: './supermat-inference.js',
       exports: { '.': './supermat-inference.js', './worker': './supermat-cpu-worker.js', './package.json': './package.json' },

@@ -15,7 +15,7 @@ export async function packU2NetModule({out,version='0.1.0'}={}) {
     await fs.copyFile(new URL('../models/u2net/README.md',import.meta.url),path.join(stage,'README.md'));
     await fs.copyFile(new URL('../webgpu-inference-kit/LICENSE',import.meta.url),path.join(stage,'LICENSE'));
     await fs.copyFile(new URL('../webgpu-inference-kit/THIRD_PARTY_NOTICES.txt',import.meta.url),path.join(stage,'THIRD_PARTY_NOTICES.txt'));
-    const manifest={name:'@kaminos/u2net',version,private:true,type:'module',license:'MIT',
+    const manifest={name:'@kaminos/u2net',version,private:false,publishConfig:{access:'public'},type:'module',license:'MIT',
       description:'U2Net background removal on a shared WebGPU device.',main:'./u2net-inference.js',
       exports:{'.':'./u2net-inference.js','./package.json':'./package.json'},
       files:['u2net-inference.js','README.md','LICENSE','THIRD_PARTY_NOTICES.txt'],

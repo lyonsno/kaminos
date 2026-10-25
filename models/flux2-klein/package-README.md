@@ -2,6 +2,14 @@
 
 FLUX.2 [klein] 4B text-to-image in the browser on WebGPU. The Qwen3-4B text encoder, the 4-step transformer and the VAE decoder run as compute shaders on a device your application provides, using the [Kaminos WebGPU inference kit](https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit).
 
+## Install
+
+```sh
+npm install @kaminos/flux2-klein@^0.1.2
+```
+
+The application interface uses inference kit 0.1.60 or later in the 0.1 series, installed as a dependency.
+
 ## Use
 
 ```js
