@@ -52,6 +52,8 @@ try{
   const want=moments(report.trajectory[frame].expected),got=moments(output.regions);
   got.forEach((v,i)=>assert(Number.isFinite(v)&&Math.abs(v-want[i])<1e-5,`moving frame${frame} moment${i}: ${v} != ${want[i]}`));
   assert(output.regions.every(r=>[...r.position,...r.energy,r.radiusSquared].every(Number.isFinite)));
+  const locations=report.trajectory[frame].expected.filter(r=>r.energy.some(v=>v>0)).map(r=>r.position);
+  for(const r of output.regions.filter(r=>r.energy.some(v=>v>0)))assert(locations.some(p=>p.every((v,c)=>Math.abs(v-r.position[c])<1e-5)),`moving frame${frame}: separated sources collapsed into an intermediate point`);
  }
  report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;}

@@ -21,7 +21,7 @@ try{
   await page.waitForFunction(()=>{const v=window.__kaminosVolumePrototype?.debugState(),s=window.__kaminosSceneRadiance?.debugState();if(v?.error||s?.error)throw Error(v?.error||s?.error);return v?.simStepCount>=120&&window.__kaminosSceneRadiance?.canRender();});
   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
   const observe=()=>page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),objects:window.kaminosSceneObjectDebugState()}));
-  report.held=await observe();assert.equal(report.held.lighting.frame.pointRegions.partition,'spatial');assert.equal(report.held.lighting.frame.smokeReconstruction.identity,'prepared-clear-support-v2');
+  report.held=await observe();assert.equal(report.held.lighting.frame.pointRegions.partition,'spatial');assert.equal(report.held.lighting.frame.smokeReconstruction.identity,'prepared-clear-box-support-v3');
   report.points=await page.evaluate(()=>window.__kaminosSceneRadiance.readPointRegions());
   await page.screenshot({path:out+'/held.png'});await write();
   await page.evaluate(()=>{window.__kaminosSceneRadiance.setGain(4);window.__kaminosSceneRadiance.setSourceSoftness(0);});

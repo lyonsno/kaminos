@@ -61,7 +61,7 @@ globalThis.GPUShaderStage={FRAGMENT:2};
 let groups=0;
 const device={createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
-const texture={createView:()=>({})},r={identity:'prepared-clear-support-v2',texture,masks:{},staticPreparations:1,updates:1};
+const texture={createView:()=>({})},r={identity:'prepared-clear-box-support-v3',texture,masks:{},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
 bindings.update(frame);bindings.update({...frame,generation:2});assert.equal(groups,1,'live coefficient update does not rebuild static bindings');
 bindings.update({...frame,smokeReconstruction:{...r,masks:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');

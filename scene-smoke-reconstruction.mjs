@@ -42,7 +42,7 @@ export function createDistributedSmokeBindings(device) {
   let last=null,group=null;
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
-    if(!frame.texture || r?.identity!=='prepared-clear-support-v2' || !r.texture || !r.masks || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
+    if(!frame.texture || r?.identity!=='prepared-clear-box-support-v3' || !r.texture || !r.masks || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
     const handles=[r.texture,r.masks];
     if(!last || handles.some((h,i)=>h!==last[i])) {
       group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},
@@ -70,12 +70,14 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
   var sum=vec3<f32>(0.0);
   for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
     let c=clamp(base+vec3<i32>(i32(x),i32(y),i32(z)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1));
-    let donor=textureLoad(distributedIncident,c,0);let radius=donor.a;
+    let donor=textureLoad(distributedIncident,c,0);
+    let id=u32(c.x)+dims.x*(u32(c.y)+dims.y*u32(c.z));let packed=smokeBoundaryMasks[id];
+    let radius=vec3<f32>(f32(packed&1023u),f32((packed>>10u)&1023u),f32((packed>>20u)&1023u))/1023.0;
     // Evaluate at the clamped domain position so edge replication preserves
     // the ordinary trilinear value instead of counting a donor eight times.
     let delta=abs(w-vec3<f32>(f32(x),f32(y),f32(z)));
-    let tent=max(vec3<f32>(0),vec3<f32>(1)-delta/max(radius,1e-20));
-    let weight=select(0.0,tent.x*tent.y*tent.z,radius>0.0);
+    let tent=max(vec3<f32>(0),vec3<f32>(1)-delta/max(radius,vec3<f32>(1e-20)));
+    let weight=select(0.0,tent.x*tent.y*tent.z,all(radius>vec3<f32>(0)));
     sum+=donor.rgb*weight;total+=weight;
   }}}
   // Normalize supported samples without amplifying a vanishing tent into a
@@ -86,6 +88,7 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
 
 // CPU scalar reference for the compact basis, used by numerical invariants.
 export function smokeSupportWeight(delta,radius){
-  if(!(radius>0))return 0;
-  return delta.reduce((w,d)=>w*Math.max(0,1-Math.abs(d)/radius),1);
+  const extents=Array.isArray(radius)?radius:[radius,radius,radius];
+  if(extents.some(r=>!(r>0)))return 0;
+  return delta.reduce((w,d,i)=>w*Math.max(0,1-Math.abs(d)/extents[i]),1);
 }
