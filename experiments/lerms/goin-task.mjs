@@ -30,7 +30,7 @@ export function createGoinTask({target,arrivalRadius=.35,theft=null}={}){
    if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position))throw Error('Goin task requires a monotonic interval and a world position');
    const motionStart=Math.min(next,Math.max(from,until));time=next;const observed=observe();
    let destination=observed?.position??null,distance=destination?Math.hypot(position[0]-destination[0],position[2]-destination[2]):null;
-   let phase=time<until?'interrupted':wet?'water-exposed':!observed?'waiting-target':distance<=arrivalRadius?'at-goin':'approaching';
+   let phase=time<until?'interrupted':wet?'water-exposed':!observed?'waiting-target':distance<=arrivalRadius?(observed.claimable===false?'waiting-goin-support':'at-goin'):'approaching';
    if(theft&&observed&&time>=until&&!wet){
     const escape=theft.escape();if(!point(escape))throw Error('Theft requires a finite live escape point');
     if(custody.carrierId&&custody.goinId!==observed.id)throw Error('Carried goin identity changed');

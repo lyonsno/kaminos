@@ -44,6 +44,19 @@ const spanning=await interruptedJourney([1.25]),partitioned=await interruptedJou
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-7.5)<1e-9,'Only the quarter second after expiry may move');
 assert.ok(Math.abs(spanning.creature.action.motion.path.distance-partitioned.creature.action.motion.path.distance)<1e-9,'Interruption travel must not depend on frame partition');
 assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
+const physical=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,.35,0]},theft:{escape:[0,0,20],socket:{bone:'pelvis',offset:[0,1,0]}},physics:{support:{size:[30,.2,30],position:[0,-.1,0]}}}},{loadSources:async()=>data});
+physical.operations.advance({seconds:0});physical.operations.advance({seconds:.02});
+physical.operations.interruptTest({seconds:2});const dropped=physical.read();
+physical.operations.advance({seconds:.1});const falling=physical.read();
+assert.ok(falling.goin.position[1]<dropped.goin.position[1]-.01,'Released goins must fall instead of freezing at the carrier socket');
+assert.equal(falling.goin.id,dropped.goin.id);
+assert.ok(falling.goin.position[2]>dropped.goin.position[2],'Release inherits carrier translation');
+assert.equal(falling.task.phase,'interrupted');
+const physicalSupport=scene.children.find(r=>r.name==='Goin support');physicalSupport.visible=false;
+assert.throws(()=>physical.operations.advance({seconds:.1}),/mounted visible box/);
+assert.throws(()=>physical.operations.setRunning({running:true}),/physics failed/);
+physicalSupport.visible=true;assert.throws(()=>physical.operations.advance({seconds:.1}),/physics failed/,'Restoring a removed support must not silently clear failure');
+await physical.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 // A producer failure is terminal for this composition, including native controls.
 const savedBufferUsage=globalThis.GPUBufferUsage;
 globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2,STORAGE:4,COPY_SRC:8,MAP_READ:16};

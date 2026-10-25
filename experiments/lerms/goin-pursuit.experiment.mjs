@@ -11,6 +11,8 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  if(inputs.arrivalRadius!==undefined&&(!Number.isFinite(inputs.arrivalRadius)||inputs.arrivalRadius<=0))throw Error('Arrival radius must be positive');
  const theft=inputs.theft??null;
  if(theft&&(!point(theft.escape)||!theft.socket||typeof theft.socket.bone!=='string'||!point(theft.socket.offset)))throw Error('Theft requires an escape point and explicit source Bone socket');
+ const physicsInput=inputs.physics??null;
+ if(physicsInput&&(!theft||!point(physicsInput.support?.size)||physicsInput.support.size.some(x=>x<=0)||!point(physicsInput.support.position)))throw Error('Goin physics requires theft and an explicit box support size and position');
  const waterInput=inputs.water??null;
  if(waterInput){
   if(typeof host.fluid?.open!=='function')throw Error('Requested water requires the shared fluid capability');
@@ -21,25 +23,49 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const session=await host.scene.open();
  const goin=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,.16,32),new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}));
  goin.name='Goin';goin.rotation.x=Math.PI/2;goin.position.fromArray(position);goin.castShadow=true;
+ if(physicsInput){const mark=new THREE.Mesh(new THREE.SphereGeometry(.055,12,8),new THREE.MeshStandardMaterial({color:0x553c14}));mark.position.set(.2,.09,0);goin.add(mark);}
  let asset,actor,seating,escapeAsset,stopCarry,stopPose,disposed=false,serial=0,revision=0,refresh=()=>{};
+ let physics,supportAsset,physicsFailure=null;
+ const support=physicsInput?new THREE.Mesh(new THREE.BoxGeometry(...physicsInput.support.size),new THREE.MeshStandardMaterial({color:0x547b72,roughness:.9})):null;
+ if(support){support.name='Goin support';support.position.fromArray(physicsInput.support.position);support.receiveShadow=true;}
  let water,receiver,stopWater,waterPending=null,waterFailure=null,wet=false,waterState={status:waterInput?'opening':'not-requested'};
  const escape=theft?new THREE.Mesh(new THREE.ConeGeometry(.2,.5,12),new THREE.MeshStandardMaterial({color:0x41b99a})):null;
  if(escape){escape.name='Escape point';escape.position.fromArray(theft.escape);}
  const task=createGoinTask({arrivalRadius:inputs.arrivalRadius??.45,theft:theft?{carrierId:inputs.lermId??goin.uuid,escape:()=>escape.getWorldPosition(new THREE.Vector3()).toArray()}:null,target:()=>{
   if(!goin.parent)return null;
   for(let node=goin;node;node=node.parent)if(!node.visible)return null;
-  return {id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray()};
+  const physical=physics?.read();
+  return {id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray(),claimable:!physical?.active||physical.contactCount>0||physical.phase==='settled'};
  }});
- const receipt=()=>{const state=task.read();if(state.custody&&state.custody.revision!==revision){revision=state.custody.revision;record({kind:'lerms.goin.custody',phase:'applied',revision,...state.transition});}refresh();};
+ const worldPose=()=>({position:goin.getWorldPosition(new THREE.Vector3()).toArray(),quaternion:goin.getWorldQuaternion(new THREE.Quaternion()).toArray()});
+ const receipt=()=>{const state=task.read();if(state.custody&&state.custody.revision!==revision){
+  if(physics&&state.transition.kind==='drop')physics.release({time:state.transition.time,...worldPose()});
+  revision=state.custody.revision;record({kind:'lerms.goin.custody',phase:'applied',revision,...state.transition});}refresh();};
+ function advancePhysics(time){
+  if(!physics)return;
+  try{
+   const state=physics.advance(time);
+   if(state.active){
+    if(!goin.parent)throw Error('Dynamic goin was removed');
+    goin.position.copy(goin.parent.worldToLocal(new THREE.Vector3(...state.position)));
+    goin.quaternion.copy(goin.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(new THREE.Quaternion(...state.quaternion)));
+    goin.updateMatrixWorld(true);session.redraw();
+   }
+  }catch(error){physicsFailure=error;actor?.operations.pause();throw error;}
+ }
  function presentCarry(){
-  if(disposed||!actor||!theft||!task.read().custody.carrierId||!goin.parent)return;
+  if(disposed||!actor||!theft||physicsFailure)return;
+  if(!task.read().custody.carrierId){advancePhysics(actor.read().action.time);return;}
+  if(!goin.parent)return;
   const snapshot=actor.pose({bones:[theft.socket.bone]});
   const world=new THREE.Vector3(...theft.socket.offset).applyMatrix4(new THREE.Matrix4().fromArray(snapshot.bones[0].matrix));
   goin.position.copy(goin.parent.worldToLocal(world));goin.updateMatrixWorld(true);session.redraw();
+  physics?.carried({time:actor.read().action.time,...worldPose()});
  }
  const waterHealthy=()=>{if(waterFailure)throw Error('Water receiver failed; reopen before resuming');};
- const steering={read:task.read,update(context){waterHealthy();const intent=task.update(context);receipt();return intent;}};
- const invokeActor=(name,input)=>{active();if(name!=='pause')waterHealthy();return actor.operations[name](input);};
+ const healthy=()=>{waterHealthy();if(physicsFailure)throw Error('Goin physics failed; reopen before resuming');};
+ const steering={read:task.read,update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
+ const invokeActor=(name,input)=>{active();if(name!=='pause')healthy();return actor.operations[name](input);};
  function sampleWater(){
   if(waterFailure)return Promise.reject(Error('Water receiver failed; reopen before resuming'));
   if(waterPending)return waterPending;
@@ -62,17 +88,29 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   return waterPending;
  }
  const active=()=>{if(disposed)throw Error('Goin pursuit is disposed');};
- async function dispose(){if(disposed)return;disposed=true;stopWater?.();stopCarry?.();stopPose?.();seating?.dispose();refresh=()=>{};
+ async function dispose(){if(disposed)return;disposed=true;stopWater?.();stopCarry?.();stopPose?.();physics?.dispose();seating?.dispose();refresh=()=>{};
   try{try{await receiver?.dispose();}finally{await water?.dispose();}}finally{
-   try{await actor?.dispose();}finally{try{await session.dispose();}finally{if(!asset){goin.geometry.dispose();goin.material.dispose();}if(escape&&!escapeAsset){escape.geometry.dispose();escape.material.dispose();}}}
+   try{await actor?.dispose();}finally{try{await session.dispose();}finally{if(!asset){goin.geometry.dispose();goin.material.dispose();}if(escape&&!escapeAsset){escape.geometry.dispose();escape.material.dispose();}if(support&&!supportAsset){support.geometry.dispose();support.material.dispose();}}}
   }
  }
  const read=()=>({schema:'lerms.goin-pursuit.v1',route:'shared-owner-scene',task:task.read(),creature:actor.read(),
-  goin:{id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray(),mounted:Boolean(goin.parent),visible:goin.visible},
-  theft:theft?{socket:structuredClone(theft.socket),attachment:'provisional-source-bone-offset',escape:{id:escapeAsset.id,position:escape.getWorldPosition(new THREE.Vector3()).toArray()},release:'world-position detach; no fall or rolling solver'}:null,
+  goin:{id:asset.id,...worldPose(),mounted:Boolean(goin.parent),visible:goin.visible},
+  physics:physics?{...physics.read(),failure:physicsFailure?.message??null}:null,
+  theft:theft?{socket:structuredClone(theft.socket),attachment:'provisional-source-bone-offset',escape:{id:escapeAsset.id,position:escape.getWorldPosition(new THREE.Vector3()).toArray()},release:physics?'rigid-body fall and contact on authored box support':'world-position detach; no fall or rolling solver'}:null,
   water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-liquid-volume-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
  try{
   asset=await session.attach(goin,{owned:true,metadata:{label:'Goin',source:'lerms:provisional-goin-geometry',type:'experiment'}});
+  if(support){
+   supportAsset=await session.attach(support,{owned:true,metadata:{label:'Goin support',source:'lerms:authored-box-support',type:'experiment'}});
+   const {createGoinPhysics}=await import('./goin-physics.mjs');
+   physics=createGoinPhysics({support:()=>{
+    for(let node=support;node;node=node.parent)if(!node.visible)return null;
+    if(!support.parent)return null;support.updateWorldMatrix(true,false);
+    const p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();support.matrixWorld.decompose(p,q,s);
+    const rebuilt=new THREE.Matrix4().compose(p,q,s);if(support.matrixWorld.elements.some((x,i)=>Math.abs(x-rebuilt.elements[i])>1e-6))throw Error('Sheared goin support is unsupported');
+    return {id:supportAsset.id,position:p.toArray(),quaternion:q.toArray(),size:physicsInput.support.size.map((x,i)=>x*s.toArray()[i])};
+   }});
+  }
   if(escape)escapeAsset=await session.attach(escape,{owned:true,metadata:{label:'Escape point',source:'lerms:authored-escape-target',type:'experiment'}});
   const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false,interests:[...inputs.creature.attention.interests,...theft?[]:[{object:asset.id,interest:1,anchor:'center',label:'Goin'}]]}:undefined;
   actor=await createWalkingCreature({host,record,inputs:{...inputs.creature,attention,actor_root:'live',action:'wander',play:false}},
@@ -90,7 +128,9 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   }
   const operations={
    moveGoin(input){active();if(!point(input?.position))throw Error('Goin position must be a finite world point');
+    healthy();
     if(task.read().custody?.carrierId)throw Error('A carried goin is placed by its carrier; interrupt before moving it');
+    physics?.reset(actor.read().action.time);
     goin.position.fromArray(input.position);host.scene.refreshPresentation(asset);session.redraw();
     const result=read();record({kind:'lerms.goin.move',phase:'applied',effective:result.goin});return result;
    },
