@@ -3279,6 +3279,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { AssetKTX2Loader as KTX2Loader } from './asset-ktx2-loader.mjs';
 import {configureAssetTextures} from './asset-texture-support.mjs';
+import {isBrazierRoomRecord} from './brazier-room-record.mjs';
+import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
@@ -3986,6 +3988,12 @@ const workingScene = createWorkingScene();
 const sceneRecords = createSceneRecordOperations({
   readers:{transform:object=>sceneObjectTransformState(object),materials:object=>getMaterialStateForObject(object),splatTransform:entry=>splatSceneTransformState(entry)},
   loaders:{
+    async brazier(record,{activate,loadRequestId}){
+      const room=await loadBrazierRoom(new URL(record.source,location.href).href);
+      if(loadRequestId!=null&&!sceneLoadRequests.isCurrent(loadRequestId)){room.dispose();throw Error('Scene load superseded');}
+      try{scene.add(room.root);registerSceneObject(room.root,record,{activate});return room.root;}
+      catch(error){room.root.removeFromParent();room.dispose();throw error;}
+    },
     camera:record=>mountAuthoredCamera(record).object,
     light:record=>mountSceneSpotLight(record).object,
     procedural:record=>mountProceduralMesh(record).object,
@@ -5115,6 +5123,7 @@ function sceneObjectMetadataFor(object) {
 function disposeObjectTree(object) {
   sceneBurning?.forget(object);
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
+  if(object.userData?.disposeBrazierRoom){object.userData.disposeBrazierRoom();return;}
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
