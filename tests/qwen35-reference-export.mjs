@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen35-reference-'));
+const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qwen35-reference-')));
 try {
   for (const mode of ['missing', 'wrong-model', 'wrong-quantization']) {
     const model = path.join(temp, mode), report = path.join(temp, `${mode}.report.json`), output = path.join(temp, `${mode}.out`);
