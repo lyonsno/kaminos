@@ -48,7 +48,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
   masks.onclick=()=>{const image=selected();if(image?.kind==='image'&&image.visibility?.status!=='withheld')openMasks?.(image);};actions.append(masks);
   const controls=document.createElement('div');controls.className='asset-mesh-controls';
-  controls.append(...[byId('asset-mesh-model-row'),actions,byId('asset-express-row')].filter(Boolean));
+  controls.append(...[byId('asset-mesh-model-row'),byId('asset-photo-size-row'),actions,byId('asset-express-row')].filter(Boolean));
   const input=document.createElement('div');input.className='asset-mesh-input';input.append(controls);
   mesh.append(input,sourceName,settings,queue,...[byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();
@@ -77,6 +77,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    if(model==='material-photo')settings.textContent='MoGe-2 + SuperMat';
     masks.hidden=!openMasks||selected()?.kind!=='image'||selected()?.visibility?.status==='withheld';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;
