@@ -73,7 +73,7 @@ export default {
    return {read,operations,dispose,
     mount({root,document,invoke}){
      const heading=document.createElement('h3');heading.textContent='Two generated bodies · one retained clip';
-     const note=document.createElement('p');note.textContent='Left: clay, closer registration. Right: clean, worse registration. Both preserve the saved fit. Extra toe descendants follow their parents; no new gait or paint.';
+     const note=document.createElement('p');note.textContent='Left: '+setup.casts[0].label+'. Right: '+setup.casts[1].label+'. Both preserve the saved fit. Extra toe descendants follow their parents; no new gait or paint.';
      const frame=document.createElement('button');frame.textContent='Frame both creatures';frame.onclick=()=>invoke('frame');
      const rest=document.createElement('button');rest.textContent='Generating rest pose';rest.onclick=()=>invoke('rest');
      root.append(heading,note,frame,rest);
