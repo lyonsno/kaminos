@@ -100,7 +100,7 @@ def main():
         terminal = json.loads((args.decoder/'observer-terminal.json').read_text())
         if not terminal.get('succeeded') or terminal.get('job_id') != 'f8dc1888521f':
             raise ValueError('Decoder export did not complete on the expected source-attested job.')
-        if args.out.exists():
+        if args.out.exists() and any(args.out.iterdir()):
             raise ValueError('Choose a fresh output directory; existing artifacts are preserved.')
         (args.out/'onnx').mkdir(parents=True)
         for path in args.source.iterdir():
