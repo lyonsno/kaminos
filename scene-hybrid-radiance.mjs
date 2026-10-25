@@ -47,7 +47,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
   const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?receiverPosition.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
-  points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
+  points=createPointRegions(device,{count,partition:'spatial'});
   smokeShadow=smokeShadowSteps?createFireSmokeShadow(device,{points:points.texture,count,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter}):null;
   external=new THREE.ExternalTexture(points.texture);
   external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;

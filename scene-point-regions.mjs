@@ -1,14 +1,16 @@
-// Prototype: all source cells contribute to fixed vertical regions. No CPU
-// readback, brightest-cell selection, or temporal history in the serving path.
+import {reduceSpatialRegions,createSpatialReducer} from './scene-spatial-point-regions.mjs';
+// Every source cell contributes. Spatial regions adapt across X/Y/Z; legacy
+// height partitions remain available for comparisons. No serving CPU readback.
 export function pointRegionPlan(dimensions,count) {
   if(!Array.isArray(dimensions)||dimensions.length!==3||dimensions.some(n=>!Number.isInteger(n)||n<1))throw new Error('positive source dimensions required');
   if(!Number.isInteger(count)||count<1||count>dimensions[1])throw new Error('point region count must fit source height');
   return {dimensions:[...dimensions],count};
 }
 export function reducePointRegionsReference(values,dimensions,count,gain=1,partition='vertical') {
-  pointRegionPlan(dimensions,count);
-  if(!['vertical','energy'].includes(partition))throw Error('unknown point partition');
+  pointRegionPlan(dimensions,partition==='spatial'?1:count);
+  if(!['vertical','energy','spatial'].includes(partition))throw Error('unknown point partition');
   if(values.length!==dimensions.reduce((a,b)=>a*b,4)||!Number.isFinite(gain)||gain<0)throw new Error('source values and gain invalid');
+  if(partition==='spatial')return reduceSpatialRegions(values,dimensions,count,gain);
   if(partition==='energy'&&count>1){
     // First moments per height slice, then split its energy fractionally at
     // quantile boundaries. A boundary crossing a voxel never duplicates power.
@@ -100,19 +102,24 @@ fn reduce(@builtin(workgroup_id) group:vec3<u32>){
 }`;
 
 export function createPointRegions(device,{count=4,partition='vertical'}={}) {
-  if(!['vertical','energy'].includes(partition))throw Error('unknown point partition');
+  if(!['vertical','energy','spatial'].includes(partition))throw Error('unknown point partition');
   if(!Number.isInteger(count)||count<1||count>device.limits.maxTextureDimension2D||count>device.limits.maxComputeWorkgroupsPerDimension)throw new Error('point count exceeds device capacity');
+  if(partition==='spatial'&&(2*count-1)*16*48>device.limits.maxStorageBufferBindingSize)throw new Error('spatial point moments exceed device storage capacity');
   const texture=device.createTexture({label:'live hybrid surface point regions',size:[count,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
   const params=device.createBuffer({label:'hybrid point reduction parameters',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const adaptive=partition==='energy'&&count>1;
-  const pipeline=device.createComputePipeline({label:'all-cell source to surface points',layout:'auto',compute:{module:device.createShaderModule({code:adaptive?ENERGY_ROWS_WGSL:POINT_REGIONS_WGSL}),entryPoint:'reduce'}});
+  const spatial=partition==='spatial'?createSpatialReducer(device,count,texture):null;
+  const pipeline=spatial?null:device.createComputePipeline({label:'all-cell source to surface points',layout:'auto',compute:{module:device.createShaderModule({code:adaptive?ENERGY_ROWS_WGSL:POINT_REGIONS_WGSL}),entryPoint:'reduce'}});
   const finish=adaptive?device.createComputePipeline({label:'equal-energy surface points',layout:'auto',compute:{module:device.createShaderModule({code:ENERGY_REGIONS_WGSL}),entryPoint:'reduce'}}):null;
   let sourceTexture=null,group=null,metadata=null,disposed=false,rows=null,rowHeight=0,finishGroup=null;
   return {texture,count,
     encode(field){
       if(disposed||field.status!=='encoded'||!field.texture)throw new Error('point reduction requires current encoded source');
-      pointRegionPlan(field.dimensions,count);
+      pointRegionPlan(field.dimensions,spatial?1:count);
       if(!Number.isFinite(field.gain)||field.gain<0)throw new Error('point reduction requires nonnegative gain');
+      if(spatial){
+        spatial.encode(field);metadata={identity:'all-cell-spatial-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,sourceCells:field.dimensions.reduce((a,b)=>a*b,1)};return {...metadata};
+      }
       if(adaptive&&rowHeight!==field.dimensions[1]){
         rows?.destroy();rowHeight=field.dimensions[1];rows=device.createBuffer({label:'emitting height moments',size:rowHeight*32,usage:GPUBufferUsage.STORAGE});sourceTexture=null;
         finishGroup=device.createBindGroup({layout:finish.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:rows}},{binding:1,resource:texture.createView()},{binding:2,resource:{buffer:params}}]});
@@ -137,6 +144,6 @@ export function createPointRegions(device,{count=4,partition='vertical'}={}) {
         return {...identity,regions:Array.from({length:count},(_,i)=>({position:Array.from(values.slice(i*4,i*4+3)),radiusSquared:values[i*4+3],energy:Array.from(values.slice(bytesPerRow/4+i*4,bytesPerRow/4+i*4+3))}))};
       }finally{buffer.destroy();}
     },
-    destroy(){disposed=true;metadata=null;texture.destroy();params.destroy();rows?.destroy();},
+    destroy(){disposed=true;metadata=null;texture.destroy();params.destroy();rows?.destroy();spatial?.destroy();},
   };
 }
