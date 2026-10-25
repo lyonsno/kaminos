@@ -17,14 +17,17 @@ export async function collectKernelWitness(browser, preserve) {
   return result;
 }
 
-export async function runKernelWitness({ chrome, fixture, out }) {
+export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false }) {
   if (!out) throw new TypeError('an explicit report path is required');
   const report = { schema: 'kaminos.qwen35-kernel-witness.v1', status: 'failed', phase: 'setup',
-    requested: { chrome, fixture }, source: sourceIdentity(path.dirname(fileURLToPath(import.meta.url))) };
+    requested: { chrome, fixture, tiledAffine }, source: sourceIdentity(path.dirname(fileURLToPath(import.meta.url))) };
   let browser, server;
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   try {
-    await save(); report.phase = 'reference-admission'; await save();
+    await save(); report.phase = 'source-admission';
+    if (typeof tiledAffine !== 'boolean') throw new Error('unsupported affine mode');
+    if (!report.source.rev || report.source.dirtyFiles?.length) throw new Error('kernel witness requires clean committed source');
+    report.phase = 'reference-admission'; await save();
     const root = fs.realpathSync(fixture), metaBytes = fs.readFileSync(path.join(root, 'meta.json')), meta = JSON.parse(metaBytes);
     const expected = kernelWitnessContract(meta), arrays = new Map();
     report.reference = { root, metaSha256: crypto.createHash('sha256').update(metaBytes).digest('hex'), source: meta.source, expectedObservations: expected.size };
@@ -44,7 +47,7 @@ export async function runKernelWitness({ chrome, fixture, out }) {
     const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
     const serving = await startServer({ '/fixture/': root, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report);
-    report.phase = 'gpu-execution'; report.url = `${serving.origin}/models/qwen3_5/kernel-witness.html`; await save();
+    report.phase = 'gpu-execution'; report.url = `${serving.origin}/models/qwen3_5/kernel-witness.html?affine=${tiledAffine ? 'tiled' : 'oracle'}`; await save();
     await browser.navigate(report.url, 'window.qwenKernelReady === true');
     // Preserve raw readbacks before adjudicating a mismatch.
     report.rows = [];
@@ -56,13 +59,16 @@ export async function runKernelWitness({ chrome, fixture, out }) {
     });
     report.adapter = result?.adapter; report.errors = result?.errors; report.completedObservations = result?.rows?.length ?? 0;
     let mismatch;
-    try { adjudicateKernelReadbacks(result, meta, arrays); } catch (error) { mismatch = error; }
+    report.affineKernel = result?.affineKernel;
+    try { adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: tiledAffine ? 'tiled' : 'oracle' }); } catch (error) { mismatch = error; }
     // Save host-derived metrics even when adjudication rejects the run.
     for (const row of report.rows) {
       const measured = result.rows.find(value => value.name === row.name);
       Object.assign(row, { relL2: measured.relL2, maxAbs: measured.maxAbs, nonFinite: measured.nonFinite, pageMetrics: measured.pageMetrics });
     }
     if (mismatch) throw mismatch;
+    report.sourceAfter = sourceIdentity(repo);
+    if (report.sourceAfter.rev !== report.source.rev || report.sourceAfter.dirtyFiles?.length) throw new Error('kernel source changed during execution');
     report.status = 'passed'; report.phase = 'complete';
   } catch (error) { report.error = String(error.stack ?? error); }
   finally {
@@ -74,8 +80,8 @@ export async function runKernelWitness({ chrome, fixture, out }) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [fixture, chrome, out] = process.argv.slice(2);
-  const report = await runKernelWitness({ fixture, chrome, out });
+  const [fixture, chrome, out, mode] = process.argv.slice(2);
+  const report = await runKernelWitness({ fixture, chrome, out, tiledAffine: mode === undefined ? false : mode === '--tiled-affine' ? true : mode });
   console.log(JSON.stringify({ status: report.status, phase: report.phase, error: report.error, rows: report.rows?.map(({ name, relL2, maxAbs, nonFinite }) => ({ name, relL2, maxAbs, nonFinite })) }));
   process.exitCode = report.status === 'passed' ? 0 : 1;
 }

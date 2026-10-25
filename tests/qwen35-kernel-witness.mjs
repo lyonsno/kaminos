@@ -22,6 +22,14 @@ function fixture() {
   }
   return { meta, arrays, result };
 }
+test('an explicitly requested affine route cannot close with a missing or different effective kernel', () => {
+  const { result, meta, arrays } = fixture();
+  assert.throws(() => contract.adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: 'tiled' }), /route/);
+  result.affineKernel = 'oracle';
+  assert.throws(() => contract.adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: 'tiled' }), /route/);
+  result.affineKernel = 'tiled';
+  assert.equal(contract.adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: 'tiled' }).rows, 24);
+});
 test('kernel admission rejects fallback, missing, repeated, partial and errored observations', () => {
   const { meta, result } = fixture();
   assert.equal(contract.validateKernelWitness(result, meta).rows, 24);

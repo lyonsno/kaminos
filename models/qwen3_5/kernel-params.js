@@ -24,6 +24,10 @@ export function affineDispatch(rows, tokens, limit) {
   if (y > limit || tokens > limit) throw new RangeError('affine request exceeds the supplied device dispatch dimensions');
   return [x, y, tokens];
 }
+export function affineTiledDispatch(rows, tokens, limit) {
+  uint(rows, 'rows'); uint(tokens, 'tokens');
+  return affineDispatch(Math.ceil(rows / 32), Math.ceil(tokens / 32), limit);
+}
 export function deltaParams({ tokens, keyHeads, valueHeads, keyDim, valueDim, kernel = 4, epsilon = 1e-6 } = {}) {
   for (const [k, v] of Object.entries({ tokens, keyHeads, valueHeads, keyDim, valueDim, kernel })) uint(v, k);
   if (valueHeads % keyHeads) throw new RangeError('value heads must divide into key-head groups');

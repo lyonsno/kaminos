@@ -1,7 +1,7 @@
 import { qwen35ModelLayout } from './model-layout.js';
 import { fetchTensor, projectionSlices } from './model-source.js';
 import * as kernels from './kernels.js';
-import { affineParams, affineDispatch, deltaParams, attentionParams } from './kernel-params.js';
+import { affineParams, affineDispatch, affineTiledDispatch, deltaParams, attentionParams } from './kernel-params.js';
 import { rmsNormShader, swigluShader, axpyShader } from '../flux2-klein/klein-kernels.js';
 import { createWebGpuTiledFlashAttentionShader, flashAttentionParams } from '../../webgpu-inference-kit/src/flash-attention-kernel.js';
 
@@ -166,9 +166,10 @@ export class Qwen35TextModel {
   }
   async linear(name, input, output, tokens, ctx, { outputStride = this.weights.get(name).rows, outputOffset = 0, inputOffset = 0 } = {}) {
     const entry = this.weights.get(name);
-    for (const part of entry.slices) await this.dispatch('affine', kernels.affineShader(), [input, part.weight, part.scales, part.biases, output],
+    const tiled = tokens > 1;
+    for (const part of entry.slices) await this.dispatch(tiled ? 'affine-tiled' : 'affine', tiled ? kernels.affineTiledShader() : kernels.affineShader(), [input, part.weight, part.scales, part.biases, output],
       affineParams({ tokens, rows: part.rows, columns: entry.columns, group: entry.group, outputStride, outputOffset: outputOffset + part.rowStart, inputOffset }),
-      affineDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension), ctx);
+      (tiled ? affineTiledDispatch : affineDispatch)(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension), ctx);
   }
   async prefill(ids, state, ctx = {}) { if (state.length !== 0) throw new Error('prefill requires fresh state'); return this.append(ids, state, ctx); }
   async decode(id, state, ctx = {}) { if (!state.length) throw new Error('decode requires a prefix'); return this.append([id], state, ctx); }

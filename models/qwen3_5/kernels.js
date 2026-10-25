@@ -32,6 +32,55 @@ fn main(@builtin(workgroup_id) group:vec3<u32>, @builtin(num_workgroups) grid:ve
  if(lane==0u){output[p.output_offset+token*p.output_stride+row]=sums[0];}
 }`;
 
+// Register-tiled GEMM follows the existing Klein tile/load/accumulator pattern.
+// Retain separate f32 scale/bias bindings and the affine oracle's exact layout.
+// Each 32x32 output tile reuses source weights across 32 prompt positions.
+export function affineTiledShader() {
+  const indices = [0, 1, 2, 3];
+  const declarations = indices.flatMap(i => indices.map(j => `var c${i}_${j}=0.0;`)).join('\n');
+  const loads = indices.map(i => `let a${i}=at[(lid.y*4u+${i}u)*32u+k]; let b${i}=bt[k*32u+lid.x*4u+${i}u];`).join('\n');
+  const products = indices.flatMap(i => indices.map(j => `c${i}_${j}+=a${i}*b${j};`)).join('\n');
+  const stores = indices.flatMap(i => indices.map(j => `{let m=m0+lid.y*4u+${i}u;let n=n0+lid.x*4u+${j}u;
+    if(m<p.tokens && n<p.rows){output[p.output_offset+m*p.output_stride+n]=c${i}_${j};}}`)).join('\n');
+  return `
+struct P { tokens:u32, rows:u32, columns:u32, group_size:u32,
+ input_offset:u32, input_stride:u32, weight_row_offset:u32, output_offset:u32,
+ output_stride:u32, pad0:u32, pad1:u32, pad2:u32 };
+@group(0) @binding(0) var<storage,read> x:array<f32>;
+@group(0) @binding(1) var<storage,read> weights:array<u32>;
+@group(0) @binding(2) var<storage,read> scales:array<f32>;
+@group(0) @binding(3) var<storage,read> biases:array<f32>;
+@group(0) @binding(4) var<storage,read_write> output:array<f32>;
+@group(0) @binding(5) var<uniform> p:P;
+var<workgroup> at:array<f32,1024>;
+var<workgroup> bt:array<f32,1024>;
+@compute @workgroup_size(8,8)
+fn main(@builtin(workgroup_id) wg:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>,
+ @builtin(local_invocation_id) lid:vec3<u32>,@builtin(local_invocation_index) lane:u32){
+ let n0=(wg.x+wg.y*grid.x)*32u;let m0=wg.z*32u;
+ ${declarations}
+ for(var k0=0u;k0<p.columns;k0+=32u){
+  for(var i=lane;i<1024u;i+=64u){
+   let m=m0+i/32u;let k=k0+i%32u;var value=0.0;
+   if(m<p.tokens && k<p.columns){value=x[p.input_offset+m*p.input_stride+k];}at[i]=value;
+  }
+  for(var i=lane;i<128u;i+=64u){
+   let row=i/4u;let col=(i%4u)*8u;let n=n0+row;let k=k0+col;
+   var packed=0u;var scale=0.0;var bias=0.0;
+   if(n<p.rows && k<p.columns){
+    let source=n+p.weight_row_offset;packed=weights[source*(p.columns/8u)+k/8u];
+    let s=source*(p.columns/p.group_size)+k/p.group_size;scale=scales[s];bias=biases[s];
+   }
+   for(var q=0u;q<8u;q++){bt[(col+q)*32u+row]=f32((packed>>(q*4u))&15u)*scale+bias;}
+  }
+  workgroupBarrier();
+  for(var k=0u;k<32u;k++){${loads}\n${products}}
+  workgroupBarrier();
+ }
+ ${stores}
+}`;
+}
+
 const DELTA = `
 struct P { tokens:u32, kh:u32, vh:u32, kd:u32, vd:u32, kernel:u32, channels:u32, prepared:u32,
  epsilon:f32, pad0:u32, pad1:u32, pad2:u32 };

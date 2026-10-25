@@ -41,7 +41,8 @@ export function validateKernelWitness(result, meta) {
   if (seen.size !== expected.size) throw new Error('missing kernel observations');
   return { rows: seen.size };
 }
-export function adjudicateKernelReadbacks(result, meta, arrays) {
+export function adjudicateKernelReadbacks(result, meta, arrays, { affineKernel = null } = {}) {
+  if (affineKernel !== null && (!['oracle', 'tiled'].includes(affineKernel) || result?.affineKernel !== affineKernel)) throw new Error('wrong or missing affine kernel route');
   // The page supplies raw bytes. Recompute its metrics on the host against the
   // hash-checked native arrays, so a blank read with optimistic metrics fails.
   const expected = new Map();

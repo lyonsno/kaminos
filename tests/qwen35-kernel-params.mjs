@@ -1,7 +1,23 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { affineParams, affineDispatch, deltaParams, attentionParams } from '../models/qwen3_5/kernel-params.js';
+import { affineParams, affineDispatch, affineTiledDispatch, deltaParams, attentionParams } from '../models/qwen3_5/kernel-params.js';
+import { Qwen35TextModel } from '../models/qwen3_5/text-model.js';
+test('tiled prefill covers partial token/row tiles and preserves single-token dispatch', async () => {
+  assert.deepEqual(affineTiledDispatch(35, 33, 8), [2, 1, 2]);
+  assert.deepEqual(affineTiledDispatch(248320, 743, 65535), [7760, 1, 24]);
+  assert.throws(() => affineTiledDispatch(32, 65, 2), /dispatch/);
+  assert.throws(() => affineTiledDispatch(0, 1, 8));
+  const calls=[], model=Object.create(Qwen35TextModel.prototype);
+  model.weights=new Map([['p',{rows:35,columns:64,group:64,slices:[{rows:35,rowStart:0,weight:{},scales:{},biases:{}}]}]]);
+  model.device={limits:{maxComputeWorkgroupsPerDimension:8}};
+  model.dispatch=async (...args)=>calls.push(args);
+  await model.linear('p',{}, {},33,{});
+  assert.equal(calls[0][0],'affine-tiled'); assert.deepEqual(calls[0][4],[2,1,2]);
+  calls.length=0; model.device.limits.maxComputeWorkgroupsPerDimension=65535;
+  await model.linear('p',{}, {},1,{});
+  assert.equal(calls[0][0],'affine'); assert.deepEqual(calls[0][4],[35,1,1]);
+});
 test('affine dispatch covers the full LM vocabulary and keeps explicit row/stride offsets', () => {
   assert.deepEqual(affineDispatch(248320, 1, 65535), [65535, 4, 1]);
   const p = affineParams({ tokens: 3, rows: 32, columns: 4096, group: 64, inputOffset: 7, inputStride: 4100,

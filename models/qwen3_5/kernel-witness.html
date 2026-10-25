@@ -1,13 +1,17 @@
 <!doctype html><meta charset="utf-8"><title>Qwen hybrid kernel witness</title>
 <script type="module">
 import * as kernels from './kernels.js';
-import { affineParams, affineDispatch, deltaParams, attentionParams } from './kernel-params.js';
+import { affineParams, affineDispatch, affineTiledDispatch, deltaParams, attentionParams } from './kernel-params.js';
 import { createWebGpuTiledFlashAttentionShader, flashAttentionParams } from '../../webgpu-inference-kit/src/flash-attention-kernel.js';
 
 window.qwenKernelReady = true;
 window.qwenKernelResult = (async () => {
   const meta = await (await fetch('/fixture/meta.json')).json(), arrays = {}, rows = [], errors = [];
-  window.qwenKernelPartial = { backend: 'webgpu', errors, rows };
+  const affineKernel = new URL(location.href).searchParams.get('affine') ?? 'oracle';
+  if (!['oracle','tiled'].includes(affineKernel)) throw new Error('unsupported affine kernel');
+  const affineCode = affineKernel === 'tiled' ? kernels.affineTiledShader() : kernels.affineShader();
+  const affineGrid = affineKernel === 'tiled' ? affineTiledDispatch : affineDispatch;
+  window.qwenKernelPartial = { backend: 'webgpu', errors, rows, affineKernel };
   for (const [name, record] of Object.entries(meta.arrays)) {
     const response = await fetch('/fixture/' + record.file);
     if (!response.ok) throw new Error(`missing reference ${name}`);
@@ -70,14 +74,14 @@ window.qwenKernelResult = (async () => {
       const root = `affine-${cs.name}`, x = arrays[`${root}.input`];
       const w = buffer(arrays[`${root}.weight`]), s = buffer(arrays[`${root}.scales`]), b = buffer(arrays[`${root}.biases`]);
       const input = buffer(x), output = blank(cs.tokens * cs.rows);
-      await dispatch('affine', kernels.affineShader(), [input, w, s, b, output], affineParams(cs), affineDispatch(cs.rows, cs.tokens, device.limits.maxComputeWorkgroupsPerDimension));
+      await dispatch('affine', affineCode, [input, w, s, b, output], affineParams(cs), affineGrid(cs.rows, cs.tokens, device.limits.maxComputeWorkgroupsPerDimension));
       capture(`${root}.full`, await read(output, cs.tokens * cs.rows), arrays[`${root}.output`]);
       const padded = new Float32Array(7 + cs.tokens * (cs.columns + 3));
       for (let t = 0; t < cs.tokens; t++) padded.set(x.subarray(t * cs.columns, (t + 1) * cs.columns), 7 + t * (cs.columns + 3));
       const stridedInput = buffer(padded), expected = new Float32Array(cs.tokens * 13 + 4).fill(-1234), stridedOutput = buffer(expected);
       for (let t = 0; t < cs.tokens; t++) expected.set(arrays[`${root}.output`].subarray(t * cs.rows + 3, t * cs.rows + 10), 2 + t * 13);
-      await dispatch('affine', kernels.affineShader(), [stridedInput, w, s, b, stridedOutput], affineParams({ ...cs, rows: 7, inputOffset: 7, inputStride: cs.columns + 3,
-        weightRowOffset: 3, outputOffset: 2, outputStride: 13 }), affineDispatch(7, cs.tokens, device.limits.maxComputeWorkgroupsPerDimension));
+      await dispatch('affine', affineCode, [stridedInput, w, s, b, stridedOutput], affineParams({ ...cs, rows: 7, inputOffset: 7, inputStride: cs.columns + 3,
+        weightRowOffset: 3, outputOffset: 2, outputStride: 13 }), affineGrid(7, cs.tokens, device.limits.maxComputeWorkgroupsPerDimension));
       capture(`${root}.strided`, await read(stridedOutput, expected.length), expected);
     }
     for (const cs of meta.gdn) for (const mode of ['batch', 'chunks']) {
@@ -136,7 +140,7 @@ window.qwenKernelResult = (async () => {
       capture(`attention.${mode}.value-cache`, await read(values, cs.capacity * kw), arrays['attention.value-cache']);
     }
     await device.queue.onSubmittedWorkDone();
-    return { backend: 'webgpu', adapter: info, errors, rows };
+    return { backend: 'webgpu', adapter: info, errors, rows, affineKernel };
   } finally { for (const b of owned) b.destroy(); device.destroy(); }
 })().catch(error => {
   const partial = window.qwenKernelPartial ?? { backend: 'webgpu', errors: [], rows: [] };
