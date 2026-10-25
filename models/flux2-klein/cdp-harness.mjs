@@ -6,6 +6,7 @@ import fsp from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { createCdpTransport } from './cdp-transport.mjs';
 
 // Effective source identity of the code a run actually executed.
 export function sourceIdentity(dir) {
@@ -59,7 +60,7 @@ export async function launchChrome(chrome, extraFlags = [], report = {}, { profi
     let stderr = '';
     child.stderr.on('data', b => { stderr += b; const m = stderr.match(/DevTools listening on (ws:\/\/\S+)/); if (m) resolve(m[1]); });
     child.once('exit', (c, s) => reject(new Error(`browser exited before CDP: ${c}/${s}`)));
-    setTimeout(() => reject(new Error(`CDP timeout: no debugging port after 120 s; stderr: ${stderr.slice(-500)}`)), 120000);
+    setTimeout(() => reject(new Error(`CDP timeout: no debugging port after 120 s; stderr: ${stderr.slice(-500)}`)), 120000).unref();
   });
   report.browserLaunchMs = Date.now() - launchStarted;
   const base = wsUrl.replace('ws://', 'http://').replace(/\/devtools\/browser\/.*/, '');
@@ -72,14 +73,11 @@ export async function launchChrome(chrome, extraFlags = [], report = {}, { profi
   if (!page) throw new Error('no page target after 5 s');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-  let id = 0; const pending = new Map(); const consoleLines = []; report.console = consoleLines;
-  ws.onmessage = ev => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+  const consoleLines = []; report.console = consoleLines;
+  const { send } = createCdpTransport(ws, msg => {
     if (msg.method === 'Runtime.consoleAPICalled') consoleLines.push(msg.params.args.map(a => a.value ?? a.description).join(' '));
     if (msg.method === 'Runtime.exceptionThrown') consoleLines.push(`exception: ${msg.params.exceptionDetails?.exception?.description}`);
-  };
-  const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  });
   await send('Runtime.enable'); await send('Page.enable');
   const evaluate = async (expression, awaitPromise = true) => {
     const res = await send('Runtime.evaluate', { expression, awaitPromise, returnByValue: true });
@@ -97,7 +95,7 @@ export async function launchChrome(chrome, extraFlags = [], report = {}, { profi
     if (child.exitCode === null && child.signalCode === null) {
       const exited = new Promise(resolve => child.once('exit', resolve));
       child.kill('SIGTERM');
-      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 10000))]);
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 10000).unref())]);
     }
     if (!profileDir) await fsp.rm(profile, { recursive: true, force: true }).catch(e => { report.profileCleanupError = String(e); });
   };

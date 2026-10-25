@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { adjudicateModelReadbacks } from '../models/qwen3_5/model-witness-contract.js';
+import { adjudicatePupExpansion } from '../models/qwen3_5/pup-witness-contract.js';
 
 function fixture() {
   const config = JSON.parse(fs.readFileSync(new URL('./fixtures/qwen35/config.json', import.meta.url)));
@@ -30,5 +31,15 @@ test('blank, partial, fallback, stale-source, wrong-token and cleanup evidence c
     r => { r.rows[0].data = Buffer.from(new Float32Array(8).buffer).toString('base64'); r.rows[0].relL2 = 0; },
     r => { r.generation.tokenIds[1] = 3; }, r => { r.errors.push('device lost'); }, r => { r.lengths.decode = 2; }, r => { r.cleanup.weights = 1; }]) {
     const changed = structuredClone(result); change(changed); assert.throws(() => adjudicateModelReadbacks(changed, meta, manifest, arrays));
+  }
+});
+test('application evidence requires actual framed input, source settings, EOS and complete streamed text', () => {
+  const settings = { temperature: 0, topK: 20, topP: .95, minP: 0, presencePenalty: 1.5, maxNewTokens: 3584, eosTokenIds: [7, 8] };
+  const expected = { prompt: 'fox', inputIds: [1, 2, 3], settings, tokenizerSha256: 'a', systemPromptsSha256: 'b' };
+  const result = { ...structuredClone(expected), stream: ['red ', 'fox'], output: { text: 'red fox', finishReason: 'eos', stopTokenId: 7, promptTokenCount: 3, tokenIds: [4, 5], generatedTokenCount: 3 } };
+  assert.equal(adjudicatePupExpansion(result, expected).generatedTokens, 3);
+  for (const change of [r => { r.output.text = ''; }, r => { r.output.finishReason = 'length'; }, r => { r.inputIds.pop(); },
+    r => { r.settings.maxNewTokens = 16; }, r => { r.tokenizerSha256 = 'wrong'; }, r => { r.stream = []; }, r => { r.output.stopTokenId = 9; }]) {
+    const changed = structuredClone(result); change(changed); assert.throws(() => adjudicatePupExpansion(changed, expected));
   }
 });

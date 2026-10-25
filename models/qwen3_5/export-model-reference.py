@@ -148,11 +148,16 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--text', default='A red fox in a forest.')
+    parser.add_argument('--manifest-only', action='store_true', help='write the source-range manifest without importing or executing MLX')
     args = parser.parse_args()
     report = {'status': 'failed', 'phase': 'setup', 'requested': {'modelRoot': str(args.model_dir.resolve()), 'text': args.text},
               'exporter': {'path': str(Path(__file__).resolve()), 'sha256': sha(Path(__file__).read_bytes())}}
     try:
-        export(args.model_dir.resolve(), args.out.resolve(), args.text, report)
+        if args.manifest_only:
+            prepare(args.model_dir.resolve(), args.out.resolve(), report)
+            report.update(status='passed', phase='complete', effective={'backend': 'source-files-only'}, output=str(args.out.resolve() / 'weights.json'))
+        else:
+            export(args.model_dir.resolve(), args.out.resolve(), args.text, report)
     except BaseException:
         report['error'] = traceback.format_exc()
     finally:

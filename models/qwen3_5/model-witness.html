@@ -5,6 +5,9 @@ import { Qwen35TextModel } from './text-model.js';
 import { createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/inference-control.js';
 import { generateTokens } from '../../webgpu-inference-kit/src/autoregressive-generation.js';
 import { sampleToken } from '../../webgpu-inference-kit/src/token-sampling.js';
+import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
+import { createPupTextInput } from './pup-input.js';
+import { expandPupText } from './pup-text.js';
 
 window.qwenModelReady = true;
 const result = window.qwenModelPartial = { backend: 'webgpu', errors: [], rows: [], lengths: {}, cleanup: {} };
@@ -52,6 +55,23 @@ window.qwenModelResult = (async () => {
     try { await run('full-prefix', [...meta.inputIds, ...meta.continuationIds], state, 'prefill'); } finally { await model.disposeState(state); }
     stage = 'autoregressive-generation'; window.qwenModelProgress = { stage }; current = null;
     result.generation = await generateTokens({ model, inputIds: meta.inputIds, capacity, maxNewTokens: 2, control, sample: logits => sampleToken(logits, { temperature: 0 }) });
+    if (window.qwenPupRequest) {
+      stage = 'pup-expansion'; window.qwenModelProgress = { stage };
+      const request = window.qwenPupRequest;
+      const tokenizerBytes = await (await fetch('/model/tokenizer.json')).arrayBuffer(), promptsBytes = await (await fetch('/model/system_prompts.json')).arrayBuffer();
+      const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+      const tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes))), systemPrompt = JSON.parse(new TextDecoder().decode(promptsBytes)).t2i;
+      const input = createPupTextInput(tokenizer, { prompt: request.prompt, systemPrompt });
+      const expansion = result.expansion = { prompt: request.prompt, inputIds: null, settings: input.generation,
+        tokenizerSha256: await hash(tokenizerBytes), systemPromptsSha256: await hash(promptsBytes), stream: [] };
+      if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
+      const prefill = model.prefill.bind(model);
+      model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill(ids, ...rest); };
+      try {
+        expansion.output = await expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
+          maxNewTokens: request.maxNewTokens, onText: (delta, text) => { expansion.stream.push(delta); window.qwenModelProgress = { stage, text }; } });
+      } finally { model.prefill = prefill; }
+    }
   } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
   finally {
     try { await model?.destroy(); result.cleanup.states = model?.states.size; result.cleanup.weights = model?.owned.size; } catch (error) { result.errors.push(`model cleanup: ${error}`); }

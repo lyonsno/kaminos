@@ -14,5 +14,10 @@ try {
   assert.equal(result.status, 1, result.stderr);
   const saved = JSON.parse(fs.readFileSync(report)); assert.equal(saved.phase, 'source-admission'); assert.match(saved.error, /duplicate source/);
   assert.equal(fs.existsSync(path.join(temp, 'output', 'meta.json')), false);
+  fs.rmSync(path.join(temp, 'b.safetensors'));
+  const manifestOnly = spawnSync(process.env.KAMINOS_PYTHON ?? 'python3', ['models/qwen3_5/export-model-reference.py', '--model-dir', temp, '--out', path.join(temp, 'output'), '--report', report, '--manifest-only'], { encoding: 'utf8' });
+  assert.equal(manifestOnly.status, 0, manifestOnly.stderr);
+  const sourceOnly = JSON.parse(fs.readFileSync(report)); assert.equal(sourceOnly.effective.backend, 'source-files-only');
+  assert.equal(fs.existsSync(path.join(temp, 'output', 'weights.json')), true); assert.equal(fs.existsSync(path.join(temp, 'output', 'meta.json')), false);
   console.log('duplicate model tensors fail before native import and preserve the rejection report');
 } finally { fs.rmSync(temp, { recursive: true, force: true }); }
