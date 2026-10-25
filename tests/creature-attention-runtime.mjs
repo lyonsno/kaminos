@@ -43,10 +43,13 @@ try{
  curiosity.value='2.5';await curiosity.onchange();
  assert.equal(creature.read().attention.behavior.curiosity,2.5,'properties use the live behavior operation');
  assert.equal(creature.read().recipe.attention.behavior.curiosity,2.5,'authored multiplier is saved');
+ const habituation=nodes(panelRoot).find(n=>n['aria-label']==='Creature habituation speed');assert.ok(habituation,'inspector exposes habituation independently');
+ habituation.value='1.5';await habituation.onchange();assert.equal(creature.read().recipe.attention.behavior.habituation,1.5);
  const priorSettings=creature.read().attention.behavior;
  assert.throws(()=>creature.operations.behavior({aversion:-1}),/nonnegative/);
  assert.deepEqual(creature.read().attention.behavior,priorSettings,'invalid updates are atomic');
  assert.throws(()=>creature.operations.behavior({recoveryTime:0}),/positive/);
+ assert.throws(()=>creature.operations.behavior({habituation:0}),/positive/);
  const savedRecipe=JSON.parse(JSON.stringify(creature.read().recipe));controls.dispose();
  creature.operations.behavior({curiosity:1});
  const profileOf=()=>creature.read().attention.profile.forward;

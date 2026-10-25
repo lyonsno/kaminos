@@ -266,7 +266,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
     // Inspected once familiar enough; forgotten only after it fades well below.
-    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
+    if(attended||observed){if(attended)m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt*behavior.habituation*(attended?1:.2));if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
     else{m.familiarity*=forgetThis;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
     // An alert lasts while its urgency does, so an urgent look can linger on
     // something outside the usual field of view.
@@ -285,7 +285,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const withinReach=s.angle<=o.reach||m.alerted||focus?.id===source.id;
     // Hysteresis: catching the eye takes the full threshold, keeping it less.
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
-    if(perceivedNow)perceived.push({id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1,eventAt:m.eventAt??null});
+    if(perceivedNow)perceived.push({id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1,eventAt:m.eventAt??null,eventStrength:m.impulse,familiarity:m.familiarity});
     candidates.push({visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
@@ -543,8 +543,8 @@ export function sceneObjectInterests({THREE,root,specs}) {
 }
 
 // The scene's flame as an interest, read through the shared flame workbench.
-// It can be seen only while burning, and while burning and not frozen it is
-// restless, so creatures keep glancing back at it. Flares are not read from
+// It can be seen only while burning. Restlessness reports source state;
+// familiar uneventful presence does not erase prior inspection. Flares are not read from
 // its settings: they reach creatures as light, through the light sense.
 export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emitter',pollMs=500,now=()=>performance.now()}) {
  if(typeof workbench?.read!=='function')throw Error('Flame interest requires the shared flame workbench');
@@ -558,7 +558,7 @@ export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emit
   const object=find();if(!object)return [];
   const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true,available:typeof r?.active==='boolean'&&typeof r?.paused==='boolean'};}catch{state={...state,available:false};}}
   return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,standOff:2,active:state.active,
-   sensed:state.available,restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',again:'flickering'}}];
+   sensed:state.available,restless:state.active&&!state.paused,causes:{lit:'flame lit',again:'flickering'}}];
  }
  return Object.freeze({read,dispose(){unsubscribe();}});
 }

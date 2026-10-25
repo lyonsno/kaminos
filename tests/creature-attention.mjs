@@ -104,7 +104,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 
 {
  // Flame: an unlit flame draws nothing; lighting it is a reason to look;
- // turning it up is another; a burning flame keeps drawing glances.
+ // turning it up is another; uneventful burning preserves familiarity.
  const c=creature(),flame={id:'flame',label:'flame',point:[.9,.6,-2.5],interest:1,active:false,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame,point:[...flame.point]}]});
  let w=watch(attention,c,3,0),t=w.t;
@@ -114,9 +114,12 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  flame.version++;w=watch(attention,c,4,t);t=w.t;
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],'turning it up draws a look');
  const windowStart=t;w=watch(attention,c,60,t);t=w.t;const again=looks(w.rows).filter(l=>l.t>windowStart+.05);
- assert.ok(again.length>=2&&again.every(l=>l.cause==='flickering'),`a burning flame keeps drawing glances (${JSON.stringify(again)})`);
+ assert.equal(again.length,0,'unchanged burning cannot erase inspection and manufacture renewed glances');
  const busy=w.rows.filter(r=>r.focus).length/w.rows.length;
  assert.ok(busy<.6,`but not a fixed stare (${busy.toFixed(2)} of the time)`);
+ turnAway(c,Math.PI);({t}=watch(attention,c,.3,t));turnAway(c,0);w=watch(attention,c,4,t);t=w.t;
+ assert.equal(looks(w.rows).length,0,'a brief look-away/back retains inspection');
+ flame.version++;w=watch(attention,c,2,t);t=w.t;assert.equal(attention.read().why?.cause,'flared up','a fresh change still renews the familiar source');
  flame.active=false;w=watch(attention,c,20,t);
  const ended=w.rows.findIndex(r=>!r.focus);
  assert.ok(ended>=0&&w.rows[ended].t-t<1,'putting it out ends any look at it promptly');

@@ -404,7 +404,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();
-   presentation=mountProperties({document,read,invoke,
+   presentation=mountProperties({document,read,invoke,installNumberDrag:host.controls.installNumberDrag,
     save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());

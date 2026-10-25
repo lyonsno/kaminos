@@ -38,14 +38,16 @@ const other=isolated.step(2.4,{observed:[source],focus:source});
 assert.equal(other.id,source.id);assert.ok(other.motivation.aversion>.5,'source-local aversion survives another source going quiet');
 console.log('Drive and aversion change actions; cessation, gaps, familiarity and source identity remain distinct');
 
-// RM-1: an observed return can renew interest without inventing an alarm.
+// RM-1 amended by satiation: an observed changed return renews interest;
+// re-seeing unchanged presence preserves the completed episode.
 const returning=createEngagement(),far={...source,point:[5,0,0]};
 const again=(time,extra={})=>returning.update({time,position:[0,0,0],observed:[far],focus:far,...extra});
 again(0);again(1.1);
 again(1.2,{observed:[],focus:null,cessation:{...cessation,since:1.2,until:2.2},interrupted:true});
 again(2.3,{observed:[],focus:null});again(12,{observed:[],focus:null});
 assert.equal(again(13).phase,'wandering','return does not bypass the completed-episode cooldown');
-assert.equal(again(25).phase,'watching','observed return renews investigation eligibility without recoil');
+assert.equal(again(25).phase,'wandering','unchanged observed return preserves satisfaction');
+assert.equal(again(25.1,{observed:[{...far,eventAt:25.1}]}).phase,'watching','a fresh observed change renews investigation without recoil');
 assert.equal(again(26.2).phase,'approaching','returned source can be investigated again');
 const returnedDrive=returning.read().motivation.drive;
 assert.equal(again(27).motivation.drive,returnedDrive,'unchanged presence cannot accumulate investigation drive');

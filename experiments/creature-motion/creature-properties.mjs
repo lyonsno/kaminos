@@ -1,7 +1,7 @@
 import {behaviorControls} from './behavior-settings.mjs';
 import {mountPlaybackControls} from '../../playback-controls.mjs';
 
-export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null}) {
+export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null,installNumberDrag=null}) {
  const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const properties=el('section');properties.className='creature-properties';
  const style=el('style',`.creature-properties{display:grid;gap:12px;border-top:1px solid #41494e;padding-top:12px;margin-top:8px;color:#d9e2e5;font:12px system-ui}.creature-properties[hidden]{display:none}.creature-properties h3{margin:0}.creature-properties label{display:grid;gap:5px}.creature-properties select{width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #505d64;border-radius:4px}.creature-properties details{font-size:11px}.creature-properties details>div{display:grid;gap:10px;margin-top:10px}.creature-properties button{padding:6px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.creature-properties [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}.creature-properties .creature-identity{font:10px ui-monospace,monospace;overflow-wrap:anywhere;color:#95a7ad}.scene-owner-playback{position:absolute;bottom:0;left:0;right:0;z-index:35}.creature-properties input[type=file]{max-width:100%}`);
@@ -24,10 +24,10 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
  const attentionNow=el('p'),attentionRecent=el('ol');attentionNow.style.cssText='margin:0';attentionRecent.style.cssText='margin:0;padding-left:18px;color:#a5b7bd;font-size:11px';
  const engageLabel=el('label'),engageToggle=el('input');engageToggle.type='checkbox';engageToggle.setAttribute('aria-label','Investigate interests');engageLabel.style.cssText='display:flex;gap:6px;align-items:center';engageLabel.append(engageToggle,el('span','Investigate interests'));engageToggle.onchange=()=>call('engagement',{enabled:engageToggle.checked});
  attentionBox.append(attentionLabel,engageLabel,attentionNow,attentionRecent);properties.append(attentionBox);
- const tuning=el('details'),tuningBody=el('div'),tuningInputs=new Map();tuning.append(el('summary','Reactions & motivation'),tuningBody);attentionBox.append(tuning);
+ const tuning=el('details'),tuningBody=el('div'),tuningInputs=new Map(),tuningDrags=[];tuning.append(el('summary','Reactions & motivation'),tuningBody);attentionBox.append(tuning);
  for(const {key,label,description} of behaviorControls){
-  const row=el('label',label+' ×'),input=el('input');input.type='number';input.min=key==='recoveryTime'?'0.01':'0';input.step='any';input.title=description;input.setAttribute('aria-label','Creature '+label.toLowerCase());
-  input.onchange=()=>call('behavior',{[key]:input.value.trim()===''?NaN:Number(input.value)});row.append(input);tuningBody.append(row);tuningInputs.set(key,input);
+  const row=el('label',label+' ×'),input=el('input');input.type='number';input.min=['recoveryTime','habituation'].includes(key)?'0.01':'0';input.step='any';input.title=description;input.setAttribute('aria-label','Creature '+label.toLowerCase());
+  input.oninput=input.onchange=()=>call('behavior',{[key]:input.value.trim()===''?NaN:Number(input.value)});row.append(input);tuningBody.append(row);tuningInputs.set(key,input);if(installNumberDrag&&input.addEventListener)tuningDrags.push(installNumberDrag({input,grip:row,step:.01}));
  }
  attentionToggle.onchange=()=>call('attention',{enabled:attentionToggle.checked});
  const advanced=el('details'),advancedBody=el('div');advanced.append(el('summary','Deformation & source'),advancedBody);properties.append(advanced);
@@ -98,5 +98,5 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
   playback.update();behaviorUI?.update();
  }
  update();
- return {properties,playback:behaviorContext?null:playback.node,update,dispose(){disposed=true;playback.dispose();properties.remove();}};
+ return {properties,playback:behaviorContext?null:playback.node,update,dispose(){disposed=true;for(const drag of tuningDrags)drag.dispose();playback.dispose();properties.remove();}};
 }
