@@ -124,6 +124,18 @@ test('the visible scene contains the reconstructed hand, never a camera backgrou
   } finally { await f.owner.dispose(); }
 });
 
+test('the required back-of-hand view keeps the luminous center above and in front of the palm',async()=>{
+  const f=await fixture();
+  try{
+    await f.owner.operations.start();await f.frame(result(.6));
+    const hand=f.attached.find(a=>a.options.metadata?.label==='Virtual hand').root;
+    const light=f.attached.find(a=>a.options.metadata?.label==='Iron Gland').root;
+    assert.ok(light.position.z>hand.position.z,'hand must be behind the luminous center');
+    assert.ok(light.position.y>hand.position.y,'the center must hover above the palm');
+    assert.ok(hand.children[0].material.depthTest&&hand.children[0].material.depthWrite);
+  }finally{await f.owner.dispose();}
+});
+
 test('overlapping option changes merge without reviving a later Stop', async()=>{
   const f=await fixture();let complete,first,second,stopping;
   try {
