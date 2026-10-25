@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {createBrowserPromptHelper,BFL_SOURCE_REVISION} from '../models/bfl-pup/browser-backend.mjs';
 globalThis.location={href:'http://localhost/probe.html',origin:'http://localhost'};
-globalThis.fetch=async url=>({ok:true,json:async()=>url.endsWith('provenance.json')?{status:'complete',source:'/snapshot/'+BFL_SOURCE_REVISION}:{t2i:'scene',i2i:'edit'}});
+globalThis.fetch=async url=>({ok:true,text:async()=> 'source template',json:async()=>url.endsWith('provenance.json')?{status:'complete',source:'/snapshot/'+BFL_SOURCE_REVISION}:{t2i:'scene',i2i:'edit'}});
 globalThis.pupRuntimeTest={loads:0,disposed:0,generated:0,acceptAfter:Infinity};
 const runtime=`
 export const env={};
