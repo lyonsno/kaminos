@@ -48,8 +48,9 @@ test('a device failure during stopping remains a failure',async()=>{
 test('page adapter shares the app host, reuses models and records the validated source route',async t=>{
   const {createPagePhotographer,PHOTOGRAPH_ROUTE}=await import(path);
   const pixels={width:2,height:2,data:new Uint8ClampedArray(16).fill(255)};
+  const encoded=[];
   const replacements={createImageBitmap:async()=>({width:2,height:2,close(){}}),
-    OffscreenCanvas:class {getContext(){return {drawImage(){},getImageData(){return pixels;},putImageData(){}};}async convertToBlob(){return new Blob(['test png']);}},
+    OffscreenCanvas:class {getContext(){return {drawImage(){},getImageData(){return pixels;},putImageData(image){encoded.push(image);}};}async convertToBlob(){return new Blob(['test png']);}},
     ImageData:class{constructor(data,width,height){Object.assign(this,{data,width,height});}}};
   for(const [key,value] of Object.entries(replacements)){const old=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});t.after(()=>old?Object.defineProperty(globalThis,key,old):delete globalThis[key]);}
   const device={features:new Set(['shader-f16'])},session={},host={device,session:async()=>session,beginRun(){}};
@@ -57,7 +58,10 @@ test('page adapter shares the app host, reuses models and records the validated 
   const common=options=>{constructions++;assert.equal(options.device,device);assert.equal(options.session,session);assert.equal(options.foreground,host);assert.equal(options.load,false);return {...options,load:async()=>{}};};
   const run=createPagePhotographer({appHost:async()=>host,fetch:async()=>new Response('original photograph'),dependencies:{
     createMoGeApp:async options=>({...common(options),model:{useRealWeights:true},infer:async()=>{geometryRuns++;return {width:2,height:2,points:new Float32Array([-1,-1,2,1,-1,2,-1,1,2,1,1,2])};}}),
-    createSuperMatApp:async options=>({...common(options),infer:async({size})=>{materialRuns++;return {width:size,height:size,albedo:pixels,orm:pixels};}}),
+    // supermat-route.js returns named image records inside its result.maps bundle.
+    createSuperMatApp:async options=>({...common(options),infer:async({size})=>{materialRuns++;
+      const map=value=>({width:size,height:size,data:new Uint8ClampedArray(size*size*4).fill(value)});
+      return {width:size,height:size,maps:{albedo:map(71),orm:map(123)}};}}),
   }});
   for(let i=0;i<2;i++){
     const result=await run({image:{source:'photo.png'},size:512});
@@ -67,4 +71,9 @@ test('page adapter shares the app host, reuses models and records the validated 
     assert.equal(new DataView(result.glb).getUint32(0,true),0x46546c67);
   }
   assert.equal(constructions,2);assert.equal(geometryRuns,2);assert.equal(materialRuns,2);
+  assert.equal(encoded.length,4);
+  for(const [i,image] of encoded.entries()){
+    assert.equal(image.width,512);assert.equal(image.height,512);assert.equal(image.data.length,512*512*4);
+    assert.equal(image.data[0],i%2?123:71);assert.equal(image.data[3],i%2?123:255);
+  }
 });

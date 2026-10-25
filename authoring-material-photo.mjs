@@ -80,7 +80,7 @@ export function createPagePhotographer({appHost,fetch=globalThis.fetch,weightsUr
       settings:{materialSize:size,depthEdge:.08},representation:'open-photograph-surface',models:['moge-2-vitl-normal','SuperMat']};
     onProgress?.({stage:'materials',phase:'exporting'});
     const label=(image.label||image.name||'Photograph').replace(/\.[^.]+$/,'');
-    const glb=await photographGlb({...result,image:pixels},{name:label,receipt:generation});check(signal);
+    const glb=await photographGlb({depth:result.depth,maps:result.maps.maps,image:pixels},{name:label,receipt:generation});check(signal);
     generation.receiptValidation={ok:true,by:'authoring-material-photo',checks:['shared-app-host','original-input-sha256','moge-points','rgba-materials','embedded-glb']};
     return {glb,generation,label};
   };
