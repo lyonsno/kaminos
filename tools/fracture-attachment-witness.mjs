@@ -59,6 +59,7 @@ try{
  report.reapplied=await invoke('partition',report.initial.settings);assert(JSON.stringify(owners(await invoke('export')))===JSON.stringify(before),'Unchanged thresholds discarded local grouping');
  report.savedSetup=(await read()).setup;await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert((await page.evaluate(()=>window.kaminosWorkbenchExperiments.state())).id===null,'Close did not release experiment');
  await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-shape',setup),report.savedSetup);report.reopened=await invoke('export');assert(JSON.stringify(owners(report.reopened))===JSON.stringify(before),'Reopen lost local grouping');assert(report.reopened.selected===nested.id,'Reopen lost selection');
+ await page.getByText('Local adjustments (optional)',{exact:true}).click();
  await invoke('resetLocal');await invoke('detail',1);await invoke('select',0);await invoke('refine');await invoke('refine');
  report.ancestorRefined=await invoke('export');await invoke('select',nested.id);report.descendantSelected=await invoke('export');
  assert(JSON.stringify(owners(report.descendantSelected))===JSON.stringify(owners(report.ancestorRefined)),'Selecting a represented descendant changed grouping');
