@@ -17,6 +17,27 @@ def run(nodes,inputs,outputs,inits,feeds):
  onnx.checker.check_model(model)
  return ort.InferenceSession(model.SerializeToString(),providers=['CPUExecutionProvider']).run(None,feeds)
 class CompatTests(unittest.TestCase):
+ def test_absent_legacy_window_means_unwindowed(self):
+  for op in ['CausalConvWithState','LinearAttention']:
+   model=h.make_model(h.make_graph([h.make_node(op,['x'],['y'],name='legacy',domain='com.microsoft',state_window=0)],'g',[],[]))
+   c.browser_compatible(model)
+   self.assertFalse(any(a.name=='state_window' for a in model.graph.node[0].attribute))
+   model=h.make_model(h.make_graph([h.make_node(op,['x'],['y'],name='legacy',domain='com.microsoft',state_window=1)],'g',[],[]))
+   with self.assertRaisesRegex(ValueError,'window'):c.browser_compatible(model)
+ def test_grouped_delta_heads(self):
+  q=np.arange(24,dtype=np.float32).reshape(1,3,8)/50;k=q*.6;v=np.arange(48,dtype=np.float32).reshape(1,3,16)/40
+  state=np.zeros((1,4,4,4),np.float32);g=np.full((1,3,4),-.1,np.float32);beta=np.full((1,3,4),.3,np.float32)
+  values={'q':q,'k':k,'v':v,'state':state,'g':g,'beta':beta}
+  inputs=[h.make_tensor_value_info(n,T.FLOAT,list(a.shape)) for n,a in values.items()]
+  outs=[h.make_tensor_value_info('y',T.FLOAT,[1,3,16]),h.make_tensor_value_info('present',T.FLOAT,[1,4,4,4])]
+  result=run([h.make_node('LinearAttention',list(values),['y','present'],name='linear',domain='com.microsoft',q_num_heads=2,kv_num_heads=4,update_rule='gated_delta',scale=1.,state_window=0)],inputs,outs,[],values)
+  qr=np.repeat(q.reshape(1,3,2,4),2,axis=2);kr=np.repeat(k.reshape(1,3,2,4),2,axis=2);vr=v.reshape(1,3,4,4);memory=state.copy();ys=[]
+  for t in range(3):
+   memory*=np.exp(g[:,t,:,None,None]);delta=vr[:,t]-np.einsum('bhd,bhdv->bhv',kr[:,t],memory)
+   memory+=beta[:,t,:,None,None]*np.einsum('bhd,bhv->bhdv',kr[:,t],delta)
+   ys.append(np.einsum('bhd,bhdv->bhv',qr[:,t],memory))
+  np.testing.assert_allclose(result[0],np.stack(ys,axis=1).reshape(1,3,16),rtol=1e-5,atol=1e-6)
+  np.testing.assert_allclose(result[1],memory,rtol=1e-5,atol=1e-6)
  def test_gate(self):
   a=np.linspace(-15,15,24,dtype=np.float16).reshape(1,6,4);b=a*.6;bias=np.array([-.4,.1,.8,-1],np.float32);scale=-np.exp(np.array([0,1,-1,.5],np.float32))
   out=run([h.make_node('LinearAttentionGate',['a','bias','scale','b'],['g','beta'],name='gate',domain='com.microsoft')],[h.make_tensor_value_info(n,T.FLOAT16,[1,6,4]) for n in ['a','b']],[h.make_tensor_value_info(n,T.FLOAT16,[1,6,4]) for n in ['g','beta']],[nh.from_array(bias,'bias'),nh.from_array(scale,'scale')],{'a':a,'b':b})
