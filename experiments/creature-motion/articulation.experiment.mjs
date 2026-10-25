@@ -53,7 +53,7 @@ export default {
    update();if(inputs.view)session.setView(inputs.view);else frame();
    if(inputs.pose)operations.restore(inputs.pose);
    return {read,operations,
-    mount({root:panel,document,invoke,reopen}) {
+    mount({root:panel,document,invoke,reopen=recipe=>globalThis.window.kaminosWorkbenchExperiments.open('marionette/creature-articulation',recipe)}) {
      const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
      const style=el('style',`.articulation-study{display:grid;gap:12px;padding:10px 0;color:#d9e2e5;font:12px system-ui}.articulation-study label{display:grid;gap:5px}.articulation-study select,.articulation-study input{box-sizing:border-box;width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #536168;border-radius:4px}.articulation-study button{padding:7px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.articulation-axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.articulation-study p{margin:0;line-height:1.45}.articulation-study [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}`);
      const body=el('section');body.className='articulation-study';body.append(style,el('h3','Articulate the creature'),el('p','Click a cyan joint or choose one below. Drag a rotation value; click to type. Rotations follow the joint’s local axes.'));
