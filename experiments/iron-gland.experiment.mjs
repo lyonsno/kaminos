@@ -62,7 +62,8 @@ export default {
       interaction: structuredClone(state), cameraVisible: false, handVisible: handSurface.root.visible, handObjectId: handAsset.id, objectId: machineAsset.id,
       imageSize: [sample.width, sample.height], lastAcquisition: last?.acquisition ?? null,
       lastPrediction: last ? { hasHand: last.hasHand, handedness: last.handedness, cropBox: last.cropBox, cropUV: last.cropUV ? Array.from(last.cropUV) : null } : null,
-      cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off', capture:capture.read(),
+      cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off',
+      capture:{...capture.read(),...(captureStarting&&capture.read().status==='idle'?{status:'starting'}:{})},
       lighting: 'virtual-core-and-scene', occlusion: 'virtual-hand-depth', placement: 'palm-anchored-view-relative-hover' });
     const sync = () => {
       if (startButton) { startButton.textContent = starting ? 'Cancel camera' : running ? 'Stop camera' : 'Start camera'; startButton.disabled = loading || disposed || !route; }
@@ -234,7 +235,7 @@ export default {
           settings:{handedness,size,threshold,label},source:inputs.captureSource??{kind:'live-camera'}});
         frame();return result;
       })().finally(()=>{if(captureStarting===task)captureStarting=null;sync();});
-      captureStarting=task;return task;
+      captureStarting=task;sync();return task;
     };
     const finishCapture = async () => {const result=await capture.finish(capture.read().protocolComplete?'complete':'partial','operator-finished');frame();return result;};
     frame();
