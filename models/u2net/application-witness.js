@@ -9,7 +9,7 @@ const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw Error('WebG
 state.adapter={vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:adapter.info.isFallbackAdapter??null};
 const device=await adapter.requestDevice();
 device.addEventListener('uncapturederror',e=>state.gpuErrors.push(e.error.message));
-const session=await createWebGpuInferenceSession({device,adapter,adapterName:adapter.info.description||'native-WebGPU'});
+const session=await createWebGpuInferenceSession({sessionId:`u2net-witness:${crypto.randomUUID()}`,device,adapter,adapterName:adapter.info.description||'native-WebGPU'});
 const foreground=createWebGpuForegroundService({device,routeId:'u2net-witness-host'});
 const app=window.u2netApp=await createU2NetApp({session,foreground,weightsUrl:'/weights/',load:false,onProgress:p=>{state.loading=p;}});
 const canvas=$('activity'),context=canvas.getContext('webgpu'),format=navigator.gpu.getPreferredCanvasFormat();context.configure({device,format,alphaMode:'opaque'});
