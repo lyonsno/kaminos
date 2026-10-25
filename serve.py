@@ -4029,6 +4029,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/api/prompt-expander/'):
+            import prompt_expander
+            return prompt_expander.handle(self, 'GET', parsed.path, ROOT)
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/workbench-experiments":
@@ -4129,6 +4132,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/api/prompt-expander/'):
+            import prompt_expander
+            return prompt_expander.handle(self, 'POST', parsed.path, ROOT)
         if parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':
