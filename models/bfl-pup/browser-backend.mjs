@@ -35,6 +35,10 @@ export function helperMessages(prompt,referenceCount,systems){
 export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runtimeUrl=TRANSFORMERS_URL}={}){
   if(!modelUrl) throw Error('A BFL ONNX model package URL is required.');
   const base=new URL(modelUrl,globalThis.location?.href).href.replace(/\/$/,'');
+  if(new URL(base).origin!==globalThis.location.origin)throw Error('Mount the local conversion package on the page origin for this browser trial.');
+  // Transformers.js4.2 resolves same-origin packages as paths. Its hub loader
+  // deliberately skips direct HTTP URLs, then rejects them as invalid HF IDs.
+  const packagePath=new URL(base).pathname;
   const response=await fetch(base+'/provenance.json');
   if(!response.ok) throw Error(`Model provenance HTTP ${response.status}`);
   const provenance=await response.json();
@@ -50,12 +54,12 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   tf.env.useBrowserCache=false;
   tf.env.allowLocalModels=true;
   onProgress({phase:'processor'});
-  const processor=await tf.AutoProcessor.from_pretrained(base);
+  const processor=await tf.AutoProcessor.from_pretrained(packagePath);
   let model=null,busy=false;
   async function load(){
     if(model)return;
     onProgress({phase:'model'});
-    model=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(base,{
+    model=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
       device:'webgpu',dtype:{embed_tokens:'q4f16',vision_encoder:'fp16',decoder_model_merged:'q4f16'},
       progress_callback:e=>onProgress({phase:'model',...e}),
     });
