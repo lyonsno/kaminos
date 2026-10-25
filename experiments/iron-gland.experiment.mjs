@@ -59,7 +59,7 @@ export default {
       imageSize: [sample.width, sample.height], lastAcquisition: last?.acquisition ?? null,
       lastPrediction: last ? { hasHand: last.hasHand, handedness: last.handedness, cropBox: last.cropBox, cropUV: last.cropUV ? Array.from(last.cropUV) : null } : null,
       cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off',
-      lighting: 'virtual-core-and-scene', occlusion: 'virtual-hand-depth' });
+      lighting: 'virtual-core-and-scene', occlusion: 'virtual-hand-depth', placement: 'palm-anchored-view-relative-hover' });
     const sync = () => {
       if (startButton) { startButton.textContent = starting ? 'Cancel camera' : running ? 'Stop camera' : 'Start camera'; startButton.disabled = loading || disposed || !route; }
       if (loadButton) loadButton.disabled = loading || disposed || running || starting || !!flight;
@@ -81,7 +81,11 @@ export default {
       lastFrameAt = now; last = result; frameCount++; if (!observation) missCount++;
       if (palm && observation) {
         handSurface.root.position.set((state.anchor[0]-.5)*4.4, 2.2+(.5-state.anchor[1])*3.3, 0);
-        machine.root.position.copy(handSurface.root.position).addScaledVector(palm.normal, palm.width*10*.8);
+        // Presentation-space levitation: reversing the hand view must not put
+        // the instrument behind the hand. This is not physical palm contact.
+        machine.root.position.copy(handSurface.root.position);
+        machine.root.position.y += palm.width*10*.6;
+        machine.root.position.z += palm.width*10*.85;
         machine.root.quaternion.copy(palm.quaternion);
         machine.root.scale.setScalar(palm.width*10*.65*size);
       } else handSurface.root.visible = false;
