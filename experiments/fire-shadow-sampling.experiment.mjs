@@ -7,4 +7,3 @@ export default {
     return createFireShadowSettings({session:await host.scene.open(),document:host.controls.document,inputs,record,updateInputs,diagnostics:true});
   },
 };
-
