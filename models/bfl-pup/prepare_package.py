@@ -78,6 +78,13 @@ def package_graph(source, target, *, head_dim, chunk_bytes=2**31-1):
     return index + 1
 
 
+def browser_processor_metadata(preprocessor, processor):
+    processor_class=processor.get('processor_class')
+    if processor_class!='Qwen3VLProcessor':
+        raise ValueError('Expected the canonical BFL Qwen3VL processor.')
+    return {**preprocessor,'processor_class':processor_class}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['source', 'decoder', 'vision', 'embeddings', 'system-prompts', 'out', 'report']:
@@ -107,6 +114,9 @@ def main():
             if path.is_file() and path.suffix in {'.json', '.jinja', '.md'}:
                 shutil.copyfile(path, args.out/path.name)
         shutil.copyfile(args.system_prompts, args.out/'system_prompts.json')
+        preprocessor=browser_processor_metadata(json.loads((args.out/'preprocessor_config.json').read_text()),
+            json.loads((args.out/'processor_config.json').read_text()))
+        (args.out/'preprocessor_config.json').write_text(json.dumps(preprocessor,indent=2)+'\n')
         external = {}
         for folder, name in [(args.decoder,'decoder_model_merged_q4f16.onnx'),
                              (args.vision,'vision_encoder_fp16.onnx'),
