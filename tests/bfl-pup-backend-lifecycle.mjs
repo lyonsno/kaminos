@@ -11,7 +11,7 @@ export const AutoProcessor={from_pretrained:async()=>Object.assign(async()=>({in
 export class LogitsProcessor{};export class InterruptableStoppingCriteria{interrupt(){}};export class TextStreamer{};
 export const Qwen3_5ForConditionalGeneration={from_pretrained:async()=>{
  const state=globalThis.pupRuntimeTest;state.loads++;
- return {sessions:{embed_tokens:{config:{device:'webgpu'}},vision_encoder:{config:{device:state.loads>state.acceptAfter?'webgpu':'wasm'}},decoder_model_merged:{config:{device:'webgpu'}}},
+ return {_get_text_only_rope_index(){return [{},{data:new BigInt64Array(1)}];},sessions:{embed_tokens:{config:{device:'webgpu'}},vision_encoder:{config:{device:state.loads>state.acceptAfter?'webgpu':'wasm'}},decoder_model_merged:{config:{device:'webgpu'}}},
  generate:async()=>{state.generated++;return {sequences:{tolist:()=>[[1n,12n,248046n]],dispose(){}}};},
  dispose:async()=>{state.disposed++;}};
 }};`;
