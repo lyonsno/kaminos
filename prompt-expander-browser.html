@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt studio · Kaminos</title>
+<style>
+  :root { color-scheme:dark; font:15px/1.5 system-ui,sans-serif; background:#101113; color:#ece9e3; }
+  * { box-sizing:border-box; } body { margin:0; } main { max-width:1150px; margin:auto; padding:40px 28px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:34px; }
+  .eyebrow { color:#c2aa82; letter-spacing:.15em; font-size:11px; text-transform:uppercase; }
+  h1 { font-size:32px; letter-spacing:-1px; font-weight:500; margin:5px 0; } p { margin:0; color:#aaa9a7; }
+  a { color:#dbbf91; } .badge { border:1px solid #494238; color:#dac4a2; padding:6px 11px; border-radius:20px; font-size:12px; white-space:nowrap; }
+  .columns { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .panel { background:#191a1d; border:1px solid #323337; border-radius:16px; padding:23px; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:13px; }
+  h2 { margin:0; font-size:16px; font-weight:550; } label { display:block; }
+  textarea { width:100%; background:#121316; color:#f1eeea; border:1px solid #35363a; border-radius:10px; padding:15px; font:inherit; line-height:1.65; resize:vertical; min-height:190px; }
+  textarea:focus { outline:2px solid #ba9767; outline-offset:2px; } #output { min-height:410px; }
+  button,.file-label { display:inline-block; background:#292a2f; color:#e8e4dd; border:1px solid #44454b; border-radius:8px; padding:9px 13px; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.4; cursor:default; } button:hover:not(:disabled),.file-label:hover { background:#35363d; }
+  #expand { background:#d7b47f; border-color:#d7b47f; color:#1a1711; font-weight:650; padding:12px 19px; }
+  #expand:hover:not(:disabled) { background:#eac997; } .row { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .muted { font-size:12px; color:#a4a3a1; } #refs { display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; }
+  figure { margin:0; position:relative; width:100px; } figure img { width:100px; height:100px; object-fit:contain; background:#0d0e0f; border-radius:8px; }
+  figure button { position:absolute; right:3px; top:3px; border-radius:50%; padding:0; width:23px; height:23px; background:#15161de6; }
+  figcaption { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:#aaa; }
+  #status { margin-top:20px; min-height:45px; color:#d2c0a2; } #status.error { color:#f2a4a0; }
+  .footer { display:flex; justify-content:space-between; gap:20px; margin-top:21px; font-size:12px; color:#828386; }
+  details { margin-top:25px; color:#aaa; font-size:12px; } pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+  #history { background:#191a1d; color:#ddd; padding:7px; border:1px solid #393a3e; border-radius:6px; max-width:100%; }
+  @media(max-width:780px) { main { padding:25px 16px; } .columns { grid-template-columns:1fr; } header { align-items:flex-start; } #output { min-height:280px; } .badge { white-space:normal; } }
+</style>
+<main>
+  <header><div><div class="eyebrow">Kaminos / Prompt studio</div><h1>Give the idea more shape.</h1><p>BFL’s prompt helper, with your reference images in view.</p></div><span class="badge">Qwen3.5 · 9B · Browser</span></header>
+  <div class="columns">
+    <section class="panel">
+      <div class="panel-head"><h2><label for="prompt">Your request</label></h2><span id="mode" class="muted">Scene caption</span></div>
+      <textarea id="prompt" placeholder="Describe the image you want—or add a reference and describe what should change."></textarea>
+      <div class="row"><label class="file-label" for="images">Add reference images</label><input id="images" type="file" accept="image/*" multiple hidden><span class="muted">Optional · up to 10 · order matters</span></div>
+      <div id="refs"></div>
+      <div class="row"><button id="expand">Expand prompt</button><button id="cancel" hidden>Cancel</button><span class="muted">⌘ / Ctrl + Enter</span></div>
+      <div id="status" role="status" aria-live="polite">Enter a request to expand. The model loads when you start.</div>
+      
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2><label for="output">Expanded prompt</label></h2><button id="copy" disabled>Copy</button></div>
+      <textarea id="output" placeholder="The expanded prompt appears here. Edit it before copying it into Generate." spellcheck="false"></textarea>
+      <div class="row"><span id="timing" class="muted"></span></div>
+      <p class="muted" style="margin-top:12px">This page expands text. Copy the result into your image generator; use the same reference images there.</p>
+    </section>
+  </div>
+  <div class="footer"><span>Runs in this browser. First use loads the prompt model.</span><a href="index.html?workspace=authoring">Kaminos workspace ↗</a></div>
+  <details><summary>Run details</summary><pre id="details">No request yet.</pre></details>
+</main>
+<script type="module" src="models/bfl-pup/studio.mjs"></script>
