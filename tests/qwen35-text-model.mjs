@@ -82,3 +82,14 @@ test('disposing a parked request releases it without resuming its borrowed contr
   await control.resume(); await work; await disposal; await model.destroy(); await control.close();
   assert.equal(status, 'paused'); assert.ok(disposedWhileParked);
 });
+test('concurrent disposal callers both wait for the state retirement fence', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });
+  const model = new Qwen35TextModel(device, manifest, { control }); await model.load('http://localhost/model/', { fetchImpl });
+  const state = await model.createState({ capacity: 4 });
+  let release; const fence = new Promise(resolve => { release = resolve; }); device.queue.onSubmittedWorkDone = () => fence;
+  const first = model.disposeState(state); let secondFinished = false;
+  const second = model.disposeState(state).then(() => { secondFinished = true; });
+  await new Promise(setImmediate); const retiredEarly = secondFinished;
+  release(); await first; await second; await model.destroy(); await control.close();
+  assert.equal(retiredEarly, false); assert.equal(state.buffers.size, 0);
+});

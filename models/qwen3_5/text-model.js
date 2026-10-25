@@ -229,11 +229,13 @@ export class Qwen35TextModel {
   }
   async disposeState(state) {
     if (state?.owner !== this) throw new Error('foreign generation state');
-    if (state.closed) return;
-    state.closed = true; state.abort.abort('generation state disposed');
-    if (this.activeState === state) await this.active.catch(() => {});
-    try { await this.device.queue.onSubmittedWorkDone(); }
-    finally { for (const b of state.buffers) b.destroy(); state.buffers.clear(); this.states.delete(state); }
+    if (!state.disposal) state.disposal = (async () => {
+      state.closed = true; state.abort.abort('generation state disposed');
+      if (this.activeState === state) await this.active.catch(() => {});
+      try { await this.device.queue.onSubmittedWorkDone(); }
+      finally { for (const b of state.buffers) b.destroy(); state.buffers.clear(); this.states.delete(state); }
+    })();
+    return state.disposal;
   }
   async destroy() {
     this.closed = true; this.lifetime.abort('model destroyed');
