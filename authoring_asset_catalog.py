@@ -33,6 +33,7 @@ def visibility_holds():
             or not all(isinstance(hold.get(key),str) and hold[key] for key in ('id','label','basis'))
             or not re.fullmatch(r'[a-f0-9]{64}',str(hold.get('sha256','')))
             or not isinstance(hold.get('size'),int) or hold['size']<0
+            or ('reason' in hold and (not isinstance(hold['reason'],str) or not hold['reason'].strip()))
             or not isinstance(hold.get('sources'),list) or not hold['sources']
             or not all(isinstance(source,str) and source.startswith('/api/') for source in hold['sources'])):
             raise ValueError('Invalid asset visibility hold record')
@@ -51,7 +52,7 @@ def visibility_holds():
                 return entry
         if hold:
             entry['label']=hold['label']
-            entry['visibility']={'status':'withheld','reason':'Hostile to eyesight. Awaiting further review.','holdId':hold['id'],'basis':hold['basis']}
+            entry['visibility']={'status':'withheld','reason':hold.get('reason','Hostile to eyesight. Awaiting further review.'),'holdId':hold['id'],'basis':hold['basis']}
         return entry
     return apply
 

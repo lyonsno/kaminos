@@ -7,6 +7,7 @@ try{
  const response=await fetch('./artifacts/inference-kiln/study.json');if(!response.ok)throw Error('The kiln study could not be loaded');
  const study=await response.json();if(study.schema!=='kaminos.inference-kiln-study.v1')throw Error('Unrecognized kiln study');
  const target=new URL('./',location.href);for(const [key,value] of Object.entries(study.query))target.searchParams.set(key,value);
+ if(new URL(location.href).searchParams.get('material')==='1')target.searchParams.set('experiment','inference-kiln-material');
  const prompt=new URL(location.href).searchParams.get('prompt');if(prompt)target.searchParams.set('experiment_inputs',JSON.stringify({prompt}));
  location.replace(target.href);
 }catch(error){document.getElementById('status').textContent=error.message;}

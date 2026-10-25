@@ -25304,7 +25304,7 @@ const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
 const burnableEditTargets=new Set();
 function syncBurnableStatus(){
-  const output=document.getElementById('object-burnable-status');if(!output)return;
+  const output=document.getElementById('object-burnable-status');if(!output||document.getElementById('object-burnable')?.disabled)return;
   const state=sceneBurning?.read(workingScene.activeObjectId),text=state?.error??(state?.status==='waiting-for-fire'?'Waiting for fire':'');
   if(output.textContent!==text)output.textContent=text;
 }
@@ -25391,10 +25391,10 @@ function syncSceneDataInspector() {
   const renderPanel=document.getElementById('selected-render-properties');
   const burnPanel=document.getElementById('selected-burnable-properties');
   if(burnPanel){
-    let supported=false;try{resolveBurnableTarget(workingScene.objects,entry?.id);supported=true;}catch{}
-    burnPanel.hidden=!supported&&!entry?.burnable?.enabled;
-    document.getElementById('object-burnable').checked=entry?.burnable?.enabled===true;
-    syncBurnableStatus();
+    let supported=false,reason='';try{resolveBurnableTarget(workingScene.objects,entry?.id);supported=true;}catch(error){reason=error.message;}
+    burnPanel.hidden=!canCollideWithFire(entry);
+    const burnInput=document.getElementById('object-burnable');burnInput.disabled=!supported;burnInput.checked=entry?.burnable?.enabled===true;
+    if(supported)syncBurnableStatus();else document.getElementById('object-burnable-status').textContent=reason;
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
     if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
@@ -25548,6 +25548,7 @@ function installSceneConstruction() {
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
     setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled,material:'wood'},'Set burnable wood');},
     burningState:id=>sceneBurning.read(id),
+    settleCombustion:()=>sceneBurning.sync(),
     burningSnapshot:id=>sceneBurning.snapshot(id),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},

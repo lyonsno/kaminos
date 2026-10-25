@@ -1,10 +1,12 @@
+import {createPromptRelief} from './inference-kiln-relief.mjs';
 import {Group,Mesh,PlaneGeometry,CanvasTexture,SRGBColorSpace,DoubleSide,MeshStandardMaterial,PointLight} from './lib/three.core.js';
 import {MeshStandardNodeMaterial} from './lib/three.webgpu.js';
 import {uniform,texture,uv,float,vec3,sin,smoothstep,mix} from './lib/three.tsl.js';
 
 // A prompt ceremony: erosion is presentation, not a physical combustion claim.
 // The original text survives every burn and is never edited by the animation.
-export function createInferenceKiln({document,prompt='A weathered bronze lantern',duration=6}){
+export function createInferenceKiln({document,prompt='A weathered bronze lantern',duration=6,representation='billboard'}){
+  if(!['billboard','relief'].includes(representation))throw Error('Unknown prompt representation');
   if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');
   if(!Number.isFinite(duration)||duration<=0)throw Error('Duration must be positive finite seconds');
   const root=new Group();root.name='Inference Kiln';
@@ -20,6 +22,8 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
   paper.opacityNode=texture(map,p).a.mul(remaining);
   paper.emissiveNode=vec3(1,.11,.008).mul(ember.mul(1.8));
   const text=new Mesh(new PlaneGeometry(2,.5),paper);text.position.set(0,.15,.13);text.name='Prompt';root.add(text);
+  const solid=representation==='relief'?new MeshStandardMaterial({color:0xb8b2a8,roughness:.8,metalness:0}):null;
+  if(solid){text.material=solid;text.castShadow=true;text.receiveShadow=true;}
   const floorMaterial=new MeshStandardMaterial({color:0x181a1e,roughness:.97,metalness:0});
   const floor=new Mesh(new PlaneGeometry(200,200),floorMaterial);floor.rotation.x=-Math.PI/2;floor.position.y=-1.8;floor.receiveShadow=true;root.add(floor);
   const backdrop=new Mesh(new PlaneGeometry(200,200),floorMaterial);backdrop.position.z=-2.5;root.add(backdrop);
@@ -32,11 +36,13 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
     for(const word of words){const candidate=line?`${line} ${word}`:word;if(line&&ctx.measureText(candidate).width>880){lines.push(line);line=word;}else line=candidate;}if(line)lines.push(line);
     canvas.height=Math.max(180,lines.length*92+40);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.font='500 76px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';
     lines.forEach((line,index)=>ctx.fillText(line,512,25+index*92+40,900));
-    map.needsUpdate=true;text.scale.y=(canvas.height/1024*2)/.5;
+    map.needsUpdate=true;
+    if(solid){const geometry=createPromptRelief(canvas);text.geometry.dispose();text.geometry=geometry;text.scale.y=1;}
+    else text.scale.y=(canvas.height/1024*2)/.5;
     reset();return read();
   }
   function reset(){elapsed=0;running=false;burn.value=-.12;light.intensity=0;return read();}
-  function ignite(){elapsed=0;running=true;burn.value=-.12;return read();}
+  function ignite(){if(solid)throw Error('Relief ignition uses scene-owned combustion');elapsed=0;running=true;burn.value=-.12;return read();}
   function advance(seconds){
     if(disposed||!running)return read();
     if(!Number.isFinite(seconds)||seconds<0)throw Error('Invalid frame duration');
@@ -46,7 +52,7 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
     if(progress===1)running=false;
     return read();
   }
-  function read(){return {prompt:source,elapsed,duration,running,consumed:elapsed>=duration,progress:Math.min(1,elapsed/duration),representation:'transparent-text-billboard',burnAuthority:'presentation-clock'};}
+  function read(){if(solid)return {prompt:source,representation:'shallow-glyph-mesh',burnAuthority:'scene-owned-thermal'};return {prompt:source,elapsed,duration,running,consumed:elapsed>=duration,progress:Math.min(1,elapsed/duration),representation:'transparent-text-billboard',burnAuthority:'presentation-clock'};}
   setPrompt(prompt);
-  return {root,setPrompt,reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();text.geometry.dispose();paper.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
+  return {root,text,setPrompt,reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();text.geometry.dispose();paper.dispose();solid?.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
 }

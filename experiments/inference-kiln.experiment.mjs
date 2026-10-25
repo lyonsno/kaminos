@@ -1,3 +1,4 @@
+import {ensureKilnSceneDomain} from '../inference-kiln-scene.mjs';
 import {createInferenceKiln} from '../inference-kiln.mjs';
 
 export default {id:'inference-kiln',title:'Inference Kiln',async create({host,inputs={},record}){
@@ -23,14 +24,16 @@ export default {id:'inference-kiln',title:'Inference Kiln',async create({host,in
   }
   try{
     kiln=createInferenceKiln({document:doc,prompt:inputs.prompt??'A weathered bronze lantern',duration:inputs.duration??6});
-    asset=await session.attach(kiln.root,{owned:true,metadata:{label:'Inference Kiln',type:'experiment',source:'inference-kiln:prompt-study'}});
+    kiln.text.removeFromParent();
+    await session.attach(kiln.root,{owned:true,presentation:true});
+    asset=await session.attach(kiln.text,{owned:true,metadata:{label:'Prompt',type:'pbr'}});
     await host.volume.ready;flame=await host.flame.open();
     if(!flame.read().active)throw Error('Inference Kiln needs the flame route; open inference-kiln-study.html');
     const original=flame.read().settings;
     restoreControls=Object.fromEntries(['volume-flow-rate','volume-immersed-fuel','volume-ray-start-noise','volume-ray-noise-animated'].map(id=>[id,(original.domControls[id]??original.rendererControls?.[id]).value]));
     runtime=host.volume.get();wasPaused=runtime.debugState().simulationPaused===true;
     canvas=runtime.canvasElement?.();opacity=canvas?.style.opacity;
-    runtime.setSimulationPaused(true);flame.setControls({'volume-ray-start-noise':false,'volume-ray-noise-animated':false});setFeed(false);showFire(0);hideHelpers();setGround(false);
+    runtime.setSimulationPaused(true);await ensureKilnSceneDomain(host,flame);flame.setControls({'volume-ray-start-noise':false,'volume-ray-noise-animated':false});setFeed(false);showFire(0);hideHelpers();setGround(false);
     doc.defaultView.kaminosSelection?.clear();
     const read=()=>({...kiln.read(),cooling:cooling>0,objectId:asset.id,flame:flame.read().clock,
       controls:flame.read().runtime.controls,scope:'visual-study-no-model-inference'});
