@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[];
- const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
+ const input=selector=>{if(!nodes.has(selector)){const node={children:[],prepend(...children){this.children.unshift(...children);},value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
  for(const name of ['width','samples','rate','radius','strength','passes','target'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
@@ -53,14 +53,17 @@ for(const mode of ['continuous','finite_drop','failure']){
  const facadeBody=source.slice(source.indexOf(' return {...finite,'),source.lastIndexOf('\n}'));
  const facade=new Function('finite','initial','records','pendingSetup','options',facadeBody)(finite,{sourceIds:['A']},[],{}, {setup:{}});
  const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
- const c={authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
+ const c={authoredWaterStarting:false,authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
   authoredWaterDraftPreview:null,localLiquidSetup:null,sceneObjectTransformState:()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}),describeAuthoredWaterDrop:()=>({}),resolveAuthoredWaterSampling:()=>({}),selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
  vm.createContext(c);
- const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
+ const reader=application.slice(application.indexOf('function authoredWaterStatus(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
  Object.assign(c,{fitAuthoredWaterBounds(){},addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){},previewAuthoredWaterSetup(){}});
  vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
+ const detailed=facade.state;facade.state=()=>{throw Error('Full diagnostic state requested on the playback hot path');};
+ assert.equal(c.window.kaminosWaterSources.readStatus().runtime.paused,true);facade.state=detailed;
+ assert.equal(typeof c.window.kaminosWaterSources.setPaused,'function','Shared playback needs idempotent pause/play, not a toggle');
  f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
  const check=(paused,step)=>{
   f.controls.refreshStatus();assert.equal(facade.paused,paused,'Authored facade must forward effective playback state');
@@ -68,7 +71,8 @@ for(const mode of ['continuous','finite_drop','failure']){
   assert.match(f.input('[data-state]').textContent,new RegExp(`${paused?'Paused':'Playing'} · tick ${step}`));
   assert.equal(f.input('[data-pause]').textContent,paused?'Play':'Pause');
   const drawContext={...c,isSceneItemVisible:()=>true,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,console,sharedWorkbench:{update(value){drawContext.footer=value;}},renderPipeline:{render(){}},setInfo(){}};
-  vm.createContext(drawContext);vm.runInContext(arm,drawContext);
+  let detailedReads=0;const detail=facade.state;facade.state=()=>{detailedReads++;return detail();};
+  vm.createContext(drawContext);vm.runInContext(arm,drawContext);facade.state=detail;assert.equal(detailedReads,0,'Footer must not request full diagnostic state on every frame');
   assert.equal(drawContext.footer.status,paused?'Paused':'Playing','Footer and panel agree on playback');
  };
  facade.setPaused(false);check(false,0);f.draftWidth(.75);

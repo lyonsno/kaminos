@@ -24,6 +24,7 @@ controls.elements.timeline.value='1.25';await controls.elements.timeline.oninput
 assert.equal(state.playing,false,'scrubbing remains held');
 const children=[...controls.node.children];state.time=1.999;controls.update();assert.deepEqual(controls.node.children,children,'time updates do not rebuild the strip or focused controls');
 controls.elements.rate.value='0.5';await controls.elements.rate.onchange();assert.equal(state.rate,.5);
+state.canRate=false;controls.update();assert.equal(controls.elements.rate.disabled,true,'An owner without a rate operation must not offer an ineffective speed control');state.canRate=true;controls.update();assert.equal(controls.elements.rate.disabled,false);
 reject=true;await controls.elements.replay.onclick();assert.match(controls.elements.error.textContent,/Owner refused/);reject=false;
 state.duration=null;controls.update();assert.equal(controls.elements.timeline.hidden,true,'unbounded simulation must not invent a finite scrub range');
 state.duration=2;controls.update();assert.equal(controls.elements.timeline.hidden,false);

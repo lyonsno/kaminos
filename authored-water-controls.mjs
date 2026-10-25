@@ -1,9 +1,10 @@
+import {mountPlaybackControls} from './playback-controls.mjs';
 import {normalizeAuthoredWaterDrop,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
 /** Water properties use the ordinary scene edit API. Debounce typing; finish a
  * numeric drag before committing, so Escape still cancels one whole gesture. */
-export function mountAuthoredWaterControls({document,root,sourceRoot=null,simulationRoot=null,controls,api,schedule=setTimeout,cancel=clearTimeout}) {
+export function mountAuthoredWaterControls({document,root,viewport=null,sourceRoot=null,simulationRoot=null,controls,api,schedule=setTimeout,cancel=clearTimeout}) {
  const node=document.createElement('section');node.className='panel authored-water-controls';
- node.innerHTML=`<style>.authored-water-controls [hidden]{display:none!important}.authored-water-controls .hint{font-size:12px;line-height:1.45;color:#a9b8be;margin:8px 0}.authored-water-controls [data-bounds] label{display:grid;grid-template-columns:4.5em repeat(3,minmax(0,1fr));align-items:center;gap:4px}.authored-water-controls [data-bounds] input{min-width:0;width:100%}.authored-water-controls [data-actions]{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}</style><h2>Water</h2><button class="btn" data-add>Add water drop</button><button class="btn" data-select-simulation>Shared water settings</button><p class="hint">Place drops, then play. Select a water object for its properties.</p><div data-run><button class="btn" data-reset>Reset</button><button class="btn" data-release>Replay</button><button class="btn" data-pause>Play</button><p class="hint" data-state role="status"></p><p class="hint" data-play-blocked role="status"></p><button class="btn" data-fit-bounds hidden>Fit bounds to water</button></div><div data-compatibility><p class="hint" data-compatibility-status role="status"></p><p class="hint" data-match-plan></p><button class="btn" data-match>Match drops to selected setup</button><p role="alert" data-match-error></p></div><div data-simulation><label>Rough particle target · all water<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-resolution-summary></p><label><input type="checkbox" data-container>Invisible container · all water</label><div data-bounds></div><p class="hint">Container dimensions apply only while its walls are enabled. Neighbor searches follow the water automatically. Authored planes, spheres and bowls provide water collision support.</p><label>Density passes · all drops<input class="transform-input" type="number" step="1" min="1" data-passes></label><p class="hint">One shared solver applies this count to every drop, so their particles interact. Changes save automatically for the next Replay.</p><div data-timestep><label>Physics ticks / simulated second<input class="transform-input" type="number" step="1" min="30" max="240" data-step-frequency></label><p class="hint" data-timestep-summary></p><p class="hint">120 = 1/120 s per physics tick; 240 = 1/240 s. Applies on Replay; playback rate stays unchanged. Render cadence advances one physics tick per rendered frame at 1×, so 120 advances twice the simulated time per frame as 240. Compare elapsed simulated seconds. Current solver range: 30–240 ticks/s. A long step with fine particles may exceed the viscosity mixing limit.</p></div><p class="hint" data-material-scale></p><p role="alert" data-simulation-error></p></div>
+ node.innerHTML=`<style>.authored-water-controls [hidden]{display:none!important}.authored-water-controls .hint{font-size:12px;line-height:1.45;color:#a9b8be;margin:8px 0}.authored-water-controls [data-bounds] label{display:grid;grid-template-columns:4.5em repeat(3,minmax(0,1fr));align-items:center;gap:4px}.authored-water-controls [data-bounds] input{min-width:0;width:100%}.authored-water-controls [data-actions]{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}</style><h2>Water</h2><button class="btn" data-add>Add water drop</button><button class="btn" data-select-simulation>Shared water settings</button><p class="hint">Place drops, then play. Select a water object for its properties.</p><div data-run><button class="btn" data-reset>Reset</button><button class="btn" data-release>Replay</button><button class="btn" data-pause>Play</button><p class="hint" data-state role="status"></p><p class="hint" data-play-blocked role="status"></p><button class="btn" data-fit-bounds hidden>Fit bounds to water</button></div><div data-compatibility><p class="hint" data-compatibility-status role="status"></p><p class="hint" data-match-plan></p><button class="btn" data-match>Match drops to selected setup</button><p role="alert" data-match-error></p></div><div data-simulation><label>Rough particle target · all water<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-resolution-summary></p><label><input type="checkbox" data-container>Invisible container · all water</label><div data-bounds></div><p class="hint">Container dimensions apply only while its walls are enabled. Neighbor searches follow the water automatically. Authored planes, spheres and bowls provide water collision support.</p><label>Density passes · all drops<input class="transform-input" type="number" step="1" min="1" data-passes></label><p class="hint">One shared solver applies this count to every drop, so their particles interact. Changes save automatically for the next Replay.</p><div data-timestep><label>Physics ticks / simulated second<input class="transform-input" type="number" step="1" min="0" data-step-frequency></label><p class="hint" data-timestep-summary></p><p class="hint">120 = 1/120 s per physics tick; 240 = 1/240 s. Applies on Replay; playback rate stays unchanged. Render cadence advances one physics tick per rendered frame at 1×, so 120 advances twice the simulated time per frame as 240. Compare elapsed simulated seconds. Positive finite timesteps are executable. A long step with fine particles can make viscosity extrapolate; its effective blend is shown below.</p></div><p class="hint" data-material-scale></p><p role="alert" data-simulation-error></p></div>
  <div data-selected hidden><p class="hint" data-label></p><p class="hint">Initial particles at rest; no simulation steps. Changes save automatically. Released water moves independently; edits apply on the next release.</p><label>Water mode<select class="select-input" data-mode><option value="finite_drop">Finite drop</option><option value="continuous">Continuous flow</option></select></label>
  <div data-drop><label>Drop width<input class="transform-input" type="number" step="0.01" data-width></label><label hidden>Legacy particles across<input class="transform-input" type="number" step="1" min="1" readonly data-samples></label><p class="hint" data-proposed></p><p class="hint">Particle count follows the shared target automatically. Size is requested; initial water is quantized to particle layers.</p></div>
  <div data-flow hidden><label>Particles / second<input class="transform-input" type="number" min="0" step="100" data-rate></label><label>Aperture radius<input class="transform-input" type="number" min="0.035" max="0.18" step=".001" data-radius></label><label>Flow strength<input class="transform-input" type="number" min=".25" max="2.6" step=".01" data-strength></label><button class="btn" data-stop>Stop emission</button></div><p role="status" data-source-status></p><p role="alert" data-source-error></p></div><p role="alert" data-run-error></p>`;
@@ -12,8 +13,9 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  sourcePanel.classList.add('authored-water-controls');simulationPanel.classList.add('authored-water-controls');
  const $=q=>node.querySelector(q)??sourcePanel.querySelector(q)??simulationPanel.querySelector(q);
  const sourceError=$('[data-source-error]'),runError=$('[data-run-error]'),simulationError=$('[data-simulation-error]');
- let selected=null,dirty=false,simulationDirty=false,revision=0,simulationRevision=0,disposed=false,inFlight=null,ownWrite=null,acceptedSource=null,acceptedSimulation=null,runRevision=0,previewInfo=null;
+ let cachedState=null,selected=null,dirty=false,simulationDirty=false,revision=0,simulationRevision=0,disposed=false,inFlight=null,ownWrite=null,acceptedSource=null,acceptedSimulation=null,runRevision=0,previewInfo=null;
  const timers=new Map(),gestures=new Set(),scrubs=[];
+ let playback=null,playbackRate=1;
  const stopTimer=kind=>{if(timers.has(kind)){cancel(timers.get(kind));timers.delete(kind);}};
  const current=(id,version)=>!disposed&&selected?.id===id&&revision===version;
  const call=async(action,{error=runError}={})=>{if(disposed)return;const id=selected?.id,version=revision,runVersion=error===runError?++runRevision:runRevision;try{error.textContent='';await action();if(!disposed)refresh();return true;}catch(e){if(!disposed&&(error!==sourceError||current(id,version))&&(error!==runError||runVersion===runRevision))error.textContent=e.message;return false;}};
@@ -96,10 +98,11 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  $('[data-match]').onclick=()=>call(()=>api.match(selected?.id??api.read().simulation?.compatibility?.match?.referenceId),{error:$('[data-match-error]')});
  $('[data-fit-bounds]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.fitBounds();});
  $('[data-reset]').onclick=()=>call(()=>api.reset());
- $('[data-release]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.release(selected?.id??api.read().sources?.[0]?.id);});
- $('[data-pause]').onclick=()=>call(async()=>{if(api.read().runtime)return api.pause();if(await flush('source')&&await flush('simulation'))return api.release(selected?.id??api.read().sources?.[0]?.id);});
+ async function restart(paused=false){if(!await flush('source')||!await flush('simulation'))throw Error('Complete the water properties before playback');await api.release(selected?.id??api.read().sources?.[0]?.id,{paused});if(api.read().sources?.every(r=>r.mode==='finite_drop'))api.setPlaybackRate?.(playbackRate);}
+ $('[data-release]').onclick=()=>call(()=>restart());
+ $('[data-pause]').onclick=()=>call(async()=>{if(api.read().runtime)return api.pause();return restart();});
  function refresh(){
-  if(disposed)return;const s=api.read();
+  if(disposed)return;const s=api.read();cachedState=s;
   const sourceSignature=JSON.stringify(s.selected?.settings),simulationSignature=JSON.stringify(s.simulation?.settings);
   const sourceChanged=s.selected?.id!==selected?.id||(acceptedSource!==sourceSignature&&ownWrite!=='source');
   if(sourceChanged){restorePreview();stopTimer('source');dirty=false;revision++;sourceError.textContent='';}
@@ -120,6 +123,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
    }
    showProposal();
   }
+  if(playback)playback.node.hidden=!(s.selected||s.simulation?.selected);
   refreshCompatibility(s);refreshStatus(s);
  }
  function refreshCompatibility(s=api.read()){
@@ -135,19 +139,22 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   const hz=Number($('[data-step-frequency]').value),dt=s.runtime?.materialScaling?.dt;
   const requested=Number.isFinite(hz)&&hz>0?`${hz.toLocaleString()} ticks/s · ${(1000/hz).toPrecision(5)} ms per physics tick`:'Enter a physics tick frequency.';
   const current=dt?` Current run: ${(1/dt).toLocaleString()} ticks/s · ${(dt*1000).toPrecision(5)} ms.`:'';
-  $('[data-timestep-summary]').textContent=requested+current;
+  const viscosity=s.runtime?.viscosityScaling;
+  const mixing=viscosity?` Viscosity blend ceiling ${viscosity.maximumBlend.toPrecision(4)}${viscosity.extrapolates?' · exceeds 1: extrapolation, not averaging.':''}`:'';
+  const text=requested+current+mixing;if($('[data-timestep-summary]').textContent!==text)$('[data-timestep-summary]').textContent=text;
  }
- function refreshStatus(s=api.read()){
+ function refreshStatus(s=api.readStatus?{...cachedState,...api.readStatus()}:api.read()){
+  playback?.update();
   showTimeStepSummary(s);
   const scale=s.runtime?.materialScaling; $('[data-material-scale]').textContent=scale?.mode==='reference_acceleration'?`Repulsion uses the same reference acceleration across timestep, support radius and pass count. Effective positional coefficient ${scale.repulsionCoefficient.toPrecision(4)} · drag retention ${scale.dragRetention.toPrecision(5)} per ${scale.dt.toPrecision(4)} s tick.`:'Finite water scales repulsion with timestep, support radius and pass count; drag is a decay rate per second.';
-  const text=s.runtime?`${s.runtime.paused?'Paused':'Playing'} · tick ${s.runtime.step??0} · ${s.runtime.particleCount?.toLocaleString()??'unknown'} particles`:s.failure?`Water stopped: ${s.failure}`:'Initial particles at rest. Play starts water; Replay starts over.';
+  const text=s.starting?'Preparing water…':s.runtime?`${s.runtime.paused?'Paused':'Playing'} · tick ${s.runtime.step??0} · ${s.runtime.particleCount?.toLocaleString()??'unknown'} particles`:s.failure?`Water stopped: ${s.failure}`:'Initial particles at rest. Play starts water; Replay starts over.';
   const blocker=!s.runtime&&s.simulation?.compatibility?.compatible===false?s.simulation.compatibility.message:'';
   $('[data-play-blocked]').textContent=blocker?`Play unavailable: ${blocker}`:'';
   const fit=s.simulation?.boundsFit;$('[data-fit-bounds]').hidden=!fit?.changed||s.simulation?.sampling?.container===null;$('[data-fit-bounds]').disabled=dirty||simulationDirty;
   $('[data-fit-bounds]').title=fit?.changed?'Enlarge the shared box to include the placed water. Drop positions, sizes and particle target stay unchanged. Undo restores the previous box.':'';
   const status=text+(s.runtime?.pendingSourceChanges?' · Initial setup changed; displayed water is from the previous run. Reset or Replay to use the edited setup.':'');if($('[data-state]').textContent!==status)$('[data-state]').textContent=status;
   const hasSources=Boolean(s.sources?.length||s.selected);
-  $('[data-reset]').disabled=!s.runtime&&!hasSources;$('[data-release]').disabled=!hasSources||s.simulation?.compatibility?.compatible===false;$('[data-release]').textContent='Replay';$('[data-pause]').disabled=!s.runtime&&(!hasSources||s.simulation?.compatibility?.compatible===false);$('[data-pause]').textContent=s.runtime&&!s.runtime.paused?'Pause':'Play';
+  $('[data-reset]').disabled=!s.runtime&&!hasSources;$('[data-release]').disabled=!!s.starting||!hasSources||s.simulation?.compatibility?.compatible===false;$('[data-release]').textContent='Replay';$('[data-pause]').disabled=!!s.starting||!s.runtime&&(!hasSources||s.simulation?.compatibility?.compatible===false);$('[data-pause]').textContent=s.runtime&&!s.runtime.paused?'Pause':'Play';
  }
  let historyState={undoCount:0,redoCount:0};
  const unsubscribe=api.subscribeEdits?.(state=>{
@@ -157,6 +164,23 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
    restorePreview();stopTimer('source');stopTimer('simulation');dirty=false;simulationDirty=false;revision++;simulationRevision++;sourceError.textContent='';simulationError.textContent='';refresh();
   }
  });
- if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot)simulationRoot.append(simulationPanel);
- refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
+ if(viewport){
+  const read=()=>{const s=api.readStatus(),r=s.runtime;return {playing:!!r&&!r.paused,time:r?.time??0,duration:null,stepSeconds:r?.dt??cachedState?.simulation?.settings?.simulationStepSeconds??1/240,rate:r?.rate??playbackRate,busy:!!s.starting||!cachedState?.sources?.length,canRate:cachedState?.sources?.every(r=>r.mode==='finite_drop'),canStep:cachedState?.sources?.every(r=>r.mode==='finite_drop'),canSeek:cachedState?.sources?.every(r=>r.mode==='finite_drop')};};
+  playback=mountPlaybackControls({document,root:viewport,label:'Water playback',read,invoke:async(name,input)=>{
+   if(name==='pause')return api.setPaused(true);
+   if(name==='play'){if(api.readStatus().runtime)return api.setPaused(false);return restart(false);}
+   if(name==='replay')return restart(false);
+   if(name==='rate'){playbackRate=input.rate;if(api.readStatus().runtime)api.setPlaybackRate(playbackRate);return;}
+   const r=api.readStatus().runtime,dt=r?.dt??cachedState.simulation.settings.simulationStepSeconds??1/240;
+   const target=name==='step'?Math.max(0,(r?.step??0)+input.direction):Math.round(input.seconds/dt);
+   if(!Number.isSafeInteger(target)||target<0)throw Error('Playback target must be a representable simulation tick');
+   if(!r||target<r.step)await restart(true);else api.setPaused(true);
+   await api.advanceTo(target);
+  }});
+  playback.node.style.cssText='position:absolute;bottom:0;left:0;right:0;z-index:35';
+  const reset=document.createElement('button');reset.type='button';reset.textContent='Reset';reset.onclick=()=>call(()=>api.reset());playback.elements.replay.before(reset);
+  playback.elements.play.setAttribute('aria-label','Play or pause water');
+ }
+ if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot){simulationPanel.prepend($('[data-run]'),runError);simulationRoot.append(simulationPanel);}
+ refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){playback?.dispose();restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
 }

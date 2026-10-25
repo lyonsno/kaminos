@@ -1,8 +1,9 @@
+import {validateFluidTimeStep} from './fluid-time-step.mjs';
 /** Numerical setup comes from the owner; device and presentation remain host-owned. */
 export function applyFluidOwnerSetup(base,setup) {
  if(!setup||typeof setup!=='object'||!setup.solver||!Number.isFinite(setup.dt)||setup.dt<=0)throw Error('Owner fluid setup requires solver options and a positive finite timestep');
  if(!['analytical','invisible_box'].includes(setup.support?.kind))throw Error('Unsupported owner fluid support');
- if(setup.dt<1/240||setup.dt>1/30)throw Error('Owner timestep is outside the current solver step contract (1/240 to 1/30 seconds)');
+ validateFluidTimeStep(setup.dt);
  const options=setup.solver;
  if(options.rendererMode!=='screen_space_refraction')throw Error('Shared Fluid host currently requires screen_space_refraction; requested '+options.rendererMode);
  for(const name of ['canvas','webgpuDevice','hostFrameComposition','hostFramePipelineIdentity','presentationMode'])if(Object.hasOwn(options,name))throw Error('Owner setup cannot replace host '+name);

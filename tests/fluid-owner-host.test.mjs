@@ -33,7 +33,7 @@ test('shared rendering and timestep refusal are explicit before allocation',asyn
  const {applyFluidOwnerSetup}=await import(path);
  assert.throws(()=>applyFluidOwnerSetup({},paperBoxSetup({resolution:16})),/screen_space_refraction/);
  const setup=paperRiverSetup({particleCount:12288});
- assert.throws(()=>applyFluidOwnerSetup({}, {...setup,dt:1/1000}),/step contract/);
+ assert.equal(applyFluidOwnerSetup({}, {...setup,dt:1/1000}).simulationStepSeconds,1/1000);
 });
 
 test('owner identity survives an explicit shared reset and rejects a replaced owner',async()=>{

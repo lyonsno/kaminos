@@ -1,5 +1,5 @@
 // Shared presentation only. Owners keep their clock, seek law and scheduler.
-// read(): {playing,time,duration:null|seconds,stepSeconds,rate,busy?,canSeek?,canStep?}
+// read(): {playing,time,duration:null|seconds,stepSeconds,rate,busy?,canSeek?,canStep?,canRate?}
 // invoke(): replay/play/pause/seek({seconds})/step({direction})/rate({rate}).
 export function mountPlaybackControls({document,root,read,invoke,extra=null,label='Playback'}) {
  if(!document||!root||typeof read!=='function'||typeof invoke!=='function')throw Error('Playback requires an owner read, operations and a mount');
@@ -44,7 +44,8 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   if(disposed)return;
   try{
    const s=state();
-   replay.disabled=play.disabled=rate.disabled=Boolean(s.busy||working);
+   replay.disabled=play.disabled=Boolean(s.busy||working);
+   rate.disabled=Boolean(s.busy||working||s.canRate===false);
    back.disabled=forward.disabled=Boolean(s.busy||working||s.canStep===false);
    timeline.disabled=go.disabled=Boolean(s.busy||s.canSeek===false);
    timeline.hidden=s.duration==null||s.canSeek===false;

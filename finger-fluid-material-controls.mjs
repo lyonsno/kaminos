@@ -14,8 +14,8 @@ export function validateMaterialControls(values) {
   const coefficient=Math.fround(PBF_REPULSION_COEFFICIENT*particleRepulsionStrength);
   if(!Number.isFinite(particleRepulsionStrength)||particleRepulsionStrength<0||!Number.isFinite(coefficient)||(particleRepulsionStrength>0&&coefficient===0))throw new RangeError('Particle repulsion strength must be nonnegative and representable in WebGPU f32');
   if(!Number.isSafeInteger(densityIterations)||densityIterations<1)throw new RangeError('Density passes must be a positive safe integer');
-  if(!Number.isFinite(capillaryStrength)||capillaryStrength<0||capillaryStrength>2)throw new RangeError('Cohesion must follow the existing [0,2] solver contract');
-  if(!Number.isFinite(freeFlightViscosityBoost)||freeFlightViscosityBoost<0||freeFlightViscosityBoost>0.3)throw new RangeError('Free-flight viscosity must follow the existing [0,0.3] solver contract');
+  if(!Number.isFinite(capillaryStrength)||capillaryStrength<0||!Number.isFinite(Math.fround(capillaryStrength)))throw new RangeError('Cohesion must be nonnegative and representable in WebGPU f32');
+  if(!Number.isFinite(freeFlightViscosityBoost)||freeFlightViscosityBoost<0||!Number.isFinite(Math.fround(freeFlightViscosityBoost)))throw new RangeError('Free-flight viscosity must be nonnegative and representable in WebGPU f32');
   return {particleRepulsionStrength,densityIterations,capillaryStrength,freeFlightViscosityBoost};
 }
 

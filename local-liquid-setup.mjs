@@ -1,3 +1,4 @@
+import {validateFluidTimeStep} from './fluid-time-step.mjs';
 import { Euler, Vector3 } from './lib/three.core.js';
 import { normalizeAuthoredWaterDrop, normalizeAuthoredWaterSampling } from './authored-water-drop.mjs';
 
@@ -13,8 +14,7 @@ const clone = value => structuredClone(value);
 // Match the existing finite owner/core step contract. Older scenes omit this
 // field and keep their original 1/240-second authored-drop timestep.
 export function normalizeFiniteWaterTimeStep(value=1/240) {
-  if(!Number.isFinite(value)||value<1/240||value>1/30)throw Error('Finite water physics timestep must be between 1/240 and 1/30 seconds (30–240 ticks per simulated second)');
-  return value;
+  return validateFluidTimeStep(value);
 }
 
 export function defaultLocalLiquidSetup() {

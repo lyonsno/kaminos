@@ -8,7 +8,7 @@ export function resolveFingerFluidCohesionModel({pressureSolver='ipbf',cohesionM
 export function resolveFingerFluidCohesionStrength(value,cohesionModel='legacy',gravity=9.2) {
   resolveFingerFluidCohesionModel({cohesionModel});
   if(!Number.isFinite(value)||value<0)throw new RangeError('Cohesion strength must be finite and nonnegative');
-  if(cohesionModel==='legacy'&&value>2)throw new RangeError('Legacy cohesion must be within [0, 2]');
+  if(!Number.isFinite(Math.fround(value)))throw new RangeError('Cohesion strength cannot be represented in WebGPU f32');
   if(cohesionModel==='ipbf_free_surface'&&(!Number.isFinite(Math.fround(value))||!Number.isFinite(Math.fround(Math.fround(value)*Math.fround(gravity)))))throw new RangeError('Cohesion force cannot be represented in WebGPU f32');
   if(cohesionModel==='akinci_2013'&&!Number.isFinite(Math.fround(value)))throw new RangeError('Surface coefficient cannot be represented in WebGPU f32');
   return value;

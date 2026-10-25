@@ -1,3 +1,4 @@
+import {validateFluidTimeStep} from './fluid-time-step.mjs';
 import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT} from './finger-fluid-world-neighbors.mjs';
 import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
@@ -7638,7 +7639,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   let particle = particles[index];
   let position = particle.predicted.xyz;
   let baseCell = gridCoord(position);
-  var velocity = (position - particle.position.xyz) / max(params.dt, 0.00001);
+  var velocity = (position - particle.position.xyz) / params.dt;
   var neighborVelocity = vec3<f32>(0.0);
   var neighborWeight = 0.0;
 
@@ -7659,7 +7660,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
             // Smooth the same post-projection field used by this particle.
             // position/predicted stay immutable until this dispatch completes;
             // delta is the output, so neighboring invocations cannot race it.
-            neighborVelocity = neighborVelocity + ((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / max(params.dt, 0.00001)) * weight;
+            neighborVelocity = neighborVelocity + ((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / params.dt) * weight;
             neighborWeight = neighborWeight + weight;
           }
           current = particleNext[neighborIndex];
@@ -8055,7 +8056,7 @@ fn commit_unsupported_sheet_support(@builtin(global_invocation_id) gid: vec3<u32
   let correctionLength = length(correction);
   if (correctionLength > 0.0000001) {
     let sheetState = neighborTopology[index].sheet;
-    var velocity = particle.delta.xyz + correction / max(params.dt, 0.00001);
+    var velocity = particle.delta.xyz + correction / params.dt;
     let normalSpeed = dot(velocity, sheetState.xyz);
     velocity = velocity - sheetState.xyz * normalSpeed * min(0.18, sheetState.w * params.sheet.x * 0.12);
     let speed = length(velocity);
@@ -8659,7 +8660,7 @@ fn kineticEnergy(velocity: vec3<f32>) -> f32 {
 fn measure_projection_energy(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x >= params.particleCount) { return; }
   let particle = particles[gid.x];
-  let velocity = (particle.predicted.xyz - particle.position.xyz) / max(params.dt, 0.00001);
+  let velocity = (particle.predicted.xyz - particle.position.xyz) / params.dt;
   energyRecords[gid.x].x = kineticEnergy(velocity);
 }
 
@@ -11941,7 +11942,7 @@ export function evaluateFingerFluidInterfaceDensityConstraint({
 }
 
 export function resolveFingerFluidCapillaryStrength(value = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,{cohesionModel='legacy'}={}) {
-  const strength=cohesionModel==='legacy'?finite(value,KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH):value;
+  const strength=value;
   return resolveFingerFluidCohesionStrength(strength,cohesionModel);
 }
 
@@ -12007,8 +12008,8 @@ export function evaluateFingerFluidThinSheetVorticityActivity({
 export function resolveFingerFluidFreeFlightViscosityBoost(
   value = KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
 ) {
-  const boost = finite(value, KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST);
-  if (boost < 0 || boost > 0.3) throw new RangeError(`Finger fluid free-flight viscosity boost must be within [0, 0.3]: ${value}`);
+  const boost = value;
+  if (!Number.isFinite(boost)||boost<0||!Number.isFinite(Math.fround(boost))) throw new RangeError('Free-flight viscosity boost must be nonnegative and representable in WebGPU f32');
   return boost;
 }
 
@@ -13400,7 +13401,7 @@ export async function createWebGPUFingerFluidSolver({
   sceneColliders = [],
   composedRevision = null,
 } = {}) {
-  if(!Number.isFinite(simulationStepSeconds)||simulationStepSeconds<1/240||simulationStepSeconds>1/30)throw new RangeError('Initial simulation timestep must match the solver step contract');
+  validateFluidTimeStep(simulationStepSeconds);
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
   const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
@@ -13989,39 +13990,46 @@ export async function createWebGPUFingerFluidSolver({
     layout: entryPoint.startsWith('surface_')?surfacePipelineLayout:entryPoint.startsWith('ipbf_')?ipbfPipelineLayout:computePipelineLayout,
     compute: { module: computeModule, entryPoint },
   });
+  async function compilePipelines(entries,compile) {
+    const names=Object.keys(entries);
+    const results=await Promise.allSettled(names.map(async name=>compile(entries[name])));
+    const failure=results.find(result=>result.status==='rejected');
+    if(failure)throw failure.reason;
+    return Object.fromEntries(names.map((name,i)=>[name,results[i].value]));
+  }
   let pipelines;
   try {
-    pipelines = {
-      clear: await pipelineFor('clear_grid'),
-      predict: await pipelineFor('predict_positions'),
-      build: await pipelineFor('build_linked_cell_grid'),
-      ...(useIPBF ? {ipbfPrepare:await pipelineFor('ipbf_prepare'),ipbfVelocity:await pipelineFor('ipbf_velocity')} : {}),
-      lambda: await pipelineFor(useIPBF ? 'ipbf_density' : 'compute_density_lambda'),
-      delta: await pipelineFor(useIPBF ? 'ipbf_delta' : 'solve_position_delta'),
-      applyDelta: await pipelineFor('apply_position_delta'),
-      classifySurface: await pipelineFor('classify_free_surface'),
-      velocity: await pipelineFor('compute_velocity_viscosity'),
-      vorticity: await pipelineFor('compute_vorticity'),
-      confinement: await pipelineFor('apply_vorticity_confinement'),
-      classifyUnsupportedSheet: await pipelineFor('classify_unsupported_sheet'),
-      applyUnsupportedSheet: await pipelineFor('apply_unsupported_sheet_support'),
-      commitUnsupportedSheet: await pipelineFor('commit_unsupported_sheet_support'),
-      cohesion: await pipelineFor('apply_surface_cohesion'),
-      ...(useAkinci?{surfaceBuild:await pipelineFor('surface_build_grid'),surfaceDensity:await pipelineFor('surface_density'),surfaceNormals:await pipelineFor('surface_normals'),surfaceForce:await pipelineFor('surface_force')}:{}),
-      applyVelocity: await pipelineFor('apply_velocity_position'),
-      adaptiveDensity: await pipelineFor('adaptive_refine_or_merge'),
-      clearInterface: await pipelineFor('clear_interface_counters'),
-      compactInterface: await pipelineFor('compact_interface_records'),
-      measureTopology: await pipelineFor('measure_neighbor_topology'),
-      computeParticleShift: await pipelineFor('compute_support_particle_shift'),
-      applyParticleShift: await pipelineFor('apply_support_particle_shift'),
-      computeChemistry: await pipelineFor('compute_material_tracer_diffusion'),
-      applyChemistry: await pipelineFor('apply_material_tracer_diffusion'),
-      clearLiquidFireContacts: await pipelineFor('clear_liquid_fire_contact_descriptor'),
-      compactLiquidFireContacts: await pipelineFor(effectiveLiquidFireContactCoverage === 'active-liquid-particles'
+    pipelines = await compilePipelines({
+      clear: ('clear_grid'),
+      predict: ('predict_positions'),
+      build: ('build_linked_cell_grid'),
+      ...(useIPBF ? {ipbfPrepare:('ipbf_prepare'),ipbfVelocity:('ipbf_velocity')} : {}),
+      lambda: (useIPBF ? 'ipbf_density' : 'compute_density_lambda'),
+      delta: (useIPBF ? 'ipbf_delta' : 'solve_position_delta'),
+      applyDelta: ('apply_position_delta'),
+      classifySurface: ('classify_free_surface'),
+      velocity: ('compute_velocity_viscosity'),
+      vorticity: ('compute_vorticity'),
+      confinement: ('apply_vorticity_confinement'),
+      classifyUnsupportedSheet: ('classify_unsupported_sheet'),
+      applyUnsupportedSheet: ('apply_unsupported_sheet_support'),
+      commitUnsupportedSheet: ('commit_unsupported_sheet_support'),
+      cohesion: ('apply_surface_cohesion'),
+      ...(useAkinci?{surfaceBuild:('surface_build_grid'),surfaceDensity:('surface_density'),surfaceNormals:('surface_normals'),surfaceForce:('surface_force')}:{}),
+      applyVelocity: ('apply_velocity_position'),
+      adaptiveDensity: ('adaptive_refine_or_merge'),
+      clearInterface: ('clear_interface_counters'),
+      compactInterface: ('compact_interface_records'),
+      measureTopology: ('measure_neighbor_topology'),
+      computeParticleShift: ('compute_support_particle_shift'),
+      applyParticleShift: ('apply_support_particle_shift'),
+      computeChemistry: ('compute_material_tracer_diffusion'),
+      applyChemistry: ('apply_material_tracer_diffusion'),
+      clearLiquidFireContacts: ('clear_liquid_fire_contact_descriptor'),
+      compactLiquidFireContacts: (effectiveLiquidFireContactCoverage === 'active-liquid-particles'
         ? 'compact_liquid_volume_particles' : 'compact_liquid_fire_contacts'),
-      finalizeLiquidFireContacts: await pipelineFor('finalize_liquid_fire_contact_descriptor'),
-    };
+      finalizeLiquidFireContacts: ('finalize_liquid_fire_contact_descriptor'),
+    }, pipelineFor);
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
@@ -14053,6 +14061,8 @@ export async function createWebGPUFingerFluidSolver({
   try {refreshComputeBindGroup();} catch (error) {
     return failFingerFluidInitialization(`WebGPU compute bind group validation failed: ${error.message || String(error)}`);
   }
+  let energyPipelines={},energyDiagnosticsBindGroup=null;
+  if(energyDiagnosticsEnabled){
   const energyDiagnosticsModule = createSceneShaderModule({
     label: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
     code: ENERGY_DIAGNOSTICS_SHADER,
@@ -14071,7 +14081,6 @@ export async function createWebGPUFingerFluidSolver({
     layout: energyDiagnosticsPipelineLayout,
     compute: { module: energyDiagnosticsModule, entryPoint },
   });
-  let energyPipelines;
   try {
     energyPipelines = {
       projection: await energyPipelineFor('measure_projection_energy'),
@@ -14082,7 +14091,7 @@ export async function createWebGPUFingerFluidSolver({
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU energy diagnostic pipeline validation failed: ${error.message || String(error)}`);
   }
-  const energyDiagnosticsBindGroup = device.createBindGroup({
+  energyDiagnosticsBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-energy-diagnostics-bind-group',
     layout: energyDiagnosticsLayout,
     entries: [
@@ -14091,6 +14100,8 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 2, resource: { buffer: energyDiagnosticsBuffer } },
     ],
   });
+
+  }
 
   const format = safeHostFrameComposition
     ? 'bgra8unorm'
@@ -15189,9 +15200,8 @@ export async function createWebGPUFingerFluidSolver({
   function step(dt = simulationStepSeconds) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
-    if((finitePBF||viscosityScaling!=='legacy')&&(!Number.isFinite(dt)||dt<1/240||dt>1/30))throw new RangeError('Explicit physics timestep outside solver contract');
-    const frameDt = clamp(finite(dt, 1 / 60), 1 / 240, 1 / 30);
-    const substepDt = frameDt / safeSubsteps;
+    const frameDt = validateFluidTimeStep(dt);
+    const substepDt = validateFluidTimeStep(frameDt / safeSubsteps);
     for (let substep = 0; substep < safeSubsteps; substep += 1) {
       writeSimulationParams(substepDt);
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-simulation-step' });
@@ -16511,6 +16521,12 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
+  function getPlaybackState() {
+    return {particleCount:safeParticleCount,simulatedTimeSeconds,lastStepSeconds,
+      materialScaling:lastMaterialScale?{...lastMaterialScale,dragRetention:Math.fround(lastMaterialScale.dragRetention),repulsionCoefficient:Math.fround(lastMaterialScale.repulsionCoefficient)}:null,
+      viscosityScaling:{mode:viscosityScaling,factor:lastViscosityScale,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale,maximumBlend:.24*lastViscosityScale,extrapolates:.24*lastViscosityScale>1}};
+  }
+
   function getDebugState() {
     const effectivePressureControls=pressureControlState?.read().effective;
     return {
@@ -16518,7 +16534,7 @@ export async function createWebGPUFingerFluidSolver({
       diagnosticBox: safeDiagnosticBox,
       simulatedTimeSeconds,lastStepSeconds,
       materialScaling:lastMaterialScale?{...lastMaterialScale,dragRetention:Math.fround(lastMaterialScale.dragRetention),repulsionCoefficient:Math.fround(lastMaterialScale.repulsionCoefficient)}:null,
-      viscosityScaling:{mode:viscosityScaling,factor:lastViscosityScale,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale},
+      viscosityScaling:{mode:viscosityScaling,factor:lastViscosityScale,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale,maximumBlend:.24*lastViscosityScale,extrapolates:.24*lastViscosityScale>1},
       diagnosticDynamics:{requested:diagnosticDynamics,effective:safeDiagnosticDynamics,neighborSmoothing:!reducedDynamics,vorticityConfinement:!reducedDynamics,speedClipping:!reducedDynamics,boundaryVelocityResponse:true,population:diagnosticPopulation?{schema:diagnosticPopulation.schema,fixture:diagnosticPopulation.fixture,refinement:diagnosticPopulation.refinement,source:diagnosticPopulation.source,particleCount:safeBaseParticleCount,particleVolume:ipbfParticleVolume,representedVolume:safeBaseParticleCount*ipbfParticleVolume}:null},
       liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
       solver_backend: 'webgpu_compute',
@@ -17417,6 +17433,7 @@ export async function createWebGPUFingerFluidSolver({
     setReflectionMeshPhaseForWitness,
     getParticleOwnershipDescriptor,
     getDebugState,
+    getPlaybackState,
     destroy,
   };
   return runtimeApi;

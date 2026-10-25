@@ -36,6 +36,7 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
   setPlaybackMode(value){assertActive();clock.setMode(value);redraw();return state();},
   async advanceTo(target){assertActive();if(!Number.isSafeInteger(target)||target<step)throw Error('Reset before advancing backwards');paused=true;clock.reset();if(readColliders)solver.setSceneColliders(readColliders());for(;step<target;step++)solver.step(currentSetup.dt);await device.queue.onSubmittedWorkDone();assertActive();redraw();return state();},
   restart:()=>install(currentSetup),
+  readStatus:()=>({clock:state(),solver:solver.getPlaybackState?.()??solver.getDebugState()}),
   state:()=>({...presentation.state(),clock:state(),presentation:presentationMode,proxyStepEvery,setup:currentSetup,solver:solver.getDebugState()}),
   getMaterialControls:()=>solver.getMaterialControls?.()??{available:false},
   setMaterialControls(patch){assertActive();const receipt=solver.setMaterialControls(patch);currentSetup={...currentSetup,solver:{...currentSetup.solver,...receipt.effective}};redraw();return receipt;},

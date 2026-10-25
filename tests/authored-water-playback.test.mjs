@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[];
- const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
+ const input=selector=>{if(!nodes.has(selector)){const node={children:[],append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
  for(const name of ['width','samples','rate','radius','strength','passes','target'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
@@ -44,4 +44,16 @@ const {authoredDropSetup}=await import('../authored-water-host.mjs');
  assert.equal(f.input('[data-fit-bounds]').hidden,false);await f.input('[data-fit-bounds]').onclick();assert.equal(fitted,1);
  f.setSimulation({present:true,sourceCount:2,compatibility:{compatible:true,sourceCount:2},boundsFit:{changed:false}});
  assert.equal(f.input('[data-play-blocked]').textContent,'');assert.equal(f.input('[data-pause]').disabled,false);assert.equal(f.input('[data-fit-bounds]').hidden,true);
+}
+
+{
+ const mounted=[];const f=fixture({simulationRoot:{append:n=>mounted.push(n)}});
+ assert.ok(f.input('[data-simulation]').children.includes(f.input('[data-run]')),'The selected water simulation must contain its own playback actions');
+ assert.ok(mounted.includes(f.input('[data-simulation]')));
+ let fullReads=0,statusReads=0;const read=f.api.read;
+ f.api.read=()=>{fullReads++;return read();};
+ f.api.readStatus=()=>{statusReads++;return {runtime:{paused:false,step:42,particleCount:4096}};};
+ f.controls.refreshStatus();
+ assert.equal(fullReads,0,'A tick update must not resample initial water or recompute compatibility');
+ assert.equal(statusReads,1);assert.match(f.input('[data-state]').textContent,/tick 42/);
 }
