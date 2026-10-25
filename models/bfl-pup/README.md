@@ -19,7 +19,7 @@ header and small model/config/tokenizer files. It does not delete the source.
 The language decoder uses the ONNX Runtime GenAI model builder, pinned to
 `microsoft/onnxruntime-genai@6b7ff3ca3efa15da219050fdb4ecf8bed67875af`:
 INT4 weights, WebGPU target, `exclude_embeds=true`, `block_size=64`,
-`is_symmetric=false`, `state_window=0`, and
+`is_symmetric=false`, `state_window=0`, `exclude_mtp=true`, and
 `filename=decoder_model_merged_q4f16.onnx`. Browser packaging must retain its
 FP16 I/O and each cache binding's actual type and shape. An exported decoder
 alone is not an image-aware prompt helper.
@@ -31,7 +31,11 @@ directory so previous artifacts remain available. Reports record the failure
 phase, source identity, actual versions and component checks.
 
 Token embeddings use ONNX Runtime's affine Q4 `GatherBlockQuantized`, groups
-of64, with FP16 output. Vision weights stay FP16. The vision graph encodes one
+of64, with FP16 output. Vision parameters use FP16 storage with FP32 arithmetic
+and FP16 feature output. This precision route is provisional: the first full
+FP16 export failed the recorded source-comparison tolerance, so the next
+experiment retains FP32 arithmetic rather than weakening that tolerance.
+The vision graph encodes one
 image per call; a browser adapter must evaluate all supplied references and
 concatenate their features in attachment order. It supplies block-ordered
 position IDs and bilinear position-embedding indices/weights derived from each
