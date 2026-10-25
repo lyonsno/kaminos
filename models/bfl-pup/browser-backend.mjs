@@ -1,6 +1,7 @@
 // Replaceable BFL prompt/ordered-reference -> editable text operation.
 // This adapter owns Transformers.js tensors; callers receive text and provenance.
 import {prepareReference} from './reference-policy.mjs';
+import {installTextRopeCompatibility} from './text-rope-compat.mjs';
 export const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 export const BFL_SOURCE_REVISION = '3f3edb52b2c55de0d49feab28598b68f7f8e4830';
 
@@ -74,6 +75,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
     for(const [name,session] of Object.entries(candidate.sessions)){
       if(session.config?.device!=='webgpu')throw Error(`${name} did not select the WebGPU session.`);
     }
+    installTextRopeCompatibility(candidate);
     // The exported single-image graph takes source-equivalent position inputs.
     candidate.encode_image=async({pixel_values,image_grid_thw})=>{
       const grids=image_grid_thw.tolist(),features=[];
@@ -140,6 +142,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         return {text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
           generationMs:performance.now()-generationStarted,totalMs:performance.now()-started,
           backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,modelUrl:base,referenceCount:images.length,
+          runtimeCompatibility:['Transformers.js4.2 text-only continuation delta'],
           referencePreparation:{sizes:raw.map(image=>[image.width,image.height]),resizer:'browser-canvas',jpegQuality:.92,whiteBackdrop:true},
           sessions:Object.fromEntries(Object.entries(model.sessions).map(([name,s])=>[name,{...s.config,inputNames:s.inputNames,outputNames:s.outputNames}]))};
       }finally{
