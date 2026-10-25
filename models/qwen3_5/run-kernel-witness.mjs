@@ -19,8 +19,9 @@ export async function collectKernelWitness(browser, preserve) {
 
 export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false }) {
   if (!out) throw new TypeError('an explicit report path is required');
+  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const report = { schema: 'kaminos.qwen35-kernel-witness.v1', status: 'failed', phase: 'setup',
-    requested: { chrome, fixture, tiledAffine }, source: sourceIdentity(path.dirname(fileURLToPath(import.meta.url))) };
+    requested: { chrome, fixture, tiledAffine }, source: sourceIdentity(repo) };
   let browser, server;
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   try {
@@ -44,7 +45,6 @@ export async function runKernelWitness({ chrome, fixture, out, tiledAffine = fal
     const executable = fs.realpathSync(chrome);
     if (/\/Google Chrome\.app\//i.test(executable)) throw new Error('installed GUI Chrome is not an automation executable');
     fs.accessSync(executable, fs.constants.X_OK); report.effectiveExecutable = executable;
-    const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
     const serving = await startServer({ '/fixture/': root, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report);
     report.phase = 'gpu-execution'; report.url = `${serving.origin}/models/qwen3_5/kernel-witness.html?affine=${tiledAffine ? 'tiled' : 'oracle'}`; await save();
