@@ -34,7 +34,18 @@ def prepare(root, output, report):
             for name, row in header.items():
                 if not name.startswith('language_model.'):
                     continue
+                key = name.removeprefix('language_model.')
+                if key in tensors:
+                    raise ValueError(f'duplicate source {name}')
                 begin, end = row['data_offsets']
+                elements = 1
+                for dimension in row['shape']:
+                    if not isinstance(dimension, int) or dimension < 1:
+                        raise ValueError(f'invalid source shape {name}')
+                    elements *= dimension
+                width = {'U32': 4, 'BF16': 2}.get(row['dtype'])
+                if not width or begin < 0 or end - begin != elements * width or length + 8 + end > file.stat().st_size:
+                    raise ValueError(f'invalid source range/type {name}')
                 f.seek(length + 8 + begin)
                 digest = hashlib.sha256()
                 remaining = end - begin
@@ -44,9 +55,7 @@ def prepare(root, output, report):
                         raise ValueError(f'partial source {name}')
                     digest.update(data)
                     remaining -= len(data)
-                if name in tensors:
-                    raise ValueError(f'duplicate source {name}')
-                tensors[name.removeprefix('language_model.')] = {
+                tensors[key] = {
                     'file': file.name, 'offset': length + 8 + begin, 'bytes': end - begin,
                     'shape': row['shape'], 'dtype': row['dtype'], 'sha256': digest.hexdigest()}
     if not tensors:
