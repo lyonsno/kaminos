@@ -556,18 +556,6 @@
       "size": 67116
     },
     {
-      "id": "research-20261025-ec7baa503807",
-      "kind": "image",
-      "label": "Dunwich research \u00b7 Rounded Toy Flat Painted Dots S102501",
-      "basis": "producer-research-set-not-admitted-for-browsing",
-      "reason": "Research image. Awaiting browsing review.",
-      "sources": [
-        "/api/job-output?job_id=ec7baa503807&file=output.png"
-      ],
-      "sha256": "c8ff4eced5aad5c7e023dd14e4962b13fb2b9678282f9151596d13d4d6a0ff13",
-      "size": 69334
-    },
-    {
       "id": "research-20261025-3cc480d083f5",
       "kind": "image",
       "label": "Dunwich research \u00b7 Rounded Toy Clustered Growths S102501",
