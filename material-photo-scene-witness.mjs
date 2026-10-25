@@ -5,20 +5,27 @@ import {createHash} from 'node:crypto';
 import {parseArgs} from 'node:util';
 import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
-const {values:v}=parseArgs({options:{...Object.fromEntries(['root','origin','out','chrome','playwright','source-report'].map(k=>[k,{type:'string'}])),native:{type:'boolean',default:false}}});
-const out=path.resolve(v.out??'photo-scene-witness'),report={status:'failed',phase:'arguments',requested:v,route:v.native?'native page inference through ordinary Generate/Add/save':'retained native arrays through ordinary Generate/Add/save; no inference',errors:[]};
+const options={...Object.fromEntries(['root','origin','out','chrome','playwright','source-report'].map(k=>[k,{type:'string'}])),native:{type:'boolean',default:false}};
+// Recover the caller's destination before strict parsing can reject another argument.
+const loose=parseArgs({strict:false,allowPositionals:true,options:{out:{type:'string'}}}).values;
+const out=path.resolve(typeof loose.out==='string'?loose.out:'photo-scene-witness'),report={status:'failed',phase:'arguments',requestedArgs:process.argv.slice(2),errors:[],observations:{}};
+let v;
 const hash=b=>createHash('sha256').update(b).digest('hex');
 let browser,page;
 const save=async()=>{await fs.mkdir(out,{recursive:true});await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));};
 try{
-  await save();for(const key of ['root','origin','out','chrome','playwright'])assert.ok(v[key],`--${key} required`);
+  await save();v=parseArgs({options}).values;report.requested=v;
+  report.route=v.native?'native page inference through ordinary Generate/Add/save':'retained native arrays through ordinary Generate/Add/save; no inference';
+  for(const key of ['root','origin','out','chrome','playwright'])assert.ok(v[key],`--${key} required`);
   assert.ok(v.native?!v['source-report']:v['source-report'],'choose native inference OR a retained source report');
   report.phase='source';report.server=await verifyAuthoringServer({origin:v.origin,repoRoot:v.root});
   report.sourceHashes={};for(const file of ['authoring-material-photo.mjs','models/material-photo/photograph-glb.js','authoring-trellis-generation.mjs','authoring-assets.mjs','authoring-generate-layout.mjs']){
     const local=await fs.readFile(path.join(v.root,file)),served=Buffer.from(await(await fetch(v.origin+'/'+file)).arrayBuffer());
     assert.equal(hash(served),hash(local),`wrong served ${file}`);report.sourceHashes[file]=hash(local);
   }
-  const raw=v.native?null:JSON.parse(await fs.readFile(v['source-report'],'utf8')).application?.raw?.baseline;
+  const producerBytes=v.native?null:await fs.readFile(v['source-report']);
+  const producer=producerBytes?JSON.parse(producerBytes):null,raw=producer?.application?.raw?.baseline;
+  if(producer)report.producer={path:path.resolve(v['source-report']),sha256:hash(producerBytes),source:producer.source,input:producer.input??null,status:producer.status,phase:producer.phase};
   if(!v.native)assert.ok(raw,'native baseline required');report.raw={};const buffers={};
   for(const role of v.native?[]:['geometry-points','geometry-normals','image','albedo','orm']){
     const item=raw[role];assert.ok(item,`missing ${role}`);const bytes=await fs.readFile(item.file);
@@ -29,6 +36,11 @@ try{
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--use-mock-keychain','--password-store=basic']});
   report.browser={executable,version:browser.version()};page=await browser.newPage({viewport:{width:1440,height:1000}});
   page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);page.on('pageerror',e=>report.errors.push(String(e)));
+  const entry=await fs.readFile(path.join(v.root,'index.html'),'utf8'),marker='window.kaminosSceneObjectDebugState = function() {';
+  assert.equal(entry.split(marker).length,2,'scene observation injection point changed');
+  const inspectedEntry=entry.replace(marker,'window.__photoWitnessObject = id => workingScene.objects.find(row => row.id === id)?.object;\n'+marker);
+  report.sceneObservationModule={sourceSha256:hash(entry),effectiveSha256:hash(inspectedEntry),change:'Expose existing imported object for readback and temporary visibility control only'};
+  await page.route(url=>url.origin===new URL(v.origin).origin&&['/','/index.html'].includes(url.pathname),route=>route.fulfill({body:inspectedEntry,contentType:'text/html'}));
   // Replay replaces only the native page adapter. Controller, export, persistence and scene entry are real.
   if(!v.native){
   const module=await fs.readFile(path.join(v.root,'authoring-material-photo.mjs'),'utf8');
@@ -39,9 +51,13 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
  const points=await read('geometry-points'),normals=await read('geometry-normals');
  const result={depth:{width:points.width,height:points.height,points:points.data,normals:normals.data},image:await read('image'),maps:{albedo:await read('albedo'),orm:await read('orm')}};
  if(size!==result.maps.albedo.width)throw Error('Replay resolution mismatch');
+ const response=await fetch(image.source),source=await response.arrayBuffer();
+ const bitmap=await createImageBitmap(new Blob([source]));
+ const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');context.drawImage(bitmap,0,0);bitmap.close();
+ const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+ if(canvas.width!==result.image.width||canvas.height!==result.image.height||pixels.length!==result.image.data.length||pixels.some((value,i)=>value!==result.image.data[i]))throw Error('Replay input mismatch: selected photograph differs from retained native input');
  onProgress({stage:'materials',phase:'exporting'});
- const source=await(await fetch(image.source)).arrayBuffer();
- const generation={schema:'kaminos.asset-generation.v1',runId:'retained-native-photo-witness-'+crypto.randomUUID(),route:'retained-native-arrays',input:{source:image.source,sha256:await sha256(source)},settings:{materialSize:size},receiptValidation:{ok:true,by:'retained-native-witness',checks:['raw-array-sha256','replay-resolution','embedded-glb']}};
+ const generation={schema:'kaminos.asset-generation.v1',runId:'retained-native-photo-witness-'+crypto.randomUUID(),route:'retained-native-arrays',input:{source:image.source,sha256:await sha256(source),rgbaSha256:manifest.image.sha256},settings:{materialSize:size},receiptValidation:{ok:true,by:'retained-native-witness',checks:['raw-array-sha256','original-image-rgba-equality','replay-resolution','embedded-glb']}};
  return {glb:await photographGlb(result,{name:'Backpack - retained native output',receipt:generation}),generation,label:'Backpack - retained native output'};
 };}
 `;
@@ -72,9 +88,30 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
   report.inserted=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
   assert.equal(report.inserted.length,report.before.length+1);
-  const shot=async name=>{await settle();const png=await page.screenshot({path:path.join(out,name+'.png')});
-    const crop=await page.locator('#kaminos-host-renderer-canvas').screenshot();const {pixels}=decodeScreenshotPngRgb(crop);
-    let min=255,max=0;for(const value of pixels){min=Math.min(min,value);max=Math.max(max,value);}assert.ok(max-min>20,'blank scene canvas');return hash(png);};
+  const shot=async name=>{
+    const observed=await page.evaluate(id=>{
+      const object=window.__photoWitnessObject(id),meshes=[];
+      object?.traverse(child=>{if(child.isMesh){let visible=true;for(let node=child;node;node=node.parent)visible&&=node.visible!==false;
+        meshes.push({visible,maps:(Array.isArray(child.material)?child.material:[child.material]).map(m=>({albedo:!!m?.map?.isTexture,metalness:!!m?.metalnessMap?.isTexture,roughness:!!m?.roughnessMap?.isTexture}))});}});
+      return {visible:object?.visible===true,meshes};
+    },report.id);
+    assert.ok(observed.visible&&observed.meshes.some(m=>m.visible),'photograph is not visible');
+    assert.ok(observed.meshes.every(m=>m.maps.length&&m.maps.every(t=>t.albedo&&t.metalness&&t.roughness)),'imported photograph lost material texture maps');
+    await settle();await page.screenshot({path:path.join(out,name+'.png')});
+    const canvas=page.locator('#kaminos-host-renderer-canvas');
+    const crop=await canvas.screenshot({path:path.join(out,name+'-canvas.png')}),shown=decodeScreenshotPngRgb(crop);
+    let hidden;
+    try{
+      await page.evaluate(id=>{window.__photoWitnessObject(id).visible=false;window._kaminosDirty();},report.id);await settle();
+      hidden=decodeScreenshotPngRgb(await canvas.screenshot({path:path.join(out,name+'-hidden.png')}));
+    }finally{await page.evaluate(id=>{window.__photoWitnessObject(id).visible=true;window._kaminosDirty();},report.id);await settle();}
+    assert.equal(hidden.width,shown.width);assert.equal(hidden.height,shown.height);
+    let changedPixels=0;for(let i=0;i<shown.width*shown.height;i++){
+      if([0,1,2].some(c=>Math.abs(shown.pixels[i*shown.channels+c]-hidden.pixels[i*hidden.channels+c])>=16))changedPixels++;
+    }
+    assert.ok(changedPixels>Math.max(16,shown.width*shown.height*.001),'photograph contributes no visible canvas pixels');
+    report.observations[name]={...observed,changedPixels,canvasPixels:shown.width*shown.height};return hash(shown.pixels);
+  };
   report.front=await shot('front');
   report.phase='history';await page.evaluate(()=>window.kaminosSceneEdits.undo());
   assert.equal((await page.evaluate(()=>window.kaminosSceneObjectDebugState())).length,report.before.length);
