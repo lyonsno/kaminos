@@ -16,6 +16,8 @@ try{
  await page.exposeFunction('__gpuError',m=>report.errors.push(m));await page.addInitScript(()=>{const old=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...a){const d=await old.apply(this,a);d.addEventListener('uncapturederror',e=>window.__gpuError(e.error.message));return d;};});
  report.phase='scene';await write();
  report.result=await visualWork({page,origin,repoRoot:repo,sceneFile,workspace:'workbench',out,exercise:async()=>{
+  const settings=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().controls);
+  assert.equal(settings.resolution,32,'implementation witness must use its recorded32-cell simulation');assert.equal(settings.raySteps,8,'implementation witness camera ray budget');
   await page.waitForFunction(()=>{const v=window.__kaminosVolumePrototype?.debugState(),s=window.__kaminosSceneRadiance?.debugState();if(v?.error||s?.error)throw Error(v?.error||s?.error);return v?.simStepCount>=120&&window.__kaminosSceneRadiance?.canRender();});
   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
   const observe=()=>page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),objects:window.kaminosSceneObjectDebugState()}));
