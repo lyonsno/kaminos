@@ -98,7 +98,8 @@ export function usedInputPreviewFor(preview,selectedSource){
   return preview&&typeof preview==='object'&&preview.input&&preview.input===selectedSource&&preview.source?preview.source:null;
 }
 // The status line for a self-preparing service: what it used for this selection, if known.
-export function usedInputStatusFor(preview,selectedSource){
+export function usedInputStatusFor(preview,selectedSource,inputKind){
+  if(inputKind==='original')return 'Original photograph';
   const own=preview&&typeof preview==='object'&&preview.input===selectedSource?preview:null;
   if(own?.kind==='cutout')return 'This is the cutout generation is using, prepared in this page.';
   if(own?.kind==='original-alpha')return 'This image already has transparency; generation uses it as it is.';
@@ -151,7 +152,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     const selfPreparing=mode==='generate'&&controller.preparesInput?.();
     byId('asset-image').hidden=withheld||selected?.kind!=='image';if(withheld||selected?.kind!=='image')byId('asset-image').removeAttribute('src');if(selected?.kind==='image'&&!withheld){const source=usedInput||(mode==='generate'&&!selfPreparing&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
     // A self-preparing model's own account of its input wins over any server preparation it does not use.
-    byId('asset-preparation-status').textContent=(selfPreparing&&selected?.kind==='image')?usedInputStatusFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
+    byId('asset-preparation-status').textContent=(selfPreparing&&selected?.kind==='image')?usedInputStatusFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path),controller.generation().inputKind):preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=withheld||selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
     const generation=controller.generation();
     byId('asset-use-image').disabled=byId('asset-prepare').disabled=['input','loading','running','stopping','saving'].includes(generation.status);
