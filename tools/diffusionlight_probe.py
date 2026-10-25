@@ -216,9 +216,9 @@ def run_inference(models, image, output, report, report_path):
     bright,_,bright_pool,_=pipe.encode_prompt(PROMPT)
     dark,_,dark_pool,_=pipe.encode_prompt(BLACK_PROMPT)
     report['effectiveDevice']=str(pipe.unet.device)
-    if report['effectiveDevice']!='mps':
+    if pipe.unet.device.type!='mps':
         raise RuntimeError('unexpected diffusion device')
-    report['route']={'depthDevice':'mps','depthDtype':'float32','diffusionDevice':'mps',
+    report['route']={'depthDevice':'mps','depthDtype':'float32','diffusionDevice':report['effectiveDevice'],
         'diffusionDtype':'float16','randomGeneratorDevice':'cpu','cpuFallback':False,
         'torchVersion':torch.__version__,'diffusersVersion':__import__('diffusers').__version__}
     report['settings']={'exposures':EVS,'seed':SEED,'pipeline':PIPELINE_SETTINGS,

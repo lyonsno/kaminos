@@ -6,7 +6,7 @@ import tempfile
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 from PIL import Image
@@ -179,6 +179,31 @@ class TurboContract(unittest.TestCase):
         with patch.dict('os.environ',{'PYTORCH_ENABLE_MPS_FALLBACK':'1'}):
             with self.assertRaisesRegex(RuntimeError,'fallback'):
                 self.probe.require_mps()
+
+    def test_effective_device_accepts_indexed_mps_but_refuses_other_backends(self):
+        import torch
+        from diffusers import StableDiffusionXLControlNetInpaintPipeline as Pipeline
+        for device in ['mps','mps:0','cpu','cuda:0']:
+            with self.subTest(device=device), tempfile.TemporaryDirectory() as tmp:
+                pipe=MagicMock()
+                pipe.unet.device=torch.device(device)
+                pipe.to.return_value=pipe
+                pipe.encode_prompt.return_value=(torch.ones(1),None,torch.ones(1),None)
+                models={name:{'path':tmp} for name in ['depth','base','control','turbo','exposure']}
+                report={}
+                expected='inference-boundary' if device.startswith('mps') else 'unexpected diffusion device'
+                with (patch.object(self.probe,'require_mps'),
+                      patch.object(self.probe,'adapter_weights',return_value=({},{})),
+                      patch('torch.mps.empty_cache'),
+                      patch('torch.mps.synchronize',side_effect=RuntimeError('inference-boundary')),
+                      patch('transformers.pipeline',return_value=lambda image:{'depth':Image.new('L',(1024,1024),20)}),
+                      patch('diffusers.ControlNetModel.from_pretrained',return_value=object()),
+                      patch.object(Pipeline,'from_pretrained',return_value=pipe),
+                      patch('diffusers.UniPCMultistepScheduler.from_config',return_value=object())):
+                    with self.assertRaisesRegex(RuntimeError,expected):
+                        self.probe.run_inference(models,Image.new('RGB',(1024,1024)),
+                            Path(tmp),report,Path(tmp)/'loading.json')
+                self.assertEqual(report['effectiveDevice'],device)
 
     @unittest.skipUnless(os.environ.get('DIFFUSIONLIGHT_SOURCE_ROOT'), 'requires pinned upstream conversion source')
     def test_upstream_projection_axes_and_hdr_merge_preserve_real_radiance(self):
