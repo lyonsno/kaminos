@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
+import {createEncounterWorld} from '../experiments/creature-motion/encounters.mjs';
 
 // The joined walking creature: attention follows the cast that is actually
 // applied, and switching attention off while paused clears the turn at once.
@@ -158,6 +159,31 @@ try{
  }finally{await curious.dispose();}
  }
 
+ // PHYSICAL-02: the collision consumer must see both resolved gaze and chest
+ // recoil, without presenting speculative poses or advancing perception twice.
+ for(const response of ['physical','admission']){
+  const world=createEncounterWorld({response,avoidance:false}),context=world.actor('attention');let proposed,poll,walker;
+  const timers={set:globalThis.setInterval,clear:globalThis.clearInterval};
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  const supportFactory=()=>{let palette;return {update(m){palette=m;},flush(){},dispose(){},read:()=>({backend:'instrumented-support'}),movementCores(m=palette){return [[2,[0,0,-1]],[4,[0,.3,-2]]].map(([channel,rest])=>{const p=new THREE.Vector3(...rest).applyMatrix4(new THREE.Matrix4().fromArray(m[channel])).toArray();return {a:p,b:[...p],radius:.1};});}};};
+  try{
+   fire={active:false,paused:false};emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.08}))})};
+   walker=await createWalkingCreature({host,inputs:{...inputs,choices:[],deformation:'gpu',action:'wander',play:false,attention:{interests:inputs.attention.interests,flame:{interest:1}}}},{...dependencies,loadGpuDeformer:async()=>supportFactory,encounterContext:{...context,steer:({direction})=>({direction,distanceScale:0}),limit:input=>{proposed=input.nextBody;return {fraction:1};}}});
+   walker.operations.play();
+   const tick=()=>{scene.updateMatrixWorld(true);const updates=walker.read().skin.updates,observation=world.beginStep();callback({deltaSeconds:1/30,observation});world.finishStep();
+    const body=walker.operations.encounterBody(),shapes=response==='physical'?world.read().physics.shapes.map(s=>s.position):proposed.movementCores.map(s=>s.a);
+    for(let i=0;i<shapes.length;i++)assert.ok(Math.hypot(...shapes[i].map((x,j)=>x-body.movementCores[i].a[j]))<1e-7,`PHYSICAL-02: ${response} support excludes resolved attention`);
+    assert.ok(walker.read().skin.updates-updates<=1,'A proposed pose must not publish extra deformation updates');
+   };
+   for(let i=0;i<45;i++)tick();
+   assert.ok(walker.read().attention.weight>.8,'Held-gait fixture must actually look at the prop');
+   const chestBefore=walker.pose({bones:['spine-chest']});
+   fire.active=true;notify();for(let i=0;i<3;i++)tick();await poll();tick();
+   assert.ok(walker.read().attention.startle,'Fixture must actually invoke chest recoil');
+   assert.notDeepEqual(walker.pose({bones:['spine-chest']}).bones,chestBefore.bones,'Chest overlay must change the presented support');
+  }finally{await walker?.dispose();world.dispose();globalThis.setInterval=timers.set;globalThis.clearInterval=timers.clear;delete window.kaminosFireLightProbe;}
+ }
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}

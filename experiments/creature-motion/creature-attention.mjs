@@ -339,14 +339,17 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    if(startle)applyStartlePose({THREE,bones,point:startle.point,strength:recoilAmount(startle,time)});
    gazeLocal=new THREE.Vector3(...profile.forward).transformDirection(head.matrixWorld).transformDirection(group.matrixWorld.clone().invert());
    reticle.visible=Boolean(focus)&&weight>.2;
-   if(reticle.visible&&placement){
-    placement.updateMatrixWorld(true);
-    reticle.position.copy(placement.worldToLocal(new THREE.Vector3(...focus.point)));
-    const sc=new THREE.Vector3().setFromMatrixScale(placement.matrixWorld);reticle.scale.set(.05/sc.x,.05/sc.y,.05/sc.z);
-    setCaption(why?(why.cause==='looking around'?'looking around':`${why.cause} · ${why.label}`):'');
-   }
+   positionReticle(placement);
    error=null;
   }catch(failure){error=failure.message;reticle.visible=false;throw failure;}
+ }
+
+ function positionReticle(placement){
+  if(!reticle.visible||!focus||!placement)return;
+  placement.updateMatrixWorld(true);
+  reticle.position.copy(placement.worldToLocal(new THREE.Vector3(...focus.point)));
+  const sc=new THREE.Vector3().setFromMatrixScale(placement.matrixWorld);reticle.scale.set(.05/sc.x,.05/sc.y,.05/sc.z);
+  setCaption(why?(why.cause==='looking around'?'looking around':`${why.cause} · ${why.label}`):'');
  }
 
  // Light around the creature, sampled elsewhere (e.g. the fire light field at
@@ -455,7 +458,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
- return Object.freeze({modify,sense,read,motionSeconds,setEngagement:id=>{engagementId=id;},setEnabled,setProfile,reticle,dispose});
+ return Object.freeze({modify,sense,read,motionSeconds,positionReticle,setEngagement:id=>{engagementId=id;},setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that
