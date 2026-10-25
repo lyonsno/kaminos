@@ -30,9 +30,13 @@ export function migrateScore(value){
 }
 // Numeric plans are compiled at edits/event arrival, not by rereading and cloning
 // every endpoint and every past event for each presented frame.
+export function responseFields(score){
+ const used=new Set(Object.values(score.stacks??{}).flatMap(layers=>layers.filter(l=>l.enabled).map(l=>l.objectId)));
+ return [...new Set([...Object.values(score.stages).flatMap(r=>r.fields),...(score.objects??[]).filter(o=>used.has(o.id)).flatMap(o=>o.recipe.fields),...(score.flare?.fields??[])])];
+}
 export function compileScore(recording,score,baseline){
  validateScore(score,baseline);
- const allFields=new Set([...Object.values(score.stages).flatMap(r=>r.fields),...(score.objects??[]).flatMap(o=>o.recipe.fields),...(score.flare?.fields??[])]);
+ const allFields=new Set(responseFields(score));
  const values=s=>Object.fromEntries([...allFields].map(id=>[id,descriptor(s,id)?.value]));
  const initial=values(baseline),scale=score.timeScale??1,transition=score.transitionMs??400;
  const interpolate=(a,b,id,t)=>{if(t===0)return a;if(t===1)return b;return id==='volume-wind-angle'?((a+(((b-a+540)%360)-180)*t+540)%360)-180:a+(b-a)*t;};

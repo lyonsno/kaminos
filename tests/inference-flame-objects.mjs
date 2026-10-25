@@ -51,3 +51,9 @@ test('direct progress easing continues through unassigned successor phases',()=>
  assert.equal(evaluateInferenceFlame(r,1200,score,settings(2)).settings.domControls[field].value,6);
  assert.equal(evaluateInferenceFlame(r,1400,score,settings(2)).settings.domControls[field].value,10);
 });
+
+test('unused library objects do not make their parameters replay-owned',()=>{
+ const score={stages:{},objects:[{id:'unused',label:'Unused',kind:'state',recipe}],stacks:{}};
+ const result=evaluateInferenceFlame(recording,500,score,settings(7));
+ assert.deepEqual(result.settings,settings(7));
+});

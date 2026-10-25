@@ -1,5 +1,5 @@
 import {blendSettings,descriptor} from './flame-blend.mjs';
-import {compileScore,migrateScore,validateScore,validateRecipe} from './inference-flame-score.mjs';
+import {compileScore,migrateScore,validateScore,validateRecipe,responseFields} from './inference-flame-score.mjs';
 const clone=structuredClone;
 const smooth=x=>{x=Math.min(1,Math.max(0,x));return x*x*(3-2*x);};
 export const INFERENCE_STAGES=['weights','text','denoise','decode','saving','complete'];
@@ -34,7 +34,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   if(!flame.read().active)throw Error('Add or enable a flame first');
   if(!transaction){
    const current=flame.settings();
-   const fields=[...new Set([...Object.values(score.stages).flatMap(recipe=>recipe.fields),...(score.objects??[]).flatMap(o=>o.recipe.fields),...(score.flare?.fields??[])])];
+   const fields=responseFields(score);
    baseline=baseline&&fields.length?blendSettings({a:baseline,b:baseline,current,fields,amount:0}):current;
    invalidate();lastApplied=null;transaction=flame.beginPreview('Inference flame response');
   }
