@@ -6,5 +6,6 @@
   "engineRevision": "96b043c88dc2a4af5367820caf1e1e9f458d5560",
   "license": "LICENSE.md",
   "rebuildSource": "structural-material-arch-gpu-engine.js and scripts/build-arch-gpu-engine.mjs at sourceCommit",
-  "note": "Existing pinned WebPhysics engine with Kaminos fixed-joint, scheduling and disposal repairs; bundle copied without algorithm changes."
+  "note": "Existing pinned WebPhysics engine with Kaminos fixed-joint, scheduling and disposal repairs; trailing whitespace removed from compiled bundle, no algorithm changes.",
+  "copiedSha256": "a6d551b81648b8caef6d0392ce0067fd0d6a9ecc09cc117c286dfda057644262"
 }
