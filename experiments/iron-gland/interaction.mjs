@@ -18,14 +18,12 @@ export function handObservation(result, { width, height, mirror = true } = {}) {
   const length = distance(pixels[0], pixels[9]);
   if (span < 1 || length < 1) return null;
   const axis = pixels[9].map((v, i) => (v - pixels[0][i]) / length);
-  // Use the thumb side of the palm, so the hover follows either chosen hand.
-  const side = pixels[5].map((v, i) => (v - pixels[17][i]) / span);
   const palm = midpoint(pixels[0], pixels[9]);
   const normalize = p => [p[0] / width, p[1] / height];
   return {
     handedness: result.handedness,
     wrist: normalize(pixels[0]), pinch: normalize(midpoint(pixels[4], pixels[8])),
-    anchor: normalize(palm.map((v, i) => v + side[i] * span * .95)),
+    anchor: normalize(palm),
     span: span / width, angle: Math.atan2(-axis[1], axis[0]),
     pinchRatio: distance(pixels[4], pixels[8]) / span,
   };
