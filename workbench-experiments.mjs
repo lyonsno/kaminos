@@ -8,19 +8,34 @@ function validateDefinition(definition, source='experiment') {
   }
 }
 
-// Importing trusted owner definitions discovers tools; creating an instance is
-// a separate, explicit act. The server supplies URLs from the current checkout.
-export async function loadExperimentContributions(urls, {loadModule=url=>import(url)}={}) {
-  const definitions=[], seen=new Map();
-  for(const url of urls) {
-    let definition;
-    try {definition=(await loadModule(url)).default;validateDefinition(definition,url);}
-    catch(error) {throw Error(`Experiment ${url}: ${error.message}`,{cause:error});}
-    if(seen.has(definition.id))throw Error(`Duplicate experiment ${definition.id}: ${seen.get(definition.id)} and ${url}`);
-    seen.set(definition.id,url);
-    definitions.push({...definition,moduleUrl:url});
+// The catalogue contains data only. Import the implementation at activation,
+// preserving source identity before allowing its factory to touch the host.
+export async function loadExperimentContributions(entries, {loadModule=url=>import(url)}={}) {
+  if(!Array.isArray(entries))throw Error('Experiment catalogue requires an entries array');
+  const definitions=entries.map(entry=>{
+    const {id,title,moduleUrl,error}=entry??{};
+    const problem=error || (typeof id!=='string'||!id.trim()||typeof title!=='string'||!title.trim()||typeof moduleUrl!=='string'||!moduleUrl.trim()
+      ? 'Experiment metadata requires id, title and moduleUrl' : null);
+    return {id,title,moduleUrl,...(problem?{error:`${moduleUrl??'experiment'}: ${problem}`}:{})};
+  });
+  const ids=new Map();
+  for(const entry of definitions)if(typeof entry.id==='string'){
+    if(!ids.has(entry.id))ids.set(entry.id,[]);ids.get(entry.id).push(entry);
   }
-  return definitions;
+  for(const [id,group] of ids)if(group.length>1){
+    const error=`Duplicate experiment ${id}: ${group.map(d=>d.moduleUrl).join(' and ')}`;
+    for(const entry of group)entry.error=error;
+  }
+  return definitions.map(entry=>({...entry,async create(context){
+    if(entry.error)throw Error(entry.error);
+    let definition;
+    try {
+      definition=(await loadModule(entry.moduleUrl)).default;
+      validateDefinition(definition,entry.moduleUrl);
+      if(definition.id!==entry.id || definition.title!==entry.title)throw Error('catalogue identity differs from implementation; refresh metadata and reload');
+    } catch(error){throw Error(`Experiment ${entry.moduleUrl}: ${error.message}`,{cause:error});}
+    return definition.create(context);
+  }}));
 }
 
 export async function openExperiment(definition, {host,inputs={},record=operation=>investigationOperations.emit(operation),onInputsChange=()=>{}}={}) {

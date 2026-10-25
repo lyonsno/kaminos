@@ -14,7 +14,7 @@ let frame,points=1,pointSampling='all',sampling='fixed',quality={resolution:256,
 const document={addEventListener(){},removeEventListener(){},getElementById:()=>null,createElement:()=>new Element(),defaultView:Object.assign(new EventTarget(),{Event,__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}})};
 const host={controls:{document},scene:{open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}})}};
 globalThis.document=document;globalThis.window={addEventListener(){}};
-const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
+const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[{id:'fire-shadow-sampling',title:'Fire shadow sampling',moduleUrl:new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href}],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
 await entry.open('fire-shadow-sampling',{sampling:'complementary',points:1,retained:'other input'});frame();
 await entry.invoke('setPoints',2);assert.equal(points,2);
 const owner=readOwnerExperimentAddress(new URL(href));

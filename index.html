@@ -2858,7 +2858,7 @@ import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, fl
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting } from './scene-lighting-compile.mjs';
-import { createFireShadowSettings } from './experiments/fire-shadow-sampling.experiment.mjs';
+import { createFireShadowSettings } from './fire-shadow-settings.mjs';
 import { installRenderingNumberControls } from './rendering-number-controls.mjs';
 import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
 import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
@@ -12849,7 +12849,7 @@ async function installOwnerWorkbenchEntry() {
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
   flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
-    discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
+    discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).experiments;},
     onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
   });
   window.kaminosWorkbenchExperiments=ownerExperimentEntry;

@@ -4032,10 +4032,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/workbench-experiments":
-            from workbench_experiments import discover_experiments
+            from workbench_experiments import discover_experiments, experiment_catalogue
             try:
                 modules = discover_experiments(ROOT, os.environ.get("KAMINOS_EXPERIMENTS_DIR", "experiments"))
-                self.send_json({"modules": modules, "source": volume_settings_server_source()})
+                self.send_json({"modules": modules, "experiments": experiment_catalogue(ROOT, modules), "source": volume_settings_server_source()})
             except (OSError, ValueError) as error:
                 self.send_error(500, str(error))
         elif parsed.path == "/api/sf3d-source-admission":

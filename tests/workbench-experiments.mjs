@@ -10,14 +10,14 @@ const {loadExperimentContributions = unavailable, openExperiment = unavailable} 
     throw error;
   });
 
-test('discovery loads definitions without creating a simulation; follow-up needs no central list', async () => {
+test('discovery reads metadata without creating a simulation; follow-up needs no central list', async () => {
   let starts=0;
   const modules=new Map([['/paper.experiment.mjs',{default:{id:'paper',title:'Finite water',create(){starts++;}}}]]);
   const loadModule=async url=>modules.get(url);
-  assert.equal((await loadExperimentContributions([...modules.keys()],{loadModule}))[0].id,'paper');
+  assert.equal((await loadExperimentContributions([...modules].map(([moduleUrl,{default:{id,title}}])=>({id,title,moduleUrl})),{loadModule}))[0].id,'paper');
   assert.equal(starts,0);
   modules.set('/hand.experiment.mjs',{default:{id:'hand',title:'Hand comparison',create(){starts++;}}});
-  const second=await loadExperimentContributions([...modules.keys()],{loadModule});
+  const second=await loadExperimentContributions([...modules].map(([moduleUrl,{default:{id,title}}])=>({id,title,moduleUrl})),{loadModule});
   assert.deepEqual(second.map(row=>row.id),['paper','hand']);
   assert.equal(starts,0);
 });
@@ -58,8 +58,10 @@ test('hand operations preserve unavailable intervals, source timing and custom o
 
 test('duplicate identity, import errors and invalid factories fail with source context', async () => {
   const definition={id:'same',title:'Same',create(){}};
-  await assert.rejects(loadExperimentContributions(['/one','/two'],{loadModule:async()=>({default:definition})}),/Duplicate.*same.*one.*two/);
-  await assert.rejects(loadExperimentContributions(['/broken'],{loadModule:async()=>{throw Error('syntax');}}),/broken.*syntax/);
+  const duplicates=await loadExperimentContributions(['/one','/two'].map(moduleUrl=>({id:'same',title:'Same',moduleUrl})));
+  await assert.rejects(openExperiment(duplicates[0]),/Duplicate.*same.*one.*two/);
+  const [broken]=await loadExperimentContributions([{id:'broken',title:'Broken',moduleUrl:'/broken'}],{loadModule:async()=>{throw Error('syntax');}});
+  await assert.rejects(openExperiment(broken),/broken.*syntax/);
   await assert.rejects(openExperiment({id:'missing',title:'Missing',create:()=>({operations:{}})},{host:{}}),/read/);
   await assert.rejects(openExperiment({id:'bad',title:'Bad',create:()=>({read(){},operations:{start:3}})},{host:{}}),/start/);
 });

@@ -87,7 +87,11 @@ the existing investigation tools below.
 ## Contribute Your Feature
 
 1. Copy the small definition to `experiments/<your-feature>.experiment.mjs` and
-   choose a unique `id` and `title`. Keep domain implementation in its own modules.
+   choose a unique `id` and `title`. Add the adjacent `<your-feature>.experiment.json`
+   containing `{"id":"your-feature","title":"Your feature"}` with the same values.
+   The server reads that metadata without importing implementations; choosing an
+   experiment imports its module and checks both values before calling its factory.
+   Keep domain implementation in its own modules.
 2. In `create({host, inputs, record})`, validate setup and await
    `host.scene.open()`. Attach owned Three objects with `session.attach(root,
    {owned: true, metadata})`, or load a GLB with `session.loadAsset({url})`.
@@ -97,7 +101,14 @@ the existing investigation tools below.
    actual state. Operations perform meaningful domain actions and record their
    effective values. `mount({root, document, invoke})` connects controls to those
    same operations. Dispose the session and any feature-owned subscriptions.
-4. Refresh experiment discovery after adding files; reload after changing
+4. Refresh experiment discovery after adding files or editing metadata. Missing or
+   malformed metadata and duplicate IDs appear as unavailable entries with source
+   diagnostics; unrelated experiments remain usable. Fix the adjacent metadata and
+   refresh to recover. The existing `/api/workbench-experiments` response retains
+   `modules` for source inventory and adds `experiments` for the data-only catalogue.
+   Each catalogue row has `moduleUrl` plus `id`/`title`, or a source-specific `error`.
+   The entry's `list()` exposes those errors and `state().moduleUrl` identifies the
+   running implementation even after a catalogue refresh. Reload after changing
    imported code. Open with `?experiment=<id>&experiment_inputs=<URL-encoded JSON>`.
    Reuse existing control grammar and ordinary scene/editor operations.
 5. Exercise an actual control and the corresponding agent invocation. Inspect
