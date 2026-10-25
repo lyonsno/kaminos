@@ -1,5 +1,6 @@
 // Actual browser/model computational witness, using the existing isolated CDP harness.
 import fs from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {validateExpansion} from './witness-contract.mjs';
 import {fileURLToPath} from 'node:url';
@@ -33,6 +34,24 @@ try{
  report.phase='done';exit=0;
 }catch(error){report.error=String(error?.stack??error);report.failurePhase=report.phase;report.phase='failed';}
 finally{
- await browser?.close();server?.close();report.finishedAt=new Date().toISOString();await save();
+ await browser?.close();server?.close();
+ // The queue gives this command its own process group. Chrome's main process
+ // can exit before its GPU/crashpad children; keep the producer alive until
+ // those exact children quiesce instead of stranding the shared queue.
+ const group=Number(execFileSync('ps',['-o','pgid=','-p',String(process.pid)],{encoding:'utf8'}).trim());
+ const cleanupStarted=Date.now();
+ if(group===process.pid){
+  for(;;){
+   const rows=execFileSync('ps',['-axo','pid=,pgid=,comm='],{encoding:'utf8'}).split('\n').filter(row=>{
+    const parts=row.trim().split(/\s+/);return Number(parts[1])===group&&Number(parts[0])!==process.pid&&parts.slice(2).join(' ')!=='ps';
+   });
+   if(!rows.length)break;
+   report.remainingOwnedGroup=rows;await save();
+   await new Promise(resolve=>setTimeout(resolve,500));
+  }
+  delete report.remainingOwnedGroup;
+ }
+ report.groupCleanup={group,isolated:group===process.pid,waitMs:Date.now()-cleanupStarted};
+ report.finishedAt=new Date().toISOString();await save();
 }
 process.exit(exit);
