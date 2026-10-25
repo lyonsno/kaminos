@@ -57,6 +57,10 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   onProgress({phase:'processor'});
   const processor=await tf.AutoProcessor.from_pretrained(packagePath);
   if(!processor.tokenizer)throw Error('The browser package must identify Qwen3VLProcessor, including its tokenizer.');
+  const templateResponse=await fetch(base+'/chat_template.jinja');
+  if(!templateResponse.ok)throw Error(`BFL chat template HTTP ${templateResponse.status}`);
+  processor.chat_template=await templateResponse.text();
+  if(!processor.chat_template.trim())throw Error('The BFL chat template is empty.');
   let model=null,busy=false;
   async function load(){
     if(model)return;
@@ -100,13 +104,15 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
       try{
         const messages=helperMessages(prompt,images.length,systems);
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
-        await load();
         const text=processor.apply_chat_template(messages,{add_generation_prompt:true,enable_thinking:false});
         const raw=await Promise.all(images.map(async image=>prepareReference(
           image instanceof tf.RawImage?image:await tf.RawImage.read(image),images.length,tf.RawImage)));
         // Original attachment order survives preparation and vision concatenation.
         inputs=await processor(text,raw.length?raw:undefined,{padding:false,truncation:false});
         const promptLength=inputs.input_ids.dims[1];
+        if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
+        await load();
+        if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         class GeneratedPresence extends tf.LogitsProcessor{
           _call(ids,logits){
             const vocab=logits.dims.at(-1);
