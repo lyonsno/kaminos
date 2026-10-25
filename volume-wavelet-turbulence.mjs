@@ -25,11 +25,11 @@ export const WAVELET_BAND_SLOPE = -5 / 6;
 // Wavelength of the first synthesised octave, in cells. The resolved mid band
 // the kernel measures sits at roughly 4–8 cells; the synthesised band fills
 // 4 cells downward, one octave per step of 2.
-// Convert a velocity-cell amplitude to material cells, then continue the
-// spectral slope down to the smaller physical wavelength.
+// Convert velocity-cell amplitude to material-cell units without changing
+// physical amplitude or shifting the existing synthesized spectrum.
 export function materialTurbulenceScale(materialPerVelocity) {
   if(!(materialPerVelocity>=1))throw Error('Invalid material/velocity ratio');
-  return materialPerVelocity**(1+WAVELET_BAND_SLOPE);
+  return materialPerVelocity;
 }
 export const WAVELET_BASE_WAVELENGTH_CELLS = 4;
 export const WAVELET_LACUNARITY = 2;

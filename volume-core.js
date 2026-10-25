@@ -4157,13 +4157,14 @@ fn materialTransportVelocity(cell:vec3<f32>,resolved:vec3<f32>)->vec3<f32>{
   a+=textureLoad(waveletCoordSrc,c,0)*weight;
   b+=textureLoad(waveletCoordSrc,c+vec3<i32>(0,0,dims.z),0)*weight;
  }}}
- let amplitude=a.w*pow(ratio,1.0+WAVELET_BAND_SLOPE);
+ // Units only: preserve physical amplitude and both existing wavelengths.
+ let amplitude=a.w*ratio;
  if(amplitude<=0.0){return resolved;}
  let blend=waveletBlendA(u32(u.wavelet_turbulence.w),WAVELET_COHERENCE_PERIOD_STEPS);
  let octaves=clamp(u32(u.wavelet_turbulence.y),1u,2u);
  var detail=vec3<f32>(0);
- if(blend>0.0){detail+=blend*waveletDetailWeighted(a.xyz*ratio,octaves,u.wavelet_octave_weights.xy);}
- if(blend<1.0){detail+=(1.0-blend)*waveletDetailWeighted(b.xyz*ratio,octaves,u.wavelet_octave_weights.xy);}
+ if(blend>0.0){detail+=blend*waveletDetailWeighted(a.xyz,octaves,u.wavelet_octave_weights.xy);}
+ if(blend<1.0){detail+=(1.0-blend)*waveletDetailWeighted(b.xyz,octaves,u.wavelet_octave_weights.xy);}
  return resolved+detail*amplitude*u.wavelet_turbulence.x*u.wavelet_turbulence.z;
 }
 
