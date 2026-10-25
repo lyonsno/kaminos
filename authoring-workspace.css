@@ -466,3 +466,9 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .generation-flame-paper{position:absolute;inset:12px 14px 22px;padding:7px;background:#30241b;font-size:9px;line-height:1.4;overflow:hidden;box-shadow:0 1px 7px #0008;z-index:1;}
 .generation-flame-card{position:absolute;left:20px;top:16px;width:60px;height:60px;object-fit:contain;transform:rotate(-4deg);border:1px solid #f5d5a565;box-shadow:0 2px 10px #0009;z-index:2;}
 .generation-flame-volume{z-index:3;pointer-events:none;}
+/* Agent work retains the ordinary selectable asset tiles. */
+#asset-entries.asset-agent-groups { display:block; }
+.asset-agent-group { border-bottom:1px solid #ffffff19; padding:10px 0; }
+.asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
+.asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
+.asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
