@@ -2854,6 +2854,8 @@ applyVolumeControlDescriptions(document);
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
+import {createSceneBloom} from './scene-bloom.mjs';
+import {bloom} from './lib/addons/tsl/display/BloomNode.js';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
@@ -11116,13 +11118,15 @@ async function initScene() {
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
   let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
+  const sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
+  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')}),set(settings){sceneBloom.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
+    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11144,11 +11148,12 @@ async function initScene() {
     renderPipeline.outputNode = baseSceneOutput;
   }
   rawSceneOutput=renderPipeline.outputNode;
+  const displaySceneOutput=diagnostic?rawSceneOutput:sceneBloom.output(rawSceneOutput);
   sceneEmissiveCamera=null;
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
-    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE});
+    sceneEmissiveCamera=createSceneEmissiveCamera(displaySceneOutput,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE});
   }
-    outlinedSceneOutput=selectionFeedback.output(rawSceneOutput);
+    outlinedSceneOutput=selectionFeedback.output(displaySceneOutput);
     outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
     renderPipeline.outputNode=outlinedSceneOutput;
     giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
@@ -11157,7 +11162,7 @@ async function initScene() {
   }
   updateSceneGI = value => {
     const next = resolveSceneGIControlState(value);
-    const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0) || next.temporal!==sceneGISettings.temporal;
+    const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0) || next.temporal!==sceneGISettings.temporal || (sceneBloom.read().settings.enabled&&(next.view==='scene')!==(sceneGISettings.view==='scene'));
     sceneGI.setSettings(next);
     sceneGI.setEstimatorSettings(next.estimator);
     sceneGISettings = next;
@@ -25558,6 +25563,7 @@ function installSceneConstruction() {
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
     setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled,material:'wood'},'Set burnable wood');},
     burningState:id=>sceneBurning.read(id),
+    setBurnAppearance:(id,value)=>sceneBurning.setAppearance(id,value),
     settleCombustion:()=>sceneBurning.sync(),
     burningSnapshot:id=>sceneBurning.snapshot(id),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),

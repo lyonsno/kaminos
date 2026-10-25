@@ -42,11 +42,12 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame})
     }));
     return {
       object:entry.object,
+      setAppearance(value){if(bindings.some(binding=>binding.read().appearanceModel!=='incineration-front-v1'))throw Error('No incineration appearance on this material');for(const binding of bindings)binding.setAppearance(value);},
       setMounted(value){debris.root.visible=value;},
       materialMask:()=>field.materialMask(entry.id),
       encodeGasSource:(encoder,frame,gas)=>field.encodeGasSource(encoder,frame,gas),
       encode(encoder,frame){field.encode(encoder,frame);debris.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);},
-      read:()=>({objectId:entry.id,fields:[field.read()],debris:debris.read(),elapsed,physicalWoodCalibration:false,
+      read:()=>({objectId:entry.id,fields:[field.read()],debris:debris.read(),elapsed,physicalWoodCalibration:false,appearance:bindings.map(binding=>binding.read()),
         materials:(Array.isArray(mesh.material)?mesh.material:[mesh.material]).map(m=>({color:m.color.getHexString(),roughness:m.roughness,metalness:m.metalness}))}),
       snapshot:()=>debris.snapshot(),
       dispose,

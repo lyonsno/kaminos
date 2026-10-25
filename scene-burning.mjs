@@ -58,6 +58,8 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     return pending;
   }
   return {sync,forget,
+    setAppearance(id,value){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);
+      if(!row)throw Error('Burnable material is not resident');row.body.setAppearance(value);dirty();return row.body.read();},
     snapshot(id){
       if(runtime()?.debugState().simulationPaused!==true)throw Error('Pause before material diagnosis');
       const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);
