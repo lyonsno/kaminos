@@ -55,7 +55,7 @@ async function fixture() {
   const owner = await definition.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{},record:e=>events.push(e)});
   await owner.operations.loadModels();
   return {owner,tracks,attached,events,video,stageControls,
-    makeStream,setCameraRequest:value=>{window.navigator.mediaDevices.getUserMedia=value;},
+    makeStream,setCameraRequest:value=>{window.navigator.mediaDevices.getUserMedia=value;},setFetch:value=>{window.fetch=value;},
     setModelData:value=>{modelData=value;},setSessionData:value=>{sessionData=value;},
     get releases(){return releases;},get routeCreations(){return routeCreations;},
     async frame(value) { await flush();pending=value;const cb=video.callback;video.callback=null;assert.ok(cb,'frame scheduled');cb();await flush(); },
@@ -121,6 +121,18 @@ test('capture is an explicit operation and cannot start without an active camera
     await assert.rejects(async()=>f.owner.operations.beginCapture(),/camera/i);
     assert.equal(f.tracks.length,0);
   }finally{await f.owner.dispose();}
+});
+
+test('runtime identity acquisition is visible as capture starting and a camera stop cancels it',async()=>{
+  const f=await fixture();let resolve,begun,stopped;
+  try{
+    f.setFetch(()=>new Promise(r=>{resolve=r;}));await f.owner.operations.start();await flush();
+    begun=f.owner.operations.beginCapture();const rejected=assert.rejects(begun,/Camera stopped/);
+    assert.equal(f.owner.read().capture.status,'starting');
+    stopped=f.owner.operations.stop();resolve({ok:true,json:async()=>({source:{commit:'fixture'}})});
+    await rejected;await stopped;
+    assert.equal(f.owner.read().capture.status,'idle');assert.equal(f.owner.read().running,false);
+  }finally{resolve?.({ok:true,json:async()=>({})});await begun?.catch(()=>{});await stopped;await f.owner.dispose();}
 });
 
 test('the visible scene contains the reconstructed hand, never a camera background', async () => {
