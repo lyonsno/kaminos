@@ -44,3 +44,10 @@ test('stack arrangements use a distinct schema so older readers cannot silently 
 test('disjoint state layers combine their parameter sets',()=>{
  const f=fixture(),o=f.response.operations;o.load(recording);o.saveObject({id:'heat',kind:'state',recipe});o.saveObject({id:'wind',kind:'state',recipe:{...recipe,fields:[wind],b:{label:'Wind',settings:settings(99,70)}}});o.addLayer({stage:'decode',objectId:'heat'});o.addLayer({stage:'decode',objectId:'wind'});o.seek(500);assert.equal(f.get(),10);assert.equal(evaluateInferenceFlame(recording,500,o.export().score,settings(2)).settings.domControls[wind].value,70);f.response.dispose();
 });
+
+test('direct progress easing continues through unassigned successor phases',()=>{
+ const r={...recording,durationMs:2000,events:[{type:'stage',stage:'denoise',atMs:0},{type:'progress',stage:'denoise',completed:1,total:1,atMs:1000},{type:'stage',stage:'decode',atMs:1050},{type:'complete',atMs:2000}]};
+ const score={stages:{denoise:recipe},transitionMs:400,flare:null};
+ assert.equal(evaluateInferenceFlame(r,1200,score,settings(2)).settings.domControls[field].value,6);
+ assert.equal(evaluateInferenceFlame(r,1400,score,settings(2)).settings.domControls[field].value,10);
+});

@@ -54,7 +54,7 @@ export function compileScore(recording,score,baseline){
  const duration=(span,l)=>{const authored=l.object.recipe.duration*1000;return (l.timing==='phase'&&Number.isFinite(span.end)?span.end-span.start:authored)*l.scale*scale;};
  const progressAt=(span,t)=>{let p=null;for(const e of span.events){if(e.atMs>t)break;if(e.type==='progress')p=e.total===null?null:e.completed/e.total;}return p;};
  function at(span,t){
-  const out={...span.before};
+  const out=span.carry?at(span.carry,t):{...span.before};
   // Keep the original direct stage assignment API's observed-progress easing.
   const recipe=score.stages[span.stage];
   if(recipe){
@@ -71,8 +71,10 @@ export function compileScore(recording,score,baseline){
   }
   return out;
  }
- let before=initial;
- for(const span of spans){span.before={...before};span.layers=layersFor(span);if(Number.isFinite(span.end))before=at(span,span.end);
+ let before=initial,carry=null;
+ for(const span of spans){span.before={...before};span.layers=layersFor(span);
+  const direct=score.stages[span.stage];span.carry=!direct&&!span.layers.length?carry:null;carry=direct?span:span.layers.length?null:carry;
+  if(direct)end=Math.max(end,span.stage==='complete'?span.start+direct.duration*1000*scale:span.events.at(-1).atMs+transition);if(Number.isFinite(span.end))before=at(span,span.end);
   else {for(const l of span.layers)if(l.object.kind!=='state')end=Math.max(end,span.start+duration(span,l));const r=score.stages[span.stage];if(r)end=Math.max(end,span.stage==='complete'?span.start+r.duration*1000*scale:span.events.at(-1).atMs+transition);}
  }
  return {end,fields:[...allFields],evaluate(time){
