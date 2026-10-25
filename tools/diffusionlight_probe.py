@@ -171,7 +171,7 @@ def reconstruct(root, output):
     return hdr_dir/'probe.exr'
 
 
-def run_inference(models, image, output, report, report_path):
+def run_inference(models, image, output, report, report_path, seed=SEED):
     import torch
     from diffusers import ControlNetModel, StableDiffusionXLControlNetInpaintPipeline, UniPCMultistepScheduler
     from transformers import pipeline
@@ -221,7 +221,7 @@ def run_inference(models, image, output, report, report_path):
     report['route']={'depthDevice':'mps','depthDtype':'float32','diffusionDevice':report['effectiveDevice'],
         'diffusionDtype':'float16','randomGeneratorDevice':'cpu','cpuFallback':False,
         'torchVersion':torch.__version__,'diffusersVersion':__import__('diffusers').__version__}
-    report['settings']={'exposures':EVS,'seed':SEED,'pipeline':PIPELINE_SETTINGS,
+    report['settings']={'exposures':EVS,'seed':seed,'pipeline':PIPELINE_SETTINGS,
         'scheduler':'UniPCMultistepScheduler','switchTimestep':800,'exposureLoraScale':.75,
         'prompt':PROMPT,'blackPrompt':BLACK_PROMPT,'negativePrompt':NEGATIVE_PROMPT}
     report['exposures']=[]
@@ -238,12 +238,13 @@ def run_inference(models, image, output, report, report_path):
                     switches.append({'step':index,'timestep':float(timestep)})
                 return callback_kwargs
             apply_lora('turbo',1.)
+            generator=torch.Generator(device='cpu').manual_seed(seed)
             torch.mps.synchronize(); start=time.perf_counter()
             frame=pipe(prompt_embeds=interpolate_prompt(bright,dark,ev),
                 pooled_prompt_embeds=interpolate_prompt(bright_pool,dark_pool,ev),
                 negative_prompt=NEGATIVE_PROMPT,image=image,mask_image=mask,control_image=control_image,
                 **PIPELINE_SETTINGS,callback_on_step_end=callback,
-                generator=torch.Generator(device='cpu').manual_seed(SEED)).images[0]
+                generator=generator).images[0]
             torch.mps.synchronize()
             elapsed=time.perf_counter()-start
             name=f'probe_ev{int(ev*10)}.png'
@@ -252,7 +253,8 @@ def run_inference(models, image, output, report, report_path):
             pixels=np.asarray(frame)
             if not switches or np.ptp(pixels[384:640,384:640])==0:
                 raise RuntimeError('missing LoRA switch or blank generated ball')
-            report['exposures'].append({'ev':ev,'seed':SEED,'seconds':elapsed,'switches':switches,'effectiveSteps':step_count,
+            report['exposures'].append({'ev':ev,'seed':seed,'effectiveSeed':generator.initial_seed(),
+                'seconds':elapsed,'switches':switches,'effectiveSteps':step_count,
                 'image':str(output/'raw'/name),'sha256':digest(output/'raw'/name)})
             save_json(report_path,report)
     del pipe, control
@@ -269,6 +271,7 @@ def main(argv=None):
     parser.add_argument('--fov',type=float,default=60)
     parser.add_argument('--view-yaw',type=float,default=0)
     parser.add_argument('--label',default='Warehouse')
+    parser.add_argument('--seed',type=int,default=SEED)
     args=parser.parse_args(argv)
     if args.acquire:
         return acquire(args.acquire)
@@ -310,7 +313,7 @@ def main(argv=None):
             'viewYawDegrees':args.view_yaw,'image':png_url(crop),'sha256':digest(args.output_dir/'input.png'),
             'preprocessing':'1024x768 perspective; gamma1/2.4; positive median=.5; clip; black pad1024 square',
             'scope':'same 60-degree camera frustum as EMLight; native higher-resolution sampling; no fitted view'}
-        run_inference(models,image,args.output_dir,report,report_path)
+        run_inference(models,image,args.output_dir,report,report_path,seed=args.seed)
         report['phase']='hdr-reconstruction'; save_json(report_path,report)
         hdr=reconstruct(args.source_root,args.output_dir)
         estimated=read_environment(hdr,args.output_dir)

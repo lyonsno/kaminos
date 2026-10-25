@@ -205,6 +205,41 @@ class TurboContract(unittest.TestCase):
                             Path(tmp),report,Path(tmp)/'loading.json')
                 self.assertEqual(report['effectiveDevice'],device)
 
+    def test_selected_seed_reaches_every_exposure_and_its_receipt(self):
+        import torch
+        from diffusers import StableDiffusionXLControlNetInpaintPipeline as Pipeline
+        for selected in [None, 0, -1]:
+            with self.subTest(seed=selected), tempfile.TemporaryDirectory() as tmp:
+                expected=self.probe.SEED if selected is None else selected
+                pipe=MagicMock()
+                pipe.unet.device=torch.device('mps:0')
+                pipe.to.return_value=pipe
+                pipe.encode_prompt.return_value=(torch.ones(1),None,torch.ones(1),None)
+                frame=Image.new('RGB',(1024,1024))
+                frame.putpixel((512,512),(255,255,255))
+                seeds=[]
+                def generate(**kwargs):
+                    seeds.append(kwargs['generator'].initial_seed())
+                    kwargs['callback_on_step_end'](pipe,5,769,{})
+                    return SimpleNamespace(images=[frame])
+                pipe.side_effect=generate
+                models={name:{'path':tmp} for name in ['depth','base','control','turbo','exposure']}
+                report={}
+                with (patch.object(self.probe,'require_mps'),
+                      patch.object(self.probe,'adapter_weights',return_value=({},{})),
+                      patch('torch.mps.empty_cache'),patch('torch.mps.synchronize'),
+                      patch('transformers.pipeline',return_value=lambda image:{'depth':Image.new('L',(1024,1024),20)}),
+                      patch('diffusers.ControlNetModel.from_pretrained',return_value=object()),
+                      patch.object(Pipeline,'from_pretrained',return_value=pipe),
+                      patch('diffusers.UniPCMultistepScheduler.from_config',return_value=object())):
+                    kwargs={} if selected is None else {'seed':selected}
+                    self.probe.run_inference(models,frame,Path(tmp),report,Path(tmp)/'lighting.json',**kwargs)
+                effective=torch.Generator(device='cpu').manual_seed(expected).initial_seed()
+                self.assertEqual(seeds,[effective]*len(self.probe.EVS))
+                self.assertEqual(report['settings']['seed'],expected)
+                self.assertEqual([item['seed'] for item in report['exposures']],[expected]*len(self.probe.EVS))
+                self.assertEqual([item['effectiveSeed'] for item in report['exposures']],seeds)
+
     @unittest.skipUnless(os.environ.get('DIFFUSIONLIGHT_SOURCE_ROOT'), 'requires pinned upstream conversion source')
     def test_upstream_projection_axes_and_hdr_merge_preserve_real_radiance(self):
         root=Path(os.environ['DIFFUSIONLIGHT_SOURCE_ROOT'])
