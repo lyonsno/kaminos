@@ -57,6 +57,43 @@ class TurboContract(unittest.TestCase):
             'num_inference_steps':30,'guidance_scale':parameters['guidance_scale'].default,
             'strength':parameters['strength'].default,'controlnet_conditioning_scale':.5})
 
+    def test_both_adapters_load_through_real_diffusers_offline_resolver(self):
+        import torch
+        from diffusers import StableDiffusionXLControlNetInpaintPipeline as Pipeline
+        from safetensors.torch import save_file
+        loaded={}
+        class LoadingProbe:
+            scheduler=SimpleNamespace(config={})
+            def to(self, device):
+                return self
+            def load_lora_weights(self, path, adapter_name, **kwargs):
+                loaded[adapter_name]=Pipeline.lora_state_dict(path, **kwargs)[0]
+            def prepare_mask_latents(self, *args, **kwargs):
+                raise AssertionError('inference is outside this loading test')
+            def encode_prompt(self, prompt):
+                raise RuntimeError('adapters-observed')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            models={name:{'path':tmp} for name in ['depth','base','control']}
+            key='unet.test.to_q.lora_A.weight'
+            for value,name in enumerate(['turbo','exposure'],1):
+                folder=root/name; folder.mkdir()
+                save_file({key:torch.full((2,2),float(value))},folder/'pytorch_lora_weights.safetensors')
+                models[name]={'path':str(folder)}
+            with (patch.object(self.probe,'require_mps'),
+                  patch('torch.mps.empty_cache'),
+                  patch('transformers.pipeline',return_value=lambda image:{'depth':Image.new('L',(1024,1024),20)}),
+                  patch('diffusers.ControlNetModel.from_pretrained',return_value=object()),
+                  patch.object(Pipeline,'from_pretrained',return_value=LoadingProbe()),
+                  patch('diffusers.UniPCMultistepScheduler.from_config',return_value=object()),
+                  patch('diffusers.loaders.lora_base.HF_HUB_OFFLINE',True)):
+                with self.assertRaisesRegex(RuntimeError,'adapters-observed'):
+                    self.probe.run_inference(models,Image.new('RGB',(1024,1024)),
+                        root,{},root/'loading.json')
+            self.assertEqual(set(loaded),{'turbo','exposure'})
+            torch.testing.assert_close(loaded['turbo'][key],torch.ones(2,2))
+            torch.testing.assert_close(loaded['exposure'][key],torch.full((2,2),2.))
+
     def test_absent_assets_leave_durable_failure_not_stale_success(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

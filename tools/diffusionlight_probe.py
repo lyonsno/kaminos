@@ -178,8 +178,10 @@ def run_inference(models, image, output, report, report_path):
     pipe=StableDiffusionXLControlNetInpaintPipeline.from_pretrained(models['base']['path'],
         controlnet=control,variant='fp16',torch_dtype=torch.float16,add_watermarker=False,
         local_files_only=True).to('mps')
-    pipe.load_lora_weights(models['turbo']['path'],adapter_name='turbo')
-    pipe.load_lora_weights(models['exposure']['path'],adapter_name='exposure')
+    pipe.load_lora_weights(models['turbo']['path'],adapter_name='turbo',
+        weight_name='pytorch_lora_weights.safetensors',local_files_only=True)
+    pipe.load_lora_weights(models['exposure']['path'],adapter_name='exposure',
+        weight_name='pytorch_lora_weights.safetensors',local_files_only=True)
     pipe.scheduler=UniPCMultistepScheduler.from_config(pipe.scheduler.config)
     original=pipe.prepare_mask_latents
     def prepare(self, *args, **kwargs):
