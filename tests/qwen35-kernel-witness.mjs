@@ -1,0 +1,46 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as contract from '../models/qwen3_5/kernel-witness-contract.js';
+
+// Local admission-policy fixture, not evidence about an external GPU runtime.
+function fixture() {
+  const meta = { schema: 'kaminos.qwen35-kernel-reference.v1', source: { effective: { backend: 'mlx-metal' } },
+    affine: [{ name: 'tiny', tokens: 1, rows: 10 }], gdn: [{ name: 'tiny', tokens: 1 }], attention: {}, chunks: [1], arrays: {} };
+  const arrays = new Map();
+  for (const name of ['affine-tiny.output', ...['convolved', 'prepared', 'recurrence', 'state', 'gated', 'history'].map(s => `gdn-tiny.${s}`),
+    ...['q', 'key-cache', 'value-cache', 'output', 'gated'].map(s => `attention.${s}`)]) {
+    const data = new Float32Array(name === 'affine-tiny.output' ? 10 : 2).fill(.5);
+    arrays.set(name, data); meta.arrays[name] = { dtype: 'f32', shape: [data.length], bytes: data.byteLength };
+  }
+  const result = { backend: 'webgpu', adapter: { vendor: 'apple', architecture: 'apple-m4', isFallbackAdapter: false }, errors: [], rows: [] };
+  for (const [name, elements] of contract.kernelWitnessContract(meta)) {
+    let data = new Float32Array(elements).fill(.5);
+    if (name.endsWith('.strided')) { data.fill(-1234); data.set(new Float32Array(7).fill(.5), 2); }
+    result.rows.push({ name, elements, nonFinite: 0, relL2: 0, maxAbs: 0, data: Buffer.from(data.buffer).toString('base64') });
+  }
+  return { meta, arrays, result };
+}
+test('kernel admission rejects fallback, missing, repeated, partial and errored observations', () => {
+  const { meta, result } = fixture();
+  assert.equal(contract.validateKernelWitness(result, meta).rows, 24);
+  for (const change of [r => { r.backend = 'cpu'; }, r => { r.adapter.isFallbackAdapter = true; }, r => { r.adapter.description = 'SwiftShader'; },
+    r => { r.rows = []; }, r => { r.rows.pop(); }, r => { r.rows.push(r.rows[0]); }, r => { r.errors.push('device lost'); },
+    r => { r.rows[0].elements--; }, r => { r.rows[0].maxAbs = NaN; }]) {
+    const altered = structuredClone(result); change(altered); assert.throws(() => contract.validateKernelWitness(altered, meta));
+  }
+});
+test('host adjudication measures preserved GPU bytes rather than trusting page metrics', () => {
+  const { meta, arrays, result } = fixture();
+  assert.equal(contract.adjudicateKernelReadbacks(result, meta, arrays).rows, 24);
+  const liar = structuredClone(result);
+  liar.rows[0].data = Buffer.from(new Float32Array(liar.rows[0].elements).buffer).toString('base64');
+  assert.throws(() => contract.adjudicateKernelReadbacks(liar, meta, arrays), /mismatch/);
+});
+test('host adjudication refuses short and nonfinite raw data with falsely passing metrics', () => {
+  const { meta, arrays, result } = fixture();
+  for (const value of [new Float32Array(1), new Float32Array(result.rows[0].elements).fill(NaN)]) {
+    const liar = structuredClone(result); liar.rows[0].data = Buffer.from(value.buffer).toString('base64');
+    assert.throws(() => contract.adjudicateKernelReadbacks(liar, meta, arrays), /partial|mismatch/);
+  }
+});
