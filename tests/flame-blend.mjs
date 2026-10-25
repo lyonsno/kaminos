@@ -82,3 +82,12 @@ test('an existing disabled field must be enabled instead of duplicated',async()=
  const f=emptyCockpit({present:true});await f.c.operations.choose({slot:'a',presetId:'original'});
  await assert.rejects(f.c.operations.useA(),/Enable.*existing/);assert.equal(f.applied(),0);f.c.dispose();
 });
+
+test('captured endpoints immediately carry a compact content name that changes with the look',()=>{
+ const f=cockpit();f.op.capture('a');const first=f.controller.read().a;
+ assert.match(first.label,/^Capture · [0-9a-f]{8}$/);
+ f.op.capture('b');assert.equal(f.controller.read().b.label,first.label,'the same look has the same capture name');
+ const next=f.author.read();next.domControls['volume-physical-thermal'].value=7;next.domControls['volume-physical-thermal'].rawValue='7';f.author.apply(next);
+ f.op.capture('a');assert.notEqual(f.controller.read().a.label,first.label);
+ assert.equal(f.op.export().a.label,f.controller.read().a.label);f.controller.dispose();
+});

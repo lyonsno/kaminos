@@ -20,7 +20,7 @@ export function createFlameWorkbench({readSettings,applySettings,readRuntime,rea
     }
     applySettings(next,'Edit Flame Workbench controls');return read();
   }
-  return Object.freeze({read,settings:()=>structuredClone(readSettings()),setControls,applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,
+  return Object.freeze({read,status:()=>({active:readRuntime()?.active===true,present:readPresence()}),settings:()=>structuredClone(readSettings()),setControls,applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,
     setPaused(paused){if(typeof paused!=='boolean')throw Error('Pause requires a Boolean');return setControls({'volume-look-freeze':paused?1:0});},
   });
 }

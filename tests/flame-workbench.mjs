@@ -268,3 +268,9 @@ test('first-flame endpoint initialization uses captured settings and honors canc
  const request=new AbortController(),pending=add('original',{settings:endpoint,signal:request.signal});request.abort();release();
  await assert.rejects(pending);assert.equal(received,null);
 });
+
+test('lightweight flame status avoids serializing scene, view and whole settings for animation UI',()=>{
+ const f=fixture();for(const key of ['readScene','readView','readSettings'])f.options[key]=()=>{throw Error('expensive snapshot requested');};
+ f.options.readPresence=()=>true;const api=createFlameWorkbench(f.options);
+ assert.deepEqual(api.status(),{active:true,present:true});
+});

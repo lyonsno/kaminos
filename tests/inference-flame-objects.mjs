@@ -1,0 +1,39 @@
+// kaminos-test: node
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createInferenceFlame,evaluateInferenceFlame} from '../inference-flame.mjs';
+const field='volume-physical-thermal',wind='volume-wind-angle';
+const settings=(value,angle=30)=>({domControls:{[field]:{type:'range',value},[wind]:{type:'range',value:angle}},rendererControls:{},presentationControls:{}});
+const recipe={a:{label:'A',settings:settings(2)},b:{label:'B',settings:settings(10)},fields:[field],duration:2};
+const recording={schema:'kaminos.inference-recording.v1',runId:'observed-shape-fixture',source:{kind:'fixture'},status:'complete',durationMs:1000,events:[{type:'stage',stage:'decode',atMs:0},{type:'complete',atMs:1000}]};
+function fixture(){let current=settings(2),callback,writes=0;const response=createInferenceFlame({flame:{read:()=>({active:true}),settings:()=>structuredClone(current),beginPreview:()=>({active:()=>true,update:s=>{writes++;current=s;},commit(){},cancel(){}})},source:{},onFrame:f=>{callback=f;return()=>{};}});return {response,get:()=>current.domControls[field].value,writes:()=>writes,tick:dt=>callback({deltaSeconds:dt})};}
+test('Finished executes the entire authored ramp, including its tail after inference',()=>{
+ const f=fixture();f.response.operations.load(recording);f.response.operations.assign({stage:'complete',recipe});
+ assert.equal(f.response.read().playbackDurationMs,3000);
+ f.response.operations.seek(2000);assert.equal(f.get(),6);
+ f.response.operations.seek(3000);assert.equal(f.get(),10);f.response.dispose();
+});
+test('saved objects compose disjoint fields, ordered overrides, pulse returns to underlying state',()=>{
+ const f=fixture(),o=f.response.operations;o.load(recording);
+ o.saveObject({id:'base',kind:'state',label:'Warm',recipe});o.saveObject({id:'pulse',kind:'pulse',label:'Flare',recipe:{...recipe,b:{label:'Peak',settings:settings(20)}}});
+ o.addLayer({stage:'decode',objectId:'base'});o.addLayer({stage:'decode',objectId:'pulse',timing:'phase'});
+ o.seek(500);assert.equal(f.get(),20);o.seek(1000);assert.equal(f.get(),10);
+ const saved=o.export();o.restore(saved);assert.deepEqual(o.export(),saved);
+ assert.throws(()=>o.deleteObject('base'),/used|assigned|layer/i);
+ const ids=f.response.read().score.stacks.decode.map(l=>l.id);o.moveLayer({stage:'decode',id:ids[1],direction:-1});o.seek(500);assert.equal(f.get(),10);
+ o.updateLayer({stage:'decode',id:ids[0],enabled:false});o.seek(500);assert.equal(f.get(),20);f.response.dispose();
+});
+test('phase fit reaches B at phase boundary and seconds scale extends Finished',()=>{
+ const f=fixture(),o=f.response.operations;o.load(recording);o.saveObject({id:'r',kind:'ramp',recipe});o.addLayer({stage:'decode',objectId:'r',timing:'phase'});o.addLayer({stage:'complete',objectId:'r',timing:'seconds',scale:2});
+ o.seek(500);assert.equal(f.get(),6);o.seek(3000);assert.equal(f.get(),6);assert.equal(f.response.read().playbackDurationMs,5000);
+ o.timeScale(2);assert.equal(f.response.read().playbackDurationMs,9000);f.response.dispose();
+});
+test('unchanging replay does not repeatedly write settings and lightweight reads omit saved objects',()=>{
+ const f=fixture();f.response.operations.load(recording);f.response.operations.play();const before=f.writes();f.tick(.1);f.tick(.1);assert.equal(f.writes(),before);
+ assert.equal(f.response.read({includeScore:false}).score,undefined);f.response.dispose();
+});
+test('invalid layer and object edits preserve the accepted arrangement',()=>{
+ const f=fixture(),o=f.response.operations;o.load(recording);o.saveObject({id:'r',kind:'ramp',recipe});o.addLayer({stage:'decode',objectId:'r'});const before=o.export();
+ assert.throws(()=>o.updateLayer({stage:'decode',id:before.score.stacks.decode[0].id,scale:0}));assert.deepEqual(o.export(),before);
+ assert.throws(()=>o.updateObject({id:'r',recipe:{...recipe,duration:NaN}}));assert.deepEqual(o.export(),before);f.response.dispose();
+});

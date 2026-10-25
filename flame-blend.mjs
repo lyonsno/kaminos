@@ -32,14 +32,20 @@ export function blendSettings({a,b,current,fields,amount}) {
   return next;
 }
 
+function captureLabel(settings) {
+  const values=axes.flatMap(axis=>Object.entries(settings[axis]??{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,d])=>[id,d.value]));
+  let hash=2166136261;for(const character of JSON.stringify(values)){hash^=character.charCodeAt(0);hash=Math.imul(hash,16777619);}
+  return 'Capture · '+(hash>>>0).toString(16).padStart(8,'0');
+}
+
 // The endpoints are authored settings; the evolving fluid belongs to the host.
 export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
   let a=null,b=null,fields=[],amount=0,duration=4,gesture=null,playback=null,disposed=false,loading=false,error=null;
   const lifetime=new AbortController();
   const settings=()=>flame.settings ? flame.settings() : flame.read().settings;
   const current=()=>({a,b,fields,amount,duration});
-  const read=()=>({...structuredClone(current()),active:flame.read().active,present:flame.read().present===true,playing:!!playback,previewing:!!gesture,loading,error,
-    choices:blendChoices(a?.settings,b?.settings,settings())});
+  const read=()=>{const status=flame.status?.()??flame.read();return {...structuredClone(current()),active:status.active,present:status.present===true,playing:!!playback,previewing:!!gesture,loading,error,
+    choices:blendChoices(a?.settings,b?.settings,settings())};};
   const available=()=>{if(disposed)throw Error('Flame blend is disposed');};
   const editable=()=>{available();if(gesture||loading)throw Error('Finish the current blend or preset load first');};
   const slot=name=>{if(!['a','b'].includes(name))throw Error('Choose endpoint a or b');return name;};
@@ -90,7 +96,7 @@ export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
   }
   const operations={
     capture(name){editable();slot(name);if(!flame.read().active)throw Error('Add a flame to the scene first');
-      const endpoint={label:'Captured scene '+name.toUpperCase(),settings:settings()};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('capture');changed();return read();},
+      const captured=settings(),endpoint={label:captureLabel(captured),settings:captured};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('capture');changed();return read();},
     async choose({slot:name,presetId}){editable();slot(name);loading=true;changed();
       try{const next=await flame.readBasin(presetId);if(disposed)throw Error('Flame blend was closed during preset load');
         const endpoint={label:next.source?.label||presetId,settings:next};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('endpoint');return read();

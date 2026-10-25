@@ -53,7 +53,7 @@ test('unknown totals remain unknown and imported recipes do not mutate the curre
  const unknown={...recording,events:[{type:'progress',stage:'weights',completed:5,total:null,atMs:0}]};validateRecording(unknown);
  assert.equal(evaluateInferenceFlame(unknown,100,score,settings(1)).progress,null);
  const f=fixture();f.response.operations.load(recording);f.response.operations.assign({stage:'denoise',recipe});const saved=f.response.operations.export(),before=f.author.read();
- f.response.operations.restore(saved);assert.deepEqual(f.author.read(),before);assert.deepEqual(f.response.operations.export(),saved);f.response.dispose();
+ f.response.operations.restore(saved);assert.deepEqual(f.author.read(),before);const migrated=f.response.operations.export();assert.deepEqual(migrated.recording,saved.recording);assert.deepEqual(migrated.score.objects[0].recipe,saved.score.stages.denoise);f.response.operations.restore(migrated);assert.deepEqual(f.response.operations.export(),migrated);f.response.dispose();
 });
 test('following waits at zero and lets the finished look settle after the terminal event',()=>{
  const f=fixture();f.response.operations.assign({stage:'complete',recipe:{...recipe,a:recipe.b}});f.response.operations.follow();f.tick(5);

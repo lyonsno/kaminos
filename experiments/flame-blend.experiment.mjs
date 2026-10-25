@@ -36,13 +36,14 @@ export default {
         const failed=error=>{message=error.message;sync();};
         const run=(name,value)=>{message='';return invoke(name,value).catch(failed);};
         const button=(text,name,value)=>{const b=el('button',text,'btn');b.type='button';b.addEventListener('click',()=>run(name,value));return b;};
-        const endpointLabels={},endpointSelects={},editing=[];
+        const endpointLabels={},endpointSelects={},endpointCurrent={},editing=[];
         for(const name of ['a','b']) {
           const box=el('section',null,'flame-blend-endpoint');
           const label=el('strong',name.toUpperCase()+' · Choose or capture a look');endpointLabels[name]=label;
           const select=el('select');select.setAttribute('aria-label','Endpoint '+name.toUpperCase()+' preset');
           const placeholder=el('option','Choose saved preset');placeholder.value='';select.append(placeholder);endpointSelects[name]=select;
-          select.addEventListener('change',()=>{if(select.value)run('choose',{slot:name,presetId:select.value});});
+          const captured=el('option');captured.value='@current';captured.hidden=true;select.append(captured);endpointCurrent[name]=captured;
+          select.addEventListener('change',()=>{if(select.value&&select.value!=='@current')run('choose',{slot:name,presetId:select.value});});
           const capture=button('Capture scene as '+name.toUpperCase(),'capture',name);editing.push(select,capture);
           box.append(label,select,capture);panel.append(box);
         }
@@ -75,7 +76,10 @@ export default {
         sync=()=>{
           if(!alive)return;
           const state=blend.read(),busy=state.previewing||state.loading;
-          for(const name of ['a','b'])endpointLabels[name].textContent=name.toUpperCase()+' · '+(state[name]?.label||'Choose or capture a look');
+          for(const name of ['a','b']){
+            const endpoint=state[name];endpointLabels[name].textContent=name.toUpperCase()+' · '+(endpoint?.label||'Choose or capture a look');
+            endpointCurrent[name].hidden=!endpoint;endpointCurrent[name].textContent=endpoint?.label||'';endpointSelects[name].value=endpoint?'@current':'';
+          }
           for(const node of editing)node.disabled=busy;
           useA.hidden=state.active||state.present;useA.disabled=busy||!state.a?.settings.source?.presetId;
           amount.disabled=!state.active||!state.fields.length||!state.a||!state.b||state.playing||state.loading;
