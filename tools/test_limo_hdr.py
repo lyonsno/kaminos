@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import unittest
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import torch
@@ -52,6 +53,27 @@ class LimoHdrInputTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('LIMO_HDR_SOURCE_ROOT'),'set LIMO_HDR_SOURCE_ROOT for source renderer tests')
 class LimoHdrTests(unittest.TestCase):
+    def test_omitted_geometry_digest_rejected_before_any_geometry_read(self):
+        root=Path(os.environ['LIMO_HDR_SOURCE_ROOT'])
+        consumed=('sphere_0/mask_0001.exr','sphere_0/position_0001.exr',
+            'sphere_0/normal_0001.exr','camera_info.pkl')
+        with tempfile.TemporaryDirectory() as directory:
+            scene=Path(directory)/'scene'; scene.mkdir()
+            for relative in consumed:
+                item=scene/relative; item.parent.mkdir(exist_ok=True); item.write_bytes(b'fixture')
+            probe_path=Path(directory)/'probe.json'; probe_path.write_text('{}')
+            report_path=Path(directory)/'fit.json'
+            for omitted in (consumed,('camera_info.pkl',)):
+                with self.subTest(omitted=omitted):
+                    probe={'scene':{'path':str(scene),'files':{
+                        name:digest(scene/name) for name in consumed if name not in omitted}}}
+                    args=SimpleNamespace(probe=probe_path,source_root=root)
+                    with patch.object(limo_hdr,'require_mps'),patch.object(limo_hdr,'validate_probe',return_value=probe), \
+                            patch('pyexr.read',side_effect=RuntimeError('unexpected geometry read')) as read:
+                        with self.assertRaisesRegex(ValueError,'incomplete scene manifest'):
+                            limo_hdr.fit(args,{},report_path)
+                        read.assert_not_called()
+
     def test_source_renderer_keeps_device_and_environment_gradient(self):
         root=Path(os.environ['LIMO_HDR_SOURCE_ROOT'])
         sys.path.insert(0,str(root))

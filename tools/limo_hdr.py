@@ -43,6 +43,10 @@ def fit(args, report, path):
     report['phase']='input-validation'; save_json(path,report)
     probe=validate_probe(args.probe)
     scene=Path(probe['scene']['path'])
+    consumed={'sphere_0/mask_0001.exr','sphere_0/position_0001.exr',
+        'sphere_0/normal_0001.exr','camera_info.pkl'}
+    if not consumed.issubset(probe['scene']['files']):
+        raise ValueError('incomplete scene manifest: consumed geometry/camera digest missing')
     for relative,sha in probe['scene']['files'].items():
         if digest(scene/relative)!=sha: raise ValueError(f'scene digest mismatch: {relative}')
     report['inputs']={'probe':str(args.probe),'sha256':digest(args.probe),'scene':str(scene)}
