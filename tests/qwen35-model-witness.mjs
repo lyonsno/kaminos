@@ -43,3 +43,10 @@ test('application evidence requires actual framed input, source settings, EOS an
     const changed = structuredClone(result); change(changed); assert.throws(() => adjudicatePupExpansion(changed, expected));
   }
 });
+test('requested split-prefix parity requires every chunked layer/norm/logit observation', () => {
+  const { result, meta, manifest, arrays } = fixture();
+  for (const row of result.rows.slice(0, 3)) result.rows.push({ ...row, name: row.name.replace('prefill.', 'chunked-prefill.') });
+  result.lengths['chunked-prefill'] = meta.inputIds.length;
+  assert.equal(adjudicateModelReadbacks(result, meta, manifest, arrays, { chunkedPrefill: true }).rows, 12);
+  result.rows.pop(); assert.throws(() => adjudicateModelReadbacks(result, meta, manifest, arrays, { chunkedPrefill: true }), /missing/);
+});

@@ -6,6 +6,8 @@ import { createHash } from 'node:crypto';
 import { Qwen35TextModel } from '../models/qwen3_5/text-model.js';
 import { qwen35ModelLayout } from '../models/qwen3_5/model-layout.js';
 import { createWebGpuInferenceControl } from '../webgpu-inference-kit/src/inference-control.js';
+import { generateTokens } from '../webgpu-inference-kit/src/autoregressive-generation.js';
+import { expandPupText } from '../models/qwen3_5/pup-text.js';
 
 // Host-lifecycle fixture only. Fake GPU commands establish no numerical claim.
 function fixture() {
@@ -102,4 +104,24 @@ test('prefill splits only at device capacity and consumes every input token befo
   await model.destroy(); await control.close();
   assert.deepEqual(calls.map(c => c.ids.length), [32, 32, 1]); assert.deepEqual(calls.flatMap(c => c.ids), input);
   assert.deepEqual(calls.map(c => c.predict), [false, false, true]); assert.equal(state.length, 65);
+});
+test('generation and PUP consumers inherit the existing model control when request control is omitted', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });
+  const model = new Qwen35TextModel(device, manifest, { control }); await model.load('http://localhost/model/', { fetchImpl });
+  try {
+    const generated = await generateTokens({ model, inputIds: [1, 2], capacity: 2, maxNewTokens: 1, sample: () => 0 });
+    assert.deepEqual(generated.tokenIds, [0]);
+    const tokenizer = { added: new Map([['<|im_end|>', 62], ['<|endoftext|>', 63]]), encode: () => [1, 2], createDecoder: () => ({ push: () => 'caption', end: () => '' }) };
+    const expanded = await expandPupText({ model, tokenizer, prompt: 'fox', systemPrompt: 'expand', maxNewTokens: 1 }); assert.equal(expanded.text, 'caption');
+    const other = createWebGpuInferenceControl({ queue: device.queue }), state = await model.createState({ capacity: 2, control: other });
+    assert.equal(state.control, other); await model.disposeState(state); await other.close(); assert.equal(model.states.size, 0);
+  } finally { await model.destroy(); await control.close(); }
+});
+test('paused model requests enqueue no token upload before a leaf duty is admitted', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });
+  const model = new Qwen35TextModel(device, manifest, { control }); await model.load('http://localhost/model/', { fetchImpl });
+  const state = await model.createState({ capacity: 4 }); await control.pause(); let writes = 0; device.queue.writeBuffer = () => { writes++; };
+  const work = model.prefill([1, 2], state).catch(error => error); await new Promise(setImmediate); const beforeAdmission = writes;
+  await model.disposeState(state); const failure = await work; assert.equal(failure.name, 'AbortError'); assert.equal(control.snapshot().status, 'paused');
+  await model.destroy(); await control.resume(); await control.close(); assert.equal(beforeAdmission, 0); assert.equal(writes, 0);
 });

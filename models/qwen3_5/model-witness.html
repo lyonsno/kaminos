@@ -53,6 +53,13 @@ window.qwenModelResult = (async () => {
     try { await run('prefill', meta.inputIds, state, 'prefill'); await run('decode', meta.continuationIds, state, 'decode'); } finally { await model.disposeState(state); }
     state = await model.createState({ capacity });
     try { await run('full-prefix', [...meta.inputIds, ...meta.continuationIds], state, 'prefill'); } finally { await model.disposeState(state); }
+    state = await model.createState({ capacity });
+    try {
+      stage = 'chunked-prefill'; current = null;
+      const split = Math.floor(meta.inputIds.length / 2);
+      await model.prefill(meta.inputIds.slice(0, split), state);
+      await run('chunked-prefill', meta.inputIds.slice(split), state, 'append');
+    } finally { await model.disposeState(state); }
     stage = 'autoregressive-generation'; window.qwenModelProgress = { stage }; current = null;
     result.generation = await generateTokens({ model, inputIds: meta.inputIds, capacity, maxNewTokens: 2, control, sample: logits => sampleToken(logits, { temperature: 0 }) });
     if (window.qwenPupRequest) {

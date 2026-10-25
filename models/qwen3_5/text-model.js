@@ -145,6 +145,7 @@ export class Qwen35TextModel {
     finally { this.loading = false; this.finishLoading(); }
   }
   async createState({ capacity, signal = null, control = this.control } = {}) {
+    control ??= this.control;
     positive(capacity, 'capacity'); if (capacity > this.config.maxPositions) throw new RangeError('capacity exceeds model positions');
     checkAbort(signal);
     if (!this.loaded || this.closed || this.loading) throw new Error('model weights are not loaded');
@@ -196,7 +197,10 @@ export class Qwen35TextModel {
     const add = (hidden, update) => this.dispatch('axpy', axpyShader(), [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], ctx);
     try {
       checkAbort(ctx.signal);
-      const input = this.upload(new Uint32Array(ids), scratch), hidden = f(tokens * c.hiddenSize), normalized = f(tokens * c.hiddenSize), update = f(tokens * c.hiddenSize);
+      const input = await admit(ctx.control, ctx.signal, async () => {
+        const buffer = this.upload(new Uint32Array(ids), scratch); await this.device.queue.onSubmittedWorkDone(); return buffer;
+      });
+      const hidden = f(tokens * c.hiddenSize), normalized = f(tokens * c.hiddenSize), update = f(tokens * c.hiddenSize);
       const gateUp = f(tokens * 2 * c.intermediateSize), activation = f(tokens * c.intermediateSize);
       const deltaWidth = 2 * c.linearKeyHeads * c.linearKeyDim + c.linearValueHeads * c.linearValueDim, valueWidth = c.linearValueHeads * c.linearValueDim;
       const mixed = f(tokens * deltaWidth), z = f(tokens * valueWidth), gates = f(tokens * 2 * c.linearValueHeads), convolved = f(tokens * deltaWidth), prepared = f(tokens * (deltaWidth + 2 * c.linearValueHeads)), recurrent = f(tokens * valueWidth), gatedDelta = f(tokens * valueWidth);

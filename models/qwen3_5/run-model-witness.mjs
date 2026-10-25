@@ -14,11 +14,13 @@ const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 export async function runModelWitness({ fixture, modelRoot, chrome, out, request = null }) {
   if (!out) throw new Error('explicit report path required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const report = { schema: 'kaminos.qwen35-model-witness.v1', status: 'failed', phase: 'setup', source: sourceIdentity(repo), requested: { fixture, modelRoot, chrome, request }, rows: [] };
+  const report = { schema: 'kaminos.qwen35-model-witness.v2', status: 'failed', phase: 'setup', source: sourceIdentity(repo), requested: { fixture, modelRoot, chrome, request }, rows: [] };
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   let browser, server;
   try {
-    await save(); report.phase = 'reference-admission';
+    await save(); report.phase = 'source-admission';
+    if (!report.source.rev || report.source.dirtyFiles?.length) throw new Error('model witness requires a clean committed source revision');
+    report.phase = 'reference-admission';
     const root = fs.realpathSync(fixture), nativeBytes = fs.readFileSync(path.join(root, 'report.json')), native = JSON.parse(nativeBytes), metaBytes = fs.readFileSync(path.join(root, 'meta.json')), meta = JSON.parse(metaBytes);
     const weightsBytes = fs.readFileSync(path.join(root, 'weights.json')), manifest = JSON.parse(weightsBytes);
     if (native.status !== 'passed' || native.effective?.backend !== 'mlx-metal' || native.metaSha256 !== sha(metaBytes) || native.weightsManifestSha256 !== sha(weightsBytes) || meta.weightsManifestSha256 !== sha(weightsBytes)) throw new Error('failed/stale/wrong native reference or weights manifest');
@@ -63,10 +65,12 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
       await fsp.writeFile(file, raw); report.rows.push({ name: row.name, elements: row.elements, file, sha256: sha(raw) }); await save();
     }
     let failure;
-    try { report.verdict = adjudicateModelReadbacks(result, meta, manifest, arrays); } catch (error) { failure = error; }
+    try { report.verdict = adjudicateModelReadbacks(result, meta, manifest, arrays, { chunkedPrefill: true }); } catch (error) { failure = error; }
     for (const row of report.rows) { const observed = result.rows.find(r => r.name === row.name); for (const key of ['relL2', 'maxAbs', 'maxScaled', 'nonFinite', 'top1']) if (observed[key] !== undefined) row[key] = observed[key]; }
     if (failure) throw failure;
     if (pupExpected) report.pupVerdict = adjudicatePupExpansion(result.expansion, pupExpected);
+    report.sourceAfter = sourceIdentity(repo);
+    if (report.sourceAfter.rev !== report.source.rev || report.sourceAfter.dirtyFiles?.length) throw new Error('source changed during the model witness; preserved readbacks do not establish one clean revision');
     report.status = 'passed'; report.phase = 'complete';
   } catch (error) { report.error = String(error.stack ?? error); }
   finally {
