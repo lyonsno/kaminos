@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -211,6 +212,7 @@ export async function runSam31DecoderHighResolutionProjectionPhaseProgramRoute(i
     timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0, now: input.now,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   let gpu = null;
   await runtime.runStage(REQUIRED_STAGES[0], async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
@@ -269,6 +271,6 @@ export async function runSam31DecoderHighResolutionProjectionPhaseProgramRoute(i
   });
   const authoritative = assertAuthoritativeRouteWorkerResult(createRouteWorkerResult(route, { request: input.request, receipt }), route);
   if (input.includeReadback === true) authoritative.debugReadback = { mode: 'explicit-debug-evidence', highResolutionS0: Array.from(new Float32Array(readback.highResolutionS0)), highResolutionS1: Array.from(new Float32Array(readback.highResolutionS1)) };
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }

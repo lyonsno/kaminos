@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { partitionSamFlashAttentionPhase } from './sam-flash-attention.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -747,6 +748,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     now: input.now,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   const queryRows = shape.batch * shape.queryTokens;
   const memoryRows = shape.batch * shape.memoryTokens;
   const totalQuery = queryRows * shape.channels;
@@ -995,6 +997,6 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
       } : {}),
     };
   }
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }

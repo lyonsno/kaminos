@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -216,6 +217,7 @@ export async function runSam31MaskConditioningPhaseProgramRoute(input = {}) {
     yieldMs: 0,
     now: input.now,
   });
+  return withSamPhaseCleanup(runtime, async () => {
 
   let tensors;
   await runtime.runStage('load-mask-conditioning-inputs', async stage => {
@@ -284,6 +286,6 @@ export async function runSam31MaskConditioningPhaseProgramRoute(input = {}) {
       objectScores: Array.from(new Float32Array(run.outputs.objectScores)),
     };
   }
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }

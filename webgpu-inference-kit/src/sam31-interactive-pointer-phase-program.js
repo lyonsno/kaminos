@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -807,6 +808,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     yieldMs: 0,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
@@ -1144,6 +1146,6 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
       objectPointers: Array.from(new Float32Array(objectPointers)),
     };
   }
-  result.resourceDisposal = runtime.dispose();
   return result;
+  }, input.schedule);
 }

@@ -324,4 +324,5 @@ export {
 export { createSam3BrowserImageRuntime } from './sam3-browser-image-runtime.js';
 export { createSam3Segmenter } from './sam3-segmenter.js';
 export { createSam31VideoTracker } from './sam31-video-tracker.js';
+export { createSam31LiveLoop } from './sam31-live-loop.js';
 export { createSam3SourceMask, resizeSam3MaskLogits } from './sam3-source-mask.js';

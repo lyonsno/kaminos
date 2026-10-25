@@ -13,10 +13,12 @@ let releaseTrunk;
 let hold = false;
 let fallback = false;
 let loaded = 0;
+let expectedSchedule;
 const owner = await backbone.createSam31SingleFrameBackboneForTest({
   manifest: { shape: { imageHeight: 2, imageWidth: 2 } }, errors: [],
   async loadWeights() { loaded++; return weights; },
   async runTrunk(input) {
+    assert.equal(input.schedule, expectedSchedule, 'trunk receives this frame admission');
     calls.push(['trunk', input.frameIndex, input.rgba[0], input.manifest.sourceImages[input.frameIndex].rgbaSha256]);
     assert.equal(input.patchProjection, weights.patchProjection);
     assert.equal(input.verificationAttached, false);
@@ -25,6 +27,7 @@ const owner = await backbone.createSam31SingleFrameBackboneForTest({
     return { receipts: [receipt('trunk', input.invocationTag)], routes: ['trunk'], timing: { totalMs: 1 } };
   },
   async runNeck(input) {
+    assert.equal(input.schedule, expectedSchedule, 'neck receives this frame admission');
     calls.push([input.branch, input.frameIndex]);
     input.requestIds.push(`${input.branch}:${input.invocationTag}`);
     const r = receipt(input.branch, input.invocationTag);
@@ -34,6 +37,7 @@ const owner = await backbone.createSam31SingleFrameBackboneForTest({
       position2: new Float32Array([2]), durationMs: 1 };
   },
   async runHighResolution(input) {
+    assert.equal(input.schedule, expectedSchedule, 'projection receives this frame admission');
     calls.push(['high', input.frameIndex, input.branch]);
     input.requestIds.push(`high:${input.invocationTag}`);
     return { result: { receipt: receipt('high', input.invocationTag) }, route: { routeId: 'high' },
@@ -41,7 +45,8 @@ const owner = await backbone.createSam31SingleFrameBackboneForTest({
   },
 });
 const rgba = new Uint8Array(16).fill(7);
-const first = await owner.run({ rgba, frameIndex: 0, conditioning: true, invocationTag: 'video-a:0' });
+expectedSchedule = { invocation: { invocationId: 'frame:0' } };
+const first = await owner.run({ rgba, frameIndex: 0, conditioning: true, invocationTag: 'video-a:0', schedule: expectedSchedule });
 assert.equal(loaded, 1);
 assert.deepEqual(calls.map(x => x[0]), ['trunk', 'propagation', 'interactive']);
 assert.equal(first.frame.interactiveEmbedding[0], 0);
@@ -50,7 +55,8 @@ assert.equal(first.verificationAttached, false);
 assert.equal(first.parityPassed, null, 'serving execution is not numerical parity evidence');
 assert.equal(first.routeChainPassed, true);
 calls.length = 0;
-const second = await owner.run({ rgba, frameIndex: 1, conditioning: false, invocationTag: 'video-a:1' });
+expectedSchedule = { invocation: { invocationId: 'frame:1' } };
+const second = await owner.run({ rgba, frameIndex: 1, conditioning: false, invocationTag: 'video-a:1', schedule: expectedSchedule });
 assert.equal(loaded, 1, 'static weights are loaded once across frames');
 assert.deepEqual(calls.map(x => x[0]), ['trunk', 'propagation', 'high']);
 assert.equal(second.sourceImageSha256, first.sourceImageSha256, 'repeated camera content is valid');
@@ -64,6 +70,7 @@ await assert.rejects(owner.run({ rgba: new Uint8Array(3), frameIndex: 2, conditi
 await assert.rejects(owner.run({ rgba, frameIndex: -1, conditioning: false, invocationTag: 'bad' }), /frameIndex/);
 await assert.rejects(owner.run({ rgba, frameIndex: 2, conditioning: 'false', invocationTag: 'bad' }), /conditioning/);
 await assert.rejects(owner.run({ rgba, frameIndex: 2, conditioning: false, invocationTag: '' }), /invocationTag/);
+expectedSchedule = undefined;
 hold = true;
 const inFlight = owner.run({ rgba, frameIndex: 2, conditioning: false, invocationTag: 'video-a:2' });
 rgba.fill(9);

@@ -369,5 +369,5 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
       };
     }
     return authoritative;
-  });
+  }, input.schedule);
 }
