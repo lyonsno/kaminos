@@ -53,6 +53,19 @@ class LimoHdrInputTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('LIMO_HDR_SOURCE_ROOT'),'set LIMO_HDR_SOURCE_ROOT for source renderer tests')
 class LimoHdrTests(unittest.TestCase):
+    def test_bilinear_gather_matches_grid_sample_values_and_environment_gradients(self):
+        root=Path(os.environ['LIMO_HDR_SOURCE_ROOT']); sys.path.insert(0,str(root))
+        source=importlib.import_module('HDRMerge.batch_optimization_pol_manual_gt')
+        torch.manual_seed(3)
+        env=torch.randn(1,3,5,7,requires_grad=True)
+        uv=torch.tensor([[0.,0.],[1.,1.],[.34,.67],[-.07,.5],[1.07,.5],[-1.,.5],[.5,1.2]])
+        expected=source.sample_envmap(env,uv)
+        actual=source.sample_envmap_bilinear(env,uv)
+        torch.testing.assert_close(actual,expected,rtol=1e-6,atol=1e-6)
+        a,=torch.autograd.grad(actual.square().sum(),env,retain_graph=True)
+        b,=torch.autograd.grad(expected.square().sum(),env)
+        torch.testing.assert_close(a,b,rtol=1e-6,atol=1e-6)
+
     def test_omitted_geometry_digest_rejected_before_any_geometry_read(self):
         root=Path(os.environ['LIMO_HDR_SOURCE_ROOT'])
         consumed=('sphere_0/mask_0001.exr','sphere_0/position_0001.exr',
