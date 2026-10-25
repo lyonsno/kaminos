@@ -65,7 +65,12 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const waterHealthy=()=>{if(waterFailure)throw Error('Water receiver failed; reopen before resuming');};
  const healthy=()=>{waterHealthy();if(physicsFailure)throw Error('Goin physics failed; reopen before resuming');};
  const steering={read:task.read,update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
- const invokeActor=(name,input)=>{active();if(name!=='pause')healthy();return actor.operations[name](input);};
+ const invokeActor=(name,input)=>{
+  active();if(name!=='pause')healthy();
+  if(physics&&name==='floor'&&input?.visible)throw Error('Physical goin support replaces the decorative walking floor');
+  const finish=value=>{if(actor.read().playback.status!=='playing')host.scene.refreshPresentation(asset);return value;};
+  const result=actor.operations[name](input);return result?.then?result.then(finish):finish(result);
+ };
  function sampleWater(){
   if(waterFailure)return Promise.reject(Error('Water receiver failed; reopen before resuming'));
   if(waterPending)return waterPending;
@@ -115,6 +120,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false,interests:[...inputs.creature.attention.interests,...theft?[]:[{object:asset.id,interest:1,anchor:'center',label:'Goin'}]]}:undefined;
   actor=await createWalkingCreature({host,record,inputs:{...inputs.creature,attention,actor_root:'live',action:'wander',play:false}},
    {...dependencies,publishInspector:false,steering});
+  if(physics&&actor.read().referenceFloor)actor.operations.floor({visible:false});
   if(theft){actor.pose({bones:[theft.socket.bone]});stopPose=actor.observePose(presentCarry);stopCarry=session.onFrame(presentCarry);presentCarry();}
   if(waterInput){
    actor.pose({bones:[waterInput.receiver.bone]});
