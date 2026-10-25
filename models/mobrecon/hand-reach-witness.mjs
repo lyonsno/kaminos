@@ -18,7 +18,7 @@ export function assertLivePlacement(s) {
 }
 
 async function main() {
-  const {values:a}=parseArgs({options:Object.fromEntries(['out','chrome','playwright','python','fixture','replay','base'].map(k=>[k,{type:'string'}]))});
+  const {values:a}=parseArgs({options:Object.fromEntries(['out','chrome','playwright','python','fixture','replay','base','expected-commit'].map(k=>[k,{type:'string'}]))});
   if(!a.out) throw Error('--out required');
   const out=path.resolve(a.out), root=fileURLToPath(new URL('../../',import.meta.url));
   fs.mkdirSync(out,{recursive:true});
@@ -45,7 +45,10 @@ async function main() {
       fs.closeSync(log);base=`http://127.0.0.1:${port}`;
       for(;;){if(server.exitCode!==null)throw Error('server exited before admission');try{if((await fetch(`${base}/index.html`)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
     }
-    report.base=base; report.phase='browser';save();
+    report.base=base;
+    report.runtime=await fetch(`${base}/api/runtime-config`).then(r=>{assert.ok(r.ok,'runtime source must be observable');return r.json();});
+    assert.equal(report.runtime.source?.commit,a['expected-commit']??report.commit,'served revision must match requested source');
+    report.phase='browser';save();
     const {chromium}=await import(pathToFileURL(a.playwright));
     context=await chromium.launchPersistentContext(path.join(temp,'profile'),{executablePath:report.executable,headless:true,
       viewport:{width:1440,height:1000},args:['--enable-unsafe-webgpu','--use-mock-keychain','--password-store=basic','--no-first-run']});
