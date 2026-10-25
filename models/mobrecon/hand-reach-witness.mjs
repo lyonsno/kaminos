@@ -73,6 +73,7 @@ async function main() {
       }
     },condition);
     const capture=async name=>{
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       await page.screenshot({path:path.join(out,`${name}.png`)});
       const canvas=page.locator('#viewport canvas').filter({visible:true}).first();
       const file=path.join(out,`${name}-canvas.png`);await canvas.screenshot({path:file});

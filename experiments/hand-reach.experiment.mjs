@@ -270,7 +270,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     } catch (cause) {if (current(ticket)) {failCamera(cause); throw cause;} return read();}
     finally {if (current(ticket)) {starting = false; sync();}}
   };
-  const frame = () => {assertOpen(); session.setView({position: [0, .2, .75], target: [0, .2, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
+  const frame = () => {assertOpen(); session.setView({position: [0, .25, .75], target: [0, .25, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
   const unsubscribe = session.onFrame(() => {
     if (disposed) return;
     if (running) {
@@ -335,6 +335,11 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
         input.addEventListener('blur', () => sync(true));
         row.append(grip, input); parent.append(row); fields.set(key, input);
         scrubs.push(host.controls.installNumberDrag({input, grip, step}));
+        const wrapper = input.parentElement;
+        if (wrapper?.classList?.contains?.('authoring-number-wrap')) {
+          wrapper.style.cssText = 'width:120px;max-width:60%;flex-shrink:0';
+          input.style.cssText = 'width:100%;min-width:0;box-sizing:border-box';
+        }
       };
       number(panel, 'Threshold', 'detectorThreshold', .01, value => call('setThreshold', value), 0, 1);
       number(panel, 'Focal ratio', 'focalRatio', .01, value => call('setFocalRatio', value), .001);

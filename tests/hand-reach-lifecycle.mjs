@@ -88,8 +88,8 @@ test('scene mounts without loading models; owns registered geometry and uses ope
   assert.ok(f.rows.size > 0, 'scene mounts before any model loading');
   assert.deepEqual(f.counts(), {loads: 0, destroyed: 0, appCreates: 0, registrationLoads: 0});
   const state = f.instance.read();
-  assert.deepEqual(state.view.position, [0, .2, .75]);
-  assert.deepEqual(state.view.target, [0, .2, 0]);
+  assert.deepEqual(state.view.position, [0, .25, .75]);
+  assert.deepEqual(state.view.target, [0, .25, 0]);
   assert.equal(state.visible, false);
   await f.instance.operations.load();
   assert.ok(f.appOptions.device, 'the model app borrows the host device');

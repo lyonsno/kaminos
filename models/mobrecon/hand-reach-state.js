@@ -29,7 +29,7 @@ export function createHandReachState({target={position:[-.04,.28,-.1],radius:.01
     pinchPoint=indexTip.map((v,i)=>(v+thumbTip[i])/2);pinchDistance=distance(indexTip,thumbTip);
     contact=distance(indexTip,targetState.position)<=targetState.radius;
     const wasPinching=pinching;
-    pinching=pinchDistance<(wasPinching?.04:.025);
+    pinching=pinchDistance < (wasPinching ? .04 : .025);
     if(!pinching) {armed=true;grabbed=false;offset=null;}
     if(pinching&&!wasPinching&&armed) {
       armed=false;
