@@ -1,0 +1,10 @@
+{
+  "sourceRepo": "lyonsno/kaminos",
+  "sourceCommit": "7739d5b77975c4d52132acb0cdd5aa3fa61db052",
+  "sourceFile": "dist/structural-material-arch-gpu-engine.js",
+  "sha256": "470213bdf2e52359b0b111b78b35c2e2c8553b9e6827d4e4ccd1680e03621dca",
+  "engineRevision": "96b043c88dc2a4af5367820caf1e1e9f458d5560",
+  "license": "LICENSE.md",
+  "rebuildSource": "structural-material-arch-gpu-engine.js and scripts/build-arch-gpu-engine.mjs at sourceCommit",
+  "note": "Existing pinned WebPhysics engine with Kaminos fixed-joint, scheduling and disposal repairs; bundle copied without algorithm changes."
+}
