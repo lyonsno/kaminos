@@ -25,6 +25,13 @@ export function validateStreamSmokeFrame(result, expected) {
       || result.objectScores.some(n => !Number.isFinite(n))) throw new Error('partial or nonfinite frame output');
   if (!result.receipts?.length || result.receipts.some(r => r.status !== 'real' || r.fallbackReason != null
       || !r.requestedRouteId || r.requestedRouteId !== r.effectiveRouteId || !r.outputs?.length)) throw new Error('frame route evidence is incomplete or fallback');
+  if (expected.foreground) {
+    const f = result.foreground;
+    if (f?.status !== 'succeeded' || !f.runId || !f.routeId || !f.receipts?.length
+        || ['pendingRequestCount', 'activeRequestCount', 'activeServiceCount', 'queuedServiceCount'].some(key => f[key] !== 0)
+        || f.receipts.some(r => r.status !== 'completed' || r.failure != null || r.runId !== f.runId
+          || r.routeId !== f.routeId || !r.boundary?.phase)) throw new Error('foreground frame evidence is missing, stale or failed');
+  }
 }
 
 export async function runStreamSmoke(options) {
@@ -50,7 +57,7 @@ export async function runStreamSmoke(options) {
     await access(chrome);
     report.source = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: kit, encoding: 'utf8' }).trim(),
       dirty: execFileSync('git', ['status', '--porcelain'], { cwd: kit, encoding: 'utf8' }).trim(), sequence };
-    report.effective = { chrome, modelDir, sequenceDir, memoryAttentionKernel: options.kernel || 'online', staticBacking: 'memory' };
+    report.effective = { chrome, modelDir, sequenceDir, memoryAttentionKernel: options.kernel || 'online', staticBacking: 'memory', foreground: options.foreground === true };
     const mappings = { kit, model: modelDir, sequence: sequenceDir };
     server = createServer(async (request, response) => {
       try {
@@ -85,11 +92,12 @@ export async function runStreamSmoke(options) {
     await page.goto(url); report.phase = 'tracking'; await saveReport();
     await page.exposeFunction('checkpoint', async frame => { report.frames.push(frame); report.lastTrustworthyFrame = frame.frameIndex; await saveReport(); });
     await page.exposeFunction('adapterCheckpoint', async info => { report.effective.adapter = info; report.phase = 'adapter-selection'; await saveReport(); });
-    report.execution = await page.evaluate(async ({ sequence, kernel, validator, adapterValidator }) => {
+    report.execution = await page.evaluate(async ({ sequence, kernel, validator, adapterValidator, foreground: useForeground }) => {
       const validate = new Function(`return (${validator})`)();
       const { classifySam31MemoryAttentionAdapter } = await import('/kit/src/sam31-memory-attention-evidence.js');
       const requireNative = new Function('classifySam31MemoryAttentionAdapter', `return (${adapterValidator})`)(classifySam31MemoryAttentionAdapter);
       const { createSam31VideoTracker } = await import('/kit/src/sam.js');
+      const { createWebGpuInferenceSession, createWebGpuForegroundService } = await import('/kit/src/core.js');
       const status = document.querySelector('#status');
       window.sam31StreamSmokeProgress = 'model-setup';
       const bytes = async path => { const r = await fetch(path); if (!r.ok) throw new Error(`input fetch failed ${r.status}: ${path}`); return new Uint8Array(await r.arrayBuffer()); };
@@ -106,8 +114,38 @@ export async function runStreamSmoke(options) {
         requireNative(info);
         return adapter;
       } };
-      const tracker = await createSam31VideoTracker({ modelPackageRoot: '/model/tracker-model-root.json', gpu,
-        memoryAttentionKernel: kernel, onProgress: phase => { status.textContent = phase; window.sam31StreamSmokeProgress = phase; } });
+      let session, foreground, preview, sourceCanvas, sourceContext, pauseCheck, tracker;
+      let pauseRequested = false, stopRequested = false, stopping = false;
+      if (useForeground) {
+        session = await createWebGpuInferenceSession({ sessionId: `sam-stream-host:${crypto.randomUUID()}`, gpu });
+        foreground = createWebGpuForegroundService({ device: session.device, routeId: 'sam-stream-host' });
+        sourceCanvas = document.createElement('canvas'); sourceCanvas.width = sequence.width; sourceCanvas.height = sequence.height;
+        sourceContext = sourceCanvas.getContext('2d');
+        const canvas = document.createElement('canvas'); canvas.id = 'live-preview'; document.body.prepend(canvas);
+        const { createSamVideoPreview } = await import('/kit/examples/sam-video-preview.mjs');
+        preview = await createSamVideoPreview({ canvas, device: session.device, foreground, onError(error) { tracker?.stop(error); } });
+      }
+      tracker = await createSam31VideoTracker({ modelPackageRoot: '/model/tracker-model-root.json', gpu,
+        ...(useForeground ? { inferenceSession: session, foregroundService: foreground } : {}),
+        memoryAttentionKernel: kernel, onProgress: phase => {
+          status.textContent = phase; window.sam31StreamSmokeProgress = phase;
+          if (useForeground && phase === 'frame-1-vit-block-stack' && !pauseRequested) {
+            pauseRequested = true;
+            pauseCheck = Promise.resolve().then(async () => {
+              const control = await tracker.pause();
+              if (control?.status !== 'paused') throw new Error('actual tracker did not pause');
+              const before = preview.snapshot().submissions;
+              try {
+                await new Promise(resolve => setTimeout(resolve, 150));
+                const after = preview.snapshot().submissions;
+                if (after <= before) throw new Error('foreground stopped during tracker Pause');
+                return { control, before, after, observationMs: 150 };
+              } finally { await tracker.resume(); }
+            });
+            pauseCheck.catch(() => {});
+          }
+          if (stopping && !stopRequested) { stopRequested = true; tracker.stop('stop witness'); }
+        } });
       const state = { packageId: tracker.packageId, adapterInfo: tracker.adapterInfo, frames: [] };
       try {
         const seed = await bytes('/sequence/' + sequence.seed.file);
@@ -115,15 +153,20 @@ export async function runStreamSmoke(options) {
         for (const [frameIndex, input] of sequence.frames.entries()) {
           const rgba = await bytes('/sequence/' + input.file);
           if (await hash(rgba) !== input.sha256) throw new Error('source frame digest mismatch');
+          if (preview) {
+            sourceContext.putImageData(new ImageData(new Uint8ClampedArray(rgba), sequence.width, sequence.height), 0, 0);
+            preview.setSource(sourceCanvas);
+          }
           const result = await (frameIndex === 0 ? tracker.initialize({ rgba, timestamp: frameIndex, mask: seed }) : tracker.track({ rgba, timestamp: frameIndex }));
-          validate(result, { frameIndex, sourceImageSha256: input.sha256 });
+          validate(result, { frameIndex, sourceImageSha256: input.sha256, foreground: useForeground });
+          if (pauseCheck) state.pause = await pauseCheck;
           const snapshot = tracker.snapshot();
           if (snapshot.completedFrames !== frameIndex + 1) throw new Error('tracker memory did not advance');
           await store(`frame-${frameIndex}.logits.f32`, result.maskLogits);
           await store(`frame-${frameIndex}.scores.f32`, result.objectScores);
           const record = { frameIndex, sourceImageSha256: result.sourceImageSha256, maskWidth: result.maskWidth,
             maskHeight: result.maskHeight, objectScores: [...result.objectScores], timing: result.timing,
-            receipts: result.receipts, snapshot, foreground: 0 };
+            receipts: result.receipts, snapshot, foreground: 0, foregroundRun: result.foreground ?? null };
           const canvas = document.createElement('canvas'); canvas.width = sequence.width; canvas.height = sequence.height;
           const drawing = canvas.getContext('2d'), pixels = new Uint8ClampedArray(rgba);
           for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
@@ -139,11 +182,32 @@ export async function runStreamSmoke(options) {
           await store(`frame-${frameIndex}.json`, JSON.stringify(record, null, 2));
           await window.checkpoint(record); state.frames.push(frameIndex);
         }
-      } finally { state.teardown = await tracker.close(); }
+        if (useForeground) {
+          if (!state.pause) throw new Error('pause witness was not exercised');
+          stopping = true;
+          const rgba = await bytes('/sequence/' + sequence.frames.at(-1).file);
+          let failure;
+          try { await tracker.track({ rgba, timestamp: sequence.frames.length }); } catch (error) { failure = error; }
+          if (failure?.name !== 'AbortError' || tracker.snapshot().completedFrames !== sequence.frames.length) {
+            throw new Error('Stop failed or committed a cancelled frame');
+          }
+          state.stop = { name: failure.name, snapshot: tracker.snapshot() };
+          state.preview = preview.snapshot();
+          if (state.preview.error) throw new Error(state.preview.error);
+          const canvas = document.querySelector('#live-preview');
+          await store('foreground-preview.png', await new Promise((done, reject) => canvas.toBlob(blob => blob ? done(blob) : reject(new Error('blank foreground capture')))));
+        }
+      } finally {
+        state.teardown = await tracker.close();
+        if (useForeground) {
+          await preview.close(); await foreground.dispose(); await session.drain();
+          state.hostTeardown = session.close();
+        }
+      }
       status.textContent = 'Sequential execution complete; visual and numerical acceptance remain separate.';
       return state;
     }, { sequence, kernel: report.effective.memoryAttentionKernel, validator: validateStreamSmokeFrame.toString(),
-      adapterValidator: requireNativeStreamAdapter.toString() });
+      adapterValidator: requireNativeStreamAdapter.toString(), foreground: report.effective.foreground });
     if (report.frames.length !== sequence.frames.length || report.pageErrors?.length || report.consoleErrors?.length) throw new Error('incomplete or errored sequential execution');
     await page.screenshot({ path: resolve(out, 'sequence.png'), fullPage: true });
     report.status = 'executed'; report.phase = 'complete';
@@ -161,7 +225,7 @@ export async function runStreamSmoke(options) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { values } = parseArgs({ options: Object.fromEntries(['model', 'sequence', 'out', 'chrome', 'playwright', 'kernel'].map(name => [name, { type: 'string' }])) });
+  const { values } = parseArgs({ options: { ...Object.fromEntries(['model', 'sequence', 'out', 'chrome', 'playwright', 'kernel'].map(name => [name, { type: 'string' }])), foreground: { type: 'boolean' } } });
   for (const name of ['model', 'sequence', 'out', 'chrome', 'playwright']) if (!values[name]) throw new Error(`--${name} is required`);
   console.log(JSON.stringify(await runStreamSmoke(values), null, 2));
 }

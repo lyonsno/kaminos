@@ -1264,5 +1264,5 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       };
     }
     return authoritative;
-  });
+  }, input.schedule);
 }

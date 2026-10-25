@@ -22,6 +22,17 @@ const frame = () => ({ frameIndex: 2, sourceImageSha256: 'sha256:current', maskW
     outputs: [{ artifactId: 'frame:2' }] }] });
 const expected = { frameIndex: 2, sourceImageSha256: 'sha256:current' };
 validateStreamSmokeFrame(frame(), expected);
+assert.throws(() => validateStreamSmokeFrame(frame(), { ...expected, foreground: true }), /foreground/);
+const scheduled = frame();
+scheduled.foreground = { status: 'succeeded', runId: 'current', routeId: 'sam:frame',
+  pendingRequestCount: 0, activeRequestCount: 0, activeServiceCount: 0, queuedServiceCount: 0,
+  receipts: [{ status: 'completed', runId: 'current', routeId: 'sam:frame', boundary: { phase: 'attention' } }] };
+validateStreamSmokeFrame(scheduled, { ...expected, foreground: true });
+for (const mutate of [f => f.receipts = [], f => f.receipts[0].runId = 'stale',
+  f => f.receipts[0].status = 'failed', f => f.activeRequestCount = 1, f => f.status = 'incomplete']) {
+  const value = structuredClone(scheduled); mutate(value.foreground);
+  assert.throws(() => validateStreamSmokeFrame(value, { ...expected, foreground: true }), /foreground/);
+}
 for (const mutate of [f => f.frameIndex--, f => f.sourceImageSha256 = 'sha256:stale', f => f.maskLogits = new Float32Array(),
   f => f.maskLogits[0] = NaN, f => f.receipts = [], f => f.receipts[0].effectiveRouteId = 'sam.fallback',
   f => f.receipts[0].fallbackReason = 'CPU', f => f.receipts[0].outputs = []]) {

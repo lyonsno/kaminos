@@ -54,7 +54,7 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
         || !r.outputs?.length || !r.outputs.every(o => o.artifactId.endsWith(`:${tag}`))) throw new Error('stream phase returned incomplete route evidence');
     return result;
   }
-  async function invoke(routeFactory, run, { profile, phase, tag, shape, tensors, roles, outputRoles, extra = {}, weightsHash }) {
+  async function invoke(routeFactory, run, { profile, phase, tag, shape, tensors, roles, outputRoles, extra = {}, weightsHash, schedule }) {
     onProgress(phase);
     const kernel = { profile, commit };
     const route = routeFactory({ model, kernel, ...(shape ? { shape } : {}),
@@ -64,26 +64,26 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
       sha256: typeof value === 'string' ? value : await sha256Bytes(value), ...(shape ? { shape } : {}) };
     const outputs = Object.fromEntries(outputRoles.map(([role, shape]) => [role, { artifactId: `${phase}:${role}:${tag}`, shape }]));
     const request = createRouteInvocationRequest(route, { requestId: `${phase}:${tag}`, inputs, outputs });
-    return checked(await run({ request, route, adapter, device, queue: device.queue,
+    return checked(await run({ request, route, adapter, device, queue: device.queue, schedule,
       adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent,
       model: { ...model, weightsHash }, kernel, tensors, residentTensorResolver: context.residentTensorResolver,
       includeReadback: true, ...extra }), tag);
   }
-  async function execute({ rgba, frameIndex, conditioning, mask, objectSlot, temporal: prepared }) {
+  async function execute({ rgba, frameIndex, conditioning, mask, objectSlot, temporal: prepared, schedule }) {
     if (!weights) throw new Error('stream driver is closed');
     const started = performance.now(), tag = `sam31-stream-${crypto.randomUUID()}`;
     if (conditioning) inputs = createSam31TrackingInputs({ ...weights.controls, height: h, width: w, objectSlots: [objectSlot] });
     if (!inputs) throw new Error('stream must be conditioned first');
-    const encoded = await backbone.run({ rgba, frameIndex, conditioning, invocationTag: tag });
+    const encoded = await backbone.run({ rgba, frameIndex, conditioning, invocationTag: tag, schedule });
     const frame = encoded.frame, receipts = [...encoded.receipts];
     let masks, scores, pointers, maskHeight, maskWidth;
     if (conditioning) {
       const binaryMasks = new Float32Array(16 * imageWidth * imageHeight);
       binaryMasks.set(mask, objectSlot * mask.length);
-      const conditioned = checked((await maskConditioningInvocation({ ...context, invocationTag: tag,
+      const conditioned = checked((await maskConditioningInvocation({ ...context, schedule, invocationTag: tag,
         inputs: { imageEmbedding: frame.interactiveEmbedding, binaryMasks },
         manifest: { reference: ingress.reference, shape: { multiplexCount, sourceMaskHeight: imageHeight, sourceMaskWidth: imageWidth } } })).result, tag);
-      const pointed = checked((await interactivePointerInvocation({ ...context, invocationTag: tag,
+      const pointed = checked((await interactivePointerInvocation({ ...context, schedule, invocationTag: tag,
         inputs: { imageEmbedding: inputs.conditionImage(frame.interactiveEmbedding), binaryMasks },
         manifest: pointerManifest, weights: weights.pointer })).result, tag);
       masks = new Float32Array(conditioned.debugReadback.maskLogits);
@@ -98,7 +98,7 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
       const pointerHash = await hashSam31StreamTensorSet(Object.fromEntries(pointerFrames.map(f => [`${f.frameIndex}:pointers`, f.pointers])));
       const positionHash = await hashSam31StreamTensorSet({ temporal: weights.temporalEmbeddings, ...weights.pointerPositionProjection });
       const bankResult = await invoke(createSam31TemporalMemoryBankPhaseProgramRouteDefinition, runSam31TemporalMemoryBankPhaseProgramRoute,
-        { phase: 'temporal-bank', profile: 'sam31-temporal-memory-bank-phase-program-v0', tag, weightsHash: hashes.temporal,
+        { schedule, phase: 'temporal-bank', profile: 'sam31-temporal-memory-bank-phase-program-v0', tag, weightsHash: hashes.temporal,
           roles: [['source-video-episode', await sha256Text(JSON.stringify(plan))],
             ['sam31-temporal-spatial-memory-frames', spatialHash, [1, spatialFrames.length, h * w, channels]],
             ['sam31-temporal-object-pointer-frames', pointerHash, [1, pointerFrames.length, 16, channels]],
@@ -113,7 +113,7 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
         memorySpatialTokens: plan.spatialTokenCount, numObjPtrTokens: plan.objectPointerTokenCount, memoryTokens: plan.memoryTokenCount,
         channels, heads: 8, headDim: 32, mlpHidden: 2048, layerCount: 4 };
       const attended = await invoke(createSam31MemoryAttentionPhaseProgramRouteDefinition, runSam31MemoryAttentionPhaseProgramRoute,
-        { phase: 'memory-attention', profile: 'sam31-memory-attention-phase-program-v0', tag, shape, weightsHash: hashes.temporal,
+        { schedule, phase: 'memory-attention', profile: 'sam31-memory-attention-phase-program-v0', tag, shape, weightsHash: hashes.temporal,
           roles: [['source-image', rgba, [imageHeight, imageWidth, 4]],
             ['sam31-memory-attention-current-tensors', await hashSam31StreamTensorSet({ image: frame.propagationEmbedding, position: frame.propagationPosition }), [1, h * w, channels]],
             ['sam31-memory-attention-bank-tensors', await hashSam31StreamTensorSet(bank), [1, plan.memoryTokenCount, channels]],
@@ -122,7 +122,7 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
           tensors: { shape, current: { image: frame.propagationEmbedding, src: frame.propagationEmbedding, srcPos: frame.propagationPosition },
             bank, layers: weights.attention.layers, finalNorm: weights.attention.finalNorm },
           extra: { attentionKernel: memoryAttentionKernel, captureIntermediateReadbacks: false } });
-      const decoded = checked((await decoderInvocation({ ...context, invocationTag: tag, frame: frameIndex,
+      const decoded = checked((await decoderInvocation({ ...context, schedule, invocationTag: tag, frame: frameIndex,
         manifest: decoderManifest, weights: weights.decoder, weightsHash: hashes.decoder,
         inputs: { imageEmbedding: new Float32Array(attended.debugReadback.memory), imagePosition: inputs.imagePosition,
           highResolutionS0: frame.highResolutionS0, highResolutionS1: frame.highResolutionS1,
@@ -139,7 +139,7 @@ export async function createSam31StreamDriver({ packageRuntime, adapter, device,
       maskHeight: imageHeight, maskWidth: imageWidth, multiplexCount, conditionChannels: true,
       conditioning: memoryInput.conditioning, resampledMaskHeight: h * 16, resampledMaskWidth: w * 16 };
     const stored = await invoke(createSam31MemoryEncoderPhaseProgramRouteDefinition, runSam31MemoryEncoderPhaseProgramRoute,
-      { phase: 'memory-encoder', profile: 'sam31-memory-encoder-phase-program-v0', tag, weightsHash: hashes.memory,
+      { schedule, phase: 'memory-encoder', profile: 'sam31-memory-encoder-phase-program-v0', tag, weightsHash: hashes.memory,
         roles: [['source-image', rgba, [imageHeight, imageWidth, 4]], ['sam31-propagation-feature-2', frame.propagationEmbedding, [1, h, w, channels]],
           ['sam31-multiplex-mask-logits', memoryInput.maskLogits, [16, 1, imageHeight, imageWidth]],
           ['sam31-multiplex-conditioning', memoryInput.conditioning, [1, 16]],

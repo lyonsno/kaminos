@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SAM Video | WebGPU Inference Kit</title>
+  <style>
+    :root{font:14px/1.5 system-ui,sans-serif;color:#202b2c;background:#f3f6f5;color-scheme:light}
+    *{box-sizing:border-box;letter-spacing:0}body{margin:0}header{padding:18px 24px;background:white;border-bottom:1px solid #cbd5d3;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}h1{font-size:22px;margin:0}header span{color:#60706c}
+    main{max-width:1500px;margin:auto;padding:24px}button,input{font:inherit;max-width:100%;min-width:0}button,input[type=text]{padding:9px 12px;border:1px solid #9eafab;border-radius:4px;background:white;color:inherit}button{cursor:pointer}button:disabled,input:disabled{opacity:.45;cursor:default}button#start{background:#17684e;color:white;border-color:#17684e}button#stop{color:#a22d35}input[type=text]{width:100%}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.model{flex:1;min-width:220px}label{font-weight:600}.file{max-width:320px}#status{min-height:24px;font-weight:600;overflow-wrap:anywhere;margin:18px 0}
+    .views{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}figure{margin:0;min-width:0}figcaption{font-weight:600;min-height:30px;overflow-wrap:anywhere}.viewport{aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#11191a;border:1px solid #b6c4c0;overflow:hidden}canvas{max-width:100%;max-height:100%;object-fit:contain;display:block}#seed{width:100%;height:100%;touch-action:none;cursor:crosshair}
+    .secondary{margin-top:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}.secondary label{display:flex;align-items:center;gap:6px;font-weight:400}footer{border-top:1px solid #cbd5d3;margin-top:24px;padding-top:14px;color:#65746e;font-size:12px;overflow-wrap:anywhere}video{display:none}:focus-visible{outline:2px solid #1a7d9c;outline-offset:3px}
+    @media(max-width:850px){.views{grid-template-columns:minmax(0,1fr)}main,header{padding:16px}.viewport{aspect-ratio:4/3}#seed{width:auto;height:100%}.model{flex-basis:100%}}
+  </style>
+  <script type="importmap">{"imports":{"@kaminos/webgpu-inference-kit/core":"../src/core.js","@kaminos/webgpu-inference-kit/sam":"../src/sam.js"}}</script>
+</head>
+<body>
+  <header><h1>SAM Video</h1><span>WebGPU Inference Kit</span></header>
+  <main>
+    <div class="toolbar"><button id="camera">Camera</button><label class="file">Video <input id="file" type="file" accept="video/*"></label></div>
+    <div class="toolbar"><label class="model">Model root <input id="model" type="text" spellcheck="false"></label><button id="load">Load Model</button><button id="unload" disabled>Unload</button></div>
+    <div class="toolbar"><button id="capture" disabled>Capture Seed</button><button id="clear" disabled>Clear Mask</button><label>Brush <input id="brush" type="range" min="1" max="64" value="12" title="Initial object mask brush radius"></label><button id="start" disabled>Start Tracking</button><button id="pause" disabled>Pause</button><button id="stop" disabled>Stop</button></div>
+    <p id="status" role="status">No source</p>
+    <section class="views" aria-label="Live video and captured mask">
+      <figure><figcaption>Live source</figcaption><div class="viewport"><canvas id="source" aria-label="Live video preview"></canvas></div></figure>
+      <figure><figcaption>Seed frame</figcaption><div class="viewport"><canvas id="seed" width="1" height="1" aria-label="Paint initial object mask" title="Paint the initial object mask"></canvas></div></figure>
+      <figure><figcaption id="frame">Last processed capture</figcaption><div class="viewport"><canvas id="result" width="1" height="1" aria-label="Mask on its captured source frame"></canvas></div></figure>
+    </section>
+    <div class="secondary" role="group" aria-label="Mask view"><label><input type="radio" name="view" value="overlay" checked>Overlay</label><label><input type="radio" name="view" value="mask">Mask</label><label><input type="radio" name="view" value="cutout">Cutout</label><button id="save" disabled>Export Capture</button></div>
+    <footer><div id="identity">No model loaded</div><div id="source-id">No processed capture</div></footer>
+    <video id="video" muted playsinline></video>
+  </main>
+  <script type="module">import {mountSamVideoPage} from './sam-video.mjs';mountSamVideoPage(document).then(app=>{globalThis.samVideoExample=app;}).catch(error=>{document.getElementById('status').textContent=error.message;});</script>
+</body>
+</html>

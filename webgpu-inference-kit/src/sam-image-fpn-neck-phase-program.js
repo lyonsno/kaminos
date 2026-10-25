@@ -1100,7 +1100,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       };
     }
     return authoritative;
-  });
+  }, input.schedule);
 }
 
 function assertSam31PropagationArchitecture(weights) {
@@ -1387,7 +1387,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       for (const [key, value] of Object.entries(readback)) authoritative.debugReadback[key] = sam3Readback(input, new Float32Array(value));
     }
     return authoritative;
-  });
+  }, input.schedule);
 }
 
 export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {

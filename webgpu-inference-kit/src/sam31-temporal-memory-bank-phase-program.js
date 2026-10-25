@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -438,6 +439,7 @@ export async function runSam31TemporalMemoryBankPhaseProgramRoute(input = {}) {
     now: input.now,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
   let tensors;
@@ -555,6 +557,6 @@ export async function runSam31TemporalMemoryBankPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) authoritative.debugReadback = {
     memoryImage: Array.from(arrays[0]), memory: Array.from(arrays[1]), memoryImagePosition: Array.from(arrays[2]), memoryPosition: Array.from(arrays[3]),
   };
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }
