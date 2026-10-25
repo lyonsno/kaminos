@@ -133,6 +133,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  let {t}=watch(attention,c,8,0);turnAway(c,Math.PI);({t}=watch(attention,c,60,t));turnAway(c,0);
  const w=watch(attention,c,3,t);
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['noticed again'],'after forgetting, seeing it again draws a look');
+ assert.ok(attention.read().perceived.find(p=>p.id==='brazier').eventAt>=t,'Genuinely forgotten source supplies fresh observed novelty to investigation');
 }
 
 {

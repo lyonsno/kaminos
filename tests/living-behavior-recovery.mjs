@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import * as api from '../experiments/creature-motion/living-scene.experiment.mjs';
 import {installOwnerExperimentEntry} from '../owner-experiment-entry.mjs';
+import {createHash} from 'node:crypto';
+import {prepareTorso} from '../experiments/creature-flesh/torso.mjs';
 test('invalid behavior rejects file Open before replacing the room',async()=>{
  const f=fixture();let opened=false;
  f.setup.actors[0].creature.attention={interests:[],behavior:{curiosity:-1}};
@@ -16,7 +18,7 @@ function fixture(){const scene=new THREE.Scene(),callbacks=new Set(),document={c
  const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}],transform={position:[0,0,0],quaternion:[0,0,0,1],scale:[1,1,1]};
  const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[0,.2,0,0,.2,1,0,.2,2],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
  const setup={running:false,zones:[{id:'yard',label:'Yard',transform:{...transform,scale:[4,1,4]}}],actors:[{id:'one',label:'One',active:true,places:[{zoneId:'yard',enabled:true,preference:1}],creature:{case:'skin',case_sha256:'c'.repeat(64),motion:'motion',motion_sha256:'a'.repeat(64),frame:'frame',frame_sha256:'b'.repeat(64),blend_frames:0,transform,action:'wander',play:false}}]};
- return {host,scene,callbacks,document,setup,deps:{loadSources:async()=>data}};
+ return {host,scene,callbacks,document,setup,data,deps:{loadSources:async()=>data}};
 }
 for(const variant of ['disabled','empty','zero'])test('held '+variant+' places survive actual reconstruction and release',async()=>{const f=fixture();let room=await api.createLivingScene({host:f.host,inputs:f.setup},f.deps);try{
  await room.operations.setRunning({running:true});for(const fn of f.callbacks)fn({deltaSeconds:.1});await room.operations.setRunning({running:false});const prior=room.read().actors[0].state;
@@ -29,3 +31,46 @@ test('actual shared-entry Open preflight retains a valid cohort on dangling refe
  let entry;try{entry=await installOwnerExperimentEntry({document:f.document,root:new Element(),host:f.host,discover:async()=>[{id:'mushfinger/living-scene',title:'Fixture',moduleUrl:module}]});await entry.open('mushfinger/living-scene',f.setup);const before=await entry.read(),bad=structuredClone(f.setup);bad.actors[0].places[0].zoneId='missing';await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad}),/zone/i);assert.deepEqual(await entry.read(),before);assert.equal(f.scene.children.length,2,'Invalid Open destroyed current roots');}finally{await entry?.close();globalThis.Option=priorOption;delete globalThis.__behaviorReviewCreate;}});
 test('preview can return to an all-disabled held journey, including after Open',async()=>{const f=fixture();let room=await api.createLivingScene({host:f.host,inputs:f.setup},f.deps);try{await room.operations.setRunning({running:true});for(const fn of f.callbacks)fn({deltaSeconds:.1});await room.operations.setRunning({running:false});await room.operations.setPlaces({id:'one',places:[]});const before=room.read().actors[0].state.action.motion;await room.operations.setPreview({id:'one',preview:true});const setup=room.read().recipe;await room.dispose();room=await api.createLivingScene({host:f.host,inputs:setup},f.deps);await room.operations.setPreview({id:'one',preview:false});assert.deepEqual(room.read().actors[0].state.action.motion,before);assert.equal(f.callbacks.size,0);}finally{await room.dispose();}});
 test('actual zone outline uses a supported closed-line primitive',async()=>{const f=fixture(),room=await api.createLivingScene({host:f.host,inputs:f.setup},f.deps);try{const zone=f.scene.children.find(root=>root.userData.kaminosHelperKind==='zones'),edge=zone.children[0];assert.notEqual(edge.isLineLoop,true,'Effective WebGPU renderer rejects LineLoop');assert.equal(edge.isLine,true);const points=edge.geometry.attributes.position;assert.ok(points.count>=4);for(let axis=0;axis<3;axis++)assert.equal(points.array[axis],points.array[(points.count-1)*3+axis],'Zone outline is not closed');}finally{await room.dispose();}});
+test('hashed identity-matching but malformed flesh cannot destroy an existing room',async()=>{
+ const f=fixture(),priorFetch=globalThis.fetch,priorOption=globalThis.Option;globalThis.Option=class{};
+ globalThis.__physicalReviewCreate=async args=>{const room=await api.createLivingScene(args,f.deps);return {...room,mount(){}};};
+ const module='data:text/javascript,'+encodeURIComponent('export default {id:"mushfinger/living-scene",title:"Fixture",create:args=>globalThis.__physicalReviewCreate(args)}');
+ const bytes=new TextEncoder().encode(JSON.stringify({schema:'kaminos.creature-flesh.torso-proxy.v0',source:{caseSha256:f.data.source.caseSha256,vertices:3,channels:2}}));
+ globalThis.fetch=async()=>new Response(bytes);let entry;
+ try{entry=await installOwnerExperimentEntry({document:f.document,root:new Element(),host:f.host,discover:async()=>[{id:'mushfinger/living-scene',title:'Fixture',moduleUrl:module}]});await entry.open('mushfinger/living-scene',f.setup);const before=await entry.read(),bad=structuredClone(f.setup);
+  bad.actors[0].creature.deformation='gpu';bad.actors[0].creature.flesh={preparations:[{case_sha256:f.data.source.caseSha256,url:'/invalid-preparation',sha256:createHash('sha256').update(bytes).digest('hex')}]};
+  await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad,loadSources:f.deps.loadSources}),/complete section lattice/i);
+  assert.deepEqual(await entry.read(),before,'Structural refusal disposed the working room');assert.equal(f.scene.children.length,2);
+ }finally{await entry?.close();globalThis.fetch=priorFetch;globalThis.Option=priorOption;delete globalThis.__physicalReviewCreate;}
+});
+test('valid flesh with an unsupported starting pose cannot destroy the current room',async()=>{
+ const f=fixture(),matrix=z=>[[1,0,0,0],[0,1,0,0],[0,0,1,z],[0,0,0,1]],names=['pelvis','spine-lumbar','spine-chest'];
+ const bones=names.map((name,i)=>({name,parent:i?names[i-1]:null,restMatrix:matrix(i/2),tail:[0,0,i/2+.2]})),rest=[],weights=[];
+ for(let k=0;k<7;k++)for(let a=0;a<16;a++){rest.push(Math.cos(a*Math.PI/8),Math.sin(a*Math.PI/8),k/6);weights.push(0,0,1,0);}
+ const data={manifest:{bones,channels:['fixed',...names],vertices:112,triangles:1},rest:Float32Array.from(rest),weights:Float32Array.from(weights),triangles:new Uint32Array([0,1,2]),frame:{canonicalWorldToSourceNormalized:matrix(0),bones},source:f.data.source,
+ motion:{frames:3,joints:3,skeleton:{fps:30,jointNames:names,parents:[-1,0,1]},positions:[0,1,2].flatMap(i=>[0,0,i*.1,0,0,.5+i*.1,0,0,i*.1]),localRotations:Array.from({length:9},()=>[1,0,0,0]).flat()}};
+ const prepared=prepareTorso(data);prepared.source.caseSha256=data.source.caseSha256;const bytes=new TextEncoder().encode(JSON.stringify(prepared)),priorFetch=globalThis.fetch,priorOption=globalThis.Option;
+ const loadSources=async input=>input.flesh?data:f.data;globalThis.fetch=async()=>new Response(bytes);globalThis.Option=class{};globalThis.__poseReviewCreate=async args=>{const room=await api.createLivingScene(args,{loadSources});return {...room,mount(){}};};
+ const module='data:text/javascript,'+encodeURIComponent('export default {id:"mushfinger/living-scene",title:"Fixture",create:args=>globalThis.__poseReviewCreate(args)}');let entry;
+ try{entry=await installOwnerExperimentEntry({document:f.document,root:new Element(),host:f.host,discover:async()=>[{id:'mushfinger/living-scene',title:'Fixture',moduleUrl:module}]});await entry.open('mushfinger/living-scene',f.setup);const before=await entry.read(),bad=structuredClone(f.setup);bad.actors[0].creature.deformation='gpu';bad.actors[0].creature.flesh={preparations:[{case_sha256:data.source.caseSha256,url:'/valid-preparation',sha256:createHash('sha256').update(bytes).digest('hex')}]};
+  await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad,loadSources}),/Pose reference inverted element/);assert.deepEqual(await entry.read(),before);assert.equal(f.scene.children.length,2);
+ }finally{await entry?.close();globalThis.fetch=priorFetch;globalThis.Option=priorOption;delete globalThis.__poseReviewCreate;}
+});
+test('even flesh cross-section is refused before replacing the current room',async()=>{
+ const f=fixture(),matrix=z=>[[1,0,0,0],[0,1,0,0],[0,0,1,z],[0,0,0,1]],names=['pelvis','spine-lumbar','spine-chest'];
+ const bones=names.map((name,i)=>({name,parent:i?names[i-1]:null,restMatrix:matrix(i/2),tail:[0,0,i/2+.2]})),rest=[],weights=[];
+ for(let k=0;k<7;k++)for(let a=0;a<16;a++){rest.push(Math.cos(a*Math.PI/8),Math.sin(a*Math.PI/8),k/6);weights.push(0,0,1,0);}
+ const data={manifest:{bones,channels:['fixed',...names],vertices:112,triangles:1},rest:Float32Array.from(rest),weights:Float32Array.from(weights),triangles:new Uint32Array([0,1,2]),frame:{canonicalWorldToSourceNormalized:matrix(0),bones},source:f.data.source,
+ motion:{frames:3,joints:3,skeleton:{fps:30,jointNames:names,parents:[-1,0,1]},positions:[0,1,2].flatMap(i=>[0,0,i*.1,0,0,.5+i*.1,0,0,1+i*.1]),localRotations:Array.from({length:9},()=>[1,0,0,0]).flat()}};
+ const prepared=prepareTorso(data),c=4,id=(i,j,k)=>(k*c+j)*c+i,perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+ prepared.source.caseSha256=data.source.caseSha256;prepared.construction.crossSection=c;prepared.positions=[];prepared.pinned=[];prepared.tetrahedra=[];
+ for(let k=0;k<7;k++)for(let j=0;j<c;j++)for(let i=0;i<c;i++){prepared.positions.push([i/3*2-1,j/3*2-1,k/6]);prepared.pinned.push(k===0||k===6);}
+ for(let k=0;k<6;k++)for(let j=0;j<c-1;j++)for(let i=0;i<c-1;i++)for(const perm of perms){const q=[i,j,k],t=[id(...q)];for(const a of perm){q[a]++;t.push(id(...q));}prepared.tetrahedra.push(t);}
+ prepared.bindings=Array(112*4).fill(0);prepared.bindingWeights=Array(112*4).fill(0);prepared.nodeWeights=Array(112*4).fill(0);
+ const bytes=new TextEncoder().encode(JSON.stringify(prepared)),priorFetch=globalThis.fetch,priorOption=globalThis.Option,loadSources=async input=>input.flesh?data:f.data;
+ globalThis.fetch=async()=>new Response(bytes);globalThis.Option=class{};globalThis.__evenReviewCreate=async args=>{const room=await api.createLivingScene(args,{loadSources});return {...room,mount(){}};};
+ const module='data:text/javascript,'+encodeURIComponent('export default {id:"mushfinger/living-scene",title:"Fixture",create:args=>globalThis.__evenReviewCreate(args)}');let entry;
+ try{entry=await installOwnerExperimentEntry({document:f.document,root:new Element(),host:f.host,discover:async()=>[{id:'mushfinger/living-scene',title:'Fixture',moduleUrl:module}]});await entry.open('mushfinger/living-scene',f.setup);const before=await entry.read(),bad=structuredClone(f.setup);bad.running=true;bad.encounters={avoidance:true};bad.actors[0].creature.deformation='gpu';bad.actors[0].creature.flesh={preparations:[{case_sha256:data.source.caseSha256,url:'/even-preparation',sha256:createHash('sha256').update(bytes).digest('hex')}]};
+  await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad,loadSources}),/odd.*section lattice/i);assert.deepEqual(await entry.read(),before);assert.equal(f.scene.children.length,2);
+ }finally{await entry?.close();globalThis.fetch=priorFetch;globalThis.Option=priorOption;delete globalThis.__evenReviewCreate;}
+});

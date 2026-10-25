@@ -260,7 +260,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      else if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
      else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
      else if(!visual&&m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.eventAt=time;m.cause='moved';m.movedUnseen=false;}
-     else if(!m.seen&&!m.inspected&&m.eventAt!==time&&!source.transient){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
+     else if(!m.seen&&!m.inspected&&m.eventAt!==time&&!source.transient){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';if(m.forgotten)m.eventAt=time;}
      m.everSeen=true;
     }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}
     m.seen=s.visible;m.last=[...source.point];
@@ -379,14 +379,17 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    if(startle)applyStartlePose({THREE,bones,point:startle.point,strength:recoilAmount(startle,time)});
    gazeLocal=new THREE.Vector3(...profile.forward).transformDirection(head.matrixWorld).transformDirection(group.matrixWorld.clone().invert());
    reticle.visible=Boolean(focus)&&weight>.2;
-   if(reticle.visible&&placement){
-    placement.updateMatrixWorld(true);
-    reticle.position.copy(placement.worldToLocal(new THREE.Vector3(...focus.point)));
-    const sc=new THREE.Vector3().setFromMatrixScale(placement.matrixWorld);reticle.scale.set(.05/sc.x,.05/sc.y,.05/sc.z);
-    setCaption(why?(why.cause==='looking around'?'looking around':`${why.cause} · ${why.label}`):'');
-   }
+   positionReticle(placement);
    error=null;
   }catch(failure){error=failure.message;reticle.visible=false;throw failure;}
+ }
+
+ function positionReticle(placement){
+  if(!reticle.visible||!focus||!placement)return;
+  placement.updateMatrixWorld(true);
+  reticle.position.copy(placement.worldToLocal(new THREE.Vector3(...focus.point)));
+  const sc=new THREE.Vector3().setFromMatrixScale(placement.matrixWorld);reticle.scale.set(.05/sc.x,.05/sc.y,.05/sc.z);
+  setCaption(why?(why.cause==='looking around'?'looking around':`${why.cause} · ${why.label}`):'');
  }
 
  // Light around the creature, sampled elsewhere (e.g. the fire light field at
@@ -505,7 +508,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(next?.id!==watchIntent?.id){watchCheck=null;watchNext=null;watchDiversion=null;}
   watchIntent=next?structuredClone(next):null;engagementId=typeof intent==='string'?intent:intent?.id??null;
  }
- return Object.freeze({modify,sense,read,motionSeconds,setBehavior:value=>{behavior=behaviorSettings(value);return read();},setEngagement,setEnabled,setProfile,reticle,dispose});
+ return Object.freeze({modify,sense,read,motionSeconds,positionReticle,setBehavior:value=>{behavior=behaviorSettings(value);return read();},setEngagement,setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that

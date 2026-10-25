@@ -12,6 +12,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
  const actionNote=el('p');actionNote.style.cssText='margin:0;color:#a5b7bd;font-size:11px';properties.append(actionNote);
  const editArea=el('button','Edit wander area');editArea.type='button';properties.append(editArea);
  const initial=read(),skins=initial.currentSkin?.choices??[];
+ const fleshLabel=el('label','Soft body response'),fleshToggle=el('input');fleshToggle.type='checkbox';fleshToggle.setAttribute('aria-label','Creature soft body response');fleshLabel.style.cssText='display:flex;align-items:center;justify-content:space-between';fleshLabel.append(fleshToggle);fleshLabel.hidden=!initial.flesh;properties.append(fleshLabel);fleshToggle.onchange=()=>call('flesh',{enabled:fleshToggle.checked});
  const casts=[...new Map(skins.map(c=>[c.cast,c])).values()];
  const cast=select('Cast',casts.map(c=>[c.cast,c.label]));cast.hidden=!casts.length;
  const motion=select('Motion',initial.motions.map(c=>[c.id,c.label]));motion.hidden=!initial.motions.length;
@@ -77,6 +78,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
   // The selector owns Cast/Attachment errors, including requests made through
   // the agent invoker. Other properties cannot supersede that domain state.
   error.textContent=[s?.error,r.action?.error,...failures.values()].filter(Boolean).join('\n');
+  fleshLabel.hidden=!r.flesh;if(r.flesh)fleshToggle.checked=r.flesh.enabled;
   action.value=r.action?.kind??'preview';editArea.hidden=!r.action?.area?.mounted;
   const wandering=r.action?.kind==='wander';mode.disabled=wandering;actionNote.hidden=!wandering;
   actionNote.textContent=wandering?`${r.playback.status==='playing'?'Wandering':'Held pose'} · edit the area with the scene gizmo. Flat support; no foot-contact solve.`:'';

@@ -52,3 +52,12 @@ assert.deepEqual(pose(make({snapshot:turning.snapshot()})),pose(turning),'checkp
 assert.ok(forward(make({pathSnapshot:turning.snapshot().path,pathReverse:true,pathFacing:turning.read().facing})).distanceTo(forward(turning))<1e-9,'clip replacement retains assisted facing');
 const released=forward(turning);turning.face(null,1/60);assert.ok(forward(turning).angleTo(released)<=4/60+1e-9,'watch release cannot snap the body back');
 const invalid=turning.snapshot();assert.throws(()=>turning.face([NaN,0],.1),/finite/);assert.deepEqual(turning.snapshot(),invalid);
+
+// Contact owns the achieved body yaw as well as translation. An assisted turn
+// cannot bypass the accepted physical orientation while retreating.
+for(const reverse of [false,true]){
+ const physical=make();if(reverse)physical.setReverse(true);
+ const prior=physical.snapshot(),old=forward(physical);physical.face([4,-2],.2);physical.advance(.1);
+ physical.contact(prior,{position:prior.path.points[0],direction:prior.path.direction,facing:Math.atan2(old.x,old.z)});
+ assert.ok(forward(physical).distanceTo(old)<1e-9,'Accepted physical yaw must replace requested assisted facing');
+}
