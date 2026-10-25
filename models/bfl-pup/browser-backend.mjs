@@ -1,5 +1,6 @@
 // Replaceable BFL prompt/ordered-reference -> editable text operation.
 // This adapter owns Transformers.js tensors; callers receive text and provenance.
+import {prepareReference} from './reference-policy.mjs';
 export const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 export const BFL_SOURCE_REVISION = '3f3edb52b2c55de0d49feab28598b68f7f8e4830';
 
@@ -96,9 +97,9 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         await load();
         const text=processor.apply_chat_template(messages,{add_generation_prompt:true,enable_thinking:false});
-        const raw=await Promise.all(images.map(image=>image instanceof tf.RawImage?image:tf.RawImage.read(image)));
-        // Caller supplies BFL policy-prepared references; original attachment order
-        // survives processing, vision evaluation and feature concatenation.
+        const raw=await Promise.all(images.map(async image=>prepareReference(
+          image instanceof tf.RawImage?image:await tf.RawImage.read(image),images.length,tf.RawImage)));
+        // Original attachment order survives preparation and vision concatenation.
         inputs=await processor(text,raw.length?raw:undefined,{padding:false,truncation:false});
         const promptLength=inputs.input_ids.dims[1];
         class GeneratedPresence extends tf.LogitsProcessor{
@@ -128,6 +129,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         return {text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
           generationMs:performance.now()-generationStarted,totalMs:performance.now()-started,
           backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,modelUrl:base,referenceCount:images.length,
+          referencePreparation:{sizes:raw.map(image=>[image.width,image.height]),resizer:'browser-canvas',jpegQuality:.92,whiteBackdrop:true},
           sessions:Object.fromEntries(Object.entries(model.sessions).map(([name,s])=>[name,{...s.config,inputNames:s.inputNames,outputNames:s.outputNames}]))};
       }finally{
         if(output?.past_key_values)for(const t of Object.values(output.past_key_values))t?.dispose?.();

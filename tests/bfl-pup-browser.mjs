@@ -24,3 +24,7 @@ const {validateExpansion}=await import('../models/bfl-pup/witness-contract.mjs')
 const good={backend:'transformers.js/onnx-webgpu',modelRevision:'3f3edb52b2c55de0d49feab28598b68f7f8e4830',text:'blue kettle',partial:false,stopReason:'eos',referenceCount:1,sessions:{embed_tokens:{device:'webgpu'},vision_encoder:{device:'webgpu'},decoder_model_merged:{device:'webgpu'}}};
 assert.doesNotThrow(()=>validateExpansion(good,1));
 for(const change of [{backend:'mlx-metal'},{modelRevision:'base-qwen'},{text:' '},{partial:true},{stopReason:'output-limit'},{referenceCount:0},{sessions:{}},{sessions:{...good.sessions,decoder_model_merged:{device:'wasm'}}}])assert.throws(()=>validateExpansion({...good,...change},1));
+const {referenceSize}=await import('../models/bfl-pup/reference-policy.mjs');
+const sizes=JSON.parse(fs.readFileSync(new URL('./fixtures/bfl-pup/reference-sizes.json',import.meta.url)));
+for(const c of sizes.cases)assert.deepEqual(referenceSize(c.width,c.height,c.references),c.size);
+assert.throws(()=>referenceSize(2010,10,1),/200/);

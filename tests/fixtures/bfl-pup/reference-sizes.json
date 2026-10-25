@@ -1,0 +1,257 @@
+{
+  "source": "BFL flux3/pup.py reference_size, exact locally retained source; Python tie-to-even rounding",
+  "cases": [
+    {
+      "width": 1024,
+      "height": 1024,
+      "references": 1,
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "width": 48,
+      "height": 80,
+      "references": 1,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 80,
+      "height": 48,
+      "references": 1,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1500,
+      "height": 900,
+      "references": 1,
+      "size": [
+        1312,
+        768
+      ]
+    },
+    {
+      "width": 900,
+      "height": 1500,
+      "references": 1,
+      "size": [
+        768,
+        1312
+      ]
+    },
+    {
+      "width": 12000,
+      "height": 100,
+      "references": 1,
+      "size": [
+        11200,
+        64
+      ]
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "references": 1,
+      "size": [
+        32,
+        32
+      ]
+    },
+    {
+      "width": 1024,
+      "height": 1024,
+      "references": 2,
+      "size": [
+        704,
+        704
+      ]
+    },
+    {
+      "width": 48,
+      "height": 80,
+      "references": 2,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 80,
+      "height": 48,
+      "references": 2,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1500,
+      "height": 900,
+      "references": 2,
+      "size": [
+        928,
+        544
+      ]
+    },
+    {
+      "width": 900,
+      "height": 1500,
+      "references": 2,
+      "size": [
+        544,
+        928
+      ]
+    },
+    {
+      "width": 12000,
+      "height": 100,
+      "references": 2,
+      "size": [
+        7904,
+        64
+      ]
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "references": 2,
+      "size": [
+        32,
+        32
+      ]
+    },
+    {
+      "width": 1024,
+      "height": 1024,
+      "references": 3,
+      "size": [
+        512,
+        512
+      ]
+    },
+    {
+      "width": 48,
+      "height": 80,
+      "references": 3,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 80,
+      "height": 48,
+      "references": 3,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1500,
+      "height": 900,
+      "references": 3,
+      "size": [
+        640,
+        384
+      ]
+    },
+    {
+      "width": 900,
+      "height": 1500,
+      "references": 3,
+      "size": [
+        384,
+        640
+      ]
+    },
+    {
+      "width": 12000,
+      "height": 100,
+      "references": 3,
+      "size": [
+        5600,
+        32
+      ]
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "references": 3,
+      "size": [
+        32,
+        32
+      ]
+    },
+    {
+      "width": 1024,
+      "height": 1024,
+      "references": 10,
+      "size": [
+        512,
+        512
+      ]
+    },
+    {
+      "width": 48,
+      "height": 80,
+      "references": 10,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 80,
+      "height": 48,
+      "references": 10,
+      "size": [
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1500,
+      "height": 900,
+      "references": 10,
+      "size": [
+        640,
+        384
+      ]
+    },
+    {
+      "width": 900,
+      "height": 1500,
+      "references": 10,
+      "size": [
+        384,
+        640
+      ]
+    },
+    {
+      "width": 12000,
+      "height": 100,
+      "references": 10,
+      "size": [
+        5600,
+        32
+      ]
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "references": 10,
+      "size": [
+        32,
+        32
+      ]
+    }
+  ]
+}
