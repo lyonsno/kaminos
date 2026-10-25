@@ -26,14 +26,32 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
  root.append(section);
  const select=section.querySelector('select'),refresh=section.querySelector('button'),status=section.querySelector('[role=status]'),content=section.querySelector('.owner-experiment-content');
  const diagnostics=section.querySelector('.owner-experiment-diagnostics');
- let definitions=[],current=null,pending=Promise.resolve(),selected=null,currentModuleUrl=null;
+ let definitions=[],current=null,pending=Promise.resolve(),selected=null,currentModuleUrl=null,catalogueRequest=0;
  const serial=action=>{const result=pending.then(action);pending=result.catch(()=>{});return result;};
  const fail=error=>{status.textContent=error.message||String(error);};
  async function close(){if(current){const old=current;current=null;selected=null;currentModuleUrl=null;await old.dispose();}content.replaceChildren();}
  const api={
   list:()=>definitions.map(({id,title,moduleUrl,error})=>({id,title,moduleUrl,...(error?{error}:{})})),
   state:()=>({id:current?.id??null,selected,moduleUrl:currentModuleUrl}),
-  refresh(){return serial(async()=>{const entries=await discover();definitions=await loadExperimentContributions(entries);select.replaceChildren(new Option('Choose an experiment…',''),...definitions.map(d=>{const option=new Option(d.title??d.moduleUrl??'Unavailable experiment',d.id??'');option.disabled=Boolean(d.error);return option;}));diagnostics.textContent=definitions.filter(d=>d.error).map(d=>d.error).join('\n');select.value=current?.id??'';status.textContent=definitions.length?'':'No owner experiments found';return api.list();});},
+  async refresh(){
+   const request=++catalogueRequest;
+   refresh.disabled=true;refresh.textContent='Refreshing…';
+   try{
+    const next=await loadExperimentContributions(await discover());
+    if(request!==catalogueRequest)return api.list();
+    definitions=next;
+    select.replaceChildren(new Option('Choose an experiment…',''),...definitions.map(d=>{const option=new Option(d.title??d.moduleUrl??'Unavailable experiment',d.id??'');option.disabled=Boolean(d.error);return option;}));
+    diagnostics.textContent=definitions.filter(d=>d.error).map(d=>d.error).join('\n');
+    select.value=current?.id??'';
+    if(!definitions.length)diagnostics.textContent='No owner experiments found';
+    return api.list();
+   }catch(error){
+    if(request===catalogueRequest)diagnostics.textContent='Experiment discovery: '+(error.message||String(error));
+    throw error;
+   }finally{
+    if(request===catalogueRequest){refresh.disabled=false;refresh.textContent='Refresh experiments';}
+   }
+  },
   open(id,inputs={}){return serial(async()=>{
    const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);if(definition.error)throw Error(definition.error);
    await close();status.textContent='Opening '+definition.title+'…';
@@ -45,6 +63,6 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
   close:()=>serial(async()=>{await close();select.value='';status.textContent='';onChange({id:null,inputs:null});}),
  };
  select.addEventListener('change',()=>{if(select.value)api.open(select.value).catch(fail);else api.close().catch(fail);});
- refresh.addEventListener('click',()=>api.refresh().catch(fail));
+ refresh.addEventListener('click',()=>api.refresh().catch(()=>{}));
  await api.refresh();return api;
 }
