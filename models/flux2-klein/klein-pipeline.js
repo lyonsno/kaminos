@@ -252,7 +252,8 @@ export class KleinPipeline {
     // Projection and at least one materialized attention head span the whole
     // sequence. Reference tokens consume that same device capacity.
     const maxJointTokens = Math.min(Math.floor(cap / ((3 * D + 2 * F) * 4)), Math.floor(Math.sqrt(cap / 4)));
-    const maxTextTokens = Math.min(this.maxPromptTokens, maxJointTokens - imgTokens - referenceTokens);
+    const projectionTokens = Math.min(this.maxPromptTokens, maxJointTokens - imgTokens - referenceTokens);
+    const maxTextTokens = this.textEncoder.maxTokensForBufferLimit(cap, projectionTokens);
     const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
     // The decoder's attention scores are chunked by query rows (at least 64 at a time).
     const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
@@ -455,6 +456,7 @@ export class KleinPipeline {
     if (maxLength < requestedLength) t.textPaddingRequested = requestedLength;
     const framed = this.framePrompt(prompt, maxLength);
     const txtTokens = framed.inputIds.length;
+    this.textEncoder.assertActivationFits(txtTokens, limits.cap);
     // Sequential residency: transformer activations exist from here until the decoder's input is
     // prepared, decoder activations from then until the image is read back, so peak activation
     // memory is the larger stage rather than the sum (about 3 GB plus 5 GB at 1024²).

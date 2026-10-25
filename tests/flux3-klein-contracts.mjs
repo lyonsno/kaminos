@@ -8,6 +8,7 @@ import { flux3ImageIds, flux3TextIds } from '../models/flux3-klein/flux3-transfo
 import { flux3PromptIds } from '../models/flux3-klein/flux3-prompt.js';
 import { Flux3Pipeline } from '../models/flux3-klein/flux3-pipeline.js';
 import { KleinPipeline } from '../models/flux2-klein/klein-pipeline.js';
+import { KleinTextEncoder } from '../models/flux2-klein/klein-text-encoder.js';
 
 const REF16 = [1.0, 0.9904716610908508, 0.9798020720481873, 0.9677731394767761, 0.954107403755188, 0.9384464025497437,
   0.920318603515625, 0.899091899394989, 0.873896598815918, 0.8435055017471313, 0.8061264157295227, 0.7590360641479492,
@@ -61,6 +62,10 @@ function preflight(prototype, cap) {
   pipeline.transformer = { D: 3072, F: 9216 };
   pipeline.kernels = { vaeActType: 'f16' };
   pipeline.tokenizer = stub;
+  pipeline.textEncoder = Object.assign(Object.create(KleinTextEncoder.prototype), {
+    device: pipeline.device, D: 2560, F: 9728, QH: 32, KVH: 8,
+    cfg: { rope_theta: 5000000 }, weights: {},
+  });
   return pipeline;
 }
 const roomyFlux3 = preflight(Flux3Pipeline.prototype, 2 ** 32 - 4);
@@ -77,5 +82,28 @@ assert.equal(roomyFlux3.requestedTextTokens('x'.repeat(9000)), 8192,
 assert.equal(preflight(KleinPipeline.prototype, 2 ** 32 - 4).sizeLimits(512).maxTextTokens, 512);
 assert.equal(preflight(Flux3Pipeline.prototype, 128 * 2 ** 20).sizeLimits(512).maxTextTokens, 189,
   'the real projection buffer limit still constrains a smaller GPU');
+
+// F3LP-01: the actual mounted encoder has four grouped query heads per KV head.
+// Its minimum score group exceeds 64 MiB for long prompts and is quadratic in L.
+const middle = preflight(Flux3Pipeline.prototype, 768 * 2 ** 20);
+const middlePrompt = 'x'.repeat(7050 - roomyFlux3.framePrompt('').length);
+const middleLimit = middle.sizeLimits(64);
+const admitted = middle.framePrompt(middlePrompt,
+  Math.min(middle.requestedTextTokens(middlePrompt), middleLimit.maxTextTokens));
+assert.equal(admitted.length, 7050, 'capacity-limited padding retains all real prompt tokens');
+assert.ok(4 * admitted.inputIds.length ** 2 * 4 <= middleLimit.cap,
+  'the final padded prompt fits the encoder score buffer, not just transformer projection');
+globalThis.GPUBufferUsage ??= { STORAGE: 128, COPY_SRC: 4, COPY_DST: 8 };
+middle.device.queue = { writeBuffer() {} };
+middle.device.createBuffer = ({ size }) => {
+  assert.ok(size <= middleLimit.cap, `encoder buffer ${size} exceeds effective cap ${middleLimit.cap}`);
+  return { size, destroy() {} };
+};
+middle.textEncoder.allocate(admitted.inputIds.length, admitted.positionIds);
+let allocations = 0;
+middle.transformer.allocate = () => { allocations++; throw Error('allocated before admission'); };
+const tooLong = 'x'.repeat(7150 - roomyFlux3.framePrompt('').length);
+await assert.rejects(middle.generateScheduled({ prompt: tooLong, width: 64, height: 64 }), /prompt is too long/);
+assert.equal(allocations, 0, 'an unsupported real prompt fails before transformer activation allocation');
 
 console.log('flux3-klein contracts ok');
