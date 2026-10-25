@@ -3295,6 +3295,8 @@ import {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {isBrazierRoomRecord} from './brazier-room-record.mjs';
+import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
@@ -5069,6 +5071,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  if(object.userData?.disposeBrazierRoom){object.userData.disposeBrazierRoom();return;}
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
@@ -25020,6 +25023,13 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record, loadRequestId = null) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if(isBrazierRoomRecord(record)){
+    const room=await loadBrazierRoom(new URL(record.source,location.href).href);
+    if(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)){room.dispose();throw Error('Scene load superseded');}
+    try{scene.add(room.root);registerSceneObject(room.root,record);return room.root;}
+    catch(error){room.root.removeFromParent();room.dispose();throw error;}
+  }
+
   if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
   if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;

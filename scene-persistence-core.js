@@ -1,3 +1,4 @@
+import {isBrazierRoomRecord} from './brazier-room-record.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
@@ -142,6 +143,7 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(isBrazierRoomRecord(record))return true;
   if(record?.type===CAMERA_TYPE&&record.source===CAMERA_SOURCE){try{checkedCameraRecord(record);return true;}catch{return false;}}
   if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
   if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
