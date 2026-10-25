@@ -409,3 +409,10 @@ test('image conditioning keeps its input and effective route in the saved PNG',a
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),p);
 
 });
+
+test('the saved PNG retains the original request, expansion and final edited prompt',async()=>{
+ const h=harness();const expansion={schema:'kaminos.prompt-expansion.v1',request:{prompt:'blue',model:'flux2',reference:null},expandedPrompt:'a blue kettle',result:{backend:'observed-provider',text:'a blue kettle',stopReason:'eos'}};
+ await h.service.run({prompt:'a dark blue kettle',seed:42,promptExpansion:expansion});
+ const saved=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));
+ assert.equal(saved.prompt,'a dark blue kettle');assert.deepEqual(saved.promptExpansion,expansion);
+});
