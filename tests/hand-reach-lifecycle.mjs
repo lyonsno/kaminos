@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createHandReachExperiment} from '../experiments/hand-reach.experiment.mjs';
 import {createWorkbenchSceneHost, disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 
 const deferred = () => {let resolve, reject; const promise = new Promise((a, b) => {resolve = a; reject = b;}); return {promise, resolve, reject};};
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -27,7 +29,7 @@ function reachState() {
   };
 }
 
-async function fixture({infer, acquire, play, createApp, loadRegistration, createState = reachState, inputs = {}} = {}) {
+async function fixture({infer, acquire, play, createApp, loadRegistration, createState = reachState, inputs = {}, createRetention, captureInput} = {}) {
   let time = 0, frame, nextCallback = 0, appOptions;
   const callbacks = new Map(), tracks = [], rows = new Map(), events = [], placements = [], captures = [], drags = [], recipes = [];
   const video = Object.assign(new EventTarget(), {videoWidth: 640, videoHeight: 480, currentTime: 0, readyState: 4,
@@ -63,12 +65,13 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
   const instance = await createHandReachExperiment({host: {scene: {open: async () => hostScene.open()},
     controls: {document: {createElement: () => video}, installNumberDrag(options) {
       const drag = {...options, disposed: false, dispose() {this.disposed = true;}}; drags.push(drag); return drag;
-    }}}, inputs, record: row => events.push(row), updateInputs: recipe => recipes.push(recipe)}, {
+    }}}, inputs: {retainTrial:false,...inputs}, record: row => events.push(row), updateInputs: recipe => recipes.push(recipe)}, {
     now: () => time, createState, getGpu: async () => ({device}),
     getUserMedia: acquire ?? acquireDefault,
     createApp: async options => {appOptions = options; appCreates++; return createApp ? createApp(options, app) : app;},
     loadRegistration: async (...args) => {registrationLoads++; return loadRegistration ? loadRegistration(...args) : {};},
     createRegistration: () => registration,
+    createRetention, captureInput,
   });
   return {instance, video, tracks, scene, borrowed, rows, placements, captures, events, callbacks, app, registration, acquireDefault, drags, recipes,
     get appOptions() {return appOptions;}, counts: () => ({loads, destroyed, appCreates, registrationLoads}),
@@ -83,6 +86,48 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
   };
 }
 
+test('recorded trial retains exact inference input, raw result and effective placement before closure', async () => {
+  const frames=[], finishes=[], frozen={width:640,height:480}, image=new Blob(['png'],{type:'image/png'});
+  let closed=false;
+  const f=await fixture({inputs:{retainTrial:true},
+    createRetention:async()=>({id:'test-trial',append:async row=>frames.push(row),finish:async summary=>finishes.push(summary),close(){closed=true;}}),
+    captureInput:()=>({source:frozen,image:Promise.resolve(image)}),
+  });
+  await f.instance.operations.start();await f.videoFrame();await f.instance.operations.stop();
+  assert.equal(frames.length,1);
+  assert.equal(f.captures[0].source,frozen,'model consumes exactly the frozen retained input');
+  assert.equal(frames[0].image,image);
+  assert.equal(frames[0].prediction.nativeVertices.length,9);
+  assert.equal(frames[0].effective.presentation,'live-hand');
+  assert.equal(frames[0].inputSource.source.mirrored,false);
+  assert.equal(finishes.length,1);
+  assert.equal(closed,true);
+  await f.instance.dispose();
+});
+
+test('trial write failure ends camera visibly and retains the failure status',async()=>{
+  const f=await fixture({inputs:{retainTrial:true},
+    createRetention:async()=>({id:'failed-trial',append:async()=>{throw Error('storage full');},finish:async()=>{},close(){}}),
+    captureInput:()=>({source:{},image:Promise.resolve(new Blob(['png']))}),
+  });
+  await f.instance.operations.start();await f.videoFrame();
+  assert.equal(f.instance.read().running,false);assert.equal(f.instance.read().visible,false);
+  assert.equal(f.instance.read().retention.status,'failed');assert.match(f.instance.read().retention.error,/storage full/);
+  assert.equal(f.tracks[0].stops,1);await f.instance.dispose();
+});
+
+test('stop waits for the captured trial frame and records the superseded result',async()=>{
+  const gate=deferred(),frames=[];
+  const f=await fixture({inputs:{retainTrial:true},infer:async options=>{await options.getFrame();await gate.promise;return prediction();},
+    createRetention:async()=>({id:'stopped-trial',append:async row=>frames.push(row),finish:async()=>{},close(){}}),
+    captureInput:()=>({source:{},image:Promise.resolve(new Blob(['png']))}),
+  });
+  await f.instance.operations.start();await f.videoFrame();const stopping=f.instance.operations.stop();
+  gate.resolve();await stopping;
+  assert.equal(frames.length,1);assert.match(frames[0].failure,/superseded/);
+  assert.equal(f.instance.read().visible,false);await f.instance.dispose();
+});
+
 test('scene mounts without loading models; owns registered geometry and uses operator view', async () => {
   const f = await fixture();
   assert.ok(f.rows.size > 0, 'scene mounts before any model loading');
@@ -94,6 +139,39 @@ test('scene mounts without loading models; owns registered geometry and uses ope
   await f.instance.operations.load();
   assert.ok(f.appOptions.device, 'the model app borrows the host device');
   await f.instance.dispose();
+});
+
+test('repeated predictions reuse uploaded buffers and closure retires all of them', async () => {
+  // Use the bundled renderer's actual lifetime logic, with a counting GPU backend.
+  const source = readFileSync(new URL('../lib/three.webgpu.js', import.meta.url), 'utf8');
+  const start = source.indexOf('class DataMap {'), end = source.indexOf('\nclass ', source.indexOf('class Info {') + 1);
+  assert.ok(start > 0 && end > start);
+  const {Attributes, Geometries, Info} = runInNewContext(`${source.slice(start,end)}\n({Attributes,Geometries,Info})`, {...THREE});
+  const live = new Set(), info = new Info();
+  const backend = {createAttribute: a => live.add(a), createIndexAttribute: a => live.add(a),
+    updateAttribute: a => assert.ok(live.has(a)), destroyAttribute: a => live.delete(a)};
+  const geometries = new Geometries(new Attributes(backend, info), info);
+  const f = await fixture();
+  const render = hand => {
+    info.render.calls++;
+    const geometry = hand.geometry;
+    geometries.updateForRender({geometry, material: hand.material, getAttributes: () => Object.values(geometry.attributes)});
+  };
+  for (let i=0;i<10;i++) {
+    await f.instance.operations.presentRetained(prediction({faces:[0,1,2], handedness:i%2?'left':'right'}));
+    const hand = f.scene.getObjectByProperty('uuid', f.instance.read().objects.hand.uuid);
+    render(hand);
+    assert.deepEqual(Array.from(hand.geometry.index.array), i%2?[0,2,1]:[0,1,2]);
+    assert.equal(live.size,3,'position, normal and index allocations stay stable');
+  }
+  const oldPlace=f.registration.place;
+  f.registration.place=(...args)=>({...oldPlace(...args),worldVertices:new Float32Array(12)});
+  await f.instance.operations.presentRetained(prediction({faces:[0,1,2,0,2,3]}));
+  render(f.scene.getObjectByProperty('uuid',f.instance.read().objects.hand.uuid));
+  assert.equal(live.size,3,'changed topology retires old geometry before uploading its replacement');
+  await f.instance.dispose();
+  assert.equal(live.size,0,'closure retires every uploaded hand buffer');
+  assert.equal(info.memoryMap.size,0);
 });
 
 test('load borrows only the device, while live placement keeps actual 3D coordinates and clears on miss', async () => {

@@ -17,6 +17,14 @@ export function assertLivePlacement(s) {
   assert.equal(s.inputSource.kind,'live-camera'); assert.ok(Number.isFinite(s.inputSource.frameId));
 }
 
+export function assertRuntimeSource(runtime, expectedCommit) {
+  assert.equal(typeof expectedCommit,'string','requested revision required');
+  assert.ok(expectedCommit.length > 0,'requested revision required');
+  assert.equal(runtime.source?.commit,expectedCommit,'served revision must match requested source');
+  assert.equal(runtime.source.dirty,false,'served source must not be dirty or unverified');
+  assert.ok(typeof runtime.source.repoRoot === 'string' && runtime.source.repoRoot.length > 0,'served root required');
+}
+
 async function main() {
   const {values:a}=parseArgs({options:Object.fromEntries(['out','chrome','playwright','python','fixture','replay','base','expected-commit'].map(k=>[k,{type:'string'}]))});
   if(!a.out) throw Error('--out required');
@@ -32,6 +40,7 @@ async function main() {
     report.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
     report.dirty=execFileSync('git',['status','--short'],{cwd:root,encoding:'utf8'});
     temp=fs.mkdtempSync(path.join(os.tmpdir(),'hand-reach-witness-'));
+    report.profile=path.join(temp,'profile');
     let base=a.base;
     if(!base) {
       const port=await new Promise(resolve=>{const s=net.createServer().listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
@@ -47,7 +56,7 @@ async function main() {
     }
     report.base=base;
     report.runtime=await fetch(`${base}/api/runtime-config`).then(r=>{assert.ok(r.ok,'runtime source must be observable');return r.json();});
-    assert.equal(report.runtime.source?.commit,a['expected-commit']??report.commit,'served revision must match requested source');
+    assertRuntimeSource(report.runtime,a['expected-commit']??report.commit);
     report.phase='browser';save();
     const {chromium}=await import(pathToFileURL(a.playwright));
     context=await chromium.launchPersistentContext(path.join(temp,'profile'),{executablePath:report.executable,headless:true,
@@ -114,6 +123,23 @@ async function main() {
     });
     await step('miss-clears-contact',async()=>{await invoke('setThreshold',1);await wait('r.presentation === "no-hand"');const r=await read();assert.equal(r.visible,false);assert.equal(r.state.grabbed,false);assert.equal(r.state.contact,false);return r;});
     await step('reacquire-stop',async()=>{await invoke('setThreshold',.8);await wait('r.visible');const r=await read();assertLivePlacement(r);await invoke('stop');const stopped=await read();assert.equal(stopped.running,false);assert.equal(stopped.visible,false);assert.equal(stopped.camera,null);return {r,stopped};});
+    await step('retained-trial',async()=>{
+      const exported=await invoke('exportTrial'),trial=JSON.parse(exported.text);
+      fs.writeFileSync(path.join(out,'trial.json'),exported.text);
+      assert.ok(trial.frames.length>0,'camera inputs and outputs must survive stop');
+      const hand=trial.frames.find(row=>row.prediction?.hasHand);
+      assert.ok(hand?.prediction.nativeVertices.length===2334,'native geometry retained');
+      assert.ok(hand.image.startsWith('data:image/png;base64,'),'exact RGB frame retained as PNG');
+      assert.ok(hand.effective.placement.valid,'effective placement retained');
+      fs.writeFileSync(path.join(out,'trial-input.png'),Buffer.from(hand.image.split(',')[1],'base64'));
+      const reopened=await page.evaluate(async id=>{
+        const {readHandReachTrial}=await import('/models/mobrecon/hand-reach-retention.js');
+        const r=await readHandReachTrial({id});
+        return {id:r.id,status:r.status,frames:r.frames.length,imageBytes:r.frames[0].image.size};
+      },trial.id);
+      assert.equal(reopened.frames,trial.frames.length);assert.ok(reopened.imageBytes>0);
+      return {...reopened,artifact:'trial.json',sourceImage:'trial-input.png'};
+    });
     await step('close-reopen',async()=>{await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('hand-reach'));await wait('r.running === false && r.received === 0');return read();});
     report.errors.push(...await page.evaluate(()=>window.__reachWitness.errors));assert.equal(report.errors.length,0);
     report.status='passed';report.phase=null;

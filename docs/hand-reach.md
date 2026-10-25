@@ -51,6 +51,16 @@ explicit source identity and optional triangle indices. It stops live acquisitio
 and labels the presentation as replay. Without triangle indices it loads the
 model package for topology. It does not pretend recorded input is a live camera.
 
+`Record trial locally` defaults on. Each inference uses a frozen camera frame;
+its full-resolution PNG, native prediction, crop, effective placement and scene
+state are committed together to browser-local IndexedDB. Stop finishes the
+trial; Save trial stops and downloads its JSON with embedded PNGs. No camera
+images are uploaded. Recording adds PNG/storage work; switch it off while the
+camera is stopped when that diagnostic tradeoff is unwanted. A storage failure
+stops acquisition visibly and preserves earlier committed frames. There is no
+automatic pruning. `readTrial()` returns the retained trial; its ID in `read()`
+can also be passed to `readHandReachTrial` after reopening the same browser origin.
+
 Focused contracts: `npm test -- --only tests/hand-camera-registration.mjs,tests/hand-reach-state.mjs,tests/hand-reach-lifecycle.mjs,tests/hand-reach-witness.mjs`.
 The optional `models/mobrecon/hand-reach-witness.mjs` exercises real inference on
 a retained camera recording and writes a phase-bearing report plus desktop/mobile

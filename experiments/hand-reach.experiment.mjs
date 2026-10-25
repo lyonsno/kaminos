@@ -32,6 +32,15 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const createApp = dependencies.createApp ?? createHandMeshApp;
   const loadRegistration = dependencies.loadRegistration ?? (async (...args) => (await import('../models/mobrecon/hand-camera-registration.js')).loadHandRegistration(...args));
   const createRegistration = dependencies.createRegistration ?? (async resource => (await import('../models/mobrecon/hand-camera-registration.js')).createHandRegistration(resource));
+  const createRetention = dependencies.createRetention ?? (async options => (await import('../models/mobrecon/hand-reach-retention.js')).createHandReachRetention(options));
+  const captureInput = dependencies.captureInput ?? (source => {
+    const canvas = document.createElement('canvas'); canvas.width = source.videoWidth; canvas.height = source.videoHeight;
+    canvas.getContext('2d').drawImage(source,0,0);
+    const image = new Promise((resolve,reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(Error('Camera PNG capture failed')),'image/png'));
+    return {source:canvas,image};
+  });
+  let retainTrial = inputs.retainTrial ?? true, trial = null, trialFinish = null;
+  let retention = {status:'idle',id:null,frames:0,error:null};
   const state = await (dependencies.createState ?? (async () => (await import('../models/mobrecon/hand-reach-state.js')).createHandReachState()))();
   if (inputs.target) state.setTarget({position: position(inputs.target.position), radius: positive(inputs.target.radius, 'Target radius')});
   if (inputs.cube) state.setCube({position: position(inputs.cube.position), size: positive(inputs.cube.size, 'Cube size')});
@@ -83,6 +92,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     authority: 'uncalibrated-hand-reach-experiment', interactionAuthority: 'local-target-and-cube-only',
     running, starting, disposed, loading: Boolean(loading), progress, error, presentation, visible: hand.visible,
     handedness, detectorThreshold, focalRatio, packages, registrationUrl,
+    retainTrial, retention:{...retention},
     inputSource: inputSource ? structuredClone(inputSource) : null,
     identity: app?.identity ?? null, application: app?.snapshot() ?? null, registrationIdentity: registration?.identity ?? null,
     placement: placement ? structuredClone(placement) : null,
@@ -102,7 +112,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (status) {
       const origin = inputSource?.kind === 'retained-prediction' ? `REPLAY: ${inputSource.label}` : running ? 'LIVE CAMERA' : starting ? 'STARTING CAMERA' : 'CAMERA OFF';
       const condition = s.grabbed ? 'Cube grabbed' : s.contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
-      status.textContent = `${origin} | ${condition}${loading ? ' | Loading models' : ''}${error ? ` | ${error}` : ''}`;
+      status.textContent = `${origin} | ${condition}${loading ? ' | Loading models' : ''}${error ? ` | ${error}` : ''}${retention.id ? ` | Local trial: ${retention.status}, ${retention.frames} frames` : ''}`;
     }
     const values = {handedness, detectorThreshold, focalRatio, radius: s.target.radius, size: s.cubeSize};
     for (const [i, axis] of ['x', 'y', 'z'].entries()) {values[`target-${axis}`] = s.target.position[i]; values[`cube-${axis}`] = s.cubePosition[i];}
@@ -126,8 +136,18 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     presentation = reason; hand.visible = false; state.lose(); drawState();
   };
   const applied = kind => {sync(); const effective = read(); record({kind: `hand-reach.${kind}`, phase: 'applied', target: asset.id, effective}); return effective;};
-  const remember = () => {const s = state.read(); updateInputs({...inputs, handedness, detectorThreshold, focalRatio,
+  const remember = () => {const s = state.read(); updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,
     target: s.target, cube: {position: s.cubePosition, size: s.cubeSize}});};
+  const finishTrial = () => {
+    if (!trial) return trialFinish;
+    const owned=trial; trial=null;
+    trialFinish=(async()=>{
+      try {await owned.finish({error,endedAt:new Date().toISOString(),state:state.read()}); retention.status=retention.error?'failed':'retained';}
+      catch(cause){retention.status='failed';retention.error=message(cause);throw cause;}
+      finally{owned.close();sync();}
+    })();
+    return trialFinish;
+  };
 
   const ensureRegistration = () => {
     assertOpen();
@@ -171,11 +191,12 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const stop = async () => {
     generation++; running = false; starting = false; blocked = true;
     releaseCamera(); app?.stop('Camera stopped'); lose('camera-off');
-    await flight?.catch(() => {}); return applied('stop');
+    await flight?.catch(() => {}); await finishTrial(); return applied('stop');
   };
   const failCamera = cause => {
     error = message(cause); generation++; running = false; starting = false; blocked = true;
     releaseCamera(); app?.stop(error); lose('camera-error'); applied('failure');
+    if(!flight) finishTrial()?.catch(failure=>{error=message(failure);sync();});
   };
   const present = (result, origin, faces) => {
     last = result; inputSource = origin;
@@ -195,17 +216,40 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     // the model's left-hand reflection reverses triangle orientation.
     const indices = Array.from(faces);
     if (result.handedness === 'left') for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
-    hand.geometry.setAttribute('position', new BufferAttribute(new Float32Array(vertices), 3));
-    hand.geometry.setIndex(indices); hand.geometry.computeVertexNormals(); hand.geometry.computeBoundingSphere();
+    let geometry = hand.geometry;
+    if (geometry.attributes.position?.array.length !== vertices.length || geometry.index?.count !== indices.length) {
+      // Dispose while the old attributes are still attached so the renderer can retire them.
+      geometry.dispose();
+      geometry = hand.geometry = new BufferGeometry();
+      geometry.setAttribute('position', new BufferAttribute(new Float32Array(vertices), 3));
+      geometry.setIndex(indices);
+    } else {
+      geometry.attributes.position.array.set(vertices);
+      geometry.attributes.position.needsUpdate = true;
+      if (indices.some((value, i) => value !== geometry.index.array[i])) {
+        geometry.index.array.set(indices); geometry.index.needsUpdate = true;
+      }
+    }
+    geometry.computeVertexNormals(); geometry.computeBoundingSphere();
     hand.visible = true; state.update({joints, valid: true}); received++;
     presentation = origin.kind === 'retained-prediction' ? 'replay-hand' : 'live-hand'; drawState();
   };
   const infer = ticket => {
     if (!current(ticket) || !sourceFresh() || flight || !app || sourceFrame === lastRequestedFrame) return;
     const revision = configRevision;
-    let capture;
+    let capture, frozen, result, retaining = trial, retentionAttempted=false;
+    const retain = async failure => {
+      if (!retaining || !capture) return;
+      retentionAttempted=true;
+      let image=null, captureError;
+      try{image=await frozen.image;}catch(cause){captureError=cause;}
+      await retaining.append({frameId:capture.frameId,image,inputSource:capture,
+        prediction:result??null,failure:captureError?message(captureError):failure?message(failure):null,effective:read()});
+      retention.frames++;
+      if(captureError)throw captureError;
+    };
     const task = (async () => {
-      const result = await app.infer({handedness, acquisition: {mode: 'detector', threshold: detectorThreshold, padding: 1.4, onMiss: 'skip'},
+      result = await app.infer({handedness, acquisition: {mode: 'detector', threshold: detectorThreshold, padding: 1.4, onMiss: 'skip'},
         getFrame: () => {
           if (!current(ticket) || !sourceFresh() || revision !== configRevision) throw new DOMException('Camera frame superseded', 'AbortError');
           const width = video.videoWidth, height = video.videoHeight;
@@ -214,17 +258,26 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
           capture = {kind: 'live-camera', label: 'Unmirrored camera', width, height, frameId: video.currentTime,
             capturedAtMs: now(), epoch: observationEpoch,
             source: {streamId: stream.id, trackId: track().id, mirrored: false}};
-          return {source: video, width, height, frameId: capture.frameId};
+          frozen=retaining?captureInput(video):{source:video};
+          frozen.image?.catch(()=>{});
+          return {source: frozen.source, width, height, frameId: capture.frameId};
         }});
-      if (!current(ticket) || revision !== configRevision || !capture || capture.epoch !== observationEpoch || !sourceFresh()) return;
+      if (!current(ticket) || revision !== configRevision || !capture || capture.epoch !== observationEpoch || !sourceFresh()) {await retain('Prediction superseded');return;}
       const latency = now() - capture.capturedAtMs;
       inferenceLatencyMs = Math.max(inferenceLatencyMs ?? 0, latency);
       lastCaptureAt = capture.capturedAtMs;
       present(result, capture, app.faces);
-    })().catch(cause => {
+      await retain();
+    })().catch(async cause => {
+      try {if (!retentionAttempted && frozen) await retain(cause);}
+      catch(failure){retention.error=message(failure);retention.status='failed';}
+      if(retaining && retentionAttempted && !retention.error){retention.error=message(cause);retention.status='failed';}
       if (!current(ticket) || revision !== configRevision || cause?.name === 'AbortError') return;
       failCamera(cause);
-    }).finally(() => {if (flight === task) flight = null;});
+    }).finally(async () => {
+      if (!running) await finishTrial()?.catch(cause=>{error=message(cause);sync();});
+      if (flight === task) flight = null;
+    });
     flight = task;
   };
   const observeFrame = (ticket, mediaTime) => {
@@ -247,8 +300,13 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     inputSource = {kind: 'live-camera', label: 'Unmirrored camera', source: null};
     lose('starting-camera');
     try {
-      await flight?.catch(() => {}); if (!current(ticket)) return read();
+      await flight?.catch(() => {}); await trialFinish?.catch(()=>{}); if (!current(ticket)) return read();
       await load(); if (!current(ticket)) return read();
+      if(retainTrial){
+        const created=await createRetention({source:{kind:'operator-camera-trial',packages,registration:registration.identity,view:session.readView(),initial:state.read()}});
+        if(!current(ticket)){await created.finish({cancelled:true});created.close();return read();}
+        trial=created;retention={status:'recording',id:created.id,frames:0,error:null};
+      } else retention={status:'disabled',id:null,frames:0,error:null};
       // No requested resolution/frame-rate caps: use the camera's actual route.
       const acquired = await getUserMedia({video: true, audio: false});
       if (!current(ticket)) {acquired.getTracks().forEach(item => item.stop()); return read();}
@@ -267,7 +325,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       inferenceLatencyMs = null; last = null; placement = null; received = 0;
       running = true; starting = false; blocked = false; lose('awaiting-frame'); schedule(ticket);
       return applied('start');
-    } catch (cause) {if (current(ticket)) {failCamera(cause); throw cause;} return read();}
+    } catch (cause) {if (current(ticket)) {failCamera(cause);await finishTrial();throw cause;} return read();}
     finally {if (current(ticket)) {starting = false; sync();}}
   };
   const frame = () => {assertOpen(); session.setView({position: [0, .25, .75], target: [0, .25, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
@@ -284,6 +342,21 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   drawState(); frame();
   const operations = {
     load, start, stop, frame,
+    setRetainTrial(value) {assertOpen();if(running||starting)throw Error('Stop camera before changing trial recording');retainTrial=Boolean(value);remember();return applied('retain-trial');},
+    async readTrial() {
+      if(!retention.id)throw Error('No recorded trial');
+      const {readHandReachTrial}=await import('../models/mobrecon/hand-reach-retention.js');
+      return readHandReachTrial({id:retention.id});
+    },
+    async exportTrial() {
+      let stopError=null;
+      try {await stop();}catch(cause){stopError=message(cause);}
+      const retained=await operations.readTrial();
+      for(const row of retained.frames) if(row.image) row.image=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(row.image);
+      });
+      return {filename:`hand-reach-${retention.id}.json`,text:JSON.stringify({...retained,stopError},(_key,value)=>ArrayBuffer.isView(value)?Array.from(value):value)};
+    },
     setHandedness(value) {assertOpen(); handedness = side(value); configRevision++; lose('awaiting-frame'); remember(); return applied('hand');},
     setThreshold(value) {assertOpen(); detectorThreshold = thresholdValue(value); configRevision++; lose('awaiting-frame'); remember(); return applied('threshold');},
     setFocalRatio(value) {assertOpen(); focalRatio = positive(value, 'Focal ratio'); configRevision++; lose('awaiting-frame'); remember(); return applied('focal-ratio');},
@@ -325,6 +398,20 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       status = doc.createElement('div'); status.setAttribute('role', 'status'); status.dataset.handReachStatus = '';
       status.style.cssText = 'font-size:12px;overflow-wrap:anywhere';
       panel.append(commands, handLabel, status);
+      const recordingLabel=doc.createElement('label'),recordingInput=doc.createElement('input');
+      recordingInput.type='checkbox';recordingInput.checked=retainTrial;
+      recordingInput.addEventListener('change',()=>call('setRetainTrial',recordingInput.checked).finally(()=>{recordingInput.checked=retainTrial;}));
+      const recordingText=doc.createElement('span');recordingText.textContent='Record trial locally';
+      recordingLabel.append(recordingInput,recordingText);panel.append(recordingLabel);
+      // Export is the same operation for human and agent; the UI only delivers its file.
+      const download=doc.createElement('button');download.type='button';download.textContent='Save trial';
+      download.addEventListener('click',async()=>{
+        try{
+          const result=await invoke('exportTrial'),url=URL.createObjectURL(new Blob([result.text],{type:'application/json'}));
+          const link=doc.createElement('a');link.href=url;link.download=result.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
+        }catch(cause){error=message(cause);sync();}
+      });
+      panel.append(download);
       const number = (parent, label, key, step, action, min, max) => {
         const row = doc.createElement('label'); row.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:0';
         const grip = doc.createElement('span'); grip.textContent = label; grip.style.flex = '1';
