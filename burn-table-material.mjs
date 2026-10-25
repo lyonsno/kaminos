@@ -83,7 +83,9 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   if(!['partial','whole'].includes(coverage))throw Error('Invalid burn coverage');
   const {uniform,float,vec3,positionLocal,normalLocal,materialNormal,materialColor,materialRoughness,materialMetalness,mix,transformNormalToView,smoothstep}=THREE.TSL;
   const config=checkedBurnControls(settings);
-  const incineration=original.userData?.kaminosBurnAppearance==='incineration';
+  const appearanceSelectable=['incineration','crust'].includes(original.userData?.kaminosBurnAppearance);
+  let incineration=original.userData?.kaminosBurnAppearance==='incineration';
+  const appearanceMix=uniform(Number(incineration));
   const glow=uniform(20);
   const controls=uniform(new THREE.Vector3(config.heat,config.char,config.reaction));
   const clock=uniform(0), profile=uniform(config.profile==='metal'?1:0);
@@ -108,22 +110,22 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   const redToOrange=mix(vec3(.7,.008,.001),vec3(1,.12,.008),smoothstep(.55,.88,sample.x));
   const hotColor=mix(redToOrange,vec3(1,.42,.055),smoothstep(.88,1,sample.x));
   material.emissiveNode=hotColor.mul(sample.z.mul(5));
-  if(incineration){
+  if(appearanceSelectable){
     if(!stateNode||!presenceNode)throw Error('Incineration appearance requires resident heat and material coverage');
     const front=incinerationNode({state:stateNode,facets,p}).toVar('incinerationFrontData');
-    material.colorNode=materialColor.rgb.mul(mix(float(1),float(.018),front.y));
-    material.roughnessNode=mix(materialRoughness,float(.97),front.y);
+    material.colorNode=mix(material.colorNode,materialColor.rgb.mul(mix(float(1),float(.018),front.y)),appearanceMix);
+    material.roughnessNode=mix(material.roughnessNode,mix(materialRoughness,float(.97),front.y),appearanceMix);
     const ember=mix(vec3(1,.006,.0006),vec3(1,.16,.006),smoothstep(.25,.7,front.w));
     const incandescent=mix(ember,vec3(1,.82,.42),smoothstep(.72,1,front.w));
-    material.emissiveNode=incandescent.mul(front.z).mul(glow);
+    material.emissiveNode=mix(material.emissiveNode,incandescent.mul(front.z).mul(glow),appearanceMix);
   }
   // Diagnostic emission is unlit data; the beauty response stays unchanged.
   const diagnostic=mix(vec3(sample.y),vec3(sample.x,0,0),inspection.greaterThan(1.5));
   material.colorNode=mix(material.colorNode,vec3(0),inspection.greaterThan(.5));
   material.emissiveNode=mix(material.emissiveNode,diagnostic,inspection.greaterThan(.5));
   material.outputNode=inspection.greaterThan(.5).select(THREE.TSL.vec4(diagnostic,1),THREE.TSL.output);
-  return {material,setAppearance(value){if(!incineration)throw Error('No incineration appearance on this material');if(!Number.isFinite(value.glow)||value.glow<0)throw Error('Invalid incineration glow');glow.value=value.glow;},update(seconds,displayed=material){clock.value=seconds;for(const target of new Set([material,displayed])){target.color.copy(original.color);target.roughness=original.roughness;target.metalness=original.metalness;}},setView(next){if(!['beauty','char','heat'].includes(next))throw Error('Invalid burn view');view=next;inspection.value=['beauty','char','heat'].indexOf(next);},set(next){if(stateNode)throw Error('Live thermal state is GPU-owned');const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
-    read:()=>({appearanceModel:incineration?'incineration-front-v1':'char-facet-crust-v1',appearance:incineration?{glow:glow.value}:null,sourceMaterial:original.uuid,
+  return {material,setAppearance(value){if(!appearanceSelectable)throw Error('No incineration appearance on this material');const nextGlow=value.glow??glow.value,nextProfile=value.profile??(incineration?'incineration':'crust');if(!Number.isFinite(nextGlow)||nextGlow<0)throw Error('Invalid incineration glow');if(!['crust','incineration'].includes(nextProfile))throw Error('Unknown kiln appearance');glow.value=nextGlow;incineration=nextProfile==='incineration';appearanceMix.value=Number(incineration);original.userData.kaminosBurnAppearance=nextProfile;},update(seconds,displayed=material){clock.value=seconds;for(const target of new Set([material,displayed])){target.color.copy(original.color);target.roughness=original.roughness;target.metalness=original.metalness;}},setView(next){if(!['beauty','char','heat'].includes(next))throw Error('Invalid burn view');view=next;inspection.value=['beauty','char','heat'].indexOf(next);},set(next){if(stateNode)throw Error('Live thermal state is GPU-owned');const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
+    read:()=>({appearanceModel:incineration?'incineration-front-v1':'char-facet-crust-v1',appearanceSelectable,appearance:appearanceSelectable?{glow:glow.value,profile:incineration?'incineration':'crust'}:null,sourceMaterial:original.uuid,
       view,coverage:stateNode?'resident':coverage,
       stateAuthority:stateIdentity||'synthetic-held-exposure-v1',
       controls:stateNode?null:{heat:controls.value.x,char:controls.value.y,reaction:controls.value.z,profile:profile.value===1?'metal':'wood'},

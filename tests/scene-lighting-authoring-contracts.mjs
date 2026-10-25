@@ -155,6 +155,7 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
       sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'})},document:{body:{dataset:{}}},prePassDepth:{},
       URLSearchParams,location:{search:''},
+      sceneBloom:{read:()=>({settings:{enabled:false}}),output:value=>value},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
       fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
     vm.runInContext(part('  const aoVisibility =','  const sceneGI =')

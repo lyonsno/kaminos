@@ -136,16 +136,17 @@ test('the actual domain helper retires when its field is absent and survives tog
   activeSceneComposition={};refresh();assert.equal(flameDomainGuide.visible,true);assert.equal(scene.children.length,1);
 });
 
-test('both actual GI graph arms preserve ordinary final display while shared water captures raw input',()=>{
-  for(const cached of [false,true]) {
+test('both actual GI graph arms preserve raw input and optional display bloom',()=>{
+  for(const enabled of [false,true])for(const cached of [false,true]) {
     const sceneGISettings={mode:'gtao',view:'scene',denoise:1,temporal:false},document={body:{dataset:{}}},localLiquidHost={};
     const scenePass={},prePassDepth={},prePassNormal={},sceneGI={debugState:()=>({filterImplementation:'shared'})};let activeSceneDepth,fireLightFieldPass;
     let rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera=null;
-    const renderPipeline={outputColorTransform:false},selectionFeedback={output:x=>x};
+    const raw={},bloomed={};const renderPipeline={outputColorTransform:false},selectionFeedback={output:x=>x};
+    const sceneBloom={read:()=>({settings:{enabled}}),output:value=>{assert.equal(value,raw);return enabled?bloomed:value;}};
     const sharedGpu={device:{}},isFireLightFieldRoute=()=>true,fireLightFieldRouteParams=()=>new URLSearchParams();
-    const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:{}});
-    const giOutputGraphs=new Map(cached?[['shared:gtao:true:false:true:false',{rawSceneOutput:{},outlinedSceneOutput:{},outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
+    const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:raw});
+    const cachedOutput=enabled?bloomed:raw;const giOutputGraphs=new Map(cached?[[`shared:gtao:true:false:true:false:${enabled}`,{rawSceneOutput:raw,outlinedSceneOutput:cachedOutput,outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
     const a=source.indexOf('  function rebuildSceneGIOutput()'),b=source.indexOf('  updateSceneGI =',a);
-    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.ok(rawSceneOutput);
+    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.equal(rawSceneOutput,raw,'raw lighting must not include display bloom');assert.equal(renderPipeline.outputNode,cachedOutput,'both cache arms must use the requested display stage');
   }
 });
