@@ -43,7 +43,7 @@ finally{
  if(group===process.pid){
   for(;;){
    const rows=execFileSync('ps',['-axo','pid=,pgid=,comm='],{encoding:'utf8'}).split('\n').filter(row=>{
-    const parts=row.trim().split(/\s+/);return Number(parts[1])===group&&Number(parts[0])!==process.pid&&parts.slice(2).join(' ')!=='ps';
+    const parts=row.trim().split(/\s+/);return Number(parts[1])===group&&Number(parts[0])!==process.pid&&path.basename(parts.slice(2).join(' '))!=='ps';
    });
    if(!rows.length)break;
    report.remainingOwnedGroup=rows;await save();
