@@ -14,7 +14,7 @@ export function createCreatureArticulation({THREE,group,bones,caseSha256,update}
  };
  const rest=capture();let base=structuredClone(rest),rotations={},label='Rest pose';
  function assign(o,values){const {p,q,s}=validateMatrix(values);o.position.copy(p);o.quaternion.copy(q);o.scale.copy(s);}
- function apply(){assign(group,base.actor);for(const b of base.bones){const bone=bones.get(b.name);assign(bone,b.matrix);const angles=rotations[b.name]??[0,0,0];bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles.map(x=>x*Math.PI/180),'XYZ')));}group.updateMatrixWorld(true);update();}
+ function apply(){assign(group,base.actor);for(const b of base.bones){const bone=bones.get(b.name);assign(bone,b.matrix);const angles=rotations[b.name]??[0,0,0];bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles.map(x=>x*(Math.PI/180)),'XYZ')));}group.updateMatrixWorld(true);update();}
  function commit(nextBase,nextRotations,nextLabel){validate(nextBase,nextRotations);if(typeof nextLabel!=='string')throw Error('Pose label required');const before={base,rotations,label};base=structuredClone(nextBase);rotations=structuredClone(nextRotations);label=nextLabel;try{apply();}catch(e){({base,rotations,label}=before);apply();throw e;}return read();}
  function read(){return {base:label,rotations:structuredClone(rotations),joints:names.map(name=>({name,parent:bones.get(name).parent?.isBone?bones.get(name).parent.name:null,degrees:[...(rotations[name]??[0,0,0])]}))};}
  return Object.freeze({read,snapshot:()=>({schema:'kaminos.creature-articulation.v1',caseSha256,base:label,pose:structuredClone(base),rotations:structuredClone(rotations)}),
