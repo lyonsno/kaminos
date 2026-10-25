@@ -27,9 +27,9 @@ assert.equal(136 % 8, 0, '136 preserves the structure-grid divisor');
 
 assertRange('volume-render-scale', { min: '0.1', max: '1', step: 'any' });
 const scaleControl=control('volume-render-scale');assert.match(scaleControl,/step="any"/, 'render scale retains exact values instead of quantizing authored fractions');
-assert.match(index,/renderScale: readVolumeRenderScaleControlValue\(\)/,'runtime capture retains exact render scale');
+assert.match(index,/renderScale: readVolumeRenderScaleControlValue\((?:document)?\)/,'runtime capture retains exact render scale');
 assert.match(core, /return Math\.max\(0\.1, Math\.min\(1, requested\)\)/, 'the runtime still accepts exact full resolution and legacy preset values');
-assert.match(index,/function readVolumeRenderScaleControlValue\(\)[\s\S]*value/, 'source render scale reads its numeric control');
+assert.match(index,/function readVolumeRenderScaleControlValue\((?:document=globalThis.document)?\)[\s\S]*value/, 'source render scale reads its numeric control');
 assert.match(index, /id="raymarch-smoke-presentation-control"[^>]+data-requested-mode="on"/, 'Smoke On/Off owns stable authored requested state');
 assert.match(index, /function readRaymarchSmokePresentationRequestedMode\(\)[\s\S]*dataset\.requestedMode/, 'preset capture reads authored Smoke state from the control surface');
 assert.match(index, /function readVolumeSettingsPresentationControls\(\)[\s\S]*readRaymarchSmokePresentationRequestedMode\(\)[\s\S]*raymarch-smoke-presentation-requested-state-mismatch/, 'preset capture fails loud when authored Smoke state and runtime receipt disagree');

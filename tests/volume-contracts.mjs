@@ -509,7 +509,7 @@ assert.match(index, /windAngle/, 'Volume controls carry explicit wind direction 
 assert.match(index, /windHeight/, 'Volume controls carry explicit wind height/ramp into the renderer');
 assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
 assert.match(index, /id="volume-render-scale" min="0\.1" max="1" step="any"/, 'Volume tab gives the operator exact numeric control over the requested 10–100% raymarch range');
-assert.match(index, /renderScale: readVolumeRenderScaleControlValue\(\)/, 'runtime uses the exact full-range render resolution');
+assert.match(index, /renderScale: readVolumeRenderScaleControlValue\((?:document)?\)/, 'runtime uses the exact full-range render resolution');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
 assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
