@@ -1,8 +1,8 @@
 # BFL prompt helper: browser conversion
 
 This directory builds ONNX components for the exact
-`black-forest-labs/flux-3-image-klein-pup` Qwen3.5-9B fine-tune. Component
-construction is in progress; a working browser helper is not established yet.
+`black-forest-labs/flux-3-image-klein-pup` Qwen3.5-9B fine-tune. The Q4 browser package has produced coherent, EOS-terminated text-only and
+image-conditioned expansions through WebGPU.
 The existing local MLX trial lives on `cc/thomas-pup-sidecar-1025`.
 
 Use a separate Python 3.12 environment with `requirements-export.txt`. This is
@@ -106,9 +106,12 @@ native grouped recurrence. `tests/bfl-pup-package.py` checks complete external
 tensor bytes and binding/shape rewrites. Node input tests use recorded canonical
 fixtures; backend/worker lifecycle stubs establish rejection, cancellation and
 ownership only. None substitutes for the actual whole-helper browser witness.
-The active trial still needs successful text and image-aware browser generation,
-inspection of those full captions, and consumer composition before the original
-full-precision source can be retired.
+Text-only execution and an image-aware request through the actual worker/page
+have passed, including editable output and exact clipboard text. The original
+18.8 GB BF16 weight was retired after those outputs and source consumers were
+checked; source metadata and the separate MLX Q4 package remain retained.
+Automatic Generate integration and shared-device renderer composition remain
+separate consumer work.
 
 The adapter explicitly loads BFL's `chat_template.jinja`: the pinned Qwen3VL
 processor does not load that file by default. Preparation precedes model
@@ -121,3 +124,19 @@ three-token prompt; canonical Transformers5.20.2 returns delta0 and position3.
 The browser replay after the shim matches those canonical positions. This is
 an input/cache position correction for this pinned runtime, not evidence of
 whole-model output quality. The model's image-aware position path is retained.
+
+The page uses the existing `serve.py` `/api/gpu-lease` endpoint to wait for
+Greenroom before loading weights, renew its lease while working, and release
+after disposal. Cancel ends the owned worker, including model loading.
+Elapsed total covers GPU wait, processor/model setup and disposal; the backend
+expansion and token-generation timings remain separate in Run details.
+A server without Greenroom reports that explicitly; a broken endpoint fails
+before inference. Failed release stays visible and is retried before a later
+request or on page close.
+
+For a local offer, mount the accepted package under the ignored
+`models/bfl-pup-onnx/` directory, then use the normal Kaminos server and open
+`/prompt-expander-browser.html`. The package contains about 5.8 GB of external
+weights. Model tensors execute in the visitor's browser; the server serves
+files and coordinates GPU admission on the shared shop machine. The provider
+operation remains replaceable by the inference-kit implementation.
