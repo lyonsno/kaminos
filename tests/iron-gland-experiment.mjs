@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import * as THREE from '../lib/three.core.js';
 import { handObservation, createHoverController } from '../experiments/iron-gland/interaction.mjs';
 import { createMechanism } from '../experiments/iron-gland/mechanism.mjs';
+import { createVirtualHand } from '../experiments/iron-gland/virtual-hand.mjs';
 import { installOwnerExperimentEntry } from '../owner-experiment-entry.mjs';
 
 // Exercise the actual experiment, substituting only camera, model loading and host I/O.
@@ -12,12 +13,14 @@ const source = (await fs.readFile(new URL('../experiments/iron-gland.experiment.
   .replace(/^import .*;$/gm, '').replace('export default', 'return');
 const compile = new Function('Mesh', 'PlaneGeometry', 'MeshBasicMaterial', 'CanvasTexture', 'SRGBColorSpace',
   'createBrowserHandMeshRoute', 'readLocalModels', 'readServedModels', 'createModelStore',
-  'handObservation', 'createHoverController', 'createMechanism', source);
+  'handObservation', 'createHoverController', 'createMechanism', 'createVirtualHand', source);
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = pinch => {
   const uv = new Float32Array(42).fill(.5);
   for (const [i, x, y] of [[0,.5,.8],[5,.3,.5],[9,.5,.4],[17,.7,.5],[4,.4,.25],[8,.4+pinch*.4,.25]]) { uv[2*i]=x; uv[2*i+1]=y; }
-  return { hasHand:true, handedness:'right', cropUV:uv, cropBox:[100,40,300,240], acquisition:{fallback:false} };
+  const verticesMeters = new Float32Array(778*3);
+  verticesMeters.set([.04,-.07,0],62*3); verticesMeters.set([-.04,-.07,0],595*3);
+  return { hasHand:true, handedness:'right', verticesMeters, cropUV:uv, cropBox:[100,40,300,240], acquisition:{fallback:false} };
 };
 async function fixture() {
   const tracks = [];
@@ -32,24 +35,25 @@ async function fixture() {
   const makeStream = () => {const t=new Track();tracks.push(t);return {getTracks:()=>[t],getVideoTracks:()=>[t]};};
   const video = { videoWidth:640, videoHeight:480, play:async()=>{},
     requestVideoFrameCallback(fn) { this.callback=fn; return 1; }, cancelVideoFrameCallback() { this.callback=null; } };
-  const window = Object.assign(new EventTarget(), {innerWidth:1440,innerHeight:1000,indexedDB:{},
+  const window = Object.assign(new EventTarget(), {Event,innerWidth:1440,innerHeight:1000,indexedDB:{},
     navigator:{mediaDevices:{getUserMedia:async()=>makeStream()}},
     kaminosAppGpu:async()=>({session:async()=>sessionData})});
-  const document = {defaultView:window,getElementById:()=>null,createElement:tag=>{
+  const stageControls=new Map(['show-env-bg','composition-ground-visible'].map(id=>[id,Object.assign(new EventTarget(),{checked:true})]));
+  const document = {defaultView:window,getElementById:id=>stageControls.get(id)??null,createElement:tag=>{
     if(tag==='video')return video;
     if(tag==='canvas')return {width:0,height:0,getContext:()=>({drawImage(){},setTransform(){},resetTransform(){}})};
     throw Error(`unexpected element ${tag}`);
   }};
   let pending = result(.6), frameCallback, disposed=0;
-  const route = {identity:{routeId:'unit-fixture'},infer:()=>Promise.resolve(pending),release(){releases++;}};
+  const route = {identity:{routeId:'unit-fixture'},faces:new Uint16Array([0,1,2]),infer:()=>Promise.resolve(pending),release(){releases++;}};
   const definition = compile(THREE.Mesh,THREE.PlaneGeometry,THREE.MeshBasicMaterial,THREE.CanvasTexture,THREE.SRGBColorSpace,
-    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism);
+    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand);
   const attached=[],events=[];
   const scene = {attach:async(root,options)=>{attached.push({root,options});return {id:root.uuid,root};},
     setView:()=>{},redraw(){},onFrame:fn=>{frameCallback=fn;return()=>{frameCallback=null;};},dispose:async()=>{disposed++;}};
   const owner = await definition.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{},record:e=>events.push(e)});
   await owner.operations.loadModels();
-  return {owner,tracks,attached,events,video,
+  return {owner,tracks,attached,events,video,stageControls,
     makeStream,setCameraRequest:value=>{window.navigator.mediaDevices.getUserMedia=value;},
     setModelData:value=>{modelData=value;},setSessionData:value=>{sessionData=value;},
     get releases(){return releases;},get routeCreations(){return routeCreations;},
@@ -108,19 +112,52 @@ test('asynchronous camera denial remains visible after Start acknowledges initia
   } finally {deny?.(Error('camera permission denied'));await f.owner.dispose();}
 });
 
-test('camera background cannot depth-clip the closed, open or rotated mechanism', async () => {
+test('the visible scene contains the reconstructed hand, never a camera background', async () => {
   const f=await fixture();
   try {
-    const plane=f.attached.find(a=>a.options.presentation).root;
-    const mechanism=f.attached.find(a=>!a.options.presentation).root;
-    assert.equal(plane.material.depthWrite,false,'camera pixels must not occlude the hovering object');
-    assert.equal(plane.material.depthTest,false);
-    assert.ok(plane.renderOrder<mechanism.renderOrder,'background draws before opaque mechanism');
+    assert.equal(f.attached.some(a=>a.options.metadata?.source==='live-camera:iron-gland'),false,
+      'camera frames are inference input, not displayed scene content');
     await f.owner.operations.start();
     await f.frame(result(.6)); await f.frame(result(.2));
-    const box=new THREE.Box3().setFromObject(mechanism);
-    assert.ok(box.min.z<plane.position.z,'fixture actually exercises geometry behind the camera plane');
+    assert.equal(f.owner.read().cameraVisible,false);
+    assert.equal(f.owner.read().handVisible,true);
   } finally { await f.owner.dispose(); }
+});
+
+test('overlapping option changes merge without reviving a later Stop', async()=>{
+  const f=await fixture();let complete,first,second,stopping;
+  try {
+    await f.owner.operations.start();await f.frame(new Promise(resolve=>{complete=resolve;}));
+    first=f.owner.operations.setOptions({size:1.7});
+    second=f.owner.operations.setOptions({threshold:.3});
+    stopping=f.owner.operations.stop();
+    complete(result(.6));await Promise.all([first,second,stopping]);await flush();
+    assert.equal(f.owner.read().size,1.7);
+    assert.equal(f.owner.read().threshold,.3);
+    assert.equal(f.owner.read().running,false,'a later Stop supersedes an options restart');
+    assert.equal(f.owner.read().starting,false);
+    assert.equal(f.tracks.length,1,'options must not reacquire after Stop');
+  }finally{complete?.(result(.6));await Promise.all([first,second,stopping]);await f.owner.dispose();}
+});
+
+test('later Stop supersedes a single pending options restart',async()=>{
+  const f=await fixture();let complete,options,stop;
+  try{
+    await f.owner.operations.start();await f.frame(new Promise(r=>{complete=r;}));
+    options=f.owner.operations.setOptions({size:1.4});stop=f.owner.operations.stop();
+    complete(result(.6));await Promise.all([options,stop]);await flush();
+    assert.equal(f.owner.read().running,false);assert.equal(f.owner.read().starting,false);
+    assert.equal(f.tracks.length,1);
+  }finally{complete?.(result(.6));await Promise.all([options,stop]);await f.owner.dispose();}
+});
+
+test('dark stage restores borrowed settings but preserves subsequent scene edits',async()=>{
+  const f=await fixture();
+  assert.ok([...f.stageControls.values()].every(c=>!c.checked));
+  const edited=f.stageControls.get('show-env-bg');edited.dispatchEvent(new Event('change'));
+  await f.owner.dispose();
+  assert.equal(edited.checked,false,'a subsequent editor choice is retained');
+  assert.equal(f.stageControls.get('composition-ground-visible').checked,true,'unmodified borrowed setting is restored');
 });
 
 test('model replacement is rejected while stopped inference drains, then succeeds', async () => {

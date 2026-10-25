@@ -11,7 +11,9 @@ export function verifyFrame(state, { after = 0, threshold }) {
   assert.equal(state.running, true);
   assert.equal(state.error, null);
   assert.ok(state.frameCount > after, 'a new inference result must be presented');
-  assert.equal(state.cameraVisible, true);
+  assert.equal(state.cameraVisible, false);
+  assert.equal(state.handVisible, true);
+  assert.equal(state.view, 'opposite-camera');
   assert.equal(state.interaction.visible, true);
   assert.ok(state.interaction.anchor.every(Number.isFinite));
   assert.ok(Number.isFinite(state.interaction.span) && state.interaction.span > 0);
