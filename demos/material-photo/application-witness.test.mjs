@@ -21,7 +21,7 @@ test('real rendering wait admits healthy optional-error state and exposes actual
   }
 });
 
-for (const corrupt of [false, true]) test(`retained output corruption is ${corrupt ? 'rejected' : 'absent across the complete lifecycle'}`, async () => {
+for (const {corrupt, fast} of [{corrupt:false,fast:false}, {corrupt:true,fast:false}, {corrupt:false,fast:true}]) test(`retained output corruption is ${corrupt ? 'rejected' : 'absent across the complete lifecycle'}; fast material duty ${fast}`, async () => {
   const { exercisePhotoApplications } = await import('./application-witness.mjs');
   const geometry = () => ({ width: 1, height: 1, depth: new Float32Array([1]),
     normals: new Float32Array([0, 0, 1]), points: new Float32Array([0, 0, 1]), colors: new Float32Array([1, 0, 0]) });
@@ -36,7 +36,7 @@ for (const corrupt of [false, true]) test(`retained output corruption is ${corru
       async infer({ signal, onRunProgress }) {
         active = true; calls++; onRunProgress?.({ duties: 1 });
         try {
-          if (calls === (kind === 'geometry' ? 1 : 2)) await new Promise((resolve, reject) => {
+          if (calls === (kind === 'geometry' ? 1 : 2) && !(kind === 'materials' && fast && !paused)) await new Promise((resolve, reject) => {
             signal.addEventListener('abort', () => {
               if (kind === 'materials' && corrupt) retained.output.maps.albedo.data.fill(0);
               reject(new DOMException('stopped', 'AbortError'));

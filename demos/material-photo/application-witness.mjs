@@ -48,33 +48,40 @@ export async function exercisePhotoApplications(page, out, report, save) {
     window.__photoLifecycle = { apps, operation: createMaterialPhotoOperation(apps), baseline };
   });
   const baseline = await capture('baseline');
-  const start = async retained => page.evaluate(retained => {
+  const start = async (retained, interrupt = false) => page.evaluate(({retained, interrupt}) => {
     const test = window.__photoLifecycle;
-    test.terminal = null; test.progress = []; test.current = null;
+    test.terminal = null; test.progress = []; test.current = null; test.pauseRequest = null;
     test.pending = test.operation.infer({ image: test.baseline.image, size: test.baseline.output.width,
       ...(retained ? { depth: test.baseline.geometry } : {}),
-      onProgress: event => test.progress.push(event),
+      onProgress: event => {
+        test.progress.push(event);
+        // Request at the observed retired duty, before a fast model can finish
+        // between two browser-protocol messages. Never await pause in the callback.
+        if (interrupt && retained && event.stage === 'materials' && event.detail?.duties > 0 && !test.pauseRequest) {
+          test.pauseRequest = test.apps.materials.pause();
+          test.pauseRequest.catch(() => {});
+        }
+      },
     }).then(result => {
       test.current = { image: test.baseline.image, geometry: result.depth, output: result.maps };
       test.terminal = { status: 'resolved' };
     }, error => { test.terminal = { status: 'rejected', name: error.name, message: error.message }; });
-  }, retained);
+  }, {retained, interrupt});
 
   for (const stage of ['geometry', 'materials']) {
     state.phase = `${stage}-cancellation`; await save();
     const displayedBefore = await page.evaluate(() => window.__materialPhotoActions.presentation().physicalbaseline.activeMaterial.mapUUID);
-    await start(stage === 'materials');
+    await start(stage === 'materials', true);
     // For materials require an actual retired producer duty. Geometry exposes the
     // control's active work boundary, which can include CPU preparation/yield work.
     await page.waitForFunction(stage => {
       const t = window.__photoLifecycle;
-      return t.terminal || (t.apps[stage].snapshot().control?.activeDutyCount > 0 &&
-        (stage === 'geometry' || t.progress.some(e => e.stage === 'materials' && e.detail?.duties > 0)));
+      return t.terminal || (stage === 'materials' ? Boolean(t.pauseRequest) : t.apps[stage].snapshot().control?.activeDutyCount > 0);
     }, stage);
     const paused = await page.evaluate(async stage => {
       const t = window.__photoLifecycle;
       if (t.terminal) throw Error('Inference terminated before the requested interruption');
-      await t.apps[stage].pause();
+      await (stage === 'materials' ? t.pauseRequest : t.apps[stage].pause());
       return t.apps[stage].snapshot().control;
     }, stage);
     const framesBefore = await page.evaluate(() => window.__materialPhotoActions.presentation().renderCallbacks.duringModel);
