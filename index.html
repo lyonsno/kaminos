@@ -2855,6 +2855,7 @@ import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSource
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
 import {createSceneBloom} from './scene-bloom.mjs';
+import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
 import {bloom} from './lib/addons/tsl/display/BloomNode.js';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
@@ -3011,6 +3012,7 @@ function refreshRenderingControls() {
 }
 let ordinarySceneDepthProvider = null;
 let authoredWaterFlameTransportActive = false;
+let authoredFlameHDRActive = false;
 let compositionHost = null;
 
 // Fire light-field route params may ride the URL HASH as well as the query:
@@ -11118,13 +11120,22 @@ async function initScene() {
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
   let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
+  let sceneEmissionSource=null,sceneFlameHDR=null;
   const sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
-  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')}),set(settings){sceneBloom.set(settings);return this.read();}};
+  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){sceneBloom.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
+    if(sceneBloom.read().settings.enabled||sceneBloom.read().settings.composeFlame){
+      const beauty=combined?sceneGI.beauty:scenePass;
+      if(!beauty.getMRT()?.outputNodes?.emissive){
+        beauty.setMRT(mrt({output:THREE.TSL.output,...beauty.getMRT()?.outputNodes,emissive:THREE.TSL.emissive}));
+        beauty.renderTarget.dispose();beauty.needsUpdate=true;
+      }
+      sceneEmissionSource=beauty.getTextureNode('emissive');
+    }
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
     const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
@@ -11148,7 +11159,7 @@ async function initScene() {
     renderPipeline.outputNode = baseSceneOutput;
   }
   rawSceneOutput=renderPipeline.outputNode;
-  const displaySceneOutput=diagnostic?rawSceneOutput:sceneBloom.output(rawSceneOutput);
+  const displaySceneOutput=diagnostic?rawSceneOutput:sceneBloom.output(rawSceneOutput,sceneEmissionSource);
   sceneEmissiveCamera=null;
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
     sceneEmissiveCamera=createSceneEmissiveCamera(displaySceneOutput,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE});
@@ -11613,7 +11624,10 @@ async function initScene() {
       &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
       &&localLiquidHost?.supportsVolumeTransport===true&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
       &&prototype?.isActive?.()===true;
-    if(transportPrototype&&(!wanted||transportPrototype!==prototype)) {
+    const wantedHDR=typeof sceneBloom!=='undefined'&&sceneBloom.read().settings.composeFlame&&!localLiquidHost
+      &&ordinaryDepthEnabled&&isSceneItemVisible('flame-field')&&viewportDisplay.fire==='full'&&prototype?.isActive?.()===true
+      &&(typeof sceneGISettings==='undefined'||sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene');
+    if(transportPrototype&&(!(wanted||wantedHDR)||transportPrototype!==prototype)) {
       transportPrototype.setSceneTransportConsumer(null);
       if(!fireProxySync?.state().presentationSuppressed)transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
       transportPrototype=null;
@@ -11621,12 +11635,13 @@ async function initScene() {
     // Release the proxy's temporary canvas hiding before transport snapshots
     // ordinary presentation. Later proxy reconciliation is then idempotent.
     syncFireProxy();
-    if(wanted&&!transportPrototype) {
+    if((wanted||wantedHDR)&&!transportPrototype) {
       prototype.setSceneTransportConsumer(consumeSceneTransportFrame);
       transportCanvasVisibility=prototype.canvasElement().style.visibility;
       transportPrototype=prototype;
     }
-    authoredWaterFlameTransportActive=!!transportPrototype;
+    authoredWaterFlameTransportActive=!!transportPrototype&&wanted;
+    authoredFlameHDRActive=!!transportPrototype&&wantedHDR;
     if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
   }
   window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
@@ -11660,7 +11675,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     if(exclusiveInspectionRender&&!manualInspectionRender)return false;
-    if(authoredWaterFlameTransportActive&&!ordinarySceneTransportFrame)return false;
+    if((authoredWaterFlameTransportActive||authoredFlameHDRActive)&&!ordinarySceneTransportFrame)return false;
     renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
@@ -11716,6 +11731,10 @@ async function initScene() {
           renderPipeline.render();
           setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
         }
+      } else if(authoredFlameHDRActive&&ordinarySceneTransportFrame){
+        sceneFlameHDR??=createSceneFlameHDR({renderer,camera,device:sharedGpu.device,bloom:sceneBloom,decorate:node=>selectionFeedback.output(node)});
+        sceneFlameHDR.render({frame:ordinarySceneTransportFrame,input:rawSceneOutput,emissionInput:sceneEmissionSource,depthInput:activeSceneDepth,
+          matched:document.getElementById('rendering-match-flame-camera').checked,physical:volumePrototype.emissiveCameraState()});
       } else renderPipeline.render();
     }));
     // Copy the surface records this frame's step wrote; queue order puts the
@@ -11996,7 +12015,7 @@ async function initScene() {
       // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
       const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
           if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
-        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')&&!authoredWaterFlameTransportActive?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')&&!(authoredWaterFlameTransportActive||authoredFlameHDRActive)?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>workingScene.objects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>window.selectSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
@@ -25063,7 +25082,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
     const capture = captureComposedCanvases({
       crop,
       host: renderer.domElement,
-      volume: activeSceneComposition && isSceneItemVisible('flame-field') && !authoredWaterFlameTransportActive ? volumePrototype.canvasElement() : null,
+      volume: activeSceneComposition && isSceneItemVisible('flame-field') && !(authoredWaterFlameTransportActive||authoredFlameHDRActive) ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });

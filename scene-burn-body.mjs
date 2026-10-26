@@ -30,7 +30,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame})
     mesh.material=Array.isArray(original)?converted:converted[0];
     const coverage={owner:mesh,read:()=>({...field.residentState(),texture:field.texture,device:field.device,revision:field.read().generation+':'+field.read().steps})};
     releases.push(bindResidentLightCoverage(mesh,coverage));
-    debris=await createLogDebrisGpu({renderer,field,ground:ground(),onFrame});
+    debris=await createLogDebrisGpu({renderer,field,ground:ground(),onFrame,thermalControls:bindings[0]?.thermalControls});
     releases.push(bindResidentLightCoverage(debris.caps,coverage));debris.caps.castShadow=true;
     // Detached fragments remain world-space presentation, never a separately editable object.
     debris.root.userData.kaminosEditorHelper=true;scene.add(debris.root);

@@ -16,7 +16,7 @@ function material(appearance){
 }
 test('incineration is opt-in, preserves authored maps and uses the resident material coverage',()=>{
  const {binding,original,presence}=material('incineration');
- assert.equal(binding.read().appearanceModel,'incineration-front-v1');
+ assert.equal(binding.read().appearanceModel,'thermal-incineration-v1');
  assert.equal(binding.read().stateAuthority,'resident-test');
  assert.equal(binding.material.map,original.map);assert.equal(binding.material.normalMap,original.normalMap);
  assert.equal(binding.material.opacityNode,presence);assert.equal(binding.material.alphaTest,.5);
@@ -28,5 +28,15 @@ test('incineration is opt-in, preserves authored maps and uses the resident mate
 });
 test('ordinary burn materials retain the existing crust appearance',()=>{
  const {binding,original}=material(undefined);assert.equal(binding.read().appearanceModel,'char-facet-crust-v1');
+ binding.dispose();original.dispose();
+});
+
+test('thermal appearance composes the original scorch and reports the shared thermal law',()=>{
+ const {binding,original}=material('incineration');
+ assert.equal(binding.read().scorchResponse,'char-facet-crust-v1');
+ assert.equal(binding.read().emissionAuthority,'resident-temperature-planck-lut-v1');
+ assert.equal(binding.read().thermal.kelvinPerHeat,1600);
+ binding.setAppearance({kelvinPerHeat:1200});assert.equal(binding.read().thermal.kelvinPerHeat,1200);
+ const before=binding.read();assert.throws(()=>binding.setAppearance({kelvinPerHeat:NaN,glow:3}),/Kelvin/);assert.deepEqual(binding.read(),before);
  binding.dispose();original.dispose();
 });

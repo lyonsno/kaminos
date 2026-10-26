@@ -4,13 +4,13 @@ import {checkedSceneBloom} from '../scene-bloom.mjs';
 
 export default {id:'inference-kiln-material',title:'Inference Kiln · material',async create({host,inputs={},record}){
  const doc=host.controls.document,app=doc.defaultView.kaminosSceneAuthoring;
- const bloom=doc.defaultView.kaminosSceneBloom,bloomSettings=checkedSceneBloom({enabled:true,...inputs.bloom});
- let restoreBloom,glow=inputs.glow??20,syncFields=()=>{};
+ const bloom=doc.defaultView.kaminosSceneBloom,bloomSettings=checkedSceneBloom({enabled:true,composeFlame:true,...inputs.bloom});
+ let cameraMatch,savedCameraMatch,lastKelvin,restoreBloom,glow=inputs.glow??1,syncFields=()=>{};
  if(!Number.isFinite(glow)||glow<0)throw Error('Invalid incineration glow');
  if(inputs.appearance!==undefined&&!['crust','incineration'].includes(inputs.appearance))throw Error('Unknown kiln appearance');
  if(inputs.prompt!==undefined&&(typeof inputs.prompt!=='string'||!inputs.prompt.trim()))throw Error('Enter a prompt to burn');
  const session=await host.scene.open();
- const applyGlow=()=>{if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{glow});};
+ const applyGlow=()=>{if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{glow,kelvinPerHeat:Number(doc.getElementById('volume-physical-kelvin-per-heat')?.value??1600)});};
  let kiln,asset,flame,runtime,restore,emitter,emitterPose,paused,ground,groundVisible,stop=()=>{},closed=false,pulse=0,status,mode='lettering',ignitionStart=0;
  const assertOpen=()=>{if(closed)throw Error('Material study is closed');};
  const setFeed=enabled=>flame.setControls({'volume-flow-rate':enabled?2.5:0,'volume-immersed-fuel':enabled?.55:0});
@@ -22,9 +22,10 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   app.setBurnable(asset.id,false);await settle();runtime.resetThermalExperimentFluid();app.setBurnable(asset.id,true);await settle();applyGlow();session.redraw();sync();return read();};
  async function dispose(){if(closed)return;closed=true;stop();
   try{if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,false);await settle();}}
-  finally{try{await session.dispose();}finally{kiln?.dispose();if(restoreBloom)bloom.set(restoreBloom);if(restore)flame.setControls(restore);if(emitterPose&&host.scene.objects().some(row=>row.id===emitter.id))host.scene.setTransform(emitter.id,emitterPose);if(runtime)runtime.setSimulationPaused(paused);if(ground){ground.checked=groundVisible;ground.onchange({target:ground});}}}
+  finally{try{await session.dispose();}finally{kiln?.dispose();if(restoreBloom)bloom.set(restoreBloom);if(cameraMatch)cameraMatch.checked=savedCameraMatch;if(restore)flame.setControls(restore);if(emitterPose&&host.scene.objects().some(row=>row.id===emitter.id))host.scene.setTransform(emitter.id,emitterPose);if(runtime)runtime.setSimulationPaused(paused);if(ground){ground.checked=groundVisible;ground.onchange({target:ground});}}}
  }
  try{
+  cameraMatch=doc.getElementById('rendering-match-flame-camera');savedCameraMatch=cameraMatch?.checked;if(cameraMatch)cameraMatch.checked=true;
   await host.volume.ready;flame=await host.flame.open();if(!flame.read().active)throw Error('Open this material study through inference-kiln-study.html?material=1');
   runtime=host.volume.get();paused=runtime.debugState().simulationPaused===true;runtime.setSimulationPaused(true);
   await ensureKilnSceneDomain(host,flame);
@@ -52,7 +53,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    setPaused(value){assertOpen();if(typeof value!=='boolean')throw Error('Pause must be Boolean');runtime.setSimulationPaused(value);return read();},
    frame(){assertOpen();host.scene.select(asset.id);return session.setView({position:[0,.1,4.5],target:[0,0,0]});},
   };
-  stop=session.onFrame(({deltaSeconds})=>{if(pulse>0){const state=app.burningState(asset.id);pulse=state.status==='resident'?Math.max(0,3-((state.state.fields[0].referenceSeconds??0)-ignitionStart)):0;if(!pulse){setFeed(false);sync();}}});operations.frame();
+  stop=session.onFrame(({deltaSeconds})=>{const kelvin=Number(doc.getElementById('volume-physical-kelvin-per-heat')?.value??1600);if(kelvin!==lastKelvin){lastKelvin=kelvin;if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{kelvinPerHeat:kelvin});}if(pulse>0){const state=app.burningState(asset.id);pulse=state.status==='resident'?Math.max(0,3-((state.state.fields[0].referenceSeconds??0)-ignitionStart)):0;if(!pulse){setFeed(false);sync();}}});operations.frame();
   return {read,operations,mount({root,document,invoke}){
    const field=document.createElement('textarea');field.rows=3;field.value=kiln.read().prompt;field.setAttribute('aria-label','Material study prompt');field.style.cssText='width:100%;box-sizing:border-box;background:#202327;color:#eee;padding:10px;border:1px solid #42464c;border-radius:6px;';
    field.onchange=()=>invoke('setPrompt',field.value).catch(error=>status.textContent=error.message);
@@ -61,7 +62,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    const actions=document.createElement('div');actions.className='flame-basin-actions';for(const [text,op]of [['Ignite','ignite'],['Stop heating','stopHeating'],['Reset','reset']]){const button=document.createElement('button');button.className='btn';button.textContent=text;button.onclick=()=>invoke(op).catch(error=>status.textContent=error.message);actions.append(button);}
    const appearanceLabel=document.createElement('label');appearanceLabel.textContent='Surface';const appearance=document.createElement('select');for(const [value,text]of [['incineration','Incineration'],['crust','Original crust']]){const option=document.createElement('option');option.value=value;option.textContent=text;appearance.append(option);}appearance.value=kiln.read().appearance;appearance.onchange=()=>invoke('setAppearance',appearance.value).catch(error=>status.textContent=error.message);appearanceLabel.append(appearance);
    const bloomLabel=document.createElement('label'),enabled=document.createElement('input');enabled.type='checkbox';enabled.checked=bloom.read().settings.enabled;enabled.onchange=()=>invoke('setBloom',{enabled:enabled.checked});bloomLabel.append(enabled,document.createTextNode(' Bloom'));
-   const tuning=document.createElement('div'),fields=[];for(const [title,value,step,op,key,max]of [['Ember brightness',glow,1,'setGlow',null,null],['Bloom strength',bloom.read().settings.strength,.01,'setBloom','strength',null],['Bloom spread',bloom.read().settings.radius,.01,'setBloom','radius',1]]){
+   const tuning=document.createElement('div'),fields=[];for(const [title,value,step,op,key,max]of [['Thermal emission',glow,1,'setGlow',null,null],['Bloom strength',bloom.read().settings.strength,.01,'setBloom','strength',null],['Bloom spread',bloom.read().settings.radius,.01,'setBloom','radius',1]]){
     const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=title+' ';input.type='number';input.min='0';if(max!==null)input.max=String(max);input.step='any';input.value=String(value);input.className='transform-input';input.setAttribute('aria-label',title);input.addEventListener('input',()=>{if(input.value.trim()&&Number.isFinite(Number(input.value)))invoke(op,key?{[key]:Number(input.value)}:Number(input.value)).catch(error=>status.textContent=error.message);});row.append(grip,input);tuning.append(row);host.controls.installNumberDrag({input,grip,step});fields.push({input,key});
    }
    syncFields=()=>{const state=bloom.read().settings;enabled.checked=state.enabled;appearance.value=kiln.read().appearance;select.value=mode;for(const {input,key}of fields)if(document.activeElement!==input||input.readOnly)input.value=String(key?state[key]:glow);};
