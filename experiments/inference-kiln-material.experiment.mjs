@@ -28,8 +28,8 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
  const reset=async()=>{if(closed)throw Error('Material study is closed');runtime.setSimulationPaused(true);await activate();pulse=0;setFeed(false);
   app.setBurnable(asset.id,false);await settle();runtime.resetThermalExperimentFluid();app.setBurnable(asset.id,true);await settle();applyGlow();session.redraw();sync();return read();};
  async function dispose(){if(closed)return;closed=true;stop();
-  if(runtime&&flame&&!flame.read().active){runtime.setSimulationPaused(true);await activate();}
-  try{if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,false);await settle();}}
+  try{if(runtime&&flame&&!flame.read().active){runtime.setSimulationPaused(true);await activate();}
+   if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,false);await settle();}}
   finally{try{await session.dispose();}finally{kiln?.dispose();if(restoreBloom)bloom.set(restoreBloom);if(cameraMatch)cameraMatch.checked=savedCameraMatch;if(restore)flame.setControls(restore);if(emitterPose&&host.scene.objects().some(row=>row.id===emitter.id))host.scene.setTransform(emitter.id,emitterPose);if(runtime)runtime.setSimulationPaused(paused);if(ground){ground.checked=groundVisible;ground.onchange({target:ground});}}}
  }
  try{
