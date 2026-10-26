@@ -13,7 +13,14 @@ export function generationImageView({selected,preparedSource=null,showSegmented=
   return {source,preview:null,label:source===original?'Original image':'Segmented image'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null}){
+export function generationComparisonView({selected,comparison,preparedSource=null,showSegmented=true,preview=null}){
+ const original=selected?.source||(selected?.root&&selected?.path?assetSource(selected.root,selected.path):null);
+ const prepared=showSegmented&&!!comparison?.preparedSource&&!!preparedSource&&preparedSource!==original;
+ return {left:comparison&&!assetWithheld(comparison)?(prepared?comparison.preparedSource:comparison.source):null,
+  right:generationImageView({selected,preparedSource,showSegmented:prepared,preview}),label:prepared?'Segmented images':'Original images'};
+}
+
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null}){
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -23,22 +30,30 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const text=byId('asset-text-image');
   if(text){text.querySelector(':scope > p')?.remove();image.append(...text.childNodes);text.remove();}
   const imageHelp=document.createElement('p');imageHelp.className='asset-help';imageHelp.textContent='Or pick an image in Browse, or open one from disk.';image.append(imageHelp);
-  let showSegmented=true,expanded=false,painted=null,viewIdentity=null;
+  let showSegmented=true,expanded=false,comparing=false,painted=null,viewIdentity=null;
   const preference='kaminos.generate-image-view.v1';
   try{showSegmented=JSON.parse(document.defaultView.localStorage.getItem(preference))?.showSegmented!==false;}catch{/* unavailable storage keeps the page-local choice */}
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
   const canvas=document.createElement('canvas');canvas.id='asset-step-preview';canvas.hidden=true;canvas.setAttribute('role','img');
-  const frame=document.createElement('div');frame.className='asset-image-view';frame.append(preview,canvas);
+  const frame=document.createElement('div');frame.className='asset-image-view asset-compare-current';frame.append(preview,canvas);
   const ceremony=createFlame?installGenerationFlame({document,slot:frame,createRenderer:createFlame}):null;
+  const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
+  const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
+  const blink=document.createElement('img');blink.id='asset-compare-blink';blink.hidden=true;blink.alt='Comparison input';frame.append(blink);pair.append(inputFrame,frame);
+  const compareTools=document.createElement('div');compareTools.className='asset-compare-tools';compareTools.hidden=true;
+  const choose=document.createElement('select');choose.id='asset-compare-choice';choose.setAttribute('aria-label','Compare image with');
+  const hold=document.createElement('button');hold.type='button';hold.id='asset-compare-hold';hold.textContent='Hold to show input';hold.title='Hold here to show the comparison input over the result';
+  const setBlink=value=>{blink.hidden=!value;};hold.addEventListener('pointerdown',e=>{hold.setPointerCapture(e.pointerId);setBlink(true);});for(const name of ['pointerup','pointercancel','lostpointercapture','blur'])hold.addEventListener(name,()=>setBlink(false));hold.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();setBlink(true);}});hold.addEventListener('keyup',e=>{if(e.code==='Space')setBlink(false);});
+  choose.onchange=()=>{history?.compare(choose.value);render();};compareTools.append(choose,hold);
   const tools=document.createElement('div');tools.className='asset-image-view-tools';
   const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='asset-show-segmented';toggle.checked=showSegmented;
   toggleLabel.append(toggle,document.createTextNode('Show segmented'));toggleLabel.title='Changes the displayed image; mesh generation still uses its prepared input.';
   const expand=document.createElement('button');expand.type='button';expand.id='asset-image-expand';expand.textContent='Expand image';expand.setAttribute('aria-expanded','false');expand.setAttribute('aria-controls','asset-step-mesh');
   const caption=document.createElement('span');caption.id='asset-image-view-label';
   const fit=document.createElement('button');fit.type='button';fit.id='asset-image-fit';fit.hidden=true;
-  const zoom=installImageZoom({frame,targets:[preview,canvas],resetButton:fit});
-  tools.append(toggleLabel,fit,expand);mesh.append(tools,frame,caption);
-  const timing=image.querySelector('#asset-image-timing');if(timing)mesh.insertBefore(timing,frame);
+  const zoom=installImageZoom({frame,targets:[preview,canvas,inputPreview,blink],resetButton:fit,peers:[inputFrame]});
+  tools.append(toggleLabel,fit,expand);mesh.append(tools,compareTools,pair,caption);
+  const timing=image.querySelector('#asset-image-timing');if(timing)mesh.insertBefore(timing,pair);
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');
@@ -61,12 +76,23 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     // The drawer's detail column shows the selected image in Browse; in Generate the
     // Mesh step shows it, at the stage generation will actually use.
     const source=byId('asset-image'),state=imageState();ceremony?.render(state);
-    const view=generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
+    const comparison=history?.comparison(),journal=history?.read();
+    const paired=generationComparisonView({selected:selected(),comparison,preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
+    pair.dataset.comparing=String(comparing);inputFrame.hidden=!comparing;compareTools.hidden=!comparing;
+    if(comparing){
+     const candidates=journal?.entries.filter(e=>e.visibility?.status!=='withheld')||[];
+     if(comparison&&!candidates.some(e=>e.source===comparison.source))candidates.unshift(comparison);
+     const key=JSON.stringify(candidates.map(e=>[e.source,e.name]));if(choose.dataset.entries!==key){choose.dataset.entries=key;choose.replaceChildren(...candidates.map((e,i)=>{const option=document.createElement('option');option.value=e.source;option.textContent=`${i+1} · ${e.name||'Image'}`;return option;}));}
+     choose.value=comparison?.source||'';hold.disabled=!comparison;
+     const input=paired.left;
+     if(input){if(inputPreview.getAttribute('src')!==input){inputPreview.src=input;blink.src=input;}inputPreview.hidden=false;inputPreview.alt=`Comparison · ${comparison.name||'Input'}`;}else{inputPreview.removeAttribute('src');blink.removeAttribute('src');inputPreview.hidden=true;}
+    }else blink.hidden=true;
+    const view=comparing?paired.right:generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
     const identity=view.preview?.runId||selected()?.source||selected()?.path||null;
     if(identity!==viewIdentity){zoom.reset();viewIdentity=identity;}
     const showing=!!(view.source||view.preview);frame.hidden=!showing&&!ceremony?.read().running;preview.hidden=!view.source;canvas.hidden=!view.preview;
     if(view.source&&preview.getAttribute('src')!==view.source)preview.src=view.source;
-    if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=view.label;caption.hidden=!showing;
+    if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=comparing?paired.label:view.label;caption.hidden=!showing;
     if(view.preview){
       const p=view.preview,key=`${p.runId}:${p.kind}:${p.step}`;
       if(painted!==key){canvas.width=p.width;canvas.height=p.height;canvas.getContext('2d').putImageData(new document.defaultView.ImageData(p.rgba,p.width,p.height),0,0);painted=key;}
@@ -82,5 +108,5 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     empty.hidden=resultList.children.length>0;
   }
   render();
-  return {render,ceremony};
+  return {render,ceremony,comparing:()=>comparing,compare(value=true){comparing=!!value;if(comparing){expanded=true;pane.dataset.imageExpanded='true';expand.textContent='Collapse image';expand.setAttribute('aria-expanded','true');if(!history?.comparison()&&history?.reference())history.compare(history.reference().source);}render();}};
 }

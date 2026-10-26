@@ -1,0 +1,9 @@
+# Iterating on generated images
+
+Generate keeps an image history strip beneath its existing controls. New results retain their input identity, original request, expanded text, final submitted prompt, model, seed and dimensions. Selecting an existing saved image in Browse also brings it into history; PNG generation metadata is read when available. Images stay in the asset store; the journal and viewing/reference choices persist in this browser origin's local storage without a retention cap. Missing storage or a failed save is reported in the history panel.
+
+Click a thumbnail to inspect it. This changes the viewed image and mesh input, while leaving the pinned image reference for the next image edit unchanged. **Use as reference** pins the viewed image and enables image conditioning. **Edit this image** also clears the prompt for a fresh instruction. **Reuse instructions** restores the submitted text and original conditioning reference; the expandable instruction record shows all three text stages.
+
+**Compare with input** expands the existing panel into two image views. Choose another history image from the comparison menu. Zoom and pan work on either image and move both together. Hold **Show input** to blink the comparison image over the viewed image. Original/segmented display uses the same mode for both images; if either cutout is unavailable, both originals are shown.
+
+**Keep prompt helper loaded** retains the helper's model after a successful expansion. Its execution lease is released between requests. **Unload**, Cancel, disabling retention or closing the tab retires the worker. Retention begins after first use and keeps model memory allocated; it does not preload models on page open. A browser preference overrides the server's `KAMINOS_PUP_KEEP_LOADED` initial default.

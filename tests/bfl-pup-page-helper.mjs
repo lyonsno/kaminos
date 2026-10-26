@@ -15,3 +15,9 @@ assert.equal(waitingLoads,0,'waiting or cancelled admission must not load model 
 const failed=createPagePromptHelper({modelUrl:'/model',providerFactory:factory,post:async request=>request.action==='claim'?{status:'held',leaseId:'test',ttlSeconds:120}:Promise.reject(Error('release broke'))});
 await assert.rejects(failed.expand({prompt:'x'}),error=>error.message.includes('release broke')&&error.result.text==='blue');
 console.log('Prompt page admission, model disposal, handback and timing pass');
+const retained=createPagePromptHelper({modelUrl:'/model',keepLoaded:true,providerFactory:factory,post:async request=>{calls.push(request.action);return request.action==='claim'?{status:'held',leaseId:'retained',ttlSeconds:120}:{};}});
+const beforeLoads=loads,beforeDisposal=disposed,beforeCalls=calls.length;
+await retained.expand({prompt:'first'});await retained.expand({prompt:'second'});
+assert.equal(loads,beforeLoads+1,'resident page helper constructs one provider for two requests');assert.equal(disposed,beforeDisposal);
+assert.deepEqual(calls.slice(beforeCalls),['claim','model','release','claim','model','release'],'idle resident weights must not retain GPU execution authority');
+await retained.dispose();assert.equal(disposed,beforeDisposal+1);

@@ -110,8 +110,7 @@ Text-only execution and an image-aware request through the actual worker/page
 have passed, including editable output and exact clipboard text. The original
 18.8 GB BF16 weight was retired after those outputs and source consumers were
 checked; source metadata and the separate MLX Q4 package remain retained.
-Automatic Generate integration and shared-device renderer composition remain
-separate consumer work.
+Generate integration is available through the application mount below. Shared-device renderer composition remains separate provider work.
 
 The adapter explicitly loads BFL's `chat_template.jinja`: the pinned Qwen3VL
 processor does not load that file by default. Preparation precedes model
@@ -155,8 +154,7 @@ The Expand prompt action retains the selected original image, streams editable
 text and offers Undo. Completed text is put into the existing prompt field;
 partial results need explicit adoption. Saved image provenance records the
 original request, expanded text, final edited prompt and provider identity.
-The current ONNX provider owns a disposable worker and its GPU runtime. The
-inference-kit provider can replace that operation independently.
+The ONNX provider owns its worker and GPU runtime. Generate can retain that worker between successful requests; the inference-kit provider can replace the same operation independently.
 
 
 The pinned Transformers.js4.2 local-file metadata path calls `getFile()` and
@@ -169,3 +167,10 @@ processor/model phases, elapsed time and streamed text remain available.
 This changes progress reporting, not model tensors, output limits or sampling.
 Pinned source: [metadata reads](https://github.com/huggingface/transformers.js/blob/54652ba3366ccd1e3b64e689a96504309e6fb53b/packages/transformers/src/utils/model_registry/get_file_metadata.js)
 and [model preflight](https://github.com/huggingface/transformers.js/blob/54652ba3366ccd1e3b64e689a96504309e6fb53b/packages/transformers/src/models/modeling_utils.js).
+
+
+## Retaining weights during image iteration
+
+Generate offers **Keep prompt helper loaded** and **Unload**. With retention enabled, a successful expansion leaves the initialized processor and model in its worker. Every request still claims, renews and releases its own Greenroom execution lease; idle resident weights do not reserve GPU execution. A second request starts with fresh request state and reports `modelReused: true`. Cancel, a worker error, Unload, disabling the preference, or closing the tab retires the context. The prompt studio keeps its per-request default.
+
+The choice persists in browser-local storage. `KAMINOS_PUP_KEEP_LOADED=true` supplies the serving machine's initial default without overriding a previously saved browser choice. Models are loaded by the first expansion, never preloaded merely by opening the page. Retention consumes memory while the tab is open.

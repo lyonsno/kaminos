@@ -52,3 +52,9 @@ test('ordinary servers resolve the explicit prompt-helper mount and never invent
  assert.throws(()=>prompt.authoringPromptWeightRoot({}),/unavailable/i);
  assert.throws(()=>prompt.authoringPromptWeightRoot({pup:{mounted:false,modelUrl:'/pup-weights'}}),/unavailable/i);
 });
+test('resident application operation reuses its provider and explicit unload releases it',async()=>{
+ let creates=0,disposed=0;
+ const c=prompt.createAuthoringPromptExpansion({keepLoaded:true,createHelper:()=>{creates++;return{resident:true,expand:async()=>({text:'caption',partial:false}),dispose:async()=>{disposed++;}};}});
+ await c.expand({prompt:'first'});await c.expand({prompt:'second'});assert.equal(creates,1);assert.equal(disposed,0);assert.equal(c.read().resident,true);
+ await c.setKeepLoaded(false);assert.equal(disposed,1);assert.equal(c.read().resident,false);assert.equal(c.read().keepLoaded,false);
+});
