@@ -140,3 +140,20 @@ For a local offer, mount the accepted package under the ignored
 weights. Model tensors execute in the visitor's browser; the server serves
 files and coordinates GPU admission on the shared shop machine. The provider
 operation remains replaceable by the inference-kit implementation.
+
+
+## Generate application mount
+
+Set `KAMINOS_PUP_WEIGHTS_ROOT` to the completed browser conversion package when
+starting `serve.py`. Runtime configuration reports its metadata availability
+under `pup`, and `/pup-weights/` serves the same package without copying it into
+each checkout. Generate resolves this explicit mount before requesting GPU
+admission. Missing or incomplete packages produce an unavailable message;
+there is no implicit server inference backend.
+
+The Expand prompt action retains the selected original image, streams editable
+text and offers Undo. Completed text is put into the existing prompt field;
+partial results need explicit adoption. Saved image provenance records the
+original request, expanded text, final edited prompt and provider identity.
+The current ONNX provider owns a disposable worker and its GPU runtime. The
+inference-kit provider can replace that operation independently.

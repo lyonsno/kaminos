@@ -2483,10 +2483,11 @@ SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().res
 KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
 # FLUX.3 stays a local package; no hosted-weight fallback is configured.
 FLUX3_WEIGHTS_ROOT = Path(os.environ['KAMINOS_FLUX3_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_FLUX3_WEIGHTS_ROOT') else None
+PUP_WEIGHTS_ROOT = Path(os.environ['KAMINOS_PUP_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_PUP_WEIGHTS_ROOT') else None
 # A local TRELLIS 2 checkpoint package (manifest.json plus tensor files), served at
 # /trellis-checkpoints/ for TRELLIS in the page.
 TRELLIS_CHECKPOINT_ROOT = Path(os.environ['KAMINOS_TRELLIS_CHECKPOINT_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_TRELLIS_CHECKPOINT_ROOT') else None
-MOUNTED_PACKAGES = {'/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/flux3-weights/': lambda: FLUX3_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
+MOUNTED_PACKAGES = {'/pup-weights/': lambda: PUP_WEIGHTS_ROOT, '/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/flux3-weights/': lambda: FLUX3_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2636,6 +2637,36 @@ def flux3_weights_mounted():
         return False
 
 
+def pup_weights_mounted():
+    """Metadata availability for the exercised exact-source ONNX package, not model validation."""
+    if not PUP_WEIGHTS_ROOT:
+        return False
+    root = PUP_WEIGHTS_ROOT.resolve()
+    external = {'decoder_model_merged_q4f16.onnx': 3, 'vision_encoder_fp16.onnx': 1, 'embed_tokens_q4f16.onnx': 1}
+    try:
+        provenance = json.loads((root / 'provenance.json').read_text())
+        if provenance.get('status') != 'complete' or not provenance.get('source', '').endswith('/3f3edb52b2c55de0d49feab28598b68f7f8e4830') or provenance.get('external_data') != external:
+            return False
+        sizes = {entry['path']: entry['bytes'] for entry in provenance['files']}
+        def payload(name, expected=None):
+            target = (root / name).resolve()
+            return (target.is_relative_to(root) and target.is_file() and target.stat().st_size > 0
+                    and (expected is None or (type(expected) is int and expected > 0 and target.stat().st_size == expected)))
+        for name in ('config.json', 'tokenizer.json', 'tokenizer_config.json', 'preprocessor_config.json', 'chat_template.jinja', 'system_prompts.json'):
+            if not payload(name):
+                return False
+        for graph, count in external.items():
+            if not payload('onnx/' + graph):
+                return False
+            for index in range(count):
+                name = 'onnx/' + graph + '_data' + (f'_{index}' if index else '')
+                if name not in sizes or not payload(name, sizes[name]):
+                    return False
+        return True
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        return False
+
+
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -2661,6 +2692,7 @@ def runtime_config():
             "modelRoot": str(FLUX3_WEIGHTS_ROOT),
             "mounted": flux3_weights_mounted(),
         } if FLUX3_WEIGHTS_ROOT else None,
+        "pup": {"modelUrl": "/pup-weights", "modelRoot": str(PUP_WEIGHTS_ROOT), "mounted": pup_weights_mounted()} if PUP_WEIGHTS_ROOT else None,
         "trellisPage": {
             "checkpointUrl": "/trellis-checkpoints",
             "modelRoot": str(TRELLIS_CHECKPOINT_ROOT),

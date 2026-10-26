@@ -1,4 +1,6 @@
 import {createBrowserPromptHelper} from './browser-backend.mjs';
+// A runtime's orphaned async rejection must not strand the outer load promise.
+self.addEventListener('unhandledrejection',event=>postMessage({type:'error',value:String(event.reason?.stack||event.reason)}));
 self.onmessage=async({data})=>{
  let helper,result,error;
  try{

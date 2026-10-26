@@ -45,3 +45,10 @@ test('weight download callbacks do not redraw the application when visible opera
  assert.equal(notifications,before,'unchanged status must not trigger whole-app redraw per download chunk');
  gate.resolve({text:'blue enamel kettle',partial:false});await run;assert.equal(c.read().status,'complete');
 });
+
+test('ordinary servers resolve the explicit prompt-helper mount and never invent a local package',()=>{
+ assert.equal(typeof prompt.authoringPromptWeightRoot,'function');
+ assert.equal(prompt.authoringPromptWeightRoot({pup:{mounted:true,modelUrl:'/pup-weights'}}),'/pup-weights');
+ assert.throws(()=>prompt.authoringPromptWeightRoot({}),/unavailable/i);
+ assert.throws(()=>prompt.authoringPromptWeightRoot({pup:{mounted:false,modelUrl:'/pup-weights'}}),/unavailable/i);
+});

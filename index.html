@@ -3315,7 +3315,7 @@ import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
-import {createAuthoringPromptExpansion,installAuthoringPromptExpansion} from './authoring-prompt-expansion.mjs';
+import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -27059,7 +27059,10 @@ function setupAuthoringAssets(){
       if(promptHandbackUnknown)throw Error('Prompt GPU cleanup is unresolved. Recover its Greenroom lease before another run.');
       if(promptPageLease)await promptLeasePost({action:'release',leaseId:promptPageLease,reason:'retry settled prompt handback'});
       const {createPagePromptHelper}=await loadModule('./models/bfl-pup/page-helper.mjs');
-      const helper=createPagePromptHelper({modelUrl:'/models/bfl-pup-onnx',post:promptLeasePost,...callbacks,onLease:held=>{
+      const configResponse=await fetch('/api/runtime-config',{cache:'no-store'});
+      if(!configResponse.ok)throw Error(`Prompt model configuration HTTP ${configResponse.status}`);
+      const modelUrl=authoringPromptWeightRoot(await configResponse.json());
+      const helper=createPagePromptHelper({modelUrl,post:promptLeasePost,...callbacks,onLease:held=>{
         promptPageLease=held.status==='held'?held.leaseId:null;
         if(held.status==='unconfigured')callbacks.onProgress({phase:'unconfigured'});
       }});
