@@ -17,7 +17,7 @@ export default {id:'mineral-reach',title:'Layered mineral reach',async create({h
  const read=()=>({...readReach(state),playing,busy,rate,objectId:asset.id,surface:surface.read(),view:session.readView(),checkpointStored:!!staged});
  const sync=()=>{if(playButton)playButton.textContent=playing?'Hold growth':'Continue growth';for(const[k,e]of fields){if(doc.activeElement!==e)e.value=k in state.settings?state.settings[k]:k==='rate'?rate:surface.read()[k];}if(status)status.textContent=`${state.tick} steps · ${state.features.length} retained features (${readReach(state).children} children) · ${state.layers.length} layers${busy?' · advancing':''}`;};
  const changed=(kind,requested)=>{sync();record({kind:'mineral-reach.'+kind,phase:'applied',requested,effective:read()});return read();};
- const present=()=>{if(dirty){surface.update(state);dirty=false;session.redraw();}sync();};
+ const present=()=>{surface.focus(session.readView().target);if(dirty||surface.read().tick<0){surface.update(state);dirty=false;session.redraw();}sync();};
  const grow=async steps=>{active();if(busy)throw Error('Advance already in progress');if(!Number.isSafeInteger(steps)||steps<0)throw Error('Invalid steps');busy=true;try{for(let i=0;i<steps;i++){active();advanceReach(state,1);dirty=true;if(i%4===3){present();await new Promise(r=>win.setTimeout(r,0));}}present();busy=false;return changed('advance',{steps});}finally{busy=false;sync();}};
  const exportWorld=()=>({schema:'kaminos.mineral-reach.v1',state:saveReach(state),surface:{segments:surface.read().segments,depth:surface.read().depth,finish:surface.read().finish},view:session.readView(),rate});
  const replace=value=>{active();if(busy)throw Error('Advance is still in progress');if(value?.schema!=='kaminos.mineral-reach.v1')throw Error('Unknown mineral reach file');const next=restoreReach(value.state),nextRate=value.rate??rate;if(!Number.isFinite(nextRate)||nextRate<0)throw Error('Invalid evolution rate');const candidate=createReachSurface(next,value.surface);try{if(value.view)session.setView(value.view);}catch(e){candidate.dispose();throw e;}root.remove(surface.root);surface.dispose();surface=candidate;root.add(surface.root);state=next;rate=nextRate;playing=false;accumulator=0;dirty=false;session.redraw();return changed('restore',{tick:state.tick});};
@@ -30,7 +30,7 @@ export default {id:'mineral-reach',title:'Layered mineral reach',async create({h
   remember(){active();if(busy)throw Error('Advance is still in progress');staged=exportWorld();return changed('remember',state.tick);},
   returnToCheckpoint(){active();if(!staged)throw Error('Store a checkpoint first');return replace(staged);},
   restart(){active();if(busy)throw Error('Advance is still in progress');const next=createReach({size:state.size,seed:state.seed,extent:state.extent});conditions(next,state.settings);return replace({...exportWorld(),state:saveReach(next)});},
-  view(value){active();session.setView(value);session.redraw();return changed('view',value);},
+  view(value){active();session.setView(value);surface.focus(session.readView().target);dirty=true;present();session.redraw();return changed('view',value);},
  };
  const stop=session.onFrame(({deltaSeconds})=>{if(closed)return;if(playing&&!busy){accumulator+=deltaSeconds*rate;if(accumulator>=1){advanceReach(state,1);accumulator-=1;dirty=true;}}present();});
  return {read,operations,mount({root:panel,document,invoke}){

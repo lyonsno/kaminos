@@ -51,11 +51,14 @@ export function createReachSurface(state,{segments=128,depth=.22,finish=.5}={}){
  // Subpixel relief follows retained layer boundaries and evolved deposit shape.
  material.normalNode=bumpMap(sin(coordinate.mul(520)).mul(.00035).mul(float(1).sub(polish)).add(dep.x.mul(.025)));
  const mesh=new Mesh(geometry,material);mesh.name='Retained strata and deposits';root.add(mesh);
- let last=-1,uploads=0;
+ let last=-1,uploads=0,focus=[0,0];
+ function refocus(target){const next=[Math.max(-state.extent*.45,Math.min(state.extent*.45,target[0])),Math.max(-state.extent*.45,Math.min(state.extent*.45,target[2]))];if(Math.hypot(next[0]-focus[0],next[1]-focus[1])<state.extent/100)return;focus=next;last=-1;}
+
  function update(s){
   if(last===s.tick&&uploads)return;
   const a=geometry.attributes.position.array,sampler=spatialSampler(s);
-  for(let i=0;i<a.length;i+=3)a[i+1]=bedAt(s,a[i],a[i+2])+sampler.height(a[i],a[i+2]);
+  const warp=(t,f)=>f+(t<0?s.extent/2+f:s.extent/2-f)*(.12*t+.88*t*t*t);
+  for(let iz=0;iz<=segments;iz++)for(let ix=0;ix<=segments;ix++){const i=(iz*(segments+1)+ix)*3,x=warp(ix/segments*2-1,focus[0]),z=warp(iz/segments*2-1,focus[1]);a[i]=x;a[i+2]=z;a[i+1]=bedAt(s,x,z)+sampler.height(x,z);}
   geometry.attributes.position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();
   const leaves=[];let boundary=0;
   const flatten=(children,start,width,tone)=>{let at=start;for(const child of children){const w=child.width*width,t=tone*.65+child.tone*.35;if(child.children.length)flatten(child.children,at,w,t);else leaves.push([at,at+w,t,0]);at+=w;}};
@@ -81,5 +84,5 @@ export function createReachSurface(state,{segments=128,depth=.22,finish=.5}={}){
   last=s.tick;uploads++;
  }
  update(state);
- return {root,update,appearance(p){if(p.depth!=null&&(!Number.isFinite(p.depth)||p.depth<0))throw Error('Invalid exposure depth');if(p.finish!=null&&(!Number.isFinite(p.finish)||p.finish<0||p.finish>1))throw Error('Invalid finish');if(p.depth!=null){if(!Number.isFinite(p.depth)||p.depth<0)throw Error('Invalid exposure depth');exposure.value=p.depth;}if(p.finish!=null){if(!Number.isFinite(p.finish)||p.finish<0||p.finish>1)throw Error('Invalid finish');polish.value=p.finish;}},read:()=>({segments,depth:exposure.value,finish:polish.value,vertices:geometry.attributes.position.count,uploads,tick:last,representation:'continuous stratigraphy + exact sparse kernel evaluation; mesh geometry cache'}),dispose(){geometry.dispose();material.dispose();for(const t of [layerTexture,featureTexture,headerTexture,refsTexture,profileTexture])t.dispose();}};
+ return {root,update,focus:refocus,appearance(p){if(p.depth!=null&&(!Number.isFinite(p.depth)||p.depth<0))throw Error('Invalid exposure depth');if(p.finish!=null&&(!Number.isFinite(p.finish)||p.finish<0||p.finish>1))throw Error('Invalid finish');if(p.depth!=null){if(!Number.isFinite(p.depth)||p.depth<0)throw Error('Invalid exposure depth');exposure.value=p.depth;}if(p.finish!=null){if(!Number.isFinite(p.finish)||p.finish<0||p.finish>1)throw Error('Invalid finish');polish.value=p.finish;}},read:()=>({segments,depth:exposure.value,finish:polish.value,vertices:geometry.attributes.position.count,uploads,tick:last,representation:'continuous stratigraphy + exact sparse kernel evaluation; mesh geometry cache'}),dispose(){geometry.dispose();material.dispose();for(const t of [layerTexture,featureTexture,headerTexture,refsTexture,profileTexture])t.dispose();}};
 }
