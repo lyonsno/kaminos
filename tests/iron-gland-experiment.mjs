@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import * as THREE from '../lib/three.core.js';
 import { handObservation, createHoverController } from '../experiments/iron-gland/interaction.mjs';
 import { createMechanism } from '../experiments/iron-gland/mechanism.mjs';
@@ -16,6 +17,14 @@ const compile = new Function('Mesh', 'PlaneGeometry', 'MeshBasicMaterial', 'Canv
   'createBrowserHandMeshRoute', 'readLocalModels', 'readServedModels', 'createModelStore',
   'handObservation', 'createHoverController', 'createMechanism', 'createVirtualHand', 'createGestureCapture', 'mountCaptureControls', source);
 const flush = () => new Promise(resolve => setImmediate(resolve));
+test('Iron Gland is discoverable through the current host metadata catalogue',()=>{
+  const entries=JSON.parse(execFileSync(process.env.KAMINOS_PYTHON??'python3',['-c',
+    "import json; from workbench_experiments import experiment_catalogue; print(json.dumps(experiment_catalogue('.', ['/experiments/iron-gland.experiment.mjs'])))"],
+    {cwd:new URL('..',import.meta.url),encoding:'utf8'}));
+  assert.equal(entries.length,1);assert.equal(entries[0].error,undefined);
+  assert.equal(entries[0].id,'iron-gland');assert.equal(entries[0].title,'Iron Gland');
+  assert.equal(entries[0].moduleUrl,'/experiments/iron-gland.experiment.mjs');
+});
 const result = pinch => {
   const uv = new Float32Array(42).fill(.5);
   for (const [i, x, y] of [[0,.5,.8],[5,.3,.5],[9,.5,.4],[17,.7,.5],[4,.4,.25],[8,.4+pinch*.4,.25]]) { uv[2*i]=x; uv[2*i+1]=y; }
