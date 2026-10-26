@@ -70,7 +70,11 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
     try{
       candidate=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
       device:'webgpu',dtype:{embed_tokens:'q4f16',vision_encoder:'fp16',decoder_model_merged:'q4f16'},
-      progress_callback:e=>onProgress({phase:'model',...e}),
+      // Transformers.js4.2 aggregates progress by fetching local-file metadata
+      // through whole GET responses whose bodies it never consumes or cancels.
+      // With the authoring page's live streams this can exhaust the HTTP connection pool,
+      // blocking model loading and the page lease renewals. Keep phase/elapsed
+      // reporting; omit this optional preflight and let real loads read each body.
     });
     for(const [name,session] of Object.entries(candidate.sessions)){
       if(session.config?.device!=='webgpu')throw Error(`${name} did not select the WebGPU session.`);

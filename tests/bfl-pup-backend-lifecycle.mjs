@@ -4,13 +4,13 @@ import assert from 'node:assert/strict';
 import {createBrowserPromptHelper,BFL_SOURCE_REVISION} from '../models/bfl-pup/browser-backend.mjs';
 globalThis.location={href:'http://localhost/probe.html',origin:'http://localhost'};
 globalThis.fetch=async url=>({ok:true,text:async()=> 'source template',json:async()=>url.endsWith('provenance.json')?{status:'complete',source:'/snapshot/'+BFL_SOURCE_REVISION}:{t2i:'scene',i2i:'edit'}});
-globalThis.pupRuntimeTest={loads:0,disposed:0,generated:0,acceptAfter:Infinity};
+globalThis.pupRuntimeTest={loads:0,disposed:0,generated:0,acceptAfter:Infinity,options:[]};
 const runtime=`
 export const env={};
 export const AutoProcessor={from_pretrained:async()=>Object.assign(async()=>({input_ids:{dims:[1,1],dispose(){}}}),{apply_chat_template:()=>"prompt",tokenizer:{decode:()=>"A blue kettle"}})};
 export class LogitsProcessor{};export class InterruptableStoppingCriteria{interrupt(){}};export class TextStreamer{};
-export const Qwen3_5ForConditionalGeneration={from_pretrained:async()=>{
- const state=globalThis.pupRuntimeTest;state.loads++;
+export const Qwen3_5ForConditionalGeneration={from_pretrained:async(model,options)=>{
+ const state=globalThis.pupRuntimeTest;state.loads++;state.options.push(options);
  return {_get_text_only_rope_index(){return [{},{data:new BigInt64Array(1)}];},sessions:{embed_tokens:{config:{device:'webgpu'}},vision_encoder:{config:{device:state.loads>state.acceptAfter?'webgpu':'wasm'}},decoder_model_merged:{config:{device:'webgpu'}}},
  generate:async()=>{state.generated++;return {sequences:{tolist:()=>[[1n,12n,248046n]],dispose(){}}};},
  dispose:async()=>{state.disposed++;}};
@@ -28,4 +28,5 @@ try{
  assert.equal(pupRuntimeTest.generated,1);
 }finally{await helper.dispose();}
 assert.equal(pupRuntimeTest.disposed,3);
+assert.ok(pupRuntimeTest.options.every(options=>options.progress_callback===undefined),'local HTTP model loading must avoid the pinned runtime metadata preflight that leaves response bodies unread');
 console.log('BFL rejected-route retry and model ownership pass');

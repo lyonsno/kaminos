@@ -157,3 +157,15 @@ partial results need explicit adoption. Saved image provenance records the
 original request, expanded text, final edited prompt and provider identity.
 The current ONNX provider owns a disposable worker and its GPU runtime. The
 inference-kit provider can replace that operation independently.
+
+
+The pinned Transformers.js4.2 local-file metadata path calls `getFile()` and
+returns headers without consuming or cancelling the body. Supplying the
+model's optional `progress_callback` triggers that preflight for every ONNX
+file before session loading. Unread large responses can occupy the same-origin
+HTTP connection pool alongside the editor's live streams, preventing further
+model requests and lease renewal. The adapter omits this optional callback;
+processor/model phases, elapsed time and streamed text remain available.
+This changes progress reporting, not model tensors, output limits or sampling.
+Pinned source: [metadata reads](https://github.com/huggingface/transformers.js/blob/54652ba3366ccd1e3b64e689a96504309e6fb53b/packages/transformers/src/utils/model_registry/get_file_metadata.js)
+and [model preflight](https://github.com/huggingface/transformers.js/blob/54652ba3366ccd1e3b64e689a96504309e6fb53b/packages/transformers/src/models/modeling_utils.js).
