@@ -34,7 +34,7 @@ with TemporaryDirectory() as directory:
     def get(path,headers=None):
         c=http.client.HTTPConnection('127.0.0.1',server.server_address[1]);c.request('GET',path,headers=headers or {});r=c.getresponse();body=r.read();c.close();return r,body
     try:
-        assert serve.runtime_config()['pup'] == {'modelUrl':'/pup-weights','modelRoot':str(root),'mounted':True}
+        assert serve.runtime_config()['pup'] == {'modelUrl':'/pup-weights','modelRoot':str(root),'mounted':True,'keepLoadedDefault':False}
         response,body=get('/pup-weights/onnx/embed_tokens_q4f16.onnx_data',{'Range':'bytes=10-19'})
         assert response.status==206 and body==bytes(range(10,20))
         assert response.getheader('Content-Range')=='bytes 10-19/128'

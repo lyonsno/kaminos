@@ -355,11 +355,11 @@ export function imageGenerationTimeLabel(timing,status){
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
-export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null}){
+export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read().selected}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <label id="asset-reference-control" hidden><input type="checkbox" id="asset-use-reference"> Use selected image as reference <span id="asset-reference-name"></span></label>
+    <label id="asset-reference-control" hidden><input type="checkbox" id="asset-use-reference"> Use reference image <span id="asset-reference-name"></span></label>
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-decode" hidden>Decode now</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
@@ -378,9 +378,9 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status)||!!promptExpansion?.busy();
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
-    const selected=assets.read().selected,reference=byId('asset-use-reference');
-    byId('asset-reference-control').hidden=false;reference.disabled=active||!!state.pending;
-    byId('asset-reference-name').textContent=reference.checked?`· ${selected?.kind==='image'?(selected.label||selected.name):'Choose an image in Browse or Open file'}`:'';
+    const selected=reference(),referenceControl=byId('asset-use-reference');
+    byId('asset-reference-control').hidden=false;referenceControl.disabled=active||!!state.pending;
+    byId('asset-reference-name').textContent=referenceControl.checked?`· ${selected?.kind==='image'?(selected.label||selected.name):'Choose an image in Browse or Open file'}`:'';
     byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
     byId('asset-text-retry').hidden=!state.pending||active;
     byId('asset-text-stop').hidden=!state.canStop&&state.status!=='stopping';byId('asset-text-stop').disabled=!state.canStop;
@@ -403,7 +403,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
     const useReference=byId('asset-use-reference').checked;
-    const selected=assets.read().selected;
+    const selected=reference();
     if(useReference&&selected?.kind!=='image'){byId('asset-text-status').textContent='Choose a source image in Browse or Open file first.';return;}
     controller.run({promptExpansion:promptProvenance(),reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };

@@ -18,3 +18,11 @@ test('a partial image is labeled as provisional and a held image has no displaye
  const result=view.generationImageView({selected,preview,showSegmented:true});assert.equal(result.preview,preview);assert.match(result.label,/preview.*2.*4/i);
  const held=view.generationImageView({selected:{...selected,visibility:{status:'withheld'}},preparedSource:'/cutout.png',showSegmented:false});assert.equal(held.source,null);
 });
+test('comparison uses matching original/cutout modes and never pairs a cutout with an unprepared original',()=>{
+ assert.equal(typeof view.generationComparisonView,'function','paired inspection needs one display-mode decision');
+ const comparison={kind:'image',source:'/before.png',preparedSource:'/before-cutout.png'};
+ let pair=view.generationComparisonView({selected,comparison,preparedSource:'/cutout.png',showSegmented:true});
+ assert.equal(pair.left,'/before-cutout.png');assert.equal(pair.right.source,'/cutout.png');
+ pair=view.generationComparisonView({selected,comparison:{...comparison,preparedSource:null},preparedSource:'/cutout.png',showSegmented:true});
+ assert.equal(pair.left,'/before.png');assert.equal(pair.right.source,'/original.png');assert.match(pair.label,/original/i);
+});

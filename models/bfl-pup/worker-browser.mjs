@@ -1,12 +1,14 @@
 import {createBrowserPromptHelper} from './browser-backend.mjs';
-// A runtime's orphaned async rejection must not strand the outer load promise.
-self.addEventListener('unhandledrejection',event=>postMessage({type:'error',value:String(event.reason?.stack||event.reason)}));
+let helper=null,activeRequest=null;
+const send=(type,value,requestId=activeRequest)=>postMessage({type,value,requestId});
+self.addEventListener('unhandledrejection',event=>send('error',String(event.reason?.stack||event.reason)));
 self.onmessage=async({data})=>{
- let helper,result,error;
+ if(activeRequest!==null){send('error','The prompt worker is already generating.',data.requestId);return;}
+ activeRequest=data.requestId;let result,error;
  try{
-  helper=await createBrowserPromptHelper({modelUrl:data.modelUrl,onProgress:value=>postMessage({type:'progress',value})});
-  result=await helper.expand({prompt:data.prompt,images:data.images,onText:value=>postMessage({type:'text',value})});
+  helper??=await createBrowserPromptHelper({modelUrl:data.modelUrl,onProgress:value=>send('progress',value)});
+  result=await helper.expand({prompt:data.prompt,images:data.images,onText:value=>send('text',value)});
  }catch(failure){error=String(failure?.stack||failure);}
- finally{try{await helper?.dispose();}catch(failure){error=String(failure?.stack||failure);}}
- postMessage(error?{type:'error',value:error}:{type:'complete',value:result});
+ finally{if(error||!data.keepLoaded){try{await helper?.dispose();}catch(failure){error=String(failure?.stack||failure);}helper=null;}}
+ send(error?'error':'complete',error||result);activeRequest=null;
 };
