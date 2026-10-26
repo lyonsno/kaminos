@@ -13,7 +13,7 @@ const executable=source.replace(/^import[\s\S]*?from '[^']+';\n/gm,'')
   .replace('export async function createLocalLiquidHost','async function createLocalLiquidHost');
 
 for(const support of ['scene_primitives','retained_analytical_basin']) {
-  test(`live inlet host excludes unread energy measurements on ${support}`,async()=>{
+  test(`live inlet host requests supported performance paths on ${support}`,async()=>{
     const device={},colliders=[{id:'floor'}],calls=[];
     const create=runInNewContext(executable+'\ncreateLocalLiquidHost;',{
       normalizeLocalLiquidSetup,localLiquidInletPacket,structuredClone,
@@ -30,6 +30,8 @@ for(const support of ['scene_primitives','retained_analytical_basin']) {
     assert.equal(calls[1],'destroy');
     const options=calls[0];
     assert.equal(options.energyDiagnosticsMode,'disabled','ordinary inlet water must not request unread per-step measurements');
+    assert.equal(options.densityCellRejection,true,'uniform inlet pressure should skip noncontributing cells');
+    assert.equal(options.uniformVolumeDensityKernel,true,'uniform inlet pressure should use its shared volume constants');
     assert.equal(options.webgpuDevice,device);
     assert.equal(options.hostFrameComposition,true);
     assert.equal(options.truthScene,'live_hand_inlets');

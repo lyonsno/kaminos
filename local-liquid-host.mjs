@@ -63,6 +63,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     // This presentation host does not consume the per-step energy ledger.
     energyDiagnosticsMode:'disabled',
+    // Inlet particles share one volume; retain the same pressure solve with
+    // conservative cell rejection and the existing uniform-volume kernel.
+    densityCellRejection:true, uniformVolumeDensityKernel:true,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
     liveInletPacket:initialPacket,
     supportContactRoute:authored.support==='scene_primitives'?SCENE_LIQUID_SUPPORT_ROUTE:SUPPORT,
