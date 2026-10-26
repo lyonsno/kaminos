@@ -28,16 +28,42 @@ function fixture() {
   };
   const capture=createGestureCapture({fetch,MediaRecorder:Recorder,now:()=>time,epoch:()=>12345});
   return {capture,files,finishes,starts,advance:ms=>{time+=ms;capture.tick();},failWrite:()=>{failWrite=true;},
-    begin:()=>capture.begin({stream:{getVideoTracks:()=>[{getSettings:()=>({width:640,height:480})}]},identity:{backend:'fixture'},faces:new Uint32Array([0,1,2]),source:{kind:'test-fixture'}}),
+    begin:(options={})=>capture.begin({stream:{getVideoTracks:()=>[{getSettings:()=>({width:640,height:480})}]},identity:{backend:'fixture'},faces:new Uint32Array([0,1,2]),source:{kind:'test-fixture'},...options}),
     canvas:{width:640,height:480,toBlob:fn=>fn(new Blob(['raw-png-fixture'],{type:'image/png'}))}};
 }
 test('protocol includes unlabeled exploration, re-entry, different pacing and partial reversals without exact targets',()=>{
-  const cues=gestureProtocol();
+  const cues=gestureProtocol('turns');
   assert.ok(cues.some(c=>c.intent==='unlabeled'));
   assert.ok(cues.some(c=>c.intent==='reacquire'));
   assert.ok(cues.some(c=>c.intent==='partial-reversal'));
   assert.ok(new Set(cues.filter(c=>c.intent==='move').map(c=>c.seconds)).size>1);
   assert.ok(cues.every(c=>!('target' in c)&&!('velocity' in c)));
+});
+test('neutral is the default: settling, neutral carry, and two re-entries without directional commands',()=>{
+  const cues=gestureProtocol();
+  assert.deepEqual(cues.map(c=>c.intent),['unlabeled','neutral','neutral-nuisance','release','reacquire','neutral','release','reacquire','neutral']);
+  assert.equal(cues.reduce((seconds,c)=>seconds+c.seconds,0),60);
+  assert.deepEqual(cues.map(c=>c.index),cues.map((_,i)=>i));
+  assert.ok(cues.every(c=>!('direction' in c)&&!('target' in c)&&!('velocity' in c)));
+  assert.throws(()=>gestureProtocol('unknown'),/capture mode/i);
+});
+test('selected capture mode and exact protocol survive begin, completion and a new take',async()=>{
+  const f=fixture();await f.begin();
+  assert.equal(f.starts[0].settings.captureMode,'neutral');
+  assert.deepEqual(f.starts[0].protocol,gestureProtocol('neutral'));
+  for(const cue of f.starts[0].protocol)f.advance(cue.seconds*1000);
+  assert.equal(f.capture.read().protocolComplete,true);
+  assert.equal(f.capture.read().status,'recording','end of instructions never discards additional observations');
+  await f.capture.finish('complete');
+  await f.begin({mode:'turns'});
+  assert.equal(f.starts[1].settings.captureMode,'turns');
+  assert.deepEqual(f.starts[1].protocol,gestureProtocol('turns'));
+  assert.equal(f.capture.read().protocolComplete,false);
+  await f.capture.finish('partial');
+});
+test('an unknown capture mode is rejected before any persistence starts',async()=>{
+  const f=fixture();await assert.rejects(f.begin({mode:'typo'}),/capture mode/i);
+  assert.equal(f.starts.length,0);assert.equal(f.capture.read().status,'idle');
 });
 test('packed observation carries exact named features and geometry, rejects absent/nonfinite data',()=>{
   const p=prediction(),packed=packObservation(p);

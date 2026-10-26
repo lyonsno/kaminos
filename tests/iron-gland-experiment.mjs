@@ -23,7 +23,7 @@ const result = pinch => {
   verticesMeters.set([.04,-.07,0],62*3); verticesMeters.set([-.04,-.07,0],595*3);
   return { hasHand:true, handedness:'right', verticesMeters, cropUV:uv, cropBox:[100,40,300,240], acquisition:{fallback:false} };
 };
-async function fixture() {
+async function fixture({captureFactory=createGestureCapture}={}) {
   const tracks = [];
   let modelData={},sessionData={},releases=0,routeCreations=0;
   class Track extends EventTarget {
@@ -48,7 +48,7 @@ async function fixture() {
   let pending = result(.6), frameCallback, disposed=0;
   const route = {identity:{routeId:'unit-fixture'},faces:new Uint16Array([0,1,2]),infer:()=>Promise.resolve(pending),release(){releases++;}};
   const definition = compile(THREE.Mesh,THREE.PlaneGeometry,THREE.MeshBasicMaterial,THREE.CanvasTexture,THREE.SRGBColorSpace,
-    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand,createGestureCapture,()=>({update(){},dispose(){}}));
+    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand,captureFactory,()=>({update(){},dispose(){}}));
   const attached=[],events=[];
   const scene = {attach:async(root,options)=>{attached.push({root,options});return {id:root.uuid,root};},
     setView:()=>{},redraw(){},onFrame:fn=>{frameCallback=fn;return()=>{frameCallback=null;};},dispose:async()=>{disposed++;}};
@@ -73,7 +73,7 @@ async function workbenchEntry(owner) {
       return nodes.get(key);
     }};
     const definition='data:text/javascript,'+encodeURIComponent("export default {id:'iron-gland',title:'Iron Gland',create(){return globalThis.__ironGlandEntryFixture;}}");
-    const entry=await installOwnerExperimentEntry({document:{createElement:()=>section},root:{append(){}},host:{},discover:async()=>[definition]});
+    const entry=await installOwnerExperimentEntry({document:{createElement:()=>section},root:{append(){}},host:{},discover:async()=>[{id:'iron-gland',title:'Iron Gland',moduleUrl:definition}]});
     await entry.open('iron-gland');return entry;
   } finally {globalThis.Option=oldOption;globalThis.__ironGlandEntryFixture=oldOwner;}
 }
@@ -120,6 +120,19 @@ test('capture is an explicit operation and cannot start without an active camera
     assert.equal(f.owner.read().capture.status,'idle');
     await assert.rejects(async()=>f.owner.operations.beginCapture(),/camera/i);
     assert.equal(f.tracks.length,0);
+  }finally{await f.owner.dispose();}
+});
+test('Workbench beginCapture forwards the selected mode, defaulting to neutral',async()=>{
+  const starts=[];
+  const f=await fixture({captureFactory:()=>({read:()=>({status:'idle'}),finish:async()=>{},
+    begin:async args=>{starts.push(args);return {status:'recording'};}})});
+  try{
+    f.setFetch(async()=>({ok:true,json:async()=>({source:{commit:'fixture'}})}));
+    await f.owner.operations.start();await flush();
+    await f.owner.operations.beginCapture({label:'rest'});
+    await f.owner.operations.beginCapture({label:'turns',mode:'turns'});
+    assert.equal(starts[0].mode,'neutral');assert.equal(starts[0].settings.label,'rest');
+    assert.equal(starts[1].mode,'turns');assert.equal(starts[1].settings.label,'turns');
   }finally{await f.owner.dispose();}
 });
 

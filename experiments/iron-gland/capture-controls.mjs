@@ -2,8 +2,18 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
   const section=document.createElement('section');section.dataset.ironCapture='';
   section.style.cssText='border-top:1px solid #465051;margin-top:14px;padding-top:14px;letter-spacing:0;min-width:0';
   const heading=document.createElement('h3');heading.textContent='Gesture capture';heading.style.cssText='font-size:16px;margin:0 0 10px';
+  const modes=document.createElement('fieldset');modes.setAttribute('aria-label','Capture mode');
+  modes.style.cssText='display:flex;gap:12px;flex-wrap:wrap;border:0;padding:0;margin:0 0 10px;min-width:0';
+  const choices=[];let mode='neutral';
+  for(const [value,text] of [['neutral','Neutral · 1 min'],['turns','Turns · 3 min']]){
+    const option=document.createElement('label');option.style.cssText='display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer';
+    const input=document.createElement('input');input.type='radio';input.name='iron-capture-mode';input.value=value;input.checked=value===mode;
+    input.style.cssText='margin:0;accent-color:#64e0d6';input.setAttribute('aria-label',value==='neutral'?'Neutral':'Turns');
+    input.onchange=()=>{if(input.checked){mode=value;name.placeholder=value==='neutral'?'Comfortable neutral':'Comfortable turns';}};
+    const caption=document.createElement('span');caption.textContent=text;option.append(input,caption);modes.append(option);choices.push(input);
+  }
   const label=document.createElement('label');label.textContent='Take name';label.style.cssText='display:grid;gap:5px;margin:8px 0';
-  const name=document.createElement('input');name.type='text';name.placeholder='Comfortable turns';name.setAttribute('aria-label','Take name');
+  const name=document.createElement('input');name.type='text';name.placeholder='Comfortable neutral';name.setAttribute('aria-label','Take name');
   name.style.cssText='box-sizing:border-box;width:100%;min-width:0;height:32px;padding:5px 8px;background:#202629;color:#e4eeec;border:1px solid #465051;border-radius:3px';label.append(name);
   const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:10px 0';
   const status=document.createElement('div');status.setAttribute('role','status');status.style.cssText='font-size:12px;overflow-wrap:anywhere;line-height:1.5';
@@ -11,12 +21,12 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
   let failure=null;
   const run=(operation,args)=>invoke(operation,args).catch(error=>{failure=String(error.message??error);update();});
   const button=(text,title,action)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.title=title;b.setAttribute('aria-label',title);b.onclick=action;buttons.append(b);return b;};
-  const start=button('Record take','Record take',()=>{failure=null;run('beginCapture',{label:name.value});});
+  const start=button('Record take','Record take',()=>{failure=null;run('beginCapture',{label:name.value,mode});});
   const finish=button('Finish take','Finish and save this take',()=>run('finishCapture'));
   const pause=button('\u23f8','Pause instructions',()=>run('pauseCapture'));
   const repeat=button('\u21ba','Repeat this cue; keep previous data',()=>run('repeatCapture'));
   for(const b of [pause,repeat])b.style.cssText='width:34px;height:34px;padding:0;font-size:20px';
-  section.append(heading,label,buttons,status,path);root.append(section);
+  section.append(heading,modes,label,buttons,status,path);root.append(section);
 
   const viewport=document.getElementById('viewport');
   const cue=document.createElement('section');cue.dataset.ironCaptureCue='';cue.setAttribute('aria-label','Current gesture instruction');
@@ -34,7 +44,7 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
   function update() {
     const state=read(),c=state.capture,active=['starting','recording','saving'].includes(c.status);
     start.disabled=!state.running||active;finish.disabled=c.status!=='recording';pause.disabled=repeat.disabled=c.status!=='recording';
-    name.disabled=active;pause.textContent=c.paused?'\u25b6':'\u23f8';pause.title=c.paused?'Resume instructions':'Pause instructions';
+    name.disabled=active;choices.forEach(input=>{input.disabled=active;});pause.textContent=c.paused?'\u25b6':'\u23f8';pause.title=c.paused?'Resume instructions':'Pause instructions';
     pause.setAttribute('aria-label',pause.title);
     const labels={idle:'No take recorded',starting:'Opening capture',recording:'Recording',saving:'Saving',complete:'Saved',partial:'Saved partial take',failed:'Capture failed'};
     status.textContent=failure??c.error??`${labels[c.status]}${c.frameCount?` · ${c.savedFrames}/${c.frameCount} observations saved`:''}${c.pending?` · ${c.pending} pending`:''}`;

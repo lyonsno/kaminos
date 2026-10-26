@@ -222,7 +222,7 @@ export default {
       if (resumeOptions) { resumeOptions = false; start(); }
       return read();
     };
-    const beginCapture = ({label=''}={}) => {
+    const beginCapture = ({label='',mode='neutral'}={}) => {
       if (!running || !stream) throw Error('Start the camera before recording a take');
       if(captureStarting) return captureStarting;
       const ticket=generation;
@@ -231,7 +231,7 @@ export default {
         if(!response.ok)throw Error('Cannot identify the capture runtime');
         const runtime=await response.json();
         if(ticket!==generation||disposed)throw Error('Camera stopped before capture began');
-        const result=await capture.begin({stream,identity:route.identity,faces:route.faces,runtime,
+        const result=await capture.begin({stream,identity:route.identity,faces:route.faces,runtime,mode,
           settings:{handedness,size,threshold,label},source:inputs.captureSource??{kind:'live-camera'}});
         frame();return result;
       })().finally(()=>{if(captureStarting===task)captureStarting=null;sync();});
