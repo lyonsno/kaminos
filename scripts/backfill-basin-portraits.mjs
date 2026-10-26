@@ -15,7 +15,13 @@ const phase=value=>{report.phase=value;save();};
 const port=Number(option('--port','8351')),debugPort=Number(option('--debug-port','9521')),origin=`http://127.0.0.1:${port}`;
 const server=spawn('python3',['serve.py',String(port)],{cwd:process.cwd(),env:{...process.env,KAMINOS_BIND_HOST:'127.0.0.1'},stdio:['ignore','pipe','pipe']});
 let serverLog='',browserLog='',browser,ws;server.stdout.on('data',b=>serverLog+=b);server.stderr.on('data',b=>serverLog+=b);
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{report.status='interrupted';save();ws?.close();browser?.kill('SIGTERM');server.kill('SIGTERM');process.exit(130);});
+async function stopChild(child){
+ if(!child||child.exitCode!==null||child.signalCode!==null)return;
+ await new Promise(resolve=>{child.once('close',resolve);child.kill('SIGTERM');});
+}
+let stopping;
+const cleanup=()=>stopping??(stopping=Promise.all([stopChild(browser),stopChild(server)]));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{report.status='interrupted';save();ws?.close();await cleanup();process.exit(130);});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));let nextId=0;const pending=new Map();
 const call=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
 const evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;};
@@ -70,4 +76,4 @@ try{
  if(!smoke&&await evaluate('Boolean(window.portraitFlame)')){await evaluate("portraitFlame.select('domain');document.getElementById('flame-basin-browser').open=true;document.getElementById('flame-basin-refresh').click()");await delay(300);await screenshot('basin-library');}
  report.status=report.entries.every(entry=>entry.status==='passed')?'passed':'partial';phase('complete');if(report.status!=='passed')process.exitCode=1;
 }catch(error){report.status='failed';report.error=String(error.stack||error);if(ws?.readyState===WebSocket.OPEN)await screenshot('failure').catch(()=>{});process.exitCode=1;}
-finally{report.serverLog=serverLog;report.browserLog=browserLog;save();ws?.close();browser?.kill('SIGTERM');server.kill('SIGTERM');console.log(JSON.stringify({status:report.status,phase:report.phase,report:out+'/report.json'}));}
+finally{report.serverLog=serverLog;report.browserLog=browserLog;save();ws?.close();await cleanup();console.log(JSON.stringify({status:report.status,phase:report.phase,report:out+'/report.json'}));}
