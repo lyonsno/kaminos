@@ -2,6 +2,28 @@ import { Vector3, Quaternion, Euler, Matrix4 } from './lib/three.core.js';
 
 const clone = value => structuredClone(value);
 
+// Identity/undo readers run during every animation preview. The transaction's
+// retained scene context can contain image pixels and should be copied only
+// when a caller actually asks for it. Each returned snapshot owns its copies;
+// JSON/structuredClone still materialize the complete original public shape.
+function transactionSnapshot(transaction) {
+  if (!transaction) return null;
+  const snapshot = {};
+  for (const [key, value] of Object.entries(transaction)) {
+    if (value === null || typeof value !== 'object') snapshot[key] = value;
+    else Object.defineProperty(snapshot, key, {
+      enumerable: true, configurable: true,
+      get() {
+        const copy = clone(value);
+        Object.defineProperty(snapshot, key, { value: copy, writable: true, enumerable: true, configurable: true });
+        return copy;
+      },
+      set(copy) { Object.defineProperty(snapshot, key, { value: copy, writable: true, enumerable: true, configurable: true }); },
+    });
+  }
+  return snapshot;
+}
+
 export function checkedPose(pose) {
   const result = {};
   for (const key of ['position', 'rotation', 'scale']) {
@@ -31,7 +53,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     return checkedPose(value);
   };
   const put = (id, value) => targets.has(id) ? targets.get(id).write(clone(value)) : write(id, value);
-  const state = () => ({ active: active ? clone(active) : null, undoCount: past.length, redoCount: future.length, replaying });
+  const state = () => ({ active: transactionSnapshot(active), undoCount: past.length, redoCount: future.length, replaying });
   const hasHistoryEntry = id => past.some(entry => entry.id === id) || future.some(entry => entry.id === id);
   const waitForReplay = () => {
     if (!replaying) return Promise.resolve();
