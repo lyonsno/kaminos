@@ -31,7 +31,7 @@ try{
  ws=new WebSocket(targets.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));
  ws.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.id){const entry=pending.get(data.id);if(entry){pending.delete(data.id);data.error?entry.reject(Error(data.error.message)):entry.resolve(data.result);}}else if(data.method==='Runtime.exceptionThrown'){report.errors.push(data.params);save();}});
  await call('Runtime.enable');await call('Page.enable');report.url=origin+'/index.html?experiment=inference-flame&workspace=workbench';await call('Page.navigate',{url:report.url});phase('workbench-load');
- while(!await evaluate("window.kaminosWorkbenchExperiments?.state().id==='inference-flame'")){if(report.errors.length)throw Error('Workbench load failed: '+JSON.stringify(report.errors));const error=await evaluate("document.body.innerText.includes('Experiments unavailable:')?document.body.innerText:null");if(error)throw Error(error);await delay(150);}
+ while(!await evaluate("window.kaminosWorkbenchExperiments?.state().id==='inference-flame'")){if(report.errors.length)throw Error('Workbench load failed: '+JSON.stringify(report.errors));const error=await evaluate("document.body?.innerText.includes('Experiments unavailable:')?document.body.innerText:null");if(error)throw Error(error);await delay(150);}
  await evaluate('(async()=>{window.portraitFlame=await window.kaminosFlameWorkbench.open();return true;})()');
  const index=await evaluate('portraitFlame.listBasins()');
  const candidates=[];
@@ -45,7 +45,7 @@ try{
   try{
    // A fresh page gives every basin a fresh field, even when two successive
    // presets share a grid size. Applying settings alone preserves old fluid.
-   if(report.entries.length>1){await call('Page.navigate',{url:report.url});while(!await evaluate("window.kaminosWorkbenchExperiments?.state().id==='inference-flame'")){const error=await evaluate("document.body.innerText.includes('Experiments unavailable:')?document.body.innerText:null");if(error)throw Error(error);await delay(150);}await evaluate('(async()=>{window.portraitFlame=await window.kaminosFlameWorkbench.open();return true;})()');}
+   if(report.entries.length>1){await call('Page.navigate',{url:report.url});while(!await evaluate("window.kaminosWorkbenchExperiments?.state().id==='inference-flame'")){const error=await evaluate("document.body?.innerText.includes('Experiments unavailable:')?document.body.innerText:null");if(error)throw Error(error);await delay(150);}await evaluate('(async()=>{window.portraitFlame=await window.kaminosFlameWorkbench.open();return true;})()');}
    item.initialization='fresh-workbench-page';
    await evaluate(`portraitFlame.applyBasin(${JSON.stringify(entry.presetId)})`);
    phase('field-warm');
@@ -66,7 +66,7 @@ try{
   }catch(error){item.status='failed';item.error=String(error.stack||error);}
   finally{await evaluate('window.__kaminosVolumePrototype?.setSelectiveHeadLiveCapturePaused(false)').catch(()=>{});save();}
  }
- if(!smoke){await evaluate("portraitFlame.select('domain');document.getElementById('flame-basin-browser').open=true;document.getElementById('flame-basin-refresh').click()");await delay(300);await screenshot('basin-library');}
+ if(!smoke&&await evaluate('Boolean(window.portraitFlame)')){await evaluate("portraitFlame.select('domain');document.getElementById('flame-basin-browser').open=true;document.getElementById('flame-basin-refresh').click()");await delay(300);await screenshot('basin-library');}
  report.status=report.entries.every(entry=>entry.status==='passed')?'passed':'partial';phase('complete');if(report.status!=='passed')process.exitCode=1;
 }catch(error){report.status='failed';report.error=String(error.stack||error);if(ws?.readyState===WebSocket.OPEN)await screenshot('failure').catch(()=>{});process.exitCode=1;}
 finally{report.serverLog=serverLog;report.browserLog=browserLog;save();ws?.close();browser?.kill('SIGTERM');server.kill('SIGTERM');console.log(JSON.stringify({status:report.status,phase:report.phase,report:out+'/report.json'}));}
