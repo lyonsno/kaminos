@@ -35,6 +35,17 @@ test('without a shared device there is no app host',()=>{
  assert.throws(()=>createAppGpuHost({sharedGpu:null,host:f.host,kit:f.kit,frameOwner:()=>f.owner}),/shared GPU device/);
 });
 
+test('a stopped volume can hand frames to the ordinary scene without ending an active model run',async()=>{
+ const f=fixture(),scene={...f.owner,foregroundGpuContext:()=>({renderer:'kaminos-app'})};let owner=f.owner;
+ const installed=[];
+ const app=createAppGpuHost({sharedGpu:{device:f.device},host:f.host,kit:f.kit,frameOwner:()=>owner,install:async(requester,target)=>installed.push(target)});
+ const run=await app.beginRun('photo:1',{routeId:'photograph'});owner=scene;
+ assert.equal(typeof app.refreshFrames,'function');await app.refreshFrames();
+ assert.deepEqual(installed,[f.owner,scene]);assert.deepEqual(app.unsettledRuns(),['photo:1']);
+ assert.equal(app.snapshot().foreground.activeRun.runId,'photo:1');
+ await run.finish();assert.deepEqual(app.unsettledRuns(),[]);
+});
+
 test('a model run whose finish rejects is marked as still holding the GPU (a Greenroom lease must not be handed back)',async()=>{
  const f=fixture();
  const failing={...f.kit,createWebGpuForegroundService:options=>{const real=createWebGpuForegroundService(options);

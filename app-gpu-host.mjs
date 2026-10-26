@@ -27,6 +27,7 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
   }
   return {
     adapter:sharedGpu.adapter,device,queue,foreground,requester,frameOwner,
+    refreshFrames:ensureFrames,
     session(){
       return session||=kit.createWebGpuInferenceSession({sessionId,adapter:sharedGpu.adapter,device,queue,
         adapterName:sharedGpu.adapter?.info?.description||sharedGpu.adapter?.info?.device||'kaminos-shared-device',deviceOwnership:'borrowed'});

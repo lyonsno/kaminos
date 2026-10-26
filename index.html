@@ -19447,6 +19447,7 @@ function recoverFailedSceneRadiance() {
   sceneRadianceRouteTask=sceneRadianceRouteTask.catch(()=>{}).then(async()=>{
     if(window.__kaminosSceneRadiance!==lighting)return;
     await releaseSceneRadianceRoute();
+    await window.kaminosRecoverAppFrames?.();
     window.__kaminosSceneRadianceSetup={status:'failed',error:message,recovery:'ordinary-scene'};
     markDirty();setInfo(`Fire lighting stopped; scene renderer resumed: ${message}`);
   });
@@ -26940,12 +26941,18 @@ function setupAuthoringAssets(){
     appGpuPending=(async()=>{
       const kit=await import('./webgpu-inference-kit/src/core.js');
       return createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
-        install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+        install:async(requester,owner)=>{
+          if(authoringForegroundHandoff&&authoringForegroundHandoff.prototype!==owner)await authoringForegroundHandoff.handoff.release({keepServiceActive:true});
+          const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
     })();
     appGpuPending.catch(()=>{appGpuPending=null;});
     return appGpuPending;
   };
   window.kaminosAppGpu=appGpuHost;
+  window.kaminosRecoverAppFrames=async()=>{
+    if(appGpuPending)await(await appGpuPending).refreshFrames();
+    else await authoringForegroundHandoff?.handoff.release();
+  };
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
   // Which mesh model is running, kept here: the services' own read() consults these
   // blocked() checks, so asking each other for status would recurse.

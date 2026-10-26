@@ -108,9 +108,9 @@ export function createForegroundHandoff({prototype,host,waitFrame=()=>new Promis
     },
     // Back to the kiln's private animation loop, as before any model loaded, so a producer
     // that installs its own requester (SF3D) does not meet another model's pending frame.
-    async release(){
+    async release({keepServiceActive=false}={}){
       if(current===null)return;
-      await set(null);current=null;host.setForegroundServiceActive(false);
+      await set(null);current=null;if(!keepServiceActive)host.setForegroundServiceActive(false);
     },
   };
 }

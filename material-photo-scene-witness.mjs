@@ -124,6 +124,17 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
     assert.ok(changedPixels>Math.max(16,shown.width*shown.height*.001),'photograph contributes no visible canvas pixels');
     report.observations[name]={...observed,changedPixels,canvasPixels:shown.width*shown.height};return hash(shown.pixels);
   };
+  const repaint=async (name,action)=>{
+    const read=()=>page.evaluate(()=>({frame:window.kaminosViewportShadingDebugState().lastRender?.sceneFrameCount??0,
+      png:document.querySelector('#kaminos-host-renderer-canvas').toDataURL('image/png')}));
+    const before=await read();await action();await settle();await settle();
+    const after=await read();
+    assert.ok(after.frame>before.frame,'ordinary scene produced no camera-driven frame');
+    const bytes=url=>Buffer.from(url.slice('data:image/png;base64,'.length),'base64');
+    assert.notEqual(hash(bytes(before.png)),hash(bytes(after.png)),'ordinary scene frame did not repaint after navigation');
+    await fs.writeFile(path.join(out,name+'-passive-canvas.png'),bytes(after.png));
+    return {beforeFrame:before.frame,afterFrame:after.frame};
+  };
   report.front=await shot('front');
   report.phase='history';await page.evaluate(()=>window.kaminosSceneEdits.undo());
   assert.equal((await page.evaluate(()=>window.kaminosSceneObjectDebugState())).length,report.before.length);
@@ -141,7 +152,14 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
   await shot('reopened');
   if(v['flame-preset']){
     report.phase='photograph-with-flame';await save();
-    report.flame=await page.evaluate(preset=>window.kaminosSceneAuthoring.addFlameEmitter(preset),v['flame-preset']);
+    report.flame=await page.evaluate(async preset=>{
+      const app=await window.kaminosAppGpu();
+      const id=await window.kaminosSceneAuthoring.addFlameEmitter(preset);
+      const run=await app.beginRun('photograph-recovery-witness',{routeId:'photograph-recovery-empty-run'});
+      const installed=app.snapshot();await run.finish();
+      return {id,installed,route:'empty admitted run to install the real app foreground requester; no model inference'};
+    },v['flame-preset']);
+    assert.equal(report.flame.installed.framesOn,'ordinary-volume','witness must install the active volume as foreground owner');
     report.fireSteps=await page.locator('#volume-steps').inputValue();assert.ok(Number(report.fireSteps)<=40,'flame exceeds agent live budget');
     await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender()||window.__kaminosSceneRadianceSetup?.status==='failed');
     if(v['expect-lighting-rejection']){
@@ -150,11 +168,12 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
       report.lightingRecovery=await page.evaluate(()=>window.__kaminosSceneRadianceSetup);
       assert.match(report.lightingRecovery.error,/static-light-transparent-caster:/);
       const beforeCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
-      const before=await shot('lighting-recovered');
-      await page.evaluate(()=>document.activeElement?.blur());await page.keyboard.press('Numpad3');await settle();
+      report.ordinaryRepaint=await repaint('lighting-recovered-orbit',async()=>{
+        await page.evaluate(()=>document.activeElement?.blur());await page.keyboard.press('Numpad3');
+      });
       const afterCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
       assert.notDeepEqual(afterCamera.position,beforeCamera.position,'camera navigation must remain responsive');
-      assert.notEqual(await shot('lighting-recovered-orbit'),before,'camera navigation must repaint the actual renderer');
+      await page.screenshot({path:path.join(out,'lighting-recovered-orbit.png')});
     }else{
       assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance?.canRender()),true,'opaque photograph must support fire lighting');
       await shot('photograph-with-flame');

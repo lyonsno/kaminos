@@ -13,7 +13,7 @@ test('a terminal lighting failure releases its renderer gate without treating pe
   const events=[],elements=new Map();
   let state={status:'awaiting-source'};
   const lighting={debugState:()=>state,dispose(){events.push('disposed');}};
-  const context={window:{__kaminosSceneRadiance:lighting},URLSearchParams,
+  const context={window:{__kaminosSceneRadiance:lighting,kaminosRecoverAppFrames:async()=>events.push('frames-rebound')},URLSearchParams,
     document:{getElementById(id){if(!elements.has(id))elements.set(id,{replaceChildren(){}});return elements.get(id);}},
     volumePrototype:{setSceneVolumeSourceEnabled:v=>events.push(['source',v])},markDirty(){events.push('redraw');},setInfo:s=>events.push(s),refreshRenderingControls(){}};
   const a=source.indexOf('let sceneRadianceRouteTask='),b=source.indexOf('async function mountSceneRadianceRoute(',a);
@@ -29,6 +29,7 @@ test('a terminal lighting failure releases its renderer gate without treating pe
   assert.equal(context.window.__kaminosSceneRadianceSetup.recovery,'ordinary-scene');
   assert.match(context.window.__kaminosSceneRadianceSetup.error,/transparent-caster/);
   assert.ok(events.includes('redraw'));
+  assert.ok(events.includes('frames-rebound'),'lighting release must return frame ownership before claiming recovery');
 });
 
 test('capture completion refreshes the visible reduced caster diagnostics once',()=>{

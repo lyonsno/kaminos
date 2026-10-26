@@ -9,6 +9,19 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 const witness=readFileSync(new URL('../material-photo-scene-witness.mjs',import.meta.url),'utf8');
 const hash=b=>createHash('sha256').update(b).digest('hex');
+test('ordinary repaint proof rejects a stopped frame loop even when inspection draws still work',async()=>{
+  const start=witness.indexOf('const repaint=async (name,action)=>');
+  assert.ok(start>=0,'navigation recovery requires a passive repaint observer');
+  const code=witness.slice(start,witness.indexOf('\n  report.front=',start));
+  let inspectionDraws=0,camera=0;
+  const window={kaminosViewportShadingDebugState:()=>({lastRender:{sceneFrameCount:1}}),__kaminosRenderSceneForInspection(){inspectionDraws++;}};
+  const document={querySelector:()=>({toDataURL:()=> 'data:image/png;base64,AAAA'})};
+  const page={evaluate:async fn=>fn()};
+  const repaint=new Function('page','window','document','settle','hash','path','out','assert','fs',code+';return repaint;')(
+    page,window,document,async()=>{},hash,path,'unused',assert,{writeFile:async()=>{}});
+  await assert.rejects(repaint('orbit',async()=>{camera++;}),/ordinary scene.*frame/i);
+  assert.equal(camera,1);assert.equal(inspectionDraws,0,'inspection rendering cannot rescue a failed ordinary-frame observation');
+});
 test('photograph scene witness writes a failure before browser setup on missing inputs',()=>{
   const source=new URL('../material-photo-scene-witness.mjs',import.meta.url);
   assert.ok(existsSync(source),'scene witness missing');

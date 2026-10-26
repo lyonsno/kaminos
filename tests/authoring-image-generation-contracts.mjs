@@ -2,6 +2,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as module from '../authoring-image-generation.mjs';
 const {kleinDeviceRequirements,composeDeviceRequirements,createForegroundHandoff,createKleinAuthoringImageGeneration,kleinImageName}=module;
+test('moving an admitted app requester keeps the shared rendering gate held during the handoff',async()=>{
+ const states=[],handoff=createForegroundHandoff({prototype:{setForegroundOpportunityRequester(){}},host:{setForegroundServiceActive:v=>states.push(v)}});
+ handoff.install('app',()=>{});await handoff.activate('app');await handoff.release({keepServiceActive:true});
+ assert.deepEqual(states,[true],'the private renderer must not submit between two owners of an active service');
+});
 const tick=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const LIMITS={maxBufferSize:4294967296,maxStorageBufferBindingSize:4294967292,maxStorageBuffersPerShaderStage:31,maxComputeWorkgroupStorageSize:32768};
