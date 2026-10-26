@@ -1,3 +1,4 @@
+import {burnerBodyFor,remapBurnerBindings,burnerMembers,checkedBurnerRecipe} from '../../burner-recipe.mjs';
 import vm from 'node:vm';
 
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
@@ -5,6 +6,7 @@ import vm from 'node:vm';
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
   context.sceneComponents ??= null;
+  Object.assign(context,{burnerBodyFor,remapBurnerBindings,burnerMembers,checkedBurnerRecipe});
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {
     context.sceneObjects ??= [];

@@ -1,4 +1,4 @@
-import {checkedBurnerRecipe} from './burner-recipe.mjs';
+import {checkedBurnerRecipe,resolveBurnerBindings} from './burner-recipe.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
@@ -121,6 +121,7 @@ export function getSceneObjectRecords(data) {
     const raw=data.objects?.find(record=>record.id==='kiln');
     if(kiln && !Object.hasOwn(raw??{},'collision'))kiln.collision={domainId:'flame-field',enabled:true};
   }
+  resolveBurnerBindings(records,data.groups??[]);
   return records;
 }
 

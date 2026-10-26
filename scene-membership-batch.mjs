@@ -67,6 +67,7 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
     edits.assertCanRecordApplied(selectionTarget);
     try{
       for(const entry of members)copies.push(duplicate.object(entry.id));
+      duplicate.remap?.(new Map(members.map((entry,i)=>[entry.id,copies[i]])));
       groups.create(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition)});
     }catch(error){for(const copy of copies)membership.remove(copy,{recordHistory:false});throw error;}
     function snapshot(){
@@ -103,6 +104,7 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
     const revert=()=>{for(const id of copies.values())detach(id);scene.setGroups(before.groups);select(before.selection.ids,before.selection.activeId);membership.releaseUnreferenced();};
     try{
       for(const id of members){const copy=duplicate.object(id);copies.set(id,copy);membership.retainForHistory(copy,selectionTarget);}
+      duplicate.remap?.(copies);
       for(const id of roots){
         if(id.startsWith('@group:')){const group=scene.groups.find(row=>row.id===id.slice(7)),copyId=duplicate.groupId();groups.create(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
         else newRoots.push(copies.get(id));

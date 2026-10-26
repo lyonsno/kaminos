@@ -73,7 +73,11 @@ export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0
    for(let i=0;i<3;i++)controls['emitterApertureAxis'+'XYZ'[i]]=axis[i];
   }
   const inside=flamePoseInDomain(record.transform,translation,scale,shared);
-  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false&&visible(record.id),shared)};
+  const mapped=immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false&&visible(record.id),shared);
+  // Keep the physical supply area when a circular burner port is smaller than
+  // the solver's minimum footprint. Feed velocity stays the authored velocity.
+  if(record.emission?.burnerPort&&!record.emission.aperture){const radius=Number(controls.immersedRadius??.2)*pose.scale[0];mapped.emitterFluxAreaFraction=Math.min(1,(Math.max(0,radius)/mapped.immersedRadius)**2);}
+  return {id:record.id,controls:mapped};
  });
 }
 export function checkedFireSourceRecord(record){
@@ -83,6 +87,7 @@ export function checkedFireSourceRecord(record){
  if(record.emission!==undefined){
   if(record.emission?.domainId!==FIRE_DOMAIN_ID)throw Error('Invalid fire source domain reference');
   if(record.emission.aperture)checkedRectangularAperture(record.emission.aperture);
+  if(record.emission.burnerPort){const b=record.emission.burnerPort,count=b.designId==='crown-ring'?12:b.designId==='seam-rail'?1:0;if(!Number.isInteger(b.index)||b.index<0||b.index>=count||b.bodyId!==undefined&&(typeof b.bodyId!=='string'||!b.bodyId))throw Error('Invalid burner outlet binding');}
   const settings=controls(record.emission.settings,'source settings');
   for(const id of Object.keys(settings))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
   result.emission={...clone(record.emission),domainId:FIRE_DOMAIN_ID,settings};

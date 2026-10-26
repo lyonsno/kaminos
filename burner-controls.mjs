@@ -1,7 +1,7 @@
 import {burnerBodyFor,checkedBurnerRecipe} from './burner-recipe.mjs';
 export function installBurnerControls({document,host,scene,edits,history,numberDrag,write,onError=()=>{}}) {
  const panel=document.createElement('section');panel.id='selected-burner-properties';panel.hidden=true;
- panel.innerHTML='<h3>Burner</h3><p class="flame-scope">Move the group as one apparatus. Opening changes the active outlet; the metal body stays fixed.</p>';
+ panel.innerHTML='<h3>Burner</h3><p class="flame-scope">Move the body or its group as one apparatus. Opening changes the active outlet; the metal body stays fixed.</p>';
  host.prepend(panel);
  const targets=new Set(),inputs=new Map();
  const body=()=>burnerBodyFor(scene,scene.selection.activeId);
@@ -16,7 +16,7 @@ export function installBurnerControls({document,host,scene,edits,history,numberD
  const status=document.createElement('p');status.className='flame-scope';status.dataset.burnerStatus='';panel.append(status);
  return {sync(){const entry=body();panel.hidden=!entry;if(!entry)return;panel.querySelector('h3').textContent=entry.burner.designId==='crown-ring'?'Burner · Crown':'Burner · Seam';
   for(const [key,input] of inputs)if(input.type==='checkbox')input.checked=entry.burner[key];else if(document.activeElement!==input||!edits.state().active)input.value=entry.burner[key];
-  const ports=scene.objects.filter(e=>e.emission?.burnerPort&&e.groupId===entry.groupId),outside=ports.some(e=>e.object.userData.burnerOutside),floored=ports.some(e=>e.object.userData.burnerRadiusFloor);
-  status.textContent=!entry.burner.on||entry.burner.opening===0?'Supply off. Existing gas continues evolving.':outside?'An outlet is outside the simulation box. Move the burner or enlarge the box.':floored?'Small ports use the solver’s 0.02 radius floor. Enlarge the burner relative to its simulation box for narrower resolved outlets.':`${ports.length} bound outlet${ports.length===1?'':'s'} · shared Fire & smoke simulation`;
+  const ports=scene.objects.filter(e=>e.emission?.burnerPort?.bodyId===entry.id),outside=ports.some(e=>e.object.userData.burnerOutside),floored=ports.some(e=>e.object.userData.burnerRadiusFloor);
+  status.textContent=!entry.burner.on||entry.burner.opening===0?'Supply off. Existing gas continues evolving.':outside?'An outlet is outside the simulation box. Move the burner or enlarge the box.':floored?'Small ports use the solver’s 0.02 footprint floor; supply still follows the actual opening area. Enlarge the burner relative to its box to resolve narrower jets.':`${ports.length} bound outlet${ports.length===1?'':'s'} · shared Fire & smoke simulation`;
  },panel,target};
 }

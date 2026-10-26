@@ -18,7 +18,7 @@ export function checkedBurnerRecipe(value) {
 const setting=(id,value)=>({id,type:typeof value==='string'?'select-one':'range',value,rawValue:String(value)});
 // Outlet coordinates come from the retained design GLBs, in their original metre frame.
 // The body's root pose includes the ordinary GLB arrival normalization.
-export function compileBurnerSources(recipe,transform) {
+export function compileBurnerSources(recipe,transform,bodyId=null) {
  const r=checkedBurnerRecipe(recipe),pose=checkedPose(transform),s=pose.scale[0];
  if(pose.scale.some(n=>Math.abs(n-s)>1e-10*Math.max(1,Math.abs(s)))||s<0)throw Error('Burners require uniform positive scale');
  const rotation=new Quaternion().setFromEuler(new Euler(...pose.rotation));
@@ -35,25 +35,43 @@ export function compileBurnerSources(recipe,transform) {
   for(const [id,value] of Object.entries({'volume-emitter-source-law':'immersed-source','volume-emitter-aperture-pattern':'shape','volume-immersed-radius':radius,'volume-immersed-speed':r.feed,'volume-immersed-fuel':r.fuel,'volume-immersed-temperature':r.heat,'volume-immersed-back-wall':0}))settings[id]=setting(id,value);
   return {index,transform:{position:new Vector3(...centre).applyMatrix4(matrix).toArray(),rotation:new Euler().setFromQuaternion(q).toArray().slice(0,3),scale:[s,s,s]},
    emissionEnabled:r.on&&r.opening>0,
-   emission:{domainId:'flame-field',settings,burnerPort:{designId:r.designId,index},...(r.designId==='seam-rail'?{aperture:{kind:'rectangle',halfLength:.29/radius,halfWidth:.009*r.opening/radius}}:{})}};
+   emission:{domainId:'flame-field',settings,burnerPort:{designId:r.designId,index,...(bodyId?{bodyId}:{})},...(r.designId==='seam-rail'?{aperture:{kind:'rectangle',halfLength:.29/radius,halfWidth:.009*r.opening/radius}}:{})}};
  });
 }
 export function burnerBodyFor(scene,id) {
- if(id?.startsWith('@group:')){const group=scene.groups.find(g=>g.id===id.slice(7));return scene.objects.find(e=>e.burner&&group?.objectIds.includes(e.id))??null;}
+ const bodies=ids=>scene.objects.filter(e=>e.burner&&ids?.includes(e.id));
+ if(id?.startsWith('@group:')){const found=bodies(scene.groups.find(g=>g.id===id.slice(7))?.objectIds);return found.length===1?found[0]:null;}
  const entry=scene.objects.find(e=>e.id===id);if(entry?.burner)return entry;
- if(entry?.emission?.burnerPort){const group=scene.groups.find(g=>g.objectIds.includes(id));return scene.objects.find(e=>e.burner&&group?.objectIds.includes(e.id))??null;}
- return null;
+ const binding=entry?.emission?.burnerPort;if(!binding)return null;
+ if(binding.bodyId)return scene.objects.find(e=>e.id===binding.bodyId&&e.burner)??null;
+ const found=bodies(scene.groups.find(g=>g.objectIds.includes(id))?.objectIds);return found.length===1?found[0]:null;
 }
-// Derived source records remain ordinary scene members. Group membership is the binding,
-// so duplication needs no private ID remapper and every source retains normal visibility.
+// Older candidate scenes carried only group-local bindings. Resolve them once
+// into explicit references; ordinary user grouping never owns this relationship.
+export function resolveBurnerBindings(objects,groups) {
+ const scene={objects,groups};
+ for(const entry of objects){const binding=entry.emission?.burnerPort;if(!binding)continue;
+  const body=burnerBodyFor(scene,entry.id);
+  if(!body||body.burner.designId!==binding.designId)throw Error('Burner outlet has no matching authored body');
+  binding.bodyId=body.id;
+ }
+ return objects;
+}
+export function burnerMembers(scene,bodyId){return scene.objects.filter(e=>e.id===bodyId||e.emission?.burnerPort?.bodyId===bodyId).map(e=>e.id);}
+export function remapBurnerBindings(scene,copies){
+ for(const id of copies.values()){const entry=scene.objects.find(e=>e.id===id),binding=entry?.emission?.burnerPort;if(!binding)continue;
+  if(copies.has(binding.bodyId))binding.bodyId=copies.get(binding.bodyId);
+  else delete entry.emission.burnerPort; // an independently copied port becomes an ordinary source
+  if(entry.object?.userData?.kaminosSceneObject)entry.object.userData.kaminosSceneObject.emission=entry.emission;
+ }
+}
 export function synchronizeBurnerSources(scene,{pose,write}) {
- for(const group of scene.groups){
-  const bodies=scene.objects.filter(e=>e.burner&&group.objectIds.includes(e.id));if(bodies.length!==1)continue;
-  const body=bodies[0],compiled=compileBurnerSources(body.burner,pose(body));
-  for(const entry of scene.objects){if(!group.objectIds.includes(entry.id)||!entry.emission?.burnerPort)continue;
-   const port=compiled[entry.emission.burnerPort.index];
-   if(!port||entry.emission.burnerPort.designId!==body.burner.designId)throw Error('Burner outlet binding differs from its body');
-   write(entry,port);
-  }
+ const compiled=new Map();
+ for(const entry of scene.objects){const binding=entry.emission?.burnerPort;if(!binding)continue;
+  const body=burnerBodyFor(scene,entry.id);if(!body)continue; // admission/removal may be between members
+  if(!compiled.has(body.id))compiled.set(body.id,compileBurnerSources(body.burner,pose(body),body.id));
+  const port=compiled.get(body.id)[binding.index];
+  if(!port||binding.designId!==body.burner.designId)throw Error('Burner outlet binding differs from its body');
+  write(entry,port);
  }
 }

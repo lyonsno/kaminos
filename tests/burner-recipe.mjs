@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Vector3,Euler} from '../lib/three.core.js';
-import {defaultBurnerRecipe,checkedBurnerRecipe,compileBurnerSources,synchronizeBurnerSources} from '../burner-recipe.mjs';
+import {defaultBurnerRecipe,checkedBurnerRecipe,compileBurnerSources,synchronizeBurnerSources,remapBurnerBindings,resolveBurnerBindings,burnerBodyFor} from '../burner-recipe.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import {flameSourceInputs} from '../scene-fire-domain.mjs';
 import {resolveImmersedSourceConfig,immersedCoverageMapForConfig} from '../volume-core.js';
@@ -40,4 +40,29 @@ test('a burner template cannot smuggle field settings or non-finite supply into 
 test('malformed rectangle support is rejected before the solver sees a partial collection',()=>{
  const p=compileBurnerSources(defaultBurnerRecipe('seam-rail'),pose)[0],record={...p,id:'port',type:'flame-emitter',source:'kaminos:analytic-flame'};
  record.emission.aperture.halfWidth=3;assert.throws(()=>flameSourceInputs([record]),/aperture/i);
+});
+test('regrouping or ungrouping burners preserves independent body-to-outlet control',()=>{
+ const make=(id,designId)=>{const burner=defaultBurnerRecipe(designId),port=compileBurnerSources(burner,pose)[0];port.emission.burnerPort.bodyId=id;return [{id,burner,transform:pose},{id:id+'-port',...port}];};
+ for(const groups of [[],[{id:'combined',objectIds:['crown','crown-port','seam','seam-port']}]] ){
+  const scene={objects:[...make('crown','crown-ring'),...make('seam','seam-rail')],groups};scene.objects[0].burner.on=false;
+  let writes=0;synchronizeBurnerSources(scene,{pose:e=>e.transform,write:(e,p)=>{writes++;Object.assign(e,p);}});
+  assert.equal(writes,2);assert.equal(scene.objects[1].emissionEnabled,false);assert.equal(scene.objects[3].emissionEnabled,true);
+ }
+});
+
+test('copying a burner remaps only copied bindings, while an independently copied port becomes ordinary',()=>{
+ const r=defaultBurnerRecipe('crown-ring'),source={id:'old-port',...compileBurnerSources(r,pose,'old-body')[0]};
+ const copy={...structuredClone(source),id:'new-port'},body={id:'new-body',burner:structuredClone(r),transform:pose};const scene={objects:[source,copy,body],groups:[]};
+ remapBurnerBindings(scene,new Map([['old-body','new-body'],['old-port','new-port']]));assert.equal(source.emission.burnerPort.bodyId,'old-body');assert.equal(copy.emission.burnerPort.bodyId,'new-body');
+ const portOnly={...structuredClone(source),id:'port-only'};scene.objects.push(portOnly);remapBurnerBindings(scene,new Map([['old-port','port-only']]));assert.equal(portOnly.emission.burnerPort,undefined);
+});
+test('old candidate bindings migrate once and a missing explicit body fails visibly',()=>{
+ const r=defaultBurnerRecipe('seam-rail'),objects=[{id:'body',burner:r},{id:'port',...compileBurnerSources(r,pose)[0]}],groups=[{id:'original',objectIds:['body','port']}];
+ resolveBurnerBindings(objects,groups);assert.equal(objects[1].emission.burnerPort.bodyId,'body');assert.equal(burnerBodyFor({objects,groups:[]},'port'),objects[0]);
+ objects[1].emission.burnerPort.bodyId='absent';assert.throws(()=>resolveBurnerBindings(objects,groups),/authored body/);
+});
+test('an unresolved Crown opening still changes supplied area while retaining feed velocity',()=>{
+ const recipe=defaultBurnerRecipe('crown-ring'),transform={...pose,scale:[3.3,3.3,3.3]},shared={resolution:64,gridHeightRatio:2,pressureSolver:'converged-open-top',emitterSourceLaw:'immersed-source'};
+ const config=opening=>{recipe.opening=opening;const port=compileBurnerSources(recipe,transform,'body')[0];return resolveImmersedSourceConfig(flameSourceInputs([{...port,id:'port',type:'flame-emitter',source:'kaminos:analytic-flame'}],{controls:shared})[0].controls,{grid:64,gridHeight:128});};
+ const full=config(1),half=config(.5);near(half.effective.fluxRequested/full.effective.fluxRequested,.25);near(half.effective.speed,full.effective.speed);near(half.effective.radiusCells,full.effective.radiusCells);
 });

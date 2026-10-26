@@ -2779,11 +2779,13 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const centreCells = centre.map(v => (v + 1) * grid / 2);
   const direction = immersedDirectionFromAngles(yaw, pitch);
   const radiusCells = radius * grid / 2;
-  const fluxRequested = speed * Math.PI * radiusCells * radiusCells * puffFactor;
+  const sourceAreaFraction=Number(controls.emitterFluxAreaFraction??1);
+  if(!Number.isFinite(sourceAreaFraction)||sourceAreaFraction<0||sourceAreaFraction>1)throw Error('Source aperture area fraction must be between zero and one');
+  const fluxRequested = speed * Math.PI * radiusCells * radiusCells * puffFactor * sourceAreaFraction;
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: pattern.kind==='rectangle' ? rectangularSlabBasis(direction,['X','Y','Z'].map(a=>controls['emitterApertureAxis'+a])) : immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: pattern.kind==='rectangle' ? rectangularSlabBasis(direction,['X','Y','Z'].map(a=>controls['emitterApertureAxis'+a])) : immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, sourceAreaFraction, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
