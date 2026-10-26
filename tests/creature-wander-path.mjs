@@ -54,3 +54,39 @@ for(const offset of [0,.01,.02]){
  assert.ok(Math.abs(travel-1)<.001,'Arc-distance inversion changed actual geometric source-paced travel: '+travel);
 }
 console.log('Wander follows source distance, stays in its area, reconstructs and redirects without teleporting');
+
+// Feeding an accepted physical root back into the route must not choose a new
+// curve. Exercise many steps and destination transitions, including restored
+// paths, rather than only comparing the first coincident position.
+for(const destination of [null,[2,2]]){
+ const plain=createWanderPath(input),accepted=createWanderPath(input);
+ if(destination){plain.setDestination(destination);accepted.setDestination(destination);}
+ for(let i=0;i<300;i++){
+  plain.advance(.03);const proposed=accepted.advance(.03);
+  accepted.contact(proposed.position,proposed.direction,proposed.distance);
+  assert.deepEqual(accepted.snapshot(),plain.snapshot(),'Identity physical acceptance changed the remaining route or RNG');
+ }
+}
+// A tiny real correction should deform the remaining quadratic continuously,
+// rather than reinstalling the zone-sized tangent handle after each step.
+const remaining=createWanderPath(input);remaining.advance(.8);
+const original=remaining.snapshot(),current=remaining.read(),ahead=createWanderPath({snapshot:original});
+const expected=ahead.advance(.1),shift=[1e-6,-1e-6];
+remaining.contact(current.position.map((x,i)=>x+shift[i]),current.direction,current.distance);
+assert.deepEqual(remaining.read().target,current.target);
+close(remaining.read().position,current.position.map((x,i)=>x+shift[i]),'Physical displacement must remain authoritative');
+// This fixture's first two x coordinates are zero, so x = end.x * t².
+const t=Math.sqrt(current.position[0]/original.points[2][0]);
+const rightControl=original.points[1].map((x,i)=>x+(original.points[2][i]-x)*t);
+const expectedHandle=Math.hypot(...rightControl.map((x,i)=>x-current.position[i]));
+const correctedPoints=remaining.snapshot().points;
+assert.ok(Math.abs(Math.hypot(...correctedPoints[1].map((x,i)=>x-correctedPoints[0][i]))-expectedHandle)<1e-10,'Physical correction must retain the subdivided tangent handle');
+const corrected=remaining.advance(.1);
+// Rebuilding the arc lookup has the existing area-scaled 6e-5 inversion
+// tolerance; allow that numerical error while rejecting the old handle reset.
+assert.ok(Math.hypot(...corrected.position.map((x,i)=>x-expected.position[i]))<1e-4,'Small physical correction reset the remaining curve');
+const continued=createWanderPath({snapshot:remaining.snapshot()});
+close(continued.advance(.2).position,remaining.advance(.2).position,'Corrected route did not round trip');
+const rounded=createWanderPath(input);rounded.advance(.3);const roundState=rounded.snapshot(),roundRead=rounded.read();
+rounded.contact(roundRead.position.map(x=>x+Number.EPSILON),roundRead.direction.map(x=>x*(1+Number.EPSILON)),roundRead.distance);
+assert.deepEqual(rounded.snapshot(),roundState,'Transform roundoff must not trigger curve reconstruction');
