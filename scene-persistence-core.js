@@ -1,4 +1,5 @@
 import {checkedRepetition} from './scene-repetition.mjs';
+import {checkedBurnable} from './scene-burning-settings.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
@@ -40,6 +41,7 @@ function normalizeSceneObjectRecord(record) {
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
+    ...(record.burnable!=null?{burnable:checkedBurnable(record)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',

@@ -115,6 +115,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('selected-mesh-properties'), 'authoring-type-slot');
   move(byId('selected-spot-properties'), 'authoring-type-slot');
   move(byId('selected-collision-properties'), 'authoring-type-slot');
+  move(byId('selected-burnable-properties'), 'authoring-type-slot');
   move(byId('selected-render-properties'), 'authoring-type-slot');
   move(byId('selected-object-relations'), 'authoring-type-slot');
   move(byId('selected-group-properties'), 'authoring-type-slot');
