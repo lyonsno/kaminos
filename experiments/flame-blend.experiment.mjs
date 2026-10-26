@@ -1,3 +1,4 @@
+import {portraitImage} from '../flame-portrait.mjs';
 import {createFlameBlend,BLEND_GROUPS} from '../flame-blend.mjs';
 
 export default {
@@ -19,6 +20,7 @@ export default {
           .flame-blend-cockpit [hidden] {display:none!important;}
           .flame-blend-cockpit p {margin:0;color:var(--muted,#aaa);line-height:1.5;}
           .flame-blend-endpoint {display:grid;gap:4px;padding:6px;border:1px solid #ffffff20;border-radius:6px;}
+          .flame-blend-endpoint .flame-portrait {width:100%;height:128px;object-fit:contain;background:#737b86;border-radius:4px;}
           .flame-blend-cockpit select {width:100%;min-width:0;}
           .flame-blend-actions {display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
           .flame-blend-cockpit input[type=range] {width:100%;}
@@ -36,7 +38,7 @@ export default {
         const failed=error=>{message=error.message;sync();};
         const run=(name,value)=>{message='';return invoke(name,value).catch(failed);};
         const button=(text,name,value)=>{const b=el('button',text,'btn');b.type='button';b.addEventListener('click',()=>run(name,value));return b;};
-        const endpointLabels={},endpointSelects={},endpointCurrent={},editing=[];
+        const endpointLabels={},endpointSelects={},endpointCurrent={},endpointPortraits={},portraitKeys={},editing=[];
         for(const name of ['a','b']) {
           const box=el('section',null,'flame-blend-endpoint');
           const label=el('strong',name.toUpperCase()+' · Choose or capture a look');endpointLabels[name]=label;
@@ -45,7 +47,8 @@ export default {
           const captured=el('option');captured.value='@current';captured.hidden=true;select.append(captured);endpointCurrent[name]=captured;
           select.addEventListener('change',()=>{if(select.value&&select.value!=='@current')run('choose',{slot:name,presetId:select.value});});
           const capture=button('Capture scene as '+name.toUpperCase(),'capture',name);editing.push(select,capture);
-          box.append(label,select,capture);panel.append(box);
+          const picture=el('div');endpointPortraits[name]=picture;
+          box.append(label,picture,select,capture);panel.append(box);
         }
         const useA=button('Add flame from A','useA');panel.append(useA);editing.push(useA);
         const author=el('div',null,'flame-blend-actions');author.append(button('Edit emitter','select','emitter'),button('Edit material & flow','select','domain'),button('Frame flame','frame'));panel.append(author);
@@ -78,6 +81,8 @@ export default {
           const state=blend.read(),busy=state.previewing||state.loading;
           for(const name of ['a','b']){
             const endpoint=state[name];endpointLabels[name].textContent=name.toUpperCase()+' · '+(endpoint?.label||'Choose or capture a look');
+            const portrait=endpoint?.portrait,key=portrait?.imageUrl??portrait?.image??endpoint?.portraitError??'';
+            if(portraitKeys[name]!==key){portraitKeys[name]=key;endpointPortraits[name].replaceChildren(portrait?portraitImage(document,portrait,{label:name.toUpperCase()+' · '+endpoint.label}):el('p',endpoint?.portraitError?'Portrait pending · '+endpoint.portraitError:'No portrait yet'));}
             endpointCurrent[name].hidden=!endpoint;endpointCurrent[name].textContent=endpoint?.label||'';endpointSelects[name].value=endpoint?'@current':'';
           }
           for(const node of editing)node.disabled=busy;

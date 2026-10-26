@@ -57,3 +57,15 @@ test('unused library objects do not make their parameters replay-owned',()=>{
  const result=evaluateInferenceFlame(recording,500,score,settings(7));
  assert.deepEqual(result.settings,settings(7));
 });
+test('saved look portraits stay lightweight during replay and portable across export and restore',async()=>{
+ const {retainFlamePortrait,releaseFlamePortrait}=await import('../flame-portrait.mjs');
+ const raw={schema:'kaminos.flame-portrait.v1',image:'data:image/png;base64,AAAA',width:1,height:1};
+ const portrait=retainFlamePortrait(raw),f=fixture(),o=f.response.operations;
+ o.saveObject({id:'pictured',kind:'ramp',recipe:{...recipe,a:{...recipe.a,portrait},b:{...recipe.b,portrait}}});
+ releaseFlamePortrait(portrait);
+ const live=f.response.read().score.objects[0].recipe.a.portrait;
+ assert.equal(Object.hasOwn(live,'image'),false);assert.equal((await fetch(live.imageUrl)).status,200);
+ const exported=o.export();assert.equal(exported.score.objects[0].recipe.a.portrait.image,raw.image);
+ o.restore(exported);assert.equal(Object.hasOwn(f.response.read().score.objects[0].recipe.a.portrait,'image'),false);
+ assert.equal(o.export().score.objects[0].recipe.a.portrait.image,raw.image);f.response.dispose();
+});

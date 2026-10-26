@@ -10,7 +10,9 @@ Open the **Flame · inference & replay** experiment in Workbench. It uses the sc
 
 Each transition/effect offers **Fit phase**, **Authored seconds**, or **Observed progress**, plus a duration multiplier. Fit uses the recorded phase span; ×1 fills it. Authored seconds uses the saved blend duration. Observed progress follows measured progress; unknown progress falls back to authored seconds without inventing a percentage. Live phases with unknown lengths also use authored seconds. Layer and global multipliers stretch responses; longer responses may be interrupted by the next phase. Finished always gets its full authored duration after inference completes.
 
-Captured endpoints immediately select a compact name derived from their values. Replay runs no inference; it does not reconstruct an evolved fluid checkpoint.
+Captured endpoints immediately select a compact name derived from their values and a portrait of the current evolved flame. A/B portraits and shared basin covers use the same front-facing domain framing. The capture borrows the view briefly and restores it without stepping or resetting the fluid. Cold fields or unavailable capture routes keep the saved settings and report a pending portrait. Saved states show B; transitions show both endpoints. Explicit blend and arrangement exports embed portraits for reopening on another machine; live replay retains only short image references.
+
+The Properties basin browser shows shared covers. Save basin captures the current field; it never waits through a new simulation warmup. Older basins can be backfilled through `scripts/backfill-basin-portraits.mjs --output <receipt-directory> --steps 60` under Greenroom. The batch preserves authored grid and rendering settings, records current compatibility projection/clamps and appearance mode, and reports each missing or failed cover separately. Replay runs no inference; it does not reconstruct an evolved fluid checkpoint.
 
 The initial recording is an illustrated demo, labelled as such. Klein's real intermediate previews are approximate latent RGB projections, not fully decoded intermediate images. Stages without known progress show no percentage.
 

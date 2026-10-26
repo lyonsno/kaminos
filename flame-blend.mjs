@@ -1,3 +1,4 @@
+import {retainFlamePortrait,exportFlamePortrait,releaseFlamePortrait} from './flame-portrait.mjs';
 import {FLAME_PROPERTY_GROUPS} from './flame-authoring.mjs';
 
 export const BLEND_GROUPS = FLAME_PROPERTY_GROUPS.filter(group => group.view !== 'quality');
@@ -92,14 +93,23 @@ export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
     // Validate against the current host before accepting the recipe. Loading
     // endpoints does not apply their values to the live scene.
     blendSettings({a:recipe.a.settings,b:recipe.b.settings,current:settings(),fields:recipe.fields,amount:0});
-    a=structuredClone(recipe.a);b=structuredClone(recipe.b);fields=[...recipe.fields];duration=recipe.duration;amount=0;changed();return read();
+    releaseFlamePortrait(a?.portrait);releaseFlamePortrait(b?.portrait);
+    a=structuredClone(recipe.a);b=structuredClone(recipe.b);if(a.portrait)a.portrait=retainFlamePortrait(a.portrait);if(b.portrait)b.portrait=retainFlamePortrait(b.portrait);fields=[...recipe.fields];duration=recipe.duration;amount=0;changed();return read();
   }
   const operations={
     capture(name){editable();slot(name);if(!flame.read().active)throw Error('Add a flame to the scene first');
-      const captured=settings(),endpoint={label:captureLabel(captured),settings:captured};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('capture');changed();return read();},
+      const captured=settings(),endpoint={label:captureLabel(captured),settings:captured};
+      const apply=()=>{if(disposed)throw Error('Flame blend was closed during capture');releaseFlamePortrait((name==='a'?a:b)?.portrait);if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('capture');changed();return read();};
+      if(!flame.capturePortrait)return apply();
+      loading=true;changed();
+      return Promise.resolve().then(()=>flame.capturePortrait()).then(portrait=>{
+        if(JSON.stringify(settings())!==JSON.stringify(captured))throw Error('Flame settings changed during capture; capture again');
+        endpoint.portrait=retainFlamePortrait(portrait);return apply();
+      },failure=>{endpoint.portraitError=failure.message;return apply();}).finally(()=>{loading=false;changed();});
+    },
     async choose({slot:name,presetId}){editable();slot(name);loading=true;changed();
       try{const next=await flame.readBasin(presetId);if(disposed)throw Error('Flame blend was closed during preset load');
-        const endpoint={label:next.source?.label||presetId,settings:next};if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('endpoint');return read();
+        const {portrait,portraitError,...captured}=next;const endpoint={label:next.source?.label||presetId,settings:captured,...(portrait?{portrait:retainFlamePortrait(portrait)}:{}),...(portraitError?{portraitError}:{})};releaseFlamePortrait((name==='a'?a:b)?.portrait);if(name==='a')a=endpoint;else b=endpoint;refreshFields();emit('endpoint');return read();
       }finally{loading=false;changed();}},
     async useA(){editable();if(flame.read().present)throw Error('Enable the existing flame in Properties before blending');if(!a?.settings.source?.presetId)throw Error('Choose a saved preset for A first');loading=true;changed();
       try{await flame.initialize(structuredClone(a.settings),{signal:lifetime.signal});}finally{loading=false;changed();}return read();},
@@ -114,8 +124,9 @@ export function createFlameBlend({flame,onFrame,record=()=>{},changed=()=>{}}) {
     play(){editable();begin();if(amount===1)preview(0);playback={start:amount,elapsed:0};emit('play');changed();return read();},
     pause(){end();emit('pause');return read();},
     cancel(){end(true);emit('cancel');return read();},
-    export(){available();return {schema:'kaminos-flame-blend-v1',...structuredClone(current())};},
+    snapshot(){available();return {schema:'kaminos-flame-blend-v1',...structuredClone(current())};},
+    export(){available();const recipe={schema:'kaminos-flame-blend-v1',...structuredClone(current())};for(const endpoint of [recipe.a,recipe.b])if(endpoint?.portrait)endpoint.portrait=exportFlamePortrait(endpoint.portrait);return recipe;},
     restore,
   };
-  return {read,operations,dispose(){disposed=true;lifetime.abort();end(true);stopFrames();}};
+  return {read,operations,dispose(){disposed=true;lifetime.abort();end(true);stopFrames();releaseFlamePortrait(a?.portrait);releaseFlamePortrait(b?.portrait);}};
 }

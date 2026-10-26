@@ -1,5 +1,5 @@
 export function createFlameWorkbench({readSettings,applySettings,readRuntime,readScene,readView,
-  applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,readPresence=()=>readRuntime()?.active===true}) {
+  applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,capturePortrait,readPresence=()=>readRuntime()?.active===true}) {
   const read=()=>{
     const runtime=readRuntime(),settings=readSettings();
     return {active:runtime?.active===true,present:readPresence(),paused:Number(settings.domControls['volume-look-freeze']?.value)>=0.5,
@@ -20,7 +20,7 @@ export function createFlameWorkbench({readSettings,applySettings,readRuntime,rea
     }
     applySettings(next,'Edit Flame Workbench controls');return read();
   }
-  return Object.freeze({read,status:()=>({active:readRuntime()?.active===true,present:readPresence()}),settings:()=>structuredClone(readSettings()),setControls,applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,
+  return Object.freeze({read,status:()=>({active:readRuntime()?.active===true,present:readPresence()}),settings:()=>structuredClone(readSettings()),setControls,applyBasin,saveBasin,listBasins,select,frame,subscribe,readBasin,beginPreview,initialize,capturePortrait,
     setPaused(paused){if(typeof paused!=='boolean')throw Error('Pause requires a Boolean');return setControls({'volume-look-freeze':paused?1:0});},
   });
 }

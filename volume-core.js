@@ -27693,7 +27693,7 @@ export function createKaminosVolumePrototype({
           if (released) throw new Error('Still presentation was released');
           const frame = await sampleFrame({advanceSim:false,now,includeRgba:true});
           if (!frame.ok) throw new Error(frame.reason || 'Flame output failed');
-          return {image:frame.image,receipt:{width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
+          return {image:frame.image,receipt:{width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps,alphaMode:transparentCanvas?'premultiplied':'opaque'}};
         }};
       } catch (error) { release(); throw error; }
     },

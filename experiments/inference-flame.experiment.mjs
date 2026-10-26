@@ -1,3 +1,4 @@
+import {portraitImage} from '../flame-portrait.mjs';
 import blendDefinition from './flame-blend.experiment.mjs';
 import {createInferenceFlame,INFERENCE_STAGES} from '../inference-flame.mjs';
 import {inferenceEvents} from '../inference-events.mjs';
@@ -23,9 +24,9 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
   blend.operations.pause();const result=fn.apply(response.operations,args),state=response.read({includeScore:false});
   record({kind:'inference-flame.'+name,phase:'applied',effective:{position:state.position,live:state.live}});return result;
  };
- operations['response.assignBlend']=stage=>operations['response.assign']({stage,recipe:blend.operations.export()});
- operations['response.saveBlendObject']=value=>operations['response.saveObject']({...value,recipe:blend.operations.export()});
- operations['response.updateBlendObject']=value=>operations['response.updateObject']({...value,recipe:blend.operations.export()});
+ operations['response.assignBlend']=stage=>operations['response.assign']({stage,recipe:blend.operations.snapshot()});
+ operations['response.saveBlendObject']=value=>operations['response.saveObject']({...value,recipe:blend.operations.snapshot()});
+ operations['response.updateBlendObject']=value=>operations['response.updateObject']({...value,recipe:blend.operations.snapshot()});
  operations['response.editObject']=id=>{
   response.operations.pause();const object=response.read().score.objects?.find(item=>item.id===id);
   if(!object)throw Error('Choose a saved state or effect');return blend.operations.restore(object.recipe);
@@ -55,6 +56,7 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
    .inference-flame-panel .object-list,.inference-flame-panel .phase-stack{display:grid;gap:6px}
    .inference-flame-panel .object-list{max-height:270px;overflow:auto}
    .inference-flame-panel .object-card,.inference-flame-panel .layer-card{display:grid;gap:6px;padding:8px;border:1px solid #ffffff25;border-radius:6px;min-width:0}
+   .inference-flame-panel .object-portraits{display:flex;gap:6px}.inference-flame-panel .object-portraits figure{margin:0;flex:1;min-width:0}.inference-flame-panel .object-portraits img{width:100%;height:96px;object-fit:contain;background:#737b86;border-radius:4px}
    .inference-flame-panel .object-card[data-selected=true]{border-color:#dba66b;background:#dba66b12}
    .inference-flame-panel .object-card strong,.inference-flame-panel .layer-card strong{overflow-wrap:anywhere}
    .inference-flame-panel .object-summary{color:#aaa}
@@ -128,6 +130,8 @@ export default {id:'inference-flame',title:'Flame · inference & replay',async c
    for(const object of list){
     const card=el('article');card.className='object-card';card.dataset.selected=String(selectedObject===object.id);card.dataset.objectId=object.id;
     card.append(el('strong',object.label),el('span',`${kinds[object.kind]??object.kind} · ${object.recipe.fields.length} parameters${object.kind==='state'?'':` · ${object.recipe.duration}s`}`));
+    const pictures=el('div');pictures.className='object-portraits';
+    for(const slot of object.kind==='ramp'?['a','b']:['b']){const endpoint=object.recipe[slot],figure=el('figure');figure.append(endpoint?.portrait?portraitImage(document,endpoint.portrait,{label:object.label+' · '+slot.toUpperCase()}):el('span','No portrait'),el('figcaption',slot.toUpperCase()+' · '+(endpoint?.label??'')));pictures.append(figure);}card.append(pictures);
     const select=btn(selectedObject===object.id?'Selected':'Select');select.onclick=()=>{selectedObject=object.id;kind.value=object.kind;objectName.value=object.label;invalidate();};
     const edit=btn('Edit A/B');edit.onclick=()=>editObject(object);
     const add=btn('Add to '+names[stage.value]);add.onclick=()=>run('response.addLayer',{stage:stage.value,objectId:object.id});

@@ -1,3 +1,4 @@
+import {portraitImage} from './flame-portrait.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
 import {volumeControlTooltip} from './volume-control-descriptions.mjs';
 import {describeVolumeSettingsSaveOutcome} from './volume-settings-preset-contract.mjs';
@@ -265,8 +266,9 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
   basin.open=false;
-  basin.innerHTML='<summary>Basins</summary><p id="flame-basin-current" class="flame-scope"></p><label for="flame-basin-label">Basin name</label><input id="flame-basin-label" type="text" placeholder="New basin name" autocomplete="off"><button type="button" class="btn" id="flame-basin-save">Save basin</button><input id="flame-basin-search" type="search" placeholder="Find a basin" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Fire basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope"></p>';
+  basin.innerHTML='<summary>Basins</summary><p id="flame-basin-current" class="flame-scope"></p><label for="flame-basin-label">Basin name</label><input id="flame-basin-label" type="text" placeholder="New basin name" autocomplete="off"><button type="button" class="btn" id="flame-basin-save">Save basin</button><input id="flame-basin-search" type="search" placeholder="Find a basin" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Fire basin"></select><div id="flame-basin-covers" class="flame-basin-covers"></div><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope"></p>';
   sharedHost.insertBefore(basin,navigation);
+  const coverStyle=document.createElement('style');coverStyle.textContent='.flame-basin-covers{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;max-height:340px;overflow:auto;margin:8px 0}.flame-basin-cover{display:grid;gap:4px;padding:5px;text-align:left;min-width:0;border:1px solid #ffffff25;border-radius:5px;background:transparent;color:inherit;font:inherit;cursor:pointer}.flame-basin-cover[aria-pressed=true]{border-color:#dba66b}.flame-basin-cover img{width:100%;height:96px;object-fit:contain;background:#737b86}.flame-basin-cover span{overflow-wrap:anywhere}';basin.append(coverStyle);
   const byId=id=>document.getElementById(id);
   let entries=[];
   function renderOptions() {
@@ -277,12 +279,20 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     }
     if([...select.options].some(option=>option.value===previous))select.value=previous;
     byId('flame-basin-apply').disabled=!select.value;
+    const covers=byId('flame-basin-covers');covers.replaceChildren();
+    for(const entry of entries.filter(entry=>`${entry.label} ${entry.presetId}`.toLowerCase().includes(query))){
+      const card=document.createElement('button');card.type='button';card.className='flame-basin-cover';card.setAttribute('aria-pressed',String(select.value===entry.presetId));card.setAttribute('aria-label','Select '+entry.label);
+      if(entry.cover)card.append(portraitImage(document,{...entry.cover.portrait,imageUrl:entry.cover.imageUrl},{label:entry.label}));
+      else {const missing=document.createElement('span');missing.textContent='Portrait pending';card.append(missing);}
+      const caption=document.createElement('span');caption.textContent=entry.label;card.append(caption);card.onclick=()=>{select.value=entry.presetId;renderOptions();};covers.append(card);
+    }
   }
   const status=message=>byId('flame-basin-status').textContent=message;
   async function refresh() {
     try {const index=await listBasins();entries=[...index.entries,...(index.earlierVersions||[])];renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
     catch(error){status(error.message);onError(error);}
   }
+  byId('flame-basin-select').addEventListener('change',renderOptions);
   byId('flame-basin-search').addEventListener('input',renderOptions);
   byId('flame-basin-refresh').onclick=refresh;
   byId('flame-basin-save').onclick=async()=>{
@@ -296,7 +306,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       byId('flame-basin-search').value='';renderOptions();
       byId('flame-basin-select').value=result.effective.presetId;renderOptions();
       const outcome=describeVolumeSettingsSaveOutcome(result);
-      status(`Saved ${result.effective.label}${outcome.text?` | ${outcome.text}`:''}`);
+      status(`Saved ${result.effective.label}${outcome.text?` | ${outcome.text}`:''}${result.portraitWarning?` | Portrait pending: ${result.portraitWarning}`:''}`);
     } catch(error){status(error.message);onError(error);}
     finally{button.disabled=false;sync();}
   };

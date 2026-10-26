@@ -2868,6 +2868,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
+import {createFlamePortrait,flamePortraitView,readOptionalFlamePortrait} from './flame-portrait.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -11835,6 +11836,39 @@ async function initScene() {
     for(const object of hidden)object.visible=false;
     return ()=>{for(const object of hidden)object.visible=true;};
   };
+  window.kaminosCaptureFlamePortrait=createFlamePortrait({
+    async begin(){
+      const busy=recordingExtent?'A viewport recording is running':vantageBusy();if(busy)throw Error(busy);
+      if(!volumePrototype?.debugState?.().active||!flameDomainGuide?.box)throw Error('Add an active flame before capturing its portrait');
+      if(volumePrototype.debugState().simStepCount<30)throw Error('Let the current flame develop before capturing its portrait');
+      const snapshot={view:readAuthoredCameraView(),aspect:camera.aspect,zoom:camera.zoom,projection:viewProjection.state(),pixelRatio:renderer.getPixelRatio(),controlsEnabled:controls.enabled};
+      const before=JSON.stringify(flameSettingsState()),view=flamePortraitView({min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()});
+      const releaseViewport=holdViewportForVantage();let releaseInspection=null,fire=null,released=false;
+      const release=()=>{
+        if(released)return;released=true;const errors=[],restore=fn=>{try{fn?.();}catch(error){errors.push(error);}};
+        outputCaptureExtent=null;manualInspectionRender=false;
+        restore(()=>{viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;writeAuthoredCameraView(snapshot.view);camera.aspect=snapshot.aspect;camera.updateProjectionMatrix();});
+        restore(()=>{renderer.setPixelRatio(snapshot.pixelRatio);syncViewportRendererSize();});restore(()=>fire?.release());restore(releaseInspection);restore(releaseViewport);
+        controls.enabled=snapshot.controlsEnabled;sceneGI.resetHistory('flame-portrait-restored');markDirty();
+        if(errors.length)throw new AggregateError(errors,'Flame portrait restoration failed');
+      };
+      try{
+        outputCaptureExtent={width:256,height:256};controls.enabled=false;
+        viewProjection.setOrthographic(false);camera.zoom=1;writeAuthoredCameraView(view);renderer.setPixelRatio(1);syncViewportRendererSize();camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+        fire=await volumePrototype.holdPresentationForStill({renderScale:1});
+        releaseInspection=window.__kaminosBeginSceneInspection();
+        const heldSteps=volumePrototype.debugState().simStepCount;
+        return {camera:view,release,async draw(){
+          let frame;manualInspectionRender=true;try{frame=await fire.draw();}finally{manualInspectionRender=false;}
+          if(JSON.stringify(flameSettingsState())!==before)throw Error('Flame settings changed while the portrait was captured');
+          if(frame.receipt.simStepCount!==heldSteps)throw Error('Flame evolved during its held portrait');
+          frame.receipt.controls=structuredClone(volumePrototype.debugState().controls);frame.receipt.domain={min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()};
+          return frame;
+        }};
+      }catch(error){release();throw error;}
+    },
+    encode(image){const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(image.rgba),image.width,image.height),0,0);return canvas.toDataURL('image/png');},
+  });
   const outputProfiles=createOutputProfiles({controller:createUserPreferences()});
   const renderOutput=captureStill({async begin({settings,pixels,signal}){
     const busy=recordingExtent?'A viewport recording is running':vantageBusy();if(busy)throw Error(busy);
@@ -12834,9 +12868,10 @@ function openFlameWorkbench() {
     async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     readPresence:()=>Boolean(activeSceneComposition),
     initialize:(settings,{signal}={})=>addFirstFlameField(settings.source?.presetId,{settings,signal}),
-    readBasin:id=>loadAuthoredFlameBasin(id,{report:false}),
+    readBasin:id=>loadAuthoredFlameBasin(id,{report:false,portrait:true}),
     beginPreview:label=>window.kaminosFlameAuthoring.beginPreview(label),
     saveBasin:options=>saveVolumeSettingsPreset({label:options?.label}),
+    capturePortrait:options=>window.kaminosCaptureFlamePortrait(options),
     select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
   });
 }
@@ -17434,6 +17469,9 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     await volumeCockpitLayoutReady;
     const rawPreset = suppliedPreset || buildVolumeSettingsPreset();
     const preset = sceneSnapshot || suppliedPreset ? rawPreset : portableFlamePreset(rawPreset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]);
+    let portrait=null,portraitWarning=null;
+    if(!sceneSnapshot&&!suppliedPreset){try{portrait=await window.kaminosCaptureFlamePortrait();}catch(error){portraitWarning=error.message;}}
+    if(portrait&&!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),rawPreset))throw Error('Flame changed before its basin could be saved');
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -17456,15 +17494,22 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
       || (sceneSnapshot && (result.effective?.publishAlias !== false || result.effective?.alias !== null))) {
       throw new Error('preset write receipt identity or schema mismatch');
     }
+    if(portrait){try{
+      const coverResponse=await fetch('/api/volume-settings-preset-cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({presetId:result.effective.presetId,portrait})});
+      const cover=await coverResponse.json();
+      if(!coverResponse.ok||!cover.ok)portraitWarning='Portrait could not be saved: '+(cover.error||coverResponse.status);
+      else result.cover=cover.cover;
+    }catch(error){portraitWarning='Portrait could not be saved: '+error.message;}}
+    if(portraitWarning)result.portraitWarning=portraitWarning;
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput && !sceneSnapshot) labelInput.value = result.effective.label;
     const outcome = describeVolumeSettingsSaveOutcome(result);
     volumeSettingsPresetStatus(
-      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}${outcome.text ? ` | ${outcome.text}` : ''}`,
-      outcome.warning,
+      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}${outcome.text ? ` | ${outcome.text}` : ''}${portraitWarning?` | Portrait pending: ${portraitWarning}`:''}`,
+      outcome.warning||!!portraitWarning,
     );
     console.log(JSON.stringify(result, null, 2));
-    setInfo(`Volume settings preset saved: ${result.effective.label}`);
+    setInfo(`Volume settings preset saved: ${result.effective.label}${portraitWarning?' · portrait pending':''}`);
     return result;
   } catch (error) {
     volumeSettingsPresetStatus(`${error.partialSave ? 'PRESET SAVE PARTIAL' : 'PRESET SAVE FAILED'} | ${error.message || error}`, true);
@@ -21908,6 +21953,7 @@ async function loadAuthoredFlameBasin(id,options={}) {
   window.__kaminosFlameBasinClampReport=Object.freeze({label:receipt.label||id,clamps});
   if(clamps.length){console.warn(`Basin ${receipt.label||id} clamped:`,clamps);setInfo(`Basin ${receipt.label||id}: clamped to range: ${clamps.map(clamp=>clamp.message).join('; ')}`);}
   }
+  if(options.portrait)Object.assign(state,await readOptionalFlamePortrait(receipt.presetId));
   return clampedFlameSettingsState(state);
 }
 

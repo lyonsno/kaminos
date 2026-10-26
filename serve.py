@@ -25,6 +25,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
+from basin_cover_store import read_cover, read_cover_image, write_cover, validate_portrait
 
 PORT = 8090
 ROOT = Path(__file__).parent.resolve()
@@ -2072,7 +2073,7 @@ def list_volume_settings_presets_layered(layers, schema=None):
         _volume_settings_timestamp(entry.get("updatedAt")) or _volume_settings_timestamp(entry.get("publishedAt")), entry["alias"]
     )
     strip = lambda entry: {key: value for key, value in entry.items() if key != "available"}
-    return {
+    result = {
         **listings[0][1],
         "stores": [{"role": role, "storePath": listing["storePath"]} for role, listing in listings],
         "entries": sorted((strip(entry) for entry in current.values() if entry["available"]), key=ordering, reverse=True),
@@ -2085,6 +2086,14 @@ def list_volume_settings_presets_layered(layers, schema=None):
             {**entry, "storeRole": role} for role, listing in listings for entry in listing.get("invalidHistoryRows") or []
         ],
     }
+
+    for entry in result["entries"] + result["earlierVersions"]:
+        try:
+            entry["cover"] = read_cover(layers, entry["presetId"])
+        except (OSError, ValueError) as error:
+            entry["cover"] = None
+            entry["coverError"] = str(error)
+    return result
 
 
 def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
@@ -4167,6 +4176,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-captures":
             self.handle_volume_captures()
+        elif parsed.path == "/api/volume-settings-preset-cover":
+            self.handle_volume_settings_cover_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-settings-preset-cover-image":
+            self.handle_volume_settings_cover_image_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-settings-preset":
             self.handle_volume_settings_preset_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-settings-presets":
@@ -4232,6 +4245,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
             self.handle_volume_capture()
+        elif parsed.path == "/api/volume-settings-preset-cover":
+            self.handle_volume_settings_cover_post()
         elif parsed.path == "/api/volume-settings-presets":
             self.handle_volume_settings_presets_post()
         elif parsed.path == "/api/volume-basin-promotions":
@@ -4522,6 +4537,45 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": f"failed to read capture: {error}"}, 500)
             return
         self.send_json(document)
+
+    def handle_volume_settings_cover_get(self, query):
+        try:
+            preset_id = (query.get("id") or [""])[0]
+            document = read_cover(volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_id, include_image=True)
+            self.send_json(document if document else {"error": "This basin has no portrait"}, 200 if document else 404)
+        except (OSError, ValueError) as error:
+            self.send_json({"error": str(error), "failurePhase": "basin-cover-read"}, 400)
+
+    def handle_volume_settings_cover_image_get(self, query):
+        try:
+            data = read_cover_image(volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), (query.get("id") or [""])[0], (query.get("hash") or [""])[0])
+        except (OSError, ValueError) as error:
+            self.send_json({"error": str(error), "failurePhase": "basin-cover-image"}, 404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_volume_settings_cover_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            request = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(request, dict) or set(request) != {"presetId", "portrait"}:
+                raise ValueError("Basin cover requires presetId and portrait")
+            layers = volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE)
+            read_volume_settings_preset_layered(layers, request["presetId"])
+            validate_portrait(request["portrait"])
+            saved = []
+            for role, store in sorted(layers, key=lambda item: 0 if item[0] == "shared" else 1):
+                if (Path(store) / "presets" / (request["presetId"] + ".json")).is_file():
+                    write_cover(store, request["presetId"], request["portrait"], volume_settings_server_source())
+                    saved.append({"role": role, "storePath": str(store)})
+            self.send_json({"ok": True, "cover": read_cover(layers, request["presetId"]), "stores": saved})
+        except (OSError, ValueError, TypeError) as error:
+            self.send_json({"error": str(error), "failurePhase": "basin-cover-write"}, 400)
 
     def handle_volume_settings_presets_get(self):
         try:
