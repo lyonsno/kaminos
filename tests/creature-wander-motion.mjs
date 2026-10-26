@@ -62,3 +62,19 @@ for(let i=0;i<90;i++){
  identityPhysical.contact(before,{position:proposed.path.position,direction:proposed.path.direction});
  assert.deepEqual(identityPhysical.snapshot(),freePhysical.snapshot(),'Physical feedback reshaped an unobstructed source-paced route');
 }
+
+// Contact can stop or shove the root after the proposed path has arrived.
+// Its exhausted subcurve has no tangent left, so the residual return journey
+// must explicitly retain the accepted heading, including after restoration.
+const endpoint=make({area,position:[0,0],direction:[0,1],seed:123});
+endpoint.setDestination([2,2]);const beforeEndpoint=endpoint.snapshot();
+endpoint.advance(1);assert.equal(endpoint.read().path.status,'arrived');
+endpoint.contact(beforeEndpoint,{position:[2.02,2],direction:[0,1]});
+const endpointSnapshot=endpoint.snapshot();
+for(const continuation of [endpoint,make({snapshot:endpointSnapshot})]){
+ const next=continuation.advance(.00001).path;
+ assert.ok(next.direction[1]>.99,'Endpoint correction discarded accepted heading on next nonzero advance');
+ assert.ok(next.position[1]>2,'Residual journey must initially move along the accepted heading');
+ assert.deepEqual(next.target,[2,2],'Contact must preserve the selected destination');
+ continuation.advance(1);assert.equal(continuation.read().path.status,'arrived');
+}
