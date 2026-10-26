@@ -51,6 +51,10 @@ def replay_calls(prompt, generated):
     for i, token in enumerate(generated):
         yield 'decode', [token], len(prompt)+i
 
+def timed_prediction(predict, copy_logits, clock=time.perf_counter):
+    start = clock(); values = copy_logits(predict())
+    return values, 1000*(clock()-start)
+
 def source_identity():
     repo = Path(__file__).resolve().parents[2]
     return {'repoRoot': str(repo), 'rev': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
@@ -95,7 +99,7 @@ def run_native(args, browser, report):
                 raise ValueError('native model contains non-FP32 floating parameters')
         report['parameterDtypes'] = dtypes
         report['effective']['mode'] = 'forced-token-model-replay'
-        report['timingScope'] = 'synchronized model-forward wall time; excludes sampling and raw-logit capture'
+        report['timingScope'] = 'synchronized model-forward and full-logit CPU readback wall time; excludes sampling and raw-logit archival'
         report['inputIds'] = prompt; report['replayedTokenIds'] = generated
         report['settings'] = browser['pupRequest']['settings']
         report['calls'] = []; report['greedyMismatches'] = []
@@ -106,14 +110,14 @@ def run_native(args, browser, report):
             for index, (operation, tokens, past) in enumerate(replay_calls(prompt, generated)):
                 report['phase'] = operation; report['nextCallIndex'] = index
                 args.report.write_text(json.dumps(report, indent=2)+'\n')
-                start = time.perf_counter()
-                ids = mx.array([tokens], dtype=mx.int32)
-                positions = mx.broadcast_to(mx.arange(past, past+len(tokens))[None,None,:], (3,1,len(tokens)))
-                hidden = model.model(ids, cache=cache, position_ids=positions)
-                logits = model.lm_head(hidden[:,-1:,:]).reshape(-1)
-                mx.eval(logits); mx.synchronize()
-                elapsed = 1000*(time.perf_counter()-start)
-                values = np.ascontiguousarray(np.array(logits, dtype=np.float32))
+                def predict():
+                    ids = mx.array([tokens], dtype=mx.int32)
+                    positions = mx.broadcast_to(mx.arange(past, past+len(tokens))[None,None,:], (3,1,len(tokens)))
+                    hidden = model.model(ids, cache=cache, position_ids=positions)
+                    logits = model.lm_head(hidden[:,-1:,:]).reshape(-1)
+                    mx.eval(logits); mx.synchronize()
+                    return logits
+                values, elapsed = timed_prediction(predict, lambda logits: np.ascontiguousarray(np.array(logits,dtype=np.float32)))
                 if values.size != config['text_config']['vocab_size'] or not np.isfinite(values).all() or not np.any(values):
                     raise ValueError('partial, nonfinite or blank native logits')
                 raw = values.tobytes(); offset = raw_file.tell(); raw_file.write(raw)
@@ -124,7 +128,6 @@ def run_native(args, browser, report):
                 report['calls'].append({'operation':operation, 'inputTokens':len(tokens), 'pastTokens':past, 'ms':elapsed,
                   'logits':{'offset':offset,'bytes':len(raw),'sha256':sha(raw),'dtype':'f32','elements':int(values.size)},
                   'selectedTokenId':selected,'recordedTokenId':expected[index]})
-                del logits, hidden, ids, positions
         if len(report['calls']) != len(generated)+1:
             raise ValueError('incomplete native replay')
         decode_ms = sum(x['ms'] for x in report['calls'][1:])

@@ -28,6 +28,13 @@ def fixture():
         'stream': ['red ', 'fox'], 'output': {'text': 'red fox', 'promptTokenCount': 3, 'tokenIds': [4,5], 'generatedTokenCount': 3, 'finishReason': 'eos', 'stopTokenId': 248046}}}
 
 class ReplayTests(unittest.TestCase):
+    def test_native_call_timing_includes_cpu_logits_like_the_browser_adapter(self):
+        clock=[0.0]
+        def predict(): clock[0]+=0.003; return 'gpu-logits'
+        def copy(value): self.assertEqual(value,'gpu-logits'); clock[0]+=0.002; return [1,2]
+        values,ms=replay.timed_prediction(predict,copy,lambda:clock[0])
+        self.assertEqual(values,[1,2]); self.assertAlmostEqual(ms,5)
+
     def test_replay_requires_pinned_complete_actual_route_and_source(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td)/'browser.json'
