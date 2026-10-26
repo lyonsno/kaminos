@@ -20109,7 +20109,7 @@ async function initKaminosVolumeRoute() {
       }
     }
     const primary=primaryAuthoredFlameSource();
-    if(primary&&family!=='cluster'){
+    if(primary&&!primary.emission?.burnerPort&&family!=='cluster'){
       primary.emission={domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))};
       primary.object.userData.kaminosSceneObject.emission=primary.emission;
     }
