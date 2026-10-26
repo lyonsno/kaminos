@@ -111,8 +111,10 @@ def read_cover(layers, preset_id, *, include_image=False):
         if not path.is_file():
             continue
         document = json.loads(path.read_text())
-        if not isinstance(document, dict) or document.get('schema') != SCHEMA or document.get('presetId') != preset_id or not re.fullmatch(r'sha256:[0-9a-f]{64}', document.get('imageHash', '')):
+        if not isinstance(document, dict) or document.get('schema') != SCHEMA or document.get('presetId') != preset_id or not isinstance(document.get('imageHash'), str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', document['imageHash']):
             raise ValueError('Basin cover identity is invalid')
+        if not isinstance(document.get('portrait'), dict):
+            raise ValueError('Basin cover portrait metadata is invalid')
         digest = document['imageHash'][7:]
         image_path = directory / f'{digest}.png'
         if not image_path.is_file():
