@@ -66,3 +66,10 @@ test('an unresolved Crown opening still changes supplied area while retaining fe
  const config=opening=>{recipe.opening=opening;const port=compileBurnerSources(recipe,transform,'body')[0];return resolveImmersedSourceConfig(flameSourceInputs([{...port,id:'port',type:'flame-emitter',source:'kaminos:analytic-flame'}],{controls:shared})[0].controls,{grid:64,gridHeight:128});};
  const full=config(1),half=config(.5);near(half.effective.fluxRequested/full.effective.fluxRequested,.25);near(half.effective.speed,full.effective.speed);near(half.effective.radiusCells,full.effective.radiusCells);
 });
+test('synchronization cannot alias a provisional copied outlet onto the original binding',()=>{
+ const r=defaultBurnerRecipe('crown-ring'),source={id:'old-port',...compileBurnerSources(r,pose,'old-body')[0]},copy={...structuredClone(source),id:'new-port'};
+ const scene={objects:[{id:'old-body',burner:r,transform:pose},{id:'new-body',burner:structuredClone(r),transform:pose},source,copy],groups:[]};
+ synchronizeBurnerSources(scene,{pose:e=>e.transform,write:(e,p)=>Object.assign(e,p)});
+ remapBurnerBindings(scene,new Map([['old-body','new-body'],['old-port','new-port']]));
+ assert.equal(source.emission.burnerPort.bodyId,'old-body');assert.equal(copy.emission.burnerPort.bodyId,'new-body');
+});

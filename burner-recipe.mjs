@@ -72,6 +72,6 @@ export function synchronizeBurnerSources(scene,{pose,write}) {
   if(!compiled.has(body.id))compiled.set(body.id,compileBurnerSources(body.burner,pose(body),body.id));
   const port=compiled.get(body.id)[binding.index];
   if(!port||binding.designId!==body.burner.designId)throw Error('Burner outlet binding differs from its body');
-  write(entry,port);
+  write(entry,structuredClone(port));
  }
 }
