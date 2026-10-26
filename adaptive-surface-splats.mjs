@@ -1,20 +1,29 @@
 import {reduceSurfelRows} from './surfel-field-reduction.mjs';
 import {fitSurfaceFootprints} from './surface-splat-footprints.mjs';
 
-// Static 4 -> 2 -> original hierarchy. Connectivity is a hard constraint;
+// Static power-of-two -> original hierarchy. Connectivity is a hard constraint;
 // geometry/material residuals rank the optional refinements within the budget.
-export function adaptSurfaceSplats(source,meta,triangles,{targetCount}={}){
+export function adaptSurfaceSplats(source,meta,triangles,{targetCount,maxFactor=4,surfaceOnly=false}={}){
  if(!Number.isSafeInteger(targetCount)||targetCount<1)throw Error('Positive integer targetCount required');
  if(!(triangles instanceof Uint32Array)||triangles.length%3||!triangles.every(i=>i<meta.count))throw Error('Invalid source triangles');
- const coarse=reduceSurfelRows(source,meta,4),fine=reduceSurfelRows(source,meta,2),n=meta.count;
- const roots=new Uint32Array(n),children=new Uint32Array(n);
- for(let i=0;i<n;i++)roots[i]=children[i]=i;
+ if(!Number.isSafeInteger(maxFactor)||maxFactor<2||maxFactor>128||(maxFactor&(maxFactor-1)))throw Error('maxFactor must be a power of two representable in factors.u8 (2..128)');
+ const n=meta.count,levels=[],used=new Uint8Array(n);
+ for(const i of triangles)used[i]=1;
+ for(let factor=maxFactor;factor>=2;factor/=2){
+  const reduced=reduceSurfelRows(source,meta,factor),connected=Uint32Array.from({length:n},(_,i)=>i);
+  levels.push({factor,parent:reduced.parent,connected});
+ }
  const find=(parent,i)=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
  const join=(parent,a,b)=>{a=find(parent,a);b=find(parent,b);if(a!==b)parent[Math.max(a,b)]=Math.min(a,b);};
- const edge=(a,b)=>{if(coarse.parent[a]!==coarse.parent[b])return;join(roots,a,b);if(fine.parent[a]===fine.parent[b])join(children,a,b);};
+ const edge=(a,b)=>{for(const level of levels){if(level.parent[a]!==level.parent[b])break;join(level.connected,a,b);}};
  for(let t=0;t<triangles.length;t+=3){edge(triangles[t],triangles[t+1]);edge(triangles[t+1],triangles[t+2]);edge(triangles[t+2],triangles[t]);}
- const groups=new Map();
- for(let i=0;i<n;i++){const id=find(roots,i);children[i]=find(children,i);let ids=groups.get(id);if(!ids){ids=[];groups.set(id,ids);}ids.push(i);}
+ for(const level of levels)for(let i=0;i<n;i++)level.connected[i]=find(level.connected,i);
+ const groups=new Map();let omitted=0;
+ for(let i=0;i<n;i++){
+  if(surfaceOnly&&!used[i]){omitted++;continue;}
+  const id=levels[0].connected[i];let ids=groups.get(id);if(!ids){ids=[];groups.set(id,ids);}ids.push(i);
+ }
+ if(!groups.size)throw Error('No triangle-supported surface samples');
  const radius=meta.radius,heap=[],leaves=new Set();
  const higher=(a,b)=>a.error>b.error||(a.error===b.error&&a.ids[0]<b.ids[0]);
  function push(node){let i=heap.length;heap.push(node);while(i){const p=(i-1)>>1;if(!higher(node,heap[p]))break;heap[i]=heap[p];i=p;}heap[i]=node;}
@@ -42,20 +51,20 @@ export function adaptSurfaceSplats(source,meta,triangles,{targetCount}={}){
   }
   return {ids,factor,row:new Float32Array(row),error:ids.length===1?0:Math.max(plane/radius,normal/.15,material/.15,gap/radius),plane};
  }
- for(const ids of groups.values()){const node=make(ids,4);leaves.add(node);if(ids.length>1)push(node);}
+ for(const ids of groups.values()){const node=make(ids,maxFactor);leaves.add(node);if(ids.length>1)push(node);}
  const minimumCount=leaves.size;let splits=0;
  while(heap.length&&leaves.size<targetCount){
-  const node=pop(),sub=new Map();
-  for(const id of node.ids){const key=node.factor===4?children[id]:id;let ids=sub.get(key);if(!ids){ids=[];sub.set(key,ids);}ids.push(id);}
+  const node=pop(),sub=new Map(),nextLevel=levels.find(v=>v.factor===node.factor/2);
+  for(const id of node.ids){const key=nextLevel?nextLevel.connected[id]:id;let ids=sub.get(key);if(!ids){ids=[];sub.set(key,ids);}ids.push(id);}
   if(leaves.size+sub.size-1>targetCount)continue;
   leaves.delete(node);splits++;
   for(const ids of sub.values()){const next=make(ids,node.factor/2);leaves.add(next);if(ids.length>1)push(next);}
  }
- const ordered=[...leaves].sort((a,b)=>a.ids[0]-b.ids[0]),data=new Float32Array(ordered.length*12),parent=new Uint32Array(n),factors=new Uint8Array(ordered.length),depthTolerance=new Float32Array(ordered.length),histogram={};
+ const ordered=[...leaves].sort((a,b)=>a.ids[0]-b.ids[0]),data=new Float32Array(ordered.length*12),parent=new Uint32Array(n).fill(0xffffffff),factors=new Uint8Array(ordered.length),depthTolerance=new Float32Array(ordered.length),histogram={};
  for(let j=0;j<ordered.length;j++){const node=ordered[j];data.set(node.row,j*12);for(const id of node.ids)parent[id]=j;factors[j]=node.ids.length===1?1:node.factor;histogram[factors[j]]=(histogram[factors[j]]??0)+1;
   // Fit residual, not the largest cell in the asset, sets local wall tolerance.
   depthTolerance[j]=radius*1.5+node.plane*2;
  }
  const {triangles:ignoredTriangles,dataSHA256:ignoredHash,reduction:ignoredReduction,...base}=meta;
- return {data,parent,factors,depthTolerance,footprints:fitSurfaceFootprints(source,data,parent,radius),meta:{...base,count:ordered.length,sourceCount:n,radius,adaptive:{schema:'static-connected-splats.v1',targetCount,minimumCount,targetExceeded:ordered.length>targetCount,unusedBudget:Math.max(0,targetCount-ordered.length),splits,histogram,maxRemainingError:ordered.reduce((m,v)=>Math.max(m,v.error),0),score:'max(plane/radius, normal-departure/.15, material-departure/.15, unsupported-probe-distance/radius)',connectivity:'source triangle edges within each cell and normal/opacity group'}}};
+ return {data,parent,factors,depthTolerance,footprints:fitSurfaceFootprints(source,data,parent,radius),meta:{...base,count:ordered.length,sourceCount:n,radius,adaptive:{schema:'static-connected-splats.v1',maxFactor,surfaceOnly,omittedUnreferencedCount:omitted,omittedParentSentinel:4294967295,targetCount,minimumCount,targetExceeded:ordered.length>targetCount,unusedBudget:Math.max(0,targetCount-ordered.length),splits,histogram,maxRemainingError:ordered.reduce((m,v)=>Math.max(m,v.error),0),score:'max(plane/radius, normal-departure/.15, material-departure/.15, unsupported-probe-distance/radius)',connectivity:'source triangle edges within each cell and normal/opacity group'}}};
 }

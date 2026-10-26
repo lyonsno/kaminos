@@ -5,14 +5,20 @@ import {execFileSync} from 'node:child_process';
 import {adaptSurfaceSplats} from '../adaptive-surface-splats.mjs';
 import {fitSurfaceFootprints} from '../surface-splat-footprints.mjs';
 const [source,output,target,...extra]=process.argv.slice(2);
-if(!output)throw Error('Usage: node tools/prepare-adaptive-splats.mjs SOURCE_DIR OUTPUT_DIR TARGET_COUNT [--triangle-support]');
+if(!output)throw Error('Usage: node tools/prepare-adaptive-splats.mjs SOURCE_DIR OUTPUT_DIR TARGET_COUNT [--triangle-support] [--surface-only] [--max-factor N]');
 // Refuse before creating any output or entering the failure-report writer.
 if(path.resolve(source)===path.resolve(output)||(fs.existsSync(source)&&fs.existsSync(output)&&fs.realpathSync(source)===fs.realpathSync(output)))throw Error('Output must not overwrite source');
 fs.mkdirSync(output,{recursive:true});
 const report={ok:false,phase:'arguments',source:path.resolve(source),requestedTargetCount:target};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 try{
- if(extra.length>1||extra.some(v=>v!=='--triangle-support'))throw Error('Unknown footprint option');
+ const options={targetCount:Number(target)};let triangleSupport=false;
+ for(let i=0;i<extra.length;i++){
+  if(extra[i]==='--triangle-support')triangleSupport=true;
+  else if(extra[i]==='--surface-only')options.surfaceOnly=true;
+  else if(extra[i]==='--max-factor')options.maxFactor=Number(extra[++i]);
+  else throw Error('Unknown footprint option');
+ }
  if(!Number.isSafeInteger(Number(target))||Number(target)<1)throw Error('Positive integer target count required');
  report.phase='load';const meta=JSON.parse(fs.readFileSync(path.join(source,'report.json')));
  if(!meta.ok||!meta.triangles)throw Error('A successful source with original triangle connectivity is required');
@@ -21,9 +27,9 @@ try{
  if(triangles.length!==meta.triangles.count*3)throw Error('Triangle count mismatch');
  report.sourceDataSHA256=meta.dataSHA256;report.sourceTrianglesSHA256=meta.triangles.sha256;
  report.repoRoot=execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();report.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.dirty=!!execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim();
- report.phase='convert';const result=adaptSurfaceSplats(data,meta,triangles,{targetCount:Number(target)});
- if(extra.includes('--triangle-support'))result.footprints=fitSurfaceFootprints(data,result.data,result.parent,meta.radius,triangles);
- report.footprintFit=extra.includes('--triangle-support')?'triangle-dual-cell':'point-covariance';
+ report.phase='convert';const result=adaptSurfaceSplats(data,meta,triangles,options);
+ if(triangleSupport)result.footprints=fitSurfaceFootprints(data,result.data,result.parent,meta.radius,triangles);
+ report.footprintFit=triangleSupport?'triangle-dual-cell':'point-covariance';
  report.phase='write';Object.assign(report,result.meta);
  for(const [field,file]of [['data','surfels.f32'],['parent','parent.u32'],['footprints','footprints.f32'],['factors','factors.u8'],['depthTolerance','depth-tolerance.f32']]){
   const array=result[field],bytes=Buffer.from(array.buffer,array.byteOffset,array.byteLength);fs.writeFileSync(path.join(output,file),bytes);

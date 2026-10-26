@@ -11,7 +11,7 @@ export function fitSurfaceFootprints(source,reduced,parent,radius,triangles){
   frames.set([ux,uy,uz,ny*uz-nz*uy,nz*ux-nx*uz,nx*uy-ny*ux],j*6);
  }
  for(let i=0;i<parent.length;i++){
-  const j=parent[i];if(j>=n)throw Error('Parent outside retained field');
+  const j=parent[i];if(j===0xffffffff)continue;if(j>=n)throw Error('Parent outside retained field');
   const s=i*12,k=j*12,b=j*6,m=j*4,dx=source[s]-reduced[k],dy=source[s+1]-reduced[k+1],dz=source[s+2]-reduced[k+2];
   const u=dx*frames[b]+dy*frames[b+1]+dz*frames[b+2],v=dx*frames[b+3]+dy*frames[b+4]+dz*frames[b+5];
   moments[m]+=u*u;moments[m+1]+=u*v;moments[m+2]+=v*v;moments[m+3]++;
@@ -44,7 +44,7 @@ function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out){
    if(!area)continue;
    const cx=(source[a]+source[b]+source[c])/3,cy=(source[a+1]+source[b+1]+source[c+1])/3,cz=(source[a+2]+source[b+2]+source[c+2])/3;
    for(let v=0;v<3;v++){
-    const i=ids[v],s=i*12,j=parent[i];incident[i]=1;
+    const i=ids[v],s=i*12,j=parent[i];incident[i]=1;if(j===0xffffffff)continue;
     emit(j,source[s],source[s+1],source[s+2],area);
     emit(j,cx,cy,cz,area);
     for(const k of [ids[(v+1)%3]*12,ids[(v+2)%3]*12])emit(j,(source[s]+source[k])/2,(source[s+1]+source[k+1])/2,(source[s+2]+source[k+2])/2,area);
@@ -52,7 +52,7 @@ function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out){
   }
   // Unconnected points have no measured surface extent. Preserve their old
   // circular support rather than inventing adjacency to a nearby sheet.
-  for(let i=0;i<parent.length;i++)if(!incident[i]){
+  for(let i=0;i<parent.length;i++)if(!incident[i]&&parent[i]!==0xffffffff){
    const s=i*12,j=parent[i],b=j*6;
    for(let q=0;q<8;q++){
     const u=Math.cos(q*Math.PI/4)*radius*1.5,v=Math.sin(q*Math.PI/4)*radius*1.5;
