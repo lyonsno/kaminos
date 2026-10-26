@@ -25,7 +25,7 @@ export default{
   });
   return{
    read,
-   operations:{set,frame(){return session.setView({position:[7.5,5.6,8.4],target:[0,.9,0]});},recipe(){return read();}},
+   operations:{set,frame(){host.scene.frame([view.root]);return session.readView();},recipe(){return read();}},
    mount({root:entryRoot,document,invoke}){
     const root=document.createElement('section');
     const hint=document.createElement('p');hint.textContent='Select Compound Crown to operate its drives in Properties.';entryRoot.append(hint);
@@ -39,7 +39,7 @@ export default{
     }
     playingButton=document.createElement('button');playingButton.type='button';playingButton.addEventListener('click',()=>invoke('set',{playing:!recipe.playing}));
     const frame=document.createElement('button');frame.type='button';frame.textContent='Frame apparatus';frame.addEventListener('click',()=>invoke('frame'));
-    status=document.createElement('p');status.setAttribute('role','status');link=document.createElement('a');link.textContent='Reopen this setup';link.style.display='block';link.addEventListener('pointerenter',sync);
+    status=document.createElement('p');status.setAttribute('role','status');link=document.createElement('a');link.textContent='Reopen this setup';link.style.display='block';for(const event of ['pointerenter','focus','click'])link.addEventListener(event,sync);
     for(const button of [playingButton,frame])button.style.cssText='background:#2b2f34;color:#ddd;border:1px solid #525860;border-radius:4px;padding:6px 9px;margin:4px 6px 4px 0;cursor:pointer';
     root.append(playingButton,frame,status,link);seating=host.controls.mountObject({asset,properties:root});host.scene.select(asset.id);sync();
    },
