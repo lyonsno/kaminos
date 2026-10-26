@@ -2692,7 +2692,7 @@ def runtime_config():
             "modelRoot": str(FLUX3_WEIGHTS_ROOT),
             "mounted": flux3_weights_mounted(),
         } if FLUX3_WEIGHTS_ROOT else None,
-        "pup": {"modelUrl": "/pup-weights", "modelRoot": str(PUP_WEIGHTS_ROOT), "mounted": pup_weights_mounted()} if PUP_WEIGHTS_ROOT else None,
+        "pup": {"modelUrl": "/pup-weights", "modelRoot": str(PUP_WEIGHTS_ROOT), "mounted": pup_weights_mounted(), "keepLoadedDefault": os.environ.get("KAMINOS_PUP_KEEP_LOADED", "").lower() in ("1", "true", "yes")} if PUP_WEIGHTS_ROOT else None,
         "trellisPage": {
             "checkpointUrl": "/trellis-checkpoints",
             "modelRoot": str(TRELLIS_CHECKPOINT_ROOT),
