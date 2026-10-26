@@ -17,6 +17,7 @@ test('actual converter preserves all parents and fails with a durable phase repo
  const good=path.join(dir,'good');const success=run(good);assert.equal(success.status,0,success.stderr);
  const report=JSON.parse(fs.readFileSync(path.join(good,'report.json')));assert.equal(report.ok,true);assert.equal(report.sourceDataSHA256,metadata.dataSHA256);assert.equal(fs.statSync(path.join(good,'parent.u32')).size,12);
  const fitted=path.join(dir,'fitted');const fit=run(fitted,'--triangle-support');assert.equal(fit.status,0,fit.stdout);const fittedMeta=JSON.parse(fs.readFileSync(path.join(fitted,'report.json')));assert.equal(fittedMeta.footprintFit,'triangle-dual-cell');assert.equal(fittedMeta.count,report.count);assert.equal(fittedMeta.dataSHA256,report.dataSHA256);assert.deepEqual(fs.readFileSync(path.join(fitted,'parent.u32')),fs.readFileSync(path.join(good,'parent.u32')));assert.notEqual(fittedMeta.footprints.sha256,report.footprints.sha256);
+ const surfaceDir=path.join(dir,'surface');const surface=run(surfaceDir,'--triangle-support','--surface-only','--max-factor','8');assert.equal(surface.status,0,surface.stdout);const surfaceMeta=JSON.parse(fs.readFileSync(path.join(surfaceDir,'report.json')));assert.equal(surfaceMeta.adaptive.surfaceOnly,true);assert.equal(surfaceMeta.adaptive.maxFactor,8);assert.equal(surfaceMeta.adaptive.omittedUnreferencedCount,0);
  const preserved=fs.readFileSync(path.join(source,'report.json'));
  for(const destination of [source,path.join(dir,'source-alias')]){
   if(destination!==source)fs.symlinkSync(source,destination,'dir');
