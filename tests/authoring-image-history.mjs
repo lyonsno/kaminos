@@ -30,3 +30,19 @@ test('malformed stored history is preserved, and a later withheld selection revo
  let written=false;const corrupt={getItem:()=>'{bad',setItem:()=>{written=true;}};const c=history.createImageIterationHistory({storage:corrupt});c.observe(image('/a.png'));assert.equal(written,false);assert.match(c.read().error,/could not be read/);
  const h=history.createImageIterationHistory({storage:storage()});h.observe(image('/held.png'));h.observe({...image('/held.png'),visibility:{status:'withheld'}});assert.equal(h.reference(),null);assert.equal(h.read().viewed,null);
 });
+test('a visible thumbnail becoming withheld drops its rendered payload and disables its action',()=>{
+ const nodes=new Map();
+ class Element{
+  constructor(tag){this.tagName=tag;this.children=[];this.dataset={};this.attributes={};}
+  set innerHTML(text){for(const match of text.matchAll(/<([a-z]+)[^>]*\bid="([^"]+)"/g)){const child=new Element(match[1]);nodes.set(match[2],child);}}
+  append(...children){this.children.push(...children);}
+  replaceChildren(...children){this.children=children;}
+  setAttribute(key,value){this.attributes[key]=value;}
+ }
+ nodes.set('asset-generate',new Element('div'));const document={createElement:tag=>new Element(tag),getElementById:id=>nodes.get(id)};
+ const c=history.createImageIterationHistory({storage:storage()});c.observe(image('/visible.png'));
+ const ui=history.installImageIterationHistory({document,history:c,assets:{},layout:{comparing:()=>false}});
+ let button=nodes.get('asset-history-strip').children[0];assert.equal(button.children[0].src,'/visible.png');
+ c.observe({...image('/visible.png'),visibility:{status:'withheld'}});ui.render();
+ button=nodes.get('asset-history-strip').children[0];assert.equal(button.children[0].src,undefined,'withheld thumbnail must not retain its image payload');assert.equal(button.disabled,true);
+});
