@@ -61,6 +61,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
+    // This presentation host does not consume the per-step energy ledger.
+    energyDiagnosticsMode:'disabled',
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
     liveInletPacket:initialPacket,
     supportContactRoute:authored.support==='scene_primitives'?SCENE_LIQUID_SUPPORT_ROUTE:SUPPORT,
