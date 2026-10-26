@@ -171,3 +171,28 @@ host.scene.refreshPresentation(asset);
 `asset` is the current `{id,root,...}` registration receipt. The operation validates both registration ID and root identity, updates the root matrix, refreshes the existing transform inspector only when that same object is selected, and marks the app dirty. It returns `{id,transform,selectionMatched}`. It changes neither selection nor edit history, and the ordinary focused-input rule remains intact. Call once after restoration; normal `session.redraw()` remains the inexpensive playback operation. Diagnostic callers can use `window.kaminosWorkbenchRefreshPresentation(asset)` for the same operation.
 
 Experiment controls occupy the shared left surface. Existing Selection/Scene, lighting and rendering controls are moved into the existing right inspector, preserving their nodes and handlers. Authoring and Workbench still use one scene and one set of controls. `window.kaminosWorkbenchSetInvestigation(node,{tool})` mounts an existing component; `window.kaminosMountInvestigationEntry(options)` mounts the shared addressable-entry presentation with a requested existing tool (default Assets). The existing common `mountInvestigation` supplies Node-side retention and lifetime; this join creates no recording service or backend.
+
+## Environment parameter ownership
+
+The accepted HDR environment recipe lives in `scene-environment-state.mjs`.
+Per-map exposure, intensity, rotation and background grading are retained there;
+map-background visibility is shared across map choices. Controls project and edit
+that state through `scene-environment-controls.mjs`. Unsubmitted numeric drafts
+are not inputs to scene saving, preference capture, history or newly loaded materials.
+The existing `environment` scene-document fields and browser-local settings format
+remain supported. Older document defaults keep their existing interpretation.
+
+Agent edits use the same history targets as the controls:
+
+```js
+window.kaminosAuthoringParameters.set('@parameter:env-intensity-slider', {value: 0.73});
+window.kaminosAuthoringParameters.set('@parameter:show-env-bg', {value: false});
+```
+
+Rotation, blur, background brightness and contrast use their existing control IDs
+under `@parameter:`. These targets read accepted values, validate semantic ranges
+and project to rendering and controls. Undo/Redo uses the same state operations.
+Exposure keeps its existing `@parameter:exposure-slider` contract: while matched
+it edits flame-camera EV; otherwise it edits the independent environment multiplier.
+The independent multiplier survives matching and environment recall. UI bounds
+expand to display valid stored recipes without rounding their accepted values.

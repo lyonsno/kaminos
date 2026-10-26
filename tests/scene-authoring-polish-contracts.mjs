@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createSceneEnvironmentState} from '../scene-environment-state.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { BURNER_DEFAULTS, normalizeBurner } from '../annular-burner.mjs';
@@ -95,11 +96,11 @@ test('unavailable light field releases both external texture bindings', () => {
 });
 
 test('environment backdrop brightness and contrast are independent from scene lighting', () => {
-  const values = { 'env-blur-slider': '0.4', 'env-bg-brightness': '1.7', 'env-bg-contrast': '1.3' };
+  const sceneEnvironment=createSceneEnvironmentState({presets:{studio:{exposure:1,intensity:2.4}}});
+  sceneEnvironment.select('studio');sceneEnvironment.patch({backgroundBlur:.4,backgroundBrightness:1.7,backgroundContrast:1.3});
   const map = {};
   const scene = { environment: map, environmentIntensity: 2.4, environmentRotation: {} };
-  const context = vm.createContext({ scene, showEnvBg: true, currentEnvMap: map,
-    document: { getElementById: id => ({ value: values[id] }) },
+  const context = vm.createContext({ scene, sceneEnvironment, currentEnvMap: map,
     envBackdropContrast: float(1), pmremTexture: () => ({ rgb: float(0.18) }), vec3: float, mix,
     THREE: { Color: class {} },
   });
@@ -109,9 +110,8 @@ test('environment backdrop brightness and contrast are independent from scene li
   assert.equal(scene.environmentIntensity, 2.4);
   assert.equal(scene.environment, map);
   assert.ok(scene.backgroundNode, 'contrast must reach the actual rendered background');
-  assert.match(between('function buildSceneData(', 'function isCompositionAuthoring()'), /backgroundBrightness:/);
-  assert.match(between('function buildSceneData(', 'function isCompositionAuthoring()'), /backgroundContrast:/);
-  assert.match(between('  // Load environment first', '  if (objectRecords.length > 0)'), /env\.backgroundContrast/);
+  assert.match(between('function buildSceneData(', 'function isCompositionAuthoring()'), /sceneEnvironment\.document/);
+  assert.match(between('  // Load environment first', '  if (objectRecords.length > 0)'), /sceneEnvironment\.restoreDocument/);
 });
 
 let failures = 0;

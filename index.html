@@ -3297,6 +3297,8 @@ import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installNotes} from './notes-panel.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
+import {createSceneEnvironmentState} from './scene-environment-state.mjs';
+import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmentControls} from './scene-environment-controls.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
@@ -3553,11 +3555,8 @@ let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
-let currentEnvName = null;
-let environmentRecipes = {};
 let environmentLoadToken = 0;
 let rimLight = null;
-let showEnvBg = true;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
@@ -4299,21 +4298,21 @@ function currentHybridOverlayViewport() {
 }
 
 function currentHybridSplatOverlayEnvironmentContext() {
-  const env = HDR_ENVS[currentEnvName] || HDR_ENVS.studio || {};
-  const intensity = readNumberControl('env-intensity-slider', scene?.environmentIntensity ?? env.intensity ?? 1);
-  const rotationY = readNumberControl('env-rotation-slider', scene?.environmentRotation?.y ?? 0);
-  const exposure = renderer?.toneMappingExposure ?? readNumberControl('exposure-slider', env.exposure ?? 1);
+  const env = HDR_ENVS[sceneEnvironment.read().name] || HDR_ENVS.studio || {};
+  const intensity = sceneEnvironment.read().intensity;
+  const rotationY = sceneEnvironment.read().rotation;
+  const exposure = sceneEnvironment.read().exposure;
   return {
-    name: currentEnvName,
-    label: env.label || currentEnvName || 'unknown',
+    name: sceneEnvironment.read().name,
+    label: env.label || sceneEnvironment.read().name || 'unknown',
     url: env.url || null,
-    preset: currentEnvName,
+    preset: sceneEnvironment.read().name,
     intensity,
     rotationY,
     exposure,
     toneMapping: renderer?.toneMapping === THREE.AgXToneMapping ? 'AgXToneMapping' : renderer?.toneMapping === THREE.ACESFilmicToneMapping ? 'ACESFilmicToneMapping' : String(renderer?.toneMapping ?? 'unknown'),
-    backgroundVisible: !!showEnvBg,
-    backgroundBlur: readNumberControl('env-blur-slider', scene?.backgroundBlurriness ?? 0),
+    backgroundVisible: sceneEnvironment.read().showBackground,
+    backgroundBlur: sceneEnvironment.read().backgroundBlur,
   };
 }
 
@@ -10235,11 +10234,10 @@ const userPreferences=createUserPreferences();
 const startupPreferencesLoaded=userPreferences.load().then(value=>{startupPreferences=value;}).catch(error=>console.warn('User preferences unavailable:',error.message));
 let restoringSettings = false;
 const PERSISTED_SLIDERS = [
-  'exposure-slider', 'env-intensity-slider', 'env-rotation-slider', 'env-blur-slider',
   'ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff',
-  'backdrop-brightness', 'env-bg-brightness', 'env-bg-contrast', 'dof-focus', 'dof-aperture', 'dof-maxblur'
+  'backdrop-brightness', 'dof-focus', 'dof-aperture', 'dof-maxblur'
 ];
-const PERSISTED_CHECKBOXES = ['ao-toggle', 'show-env-bg', 'backdrop-toggle', 'dof-toggle'];
+const PERSISTED_CHECKBOXES = ['ao-toggle', 'backdrop-toggle', 'dof-toggle'];
 
 function saveSettings() {
   if (restoringSettings) return;
@@ -10252,9 +10250,7 @@ function saveSettings() {
     const el = document.getElementById(id);
     if (el) settings[id] = el.checked;
   }
-  rememberEnvironmentRecipe();
-  settings.environmentRecipes = environmentRecipes;
-  settings.environmentName = currentEnvName;
+  Object.assign(settings,environmentLegacySettings(sceneEnvironment));
   settings.rimLight = readRimLightSettings();
   try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
@@ -10280,7 +10276,8 @@ function restoreSettings() {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
-    environmentRecipes = normalizeEnvironmentRecipes(settings.environmentRecipes);
+    sceneEnvironment.restoreRecipes(settings.environmentRecipes);
+    if(typeof settings['show-env-bg']==='boolean')sceneEnvironment.patch({showBackground:settings['show-env-bg']});
     setRimLight(settings.rimLight);
     return Object.hasOwn(HDR_ENVS, settings.environmentName) ? settings.environmentName : 'studio';
   } finally {
@@ -10333,6 +10330,8 @@ const HDR_ENVS = {
   },
 };
 
+const sceneEnvironment=createSceneEnvironmentState({presets:HDR_ENVS});
+sceneEnvironment.subscribe(applyEnvironmentParameters);
 const envCache = {};
 
 // --- Three.js Setup ---
@@ -10906,7 +10905,7 @@ async function initScene() {
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.AgXToneMapping;
-  renderer.toneMappingExposure = 1.5;
+  renderer.toneMappingExposure = sceneEnvironment.read().exposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -11995,61 +11994,18 @@ async function initScene() {
 }
 
 // --- Environment Loading ---
-const environmentRecipeFields = {
-  exposure: 'exposure-slider', intensity: 'env-intensity-slider', rotation: 'env-rotation-slider',
-  backgroundBrightness: 'env-bg-brightness', backgroundContrast: 'env-bg-contrast', backgroundBlur: 'env-blur-slider',
-};
-
-function environmentDefaults(name) {
-  return { exposure: HDR_ENVS[name].exposure, intensity: HDR_ENVS[name].intensity,
-    rotation: 0, backgroundBrightness: 0.6, backgroundContrast: 1, backgroundBlur: 0.4 };
-}
-
-function normalizeEnvironmentRecipe(name, recipe = {}) {
-  const defaults = environmentDefaults(name);
-  return Object.fromEntries(Object.keys(environmentRecipeFields).map(key => {
-    const value = recipe[key];
-    if (value === undefined) return [key, defaults[key]];
-    if (typeof value !== 'number' || !Number.isFinite(value) || (key !== 'rotation' && value < 0)) {
-      throw new Error(`Invalid environment ${name} ${key}`);
-    }
-    if (key === 'backgroundBlur' && value > 1) throw new Error('Background blur must be between 0 and 1');
-    return [key, value];
-  }));
-}
-
-function normalizeEnvironmentRecipes(recipes = {}) {
-  const result = {};
-  for (const [name, recipe] of Object.entries(recipes)) {
-    if (Object.hasOwn(HDR_ENVS, name)) result[name] = normalizeEnvironmentRecipe(name, recipe);
-  }
-  return result;
-}
-
-function readEnvironmentRecipe() {
-  return Object.fromEntries(Object.entries(environmentRecipeFields).map(([key,id]) => [key, key==='exposure'&&sceneExposureControls?sceneExposureControls.read().independent:Number(document.getElementById(id).value)]));
-}
-
-function rememberEnvironmentRecipe() {
-  if (currentEnvName) environmentRecipes[currentEnvName] = readEnvironmentRecipe();
-}
-
-function applyEnvironmentRecipe(recipe) {
-  for (const [key,id] of Object.entries(environmentRecipeFields)) {
-    const input = document.getElementById(id);
-    // Range bounds are editing affordances, not limits on a valid saved recipe.
-    input.min = Math.min(Number(input.min), recipe[key]);
-    input.max = Math.max(Number(input.max), recipe[key]);
-    input.step = 'any';
-    input.value = recipe[key];
-    const label = document.getElementById(id.endsWith('-slider') ? id.replace('-slider','-val') : `${id}-val`);
-    label.textContent = recipe[key].toFixed(2);
-  }
-  renderer.toneMappingExposure = recipe.exposure;
-  sceneExposureControls?.sync();
-  scene.environmentIntensity = recipe.intensity;
-  scene.environmentRotation = new THREE.Euler(0, recipe.rotation, 0);
-  updateBackground();
+function environmentDefaults(name) {return sceneEnvironment.defaults(name);}
+function readEnvironmentRecipe() {return sceneEnvironment.recipe();}
+function applyEnvironmentRecipe(recipe) {return sceneEnvironment.patch(recipe);}
+function applyEnvironmentParameters(value=sceneEnvironment.read()) {
+  if(!renderer||!scene)return;
+  renderer.toneMappingExposure=value.exposure;
+  scene.environmentIntensity=value.intensity;
+  scene.environmentRotation=new THREE.Euler(0,value.rotation,0);
+  for(const {object} of workingScene.objects)object.traverse(child=>{
+    for(const material of [].concat(child.material||[]))material.envMapIntensity=value.intensity;
+  });
+  sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
 }
 
 function createProceduralEnv() {
@@ -12077,18 +12033,15 @@ function createProceduralEnv() {
 async function loadEnvironment(name, { remember = true } = {}) {
   const env = HDR_ENVS[name];
   if (!env) return;
-  if (remember) rememberEnvironmentRecipe();
   const token = ++environmentLoadToken;
-  currentEnvName = name;
+  sceneEnvironment.select(name);
 
   // Update button states
   document.querySelectorAll('.env-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.env === name);
   });
 
-  const recipe = normalizeEnvironmentRecipe(name, environmentRecipes[name]);
-  environmentRecipes[name] = recipe;
-  applyEnvironmentRecipe(recipe);
+  const recipe = readEnvironmentRecipe();
   const loadingEl = document.getElementById('env-loading');
   loadingEl.style.display = 'none';
 
@@ -12324,7 +12277,7 @@ async function showPBRPreview(options = {}) {
   const albedoTex = await loadTexture(albedoFile);
   const mat = new THREE.MeshStandardMaterial({
     map: albedoTex,
-    envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+    envMapIntensity: sceneEnvironment.read().intensity,
   });
 
   if (roughnessFile) {
@@ -12569,7 +12522,7 @@ async function showGLB(file, options = {}) {
           child.castShadow = true;
           child.receiveShadow = true;
           if (child.material) {
-            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+            child.material.envMapIntensity = sceneEnvironment.read().intensity;
           }
         }
       });
@@ -12937,10 +12890,10 @@ async function showOBJ(objFile, mtlFile, options = {}) {
               color: 0xcccccc,
               roughness: 0.5,
               metalness: 0.0,
-              envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+              envMapIntensity: sceneEnvironment.read().intensity,
             });
           } else if (child.material) {
-            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+            child.material.envMapIntensity = sceneEnvironment.read().intensity;
           }
         }
       });
@@ -12977,7 +12930,7 @@ async function showDepthSurface(options = {}) {
         map: await loadTexture(imageFile),
         displacementMap: depthTex,
         displacementScale: -0.5,
-        envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+        envMapIntensity: sceneEnvironment.read().intensity,
       })
     : new THREE.MeshStandardMaterial({ map: depthTex });
 
@@ -21598,9 +21551,9 @@ function initEnvButtons() {
 }
 
 document.getElementById('env-reset').onclick = () => {
-  if (!currentEnvName) return;
-  environmentRecipes[currentEnvName] = environmentDefaults(currentEnvName);
-  loadEnvironment(currentEnvName, { remember: false }).then(saveSettings).catch(error => setInfo(error.message));
+  const name=sceneEnvironment.read().name;if(!name)return;
+  sceneEnvironment.reset();
+  loadEnvironment(name, { remember: false }).then(saveSettings).catch(error => setInfo(error.message));
 };
 
 // --- Authored Rim Light ---
@@ -22126,11 +22079,19 @@ function installAuthoringParameterEditing() {
     if(fireControlOwner(alias.dataset.authoringAlias)!=='source')continue;
     authoringControlSessions.push(installSceneControlHistory({controls:[alias],edits,id:()=>ensureFlameSourceDataTarget(workingScene.activeObjectId),label:'Edit flame source',onError:error=>setInfo(error.message)}));
   }
-  for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
+  for(const id of ['fire-light-gain-stops','exposure-slider',...Object.values(ENVIRONMENT_CONTROL_FIELDS)]) {
     const control=document.getElementById(id);if(!control)continue;
     if(id==='exposure-slider') {
       bind('@parameter:exposure-slider',{controls:[control,document.getElementById('rendering-match-flame-camera')],label:'Adjust scene camera',
         read:()=>sceneExposureControls.read(),write:state=>sceneExposureControls.write(state),check:state=>sceneExposureControls.check(state)});
+      continue;
+    }
+    const environmentField=Object.keys(ENVIRONMENT_CONTROL_FIELDS).find(key=>ENVIRONMENT_CONTROL_FIELDS[key]===id);
+    if(environmentField){
+      bind(`@parameter:${id}`,{controls:[control],label:`Adjust ${id}`,
+        read:()=>({value:sceneEnvironment.read()[environmentField]}),
+        write:state=>{sceneEnvironment.patch({[environmentField]:state.value});saveSettings();},
+        check:state=>({value:sceneEnvironment.check({[environmentField]:state.value})[environmentField]})});
       continue;
     }
     bind(`@parameter:${id}`,{controls:[control],label:`Adjust ${id}`,read:()=>({value:Number(control.value)}),
@@ -22172,65 +22133,27 @@ function installAuthoringParameterEditing() {
 sceneExposureControls=bindSceneExposureControls({
   exposure:document.getElementById('exposure-slider'),flame:document.getElementById('volume-physical-exposure'),
   match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),
-  readIndependent:()=>renderer?.toneMappingExposure??1.1,
-  writeIndependent:value=>{if(renderer)renderer.toneMappingExposure=value;},redraw:()=>window._kaminosDirty?.(),
+  readIndependent:()=>sceneEnvironment.read().exposure,
+  writeIndependent:value=>{sceneEnvironment.patch({exposure:value});saveSettings();},redraw:()=>window._kaminosDirty?.(),
 });
 
-document.getElementById('env-intensity-slider').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  scene.environmentIntensity = v;
-  document.getElementById('env-intensity-val').textContent = v.toFixed(1);
-  for (const { object } of workingScene.objects) object.traverse(child => {
-    for (const material of [].concat(child.material || [])) material.envMapIntensity = v;
-  });
-  window._kaminosDirty?.();
-});
-
-document.getElementById('env-rotation-slider').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  const euler = new THREE.Euler(0, v, 0);
-  scene.environmentRotation = euler;
-  if (showEnvBg) scene.backgroundRotation = euler;
-  document.getElementById('env-rotation-val').textContent = v.toFixed(1);
-  window._kaminosDirty?.();
-});
-
-// --- Show Env Map Background + Blur ---
-document.getElementById('show-env-bg').addEventListener('change', e => {
-  showEnvBg = e.target.checked;
-  document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
-  document.getElementById('env-backdrop-controls').style.display = showEnvBg ? '' : 'none';
-  updateBackground();
-  window._kaminosDirty?.();
-});
-
-document.getElementById('env-blur-slider').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  scene.backgroundBlurriness = v;
-  document.getElementById('env-blur-val').textContent = v.toFixed(2);
-  window._kaminosDirty?.();
-});
+bindSceneEnvironmentControls({state:sceneEnvironment,document,onAccepted:saveSettings,onError:error=>setInfo(error.message)});
+installRenderingNumberControls(document.getElementById('authoring-source-environment'));
 
 const envBackdropContrast = uniform(1);
-for (const id of ['env-bg-brightness', 'env-bg-contrast']) {
-  document.getElementById(id).addEventListener('input', event => {
-    document.getElementById(`${id}-val`).textContent = Number(event.target.value).toFixed(2);
-    updateBackground();
-    window._kaminosDirty?.();
-  });
-}
 
 function updateBackground() {
-  if (showEnvBg && currentEnvMap) {
+  const environment=sceneEnvironment.read();
+  if (environment.showBackground && currentEnvMap) {
     if (scene.background !== currentEnvMap || !scene.backgroundNode) {
       // Grade only the background; the environment used by mesh materials is unchanged.
       const graded = pmremTexture(currentEnvMap).rgb.max(0).div(0.18).pow(envBackdropContrast.max(1)).mul(0.18);
       scene.backgroundNode = mix(vec3(0.18), graded, envBackdropContrast.min(1));
     }
     scene.background = currentEnvMap;
-    scene.backgroundBlurriness = parseFloat(document.getElementById('env-blur-slider').value);
-    scene.backgroundIntensity = Number(document.getElementById('env-bg-brightness').value);
-    envBackdropContrast.value = Number(document.getElementById('env-bg-contrast').value);
+    scene.backgroundBlurriness = environment.backgroundBlur;
+    scene.backgroundIntensity = environment.backgroundBrightness;
+    envBackdropContrast.value = environment.backgroundContrast;
     scene.backgroundRotation = scene.environmentRotation;
   } else {
     scene.backgroundNode = null;
@@ -23607,7 +23530,7 @@ function createSplatSceneObjectPlaceholder({ url, fileName, display, metadata = 
       transparent: true,
       opacity: 0.32,
       wireframe: true,
-      envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+      envMapIntensity: sceneEnvironment.read().intensity,
     })
   );
   marker.castShadow = false;
@@ -24847,7 +24770,6 @@ function editOwnedFireSettings(ownerId,kind,patch) {
 }
 
 function buildSceneData(capture = null) {
-  rememberEnvironmentRecipe();
   const objects = workingScene.objects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === workingScene.activeObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
@@ -24878,15 +24800,7 @@ function buildSceneData(capture = null) {
       fov: camera.fov,
     },
     environment: {
-      name: currentEnvName,
-      exposure: renderer.toneMappingExposure,
-      intensity: parseFloat(document.getElementById('env-intensity-slider').value),
-      rotation: parseFloat(document.getElementById('env-rotation-slider').value),
-      showBackground: showEnvBg,
-      backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
-      backgroundBrightness: Number(document.getElementById('env-bg-brightness').value),
-      backgroundContrast: Number(document.getElementById('env-bg-contrast').value),
-      recipes: environmentRecipes,
+      ...sceneEnvironment.document(),
       rimLight: readRimLightSettings(),
       ground: { visible: groundPlane.visible, height: groundPlane.position.y,
         color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
@@ -26448,18 +26362,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   if (data.environment) {
     const env = data.environment;
     const name = env.name || 'studio';
-    environmentRecipes = normalizeEnvironmentRecipes(env.recipes);
-    environmentRecipes[name] = normalizeEnvironmentRecipe(name, env);
+    sceneEnvironment.restoreDocument(env);
     await loadEnvironment(name, { remember: false });
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-    renderer.toneMappingExposure = env.exposure ?? 1.5;
-    document.getElementById('exposure-slider').value = renderer.toneMappingExposure;
-    document.getElementById('exposure-val').textContent = renderer.toneMappingExposure.toFixed(1);
-
-    const intensity = env.intensity ?? 1.0;
-    document.getElementById('env-intensity-slider').value = intensity;
-    document.getElementById('env-intensity-val').textContent = intensity.toFixed(1);
-    scene.environmentIntensity = intensity;
 
     groundPlane.visible = env.ground?.visible ?? true;
     groundPlane.position.y = Number.isFinite(env.ground?.height) ? env.ground.height : -0.85;
@@ -26471,24 +26376,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     document.getElementById('composition-ground-roughness').value = groundPlane.material.roughness;
     document.getElementById('composition-ground-roughness-value').value = String(groundPlane.material.roughness);
 
-    const rotation = env.rotation ?? 0;
-    document.getElementById('env-rotation-slider').value = rotation;
-    document.getElementById('env-rotation-val').textContent = rotation.toFixed(1);
-    scene.environmentRotation = new THREE.Euler(0, rotation, 0);
 
-    showEnvBg = env.showBackground ?? false;
-    document.getElementById('show-env-bg').checked = showEnvBg;
-    document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
-    document.getElementById('env-backdrop-controls').style.display = showEnvBg ? '' : 'none';
-    for (const [id, value] of [['env-bg-brightness', env.backgroundBrightness ?? 0.6], ['env-bg-contrast', env.backgroundContrast ?? 1]]) {
-      document.getElementById(id).value = value;
-      document.getElementById(`${id}-val`).textContent = Number(value).toFixed(2);
-    }
-    if (showEnvBg) {
-      document.getElementById('env-blur-slider').value = env.backgroundBlur ?? 0.4;
-      document.getElementById('env-blur-val').textContent = (env.backgroundBlur ?? 0.4).toFixed(2);
-    }
-    updateBackground();
   }
   setRimLight(data.environment?.rimLight);
 

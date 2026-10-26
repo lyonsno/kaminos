@@ -4,29 +4,37 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
 import {checkedRimRecipe} from '../scene-rim-light.mjs';
+import {bindSceneExposureControls} from '../scene-emissive-camera.mjs';
 
+import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
+import {bindSceneEnvironmentControls,environmentLegacySettings} from '../scene-environment-controls.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
 function environmentContext({ storage = new Map(), startup = false } = {}) {
-  const elements = new Map(), listeners = {};
-  const document = { querySelectorAll: () => [], getElementById(id) {
-    if (!elements.has(id)) elements.set(id, { value: '0', checked: false, style: {}, dataset:{}, textContent: '',
-      addEventListener(type, fn) { if (id === 'sidebar') listeners[type] = fn; },
-      dispatchEvent(event) { listeners[event.type]?.(event); },
+  const elements = new Map();
+  const document = {querySelectorAll:()=>[],getElementById(id){
+    if(!elements.has(id))elements.set(id,{value:'0',min:'0',max:'1',checked:false,style:{},dataset:{},textContent:'',listeners:{},
+      addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);},removeEventListener(){},
+      dispatchEvent(event){for(const fn of this.listeners[event.type]??[])fn({...event,target:this});},
     });
     return elements.get(id);
-  } };
+  }};
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
+  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),environmentLegacySettings,checkedRimRecipe,document, scene, sceneObjects: [],
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
-    environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
+    environmentLoadToken: 0, currentEnvMap: null,
     renderer: { toneMappingExposure: 1 }, sceneExposureControls: null, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },
     updateBackground() {}, window: {}, console,
     Event: class { constructor(type) { this.type = type; } }, rimLight: null, controls: {},
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value) },
   });
+  context.sceneEnvironment=createSceneEnvironmentState({presets:context.HDR_ENVS});
   vm.runInContext(between('// --- Environment Loading ---', '// --- File Loading ---'), context);
+  const flame=document.getElementById('volume-physical-exposure');flame.min='-8';flame.max='8';flame.ownerDocument={defaultView:{Event}};
+  context.sceneExposureControls=bindSceneExposureControls({exposure:document.getElementById('exposure-slider'),flame,match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),readIndependent:()=>context.sceneEnvironment.read().exposure,writeIndependent:exposure=>context.sceneEnvironment.patch({exposure}),redraw(){}});
+  context.sceneEnvironment.subscribe(context.applyEnvironmentParameters);
+  bindSceneEnvironmentControls({state:context.sceneEnvironment,document,onError:error=>{throw error;}});
   if (startup) {
     vm.runInContext(between('// --- Settings Persistence ---', '// --- HDR Environments ---'), context);
     vm.runInContext(between('// --- Authored Rim Light ---', '// --- Exposure / Intensity Controls ---'), context);
@@ -37,9 +45,17 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
 const values = { exposure: 'exposure-slider', intensity: 'env-intensity-slider', rotation: 'env-rotation-slider', backgroundBrightness: 'env-bg-brightness', backgroundContrast: 'env-bg-contrast' };
 const tune = (c, recipe) => {
   for (const [key, id] of Object.entries(values)) c.document.getElementById(id).value = String(recipe[key]);
-  c.renderer.toneMappingExposure = recipe.exposure;
+  c.sceneEnvironment.patch(recipe);
 };
 const snapshot = c => Object.fromEntries(Object.entries(values).map(([key,id]) => [key, Number(c.document.getElementById(id).value)]));
+
+test('undispatched environment control drafts cannot replace accepted recipe state',async()=>{
+  const c=environmentContext();await c.loadEnvironment('studio');
+  const accepted=JSON.parse(JSON.stringify(c.readEnvironmentRecipe()));
+  c.document.getElementById('env-intensity-slider').value='4.9';
+  c.document.getElementById('env-rotation-slider').value='5.2';
+  assert.deepEqual(JSON.parse(JSON.stringify(c.readEnvironmentRecipe())),accepted,'Recipe serialization must read accepted state rather than control drafts');
+});
 
 test('environment intensity permits zero through the real control and recipe path', async () => {
   const control=source.match(/<input\b[^>]*id="env-intensity-slider"[^>]*>/)?.[0];
@@ -61,7 +77,7 @@ test('environment recipes retain independent exposure while the matched editor d
   assert.equal(c.readEnvironmentRecipe().exposure,1.5);
   assert.equal(c.document.getElementById('exposure-slider').value,'4.96');
   await c.loadEnvironment('warehouse');
-  assert.equal(c.environmentRecipes.studio.exposure,1.5,'flame EV must not replace the environment multiplier');
+  assert.equal(c.sceneEnvironment.read().recipes.studio.exposure,1.5,'flame EV must not replace the environment multiplier');
   assert.equal(c.renderer.toneMappingExposure,.7);
   assert.equal(c.readEnvironmentRecipe().exposure,.7);
   assert.equal(c.document.getElementById('exposure-slider').value,'4.96');
@@ -89,8 +105,8 @@ test('two startups without edits retain stored map recipes, selection, and rim s
   for (let boot = 0; boot < 2; boot++) {
     const c = environmentContext({storage,startup:true});
     await c.loadEnvironment(c.restoreSettings() || 'studio');
-    assert.equal(c.currentEnvName,'warehouse');
-    assert.deepEqual(JSON.parse(JSON.stringify(c.environmentRecipes)),saved.environmentRecipes);
+    assert.equal(c.sceneEnvironment.read().name,'warehouse');
+    assert.deepEqual(JSON.parse(JSON.stringify(c.sceneEnvironment.read().recipes)),saved.environmentRecipes);
     assert.deepEqual(JSON.parse(JSON.stringify(c.readRimLightSettings())),saved.rimLight);
     assert.deepEqual(JSON.parse(storage.get('kaminos-settings')),saved,'restoring controls must not overwrite storage with partial startup state');
   }
@@ -107,16 +123,16 @@ test('a late HDR response cannot replace the selected environment or its tuning'
   tune(c,recipe);
   requests.get('warehouse.hdr')({ name: 'warehouse', dispose() {} }); await warehouse;
   requests.get('studio.hdr')({ name: 'studio', dispose() {} }); await studio;
-  assert.equal(c.currentEnvName,'warehouse'); assert.equal(c.scene.environment.name,'warehouse');
+  assert.equal(c.sceneEnvironment.read().name,'warehouse'); assert.equal(c.scene.environment.name,'warehouse');
   assert.equal(c.scene.environmentIntensity,0.37); assert.deepEqual(snapshot(c),recipe);
 });
 
 test('recipe validation preserves fine values and rejects invalid authored light', () => {
   const c = environmentContext();
   const recipe = { exposure: 1.23456789, intensity: 7.3456789, rotation: -9.1234, backgroundBrightness: 0, backgroundContrast: 0, backgroundBlur: 0.345678 };
-  assert.deepEqual(JSON.parse(JSON.stringify(c.normalizeEnvironmentRecipe('studio',recipe))),recipe);
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeEnvironmentRecipe(c.HDR_ENVS,'studio',recipe))),recipe);
   for (const invalid of [{ intensity: -1 }, { exposure: '1' }, { rotation: Infinity }, { backgroundBlur: 2 }]) {
-    assert.throws(()=>c.normalizeEnvironmentRecipe('studio',invalid));
+    assert.throws(()=>normalizeEnvironmentRecipe(c.HDR_ENVS,'studio',invalid));
   }
 });
 

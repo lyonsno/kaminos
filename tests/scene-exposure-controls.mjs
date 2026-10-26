@@ -17,7 +17,7 @@ assert.equal(flame.value,'1.5');assert.equal(flameUpdates,1);assert.equal(indepe
 flame.value='-3';flame.dispatchEvent(new Event('input'));assert.equal(exposure.value,'-3');
 const saved=link.read();
 match.checked=false;match.dispatchEvent(new Event('change'));
-assert.equal(exposure.value,'1.1');assert.equal(exposure.min,'.2');assert.equal(flame.value,'-3');
+assert.equal(exposure.value,'1.1');assert.equal(Number(exposure.min),.2);assert.equal(flame.value,'-3');
 exposure.value='2';exposure.dispatchEvent(new Event('input'));assert.equal(independent,2);assert.equal(flame.value,'-3');
 flame.value='4';link.sync();assert.equal(exposure.value,'2','unmatched controls are independent');
 link.write(saved);assert.equal(match.checked,true);assert.equal(flame.value,'-3');assert.equal(exposure.value,'-3');assert.equal(independent,1.1);
@@ -25,6 +25,8 @@ flame.value='-6';link.sync();assert.equal(exposure.value,'-6','silent preset/und
 assert.throws(()=>link.write({...saved,flameEV:NaN}),/exposure/);
 assert.equal(flame.value,'-6','invalid restoration is atomic');
 link.write(link.check({...link.read(),value:2.5}));assert.equal(flame.value,'2.5','existing scene parameter value API edits flame EV when matched');
+match.checked=false;independent=7.123456;link.sync();assert.equal(Number(exposure.value),7.123456);assert.ok(Number(exposure.max)>=independent);assert.equal(exposure.step,'any');
+independent=0;link.sync();assert.equal(Number(exposure.value),0);assert.equal(Number(exposure.min),0);
 console.log('PASS exposure coupling, canonical flame events, independent restoration and history state');
 
 // The adjacent inactive explanation follows scene -> GI inspection -> scene.

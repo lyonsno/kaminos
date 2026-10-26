@@ -6,8 +6,11 @@ export function bindSceneExposureControls({exposure,flame,match,label,output,rea
   const bounds=Object.fromEntries(['min','max','step'].map(key=>[key,exposure[key]]));
   const event=type=>new flame.ownerDocument.defaultView.Event(type,{bubbles:true});
   const sync=()=>{
-    for(const key of ['min','max','step'])exposure[key]=match.checked?flame[key]:bounds[key];
-    exposure.value=String(match.checked?Number(flame.value):readIndependent());
+    const independent=readIndependent();
+    exposure.min=match.checked?flame.min:String(Math.min(Number(bounds.min),independent));
+    exposure.max=match.checked?flame.max:String(Math.max(Number(bounds.max),independent));
+    exposure.step=match.checked?flame.step:'any';
+    exposure.value=String(match.checked?Number(flame.value):independent);
     label.textContent=match.checked?'Exposure EV':'Exposure';
     output.textContent=Number(exposure.value).toFixed(2);
   };
