@@ -1,8 +1,20 @@
 export const FEATURE = 'decoder3d.sampled';
 
-export function gestureProtocol() {
+export function gestureProtocol(mode='neutral') {
+  if(!['neutral','turns'].includes(mode))throw Error(`Unknown capture mode: ${mode}`);
   const cues = [];
   const add = (title, detail, seconds, intent, extra = {}) => cues.push({title, detail, seconds, intent, ...extra});
+  if(mode==='neutral'){
+    add('Find your resting shape', 'Palm up. Let your fingers and thumb cup an imaginary cube comfortably.', 8, 'unlabeled');
+    add('Rest at neutral', 'This is your no-turn position. Let the hand settle without stiffening.', 8, 'neutral');
+    add('Carry neutral', 'Keep that resting shape. Move your whole hand a little, without turning the cube.', 8, 'neutral-nuisance');
+    for(const block of [1,2]){
+      add('Let your hand rest', 'Lower your hand out of view.', 4, 'release', {block});
+      add('Find neutral again', 'Raise your hand and return to your comfortable no-turn position.', 6, 'reacquire', {block});
+      add('Rest at neutral', 'Let the fingers and thumb settle. No need to hold them rigid.', 8, 'neutral', {block});
+    }
+    return cues.map((cue,index)=>({...cue,index}));
+  }
   add('Get comfortable', 'Raise your hand. Move it around freely.', 15, 'unlabeled');
   add('Find your neutral', 'Palm up, fingers comfortably cupped around an imaginary cube.', 6, 'neutral');
   add('Carry that shape', 'Keep the same finger shape. Move your whole hand a little.', 8, 'neutral-nuisance');
@@ -87,16 +99,17 @@ export function createGestureCapture({fetch:request=globalThis.fetch,MediaRecord
     }
     update();
   }
-  async function begin({stream,identity,settings={},faces,source={kind:'live-camera'},runtime=null}={}) {
+  async function begin({stream,identity,settings={},faces,source={kind:'live-camera'},runtime=null,mode='neutral'}={}) {
     if(['starting','recording','saving'].includes(status))throw Error('A capture is already active');
+    const protocol=gestureProtocol(mode);
     if(!Recorder)throw Error('Camera recording is unavailable in this browser');
     const mimeType=['video/webm;codecs=vp8','video/webm','video/mp4'].find(type=>Recorder.isTypeSupported(type));
     if(!mimeType)throw Error('No supported camera recording format');
     if(!faces?.length||faces.length%3||!faces.every(i=>Number.isInteger(i)&&i>=0&&i<778))throw Error('Hand topology is unavailable');
     status='starting';session=null;error=null;recorder=null;videoStopped=null;finishTask=null;tasks=[];frameCount=savedFrames=videoChunks=eventCount=pending=0;
-    protocolComplete=false;pausedAt=null;cueIndex=0;cues=gestureProtocol();update();
+    protocolComplete=false;pausedAt=null;cueIndex=0;cues=protocol;update();
     try {
-      session=await post('start',{schema:'iron-gland-gesture-capture.v1',identity,settings,source,runtime,
+      session=await post('start',{schema:'iron-gland-gesture-capture.v1',identity,settings:{...settings,captureMode:mode},source,runtime,
         camera:stream.getVideoTracks()[0]?.getSettings(),timeOriginMs:epoch(),protocol:cues,
         annotationAuthority:'instructions-only-not-continuous-targets',feature:FEATURE,floatEncoding:'float32-le',videoMimeType:mimeType}, {},true);
       await write('topology.u16',new Uint16Array(faces));

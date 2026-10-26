@@ -6,7 +6,12 @@ curl as a working control gesture. The reconstructed hand remains the visible
 feedback; camera pixels are retained privately as inference input, not displayed
 as a scene background.
 
-Start the camera, then **Record take**. Instructions cover comfortable exploration,
+Start the camera, then **Record take**. **Neutral** is the default: a one-minute
+sequence to find a comfortable no-turn shape, carry it through small whole-hand
+movements, and lower/reacquire it twice. It collects neutral demonstrations;
+there is no trained neutral detector or neutral-confidence feedback yet.
+
+Select **Turns** to retain the longer sequence. Its instructions cover comfortable exploration,
 cupped neutral, whole-hand movement with fingers held neutral, slight opposite
 turns, sustained holds, returns, lowering/re-entry, partial reversals and an
 unpaced final block. The two main blocks use different movement and hold durations.
@@ -55,11 +60,16 @@ finished, not that movements matched instructions or a controller will learn the
 
 ## Operations
 
-The Workbench operations used by both UI and automation are `beginCapture({label})`,
+The Workbench operations used by both UI and automation are `beginCapture({label,mode})`,
 `finishCapture()`, `pauseCapture()` and `repeatCapture()`. Existing `stop()` drains
 in-flight inference and finalizes a partial capture. Changing handedness/model
 settings during a take is rejected. `read().capture` reports the destination,
 cue, state, saved/observed counts and pending writes.
+`mode` is `neutral` (default) or `turns`; unknown values fail before capture
+persistence starts. The manifest preserves `settings.captureMode` and the exact
+instruction sequence. The mode is locked in the UI during a take. Existing
+captures without this field retain their original recorded protocol. The end of
+either instruction sequence does not stop recording; Finish remains explicit.
 
 `POST /api/iron-gland-capture?action=start` accepts JSON capture metadata.
 `action=write&id=<uuid>&name=<file>` accepts raw bytes at the specified relative
