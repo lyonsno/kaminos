@@ -41,6 +41,14 @@ with TemporaryDirectory() as directory:
         for name in required+['onnx/vision_encoder_fp16.onnx','onnx/decoder_model_merged_q4f16.onnx_data_2']:
             target=root/name;saved=target.read_bytes();target.unlink();assert not serve.runtime_config()['pup']['mounted'],name;target.write_bytes(saved)
         target=root/files[0]['path'];target.write_bytes(b'truncated');assert not serve.runtime_config()['pup']['mounted'];target.write_bytes(bytes(range(128)))
+        # Required external lengths cannot use the graph-only optional-size sentinel.
+        for invalid in (None, 0, -1, True, '128'):
+            target=root/files[0]['path'];target.write_bytes(b'x')
+            malformed=[dict(entry) for entry in files];malformed[0]['bytes']=invalid
+            (root/'provenance.json').write_text(json.dumps({**provenance,'files':malformed}))
+            assert not serve.runtime_config()['pup']['mounted'],('external bytes',invalid)
+            target.write_bytes(bytes(range(128)))
+        (root/'provenance.json').write_text(json.dumps(provenance))
         for patch in [{'status':'partial'},{'source':'different/model'},{'external_data':{}},{'files':[]}]:
             (root/'provenance.json').write_text(json.dumps({**provenance,**patch}));assert not serve.runtime_config()['pup']['mounted'],patch
         (root/'provenance.json').write_text(json.dumps(provenance))

@@ -2660,7 +2660,7 @@ def pup_weights_mounted():
                 return False
             for index in range(count):
                 name = 'onnx/' + graph + '_data' + (f'_{index}' if index else '')
-                if name not in sizes or not payload(name, sizes[name]):
+                if name not in sizes or type(sizes[name]) is not int or sizes[name] <= 0 or not payload(name, sizes[name]):
                     return False
         return True
     except (OSError, ValueError, TypeError, AttributeError, KeyError):
