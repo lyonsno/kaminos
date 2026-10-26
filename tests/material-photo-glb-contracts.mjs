@@ -25,9 +25,18 @@ test('photograph export retains calibrated points, camera-facing winding and inf
   assert.equal(json.materials[0].pbrMetallicRoughness.metallicRoughnessTexture.index,1);
   assert.equal(json.materials[0].pbrMetallicRoughness.baseColorTexture.index,0);
   assert.equal(json.materials[0].pbrMetallicRoughness.metallicFactor,1);
+  assert.equal(json.materials[0].alphaMode,'OPAQUE','opaque photographs must not be rejected as transparent flame casters');
   assert.deepEqual([...encoded[0].data],[...maps.albedo.data.slice(0,3),255,...maps.albedo.data.slice(4,7),255,...maps.albedo.data.slice(8,11),255,...maps.albedo.data.slice(12,15),255]);
   assert.deepEqual(encoded[1],maps.orm);
   assert.equal(depth.points[2],3);
+});
+
+test('photographs with actual transparency retain their mask',async()=>{
+  const {photographGlb}=await import(source);
+  const depth={width:2,height:2,points:Float32Array.of(-1,-1,2,1,-1,2,-1,1,2,1,1,2)};
+  const image={width:2,height:2,data:new Uint8ClampedArray(16).fill(255)};image.data[15]=0;
+  const {json}=parseGlb(await photographGlb({depth,image,maps:{albedo:image,orm:image}},{encodePng:async()=>Uint8Array.of(1)}));
+  assert.equal(json.materials[0].alphaMode,'MASK');assert.equal(json.materials[0].alphaCutoff,.5);
 });
 
 test('photograph topology excludes invalid, transparent and discontinuous triangles', async()=>{

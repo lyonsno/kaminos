@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {parseArgs} from 'node:util';
 import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
-const options={...Object.fromEntries(['root','origin','out','chrome','playwright','source-report'].map(k=>[k,{type:'string'}])),native:{type:'boolean',default:false}};
+const options={...Object.fromEntries(['root','origin','out','chrome','playwright','source-report','flame-preset'].map(k=>[k,{type:'string'}])),native:{type:'boolean',default:false},'expect-lighting-rejection':{type:'boolean',default:false}};
 // Recover the caller's destination before strict parsing can reject another argument.
 const loose=parseArgs({strict:false,allowPositionals:true,options:{out:{type:'string'}}}).values;
 const out=path.resolve(typeof loose.out==='string'?loose.out:'photo-scene-witness'),report={status:'failed',phase:'arguments',requestedArgs:process.argv.slice(2),errors:[],observations:{}};
@@ -17,6 +17,7 @@ try{
   await save();v=parseArgs({options}).values;report.requested=v;
   report.route=v.native?'native page inference through ordinary Generate/Add/save':'retained native arrays through ordinary Generate/Add/save; no inference';
   for(const key of ['root','origin','out','chrome','playwright'])assert.ok(v[key],`--${key} required`);
+  assert.ok(!v['expect-lighting-rejection']||v['flame-preset'],'lighting rejection requires a flame preset');
   assert.ok(v.native?!v['source-report']:v['source-report'],'choose native inference OR a retained source report');
   report.phase='source';report.server=await verifyAuthoringServer({origin:v.origin,repoRoot:v.root});
   report.sourceHashes={};for(const file of ['authoring-material-photo.mjs','models/material-photo/photograph-glb.js','authoring-trellis-generation.mjs','authoring-assets.mjs','authoring-generate-layout.mjs']){
@@ -71,7 +72,9 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
   report.phase='arrival';await save();await page.goto(v.origin+'/?workspace=authoring');
   await page.waitForFunction(()=>window.kaminosAssets&&window.kaminosSceneAuthoring&&window.__kaminosCompositionSetup?.status!=='failed');
   await page.evaluate(()=>window.kaminosAssets.open('generate'));
-  await page.locator('#asset-mesh-model').selectOption('material-photo');await page.locator('#asset-photo-size').selectOption('512');
+  await page.locator('#asset-mesh-model').selectOption('material-photo');
+  assert.equal(await page.locator('#asset-run').textContent(),'Generate depth and materials');
+  assert.equal(await page.locator('#asset-photo-size').inputValue(),'512');
   assert.equal(await page.locator('#asset-photo-size-row').isVisible(),true);
   report.before=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
   await page.evaluate(()=>window.kaminosAssets.select({kind:'image',source:'/demos/material-photo/images/bag.webp',name:'Backpack.webp'}));
@@ -136,6 +139,27 @@ export function createPagePhotographer(){return async ({image,size,onProgress})=
   report.reopened=(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects)).find(x=>x.id===report.id);
   assert.deepEqual(report.reopened.transform,report.pose);assert.equal(report.reopened.generation?.runId,report.result.generation.runId);
   await shot('reopened');
+  if(v['flame-preset']){
+    report.phase='photograph-with-flame';await save();
+    report.flame=await page.evaluate(preset=>window.kaminosSceneAuthoring.addFlameEmitter(preset),v['flame-preset']);
+    report.fireSteps=await page.locator('#volume-steps').inputValue();assert.ok(Number(report.fireSteps)<=40,'flame exceeds agent live budget');
+    await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender()||window.__kaminosSceneRadianceSetup?.status==='failed');
+    if(v['expect-lighting-rejection']){
+      report.phase='masked-photograph-recovery';await save();
+      await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.recovery==='ordinary-scene');
+      report.lightingRecovery=await page.evaluate(()=>window.__kaminosSceneRadianceSetup);
+      assert.match(report.lightingRecovery.error,/static-light-transparent-caster:/);
+      const beforeCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
+      const before=await shot('lighting-recovered');
+      await page.evaluate(()=>document.activeElement?.blur());await page.keyboard.press('Numpad3');await settle();
+      const afterCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
+      assert.notDeepEqual(afterCamera.position,beforeCamera.position,'camera navigation must remain responsive');
+      assert.notEqual(await shot('lighting-recovered-orbit'),before,'camera navigation must repaint the actual renderer');
+    }else{
+      assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance?.canRender()),true,'opaque photograph must support fire lighting');
+      await shot('photograph-with-flame');
+    }
+  }
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.kaminosFrameSelected());await shot('mobile');
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.error=String(error.stack??error);process.exitCode=1;if(page)await page.screenshot({path:path.join(out,'failure.png')}).catch(()=>{});}

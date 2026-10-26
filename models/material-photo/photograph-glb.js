@@ -65,6 +65,7 @@ export async function photographGlb({depth,maps,image}, {name='Material photogra
   const geometry=photographGeometry(depth,{image,depthEdge});
   rgba(maps?.albedo); rgba(maps?.orm);
   const albedo={...maps.albedo,data:new Uint8ClampedArray(maps.albedo.data)};
+  const masked=image&&image.data.some((value,index)=>index%4===3&&value<255);
   for(let y=0;y<albedo.height;y++)for(let x=0;x<albedo.width;x++)albedo.data[(y*albedo.width+x)*4+3]=alphaAt(image,(x+.5)/albedo.width,(y+.5)/albedo.height);
   const chunks=[],bufferViews=[],accessors=[]; let length=0;
   const append=(bytes,target)=>{const byteOffset=(length+3)&~3; chunks.push([byteOffset,bytes]); length=byteOffset+bytes.length;
@@ -78,7 +79,7 @@ export async function photographGlb({depth,maps,image}, {name='Material photogra
   const sourceCenter=geometry.min.map((value,k)=>(value+geometry.max[k])/2);
   return encodeGlb({asset:{version:'2.0',generator:'Kaminos Material Photograph',extras:{photograph:{...receipt,frame:'moge-x-negative-y-negative-z',sourceCenter,depthEdge,representation:'open-surface'}}},
     scene:0,scenes:[{nodes:[0]}],nodes:[{name,mesh:0,translation:sourceCenter.map(v=>-v)}],meshes:[{name,primitives:[{attributes,indices,material:0}]}],
-    materials:[{name:'Inferred materials',doubleSided:true,alphaMode:'MASK',alphaCutoff:.5,
+    materials:[{name:'Inferred materials',doubleSided:true,alphaMode:masked?'MASK':'OPAQUE',...(masked?{alphaCutoff:.5}:{}),
       pbrMetallicRoughness:{baseColorTexture:{index:0},metallicRoughnessTexture:{index:1},metallicFactor:1,roughnessFactor:1}}],
     textures:[{sampler:0,source:0},{sampler:0,source:1}],samplers:[{wrapS:33071,wrapT:33071,magFilter:9729,minFilter:9987}],
     images,accessors,bufferViews,buffers:[{byteLength:bin.length}]},bin).buffer;

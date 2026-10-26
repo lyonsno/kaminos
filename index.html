@@ -11651,6 +11651,7 @@ async function initScene() {
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
     // current inputs; do not submit retired medium resources or unlit fill.
+    if (recoverFailedSceneRadiance()) return false;
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
     updateSelectionFeedback();
@@ -11755,7 +11756,8 @@ async function initScene() {
     const fireProxyEffective = fireProxySync?.effective() ?? false;
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && isSceneItemVisible('flame-field') && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const lightingFailed=recoverFailedSceneRadiance()||window.__kaminosSceneRadianceSetup?.recovery==='ordinary-scene';
+    const mainRendererNeeded = lightingFailed || !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;
 
     if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
@@ -19435,6 +19437,22 @@ window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { s
 // Serialize mounts/disposal: Undo during a module import cannot leave a second
 // consumer or duplicate inspector listeners behind.
 let sceneRadianceRouteTask=Promise.resolve(),sceneRadianceRouteKey=null,sceneRadianceEditStop=null,sceneRadianceDebugView=null;
+function recoverFailedSceneRadiance() {
+  const lighting=window.__kaminosSceneRadiance,state=lighting?.debugState();
+  if(!state?.error||!state.status?.endsWith('failed'))return false;
+  if(window.__kaminosSceneRadianceSetup?.status==='recovering')return true;
+  const message=state.error;
+  window.__kaminosSceneRadianceSetup={status:'recovering',error:message};
+  // Leave the source consumer's current submission before retiring its resources.
+  sceneRadianceRouteTask=sceneRadianceRouteTask.catch(()=>{}).then(async()=>{
+    if(window.__kaminosSceneRadiance!==lighting)return;
+    await releaseSceneRadianceRoute();
+    window.__kaminosSceneRadianceSetup={status:'failed',error:message,recovery:'ordinary-scene'};
+    markDirty();setInfo(`Fire lighting stopped; scene renderer resumed: ${message}`);
+  });
+  sceneRadianceRouteTask.catch(error=>console.error('Scene lighting recovery failed',error));
+  return true;
+}
 async function releaseSceneRadianceRoute() {
   sceneRadianceEditStop?.();sceneRadianceEditStop=null;
   sceneRadianceDebugView?.dispose();sceneRadianceDebugView=null;
@@ -27142,7 +27160,7 @@ function setupAuthoringAssets(){
   const photograph=()=>{
     if(!authoringPhotograph){
       const service=createPhotographAuthoringGeneration({runPage:createPagePhotographer({appHost:appGpuHost}),
-        size:()=>authoringMeshModel?.photoSize()??768,changed:()=>redraw(),
+        size:()=>authoringMeshModel?.photoSize()??512,changed:()=>redraw(),
         blocked:()=>!sharedGpu?.device?'Material Photograph requires WebGPU':compositionModule?'Use the existing controls in this inference workspace.':
           authoringImageGenerator?.busy()||meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')?'Another model is generating':null,
         persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'Material Photograph')});

@@ -9,6 +9,28 @@ import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 import {resolveFlameLightingRoute} from '../scene-authoring.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
+test('a terminal lighting failure releases its renderer gate without treating pending work as failure',async()=>{
+  const events=[],elements=new Map();
+  let state={status:'awaiting-source'};
+  const lighting={debugState:()=>state,dispose(){events.push('disposed');}};
+  const context={window:{__kaminosSceneRadiance:lighting},URLSearchParams,
+    document:{getElementById(id){if(!elements.has(id))elements.set(id,{replaceChildren(){}});return elements.get(id);}},
+    volumePrototype:{setSceneVolumeSourceEnabled:v=>events.push(['source',v])},markDirty(){events.push('redraw');},setInfo:s=>events.push(s),refreshRenderingControls(){}};
+  const a=source.indexOf('let sceneRadianceRouteTask='),b=source.indexOf('async function mountSceneRadianceRoute(',a);
+  vm.createContext(context);vm.runInContext(source.slice(a,b),context);
+  assert.equal(typeof context.recoverFailedSceneRadiance,'function','failed lighting needs a recovery path');
+  assert.equal(context.recoverFailedSceneRadiance(),false);assert.equal(events.length,0);
+  state={status:'preparation-failed',error:'static-light-transparent-caster:Backpack'};
+  assert.equal(context.recoverFailedSceneRadiance(),true);
+  assert.equal(context.recoverFailedSceneRadiance(),true);
+  await vm.runInContext('sceneRadianceRouteTask',context);
+  assert.equal(context.window.__kaminosSceneRadiance,null);
+  assert.equal(events.filter(x=>x==='disposed').length,1);
+  assert.equal(context.window.__kaminosSceneRadianceSetup.recovery,'ordinary-scene');
+  assert.match(context.window.__kaminosSceneRadianceSetup.error,/transparent-caster/);
+  assert.ok(events.includes('redraw'));
+});
+
 test('capture completion refreshes the visible reduced caster diagnostics once',()=>{
   let statusKey='',syncs=0;
   const state={casters:{level:'5k',targets:0,captureTriangles:0}},window={__kaminosSceneRadiance:{debugState:()=>state}},settings={sync(){syncs++;}},fireShadowSceneRoute=()=>({});

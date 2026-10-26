@@ -16,7 +16,7 @@ export function createMaterialPhotoOperation({ geometry, materials }) {
       Promise.resolve(promise).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
   }
-  function infer({ image, size = 768, depth, signal, geometryOptions = {}, materialOptions = {}, onProgress, onGeometry } = {}) {
+  function infer({ image, size = 512, depth, signal, geometryOptions = {}, materialOptions = {}, onProgress, onGeometry } = {}) {
     if (active) throw Error('a photograph operation is already running');
     for (const options of [geometryOptions, materialOptions]) {
       for (const key of ['image', 'signal', 'size', 'onRunProgress']) {
@@ -40,7 +40,9 @@ export function createMaterialPhotoOperation({ geometry, materials }) {
         const cached = depth != null, phases = {};
         if (!cached) {
           progress('geometry', 'loading'); check(abort.signal);
+          const started=performance.now();
           await wait(geometry.load((received, total) => progress('geometry', 'loading', { received, total })), abort.signal);
+          phases.geometryLoadMs=performance.now()-started;
           check(abort.signal);
           if (!geometry.model?.useRealWeights) throw Error('MoGe real weights did not load');
         }
@@ -52,7 +54,9 @@ export function createMaterialPhotoOperation({ geometry, materials }) {
         await onGeometry?.(depth, { cached, durationMs: phases.geometryMs });
         check(abort.signal);
         progress('materials', 'loading'); check(abort.signal);
+        started=performance.now();
         await wait(materials.load(event => progress('materials', 'loading', event)), abort.signal);
+        phases.materialsLoadMs=performance.now()-started;
         check(abort.signal);
         progress('materials', 'inferring'); check(abort.signal);
         started = performance.now();

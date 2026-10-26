@@ -19,7 +19,7 @@ try {
   const photograph = createMaterialPhotoOperation({ geometry, materials });
   const result = await photograph.infer({
     image, // ImageData: the same pixels go to both models.
-    size: 768,
+    size: 512,
     signal: abortController.signal,
     onProgress: ({ stage, phase, detail }) => updateProgress(stage, phase, detail),
     onGeometry: depth => showDepthPreview(depth),

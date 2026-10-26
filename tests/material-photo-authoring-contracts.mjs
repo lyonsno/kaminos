@@ -8,10 +8,31 @@ import {usedInputStatusFor} from '../authoring-assets.mjs';
 const glb=()=>encodeGlb({asset:{version:'2.0'}}).buffer;
 test('Generate offers the photograph and identifies unchanged input',()=>{
   assert.equal(MESH_MODELS['material-photo']?.label,'Material Photograph');
+  assert.equal(MESH_MODELS['material-photo']?.action,'Generate depth and materials');
   assert.equal(usedInputStatusFor(null,'photo.png','original'),'Original photograph');
 });
 const path=new URL('../authoring-material-photo.mjs',import.meta.url);
 async function factory(){assert.ok(existsSync(path),'Material Photograph authoring service is missing');return (await import(path)).createPhotographAuthoringGeneration;}
+test('photographs default to 512',async()=>{
+  const create=await factory();
+  await create({persist:async()=>({source:'saved.glb'}),runPage:async({size})=>{assert.equal(size,512);return {glb:glb(),generation:{},label:'Photo'};}}).run({source:'photo.png'});
+});
+test('photographs expose actual download and model work progress',async()=>{
+  const create=await factory();let service;
+  service=create({size:()=>512,persist:async()=>({source:'saved.glb'}),runPage:async({size,onProgress})=>{
+    assert.equal(size,512);
+    onProgress({stage:'geometry',phase:'loading',detail:{received:25,total:100}});
+    assert.equal(service.read().percent,25);assert.match(service.read().progress,/MoGe/);
+    onProgress({stage:'materials',phase:'loading',detail:{phase:'weights',resourceIndex:1,resourceCount:3,chunkIndex:2,chunkCount:5,loadedBytes:50,totalBytes:100}});
+    assert.equal(service.read().percent,50);assert.match(service.read().stage,/chunk 3\/5/i);
+    onProgress({stage:'materials',phase:'inferring',detail:{phase:'unet',phaseIndex:2,phaseCount:6,duties:4,completedFlops:30,totalFlops:100}});
+    assert.equal(service.read().percent,30);assert.match(service.read().progress,/Material inference/);
+    onProgress({stage:'materials',phase:'exporting'});
+    assert.equal(service.read().percent,null,'a new phase must not retain the preceding percentage');
+    return {glb:glb(),generation:{},label:'Photo'};
+  }});
+  await service.run({source:'photo.png'});
+});
 test('retains completed output and retries storage without another inference',async()=>{
   const create=await factory();let runs=0,saves=0;
   const output={glb:glb(),generation:{runId:'exact-run'},label:'Photo'};

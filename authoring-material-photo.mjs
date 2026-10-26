@@ -5,14 +5,38 @@ export const PHOTOGRAPH_ROUTE='moge-supermat.material-photograph.webgpu.v0';
 const check=signal=>signal?.throwIfAborted();
 const sha256=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
 
-export function createPhotographAuthoringGeneration({runPage,persist,size=()=>768,changed=()=>{},blocked=()=>null}) {
+const fraction=(done,total)=>Number.isFinite(done)&&Number.isFinite(total)&&total>0&&done>=0&&done<=total?100*done/total:null;
+function progressState({stage,phase,detail}) {
+  const model=stage==='geometry'?'Depth':'Materials',status=phase==='loading'?'loading':'running';
+  let title=model,text=phase,percent=null;
+  if(phase==='loading'&&stage==='geometry'){
+    text='Loading MoGe weights';percent=fraction(detail?.received,detail?.total);
+    if(Number.isFinite(detail?.received))text+=` · ${(detail.received/1e6).toFixed(1)}${detail.total>0?` / ${(detail.total/1e6).toFixed(1)}`:''} MB`;
+  }else if(phase==='loading'){
+    text='Loading SuperMat weights';
+    if(Number.isInteger(detail?.resourceIndex))title+=` · resource ${detail.resourceIndex+1}/${detail.resourceCount}`;
+    if(Number.isInteger(detail?.chunkIndex))title+=` · chunk ${detail.chunkIndex+1}/${detail.chunkCount}`;
+    percent=fraction(detail?.loadedBytes,detail?.totalBytes);
+    if(Number.isFinite(detail?.loadedBytes))text+=` · ${(detail.loadedBytes/1e6).toFixed(1)} MB`;
+  }else if(phase==='inferring'){
+    const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Packing material maps'};
+    text=names[detail?.phase]??(stage==='geometry'?'Inferring depth and normals':'Inferring materials');
+    if(Number.isInteger(detail?.phaseIndex)&&detail.phaseCount>0)text+=` · phase ${detail.phaseIndex+1}/${detail.phaseCount}`;
+    percent=fraction(detail?.completedFlops,detail?.totalFlops);
+    if(percent!==null)title+=' · estimated work';
+    else if(detail?.duties>0)text+=` · ${detail.duties} GPU duties`;
+  }else if(phase==='exporting')text='Building photograph surface';
+  return {status,stage:title,progress:text,percent,telemetry:{stage,phase,detail:detail?{...detail}:null}};
+}
+
+export function createPhotographAuthoringGeneration({runPage,persist,size=()=>512,changed=()=>{},blocked=()=>null}) {
   let active=false,abort=null,pending=null;
   const state={status:'idle',stage:null,progress:'',percent:null,canStop:false,error:null,results:[],inputPreview:null,inputKind:'original'};
   const read=()=>({...state,results:[...state.results],pending:pending?{label:pending.label}:null,
     ...(!active&&state.status==='idle'&&blocked()?{status:'unavailable',error:blocked()}: {})});
   const set=values=>{Object.assign(state,values);changed(read());};
   const store=async()=>{
-    set({status:'saving',stage:'Saving photograph',progress:'Saving photograph',canStop:false});
+    set({status:'saving',stage:'Saving photograph',progress:'Saving photograph',percent:null,canStop:false});
     const saved=await persist(pending.glb,pending.generation,pending.label);
     state.results.push(saved);pending=null;
     set({status:'complete',stage:'Complete',progress:'Photograph saved',percent:100,error:null});return saved;
@@ -34,8 +58,7 @@ export function createPhotographAuthoringGeneration({runPage,persist,size=()=>76
       try{
         const result=await runPage({image,size:resolution,signal:current.signal,onProgress:event=>{
           if(!active||abort!==current||current.signal.aborted)return;
-          const model=event.stage==='geometry'?'Geometry':'Materials';
-          set({status:event.phase==='loading'?'loading':'running',stage:model,progress:`${model}: ${event.phase}`});
+          set(progressState(event));
         }});
         check(current.signal);
         if(!(result?.glb instanceof ArrayBuffer)||result.glb.byteLength<12||new DataView(result.glb).getUint32(0,true)!==0x46546c67)throw Error('Photograph returned no GLB');
@@ -67,7 +90,7 @@ export function createPagePhotographer({appHost,fetch=globalThis.fetch,weightsUr
       }catch(error){await geometry.destroy();throw error;}
     })();resident.catch(()=>{resident=null;});return resident;
   }
-  return async({image,size=768,signal,onProgress})=>{
+  return async({image,size=512,signal,onProgress})=>{
     check(signal);
     const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`Photograph input HTTP ${response.status}`);
     const blob=await response.blob(),bytes=await blob.arrayBuffer(),bitmap=await createImageBitmap(blob);
@@ -77,7 +100,7 @@ export function createPagePhotographer({appHost,fetch=globalThis.fetch,weightsUr
     const result=await operation.infer({image:pixels,size,signal,onProgress});check(signal);
     const generation={schema:'kaminos.asset-generation.v1',runId:`material-photo-${crypto.randomUUID()}`,route:PHOTOGRAPH_ROUTE,target:'this-page',
       input:{source:image.source,sha256:await sha256(bytes),name:image.name??image.label},
-      settings:{materialSize:size,depthEdge:.08},representation:'open-photograph-surface',models:['moge-2-vitl-normal','SuperMat']};
+      settings:{materialSize:size,depthEdge:.08},timings:result.phases,representation:'open-photograph-surface',models:['moge-2-vitl-normal','SuperMat']};
     onProgress?.({stage:'materials',phase:'exporting'});
     const label=(image.label||image.name||'Photograph').replace(/\.[^.]+$/,'');
     const glb=await photographGlb({depth:result.depth,maps:result.maps.maps,image:pixels},{name:label,receipt:generation});check(signal);

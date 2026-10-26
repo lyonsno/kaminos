@@ -132,7 +132,7 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
 
 // Mesh model picker in the Generate tab. The choice holds while either model is running.
 export const MESH_MODELS={sf3d:{label:'Stable Fast 3D',detail:'Image → textured mesh · Stable Fast 3D (fast, beside the kiln)'},
-  'material-photo':{label:'Material Photograph',detail:'Material Photograph'},
+  'material-photo':{label:'Material Photograph',detail:'Material Photograph',action:'Generate depth and materials'},
   trellis:{label:'TRELLIS 2',detail:'Image → textured mesh · TRELLIS 2 (better, minutes, GPU queue)'},
   'trellis-page':{label:'TRELLIS 2 · this page',detail:'Image → textured mesh · TRELLIS 2 on this page’s GPU (no queue, no Python model; many minutes)'}};
 export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,changed=()=>{},trellisState=()=>null,storage=globalThis.localStorage}){
@@ -144,7 +144,7 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   (heading()||run).after(label);if(!heading())run.before(label);
   const select=label.querySelector('select');select.value=initial;
   const photoSize=document.createElement('label');photoSize.id='asset-photo-size-row';
-  photoSize.innerHTML='Materials <select id="asset-photo-size" aria-label="Photograph material resolution"><option value="512">512</option><option value="768" selected>768</option><option value="1024">1024</option></select>';
+  photoSize.innerHTML='Materials <select id="asset-photo-size" aria-label="Photograph material resolution"><option value="512" selected>512</option><option value="768">768</option><option value="1024">1024</option></select>';
   label.after(photoSize);
   // Express: TRELLIS asks for the GPU queue's quick lane. On by default, remembered.
   const express=document.createElement('label');express.id='asset-express-row';
@@ -155,6 +155,7 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   box.onchange=()=>{wanted=box.checked;try{storage?.setItem('kaminos.trellis.express',wanted?'on':'off');}catch{}changed(select.value);};
   function render(){
     select.disabled=busy();const p=heading();if(p)p.textContent=MESH_MODELS[select.value].detail;
+    run.textContent=MESH_MODELS[select.value].action??'Generate mesh';
     photoSize.hidden=select.value!=='material-photo';photoSize.querySelector('select').disabled=busy();
     const t=trellisState();express.hidden=select.value!=='trellis';
     const eligible=t?.expressEligible===true;box.disabled=busy()||!eligible;
