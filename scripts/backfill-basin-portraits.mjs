@@ -43,6 +43,10 @@ try{
  if(!chosen.length)throw Error('No compatible reactant-combustion basins were found');
  for(const entry of chosen){const item={presetId:entry.presetId,label:entry.label,status:'running'};report.entries.push(item);phase('basin-load');
   try{
+   // A fresh page gives every basin a fresh field, even when two successive
+   // presets share a grid size. Applying settings alone preserves old fluid.
+   if(report.entries.length>1){await call('Page.navigate',{url:report.url});while(!await evaluate("window.kaminosWorkbenchExperiments?.state().id==='inference-flame'")){const error=await evaluate("document.body.innerText.includes('Experiments unavailable:')?document.body.innerText:null");if(error)throw Error(error);await delay(150);}await evaluate('(async()=>{window.portraitFlame=await window.kaminosFlameWorkbench.open();return true;})()');}
+   item.initialization='fresh-workbench-page';
    await evaluate(`portraitFlame.applyBasin(${JSON.stringify(entry.presetId)})`);
    phase('field-warm');
    item.application=await evaluate('({clamps:window.__kaminosFlameBasinClampReport,source:portraitFlame.settings().source})');
