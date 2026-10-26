@@ -1,3 +1,4 @@
+import {checkedBurnerRecipe} from './burner-recipe.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
@@ -37,6 +38,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface),...(record.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
+    ...(record.burner?{burner:checkedBurnerRecipe(record.burner)}:{}),
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),

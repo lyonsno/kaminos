@@ -1,3 +1,4 @@
+import {checkedRectangularAperture,rectangularCoverageMap,rectangularSlabBasis} from './volume-rectangular-aperture.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
@@ -2624,6 +2625,7 @@ export function immersedSlabLookup(d, basis, grid) {
 // weight (inside the disc); slot and bed reach the full radius.
 export function immersedPatternSpec(effective) {
   const pattern = effective?.pattern;
+  if (pattern?.kind === 'rectangle') return pattern;
   if (!pattern || pattern.kind === 'shape') return null;
   const r = effective.radiusCells * 2 / effective.grid;
   return {
@@ -2646,7 +2648,7 @@ export function immersedCoverageMapForConfig(config, options = {}) {
   const key = immersedCoverageSignatureFor(config) + `|${options.supersample ?? 4}`;
   if (!immersedCoverageCache.has(key)) {
     if (immersedCoverageCache.size > 16) immersedCoverageCache.clear();
-    immersedCoverageCache.set(key, buildInflowCoverageMap({ grid: e.grid, supersample: options.supersample ?? 4, spec }));
+    immersedCoverageCache.set(key, spec.kind==='rectangle' ? rectangularCoverageMap(e.grid,e.radiusCells,spec) : buildInflowCoverageMap({ grid: e.grid, supersample: options.supersample ?? 4, spec }));
   }
   return immersedCoverageCache.get(key);
 }
@@ -2762,7 +2764,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // way the floor map normalises it (retired patterns fall back to the shape).
   const patternRequested = resolveInflowAperturePattern(controls);
   const patternNormalised = normalizeInflowApertureSpec({ kind: 'disc', pattern: patternRequested.kind, lineWeight: patternRequested.lineWeight, jetJitter: patternRequested.jetJitter, count: patternRequested.count, ratio: patternRequested.ratio, seed: patternRequested.seed });
-  const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
+  const pattern = controls.emitterApertureHalfLength!==undefined ? checkedRectangularAperture({kind:'rectangle',halfLength:controls.emitterApertureHalfLength,halfWidth:controls.emitterApertureHalfWidth}) : { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
   const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
   const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, coverageFraction: 0, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
@@ -2781,7 +2783,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: pattern.kind==='rectangle' ? rectangularSlabBasis(direction,['X','Y','Z'].map(a=>controls['emitterApertureAxis'+a])) : immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume

@@ -1,3 +1,4 @@
+import {checkedBurnerRecipe} from './burner-recipe.mjs';
 import {canCollideWithFire,checkedObjectCollision} from './scene-collider.mjs';
 import {giProxySettingFor} from './scene-gi-proxy-settings.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
@@ -23,6 +24,7 @@ export function createSceneObjectRecord(object, metadata, {id, sceneTransform = 
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
     generation:metadata.generation?structuredClone(metadata.generation):null,
+    ...(metadata.burner?{burner:checkedBurnerRecipe(metadata.burner)}:{}),
     assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
     collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
@@ -41,6 +43,7 @@ export function createSceneObjectRecord(object, metadata, {id, sceneTransform = 
     splat: record.splat,
     image: record.image,
     generation:record.generation,
+    ...(record.burner?{burner:record.burner}:{}),
     collision:record.collision,
     giProxy:record.giProxy?structuredClone(record.giProxy):null,
     renderRoute: record.renderRoute,

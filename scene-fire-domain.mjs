@@ -1,9 +1,10 @@
+import {checkedRectangularAperture} from './volume-rectangular-aperture.mjs';
 // Authored fire records. The single-domain engine consumes these through an
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
 import {transferRetiredForceSwitches} from './volume-retired-control-migration.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
-import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDomain,flamePoseInDomain,immersedControlsForFlamePose,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
+import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDomain,flamePoseInDomain,immersedControlsForFlamePose,flameEmitterFrame,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
 export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
@@ -67,6 +68,10 @@ export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0
    if(typeof controls[key]==='number'&&!Number.isFinite(controls[key]))throw Error(`Fire source value ${id} must be finite`);
   }
   const pose=flamePoseToDomain(record.transform,translation,scale);
+  if(record.emission?.aperture){const aperture=checkedRectangularAperture(record.emission.aperture),axis=flameEmitterFrame(pose).supportAxis;
+   controls.emitterApertureHalfLength=aperture.halfLength;controls.emitterApertureHalfWidth=aperture.halfWidth;
+   for(let i=0;i<3;i++)controls['emitterApertureAxis'+'XYZ'[i]]=axis[i];
+  }
   const inside=flamePoseInDomain(record.transform,translation,scale,shared);
   return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false&&visible(record.id),shared)};
  });
@@ -77,6 +82,7 @@ export function checkedFireSourceRecord(record){
  const result={...clone(record),transform:normalizeFlameEmitterPose(record.transform),emissionEnabled:record.emissionEnabled!==false};
  if(record.emission!==undefined){
   if(record.emission?.domainId!==FIRE_DOMAIN_ID)throw Error('Invalid fire source domain reference');
+  if(record.emission.aperture)checkedRectangularAperture(record.emission.aperture);
   const settings=controls(record.emission.settings,'source settings');
   for(const id of Object.keys(settings))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
   result.emission={...clone(record.emission),domainId:FIRE_DOMAIN_ID,settings};

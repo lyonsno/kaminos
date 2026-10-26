@@ -1,3 +1,4 @@
+import {defaultBurnerRecipe} from './burner-recipe.mjs';
 // The original geometry studies, browsed and inserted through the ordinary GLB path.
 const designs=[
  ['crown-ring','Crown · Ring burner','Twelve upward ports around an open centre.',762580,'5c3025c41147a55cb1ec9cc722598d8d901279e87a1fa5ca4251de834f211e6e'],
@@ -8,6 +9,7 @@ export function burnerAssets(){
  return designs.map(([id,label,description,size,sha256])=>{
   const name=id+'.glb',source='./assets/burners/'+name;
   return {id,root:'burners',path:name,name,label,description,size,kind:'mesh',source,
+   ...(id==='lance-nozzle'?{}:{burner:defaultBurnerRecipe(id)}),
    assetOrigin:{source,collection:'burners',designId:id,sha256,designRevision:'c9915c0a1f8fb4ab90e35605674dac9298cd855f'}};
  });
 }

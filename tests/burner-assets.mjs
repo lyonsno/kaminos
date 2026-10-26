@@ -40,3 +40,14 @@ test('bundled GLBs are the exact observed designs, retaining each proposed outle
   const ports=json.nodes.filter(n=>n.extras?.role==='proposed-emission-opening');assert.equal(ports.length,count);assert.ok(ports.every(n=>n.extras.runtimeBinding===null));
  }
 });
+test('Crown and Seam insert working burner recipes while Lance remains a geometry study',async()=>{
+ const c=catalog();await c.browse('burners');
+ assert.deepEqual(c.read().entries.map(e=>[e.id,e.burner?.designId??null]),[
+  ['crown-ring','crown-ring'],['seam-rail','seam-rail'],['lance-nozzle',null],
+ ]);
+});
+test('the first burner has an admitted current-schema flame default with retained source provenance',async()=>{
+ const artifact=JSON.parse(await readFile(new URL('../assets/burners/flame.json',import.meta.url))),schema=JSON.parse(await readFile(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
+ const {validateVolumeSettingsPresetDocument}=await import('../volume-settings-preset-contract.mjs');const receipt=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,schema);
+ assert.equal(receipt.preset.domControls['volume-emitter-source-law'].value,'immersed-source');assert.equal(receipt.preset.domControls['volume-pressure-solver'].value,'converged-open-top');assert.equal(Number(receipt.preset.domControls['volume-resolution'].value),64);assert.equal(artifact.source.parentPresetId,'vsp-a5c79ef3fe01660e8e4e059aa67b6d220199e747d62056b9517a26ac3dcdb161');
+});

@@ -3326,6 +3326,8 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
+import {defaultBurnerRecipe,checkedBurnerRecipe,compileBurnerSources,burnerBodyFor,synchronizeBurnerSources} from './burner-recipe.mjs';
+import {installBurnerControls} from './burner-controls.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
@@ -5235,7 +5237,7 @@ function ensureAuthoredFlameEmitter(metadata = {}, {activate = true} = {}) {
     const supply=entry.emission?.settings,requested=window.__kaminosVolumeEmitterReceipt?.requested;
     updateFlameEmitterSupportOutline(THREE,entry.object,supply?{...requested,sourceLaw:supply['volume-emitter-source-law']?.value??requested?.sourceLaw,immersedRadius:Number(supply['volume-immersed-radius']?.rawValue??supply['volume-immersed-radius']?.value??requested?.immersedRadius),inputRadius:Number(supply['volume-input-radius']?.rawValue??supply['volume-input-radius']?.value??requested?.inputRadius)}:requested);
     styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});
-    entry.object.visible=isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;
+    entry.object.visible=isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0&&(!entry.emission?.burnerPort||workingScene.activeObjectId===entry.id);
   }
   return entry?.object||null;
 }
@@ -5256,6 +5258,13 @@ function requirePluralFlameSourceRuntime(){
   if(readVolumeControls().emitterSourceLaw!=='immersed-source')throw Error('Multiple scene sources require the immersed source law');
 }
 function syncAuthoredFlameSources(){
+  synchronizeBurnerSources(workingScene,{pose:entry=>sceneObjectTransformState(entry.object),write:(entry,port)=>{
+    applySceneObjectTransformState(entry.object,port.transform);entry.emission=port.emission;entry.emissionEnabled=port.emissionEnabled;
+    Object.assign(entry.object.userData.kaminosSceneObject,{emission:entry.emission,emissionEnabled:entry.emissionEnabled});
+    const radius=Number(port.emission.settings['volume-immersed-radius'].value)*port.transform.scale[0]/flameDomainScale;
+    entry.object.userData.burnerRadiusFloor=radius>0&&radius<.02;
+    entry.object.userData.burnerOutside=!flamePoseInDomain(port.transform,flameDomainTranslation,flameDomainScale,readVolumeControls());
+  }});
   // Standalone basin previews use the control-driven source. Only an authored
   // scene owns a source collection, including its authoritative empty state.
   if(!isFireLightFieldRoute()&&!activeSceneComposition)return;
@@ -7288,6 +7297,7 @@ function applyAuthoredScenePose(id, transform = {}) {
     if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) normalizeLocalLiquidEmitter(entry.localLiquidEmitter, transform);
     applySceneObjectTransformState(entry.object, transform);
   }
+  if(entry.burner)syncAuthoredFlameSources();
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   updateTransformInspector();
   window._kaminosDirty?.();
@@ -21700,7 +21710,7 @@ document.getElementById('scene-select-rim').onclick=selectAuthoredRimLight;
 function updateAuthoringPropertySelection() {
   const light=document.getElementById('selected-light-properties'),flame=document.getElementById('selected-flame-properties');
   if(light)light.hidden=true;
-  if(flame)flame.hidden=selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE;
+  if(flame)flame.hidden=selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE||!!selectedSceneObjectEntry()?.emission?.burnerPort;
   if(!flame?.hidden){flameInspector?.sync(true);const enabled=document.getElementById('selected-flame-enabled');if(enabled)enabled.checked=selectedSceneObjectEntry()?.emissionEnabled!==false;}
   const sourceAction=document.getElementById('field-source-action');if(sourceAction)sourceAction.textContent=authoredFlamePresent?'Select emitter':'Restore emitter';
   const field=document.getElementById('shared-flame-domain-properties');if(field)field.hidden=workingScene.activeFieldId!=='flame-field';
@@ -21715,6 +21725,7 @@ function updateAuthoringPropertySelection() {
   });
 }
 let flameInspector = null;
+let burnerAssetControls=null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
   panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
@@ -24699,6 +24710,7 @@ function serializeSceneObject(entry) {
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
     ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
+    ...(entry.burner?{burner:checkedBurnerRecipe(entry.burner)}:{}),
     ...((metadata.assetOrigin ?? entry.assetOrigin)?{assetOrigin:structuredClone(metadata.assetOrigin ?? entry.assetOrigin)}:{}),
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
@@ -25253,6 +25265,7 @@ function addSceneSpotLight() {
 function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
+  const burnerOwner=burnerBodyFor(workingScene,id);if(burnerOwner?.groupId&&!deferRecord)return duplicateSceneGroup(burnerOwner.groupId,{interactive});
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE&&record.localLiquidEmitter.mode!=='finite_drop'&&localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode!=='finite_drop').length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error('Water inlet capacity '+LOCAL_LIQUID_EMITTER_CAPACITY+' would be exceeded');
@@ -25284,7 +25297,7 @@ function duplicateSceneGroup(id,options={}) {
 }
 function duplicateSceneSelection(id,options={}){if(workingScene.selection.ids.length>1)return duplicateSelectedSceneObjects(options);return workingScene.groups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
-async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null}={}) {
+async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null,burner=null,recordHistory=true}={}) {
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
   const generation=workingScene.generation,bytes=await file.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -25293,9 +25306,61 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==workingScene.generation)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
-  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
-  try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,...(burner?{burner:checkedBurnerRecipe(burner)}:{}),assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
+  try{if(recordHistory)await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setInfo(`Imported ${file.name}`);return id;
+}
+// One asset gesture owns the body, bound outlets and (only when needed) the first field.
+async function addBurnerAsset(asset,file) {
+  const phase=(phase,extra={})=>{window.__kaminosBurnerAssetReceipt={...window.__kaminosBurnerAssetReceipt,designId:asset.burner.designId,phase,...extra};};
+  phase('defaults');assertSceneConstructionAvailable();
+  const arrival=workingScene.arrival(),edits=scenePlacementTools.edits;
+  if(!volumePrototype){authoringBusy=true;try{await initKaminosVolumeRoute();}finally{authoringBusy=false;}arrival.assertCurrent();}
+  if(!volumePrototype)throw Error('The flame simulation did not start');
+  let initialField=null;
+  if(!activeSceneComposition){
+    const response=await fetch('./assets/burners/flame.json'),schemaResponse=await fetch('/volume-settings-preset-schema-v2.json');
+    if(!response.ok||!schemaResponse.ok)throw Error('Burner flame defaults could not be loaded');
+    const artifact=await response.json(),schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,schema);
+    const settings=clampedFlameSettingsState(flameSettingsState(receipt.preset,receipt));
+    checkFlameSettingsState(settings);
+    const route=Object.fromEntries(resolveFlameLightingRoute({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'}));
+    initialField={composition:{schema:COMPOSITION_SCHEMA,flame:{presetId:receipt.presetId,label:'Burner flame',stationary:true},route,lightGainStops:0},settings,sourcePresent:false,route};
+  } else requirePluralFlameSourceRuntime();
+  arrival.assertCurrent();assertSceneConstructionAvailable();
+  const capture=()=>({scene:readSelectionMembership(),fire:firstFlameFieldState()});
+  phase('import-body');const before=capture(),id=await importSceneMesh(file,{label:asset.label,assetOrigin:asset.assetOrigin,burner:asset.burner,recordHistory:false});
+  const target='@burner-insertion:'+id;
+  edits.register(target,{read:capture,check:value=>({scene:checkSelectionMembership(value.scene),fire:checkFirstFlameFieldState(value.fire)}),write:async value=>{
+    if(value.fire.composition){await writeFirstFlameFieldState(value.fire);await writeSelectionMembership(value.scene);}
+    else {await writeSelectionMembership(value.scene);await writeFirstFlameFieldState(value.fire);}
+  }});
+  authoringBusy=true;
+  try {
+    phase('field');if(initialField)await writeFirstFlameFieldState(initialField);phase('outlets',{bodyId:id});
+    requirePluralFlameSourceRuntime();
+    const body=workingScene.find(id),template=Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([key])=>fireControlOwner(key)==='source'));
+    body.burner=defaultBurnerRecipe(asset.burner.designId,template);body.object.userData.kaminosSceneObject.burner=body.burner;
+    // Put the complete burner near the lower centre of this field, preserving its GLB frame.
+    const transform=sceneObjectTransformState(body.object);transform.position=transform.position.map((v,i)=>v*flameDomainScale+flameDomainTranslation[i]);transform.scale=transform.scale.map(v=>v*flameDomainScale);applySceneObjectTransformState(body.object,transform);
+    const ports=compileBurnerSources(body.burner,transform),ids=[id];
+    authoredFlamePresent=true;
+    for(const port of ports){const sourceId=makeSceneObjectId('burner-port');
+      const object=ensureAuthoredFlameEmitter({...port,id:sourceId,label:ports.length===1?'Slot outlet':`Port ${port.index+1}`},{activate:false});
+      if(!object)throw Error('The burner outlet did not mount');ids.push(sourceId);
+    }
+    phase('group');const group=createSceneGroupForObjects(ids,asset.label);sceneOutlineCollapsed.add('group:'+group.id);
+    syncAuthoredFlameSources();
+    for(const member of ids)sceneMembership.retainForHistory(member,target);
+    authoringBusy=false;phase('history');edits.recordApplied(target,before,capture(),'Add '+asset.label);phase('presentation');
+    renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
+    setInfo('Added burner with flame · adjust Opening, Feed and Aim in Properties');
+    phase('complete',{groupId:group.id,outletCount:ports.length});return group.id;
+  } catch(error){
+    phase('failed',{error:error.message});
+    try{await writeSelectionMembership(before.scene);await writeFirstFlameFieldState(before.fire);}catch(rollback){throw new AggregateError([error,rollback],'Burner insertion and rollback failed');}
+    throw error;
+  } finally {authoringBusy=false;}
 }
 const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
@@ -25352,6 +25417,7 @@ function setObjectWaterCollision(id,enabled){
 }
 function syncSceneDataInspector() {
   sceneRepetitionInspector?.sync();
+  burnerAssetControls?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
   const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
@@ -25492,6 +25558,9 @@ function installSceneConstruction() {
     if(value.selection.maxError!==undefined&&!(Number.isFinite(value.selection.maxError)&&value.selection.maxError>=0&&giProxyError.value!==''))return;
     if(edits.state().active?.id===target)edits.preview(value);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[giProxyInput,giProxyDetail,giProxyError],edits,id:()=>ensureObjectGiProxyTarget(workingScene.activeObjectId),label:'Set GI proxy',onError:error=>setInfo(error.message)}));
+  burnerAssetControls=installBurnerControls({document,host:panel.parentElement,scene:workingScene,edits,
+    history:options=>authoringControlSessions.push(installSceneControlHistory(options)),numberDrag:installRelativeNumberDrag,
+    write:(id,value)=>{const entry=workingScene.find(id)??workingScene.retained(id);if(!entry)throw Error('Burner body is absent');entry.burner=checkedBurnerRecipe(value);entry.object.userData.kaminosSceneObject.burner=entry.burner;syncAuthoredFlameSources();updateTransformInspector();window._kaminosDirty?.();},onError:error=>setInfo(error.message)});
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
@@ -25590,7 +25659,7 @@ function updateSelectionFeedback(){
     box.object=entry.object;box.update();box.material.color.set(id===workingScene.activeObjectId||workingScene.activeGroupId&&workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
     const emitter=[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type);
-    box.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&entry.object.visible&&(viewportBoundsVisible||emitter&&viewportHelpersVisible&&viewportDisplay.overlays&&viewportDisplay.outlines&&viewportDisplay.outlineOpacity>0);
+    box.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&entry.object.visible&&(!entry.emission?.burnerPort||workingScene.activeObjectId===id)&&(viewportBoundsVisible||emitter&&viewportHelpersVisible&&viewportDisplay.overlays&&viewportDisplay.outlines&&viewportDisplay.outlineOpacity>0);
   }
 }
 function styleSimulationDomainGuide(guide,id){
@@ -25622,7 +25691,7 @@ function syncSceneSimulationVisibility(){
 }
 function syncEditorHelperVisibility(){
   syncWaterDomainGuide();
-  for(const entry of workingScene.objects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
+  for(const entry of workingScene.objects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0&&(!entry.emission?.burnerPort||workingScene.activeObjectId===entry.id);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
   for(const [id,{marker,light}] of sceneSpotLights)marker.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
   if(flameDomainGuide){flameDomainGuide.visible= isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
   for(const entry of workingScene.objects)if(entry.type===CAMERA_TYPE)entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
@@ -25673,6 +25742,7 @@ function createPageSceneMembershipBatch(){
 function applyCompoundSceneRecord(entry,record){
   const existing=serializeSceneObject(entry);
   entry.repetition=checkedRepetition(record.repetition);
+  if(record.burner){entry.burner=checkedBurnerRecipe(record.burner);entry.object.userData.kaminosSceneObject.burner=entry.burner;}
   if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
   if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
   entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
@@ -27145,7 +27215,9 @@ function setupAuthoringAssets(){
       const arrival=workingScene.arrival();
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       const bytes=await response.arrayBuffer();arrival.assertCurrent();
-      return importSceneMesh(new File([bytes],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
+      const file=new File([bytes],entry.name||'asset.glb',{type:'model/gltf-binary'});
+      if(entry.burner)return addBurnerAsset(entry,file);
+      return importSceneMesh(file,{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
