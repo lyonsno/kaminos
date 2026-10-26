@@ -13,9 +13,10 @@ test('actual converter preserves all parents and fails with a durable phase repo
  const rows=new Float32Array([0,0,0,0,0,1,.5,.5,.5,0,.5,1, .1,0,0,0,0,1,.5,.5,.5,0,.5,1, 0,.1,0,0,0,1,.5,.5,.5,0,.5,1]),triangles=new Uint32Array([0,1,2]);
  const metadata={ok:true,count:3,stride:12,gridSize:1,radius:.1,dataSHA256:hash(new Uint8Array(rows.buffer)),triangles:{file:'triangles.u32',count:1,sha256:hash(new Uint8Array(triangles.buffer))}};
  fs.writeFileSync(path.join(source,'surfels.f32'),Buffer.from(rows.buffer));fs.writeFileSync(path.join(source,'triangles.u32'),Buffer.from(triangles.buffer));fs.writeFileSync(path.join(source,'report.json'),JSON.stringify(metadata));
- const run=out=>spawnSync(process.execPath,['tools/prepare-adaptive-splats.mjs',source,out,'2'],{encoding:'utf8'});
+ const run=(out,...options)=>spawnSync(process.execPath,['tools/prepare-adaptive-splats.mjs',source,out,'2',...options],{encoding:'utf8'});
  const good=path.join(dir,'good');const success=run(good);assert.equal(success.status,0,success.stderr);
  const report=JSON.parse(fs.readFileSync(path.join(good,'report.json')));assert.equal(report.ok,true);assert.equal(report.sourceDataSHA256,metadata.dataSHA256);assert.equal(fs.statSync(path.join(good,'parent.u32')).size,12);
+ const fitted=path.join(dir,'fitted');const fit=run(fitted,'--triangle-support');assert.equal(fit.status,0,fit.stdout);const fittedMeta=JSON.parse(fs.readFileSync(path.join(fitted,'report.json')));assert.equal(fittedMeta.footprintFit,'triangle-dual-cell');assert.equal(fittedMeta.count,report.count);assert.equal(fittedMeta.dataSHA256,report.dataSHA256);assert.deepEqual(fs.readFileSync(path.join(fitted,'parent.u32')),fs.readFileSync(path.join(good,'parent.u32')));assert.notEqual(fittedMeta.footprints.sha256,report.footprints.sha256);
  const preserved=fs.readFileSync(path.join(source,'report.json'));
  for(const destination of [source,path.join(dir,'source-alias')]){
   if(destination!==source)fs.symlinkSync(source,destination,'dir');
