@@ -161,7 +161,11 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   // control point. Replacing only its origin/tangent avoids a zone-sized
   // handle reset on every small motor or contact correction.
   const control=mix(points[1],points[2],parameter()),end=pair(points[2]);
-  const handle=length(minus(control,current.position));
+  const remainingHandle=length(minus(control,current.position));
+  // An exhausted subcurve has no tangent. A physical displacement from its
+  // endpoint creates a residual journey, which starts along the accepted
+  // heading rather than snapping straight back toward the destination.
+  const handle=remainingHandle>tolerance?remainingHandle:Math.min(length(minus(end,position))*.4,Math.min(...area.radii)*.5);
   points=[pair(position),position.map((x,i)=>x+heading[i]*handle),end];
   offset=0;total=distance;fallback=heading;entry=!inside(position,area);segments++;
   lookup=curveTable(points,area,true);return read();
