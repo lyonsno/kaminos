@@ -22,7 +22,9 @@ export function affineDispatch(rows, tokens, limit, { rowsPerGroup = 1 } = {}) {
   uint(rows, 'rows'); uint(tokens, 'tokens'); uint(limit, 'device dispatch limit');
   if (rowsPerGroup !== 1 && rowsPerGroup !== 4) throw new RangeError('unsupported affine rows per group');
   rows = Math.ceil(rows / rowsPerGroup);
-  const x = Math.min(rows, limit), y = Math.ceil(rows / x);
+  // Choose the minimum valid height, then only enough columns to cover it.
+  // Keeping x at the device limit nearly doubles masked work at limit + 1.
+  const y = Math.ceil(rows / limit), x = Math.ceil(rows / y);
   if (y > limit || tokens > limit) throw new RangeError('affine request exceeds the supplied device dispatch dimensions');
   return [x, y, tokens];
 }

@@ -19,7 +19,7 @@ test('tiled prefill covers partial token/row tiles and preserves single-token di
   assert.equal(calls[0][0],'affine'); assert.deepEqual(calls[0][4],[35,1,1]);
 });
 test('affine dispatch covers the full LM vocabulary and keeps explicit row/stride offsets', () => {
-  assert.deepEqual(affineDispatch(248320, 1, 65535), [65535, 4, 1]);
+  assert.deepEqual(affineDispatch(248320, 1, 65535), [62080, 4, 1]);
   const p = affineParams({ tokens: 3, rows: 32, columns: 4096, group: 64, inputOffset: 7, inputStride: 4100,
     weightRowOffset: 4, outputOffset: 2, outputStride: 40 });
   assert.deepEqual([...p.slice(0, 9)], [3, 32, 4096, 64, 7, 4100, 4, 2, 40]);
@@ -46,7 +46,7 @@ test('invalid geometry and overflowing address spans fail without truncating the
 });
 
 test('four-row affine dispatch covers partial groups, device factoring and full vocabulary', () => {
-  assert.deepEqual(affineDispatch(35, 1, 8, { rowsPerGroup: 4 }), [8, 2, 1]);
+  assert.deepEqual(affineDispatch(35, 1, 8, { rowsPerGroup: 4 }), [5, 2, 1]);
   assert.deepEqual(affineDispatch(248320, 1, 65535, { rowsPerGroup: 4 }), [62080, 1, 1]);
   assert.deepEqual(affineDispatch(7, 5, 8, { rowsPerGroup: 4 }), [2, 1, 5]);
   assert.throws(() => affineDispatch(35, 1, 2, { rowsPerGroup: 4 }), /dispatch/);
@@ -58,11 +58,24 @@ test('explicit quad model selection changes only single-token projections includ
   model.weights=new Map([['p',{rows:35,columns:64,group:64,slices:[{rows:35,rowStart:0,weight:{},scales:{},biases:{}}]}]]);
   model.device={limits:{maxComputeWorkgroupsPerDimension:8}}; model.dispatch=async (...args)=>calls.push(args);
   model.singleTokenKernel='quad'; await model.linear('p',{}, {},1,{});
-  assert.equal(calls[0][0],'affine-quad'); assert.deepEqual(calls[0][4],[8,2,1]);
+  assert.equal(calls[0][0],'affine-quad'); assert.deepEqual(calls[0][4],[5,2,1]);
   calls.length=0; await model.linear('p',{}, {},2,{});
   assert.equal(calls[0][0],'affine-tiled'); assert.deepEqual(calls[0][4],[2,1,1]);
   model.singleTokenKernel='oracle'; calls.length=0; await model.linear('p',{}, {},1,{});
-  assert.equal(calls[0][0],'affine'); assert.deepEqual(calls[0][4],[8,5,1]);
+  assert.equal(calls[0][0],'affine'); assert.deepEqual(calls[0][4],[7,5,1]);
   assert.throws(()=>{model.singleTokenKernel='unknown';},/kernel/);
   model.active=Promise.resolve(); assert.throws(()=>{model.singleTokenKernel='quad';},/active/);
+});
+
+test('affine grid covers every row while avoiding large masked tails above a device dimension',()=>{
+ assert.deepEqual(affineDispatch(65536,1,65535),[32768,2,1]);
+ for(const rowsPerGroup of [1,4]) for(const limit of [1,2,8,65535]) for(const rows of [1,7,8,9,35,64,65,65535,65536,248320]){
+  const groups=Math.ceil(rows/rowsPerGroup);
+  if(groups>limit*limit){assert.throws(()=>affineDispatch(rows,1,limit,{rowsPerGroup}),/dispatch/);continue;}
+  const [x,y,z]=affineDispatch(rows,1,limit,{rowsPerGroup});
+  assert.equal(z,1);assert.ok(x>=1&&x<=limit&&y>=1&&y<=limit);
+  assert.ok(x*y>=groups);assert.ok(x*y-groups<y,'less than one column of masked groups');
+  // The WGSL flat group ID is gx+gy*grid.x; contiguous coverage has no gaps or repeats.
+  const ids=new Set();if(groups<=65){for(let gy=0;gy<y;gy++)for(let gx=0;gx<x;gx++){const g=gx+gy*x;for(let j=0;j<rowsPerGroup;j++){const row=g*rowsPerGroup+j;if(row<rows){assert.equal(ids.has(row),false);ids.add(row);}}}assert.equal(ids.size,rows);}
+ }
 });
