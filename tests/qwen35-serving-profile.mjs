@@ -139,12 +139,14 @@ test('batch comparison retains the existing kernel and varies actual layer submi
  for(const [i,row] of result.comparison.runs.entries()){
   row.singleTokenKernel='oracle';row.batchDecode=i===1;row.layerBatchSubmissions=i===1?2:0;
   row.affineDispatches={'affine':3,'affine-quad':0,'affine-tiled':0};row.profile.duties={'affine':{count:3,totalMs:5,maxMs:2,failures:0}};
+  row.profile.schema=`kaminos.qwen35-serving-profile.v${i===1?2:1}`;
   row.profile.dispatchTiming=i===1?'mixed-encoded-and-fenced':'fenced-leaf';
   row.profile.layerBatches={count:i===1?2:0,totalMs:i===1?2:0,maxMs:i===1?1:0,failures:0};
  }
  const verdict=profiling.adjudicateServingComparison(result,expected);
  assert.equal(verdict.comparisonAxis,'batchDecode');assert.deepEqual(verdict.runs.map(r=>r.batchDecode),[false,true,false]);
  for(const change of [r=>delete r.comparison.axis,r=>r.comparison.axis='kernel',
+  r=>r.comparison.runs[1].profile.schema='kaminos.qwen35-serving-profile.v1',
   r=>r.comparison.runs[1].layerBatchSubmissions=0,r=>r.comparison.runs[0].layerBatchSubmissions=1,
   r=>r.comparison.runs[1].profile.layerBatches.count=1,r=>r.comparison.runs[1].profile.dispatchTiming='fenced-leaf',
   r=>r.comparison.runs[1].profile.layerBatches.failures=1,r=>r.comparison.runs[1].profile.layerBatches.totalMs=11]){const altered=structuredClone(result);change(altered);assert.throws(()=>profiling.adjudicateServingComparison(altered,expected));}
@@ -157,4 +159,25 @@ test('batch comparison CLI preserves and rejects conflicting execution selectors
   const out=path.join(dir,`${i}.json`);await assert.rejects(promisify(execFile)(process.execPath,[script,'absent-fixture','absent-model','absent-chrome',out,...args]),e=>e.code===1);
   const saved=JSON.parse(await fs.readFile(out,'utf8'));assert.equal(saved.phase,'source-admission');assert.deepEqual(saved.requested.cliArgs,args);assert.match(saved.error,/ambiguous/);
  }}finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('mixed encoding and fence clocks use v2 and cannot be admitted as fenced v1',async()=>{
+ const model={batchDecode:true,async createState(){},async prefill(){},async decode(){},async disposeState(){},async dispatch(){},async layerBatch(){}};
+ const profile={};await withModelProfile(model,async()=>{}, {profile});
+ assert.equal(profile.schema,'kaminos.qwen35-serving-profile.v2');
+ const {result,expected}=fixture();Object.assign(result,{batchDecode:true,layerBatchSubmissions:2,layerBatchDuty:{count:2,totalMs:2,maxMs:1,failures:0}});
+ Object.assign(result.profile,{dispatchTiming:'mixed-encoded-and-fenced',layerBatches:structuredClone(result.layerBatchDuty)});
+ expected.batchDecode=true;
+ assert.throws(()=>adjudicateServingProfile(result,expected),/clock|schema/);
+ result.profile.schema='kaminos.qwen35-serving-profile.v2';
+ assert.equal(adjudicateServingProfile(result,expected).decodeCalls,1);
+ delete expected.batchDecode;
+ assert.throws(()=>adjudicateServingProfile(result,expected),/clock|schema/);
+});
+
+test('batch timing v1 cannot masquerade as independently fenced dispatch measurements',()=>{
+ const {result,expected}=fixture();Object.assign(result,{batchDecode:true,layerBatchSubmissions:2,layerBatchDuty:{count:2,totalMs:2,maxMs:1,failures:0}});
+ Object.assign(result.profile,{dispatchTiming:'mixed-encoded-and-fenced',layerBatches:structuredClone(result.layerBatchDuty)});
+ expected.batchDecode=true;
+ assert.throws(()=>adjudicateServingProfile(result,expected),/clock|schema/);
 });

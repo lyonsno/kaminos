@@ -6,7 +6,7 @@ export async function withModelProfile(model, work, { profile = {}, now = () => 
   if (typeof model.layerBatch === 'function') names.push('layerBatch');
   const originals = names.map(name => ({ name, own: Object.getOwnPropertyDescriptor(model, name), fn: model[name] }));
   if (originals.some(x => typeof x.fn !== 'function')) throw new Error('complete model required for profiling');
-  Object.assign(profile, { schema: 'kaminos.qwen35-serving-profile.v1', clock: 'performance.now-wall-ms',
+  Object.assign(profile, { schema: `kaminos.qwen35-serving-profile.v${model.batchDecode === true ? 2 : 1}`, clock: 'performance.now-wall-ms',
     diagnosticReadbacks: Boolean(model.onLayer || model.onNorm), calls: [], duties: {}, completed: false, startedMs: now(),
     dispatchTiming: model.batchDecode === true ? 'mixed-encoded-and-fenced' : 'fenced-leaf',
     layerBatches: { count: 0, totalMs: 0, maxMs: 0, failures: 0 } });
@@ -57,7 +57,7 @@ export function adjudicateServingProfile(result, expected) {
   if (result.cleanup?.states !== 0 || result.cleanup?.weights !== 0 || result.cleanup?.borrowedControl !== 'running') throw new Error('serving cleanup incomplete');
   const output = adjudicatePupExpansion(result.expansion, expected), p = result.profile;
   const finite = x => Number.isFinite(x) && x >= 0;
-  if (!p || p.schema !== 'kaminos.qwen35-serving-profile.v1' || p.clock !== 'performance.now-wall-ms' || p.diagnosticReadbacks !== false
+  if (!p || p.schema !== `kaminos.qwen35-serving-profile.v${expected.batchDecode === true ? 2 : 1}` || p.clock !== 'performance.now-wall-ms' || p.diagnosticReadbacks !== false
     || p.completed !== true || ![p.startedMs,p.finishedMs,p.totalMs,p.firstTextMs,p.loadMs,p.inputPreparationMs].every(finite)
     || p.finishedMs <= p.startedMs || Math.abs(p.finishedMs-p.startedMs-p.totalMs) > 1e-6 || p.firstTextMs > p.totalMs || !Array.isArray(p.calls)) throw new Error('incomplete/malformed serving clocks');
   let previous = p.startedMs;
