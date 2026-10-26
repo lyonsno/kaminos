@@ -30,7 +30,7 @@ window.giAssay={
   emissionAttachment() {
     const beauty=gi.beauty;
     beauty.setMRT(THREE.TSL.mrt({...beauty.getMRT().outputNodes,emissive:THREE.TSL.emissive}));
-    beauty.renderTarget.dispose();beauty.needsUpdate=true;
+    beauty.renderTarget.dispose();beauty.needsUpdate=true;beauty.getTextureNode('emissive');
     return {outputs:Object.keys(beauty.getMRT().outputNodes)};
   },
   async receivedComparison() {
