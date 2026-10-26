@@ -16,10 +16,11 @@ sampler = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sampler)
 
 
-def fixture(path, alpha='OPAQUE', matrix=None, extension=None):
+def fixture(path, alpha='OPAQUE', matrix=None, extension=None, zero_normal=False):
     # Two equal-area triangles separated in space, with constant UVs at distinct texel centres.
     pos = np.array([[0,0,0],[1,0,0],[0,1,0], [2,0,0],[3,0,0],[2,1,0]], '<f4')
     normals = np.tile([0,0,1], (6,1)).astype('<f4')
+    if zero_normal: normals[0] = 0
     uv = np.array([[.25,.25]]*3 + [[.75,.75]]*3, '<f4')
     index = np.arange(6, dtype='<u4')
     color = np.array([[[128,64,32,0],[0,0,255,0]],[[0,255,0,0],[255,128,64,0]]], 'uint8')
@@ -67,6 +68,14 @@ class Sampling(unittest.TestCase):
             self.assertEqual(meta['sourceKind'],'sampled-glb'); self.assertEqual(meta['sourceTriangleCount'],2)
             self.assertNotIn('decoderGridSize',meta)
             np.testing.assert_array_equal(rows,sampler.sample_glb(p,64)[0])
+
+    def test_zero_normal_uses_local_face_and_records_the_repair(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'source.glb';fixture(p,zero_normal=True)
+            rows, _, _, meta=sampler.sample_glb(p,16)
+            np.testing.assert_allclose(rows[:,3:6],np.tile([0,0,1],(16,1)))
+            self.assertEqual(meta['normalFallback']['zeroSourceVertices'],1)
+            self.assertEqual(meta['normalFallback']['affectedSamples'],8)
 
     def test_transform_and_normal_inverse_transpose(self):
         with tempfile.TemporaryDirectory() as t:

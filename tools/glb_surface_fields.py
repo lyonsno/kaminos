@@ -118,9 +118,8 @@ def sample_glb(path, count):
     pos = pos @ matrix[:3, :3].T + matrix[:3, 3]
     normals = normals @ np.linalg.inv(matrix[:3, :3])
     lengths = np.linalg.norm(normals, axis=1)
-    if np.any(lengths < 1e-12):
-        raise ValueError('Zero source normal')
-    normals /= lengths[:, None]
+    zero_normals = lengths < 1e-12
+    normals /= np.maximum(lengths[:, None], 1e-12)
     indices = accessor(primitive['indices']).reshape(-1, 3)
     if indices.max() >= len(pos):
         raise ValueError('Triangle index outside vertices')
@@ -138,7 +137,12 @@ def sample_glb(path, count):
     chosen = indices[parents]
     rows = np.zeros((count, 12), '<f4')
     rows[:, :3] = (pos[chosen] * bary[:, :, None]).sum(1)
-    interpolated = (normals[chosen] * bary[:, :, None]).sum(1)
+    corner_normals = normals[chosen].copy()
+    face_normals = np.cross(corners[parents, 1]-corners[parents, 0], corners[parents, 2]-corners[parents, 0])
+    face_normals /= np.linalg.norm(face_normals, axis=1)[:, None]
+    missing = zero_normals[chosen]
+    corner_normals[missing] = np.broadcast_to(face_normals[:, None, :], corner_normals.shape)[missing]
+    interpolated = (corner_normals * bary[:, :, None]).sum(1)
     lengths = np.linalg.norm(interpolated, axis=1)
     if np.any(lengths < 1e-12):
         raise ValueError('Interpolated normal cancels')
@@ -193,6 +197,7 @@ def sample_glb(path, count):
     meta = {'ok': True, 'sourceKind': 'sampled-glb', 'source': str(Path(path).resolve()),
             'sourceHashes': {'glb': digest}, 'sourceTriangleCount': len(indices), 'count': count,
             'sourceCount': count, 'stride': 12, 'bounds': [pos.min(0).tolist(), pos.max(0).tolist()],
+            'normalFallback': {'zeroSourceVertices': int(zero_normals.sum()), 'affectedSamples': int(missing.any(1).sum()), 'policy': 'zero corner normals use the sampled triangle geometric normal'},
             'surfaceArea': total, 'radius': float(np.sqrt(total/count)*.8),
             'sampling': 'area-stratified triangle selection; interior irrational-rotation barycentrics',
             'textureSampling': 'base level; bilinear in linear color, nearest if authored magFilter NEAREST',
