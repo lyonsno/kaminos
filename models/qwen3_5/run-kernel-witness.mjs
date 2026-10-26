@@ -17,15 +17,21 @@ export async function collectKernelWitness(browser, preserve) {
   return result;
 }
 
-export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false, quadAffine = false }) {
+export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false, quadAffine = false, cliArgs = null }) {
   if (!out) throw new TypeError('an explicit report path is required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const report = { schema: 'kaminos.qwen35-kernel-witness.v1', status: 'failed', phase: 'setup',
-    requested: { chrome, fixture, tiledAffine, quadAffine }, source: sourceIdentity(repo) };
+    requested: { chrome, fixture, tiledAffine, quadAffine, cliArgs }, source: sourceIdentity(repo) };
   let browser, server;
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   try {
     await save(); report.phase = 'source-admission';
+    if (cliArgs !== null) {
+      if (!Array.isArray(cliArgs) || cliArgs.some(x => typeof x !== 'string')) throw new Error('unsupported affine CLI arguments');
+      tiledAffine = cliArgs.includes('--tiled-affine'); quadAffine = cliArgs.includes('--quad-affine');
+      Object.assign(report.requested, { tiledAffine, quadAffine });
+      if (cliArgs.some(x => !['--tiled-affine', '--quad-affine'].includes(x))) throw new Error('unsupported affine CLI arguments');
+    }
     if (typeof tiledAffine !== 'boolean' || typeof quadAffine !== 'boolean') throw new Error('unsupported affine mode');
     if (tiledAffine && quadAffine) throw new Error('ambiguous affine mode');
     const affineKernel = quadAffine ? 'quad' : tiledAffine ? 'tiled' : 'oracle';
@@ -82,9 +88,8 @@ export async function runKernelWitness({ chrome, fixture, out, tiledAffine = fal
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [fixture, chrome, out, mode] = process.argv.slice(2);
-  const report = await runKernelWitness({ fixture, chrome, out, quadAffine: mode === '--quad-affine',
-    tiledAffine: mode === undefined || mode === '--quad-affine' ? false : mode === '--tiled-affine' ? true : mode });
+  const [fixture, chrome, out, ...cliArgs] = process.argv.slice(2);
+  const report = await runKernelWitness({ fixture, chrome, out, cliArgs });
   console.log(JSON.stringify({ status: report.status, phase: report.phase, error: report.error, rows: report.rows?.map(({ name, relL2, maxAbs, nonFinite }) => ({ name, relL2, maxAbs, nonFinite })) }));
   process.exitCode = report.status === 'passed' ? 0 : 1;
 }

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import * as contract from '../models/qwen3_5/kernel-witness-contract.js';
 import { collectKernelWitness, runKernelWitness } from '../models/qwen3_5/run-kernel-witness.mjs';
@@ -86,5 +89,24 @@ test('ambiguous affine requests write a failure report before reference or brows
     assert.equal(saved.status, 'failed'); assert.equal(saved.phase, 'source-admission');
     assert.match(saved.error, /ambiguous affine/);
     assert.equal(saved.requested.tiledAffine, true); assert.equal(saved.requested.quadAffine, true);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('CLI preserves all selectors and rejects both conflicting orders or unsupported extras durably', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qwen-affine-cli-'));
+  const script = fileURLToPath(new URL('../models/qwen3_5/run-kernel-witness.mjs', import.meta.url));
+  try {
+    for (const [index, args] of [
+      ['--quad-affine','--tiled-affine'], ['--tiled-affine','--quad-affine'],
+      ['--quad-affine','--unknown-affine'], ['--tiled-affine','stray-argument'], ['--unknown-affine'],
+    ].entries()) {
+      const out = path.join(dir, `${index}.json`);
+      await assert.rejects(promisify(execFile)(process.execPath, [script, 'absent-fixture','absent-chrome',out,...args]), error => error.code === 1);
+      const saved = JSON.parse(await fs.readFile(out, 'utf8'));
+      assert.equal(saved.status, 'failed'); assert.equal(saved.phase, 'source-admission');
+      assert.deepEqual(saved.requested.cliArgs, args);
+      assert.match(saved.error, index < 2 ? /ambiguous affine/ : /unsupported affine/);
+      if (index < 2) { assert.equal(saved.requested.tiledAffine, true); assert.equal(saved.requested.quadAffine, true); }
+    }
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
