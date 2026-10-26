@@ -25343,7 +25343,18 @@ async function addBurnerAsset(asset,file) {
     body.burner=defaultBurnerRecipe(asset.burner.designId,template);body.object.userData.kaminosSceneObject.burner=body.burner;
     // Put the complete burner near the lower centre of this field, preserving its GLB frame.
     const transform=sceneObjectTransformState(body.object);transform.position=transform.position.map((v,i)=>v*flameDomainScale+flameDomainTranslation[i]);transform.scale=transform.scale.map(v=>v*flameDomainScale);applySceneObjectTransformState(body.object,transform);
-    const ports=compileBurnerSources(body.burner,transform),ids=[id];
+    let ports=compileBurnerSources(body.burner,transform);
+    // Append placement may land beside the current geometry but outside its field.
+    // Keep new outlet centres inside, with room for the actual source footprint.
+    const field=readVolumeControls(),limits=[[-1,1],[-1,-1+2*Number(field.gridHeightRatio??2)],[-1,1]];
+    const local=ports.map(port=>port.transform.position.map((v,i)=>(v-flameDomainTranslation[i])/flameDomainScale));
+    const correction=[0,0,0];
+    for(const axis of [0,2]){const lo=Math.min(...local.map(p=>p[axis])),hi=Math.max(...local.map(p=>p[axis])),mid=(lo+hi)/2;
+      const margin=body.burner.designId==='seam-rail'&&axis===0?Math.min(.2,Math.max(0,1-.29*transform.scale[0]/flameDomainScale)):.2;
+      correction[axis]=(Math.max(limits[axis][0]+margin+(hi-lo)/2,Math.min(limits[axis][1]-margin-(hi-lo)/2,mid))-mid)*flameDomainScale;
+    }
+    transform.position=transform.position.map((v,i)=>v+correction[i]);applySceneObjectTransformState(body.object,transform);
+    ports=compileBurnerSources(body.burner,transform);const ids=[id];
     authoredFlamePresent=true;
     for(const port of ports){const sourceId=makeSceneObjectId('burner-port');
       const object=ensureAuthoredFlameEmitter({...port,id:sourceId,label:ports.length===1?'Slot outlet':`Port ${port.index+1}`},{activate:false});
@@ -26591,7 +26602,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     })());
     if(!schemaStage.current)return;
     const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
-    writeFlameSettingsState({...fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
+    writeFlameSettingsState(flameSettingsState(fireSettings,activeVolumeSettingsPresetReceipt));
   }
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
