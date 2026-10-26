@@ -32,7 +32,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
    active=true;abort=new AbortController();started=clock();
    set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,progress:'Loading the prompt helper…'});
    try{
-    helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:{}),progress:'Loading the prompt helper…'}),
+    helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
      onWait:wait=>set({status:'waiting',progress:`Waiting for the shared GPU${wait.heldBy?.length?': '+wait.heldBy.join(', '):''}`})});
     const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,
      onText:text=>set({status:'running',draft:text,progress:'Expanding your request…'})});

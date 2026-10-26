@@ -6,6 +6,7 @@ self.onmessage=async({data})=>{
  if(activeRequest!==null){send('error','The prompt worker is already generating.',data.requestId);return;}
  activeRequest=data.requestId;let result,error;
  try{
+  if(helper)send('progress',{phase:'resident'});
   helper??=await createBrowserPromptHelper({modelUrl:data.modelUrl,onProgress:value=>send('progress',value)});
   result=await helper.expand({prompt:data.prompt,images:data.images,onText:value=>send('text',value)});
  }catch(failure){error=String(failure?.stack||failure);}
