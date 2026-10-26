@@ -52,3 +52,15 @@ An optional fifth witness argument names an invoker-owned JSON request such as `
 The composed browser witness has passed twelve native comparisons, including a multi-token prefix split across calls. A complete BFL text request consumed 743 framed input tokens and generated 302 tokens through EOS with the shipped settings. These observations establish one exercised text expansion and the recorded numerical inputs; broader prompt quality and useful latency require their own measurements.
 
 To measure the serving path, append `--serving-profile` after the request path. This mode disables layer/norm diagnostic hooks and skips numerical oracle stages. It records source-validated weight fetch/decode/upload wall time, input preparation, time to first streamed text, each prefill/decode/state-lifetime call, and aggregated per-kernel duty wall time. Full text, token IDs, settings, source/browser/device identity and terminal cleanup remain in the report; a profile requires a complete EOS result. Duty durations include admission, compilation and queue fences, so they are not GPU timestamp measurements. The fresh browser loads model files from the supplied server; this is not a cached-model or network-download benchmark.
+
+`native-replay.py` measures the same model work through the native FP32 loader used by the numerical exporter. Supply a completed serving report and its pinned SHA256, the retained model directory, and explicit output/report paths:
+
+```sh
+python3 models/qwen3_5/native-replay.py \
+  --browser-report /path/to/browser-report.json \
+  --expected-browser-sha256 <report-sha256> \
+  --model-dir /path/to/retained-pack \
+  --out /path/to/native-replay --report /path/to/native-replay/report.json
+```
+
+The replay consumes every recorded prompt and generated token, including the final prediction of EOS. It records synchronized forward-call wall times, effective runtime/parameter dtypes, source hashes and complete raw FP32 logits with per-call offsets and hashes. Sampling and raw-logit capture occur outside those timed calls. This measures model-compute headroom along a fixed trajectory; its greedy-token agreement is reported separately from replay completion. Source tensor and tokenizer/system-prompt hashes must match the browser run. Native inference and model hashing require Greenroom in this shop.

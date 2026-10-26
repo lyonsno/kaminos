@@ -68,16 +68,14 @@ def prepare(root, output, report):
     return config, manifest
 
 
-def export(root, output, text, report):
-    config, manifest = prepare(root, output, report)
+def load_native_fp32(root, config, report):
+    """Exact retained language weights and lossless FP32 parameter expansion."""
     report['phase'] = 'native-runtime'
-    import numpy as np
     import mlx.core as mx
     from mlx.utils import tree_map
     from mlx_vlm.utils import load_model_weights
     from mlx_vlm.models.qwen3_5 import language, gated_delta
     from mlx_vlm.models.qwen3_5.config import TextConfig
-    from tokenizers import Tokenizer
     if not mx.metal.is_available():
         raise RuntimeError('native MLX Metal required')
     mx.set_default_device(mx.gpu)
@@ -96,6 +94,14 @@ def export(root, output, text, report):
     del weights
     model.update(tree_map(lambda value: value.astype(mx.float32) if mx.issubdtype(value.dtype, mx.floating) else value, model.parameters()))
     model.eval()
+    return model, mx
+
+
+def export(root, output, text, report):
+    config, manifest = prepare(root, output, report)
+    model, mx = load_native_fp32(root, config, report)
+    import numpy as np
+    from tokenizers import Tokenizer
     tokenizer = Tokenizer.from_file(str(root / 'tokenizer.json'))
     prompt = tokenizer.encode(text, add_special_tokens=False).ids
     if len(prompt) < 2:
