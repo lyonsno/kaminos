@@ -3613,6 +3613,7 @@ let authoringBusy = false;
 let vantageCaptureHeld = false;
 let volumePrototype = null;
 let sceneBurning = null;
+let sceneAshAtmosphereSettings={density:0,color:[0,0,0],displayColor:[0,0,0]};
 const syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>activeSceneComposition?volumePrototype:null,wanted:()=>isSceneItemVisible('flame-field')});
 let ownerVolumeReady = null;
 let annularBurner = null;
@@ -10999,7 +11000,7 @@ async function initScene() {
     samHostContext = { adapter, device, inferenceSession };
   }
   renderer = sharedGpu?.device
-    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() })
+    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() || new URLSearchParams(location.search).get('ash_timing')==='1' })
     : new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
   renderer.domElement.id = 'kaminos-host-renderer-canvas';
   renderer.setSize(vp.clientWidth, vp.clientHeight);
@@ -12919,6 +12920,7 @@ async function installOwnerWorkbenchEntry() {
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+  atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
@@ -20124,6 +20126,7 @@ async function initKaminosVolumeRoute() {
       return sceneColliderCollection.update(workingScene.objects);
     },
   });
+  volumePrototype.setSharedAshAtmosphere(sceneAshAtmosphereSettings);
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
     // Composition routes need the live Three scene visible under the flame:
     // alpha-composite the native volume canvas and depth-clip volume behind

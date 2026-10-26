@@ -25,6 +25,7 @@ import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, 
 import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
 import {followingDomainShift} from './moving-volume.mjs';
 import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
+import {atmosphereSettings} from './ash/atmosphere-plan.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDisplayReconstruction, displayPreparationTiming } from './volume-display-reconstruction.mjs';
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
@@ -2170,7 +2171,8 @@ export const WAVELET_TURBULENCE_UNIFORM_OFFSET = JOINED_BOUNDARY_UNIFORM_OFFSET 
 export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 4;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
 export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
-export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const SHARED_ASH_UNIFORM_OFFSET = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const VOLUME_UNIFORM_FLOATS = SHARED_ASH_UNIFORM_OFFSET + 4;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3816,6 +3818,7 @@ struct Uniforms {
   wavelet_turbulence: vec4<f32>,
   display_reconstruction: vec4<f32>,
   display_interpolation: vec4<f32>,
+  shared_ash: vec4<f32>, // display fog color RGB, extinction per local ray unit
 };
 
 struct ExternalEmitter {
@@ -9070,11 +9073,31 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   return result;
 }
 
+// Fog already applied to the scene behind the volume must not be added
+// twice. At the volume front, attenuate its premultiplied color and replace
+// only the fog obscured by its alpha. One analytic interval, no extra march.
+// This treats the bounded volume at its front face, an intentional thin-layer
+// approximation; optical/residual source captures stay unchanged.
+fn sharedAshColor(in: VSOut, color:vec4<f32>) -> vec4<f32> {
+  if(u.shared_ash.w<=0.0||color.a<=0.0){return color;}
+  let ndc=vec2<f32>(in.uv.x*2.0-1.0,in.uv.y*2.0-1.0);
+  let nearRaw=u.invViewProj*vec4<f32>(ndc,-1.0,1.0);
+  let farRaw=u.invViewProj*vec4<f32>(ndc,1.0,1.0);
+  let ro=viewRayOrigin(ndc);let rd=normalize(farRaw.xyz/farRaw.w-nearRaw.xyz/nearRaw.w);
+  let halfY=f32(GRID_Y)/f32(GRID);
+  let hit=boxHit(ro-vec3<f32>(0.0,halfY-1.0,0.0),rd,vec3<f32>(1.0,halfY,1.0));
+  let T=exp(-u.shared_ash.w*max(0.0,hit.x));
+  // The ordinary canvas has already undergone its selected display transform.
+  // Match the scene's AgX camera for the haze contribution on this display path.
+  let fogColor=u.shared_ash.rgb;
+  return vec4<f32>(T*color.rgb+color.a*(1.0-T)*fogColor,color.a);
+}
+
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
   seatGridShape();
   let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true, 0.0);
-  return result.color;
+  return select(result.color,sharedAshColor(in,result.color),TRANSPARENT_CANVAS > 0.5);
 }
 
 @fragment
@@ -9088,7 +9111,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false, 0.0);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
-  return vec4<f32>(premultipliedRadiance, alpha);
+  return sharedAshColor(in,vec4<f32>(premultipliedRadiance, alpha));
 }
 
 @fragment
@@ -10815,6 +10838,7 @@ export function createKaminosVolumePrototype({
   const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
+  let sharedAsh = {density:0,color:[0,0,0],displayColor:[0,0,0]};
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
   let volumePresentationModeRequestedRaw = 'beauty';
@@ -16371,6 +16395,7 @@ export function createKaminosVolumePrototype({
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
+    uniforms.set([...sharedAsh.displayColor,sharedAsh.density*productTransform.scale],SHARED_ASH_UNIFORM_OFFSET);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -28437,6 +28462,8 @@ export function createKaminosVolumePrototype({
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
+    sharedAshAtmosphere(){return structuredClone(sharedAsh);},
+    setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},
     setSceneMediumSource(source) {
       if (source !== null && (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)
         || !Number.isFinite(source.stepLength) || source.stepLength <= 0)) throw new Error('finite local source position and positive stepLength required');
