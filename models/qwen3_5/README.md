@@ -33,6 +33,8 @@ The host owns asset-source admission, application scheduling and presentation. T
 
 The serving path reads only the final token's full-vocabulary logits back to the portable CPU sampler. `onLayer` and `onNorm` are optional diagnostic hooks; the normal path performs no hidden-state oracle readbacks. GPU token selection and separate optimized prefill/GEMV routes can replace these operations without changing the generation interface.
 
+Prefill projections use the tiled FP32 path. The constructor option `singleTokenKernel: 'quad'` selects the experimental four-row FP32 projection for single-token calls, including the final output head; the default is `'oracle'`. The selection can change through `model.singleTokenKernel` between completed requests. It rejects unknown values and changes during active execution/loading, and each append snapshots its selection. This leaves request-state layout and the shared control unchanged. The four-row kernel has passed native kernel comparisons; full-model and application comparison determine its adoption.
+
 Prepare the source manifest without MLX:
 
 ```sh
@@ -52,6 +54,10 @@ An optional fifth witness argument names an invoker-owned JSON request such as `
 The composed browser witness has passed twelve native comparisons, including a multi-token prefix split across calls. A complete BFL text request consumed 743 framed input tokens and generated 302 tokens through EOS with the shipped settings. These observations establish one exercised text expansion and the recorded numerical inputs; broader prompt quality and useful latency require their own measurements.
 
 To measure the serving path, append `--serving-profile` after the request path. This mode disables layer/norm diagnostic hooks and skips numerical oracle stages. It records source-validated weight fetch/decode/upload wall time, input preparation, time to first streamed text, each prefill/decode/state-lifetime call, and aggregated per-kernel duty wall time. Full text, token IDs, settings, source/browser/device identity and terminal cleanup remain in the report; a profile requires a complete EOS result. Duty durations include admission, compilation and queue fences, so they are not GPU timestamp measurements. The fresh browser loads model files from the supplied server; this is not a cached-model or network-download benchmark.
+
+The numerical witness also accepts `--quad-affine` after its four required paths to select that model option. It records the effective selection and actual dispatch counts. For a single serving profile, pass the request path plus `--serving-profile --quad-affine`.
+
+For a comparison with one browser and one weight load, pass the request path plus `--compare-affine`. It runs complete expansions in the order `oracle`, `quad`, `oracle`, each with fresh request state and normal source sampling/EOS policy. Shared loading/input preparation are recorded separately from the three generation profiles. Admission requires the requested dispatch route in each run, state retirement between runs, sequential clocks, and identical complete text/token outputs. The two baseline-to-candidate decode ratios and baseline drift remain observations to interpret together. `--compare-affine` and a forced `--quad-affine` selection conflict and are rejected; unsupported trailing arguments are also preserved and rejected in the failure report. This experimental comparison does not change the model default.
 
 `native-replay.py` measures the same model work through the native FP32 loader used by the numerical exporter. Supply a completed serving report and its pinned SHA256, the retained model directory, and explicit output/report paths:
 

@@ -125,3 +125,13 @@ test('paused model requests enqueue no token upload before a leaf duty is admitt
   await model.disposeState(state); const failure = await work; assert.equal(failure.name, 'AbortError'); assert.equal(control.snapshot().status, 'paused');
   await model.destroy(); await control.resume(); await control.close(); assert.equal(beforeAdmission, 0); assert.equal(writes, 0);
 });
+
+test('constructor admits only explicit single-token kernels without changing request state/control', async () => {
+  const {manifest}=fixture(), {device}=deviceFixture(), control=createWebGpuInferenceControl({queue:device.queue});
+  try {
+    const model=new Qwen35TextModel(device,manifest,{control,singleTokenKernel:'quad'});
+    assert.equal(model.singleTokenKernel,'quad'); assert.equal(model.states.size,0);
+    assert.throws(()=>new Qwen35TextModel(device,manifest,{control,singleTokenKernel:'unknown'}),/kernel/);
+    await model.destroy(); assert.equal(control.snapshot().status,'running');
+  } finally {await control.close();}
+});

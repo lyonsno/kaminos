@@ -4,6 +4,10 @@ import { test } from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import * as profiling from '../models/qwen3_5/serving-profile.js';
 import { withModelProfile, adjudicateServingProfile } from '../models/qwen3_5/serving-profile.js';
 import { runModelWitness } from '../models/qwen3_5/run-model-witness.mjs';
 
@@ -65,4 +69,63 @@ test('rejected profile mode preserves a durable failure before reference or brow
     assert.equal(report.ownedBrowserPid,undefined);
     const saved=JSON.parse(await fs.readFile(out,'utf8')); assert.equal(saved.error,report.error); assert.equal(saved.requested.servingProfile,'unsupported');
   } finally { await fs.rm(dir,{recursive:true,force:true}); }
+});
+
+test('explicit single-token route requires actual matching dispatch evidence', () => {
+  const {result,expected}=fixture(); expected.singleTokenKernel='quad'; result.singleTokenKernel='quad';
+  result.affineDispatches={'affine':3,'affine-quad':0,'affine-tiled':0};
+  assert.throws(()=>adjudicateServingProfile(result,expected),/kernel|dispatch/);
+});
+function comparisonFixture(){
+ const {result,expected}=fixture();
+ const runs=['oracle','quad','oracle'].map((kernel,index)=>{
+  const profile=structuredClone(result.profile);profile.loadMs=0;profile.inputPreparationMs=0;
+  profile.startedMs+=20*index;profile.finishedMs+=20*index;
+  for(const row of profile.calls){row.startMs+=20*index;row.endMs+=20*index;}
+  if(kernel==='quad'){profile.duties['affine-quad']=profile.duties.affine;delete profile.duties.affine;}
+  return {index,singleTokenKernel:kernel,statesAfter:0,affineDispatches:{'affine':kernel==='oracle'?3:0,'affine-quad':kernel==='quad'?3:0,'affine-tiled':0},profile,expansion:structuredClone(result.expansion)};
+ });
+ delete result.profile;delete result.expansion;
+ result.comparison={schema:'kaminos.qwen35-serving-comparison.v1',sharedLoadMs:20,sharedInputPreparationMs:1,runs};
+ return {result,expected};
+}
+test('same-browser comparison requires complete ordered fresh-state expansions with matching actual routes',()=>{
+ const {result,expected}=comparisonFixture();
+ assert.equal(typeof profiling.adjudicateServingComparison,'function','complete comparison adjudication is required');
+ const verdict=profiling.adjudicateServingComparison(result,expected);
+ assert.equal(verdict.runs.length,3);assert.equal(verdict.identicalCompleteOutput,true);
+ assert.deepEqual(verdict.decodeSpeedupVsBaselines,[1,1]);
+ for(const change of [r=>r.comparison.runs.pop(),r=>r.comparison.runs.reverse(),
+  r=>r.comparison.runs[1].singleTokenKernel='oracle',r=>r.comparison.runs[1].statesAfter=1,
+  r=>r.comparison.runs[1].affineDispatches['affine-quad']=0,
+  r=>r.comparison.runs[1].profile.duties={'affine':{count:3,totalMs:5,maxMs:2,failures:0}},
+  r=>r.comparison.runs[1].profile.calls.pop(),r=>r.comparison.runs[1].expansion.output.finishReason='length',
+  r=>r.comparison.runs[1].expansion.output.tokenIds=[5],r=>{r.comparison.runs[1].expansion.output.text='different';r.comparison.runs[1].expansion.stream=['different'];},
+  r=>r.comparison.runs[1].profile.startedMs=0,r=>r.comparison.sharedLoadMs=NaN,
+  r=>r.backend='cpu',r=>{r.backend='cpu';for(const row of r.comparison.runs)row.backend='webgpu';},
+  r=>r.cleanup.weights=1,r=>r.errors.push('failed before comparison completed')]){
+   const altered=structuredClone(result);change(altered);assert.throws(()=>profiling.adjudicateServingComparison(altered,expected));
+ }
+});
+test('conflicting comparison and forced kernel requests fail durably before source/reference admission',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'qwen-model-route-'));
+ try{const out=path.join(dir,'report.json');const r=await runModelWitness({out,compareKernels:true,singleTokenKernel:'quad',request:'absent'});
+ assert.equal(r.status,'failed');assert.equal(r.phase,'source-admission');assert.match(r.error,/ambiguous.*kernel/);
+ const saved=JSON.parse(await fs.readFile(out,'utf8'));assert.equal(saved.requested.compareKernels,true);assert.equal(saved.requested.singleTokenKernel,'quad');
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('model witness CLI preserves complete requests and rejects conflicting or unknown trailing modes',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'qwen-model-cli-'));
+ const script=fileURLToPath(new URL('../models/qwen3_5/run-model-witness.mjs',import.meta.url));
+ try{for(const [i,args] of [
+  ['request.json','--compare-affine','--quad-affine'],['request.json','--quad-affine','--compare-affine'],
+  ['request.json','--serving-profile','--unknown-mode'],['request.json','another.json','--serving-profile'],
+ ].entries()){
+  const out=path.join(dir,`${i}.json`);
+  await assert.rejects(promisify(execFile)(process.execPath,[script,'absent-fixture','absent-model','absent-chrome',out,...args]),e=>e.code===1);
+  const saved=JSON.parse(await fs.readFile(out,'utf8'));
+  assert.equal(saved.phase,'source-admission');assert.equal(saved.status,'failed');assert.deepEqual(saved.requested.cliArgs,args);
+  assert.match(saved.error,i<2?/ambiguous.*kernel/:/unsupported.*CLI/);
+ }}finally{await fs.rm(dir,{recursive:true,force:true});}
 });

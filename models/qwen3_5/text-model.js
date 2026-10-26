@@ -46,12 +46,13 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>){
  * intermediates/KV are f32 here. Model weights remain packed affine4/group64.
  */
 export class Qwen35TextModel {
-  constructor(device, manifest, { control, onLayer = null, onNorm = null } = {}) {
+  constructor(device, manifest, { control, onLayer = null, onNorm = null, singleTokenKernel = 'oracle' } = {}) {
     if (typeof control?.runDuty !== 'function') throw new TypeError('borrowed inference control is required');
     this.layout = qwen35ModelLayout(manifest); this.config = this.layout.config;
     this.device = device; this.manifest = manifest; this.control = control; this.onLayer = onLayer; this.onNorm = onNorm;
     this.weights = new Map(); this.vectors = new Map(); this.pipelines = new Map();
     this.owned = new Set(); this.states = new Set(); this.loaded = false; this.closed = false; this.active = null;
+    this.singleTokenKernel = singleTokenKernel;
     this.lifetime = new AbortController();
     this.bindingBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
     const c = this.config, deltaWidth = 2 * c.linearKeyHeads * c.linearKeyDim + c.linearValueHeads * c.linearValueDim;
@@ -59,6 +60,12 @@ export class Qwen35TextModel {
     this.chunkTokens = Math.min(Math.floor(this.bindingBytes / (widest * 4)), device.limits.maxComputeWorkgroupsPerDimension,
       Math.floor(device.limits.maxComputeWorkgroupsPerDimension * 256 / Math.max(deltaWidth, c.queryHeads * c.headDim, c.hiddenSize)));
     positive(this.chunkTokens, 'device prefill capacity');
+  }
+  get singleTokenKernel() { return this._singleTokenKernel ?? 'oracle'; }
+  set singleTokenKernel(value) {
+    if (value !== 'oracle' && value !== 'quad') throw new RangeError('unsupported single-token kernel');
+    if (this.active || this.loading) throw new Error('cannot change kernel during active model work');
+    this._singleTokenKernel = value;
   }
   buffer(bytes, target = this.owned, usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC) {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > this.device.limits.maxBufferSize || ((usage & GPUBufferUsage.STORAGE) && bytes > this.bindingBytes)) throw new RangeError('buffer exceeds device capacity');
@@ -166,10 +173,13 @@ export class Qwen35TextModel {
   }
   async linear(name, input, output, tokens, ctx, { outputStride = this.weights.get(name).rows, outputOffset = 0, inputOffset = 0 } = {}) {
     const entry = this.weights.get(name);
-    const tiled = tokens > 1;
-    for (const part of entry.slices) await this.dispatch(tiled ? 'affine-tiled' : 'affine', tiled ? kernels.affineTiledShader() : kernels.affineShader(), [input, part.weight, part.scales, part.biases, output],
+    const tiled = tokens > 1, single = ctx.singleTokenKernel ?? this.singleTokenKernel;
+    if (single !== 'oracle' && single !== 'quad') throw new RangeError('unsupported single-token kernel');
+    const quad = !tiled && single === 'quad';
+    for (const part of entry.slices) await this.dispatch(tiled ? 'affine-tiled' : quad ? 'affine-quad' : 'affine', tiled ? kernels.affineTiledShader() : quad ? kernels.affineQuadShader() : kernels.affineShader(), [input, part.weight, part.scales, part.biases, output],
       affineParams({ tokens, rows: part.rows, columns: entry.columns, group: entry.group, outputStride, outputOffset: outputOffset + part.rowStart, inputOffset }),
-      (tiled ? affineTiledDispatch : affineDispatch)(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension), ctx);
+      tiled ? affineTiledDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension)
+        : affineDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension, { rowsPerGroup: quad ? 4 : 1 }), ctx);
   }
   async prefill(ids, state, ctx = {}) { if (state.length !== 0) throw new Error('prefill requires fresh state'); return this.append(ids, state, ctx); }
   async decode(id, state, ctx = {}) { if (!state.length) throw new Error('decode requires a prefix'); return this.append([id], state, ctx); }
@@ -181,7 +191,7 @@ export class Qwen35TextModel {
     if (ids.some(x => !Number.isInteger(x) || x < 0 || x >= c.vocabSize)) throw new RangeError('token outside model vocabulary');
     if (state.length + tokens > state.capacity) throw new RangeError('generation state capacity exhausted');
     const requestedSignal = options.signal ?? state.signal;
-    const ctx = { signal: AbortSignal.any([state.abort.signal, this.lifetime.signal, ...(requestedSignal ? [requestedSignal] : [])]), control: options.control ?? state.control };
+    const ctx = { signal: AbortSignal.any([state.abort.signal, this.lifetime.signal, ...(requestedSignal ? [requestedSignal] : [])]), control: options.control ?? state.control, singleTokenKernel: this.singleTokenKernel };
     const work = (async () => {
       let logits;
       for (let start = 0; start < ids.length; start += this.chunkTokens) {

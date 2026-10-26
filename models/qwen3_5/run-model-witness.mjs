@@ -7,22 +7,35 @@ import { startServer, launchChrome, sourceIdentity } from '../flux2-klein/cdp-ha
 import { qwen35ModelLayout } from './model-layout.js';
 import { adjudicateModelReadbacks } from './model-witness-contract.js';
 import { adjudicatePupExpansion } from './pup-witness-contract.js';
-import { adjudicateServingProfile } from './serving-profile.js';
+import { adjudicateServingProfile, adjudicateServingComparison, adjudicateAffineSelection } from './serving-profile.js';
 import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
 import { createPupTextInput } from './pup-input.js';
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 
-export async function runModelWitness({ fixture, modelRoot, chrome, out, request = null, servingProfile = false }) {
+export async function runModelWitness({ fixture, modelRoot, chrome, out, request = null, servingProfile = false,
+  singleTokenKernel = 'oracle', compareKernels = false, cliArgs = null }) {
   if (!out) throw new Error('explicit report path required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const report = { schema: 'kaminos.qwen35-model-witness.v2', mode: servingProfile ? 'serving-profile' : 'numerical-parity', status: 'failed', phase: 'setup', source: sourceIdentity(repo), requested: { fixture, modelRoot, chrome, request, servingProfile }, rows: [] };
+  const report = { schema: 'kaminos.qwen35-model-witness.v2', mode: compareKernels ? 'serving-comparison' : servingProfile ? 'serving-profile' : 'numerical-parity', status: 'failed', phase: 'setup', source: sourceIdentity(repo),
+    requested: { fixture, modelRoot, chrome, request, servingProfile, singleTokenKernel, compareKernels, cliArgs }, rows: [] };
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   let browser, server;
   try {
     await save(); report.phase = 'source-admission';
-    if (typeof servingProfile !== 'boolean') throw new Error('unknown witness mode');
+    if (cliArgs !== null) {
+      if (!Array.isArray(cliArgs) || cliArgs.some(x => typeof x !== 'string')) throw new Error('unsupported witness CLI arguments');
+      const files = cliArgs.filter(x => !x.startsWith('--'));
+      if (files.length > 1 || cliArgs.some(x => x.startsWith('--') && !['--serving-profile', '--quad-affine', '--compare-affine'].includes(x))) throw new Error('unsupported witness CLI arguments');
+      request = files[0] ?? null; servingProfile = cliArgs.includes('--serving-profile');
+      compareKernels = cliArgs.includes('--compare-affine'); singleTokenKernel = cliArgs.includes('--quad-affine') ? 'quad' : 'oracle';
+      Object.assign(report.requested, { request, servingProfile, compareKernels, singleTokenKernel });
+    }
+    if (typeof servingProfile !== 'boolean' || typeof compareKernels !== 'boolean') throw new Error('unknown witness mode');
+    if (singleTokenKernel !== 'oracle' && singleTokenKernel !== 'quad') throw new Error('unsupported single-token kernel');
+    if (compareKernels && singleTokenKernel !== 'oracle') throw new Error('ambiguous comparison/kernel request');
+    report.mode = compareKernels ? 'serving-comparison' : servingProfile ? 'serving-profile' : 'numerical-parity';
     if (!report.source.rev || report.source.dirtyFiles?.length) throw new Error('model witness requires a clean committed source revision');
-    if (servingProfile && !request) throw new Error('serving profile requires an explicit PUP request');
+    if ((servingProfile || compareKernels) && !request) throw new Error('serving profile requires an explicit PUP request');
     report.phase = 'reference-admission';
     const root = fs.realpathSync(fixture), nativeBytes = fs.readFileSync(path.join(root, 'report.json')), native = JSON.parse(nativeBytes), metaBytes = fs.readFileSync(path.join(root, 'meta.json')), meta = JSON.parse(metaBytes);
     const weightsBytes = fs.readFileSync(path.join(root, 'weights.json')), manifest = JSON.parse(weightsBytes);
@@ -54,14 +67,16 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     report.effectiveExecutable = executable;
     const serving = await startServer({ '/fixture/': root, '/model/': model, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report);
-    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
+    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenSingleTokenKernel = '+JSON.stringify(singleTokenKernel)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
     report.phase = 'gpu-execution'; report.url = serving.origin + '/models/qwen3_5/model-witness.html'; await save();
     await browser.navigate(report.url, 'window.qwenModelReady === true');
     const result = await browser.evaluate('window.qwenModelResult.then(r => ({ ...r, rows: r.rows.map(({data,...row})=>row) }))');
-    report.adapter = result.adapter; report.errors = result.errors; report.effective = { backend: result.backend, weightsManifestSha256: result.weightsManifestSha256, limits: result.limits, residentWeightBytes: result.residentWeightBytes };
+    report.adapter = result.adapter; report.errors = result.errors; report.effective = { backend: result.backend, weightsManifestSha256: result.weightsManifestSha256, limits: result.limits, residentWeightBytes: result.residentWeightBytes,
+      singleTokenKernel: result.singleTokenKernel, affineDispatches: result.affineDispatches };
     report.lengths = result.lengths; report.generation = result.generation; report.cleanup = result.cleanup; report.lastPhase = result.lastPhase;
     if (result.expansion) report.expansion = result.expansion;
     if (result.profile) report.profile = result.profile;
+    if (result.comparison) report.comparison = result.comparison;
     const rawDir = path.resolve(path.dirname(out), path.basename(out, '.json') + '-readbacks'); await fsp.mkdir(rawDir, { recursive: true });
     for (const [index, row] of (result.rows ?? []).entries()) {
       row.data = await browser.evaluate(`window.qwenModelResult.then(r => r.rows[${index}].data)`);
@@ -69,12 +84,18 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
       await fsp.writeFile(file, raw); report.rows.push({ name: row.name, elements: row.elements, file, sha256: sha(raw) }); await save();
     }
     let failure;
-    try { report.verdict = servingProfile
-      ? adjudicateServingProfile(result, { ...pupExpected, weightsManifestSha256: sha(weightsBytes) })
-      : adjudicateModelReadbacks(result, meta, manifest, arrays, { chunkedPrefill: true }); } catch (error) { failure = error; }
+    try {
+      if (compareKernels) report.verdict = adjudicateServingComparison(result, { ...pupExpected, weightsManifestSha256: sha(weightsBytes) });
+      else {
+        adjudicateAffineSelection(result, singleTokenKernel);
+        report.verdict = servingProfile
+          ? adjudicateServingProfile(result, { ...pupExpected, weightsManifestSha256: sha(weightsBytes), singleTokenKernel })
+          : adjudicateModelReadbacks(result, meta, manifest, arrays, { chunkedPrefill: true });
+      }
+    } catch (error) { failure = error; }
     for (const row of report.rows) { const observed = result.rows.find(r => r.name === row.name); for (const key of ['relL2', 'maxAbs', 'maxScaled', 'nonFinite', 'top1']) if (observed[key] !== undefined) row[key] = observed[key]; }
     if (failure) throw failure;
-    if (pupExpected) report.pupVerdict = adjudicatePupExpansion(result.expansion, pupExpected);
+    if (pupExpected && !compareKernels) report.pupVerdict = adjudicatePupExpansion(result.expansion, pupExpected);
     report.sourceAfter = sourceIdentity(repo);
     if (report.sourceAfter.rev !== report.source.rev || report.sourceAfter.dirtyFiles?.length) throw new Error('source changed during the model witness; preserved readbacks do not establish one clean revision');
     report.status = 'passed'; report.phase = 'complete';
@@ -87,7 +108,7 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
   return report;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [fixture, modelRoot, chrome, out, request, mode] = process.argv.slice(2);
-  const report = await runModelWitness({ fixture, modelRoot, chrome, out, request, servingProfile: mode === undefined ? false : mode === '--serving-profile' ? true : mode });
+  const [fixture, modelRoot, chrome, out, ...cliArgs] = process.argv.slice(2);
+  const report = await runModelWitness({ fixture, modelRoot, chrome, out, cliArgs });
   console.log(JSON.stringify({ status: report.status, phase: report.phase, error: report.error, generation: report.generation, expansion: report.expansion?.output, rows: report.rows })); process.exitCode = report.status === 'passed' ? 0 : 1;
 }

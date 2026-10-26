@@ -29,6 +29,12 @@ export async function withModelProfile(model, work, { profile = {}, now = () => 
 }
 
 export function adjudicateServingProfile(result, expected) {
+  if (expected.singleTokenKernel !== undefined) {
+    adjudicateAffineSelection(result, expected.singleTokenKernel);
+    for (const name of ['affine', 'affine-quad', 'affine-tiled']) {
+      if (result.affineDispatches[name] !== (result.profile?.duties?.[name]?.count ?? 0)) throw new Error('affine dispatch/profile kernel mismatch');
+    }
+  }
   const adapter = result?.adapter;
   if (result?.backend !== 'webgpu' || !adapter || adapter.isFallbackAdapter !== false
     || !['vendor','architecture','device','description'].some(k => String(adapter[k] ?? '').trim())
@@ -60,4 +66,35 @@ export function adjudicateServingProfile(result, expected) {
     prefillMs: prefill.ms, prefillTokensPerSecond: 1000*output.inputTokens/prefill.ms,
     decodeMs, decodeCalls: decodes.length, decodeTokensPerSecond: decodes.length ? 1000*decodes.length/decodeMs : null,
     otherGenerationMs: p.totalMs-prefill.ms-decodeMs, dutyTiming: 'wall time including admission, compilation and queue fence; not GPU timestamp time' };
+}
+
+export function adjudicateAffineSelection(result, expected) {
+  if ((expected !== 'oracle' && expected !== 'quad') || result?.singleTokenKernel !== expected) throw new Error('wrong or missing single-token kernel');
+  const counts = result.affineDispatches;
+  if (!counts || ['affine', 'affine-quad', 'affine-tiled'].some(k => !Number.isSafeInteger(counts[k]) || counts[k] < 0)
+    || counts[expected === 'quad' ? 'affine-quad' : 'affine'] < 1
+    || counts[expected === 'quad' ? 'affine' : 'affine-quad'] !== 0) throw new Error('wrong or missing affine kernel dispatch evidence');
+}
+
+// Complete real expansions bracket the candidate with the existing kernel in
+// one browser/model residency. Clocks retain their common performance.now epoch.
+export function adjudicateServingComparison(result, expected) {
+  const comparison = result?.comparison, kernels = ['oracle', 'quad', 'oracle'];
+  if (comparison?.schema !== 'kaminos.qwen35-serving-comparison.v1' || !Array.isArray(comparison.runs) || comparison.runs.length !== kernels.length
+    || [comparison.sharedLoadMs, comparison.sharedInputPreparationMs].some(x => !Number.isFinite(x) || x < 0)) throw new Error('incomplete serving comparison');
+  let previousEnd = -Infinity, first;
+  const runs = comparison.runs.map((row, index) => {
+    if (row.index !== index || row.statesAfter !== 0 || row.profile?.startedMs < previousEnd) throw new Error('wrong comparison order, overlapping clocks or unretired request state');
+    const verdict = adjudicateServingProfile({ ...result, expansion: row.expansion, profile: row.profile,
+      singleTokenKernel: row.singleTokenKernel, affineDispatches: row.affineDispatches }, { ...expected, singleTokenKernel: kernels[index] });
+    previousEnd = row.profile.finishedMs;
+    const output = row.expansion.output;
+    if (first && (output.text !== first.text || output.stopTokenId !== first.stopTokenId
+      || output.tokenIds.length !== first.tokenIds.length || output.tokenIds.some((id, i) => id !== first.tokenIds[i]))) throw new Error('complete comparison outputs disagree');
+    first ??= output;
+    return { index, singleTokenKernel: kernels[index], ...verdict };
+  });
+  if (!runs[1].decodeMs) throw new Error('comparison requires actual cached decode');
+  return { runs, identicalCompleteOutput: true, decodeSpeedupVsBaselines: [runs[0].decodeMs / runs[1].decodeMs, runs[2].decodeMs / runs[1].decodeMs],
+    baselineDriftRatio: runs[2].decodeMs / runs[0].decodeMs };
 }

@@ -52,3 +52,17 @@ test('four-row affine dispatch covers partial groups, device factoring and full 
   assert.throws(() => affineDispatch(35, 1, 2, { rowsPerGroup: 4 }), /dispatch/);
   assert.throws(() => affineDispatch(4, 1, 8, { rowsPerGroup: 3 }), /row/);
 });
+
+test('explicit quad model selection changes only single-token projections including full-vocabulary shards', async () => {
+  const calls=[], model=Object.create(Qwen35TextModel.prototype);
+  model.weights=new Map([['p',{rows:35,columns:64,group:64,slices:[{rows:35,rowStart:0,weight:{},scales:{},biases:{}}]}]]);
+  model.device={limits:{maxComputeWorkgroupsPerDimension:8}}; model.dispatch=async (...args)=>calls.push(args);
+  model.singleTokenKernel='quad'; await model.linear('p',{}, {},1,{});
+  assert.equal(calls[0][0],'affine-quad'); assert.deepEqual(calls[0][4],[8,2,1]);
+  calls.length=0; await model.linear('p',{}, {},2,{});
+  assert.equal(calls[0][0],'affine-tiled'); assert.deepEqual(calls[0][4],[2,1,1]);
+  model.singleTokenKernel='oracle'; calls.length=0; await model.linear('p',{}, {},1,{});
+  assert.equal(calls[0][0],'affine'); assert.deepEqual(calls[0][4],[8,5,1]);
+  assert.throws(()=>{model.singleTokenKernel='unknown';},/kernel/);
+  model.active=Promise.resolve(); assert.throws(()=>{model.singleTokenKernel='quad';},/active/);
+});

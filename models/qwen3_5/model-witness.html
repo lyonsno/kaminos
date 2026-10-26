@@ -32,12 +32,20 @@ window.qwenModelResult = (async () => {
     device.addEventListener('uncapturederror', e => result.errors.push(String(e.error?.message ?? e.error)));
     device.lost.then(info => { if (info.reason !== 'destroyed') result.errors.push(`device lost: ${info.message}`); });
     control = createWebGpuInferenceControl({ queue: device.queue });
-    const servingProfile = window.qwenWitnessMode === 'serving-profile';
+    const compareKernels = window.qwenWitnessMode === 'serving-comparison';
+    const servingProfile = window.qwenWitnessMode === 'serving-profile' || compareKernels;
     let current = null, layerRows = [];
-    model = new Qwen35TextModel(device, manifest, { control, ...(servingProfile ? {} : {
+    model = new Qwen35TextModel(device, manifest, { control, singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', ...(servingProfile ? {} : {
       onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
       onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
     }) });
+    result.singleTokenKernel = model.singleTokenKernel;
+    const affineDispatches = result.affineDispatches = { 'affine': 0, 'affine-quad': 0, 'affine-tiled': 0 };
+    const dispatch = model.dispatch.bind(model);
+    model.dispatch = async (name, ...args) => {
+      if (Object.hasOwn(affineDispatches, name)) affineDispatches[name]++;
+      return dispatch(name, ...args);
+    };
     stage = 'weights'; window.qwenModelProgress = { stage };
     const loadStarted = performance.now();
     await model.load(new URL('/model/', location.href), { onProgress: progress => { window.qwenModelProgress = { stage, ...progress }; } });
@@ -76,21 +84,43 @@ window.qwenModelResult = (async () => {
       const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
       const tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes))), systemPrompt = JSON.parse(new TextDecoder().decode(promptsBytes)).t2i;
       const input = createPupTextInput(tokenizer, { prompt: request.prompt, systemPrompt });
-      const expansion = result.expansion = { prompt: request.prompt, inputIds: null, settings: input.generation,
-        tokenizerSha256: await hash(tokenizerBytes), systemPromptsSha256: await hash(promptsBytes), stream: [] };
-      if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
+      const tokenizerSha256 = await hash(tokenizerBytes), systemPromptsSha256 = await hash(promptsBytes);
       const inputPreparationMs = performance.now() - inputStarted;
-      const prefill = model.prefill.bind(model);
-      model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill(ids, ...rest); };
-      try {
-        const profile = result.profile = { loadMs, inputPreparationMs, firstTextMs: null };
-        const expand = () => expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
-          maxNewTokens: request.maxNewTokens, onText: (delta, text) => {
-            if (servingProfile && profile.firstTextMs === null) profile.firstTextMs = performance.now()-profile.startedMs;
-            expansion.stream.push(delta); window.qwenModelProgress = { stage, text };
-          } });
-        expansion.output = servingProfile ? await withModelProfile(model, expand, { profile }) : await expand();
-      } finally { model.prefill = prefill; }
+      const modes = compareKernels ? ['oracle', 'quad', 'oracle'] : [model.singleTokenKernel];
+      if (compareKernels) result.comparison = { schema: 'kaminos.qwen35-serving-comparison.v1', sharedLoadMs: loadMs,
+        sharedInputPreparationMs: inputPreparationMs, runs: [] };
+      for (const [index, kernel] of modes.entries()) {
+        stage = compareKernels ? `pup-expansion-${index}-${kernel}` : 'pup-expansion';
+        window.qwenModelProgress = { stage };
+        if (model.states.size) throw new Error('previous request state was not retired');
+        model.singleTokenKernel = kernel;
+        const entry = compareKernels ? { index, singleTokenKernel: model.singleTokenKernel } : result;
+        if (compareKernels) result.comparison.runs.push(entry);
+        const before = { ...affineDispatches };
+        const expansion = entry.expansion = { prompt: request.prompt, inputIds: null, settings: { ...input.generation },
+          tokenizerSha256, systemPromptsSha256, stream: [] };
+        if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
+        const prefill = model.prefill;
+        model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill.call(model, ids, ...rest); };
+        try {
+          const profile = entry.profile = { loadMs: compareKernels ? 0 : loadMs,
+            inputPreparationMs: compareKernels ? 0 : inputPreparationMs, firstTextMs: null };
+          const expand = () => expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
+            maxNewTokens: request.maxNewTokens, onText: (delta, text) => {
+              if (servingProfile && profile.firstTextMs === null) profile.firstTextMs = performance.now() - profile.startedMs;
+              expansion.stream.push(delta); window.qwenModelProgress = { stage, text };
+            } });
+          expansion.output = servingProfile ? await withModelProfile(model, expand, { profile }) : await expand();
+        } finally {
+          model.prefill = prefill;
+          if (compareKernels) {
+            entry.affineDispatches = Object.fromEntries(Object.entries(affineDispatches).map(([name, count]) => [name, count - before[name]]));
+            entry.statesAfter = model.states.size;
+          }
+        }
+        if (model.states.size) throw new Error('completed request state was not retired');
+      }
+      result.singleTokenKernel = model.singleTokenKernel;
     }
   } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
   finally {
