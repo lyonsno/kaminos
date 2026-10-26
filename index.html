@@ -21909,7 +21909,7 @@ function writeFlameSettingsState(state) {
   const receipt=volumePrototype.setRaymarchSmokePresentationMode(smoke);
   if(receipt?.fallbackReason || receipt?.effectiveMode!==smoke)throw Error('Smoke presentation did not apply');
   window.__kaminosRaymarchSmokePresentationReceipt=receipt;syncRaymarchSmokePresentationControls(receipt);
-  if(!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),state))throw Error('Flame settings were substituted during application');
+  if(!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),state))throw Error('Flame settings were substituted during application');
   activeVolumeSettingsPresetReceipt=state.source;
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
   syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
