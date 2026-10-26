@@ -20,7 +20,7 @@ function fixture(){
   roots:{attach:mount,restore(){},detach:row=>{row.object.removeFromParent();lights.get(row.id).removeFromParent();lights.get(row.id).target.removeFromParent();},dispose(){}},domains:{light:{retainRoot:true}}});operations.attachHistory(edits);
  const add=id=>{const row={id,type:'light',label:id,source:'kaminos:light',object:new THREE.Group()};lights.set(id,new THREE.SpotLight());state.put(row);mount(row);return row;};
  const group=(ids,label,options)=>{const {select=true,...data}=options;state.setGroups([...state.groups,{...data,label,objectIds:ids}]);if(select)state.select(['@group:'+data.id]);};
- const context=vm.createContext({structuredClone,workingScene:state,scene,sceneMembership:operations,
+ const context=vm.createContext({structuredClone,workingScene:state,scene,sceneMembership:operations,burnerMembers,
   scenePlacementTools:{edits},checkedRepetition,assertSceneConstructionAvailable(){},canDuplicateObject:()=>true,
   makeSceneObjectId:()=> 'group-'+(++next),duplicateSceneObject:id=>add(id+'-copy').id,
   createSceneGroupForObjects:group,serializeSceneObject:serialize,isReloadableSceneObjectRecord:()=>true,

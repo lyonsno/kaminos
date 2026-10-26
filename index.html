@@ -25264,7 +25264,7 @@ function addSceneSpotLight() {
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
 function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
-function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
+function duplicateSceneObject(id,{interactive=false,deferRecord=false,preserveGroup=true}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   const burnerOwner=entry?.burner||entry?.emission?.burnerPort?burnerBodyFor(workingScene,id):null;if(burnerOwner?.groupId&&!deferRecord)return duplicateSceneGroup(burnerOwner.groupId,{interactive});
   if(burnerOwner&&!deferRecord)return sceneMembershipBatch.duplicateSelection([burnerOwner.id],burnerMembers(workingScene,burnerOwner.id),{interactive,start:(mode,complete)=>scenePlacementTools.start(mode,complete)});
@@ -25281,7 +25281,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
     const copy=withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     scene.add(copy);registerSceneObject(copy,record);
   }
-  if(entry.groupId){const group=workingScene.groups.find(g=>g.id===entry.groupId);if(group)workingScene.updateGroup(group.id,{objectIds:[...group.objectIds,copyId]});}
+  if(entry.groupId&&preserveGroup){const group=workingScene.groups.find(g=>g.id===entry.groupId);if(group)workingScene.updateGroup(group.id,{objectIds:[...group.objectIds,copyId]});}
   setActiveSceneObject(copyId);renderSceneObjectList();
   const complete=({commit})=>{
     scenePlacementTools.edits.discard(change=>change.id===copyId);
@@ -25295,6 +25295,14 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
 const sceneMembershipBatch=createPageSceneMembershipBatch();
 function duplicateSceneGroup(id,options={}) {
   assertSceneConstructionAvailable();
+  const group=workingScene.groups.find(g=>g.id===id);
+  const members=[...new Set((group?.objectIds??[]).flatMap(member=>workingScene.find(member)?.burner?burnerMembers(workingScene,member):[member]))];
+  // Display grouping may contain a body without its explicitly bound outlets.
+  // Copy those outlets too, retaining the original display topology in one edit.
+  if(group&&members.length!==group.objectIds.length){
+    const roots=sceneMembershipBatch.duplicateSelection(['@group:'+id],members,{...options,start:(mode,complete)=>scenePlacementTools.start(mode,complete)});
+    return roots[0].slice(7);
+  }
   return sceneMembershipBatch.duplicateGroup(id,{...options,start:(mode,complete)=>scenePlacementTools.start(mode,complete)});
 }
 function duplicateSceneSelection(id,options={}){if(workingScene.selection.ids.length>1)return duplicateSelectedSceneObjects(options);return workingScene.groups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
@@ -25748,7 +25756,7 @@ function createPageSceneMembershipBatch(){
     },
     select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
     detach:detachSelectionMember,
-    duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),remap:copies=>remapBurnerBindings(workingScene,copies),groupId:()=>makeSceneObjectId('group')},
+    duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true,preserveGroup:false}),remap:copies=>remapBurnerBindings(workingScene,copies),groupId:()=>makeSceneObjectId('group')},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
   });
 }
