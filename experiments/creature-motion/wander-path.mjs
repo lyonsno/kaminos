@@ -83,10 +83,14 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   const control=start.map((v,i)=>v+heading[i]*handle),next=choosePoint();
   points=[pair(start),control,entry?next:mix(control,next)];offset=0;lookup=curveTable(points,area);fallback=pair(heading);
  }
- function sample() {
+ function parameter() {
   const table=lookup.table;let lo=0,hi=table.length-1;
   while(hi-lo>1){const mid=(lo+hi)>>1;if(table[mid].d<=offset)lo=mid;else hi=mid;}
-  const a=table[lo],b=table[hi],span=b.d-a.d,t=span>0?a.t+(b.t-a.t)*(offset-a.d)/span:a.t;
+  const a=table[lo],b=table[hi],span=b.d-a.d;
+  return span>0?a.t+(b.t-a.t)*(offset-a.d)/span:a.t;
+ }
+ function sample() {
+  const t=parameter();
   const [p0,p1,p2]=points,u=1-t;
   const position=p0.map((v,i)=>u*u*v+2*u*t*p1[i]+t*t*p2[i]);
   const tangent=p0.map((v,i)=>2*u*(p1[i]-v)+2*t*(p2[i]-p1[i]));
@@ -146,12 +150,18 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   if(handle<1e-10)return read();
   points=[pair(current.position),current.position.map((v,i)=>v+heading[i]*handle),end];offset=0;fallback=heading;lookup=curveTable(points,area);segments++;return read();
  }
- // Rebuild the remaining curve from the physically accepted root. Keep the
- // chosen destination and RNG: contact is not a new behavioral decision.
+ // Correct the remaining curve from the physically accepted root. Keep its
+ // remaining tangent length, destination and RNG: contact is not a new turn.
  function contact(position,direction,distance){
   if(!finitePair(position)||!Number.isFinite(distance)||distance<0)throw Error('Invalid physical path result');
-  const heading=normalized(direction),end=pair(points[2]),reach=length(minus(end,position));
-  const handle=Math.min(reach*.4,Math.min(...area.radii)*.5);
+  const heading=normalized(direction),current=sample();
+  const tolerance=64*Number.EPSILON*Math.max(1,...current.position.map(Math.abs),...position.map(Math.abs),...area.radii);
+  if(length(minus(position,current.position))<=tolerance&&length(minus(heading,current.direction))<=64*Number.EPSILON){total=distance;return read();}
+  // de Casteljau's right-hand quadratic begins at sample() and has this
+  // control point. Replacing only its origin/tangent avoids a zone-sized
+  // handle reset on every small motor or contact correction.
+  const control=mix(points[1],points[2],parameter()),end=pair(points[2]);
+  const handle=length(minus(control,current.position));
   points=[pair(position),position.map((x,i)=>x+heading[i]*handle),end];
   offset=0;total=distance;fallback=heading;entry=!inside(position,area);segments++;
   lookup=curveTable(points,area,true);return read();
