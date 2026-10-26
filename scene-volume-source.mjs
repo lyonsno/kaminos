@@ -103,7 +103,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     }
     if(r.input!==region.texture){
       r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
-        {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?33:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}}]});
+        {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?34:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}}]});
       r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()}]});r.input=region.texture;
     }
     const pass=encoder.beginComputePass({label:`current ${name} physical extinction`});
@@ -210,7 +210,7 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
   // Same physical law as the camera, before optional diagnostic tinting.
-  let medium=regionSmokeMaterial(worldSmokeSample(p),1.0,1.0);
+  let medium=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,1.0,1.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
 }
 @compute @workgroup_size(4,4,4)
@@ -218,7 +218,7 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch),1.0,1.0);
+  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,1.0,1.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
 }
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;

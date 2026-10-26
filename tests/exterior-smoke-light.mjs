@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createVolumeGather} from '../scene-volume-gather.mjs';
-import {createSceneVolumeSource} from '../scene-volume-source.mjs';
+import {createSceneVolumeSource, SCENE_VOLUME_SOURCE_WGSL} from '../scene-volume-source.mjs';
+import {WORLD_SMOKE_OPTICS_WGSL} from '../volume-world-smoke-optics.mjs';
 import {exteriorSegments} from '../scene-exterior-medium.mjs';
 import {createExteriorSmokeLight} from '../scene-exterior-light.mjs';
 import {resolveWorldRegions} from '../volume-region-controls.mjs';
@@ -43,7 +44,26 @@ assert.ok(middle?.texture,'independent intermediate material must publish its ow
 assert.deepEqual(middle.dimensions,[8,16,8],'intermediate detail must not be downsampled to world dimensions');
 assert.equal(middle.generation,producer.describe().generation);
 assert.deepEqual(middle.localMax,[2,6,2]);
-assert.ok(groups.some(g=>g.entries.some(e=>e.binding===33)),'intermediate material seed must bind the actual intermediate optical field');
+const middleBinding=Number(WORLD_SMOKE_OPTICS_WGSL.match(/@group\(0\) @binding\((\d+)\) var middleOptical:/)[1]);
+assert.ok(groups.some(g=>g.entries.some(e=>e.binding===middleBinding)),'intermediate material seed must bind the actual intermediate optical field');
+// Check composition against the current exported helper interfaces, rather
+// than pinning the old branch's call arity. Native validation still owns WGSL.
+function argumentsAt(text,start){
+ let depth=0,count=1;
+ for(let i=start;i<text.length;i++){
+  if(text[i]==='(')depth++;
+  else if(text[i]===')'){if(--depth===0)return count;}
+  else if(text[i]===','&&depth===1)count++;
+ }
+ throw Error('unterminated shader call');
+}
+for(const name of ['regionSmokeMaterial','regionSmokeSample']){
+ const definition=WORLD_SMOKE_OPTICS_WGSL.indexOf('fn '+name+'(');
+ assert.ok(definition>=0,'regional optics must export '+name);
+ const arity=argumentsAt(WORLD_SMOKE_OPTICS_WGSL,WORLD_SMOKE_OPTICS_WGSL.indexOf('(',definition));
+ for(const call of SCENE_VOLUME_SOURCE_WGSL.matchAll(new RegExp('\\b'+name+'\\(','g')))
+  assert.equal(argumentsAt(SCENE_VOLUME_SOURCE_WGSL,call.index+name.length),arity,name+' seed call must match the current optical atlas helper');
+}
 const lighting=createExteriorSmokeLight(device,{grid:2,refinement:1});
 const lit=lighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
 assert.deepEqual(lit.middle.smokeReconstruction.localMin,world.middle.localMin);
