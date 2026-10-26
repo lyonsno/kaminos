@@ -28,11 +28,11 @@ function add(s,c,i,volume){
  const n=s.size,d=s.extent/(n-1),x=(i%n/(n-1)-.5)*s.extent,z=(Math.floor(i/n)/(n-1)-.5)*s.extent;
  let fs=c.byCell.get(i);
  if(!fs){const angle=Math.atan2(c.fz[i],c.fx[i])+Math.PI/2;
-  const parent={id:s.nextId++,cell:i,parent:null,level:0,x:x+(random(s.seed,i+1000)-.5)*d*.5,z:z+(random(s.seed,i+2000)-.5)*d*.5,rx:d*1.3,rz:d*.55,angle,volume:0,layers:Array(s.layers.length).fill(0)};
+  const parent={id:s.nextId++,cell:i,parent:null,level:0,x:x+(random(s.seed,i+1000)-.5)*d*.5,z:z+(random(s.seed,i+2000)-.5)*d*.5,rx:d*2.2,rz:d*.75,angle,volume:0,layers:Array(s.layers.length).fill(0)};
   fs=[parent];s.features.push(parent);c.byCell.set(i,fs);
  }
  const parent=fs[0];
- if(parent.volume>d*d*.0005&&fs.length===1){for(let j=0;j<3;j++){const offset=(j-1)*parent.rx*.55,along=Math.cos(parent.angle),across=Math.sin(parent.angle);const f={id:s.nextId++,cell:i,parent:parent.id,level:1,x:parent.x+along*offset,z:parent.z+across*offset,rx:parent.rx*.34,rz:parent.rz*.3,angle:parent.angle+(random(s.seed,i+j+3000)-.5)*.4,volume:0,layers:Array(s.layers.length).fill(0)};fs.push(f);s.features.push(f);}}
+ if(parent.volume>d*d*.0005&&fs.length===1){for(let j=0;j<3;j++){const offset=(j-1)*parent.rx*.55,along=Math.cos(parent.angle),across=Math.sin(parent.angle);const f={id:s.nextId++,cell:i,parent:parent.id,level:1,x:parent.x+along*offset,z:parent.z+across*offset,rx:parent.rx*.6,rz:parent.rz*.5,angle:parent.angle+(random(s.seed,i+j+3000)-.5)*.4,volume:0,layers:Array(s.layers.length).fill(0)};fs.push(f);s.features.push(f);}}
  const epoch=s.layers.length-1;
  // Growth is divided among scales; children do not duplicate the parent's mass.
  const weights=fs.map((f,j)=>j===0?1:.22*(.3+random(s.seed,i+j+4000))*(1+Math.min(2,c.flux[i]*30)));
