@@ -32,6 +32,50 @@ fn main(@builtin(workgroup_id) group:vec3<u32>, @builtin(num_workgroups) grid:ve
  if(lane==0u){output[p.output_offset+token*p.output_stride+row]=sums[0];}
 }`;
 
+// Experimental GEMV: four independent rows reuse each activation load. Each
+// row keeps the oracle's word/nibble order and 64-lane tree reduction in f32.
+// Partial row groups stay in every barrier and mask their source/output access.
+export function affineQuadShader() {
+  const axes = ['x', 'y', 'z', 'w'];
+  const loads = axes.map((axis, i) => `if(base+${i}u<p.rows){
+    let source=base+${i}u+p.weight_row_offset;
+    packed.${axis}=weights[source*words+word];
+    let s=source*(p.columns/p.group_size)+(word*8u)/p.group_size;
+    scale.${axis}=scales[s];bias.${axis}=biases[s];
+  }`).join('\n');
+  const quant = axes.map(axis => `f32((packed.${axis}>>(nibble*4u))&15u)`).join(',');
+  const stores = axes.map((axis, i) => `if(base+${i}u<p.rows){output[p.output_offset+token*p.output_stride+base+${i}u]=sums[0].${axis};}`).join('\n');
+  return `
+struct P { tokens:u32, rows:u32, columns:u32, group_size:u32,
+ input_offset:u32, input_stride:u32, weight_row_offset:u32, output_offset:u32,
+ output_stride:u32, pad0:u32, pad1:u32, pad2:u32 };
+@group(0) @binding(0) var<storage,read> x:array<f32>;
+@group(0) @binding(1) var<storage,read> weights:array<u32>;
+@group(0) @binding(2) var<storage,read> scales:array<f32>;
+@group(0) @binding(3) var<storage,read> biases:array<f32>;
+@group(0) @binding(4) var<storage,read_write> output:array<f32>;
+@group(0) @binding(5) var<uniform> p:P;
+var<workgroup> sums:array<vec4<f32>,64>;
+@compute @workgroup_size(64)
+fn main(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>,
+ @builtin(local_invocation_index) lane:u32){
+ let base=(group.x+group.y*grid.x)*4u;let token=group.z;
+ if(base>=p.rows || token>=p.tokens){return;}
+ let words=p.columns/8u;var sum=vec4<f32>(0.0);
+ for(var word=lane;word<words;word+=64u){
+  var packed=vec4<u32>(0u);var scale=vec4<f32>(0.0);var bias=vec4<f32>(0.0);
+  ${loads}
+  for(var nibble=0u;nibble<8u;nibble++){
+   let input=x[p.input_offset+token*p.input_stride+word*8u+nibble];
+   let value=vec4<f32>(${quant})*scale+bias;sum+=input*value;
+  }
+ }
+ sums[lane]=sum;workgroupBarrier();
+ for(var stride=32u;stride>0u;stride/=2u){if(lane<stride){sums[lane]+=sums[lane+stride];}workgroupBarrier();}
+ if(lane==0u){${stores}}
+}`;
+}
+
 // Register-tiled GEMM follows the existing Klein tile/load/accumulator pattern.
 // Retain separate f32 scale/bias bindings and the affine oracle's exact layout.
 // Each 32x32 output tile reuses source weights across 32 prompt positions.

@@ -1,8 +1,11 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import * as contract from '../models/qwen3_5/kernel-witness-contract.js';
-import { collectKernelWitness } from '../models/qwen3_5/run-kernel-witness.mjs';
+import { collectKernelWitness, runKernelWitness } from '../models/qwen3_5/run-kernel-witness.mjs';
 
 // Local admission-policy fixture, not evidence about an external GPU runtime.
 function fixture() {
@@ -63,4 +66,25 @@ test('readback collection preserves every row when the combined result exceeds a
   } };
   const result = await collectKernelWitness(browser, async row => received.push(row));
   assert.deepEqual(result.rows, source.rows); assert.deepEqual(received, source.rows);
+});
+
+test('four-row route rejects oracle substitution and admits the exact effective kernel', () => {
+  const { result, meta, arrays } = fixture();
+  result.affineKernel = 'oracle';
+  assert.throws(() => contract.adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: 'quad' }), /route/);
+  result.affineKernel = 'quad';
+  assert.equal(contract.adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: 'quad' }).rows, 24);
+});
+test('ambiguous affine requests write a failure report before reference or browser access', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qwen-affine-route-'));
+  try {
+    const out = path.join(dir, 'report.json');
+    const report = await runKernelWitness({ out, fixture: 'absent-fixture', tiledAffine: true, quadAffine: true });
+    assert.equal(report.status, 'failed'); assert.equal(report.phase, 'source-admission');
+    assert.match(report.error, /ambiguous affine/);
+    const saved = JSON.parse(await fs.readFile(out, 'utf8'));
+    assert.equal(saved.status, 'failed'); assert.equal(saved.phase, 'source-admission');
+    assert.match(saved.error, /ambiguous affine/);
+    assert.equal(saved.requested.tiledAffine, true); assert.equal(saved.requested.quadAffine, true);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });

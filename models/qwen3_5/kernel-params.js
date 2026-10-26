@@ -18,8 +18,10 @@ export function affineParams({ tokens, rows, columns, group = 64, inputOffset = 
   span(outputOffset + (tokens - 1) * outputStride + rows - 1);
   return new Uint32Array([tokens, rows, columns, group, inputOffset, inputStride, weightRowOffset, outputOffset, outputStride, 0, 0, 0]);
 }
-export function affineDispatch(rows, tokens, limit) {
+export function affineDispatch(rows, tokens, limit, { rowsPerGroup = 1 } = {}) {
   uint(rows, 'rows'); uint(tokens, 'tokens'); uint(limit, 'device dispatch limit');
+  if (rowsPerGroup !== 1 && rowsPerGroup !== 4) throw new RangeError('unsupported affine rows per group');
+  rows = Math.ceil(rows / rowsPerGroup);
   const x = Math.min(rows, limit), y = Math.ceil(rows / x);
   if (y > limit || tokens > limit) throw new RangeError('affine request exceeds the supplied device dispatch dimensions');
   return [x, y, tokens];

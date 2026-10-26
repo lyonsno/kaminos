@@ -44,3 +44,11 @@ test('invalid geometry and overflowing address spans fail without truncating the
   assert.throws(() => attentionParams({ tokens: 2, queryHeads: 16, kvHeads: 4, headDim: 256, rotaryDim: 63, pastTokens: 0, capacity: 8, ropeTheta: 1e7 }));
   assert.throws(() => attentionParams({ tokens: 2, queryHeads: 16, kvHeads: 4, headDim: 256, rotaryDim: 64, pastTokens: 7, capacity: 8, ropeTheta: 1e7 }));
 });
+
+test('four-row affine dispatch covers partial groups, device factoring and full vocabulary', () => {
+  assert.deepEqual(affineDispatch(35, 1, 8, { rowsPerGroup: 4 }), [8, 2, 1]);
+  assert.deepEqual(affineDispatch(248320, 1, 65535, { rowsPerGroup: 4 }), [62080, 1, 1]);
+  assert.deepEqual(affineDispatch(7, 5, 8, { rowsPerGroup: 4 }), [2, 1, 5]);
+  assert.throws(() => affineDispatch(35, 1, 2, { rowsPerGroup: 4 }), /dispatch/);
+  assert.throws(() => affineDispatch(4, 1, 8, { rowsPerGroup: 3 }), /row/);
+});

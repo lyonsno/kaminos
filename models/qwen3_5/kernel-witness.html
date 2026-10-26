@@ -8,9 +8,10 @@ window.qwenKernelReady = true;
 window.qwenKernelResult = (async () => {
   const meta = await (await fetch('/fixture/meta.json')).json(), arrays = {}, rows = [], errors = [];
   const affineKernel = new URL(location.href).searchParams.get('affine') ?? 'oracle';
-  if (!['oracle','tiled'].includes(affineKernel)) throw new Error('unsupported affine kernel');
-  const affineCode = affineKernel === 'tiled' ? kernels.affineTiledShader() : kernels.affineShader();
-  const affineGrid = affineKernel === 'tiled' ? affineTiledDispatch : affineDispatch;
+  if (!['oracle','tiled','quad'].includes(affineKernel)) throw new Error('unsupported affine kernel');
+  const affineCode = affineKernel === 'quad' ? kernels.affineQuadShader() : affineKernel === 'tiled' ? kernels.affineTiledShader() : kernels.affineShader();
+  const affineGrid = affineKernel === 'quad' ? (rows, tokens, limit) => affineDispatch(rows, tokens, limit, { rowsPerGroup: 4 })
+    : affineKernel === 'tiled' ? affineTiledDispatch : affineDispatch;
   window.qwenKernelPartial = { backend: 'webgpu', errors, rows, affineKernel };
   for (const [name, record] of Object.entries(meta.arrays)) {
     const response = await fetch('/fixture/' + record.file);

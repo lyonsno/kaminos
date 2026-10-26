@@ -17,16 +17,18 @@ export async function collectKernelWitness(browser, preserve) {
   return result;
 }
 
-export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false }) {
+export async function runKernelWitness({ chrome, fixture, out, tiledAffine = false, quadAffine = false }) {
   if (!out) throw new TypeError('an explicit report path is required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const report = { schema: 'kaminos.qwen35-kernel-witness.v1', status: 'failed', phase: 'setup',
-    requested: { chrome, fixture, tiledAffine }, source: sourceIdentity(repo) };
+    requested: { chrome, fixture, tiledAffine, quadAffine }, source: sourceIdentity(repo) };
   let browser, server;
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   try {
     await save(); report.phase = 'source-admission';
-    if (typeof tiledAffine !== 'boolean') throw new Error('unsupported affine mode');
+    if (typeof tiledAffine !== 'boolean' || typeof quadAffine !== 'boolean') throw new Error('unsupported affine mode');
+    if (tiledAffine && quadAffine) throw new Error('ambiguous affine mode');
+    const affineKernel = quadAffine ? 'quad' : tiledAffine ? 'tiled' : 'oracle';
     if (!report.source.rev || report.source.dirtyFiles?.length) throw new Error('kernel witness requires clean committed source');
     report.phase = 'reference-admission'; await save();
     const root = fs.realpathSync(fixture), metaBytes = fs.readFileSync(path.join(root, 'meta.json')), meta = JSON.parse(metaBytes);
@@ -47,7 +49,7 @@ export async function runKernelWitness({ chrome, fixture, out, tiledAffine = fal
     fs.accessSync(executable, fs.constants.X_OK); report.effectiveExecutable = executable;
     const serving = await startServer({ '/fixture/': root, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report);
-    report.phase = 'gpu-execution'; report.url = `${serving.origin}/models/qwen3_5/kernel-witness.html?affine=${tiledAffine ? 'tiled' : 'oracle'}`; await save();
+    report.phase = 'gpu-execution'; report.url = `${serving.origin}/models/qwen3_5/kernel-witness.html?affine=${affineKernel}`; await save();
     await browser.navigate(report.url, 'window.qwenKernelReady === true');
     // Preserve raw readbacks before adjudicating a mismatch.
     report.rows = [];
@@ -60,7 +62,7 @@ export async function runKernelWitness({ chrome, fixture, out, tiledAffine = fal
     report.adapter = result?.adapter; report.errors = result?.errors; report.completedObservations = result?.rows?.length ?? 0;
     let mismatch;
     report.affineKernel = result?.affineKernel;
-    try { adjudicateKernelReadbacks(result, meta, arrays, { affineKernel: tiledAffine ? 'tiled' : 'oracle' }); } catch (error) { mismatch = error; }
+    try { adjudicateKernelReadbacks(result, meta, arrays, { affineKernel }); } catch (error) { mismatch = error; }
     // Save host-derived metrics even when adjudication rejects the run.
     for (const row of report.rows) {
       const measured = result.rows.find(value => value.name === row.name);
@@ -81,7 +83,8 @@ export async function runKernelWitness({ chrome, fixture, out, tiledAffine = fal
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [fixture, chrome, out, mode] = process.argv.slice(2);
-  const report = await runKernelWitness({ fixture, chrome, out, tiledAffine: mode === undefined ? false : mode === '--tiled-affine' ? true : mode });
+  const report = await runKernelWitness({ fixture, chrome, out, quadAffine: mode === '--quad-affine',
+    tiledAffine: mode === undefined || mode === '--quad-affine' ? false : mode === '--tiled-affine' ? true : mode });
   console.log(JSON.stringify({ status: report.status, phase: report.phase, error: report.error, rows: report.rows?.map(({ name, relL2, maxAbs, nonFinite }) => ({ name, relL2, maxAbs, nonFinite })) }));
   process.exitCode = report.status === 'passed' ? 0 : 1;
 }
