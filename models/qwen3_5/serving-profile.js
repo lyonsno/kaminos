@@ -3,20 +3,26 @@ import { adjudicatePupExpansion } from './pup-witness-contract.js';
 
 export async function withModelProfile(model, work, { profile = {}, now = () => performance.now() } = {}) {
   const names = ['createState', 'prefill', 'decode', 'disposeState', 'dispatch'];
+  if (typeof model.layerBatch === 'function') names.push('layerBatch');
   const originals = names.map(name => ({ name, own: Object.getOwnPropertyDescriptor(model, name), fn: model[name] }));
   if (originals.some(x => typeof x.fn !== 'function')) throw new Error('complete model required for profiling');
   Object.assign(profile, { schema: 'kaminos.qwen35-serving-profile.v1', clock: 'performance.now-wall-ms',
-    diagnosticReadbacks: Boolean(model.onLayer || model.onNorm), calls: [], duties: {}, completed: false, startedMs: now() });
+    diagnosticReadbacks: Boolean(model.onLayer || model.onNorm), calls: [], duties: {}, completed: false, startedMs: now(),
+    dispatchTiming: model.batchDecode === true ? 'mixed-encoded-and-fenced' : 'fenced-leaf',
+    layerBatches: { count: 0, totalMs: 0, maxMs: 0, failures: 0 } });
   try {
     for (const { name, fn } of originals) model[name] = async function (...args) {
       const startMs = now(), row = { operation: name, startMs, status: 'failed' };
       if (name === 'prefill' || name === 'decode') Object.assign(row, { inputTokens: name === 'prefill' ? args[0].length : 1, pastTokens: args[1].length });
-      if (name !== 'dispatch') profile.calls.push(row);
+      if (name !== 'dispatch' && name !== 'layerBatch') profile.calls.push(row);
       try { const value = await fn.apply(this, args); row.status = 'passed'; return value; }
       finally {
         row.endMs = now(); row.ms = row.endMs - startMs;
         if (name === 'dispatch') {
           const duty = profile.duties[args[0]] ??= { count: 0, totalMs: 0, maxMs: 0, failures: 0 };
+          duty.count++; duty.totalMs += row.ms; duty.maxMs = Math.max(duty.maxMs, row.ms); duty.failures += Number(row.status !== 'passed');
+        } else if (name === 'layerBatch') {
+          const duty = profile.layerBatches;
           duty.count++; duty.totalMs += row.ms; duty.maxMs = Math.max(duty.maxMs, row.ms); duty.failures += Number(row.status !== 'passed');
         }
       }
@@ -29,6 +35,13 @@ export async function withModelProfile(model, work, { profile = {}, now = () => 
 }
 
 export function adjudicateServingProfile(result, expected) {
+  if (expected.batchDecode !== undefined) {
+    adjudicateBatchSelection(result, expected.batchDecode);
+    const duty = result.profile?.layerBatches;
+    if (!duty || duty.count !== result.layerBatchSubmissions || duty.failures !== 0
+      || [duty.totalMs, duty.maxMs].some(x => !Number.isFinite(x) || x < 0) || duty.maxMs > duty.totalMs || duty.totalMs > result.profile.totalMs
+      || result.profile.dispatchTiming !== (expected.batchDecode ? 'mixed-encoded-and-fenced' : 'fenced-leaf')) throw new Error('wrong or incomplete layer batch timing evidence');
+  }
   if (expected.singleTokenKernel !== undefined) {
     adjudicateAffineSelection(result, expected.singleTokenKernel);
     for (const name of ['affine', 'affine-quad', 'affine-tiled']) {
@@ -65,7 +78,18 @@ export function adjudicateServingProfile(result, expected) {
   return { ...output, loadMs: p.loadMs, inputPreparationMs: p.inputPreparationMs, totalMs: p.totalMs, firstTextMs: p.firstTextMs,
     prefillMs: prefill.ms, prefillTokensPerSecond: 1000*output.inputTokens/prefill.ms,
     decodeMs, decodeCalls: decodes.length, decodeTokensPerSecond: decodes.length ? 1000*decodes.length/decodeMs : null,
-    otherGenerationMs: p.totalMs-prefill.ms-decodeMs, dutyTiming: 'wall time including admission, compilation and queue fence; not GPU timestamp time' };
+    otherGenerationMs: p.totalMs-prefill.ms-decodeMs, maxLayerDutyMs: p.layerBatches?.maxMs ?? null,
+    dutyTiming: expected.batchDecode ? 'batched dispatches measure encoding; layer duties include admission and queue fence; do not add overlapping durations'
+      : 'wall time including admission, compilation and queue fence; not GPU timestamp time' };
+}
+
+export function adjudicateBatchSelection(result, expected) {
+  if (typeof expected !== 'boolean' || result?.batchDecode !== expected || !Number.isSafeInteger(result.layerBatchSubmissions)
+    || result.layerBatchSubmissions < (expected ? 1 : 0) || (!expected && result.layerBatchSubmissions !== 0)) throw new Error('wrong or missing layer batch submission evidence');
+  const duty = result.layerBatchDuty;
+  if (!duty || duty.count !== result.layerBatchSubmissions || duty.failures !== 0
+    || [duty.totalMs, duty.maxMs].some(x => !Number.isFinite(x) || x < 0) || duty.maxMs > duty.totalMs
+    || (duty.count === 0 && (duty.totalMs !== 0 || duty.maxMs !== 0))) throw new Error('wrong or missing layer batch duty evidence');
 }
 
 export function adjudicateAffineSelection(result, expected) {
@@ -79,22 +103,28 @@ export function adjudicateAffineSelection(result, expected) {
 // Complete real expansions bracket the candidate with the existing kernel in
 // one browser/model residency. Clocks retain their common performance.now epoch.
 export function adjudicateServingComparison(result, expected) {
-  const comparison = result?.comparison, kernels = ['oracle', 'quad', 'oracle'];
+  const comparison = result?.comparison, axis = expected.comparisonAxis ?? comparison?.axis ?? 'kernel';
+  if (!['kernel', 'batchDecode'].includes(axis) || (expected.comparisonAxis !== undefined && comparison?.axis !== expected.comparisonAxis)
+    || (expected.singleTokenKernel !== undefined && expected.singleTokenKernel !== 'oracle') || expected.batchDecode === true) throw new Error('wrong or ambiguous comparison axis');
+  const kernels = axis === 'batchDecode' ? ['oracle', 'oracle', 'oracle'] : ['oracle', 'quad', 'oracle'];
+  const batchModes = [false, axis === 'batchDecode', false], requireBatch = axis === 'batchDecode' || expected.batchDecode !== undefined;
   if (comparison?.schema !== 'kaminos.qwen35-serving-comparison.v1' || !Array.isArray(comparison.runs) || comparison.runs.length !== kernels.length
     || [comparison.sharedLoadMs, comparison.sharedInputPreparationMs].some(x => !Number.isFinite(x) || x < 0)) throw new Error('incomplete serving comparison');
   let previousEnd = -Infinity, first;
   const runs = comparison.runs.map((row, index) => {
     if (row.index !== index || row.statesAfter !== 0 || row.profile?.startedMs < previousEnd) throw new Error('wrong comparison order, overlapping clocks or unretired request state');
     const verdict = adjudicateServingProfile({ ...result, expansion: row.expansion, profile: row.profile,
-      singleTokenKernel: row.singleTokenKernel, affineDispatches: row.affineDispatches }, { ...expected, singleTokenKernel: kernels[index] });
+      singleTokenKernel: row.singleTokenKernel, affineDispatches: row.affineDispatches, batchDecode: row.batchDecode, layerBatchSubmissions: row.layerBatchSubmissions,
+      layerBatchDuty: row.profile?.layerBatches },
+      { ...expected, singleTokenKernel: kernels[index], ...(requireBatch ? { batchDecode: batchModes[index] } : {}) });
     previousEnd = row.profile.finishedMs;
     const output = row.expansion.output;
     if (first && (output.text !== first.text || output.stopTokenId !== first.stopTokenId
       || output.tokenIds.length !== first.tokenIds.length || output.tokenIds.some((id, i) => id !== first.tokenIds[i]))) throw new Error('complete comparison outputs disagree');
     first ??= output;
-    return { index, singleTokenKernel: kernels[index], ...verdict };
+    return { index, singleTokenKernel: kernels[index], ...(requireBatch ? { batchDecode: batchModes[index] } : {}), ...verdict };
   });
   if (!runs[1].decodeMs) throw new Error('comparison requires actual cached decode');
-  return { runs, identicalCompleteOutput: true, decodeSpeedupVsBaselines: [runs[0].decodeMs / runs[1].decodeMs, runs[2].decodeMs / runs[1].decodeMs],
+  return { comparisonAxis: axis, runs, identicalCompleteOutput: true, decodeSpeedupVsBaselines: [runs[0].decodeMs / runs[1].decodeMs, runs[2].decodeMs / runs[1].decodeMs],
     baselineDriftRatio: runs[2].decodeMs / runs[0].decodeMs };
 }

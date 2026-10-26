@@ -129,3 +129,32 @@ test('model witness CLI preserves complete requests and rejects conflicting or u
   assert.match(saved.error,i<2?/ambiguous.*kernel/:/unsupported.*CLI/);
  }}finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('requested decode batching cannot close with absent or unexecuted batch evidence',()=>{
+ const {result,expected}=fixture();expected.batchDecode=true;result.batchDecode=true;result.layerBatchSubmissions=0;
+ assert.throws(()=>adjudicateServingProfile(result,expected),/batch/);
+});
+test('batch comparison retains the existing kernel and varies actual layer submission policy',()=>{
+ const {result,expected}=comparisonFixture();expected.comparisonAxis='batchDecode';result.comparison.axis='batchDecode';
+ for(const [i,row] of result.comparison.runs.entries()){
+  row.singleTokenKernel='oracle';row.batchDecode=i===1;row.layerBatchSubmissions=i===1?2:0;
+  row.affineDispatches={'affine':3,'affine-quad':0,'affine-tiled':0};row.profile.duties={'affine':{count:3,totalMs:5,maxMs:2,failures:0}};
+  row.profile.dispatchTiming=i===1?'mixed-encoded-and-fenced':'fenced-leaf';
+  row.profile.layerBatches={count:i===1?2:0,totalMs:i===1?2:0,maxMs:i===1?1:0,failures:0};
+ }
+ const verdict=profiling.adjudicateServingComparison(result,expected);
+ assert.equal(verdict.comparisonAxis,'batchDecode');assert.deepEqual(verdict.runs.map(r=>r.batchDecode),[false,true,false]);
+ for(const change of [r=>delete r.comparison.axis,r=>r.comparison.axis='kernel',
+  r=>r.comparison.runs[1].layerBatchSubmissions=0,r=>r.comparison.runs[0].layerBatchSubmissions=1,
+  r=>r.comparison.runs[1].profile.layerBatches.count=1,r=>r.comparison.runs[1].profile.dispatchTiming='fenced-leaf',
+  r=>r.comparison.runs[1].profile.layerBatches.failures=1,r=>r.comparison.runs[1].profile.layerBatches.totalMs=11]){const altered=structuredClone(result);change(altered);assert.throws(()=>profiling.adjudicateServingComparison(altered,expected));}
+});
+
+test('batch comparison CLI preserves and rejects conflicting execution selectors',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'qwen-batch-cli-'));
+ const script=fileURLToPath(new URL('../models/qwen3_5/run-model-witness.mjs',import.meta.url));
+ try{for(const [i,args]of [['request.json','--compare-batching','--batch-decode'],['request.json','--compare-affine','--compare-batching']].entries()){
+  const out=path.join(dir,`${i}.json`);await assert.rejects(promisify(execFile)(process.execPath,[script,'absent-fixture','absent-model','absent-chrome',out,...args]),e=>e.code===1);
+  const saved=JSON.parse(await fs.readFile(out,'utf8'));assert.equal(saved.phase,'source-admission');assert.deepEqual(saved.requested.cliArgs,args);assert.match(saved.error,/ambiguous/);
+ }}finally{await fs.rm(dir,{recursive:true,force:true});}
+});

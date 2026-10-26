@@ -135,3 +135,82 @@ test('constructor admits only explicit single-token kernels without changing req
     await model.destroy(); assert.equal(control.snapshot().status,'running');
   } finally {await control.close();}
 });
+
+function submissionCounter(device){
+ const counts={submits:0,fences:0,dispatches:0}, submit=device.queue.submit, fence=device.queue.onSubmittedWorkDone, encoder=device.createCommandEncoder;
+ device.queue.submit=(...args)=>{counts.submits++;return submit.apply(device.queue,args);};
+ device.queue.onSubmittedWorkDone=(...args)=>{counts.fences++;return fence.apply(device.queue,args);};
+ device.createCommandEncoder=(...args)=>{const e=encoder.apply(device,args),begin=e.beginComputePass;e.beginComputePass=(...params)=>{const p=begin.apply(e,params),dispatch=p.dispatchWorkgroups;p.dispatchWorkgroups=(...shape)=>{counts.dispatches++;return dispatch.apply(p,shape);};return p;};return e;};
+ return counts;
+}
+test('optional cached layer batching preserves compute work while reducing actual submissions and fences',async(t)=>{
+ const {manifest,fetchImpl}=fixture(),{device}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),counts=submissionCounter(device);
+ const model=new Qwen35TextModel(device,manifest,{control});
+ try{await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:6});await model.prefill([1,2],state);
+ Object.assign(counts,{submits:0,fences:0,dispatches:0});await model.decode(3,state);const baseline={...counts};
+ model.batchDecode=true;Object.assign(counts,{submits:0,fences:0,dispatches:0});await model.decode(4,state);const batched={...counts};
+ assert.equal(batched.dispatches,baseline.dispatches,'every original compute pass must remain');
+ assert.ok(batched.submits<baseline.submits,JSON.stringify({baseline,batched}));assert.ok(batched.fences<baseline.fences);
+ assert.equal(model.layerBatchSubmissions,2);t.diagnostic(JSON.stringify({baseline,batched}));await model.disposeState(state);
+ }finally{await model.destroy();await control.close();}
+});
+test('layer batching keeps uniforms alive through the admitted fence and lets a pause settle afterward',async()=>{
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control});
+ assert.equal(typeof model.layerBatch,'function','admitted layer batching is required');
+ model.pipeline=async()=>({getBindGroupLayout(){}});let release;const fence=new Promise(r=>release=r);device.queue.onSubmittedWorkDone=()=>fence;
+ let settled=false;const work=model.layerBatch({control},async ctx=>{for(let i=0;i<2;i++)await model.dispatch('probe','',[],new Uint32Array([1,0,0,0]),[1,1,1],ctx);}).then(()=>{settled=true;});
+ await new Promise(setImmediate);assert.equal(model.layerBatchSubmissions,1);assert.ok(buffers.every(b=>!b.destroyed));
+ const pause=control.pause();await new Promise(setImmediate);assert.equal(settled,false);assert.equal(control.snapshot().status,'pausing');
+ release();await work;await pause;assert.ok(buffers.every(b=>b.destroyed));assert.equal(control.snapshot().status,'paused');
+ await control.resume();await model.destroy();await control.close();
+});
+test('aborting an encoded layer discards its commands and fences pending uniform uploads before retirement',async()=>{
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control});
+ assert.equal(typeof model.layerBatch,'function','admitted layer batching is required');
+ const counts=submissionCounter(device),abort=new AbortController();model.pipeline=async()=>({getBindGroupLayout(){}});
+ await assert.rejects(model.layerBatch({control,signal:abort.signal},async ctx=>{await model.dispatch('probe','',[],new Uint32Array([1,0,0,0]),[1,1,1],ctx);abort.abort('stop');}),e=>e.name==='AbortError');
+ assert.equal(counts.submits,0);assert.ok(counts.fences>0);assert.ok(buffers.every(b=>b.destroyed));
+ await model.destroy();await control.close();
+});
+test('batch validation and queue failures remain failures with all temporary buffers retired',async()=>{
+ for(const kind of ['validation','fence']){
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control});
+ assert.equal(typeof model.layerBatch,'function','admitted layer batching is required');
+ model.pipeline=async()=>({getBindGroupLayout(){}});
+ if(kind==='validation')device.popErrorScope=async()=>({message:'bad batch binding'});else device.queue.onSubmittedWorkDone=async()=>{throw new Error('batch fence failed');};
+ await assert.rejects(model.layerBatch({control},ctx=>model.dispatch('probe','',[],new Uint32Array([1,0,0,0]),[1,1,1],ctx)),/batch|binding/);
+ assert.ok(buffers.every(b=>b.destroyed));device.queue.onSubmittedWorkDone=async()=>{};await model.destroy();await control.close();
+ }
+});
+test('batching defaults off and rejects unsupported values or changes during active model work',()=>{
+ const {manifest}=fixture(),{device}=deviceFixture(),control={runDuty:async work=>work()};
+ const model=new Qwen35TextModel(device,manifest,{control});assert.equal(model.batchDecode,false);
+ assert.throws(()=>{model.batchDecode='yes';},/batch/);model.active=Promise.resolve();assert.throws(()=>{model.batchDecode=true;},/active/);
+});
+
+test('a cancelled parked layer admits no writes and does not resume its borrowed control',async()=>{
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control});
+ await control.pause();const abort=new AbortController();
+ const work=model.layerBatch({control,signal:abort.signal},async ctx=>model.dispatch('probe','',[],new Uint32Array([1,0,0,0]),[1,1,1],ctx));
+ await new Promise(setImmediate);abort.abort('withdraw parked layer');await assert.rejects(work,e=>e.name==='AbortError');
+ assert.equal(buffers.length,0);assert.equal(model.layerBatchSubmissions,0);assert.equal(control.snapshot().status,'paused');
+ await model.destroy();await control.resume();await control.close();
+});
+
+test('a final one-token prefill chunk retains fine duties and only a logical decode batches',async()=>{
+ const {manifest,fetchImpl}=fixture(),{device}=deviceFixture();device.limits.maxStorageBufferBindingSize=32768;
+ const control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control,batchDecode:true});
+ try{await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:34});
+ await model.prefill(Array.from({length:33},(_,i)=>i%64),state);assert.equal(state.length,33);assert.equal(model.layerBatchSubmissions,0);
+ await model.decode(4,state);assert.equal(model.layerBatchSubmissions,2);await model.disposeState(state);
+ }finally{await model.destroy();await control.close();}
+});
+
+test('closed encoding contexts and nested layer batches cannot enqueue additional work',async()=>{
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control});
+ model.pipeline=async()=>({getBindGroupLayout(){}});let retained;
+ try{await model.layerBatch({control},async ctx=>{retained=ctx;await model.dispatch('probe','',[],new Uint32Array([1,0,0,0]),[1,1,1],ctx);});
+ const before=buffers.length;await assert.rejects(model.dispatch('late','',[],new Uint32Array([1,0,0,0]),[1,1,1],retained),/closed/);assert.equal(buffers.length,before);
+ await assert.rejects(model.layerBatch({control},ctx=>model.layerBatch(ctx,async()=>{})),/nested/);
+ }finally{await model.destroy();await control.close();}
+});

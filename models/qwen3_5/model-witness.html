@@ -32,10 +32,11 @@ window.qwenModelResult = (async () => {
     device.addEventListener('uncapturederror', e => result.errors.push(String(e.error?.message ?? e.error)));
     device.lost.then(info => { if (info.reason !== 'destroyed') result.errors.push(`device lost: ${info.message}`); });
     control = createWebGpuInferenceControl({ queue: device.queue });
-    const compareKernels = window.qwenWitnessMode === 'serving-comparison';
-    const servingProfile = window.qwenWitnessMode === 'serving-profile' || compareKernels;
+    const comparisonMode = window.qwenWitnessMode === 'serving-comparison';
+    const compareBatching = comparisonMode && window.qwenComparisonAxis === 'batchDecode';
+    const servingProfile = window.qwenWitnessMode === 'serving-profile' || comparisonMode;
     let current = null, layerRows = [];
-    model = new Qwen35TextModel(device, manifest, { control, singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', ...(servingProfile ? {} : {
+    model = new Qwen35TextModel(device, manifest, { control, singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', batchDecode: window.qwenBatchDecode ?? false, ...(servingProfile ? {} : {
       onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
       onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
     }) });
@@ -45,6 +46,14 @@ window.qwenModelResult = (async () => {
     model.dispatch = async (name, ...args) => {
       if (Object.hasOwn(affineDispatches, name)) affineDispatches[name]++;
       return dispatch(name, ...args);
+    };
+    const layerBatchDuty = result.layerBatchDuty = { count: 0, totalMs: 0, maxMs: 0, failures: 0 };
+    const layerBatch = model.layerBatch.bind(model);
+    model.layerBatch = async (...args) => {
+      const started = performance.now(); let passed = false;
+      try { const value = await layerBatch(...args); passed = true; return value; }
+      finally { const ms = performance.now() - started; layerBatchDuty.count++; layerBatchDuty.totalMs += ms;
+        layerBatchDuty.maxMs = Math.max(layerBatchDuty.maxMs, ms); layerBatchDuty.failures += Number(!passed); }
     };
     stage = 'weights'; window.qwenModelProgress = { stage };
     const loadStarted = performance.now();
@@ -86,25 +95,28 @@ window.qwenModelResult = (async () => {
       const input = createPupTextInput(tokenizer, { prompt: request.prompt, systemPrompt });
       const tokenizerSha256 = await hash(tokenizerBytes), systemPromptsSha256 = await hash(promptsBytes);
       const inputPreparationMs = performance.now() - inputStarted;
-      const modes = compareKernels ? ['oracle', 'quad', 'oracle'] : [model.singleTokenKernel];
-      if (compareKernels) result.comparison = { schema: 'kaminos.qwen35-serving-comparison.v1', sharedLoadMs: loadMs,
+      const modes = comparisonMode ? (compareBatching
+        ? [{kernel:'oracle',batch:false},{kernel:'oracle',batch:true},{kernel:'oracle',batch:false}]
+        : [{kernel:'oracle',batch:false},{kernel:'quad',batch:false},{kernel:'oracle',batch:false}])
+        : [{kernel:model.singleTokenKernel,batch:model.batchDecode}];
+      if (comparisonMode) result.comparison = { schema: 'kaminos.qwen35-serving-comparison.v1', axis: compareBatching ? 'batchDecode' : 'kernel', sharedLoadMs: loadMs,
         sharedInputPreparationMs: inputPreparationMs, runs: [] };
-      for (const [index, kernel] of modes.entries()) {
-        stage = compareKernels ? `pup-expansion-${index}-${kernel}` : 'pup-expansion';
+      for (const [index, {kernel,batch}] of modes.entries()) {
+        stage = comparisonMode ? `pup-expansion-${index}-${kernel}-${batch ? 'batched' : 'leaf'}` : 'pup-expansion';
         window.qwenModelProgress = { stage };
         if (model.states.size) throw new Error('previous request state was not retired');
-        model.singleTokenKernel = kernel;
-        const entry = compareKernels ? { index, singleTokenKernel: model.singleTokenKernel } : result;
-        if (compareKernels) result.comparison.runs.push(entry);
-        const before = { ...affineDispatches };
+        model.singleTokenKernel = kernel; model.batchDecode = batch;
+        const entry = comparisonMode ? { index, singleTokenKernel: model.singleTokenKernel, batchDecode: model.batchDecode } : result;
+        if (comparisonMode) result.comparison.runs.push(entry);
+        const before = { ...affineDispatches }, beforeBatches = model.layerBatchSubmissions;
         const expansion = entry.expansion = { prompt: request.prompt, inputIds: null, settings: { ...input.generation },
           tokenizerSha256, systemPromptsSha256, stream: [] };
         if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
         const prefill = model.prefill;
         model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill.call(model, ids, ...rest); };
         try {
-          const profile = entry.profile = { loadMs: compareKernels ? 0 : loadMs,
-            inputPreparationMs: compareKernels ? 0 : inputPreparationMs, firstTextMs: null };
+          const profile = entry.profile = { loadMs: comparisonMode ? 0 : loadMs,
+            inputPreparationMs: comparisonMode ? 0 : inputPreparationMs, firstTextMs: null };
           const expand = () => expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
             maxNewTokens: request.maxNewTokens, onText: (delta, text) => {
               if (servingProfile && profile.firstTextMs === null) profile.firstTextMs = performance.now() - profile.startedMs;
@@ -113,9 +125,9 @@ window.qwenModelResult = (async () => {
           expansion.output = servingProfile ? await withModelProfile(model, expand, { profile }) : await expand();
         } finally {
           model.prefill = prefill;
-          if (compareKernels) {
+          if (comparisonMode) {
             entry.affineDispatches = Object.fromEntries(Object.entries(affineDispatches).map(([name, count]) => [name, count - before[name]]));
-            entry.statesAfter = model.states.size;
+            entry.statesAfter = model.states.size; entry.layerBatchSubmissions = model.layerBatchSubmissions - beforeBatches;
           }
         }
         if (model.states.size) throw new Error('completed request state was not retired');
@@ -124,6 +136,8 @@ window.qwenModelResult = (async () => {
     }
   } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
   finally {
+    result.batchDecode = model?.batchDecode; result.layerBatchSubmissions = model?.layerBatchSubmissions;
+    result.singleTokenKernel = model?.singleTokenKernel;
     try { await model?.destroy(); result.cleanup.states = model?.states.size; result.cleanup.weights = model?.owned.size; } catch (error) { result.errors.push(`model cleanup: ${error}`); }
     result.cleanup.borrowedControl = control?.snapshot().status;
     try { await control?.close(); } catch (error) { result.errors.push(`control cleanup: ${error}`); }

@@ -46,13 +46,14 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>){
  * intermediates/KV are f32 here. Model weights remain packed affine4/group64.
  */
 export class Qwen35TextModel {
-  constructor(device, manifest, { control, onLayer = null, onNorm = null, singleTokenKernel = 'oracle' } = {}) {
+  constructor(device, manifest, { control, onLayer = null, onNorm = null, singleTokenKernel = 'oracle', batchDecode = false } = {}) {
     if (typeof control?.runDuty !== 'function') throw new TypeError('borrowed inference control is required');
     this.layout = qwen35ModelLayout(manifest); this.config = this.layout.config;
     this.device = device; this.manifest = manifest; this.control = control; this.onLayer = onLayer; this.onNorm = onNorm;
     this.weights = new Map(); this.vectors = new Map(); this.pipelines = new Map();
     this.owned = new Set(); this.states = new Set(); this.loaded = false; this.closed = false; this.active = null;
     this.singleTokenKernel = singleTokenKernel;
+    this.batchDecode = batchDecode; this.layerBatchSubmissions = 0;
     this.lifetime = new AbortController();
     this.bindingBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
     const c = this.config, deltaWidth = 2 * c.linearKeyHeads * c.linearKeyDim + c.linearValueHeads * c.linearValueDim;
@@ -66,6 +67,12 @@ export class Qwen35TextModel {
     if (value !== 'oracle' && value !== 'quad') throw new RangeError('unsupported single-token kernel');
     if (this.active || this.loading) throw new Error('cannot change kernel during active model work');
     this._singleTokenKernel = value;
+  }
+  get batchDecode() { return this._batchDecode ?? false; }
+  set batchDecode(value) {
+    if (typeof value !== 'boolean') throw new TypeError('batchDecode must be boolean');
+    if (this.active || this.loading) throw new Error('cannot change batching during active model work');
+    this._batchDecode = value;
   }
   buffer(bytes, target = this.owned, usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC) {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > this.device.limits.maxBufferSize || ((usage & GPUBufferUsage.STORAGE) && bytes > this.bindingBytes)) throw new RangeError('buffer exceeds device capacity');
@@ -81,7 +88,24 @@ export class Qwen35TextModel {
     return this.pipelines.get(name);
   }
   async dispatch(name, code, buffers, params, shape, ctx) {
+    if (ctx.batch && !ctx.batch.encoding) throw new Error('layer batch encoding is closed');
     const pipeline = await this.pipeline(name, code); checkAbort(ctx.signal);
+    if (ctx.batch) {
+      if (!ctx.batch.encoding) throw new Error('layer batch encoding is closed');
+      const uniform = this.buffer(params.byteLength, ctx.batch.uniforms, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      this.device.queue.writeBuffer(uniform, 0, params);
+      this.device.pushErrorScope('validation');
+      try {
+        const bind = this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [...buffers, uniform].map((buffer, binding) => ({ binding, resource: { buffer } })) });
+        const pass = ctx.batch.encoder.beginComputePass();
+        pass.setPipeline(pipeline); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(...shape); pass.end();
+      } finally {
+        // Pop synchronously: another device owner must never inherit our scope
+        // across a pipeline await. Retain all outcomes without early rejection.
+        ctx.batch.validations.push(this.device.popErrorScope().then(error => error ? new Error(`${name}: ${error.message}`) : null, error => error instanceof Error ? error : new Error(String(error))));
+      }
+      return;
+    }
     await admit(ctx.control, ctx.signal, async () => {
       const uniform = this.buffer(params.byteLength, new Set(), GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       try {
@@ -96,6 +120,25 @@ export class Qwen35TextModel {
         const error = await validation; await this.device.queue.onSubmittedWorkDone();
         if (error) throw new Error(`${name}: ${error.message}`);
       } finally { uniform.destroy(); }
+    });
+  }
+  async layerBatch(ctx, work) {
+    if (ctx.batch) throw new Error('nested layer batching is unsupported');
+    return admit(ctx.control, ctx.signal, async () => {
+      const batch = { encoder: this.device.createCommandEncoder(), uniforms: new Set(), validations: [], encoding: true };
+      const errors = [];
+      try {
+        try {
+          await work({ ...ctx, batch }); batch.encoding = false; checkAbort(ctx.signal);
+          this.device.pushErrorScope('validation');
+          try { this.device.queue.submit([batch.encoder.finish()]); this.layerBatchSubmissions++; }
+          finally { batch.validations.push(this.device.popErrorScope().then(error => error ? new Error(`layer batch submit: ${error.message}`) : null, error => error instanceof Error ? error : new Error(String(error)))); }
+        } catch (error) { batch.encoding = false; errors.push(error instanceof Error ? error : new Error(String(error))); }
+        errors.push(...(await Promise.all(batch.validations)).filter(error => error !== null));
+        // Also fence uniform uploads when an aborted/failed encoder is discarded.
+        try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
+        if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'layer batch failed: ' + errors.map(error => error.message).join('; '));
+      } finally { batch.encoding = false; for (const buffer of batch.uniforms) buffer.destroy(); }
     });
   }
   async read(buffer, elements, offset = 0, ctx = { control: this.control }) {
@@ -191,7 +234,8 @@ export class Qwen35TextModel {
     if (ids.some(x => !Number.isInteger(x) || x < 0 || x >= c.vocabSize)) throw new RangeError('token outside model vocabulary');
     if (state.length + tokens > state.capacity) throw new RangeError('generation state capacity exhausted');
     const requestedSignal = options.signal ?? state.signal;
-    const ctx = { signal: AbortSignal.any([state.abort.signal, this.lifetime.signal, ...(requestedSignal ? [requestedSignal] : [])]), control: options.control ?? state.control, singleTokenKernel: this.singleTokenKernel };
+    const ctx = { signal: AbortSignal.any([state.abort.signal, this.lifetime.signal, ...(requestedSignal ? [requestedSignal] : [])]), control: options.control ?? state.control,
+      singleTokenKernel: this.singleTokenKernel, batchDecode: this.batchDecode && tokens === 1 && state.length > 0 };
     const work = (async () => {
       let logits;
       for (let start = 0; start < ids.length; start += this.chunkTokens) {
@@ -204,8 +248,8 @@ export class Qwen35TextModel {
   }
   async forward(ids, state, ctx, predict = true) {
     const c = this.config, tokens = ids.length, scratch = new Set(), f = n => this.buffer(n * 4, scratch);
-    const norm = (input, weight, output, width = c.hiddenSize) => this.dispatch('rms', rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], ctx);
-    const add = (hidden, update) => this.dispatch('axpy', axpyShader(), [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], ctx);
+    const norm = (input, weight, output, width = c.hiddenSize, context = ctx) => this.dispatch('rms', rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], context);
+    const add = (hidden, update, context = ctx) => this.dispatch('axpy', axpyShader(), [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], context);
     try {
       checkAbort(ctx.signal);
       const input = await admit(ctx.control, ctx.signal, async () => {
@@ -219,8 +263,9 @@ export class Qwen35TextModel {
       const qp = f(tokens * 2 * qw), kp = f(tokens * kw), vp = f(tokens * kw), q = f(tokens * qw), attention = f(tokens * qw), gatedAttention = f(tokens * qw);
       for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader(), [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, c.hiddenSize, part.rowStart, part.rows]), [Math.ceil(c.hiddenSize / 256), tokens, 1], ctx);
       for (let index = 0; index < c.numLayers; index++) {
+        const layerWork = async ctx => {
         const root = `model.layers.${index}`, layer = state.layers[index];
-        await norm(hidden, root + '.input_layernorm.weight', normalized);
+        await norm(hidden, root + '.input_layernorm.weight', normalized, c.hiddenSize, ctx);
         if (c.layers[index] === 'linear_attention') {
           const p = deltaParams({ tokens, keyHeads: c.linearKeyHeads, valueHeads: c.linearValueHeads, keyDim: c.linearKeyDim, valueDim: c.linearValueDim, kernel: c.convKernel, epsilon: this.layout.epsilon });
           await this.linear(root + '.linear_attn.in_proj_qkv', normalized, mixed, tokens, ctx);
@@ -241,11 +286,14 @@ export class Qwen35TextModel {
           await this.dispatch('attention-gate', kernels.attentionGateShader(), [attention, qp, gatedAttention], p, [Math.ceil(tokens * qw / 256), 1, 1], ctx);
           await this.linear(root + '.self_attn.o_proj', gatedAttention, update, tokens, ctx);
         }
-        await add(hidden, update); await norm(hidden, root + '.post_attention_layernorm.weight', normalized);
+        await add(hidden, update, ctx); await norm(hidden, root + '.post_attention_layernorm.weight', normalized, c.hiddenSize, ctx);
         await this.linear(root + '.mlp.gate_proj', normalized, gateUp, tokens, ctx, { outputStride: 2 * c.intermediateSize });
         await this.linear(root + '.mlp.up_proj', normalized, gateUp, tokens, ctx, { outputStride: 2 * c.intermediateSize, outputOffset: c.intermediateSize });
         await this.dispatch('swiglu', swigluShader(), [gateUp, activation], new Uint32Array([tokens, c.intermediateSize, 2 * c.intermediateSize, 0, c.intermediateSize, 0, 0, 0]), [Math.ceil(c.intermediateSize / 256), tokens, 1], ctx);
-        await this.linear(root + '.mlp.down_proj', activation, update, tokens, ctx); await add(hidden, update);
+        await this.linear(root + '.mlp.down_proj', activation, update, tokens, ctx); await add(hidden, update, ctx);
+        };
+        if (ctx.batchDecode && tokens === 1 && state.length > 0) await this.layerBatch(ctx, layerWork);
+        else await layerWork(ctx);
         if (this.onLayer) await this.onLayer({ index, buffer: hidden, tokens, context: ctx });
       }
       if (!predict) { state.length += tokens; return null; }
@@ -270,8 +318,8 @@ export class Qwen35TextModel {
     if (this.loading) await this.loadingDone;
     if (this.active) await this.active.catch(() => {});
     const errors = [];
-    for (const state of [...this.states]) try { await this.disposeState(state); } catch (error) { errors.push(error); }
-    try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error); }
+    for (const state of [...this.states]) try { await this.disposeState(state); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
+    try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
     finally { for (const b of this.owned) b.destroy(); this.owned.clear(); this.weights.clear(); this.vectors.clear(); this.loaded = false; }
     if (errors.length) throw new AggregateError(errors, 'model cleanup failed: ' + errors.map(e => e.message).join('; '));
   }
