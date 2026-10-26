@@ -2867,6 +2867,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
+import {createFlameInspectorRefresh} from './flame-inspector-refresh.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import {createFlamePortrait,flamePortraitView,readOptionalFlamePortrait} from './flame-portrait.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
@@ -19181,7 +19182,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
   syncKilnCollisionControl(s.sceneCollision);
-  flameInspector?.sync();
+  flameInspectorRefresh.request();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
 
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
@@ -21717,6 +21718,7 @@ function updateAuthoringPropertySelection() {
   });
 }
 let flameInspector = null;
+const flameInspectorRefresh=createFlameInspectorRefresh(force=>flameInspector?.sync(force));
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
   panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
@@ -21912,11 +21914,12 @@ function writeFlameSettingsState(state) {
   if(!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),state))throw Error('Flame settings were substituted during application');
   activeVolumeSettingsPresetReceipt=state.source;
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
-  syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
+  syncBurnerControls();refreshVolumeReadout();flameInspectorRefresh.request(true);
   recordFlameSettingsProblems();
 }
 function installFlameAuthoring() {
-  window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
+  window.kaminosFlameAuthoring=createFlameAuthoring({edits:{...scenePlacementTools.edits,
+      preview:next=>flameInspectorRefresh.preview(()=>scenePlacementTools.edits.preview(next))},
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
     preparePreview:state=>{
       // Continuous blends produce doubles between saved endpoints. Ask the
@@ -21933,7 +21936,7 @@ function installFlameAuthoring() {
       return state;
     },
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
-    changed:()=>flameInspector?.sync(),
+    changed:()=>flameInspectorRefresh.request(),
     load:loadAuthoredFlameBasin});
 }
 
@@ -22193,7 +22196,7 @@ function installAuthoringParameterEditing() {
     }
   }
   edits.subscribe(()=>{
-    flameInspector?.sync();
+    flameInspectorRefresh.request();
 
   });
   syncRimAuthoringHandle();

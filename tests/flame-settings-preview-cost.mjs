@@ -10,7 +10,7 @@ assert.ok(start>=0&&end>start);
 function host({substitute=false}={}){
  let captures=0,values;
  const no=()=>{};
- const context={document:{getElementById:()=>null},window:{},DEFAULT_VOLUME_SCENE:'flame',flameEmitterPose:{},activeCanonicalVolumeMacroPreset:'',activeVolumeRayBudgetPreset:'',routedVolumeRayBudgetPreset:'',activeVolumeSettingsPresetReceipt:null,flameInspector:null,
+ const context={document:{getElementById:()=>null},window:{},DEFAULT_VOLUME_SCENE:'flame',flameEmitterPose:{},activeCanonicalVolumeMacroPreset:'',activeVolumeRayBudgetPreset:'',routedVolumeRayBudgetPreset:'',activeVolumeSettingsPresetReceipt:null,flameInspector:null,flameInspectorRefresh:{request:no},
  supersedeVolumeRebuildHolds:no,setVolumeControlValue:no,updateVolumeControlLabels:no,
  applyFlameEmitterPose:no,volumePrototype:{setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode})},syncRaymarchSmokePresentationControls:no,
  readVolumeSettingsValues:()=>substitute?{...values,domControls:{flow:{value:999}}}:values,
