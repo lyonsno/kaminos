@@ -53,7 +53,7 @@ export function installImageIterationHistory({document,history,assets,layout,onE
  by('asset-history-recall').onclick=()=>{if(busy())return;const e=history.read().viewed;if(e)onRecall(e);render();};
  by('asset-history-compare').onclick=()=>{layout.compare(!layout.comparing());render();};
  function render(){
-  const state=history.read(),reference=history.reference(),viewed=state.viewed,key=JSON.stringify(state.entries.map(e=>[e.source,e.name,e.provenance?.seed]));
+  const state=history.read(),reference=history.reference(),viewed=state.viewed,key=JSON.stringify(state.entries.map(e=>[e.source,e.name,e.provenance?.seed,!!e.provenance?.reference,e.visibility?.status]));
   by('asset-history-count').textContent=String(state.entries.length);
   if(key!==painted){painted=key;by('asset-history-strip').replaceChildren(...state.entries.map((e,i)=>{
    const button=document.createElement('button');button.type='button';button.dataset.historySource=e.source;button.title=`${i+1} · ${e.name||'Image'}`;
