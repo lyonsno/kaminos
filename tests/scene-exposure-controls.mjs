@@ -27,6 +27,16 @@ assert.equal(flame.value,'-6','invalid restoration is atomic');
 link.write(link.check({...link.read(),value:2.5}));assert.equal(flame.value,'2.5','existing scene parameter value API edits flame EV when matched');
 match.checked=false;independent=7.123456;link.sync();assert.equal(Number(exposure.value),7.123456);assert.ok(Number(exposure.max)>=independent);assert.equal(exposure.step,'any');
 independent=0;link.sync();assert.equal(Number(exposure.value),0);assert.equal(Number(exposure.min),0);
+// The rendering number adapter edits this input directly. Render-loop projection
+// must preserve incomplete typing, while commit/cancel/history replace drafts.
+exposure.type='number';exposure.readOnly=false;exposure.ownerDocument.activeElement=exposure;
+exposure.value='';link.sync();assert.equal(exposure.value,'','independent draft survives redraw');assert.equal(output.textContent,'0.00');
+exposure.dispatchEvent(new Event('change'));assert.equal(exposure.value,'0','commit reconciles an incomplete draft');
+exposure.value='';match.checked=true;match.dispatchEvent(new Event('change'));assert.equal(exposure.value,flame.value,'matching deliberately replaces a draft');
+exposure.value='';link.sync();assert.equal(exposure.value,'','matched EV draft survives redraw');
+exposure.dispatchEvent(new Event('blur'));assert.equal(exposure.value,flame.value,'blur reconciles a matched incomplete draft');
+exposure.value='';link.write(saved);assert.equal(exposure.value,'-3','history/cancellation restores accepted state while focused');
+exposure.value='1.75';exposure.dispatchEvent(new Event('input'));exposure.dispatchEvent(new Event('change'));assert.equal(flame.value,'1.75');assert.equal(independent,1.1);
 console.log('PASS exposure coupling, canonical flame events, independent restoration and history state');
 
 // The adjacent inactive explanation follows scene -> GI inspection -> scene.

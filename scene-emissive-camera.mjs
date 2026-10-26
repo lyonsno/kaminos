@@ -5,14 +5,16 @@ import {cameraWhiteBalance} from './volume-emissive-transport.mjs';
 export function bindSceneExposureControls({exposure,flame,match,label,output,readIndependent,writeIndependent,redraw}) {
   const bounds=Object.fromEntries(['min','max','step'].map(key=>[key,exposure[key]]));
   const event=type=>new flame.ownerDocument.defaultView.Event(type,{bubbles:true});
-  const sync=()=>{
+  const sync=({force=false}={})=>{
     const independent=readIndependent();
     exposure.min=match.checked?flame.min:String(Math.min(Number(bounds.min),independent));
     exposure.max=match.checked?flame.max:String(Math.max(Number(bounds.max),independent));
     exposure.step=match.checked?flame.step:'any';
-    exposure.value=String(match.checked?Number(flame.value):independent);
+    const value=match.checked?Number(flame.value):independent;
+    const typing=exposure.type==='number'&&exposure.readOnly===false&&exposure.ownerDocument.activeElement===exposure;
+    if(force||!typing)exposure.value=String(value);
     label.textContent=match.checked?'Exposure EV':'Exposure';
-    output.textContent=Number(exposure.value).toFixed(2);
+    output.textContent=value.toFixed(2);
   };
   const check=state=>{
     if(typeof state.matched!=='boolean'||!Number.isFinite(state.independent)||state.independent<0||
@@ -30,10 +32,12 @@ export function bindSceneExposureControls({exposure,flame,match,label,output,rea
     sync();redraw();
   });
   flame.addEventListener('input',sync);flame.addEventListener('change',sync);
-  match.addEventListener('change',()=>{sync();redraw();});
+  exposure.addEventListener('change',()=>sync({force:true}));
+  exposure.addEventListener('blur',()=>sync({force:true}));
+  match.addEventListener('change',()=>{sync({force:true});redraw();});
   return {sync,check,
     read:()=>({value:match.checked?Number(flame.value):readIndependent(),matched:match.checked,independent:readIndependent(),flameEV:Number(flame.value)}),
-    write(state){state=check(state);writeIndependent(state.independent);match.checked=state.matched;flame.value=String(state.flameEV);flame.dispatchEvent(event('input'));sync();redraw();},
+    write(state){state=check(state);writeIndependent(state.independent);match.checked=state.matched;flame.value=String(state.flameEV);flame.dispatchEvent(event('input'));sync({force:true});redraw();},
   };
 }
 

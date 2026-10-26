@@ -8,6 +8,7 @@ import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneMembershipOperations} from '../scene-membership-operations.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
+import {createSceneEnvironmentState} from '../scene-environment-state.mjs';
 import {checkedSelection,changeSelection} from '../scene-selection.mjs';
 import {createLocalLiquidEmitterObject,createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
 import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE} from '../local-liquid-setup.mjs';
@@ -62,6 +63,7 @@ for(const type of ['image','pbr','glb','splat'])test(`${type} source loader pres
  const {context,workingScene,calls}=fixture(),current=context.currentMesh;
  const documentEffects=[];
  Object.assign(context,{shouldClearSceneForImport:()=>false,greenroomPreviewIsActive:()=>false,
+  sceneEnvironment:createSceneEnvironmentState({presets:{studio:{exposure:1.5,intensity:2.75}}}),
   loadTexture:async()=>Object.assign(new THREE.Texture(),{image:{width:8,height:4}}),
   loadDemoFiles:async()=>[{name:'albedo.png'}],updateReceiptPanel(){},loadedFiles:{},receipt:null,
   modelSourceUrl:null,modelSourceType:null,glbFileName:null,glbSourceScene:null,
@@ -80,4 +82,5 @@ for(const type of ['image','pbr','glb','splat'])test(`${type} source loader pres
  await context.sceneMembership.reconstruct(row);
  assert.equal(workingScene.activeObjectId,'selected');assert.equal(context.currentMesh,current);assert.equal(calls.selection,0);assert.deepEqual(documentEffects,[]);
  assert.ok(workingScene.find('restored'));
+ if(type==='pbr')assert.equal(workingScene.find('restored').object.material.envMapIntensity,2.75,'new materials consume accepted environment intensity');
 });
