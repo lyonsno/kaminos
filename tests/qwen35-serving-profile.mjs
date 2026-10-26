@@ -145,6 +145,8 @@ test('batch comparison retains the existing kernel and varies actual layer submi
  }
  const verdict=profiling.adjudicateServingComparison(result,expected);
  assert.equal(verdict.comparisonAxis,'batchDecode');assert.deepEqual(verdict.runs.map(r=>r.batchDecode),[false,true,false]);
+ const legacyExpected={...expected};delete legacyExpected.comparisonAxis;
+ assert.throws(()=>profiling.adjudicateServingComparison(result,legacyExpected),/axis/);
  for(const change of [r=>delete r.comparison.axis,r=>r.comparison.axis='kernel',
   r=>r.comparison.runs[1].profile.schema='kaminos.qwen35-serving-profile.v1',
   r=>r.comparison.runs[1].layerBatchSubmissions=0,r=>r.comparison.runs[0].layerBatchSubmissions=1,

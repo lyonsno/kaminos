@@ -103,8 +103,8 @@ export function adjudicateAffineSelection(result, expected) {
 // Complete real expansions bracket the candidate with the existing kernel in
 // one browser/model residency. Clocks retain their common performance.now epoch.
 export function adjudicateServingComparison(result, expected) {
-  const comparison = result?.comparison, axis = expected.comparisonAxis ?? comparison?.axis ?? 'kernel';
-  if (!['kernel', 'batchDecode'].includes(axis) || (expected.comparisonAxis !== undefined && comparison?.axis !== expected.comparisonAxis)
+  const comparison = result?.comparison, axis = expected.comparisonAxis ?? 'kernel';
+  if (!['kernel', 'batchDecode'].includes(axis) || ((expected.comparisonAxis !== undefined || comparison?.axis !== undefined) && comparison?.axis !== axis)
     || (expected.singleTokenKernel !== undefined && expected.singleTokenKernel !== 'oracle') || expected.batchDecode === true) throw new Error('wrong or ambiguous comparison axis');
   const kernels = axis === 'batchDecode' ? ['oracle', 'oracle', 'oracle'] : ['oracle', 'quad', 'oracle'];
   const batchModes = [false, axis === 'batchDecode', false], requireBatch = axis === 'batchDecode' || expected.batchDecode !== undefined;
