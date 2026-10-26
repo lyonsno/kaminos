@@ -38,8 +38,19 @@ assert.ok(calls.every(call => call.inv === invocation));
 assert.ok(calls.slice(1).every(call => call.input.sample === undefined), 'Only initial noise crosses CPU.');
 assert.ok(runs.every(r => r.options.schedulerInvocation === invocation));
 assert.ok(runs.every(r => !r.kernel.code.includes('32768u')), 'No dense-state tail may shadow sparse caller geometry.');
-const std = runs.find(r => r.options.stage === 'sampler-guidance-std').kernel.code;
-assert.match(std, /row < 5u/); assert.match(std, /mean2 - mean \* mean/);
+const rowStats = runs.find(r => r.options.stage === 'sampler-guidance-row-stats');
+assert.ok(rowStats, 'Sparse CFG must parallelize independent row statistics before serial reduction.');
+assert.deepEqual(rowStats.options.dispatch, [1, 1, 2], 'All rows and both positive/guided operands are dispatched.');
+const moments = runs.find(r => r.options.stage === 'sampler-guidance-moments');
+const stdRun = runs.find(r => r.options.stage === 'sampler-guidance-std');
+assert.ok(moments, 'The variance square must be materialized before subtraction.');
+assert.ok(runs.indexOf(rowStats) < runs.indexOf(moments) && runs.indexOf(moments) < runs.indexOf(stdRun));
+assert.strictEqual(moments.kernel.bindings[0].resource, rowStats.kernel.bindings[2].resource);
+assert.strictEqual(stdRun.kernel.bindings[0].resource, moments.kernel.bindings[1].resource,
+  'A GPU storage boundary prevents multiply/subtract contraction.');
+assert.match(moments.kernel.code, /row < 5u/);
+const std = stdRun.kernel.code;
+assert.doesNotMatch(std, /mean \* mean/, 'The final subtraction reads the rounded square instead of recomputing it.');
 assert.doesNotMatch(std, /counts\[0\]-1\.0/, 'SparseTensor std is population, not dense Bessel correction.');
 assert.ok(!uploads.some(r => r.t === sample || r.t === prediction));
 sampler.dispose(); assert.ok(!sample.destroyed && !prediction.destroyed);
@@ -47,3 +58,15 @@ assert.ok(allocated.filter(t => t !== sample && t !== prediction).every(t => t.d
 assert.throws(() => createTrellisSparseSamplerAdapter({ route, flow, config: { ...config, tokenRows: 6 },
   conditioning: new Float32Array(12) }), /resident/);
 console.log('SLat complete schedule, actual row count, source population-std law and resident recurrence pass; fake runtime does not establish GPU numeric conformance.');
+
+// A partially filled second row dispatch dimension still covers every row.
+runs.length = 0;
+const manyRows = 5000, constrained = { ...runtime, device: { limits: { maxComputeWorkgroupsPerDimension: 32 } } };
+const bigSample = constrained.createTensor({ shape: [manyRows, 32], dtype: 'f32', usage: U.storage });
+const bigPrediction = constrained.createTensor({ shape: [manyRows, 32], dtype: 'f32', usage: U.storage });
+const bigFlow = { ...flow, runtime: constrained, inputs: { sample: bigSample }, outputs: { prediction: bigPrediction } };
+const big = createTrellisSparseSamplerAdapter({ route: { runtime: constrained, routeId: route.routeId }, flow: bigFlow,
+  config: { tokenRows: manyRows, steps: 1 }, conditioning: new Float32Array(12) });
+await big.step({ sample: new Float32Array(manyRows * 32) });
+assert.deepEqual(runs.find(r => r.options.stage === 'sampler-guidance-row-stats').options.dispatch, [32, 2, 2]);
+big.dispose();

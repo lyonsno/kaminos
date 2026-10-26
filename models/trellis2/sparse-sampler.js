@@ -3,7 +3,7 @@ import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js
 
 export const SPARSE_SAMPLER_ROUTE='trellis2.sparse-sampler.webgpu.v0';
 export const SPARSE_SAMPLER_STAGES=Object.freeze(['sampler-positive-snapshot','sampler-guidance',
-  'sampler-xstart','sampler-guidance-std','sampler-guidance-rescale','sampler-final-snapshot',
+  'sampler-xstart','sampler-guidance-row-stats','sampler-guidance-moments','sampler-guidance-std','sampler-guidance-rescale','sampler-final-snapshot',
   'sampler-euler-delta','sampler-euler-update']);
 
 export function buildSparseSamplerPlan(config={}){
@@ -128,25 +128,44 @@ const updateShader=`
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<32768u){sample[i]=sample[i]-delta[i];}}`;
 
-// SparseTensor.std uses a 32-channel row tree, then serial row means and
-// second moments. It is population variance, unlike dense torch.std's Bessel
-// correction. Preserve this explicit source schedule without token caps.
-const sparseTokenStdShader=rows=>`
+// MLX main 8a1038e/449bfbc: independent 32-channel row trees run in parallel,
+// then row means/second moments accumulate in source serial order. Materialize
+// mean squared before subtraction: WGSL has no Metal fp-contract(off) pragma,
+// and a storage boundary preserves that F32 rounding across shader compilers.
+const sparseTokenRowStatsShader=rows=>`
 @group(0) @binding(0) var<storage,read> positive:array<f32>;
 @group(0) @binding(1) var<storage,read> guided:array<f32>;
-@group(0) @binding(2) var<storage,read_write> output:array<f32>;
+@group(0) @binding(2) var<storage,read_write> stats:array<f32>;
+@compute @workgroup_size(128)
+fn main(@builtin(global_invocation_id) gid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>){
+  let row=gid.x+gid.y*grid.x*128u;if(row>=${rows}u){return;}
+  var values:array<f32,32>;var squares:array<f32,32>;
+  for(var channel=0u;channel<32u;channel++){let i=row*32u+channel;
+    let value=select(positive[i],guided[i],gid.z==1u);values[channel]=value;squares[channel]=value*value;}
+  for(var offset=16u;offset>0u;offset/=2u){for(var channel=0u;channel<offset;channel++){
+    values[channel]=values[channel]+values[channel+offset];squares[channel]=squares[channel]+squares[channel+offset];}}
+  let output=(gid.z*${rows}u+row)*2u;
+  stats[output]=values[0]*0.03125;stats[output+1u]=squares[0]*0.03125;
+}`;
+const sparseTokenMomentsShader=rows=>`
+@group(0) @binding(0) var<storage,read> stats:array<f32>;
+@group(0) @binding(1) var<storage,read_write> moments:array<f32>;
 @compute @workgroup_size(1)
 fn main(@builtin(workgroup_id) wid:vec3<u32>){
   var mean_sum=0.0;var mean2_sum=0.0;
   for(var row=0u;row < ${rows}u;row++){
-    var values:array<f32,32>;var squares:array<f32,32>;
-    for(var channel=0u;channel<32u;channel++){let i=row*32u+channel;
-      let value=select(positive[i],guided[i],wid.x==1u);values[channel]=value;squares[channel]=value*value;}
-    for(var offset=16u;offset>0u;offset/=2u){for(var channel=0u;channel<offset;channel++){
-      values[channel]=values[channel]+values[channel+offset];squares[channel]=squares[channel]+squares[channel+offset];}}
-    mean_sum=mean_sum+values[0]*0.03125;mean2_sum=mean2_sum+squares[0]*0.03125;
+    let input=(wid.x*${rows}u+row)*2u;
+    mean_sum=mean_sum+stats[input];mean2_sum=mean2_sum+stats[input+1u];
   }
-  let mean=mean_sum/${rows}.0;let mean2=mean2_sum/${rows}.0;output[wid.x]=sqrt(mean2 - mean * mean);
+  let mean=mean_sum/${rows}.0;
+  moments[2u*wid.x]=mean2_sum/${rows}.0;moments[2u*wid.x+1u]=mean*mean;
+}`;
+const sparseTokenStdShader=`
+@group(0) @binding(0) var<storage,read> moments:array<f32>;
+@group(0) @binding(1) var<storage,read_write> output:array<f32>;
+@compute @workgroup_size(1)
+fn main(@builtin(workgroup_id) wid:vec3<u32>){
+  output[wid.x]=sqrt(moments[2u*wid.x]-moments[2u*wid.x+1u]);
 }`;
 
 export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,conditioningTensor,negativeConditioning,
@@ -182,9 +201,13 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
     const positive=tensor('positive'),guided=tensor('guided'),x0Positive=tensor('x0-positive'),x0Guided=tensor('x0-guided');
     const stds=tensor('stds',[2]),rescaled=tensor('x0-rescaled'),mixed=tensor('x0-mixed'),final=tensor('prediction-final');
     const delta=tensor('delta'),controls=tensor('controls',[8]);
+    const rowStats=config.tokenRows===undefined?undefined:tensor('row-stats',[2,config.tokenRows,2]);
+    const moments=config.tokenRows===undefined?undefined:tensor('moments',[2,2]);
     const R='read-only-storage',W='storage';
     const groups=Math.ceil(plan.elements/256),limit=runtime.device?.limits?.maxComputeWorkgroupsPerDimension??65535;
     const x=Math.min(groups,limit),y=Math.ceil(groups/x);if(y>limit)throw new RangeError('sampler exceeds device dispatch capacity');
+    const rowGroups=config.tokenRows===undefined?0:Math.ceil(config.tokenRows/128);
+    const rowX=Math.min(rowGroups,limit),rowY=rowGroups?Math.ceil(rowGroups/rowX):0;
     const elementCode=code=>config.tokenRows===undefined?code:code.replaceAll('32768u',`${plan.elements}u`)
       .replaceAll('gid:vec3<u32>)','gid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>)')
       .replaceAll('let i=gid.x;','let i=gid.x+gid.y*grid.x*256u;');
@@ -193,7 +216,9 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
     const operations={positive:define('sampler-positive-snapshot',copyShader,[[modelPrediction,R],[positive,W]]),
       guidance:define('sampler-guidance',guidanceShader,[[positive,R],[modelPrediction,R],[controls,R],[guided,W]]),
       xstart:define('sampler-xstart',xstartShader,[[sample,R],[positive,R],[guided,R],[controls,R],[x0Positive,W],[x0Guided,W]]),
-      std:define('sampler-guidance-std',config.tokenRows===undefined?stdShader:sparseTokenStdShader(config.tokenRows),[[x0Positive,R],[x0Guided,R],[stds,W]],[2,1,1]),
+      rowStats:rowStats&&define('sampler-guidance-row-stats',sparseTokenRowStatsShader(config.tokenRows),[[x0Positive,R],[x0Guided,R],[rowStats,W]],[rowX,rowY,2]),
+      moments:moments&&define('sampler-guidance-moments',sparseTokenMomentsShader(config.tokenRows),[[rowStats,R],[moments,W]],[2,1,1]),
+      std:define('sampler-guidance-std',moments?sparseTokenStdShader:stdShader,moments?[[moments,R],[stds,W]]:[[x0Positive,R],[x0Guided,R],[stds,W]],[2,1,1]),
       rescale:define('sampler-guidance-rescale',rescaleShader,[[sample,R],[x0Guided,R],[stds,R],[controls,R],[rescaled,W],[mixed,W],[final,W]]),
       positiveFinal:define('sampler-final-snapshot',copyShader,[[positive,R],[final,W]]),
       guidedFinal:define('sampler-final-snapshot',copyShader,[[guided,R],[final,W]]),
@@ -219,7 +244,9 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
           await flow.run({timestep:step.modelTime,...(resident?{zeroConditioning:true}:{conditioning:negative})},invocation);
           await dispatch(operations.guidance,invocation);
           if(plan.guidanceRescale>0){
-            await dispatch(operations.xstart,invocation);await dispatch(operations.std,invocation);await dispatch(operations.rescale,invocation);
+            await dispatch(operations.xstart,invocation);
+            if(operations.rowStats){await dispatch(operations.rowStats,invocation);await dispatch(operations.moments,invocation);}
+            await dispatch(operations.std,invocation);await dispatch(operations.rescale,invocation);
           }else await dispatch(operations.guidedFinal,invocation);
         }else await dispatch(operations.positiveFinal,invocation);
         // Delta materialization reproduces the source mx.eval boundary before
@@ -235,7 +262,7 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
       running=true;try{return await fn();}finally{running=false;}
     };
     return Object.freeze({plan,runtime,routeId:route.routeId,outputs:Object.freeze({sample}),
-      diagnostics:Object.freeze({positive,guided,x0Positive,x0Guided,stds,rescaled,mixed,final,delta,negative:modelPrediction}),
+      diagnostics:Object.freeze({positive,guided,x0Positive,x0Guided,stds,...(rowStats?{rowStats,moments}:{}),rescaled,mixed,final,delta,negative:modelPrediction}),
       step(input={},invocation){return guarded(()=>stepCore({stepIndex:0,...input},invocation));},
       run({sample:initial,startStepIndex=0}={},invocation){return guarded(async()=>{
         if(!Number.isSafeInteger(startStepIndex)||!plan.steps[startStepIndex])throw new RangeError('start step outside complete source schedule');
