@@ -61,7 +61,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    setPaused(value){assertOpen();if(typeof value!=='boolean')throw Error('Pause must be Boolean');runtime.setSimulationPaused(value);return read();},
    frame(){assertOpen();host.scene.select(asset.id);return session.setView({position:[0,.1,4.5],target:[0,0,0]});},
   };
-  stop=session.onFrame(({deltaSeconds})=>{const kelvin=Number(doc.getElementById('volume-physical-kelvin-per-heat')?.value??1600);if(kelvin!==lastKelvin){lastKelvin=kelvin;if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{kelvinPerHeat:kelvin});}if(pulse>0){const state=app.burningState(asset.id);pulse=state.status==='resident'?Math.max(0,3-((state.state.fields[0].referenceSeconds??0)-ignitionStart)):0;if(!pulse){setFeed(false);sync();}}});operations.frame();
+  stop=session.onFrame(({deltaSeconds})=>{const kelvin=Number(doc.getElementById('volume-physical-kelvin-per-heat')?.value??1600);if(kelvin!==lastKelvin){lastKelvin=kelvin;app.setBurnAppearance(asset.id,{kelvinPerHeat:kelvin});}if(pulse>0){const state=app.burningState(asset.id);pulse=state.status==='resident'?Math.max(0,3-((state.state.fields[0].referenceSeconds??0)-ignitionStart)):0;if(!pulse){setFeed(false);sync();}}});operations.frame();
   return {read,operations,mount({root,document,invoke}){
    const field=document.createElement('textarea');field.rows=3;field.value=kiln.read().prompt;field.setAttribute('aria-label','Material study prompt');field.style.cssText='width:100%;box-sizing:border-box;background:#202327;color:#eee;padding:10px;border:1px solid #42464c;border-radius:6px;';
    field.onchange=()=>invoke('setPrompt',field.value).catch(error=>status.textContent=error.message);
