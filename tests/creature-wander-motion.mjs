@@ -55,3 +55,10 @@ free.advance(.05,{direction:[1,0]});admitted.advance(.05,{direction:[1,0],admit:
 const rotating=make({snapshot:priorProtected});let proposedAngle;rotating.advance(.1,{direction:[1,0],admit:({from,to,turnOnly})=>{if(turnOnly)proposedAngle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);return turnOnly?.5:0;}});
 assert.equal(rotating.read().elapsed,priorProtected.elapsed,'Blocked travel holds gait while a safe partial turn remains possible');
 assert.ok(Math.abs(rotating.read().path.direction[0]+Math.sin(proposedAngle*.5))<1e-9);assert.deepEqual(rotating.read().path.position,[0,0]);
+
+const freePhysical=make({area,position:[0,0],direction:[0,1],seed:22}),identityPhysical=make({snapshot:freePhysical.snapshot()});
+for(let i=0;i<90;i++){
+ freePhysical.advance(.01);const before=identityPhysical.snapshot(),proposed=identityPhysical.advance(.01);
+ identityPhysical.contact(before,{position:proposed.path.position,direction:proposed.path.direction});
+ assert.deepEqual(identityPhysical.snapshot(),freePhysical.snapshot(),'Physical feedback reshaped an unobstructed source-paced route');
+}
