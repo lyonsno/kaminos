@@ -5,9 +5,9 @@ import experiment from '../experiments/inference-kiln-material.experiment.mjs';
 import {createSceneBurning} from '../scene-burning.mjs';
 
 test('surface comparison preserves the resident body, evolved state and playback in both directions',async()=>{
- let created=0,disposed=0,steps=0,paused=false,profile='incineration';const objects=[];
+ let created=0,disposed=0,steps=0,paused=false,profile='incineration',flameActive=true;const objects=[];
  const emitter={id:'flame-emitter',type:'flame-emitter',object:new THREE.Object3D()};objects.push(emitter,{id:'flame-field'});
- const runtime={debugState:()=>({active:true,simulationPaused:paused}),setSimulationPaused:v=>paused=v,resetThermalExperimentFluid(){},
+ const runtime={debugState:()=>({active:flameActive,simulationPaused:paused}),setActive:async v=>{flameActive=v;},setSimulationPaused:v=>paused=v,resetThermalExperimentFluid(){},
   borrowThermalGpuContext:async()=>({device:{}}),bindGpuThermalConsumer:()=>()=>{}};
  const burning=createSceneBurning({objects:()=>objects.filter(x=>x.object),runtime:()=>runtime,
   createGas:async()=>({descriptor:{},dispose(){}}),createBody:async()=>{
@@ -17,11 +17,12 @@ test('surface comparison preserves the resident body, evolved state and playback
  const canvas={width:0,height:0};const ctx={measureText:s=>({width:s.length*30}),clearRect(){},fillText(){},getImageData(){
   const data=new Uint8ClampedArray(canvas.width*canvas.height*4);for(let y=20;y<70;y++)for(let x=20;x<170;x++)data[(y*canvas.width+x)*4+3]=255;return {data,width:canvas.width,height:canvas.height};}};canvas.getContext=()=>ctx;
  const ground={checked:true,onchange(){}},settings={'volume-flow-rate':.8,'volume-immersed-fuel':.7,'volume-ray-start-noise':true,'volume-ray-noise-animated':true};
- let bloom={enabled:false,strength:.25,radius:.1,threshold:1.1};const document={createElement:()=>canvas,getElementById:()=>ground,defaultView:{kaminosSceneAuthoring:app,kaminosSceneBloom:{read:()=>({settings:{...bloom}}),set:v=>Object.assign(bloom,v)}}};
+ let bloom={enabled:false,strength:.25,radius:.1,threshold:1.1};const document={createElement:()=>canvas,getElementById:()=>ground,defaultView:{kaminosSceneVisibility:{set(id,value){assert.equal(id,'flame-field');flameActive=value;}},kaminosSceneAuthoring:app,kaminosSceneBloom:{read:()=>({settings:{...bloom}}),set:v=>Object.assign(bloom,v)}}};
  const session={async attach(object,options){if(options.presentation)return {id:'stage',root:object};const row={id:'prompt',object,burnable:{enabled:false}};objects.push(row);return {id:row.id,root:object};},setView(){},onFrame:()=>()=>{},redraw(){},async dispose(){}};
- const host={controls:{document},scene:{open:async()=>session,objects:()=>objects,select(){},setTransform(id,pose){objects.find(x=>x.id===id).object.position.fromArray(pose.position);}},volume:{ready:Promise.resolve(),get:()=>runtime},flame:{open:async()=>({read:()=>({active:true,scene:{objects},settings:{domControls:Object.fromEntries(Object.entries(settings).map(([k,value])=>[k,{value}]))},clock:{}}),setControls:values=>Object.assign(settings,values)})}};
+ const host={controls:{document},scene:{open:async()=>session,objects:()=>objects,select(){},setTransform(id,pose){objects.find(x=>x.id===id).object.position.fromArray(pose.position);}},volume:{ready:Promise.resolve(),get:()=>runtime},flame:{open:async()=>({read:()=>({active:flameActive,scene:{objects},settings:{domControls:Object.fromEntries(Object.entries(settings).map(([k,value])=>[k,{value}]))},clock:{}}),setControls:values=>{if(!flameActive)throw Error('Flame runtime is not active');Object.assign(settings,values);}})}};
  const study=await experiment.create({host,inputs:{},record(){}});steps=200;runtime.setSimulationPaused(false);
  await study.operations.setAppearance('crust');assert.equal(study.read().combustion.state.fields[0].steps,200,'a display choice must retain the evolved field');assert.equal(created,1);assert.equal(disposed,0);assert.equal(paused,false);
  await study.operations.setAppearance('incineration');await study.operations.setAppearance('incineration');assert.equal(steps,200);assert.equal(created,1);assert.equal(disposed,0);assert.equal(paused,false);assert.equal(profile,'incineration');
- await study.dispose();await burning.dispose();assert.equal(disposed,1);
+ flameActive=false;await study.operations.reset();assert.equal(flameActive,true);assert.equal(study.read().combustion.state.fields[0].steps,0);
+ flameActive=false;await study.dispose();await burning.dispose();assert.equal(flameActive,true);assert.equal(disposed,2);
 });

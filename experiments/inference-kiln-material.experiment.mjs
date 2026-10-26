@@ -15,12 +15,20 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
  const assertOpen=()=>{if(closed)throw Error('Material study is closed');};
  const setFeed=enabled=>flame.setControls({'volume-flow-rate':enabled?2.5:0,'volume-immersed-fuel':enabled?.55:0});
  const settle=()=>app.settleCombustion();
+ const activate=async()=>{
+  if(flame.read().active)return;
+  // Reset, ignition and closing the study restore its initially visible fire.
+  // Visibility remains with the native editor and GPU activation with its host.
+  doc.defaultView.kaminosSceneVisibility.set('flame-field',true);
+  await runtime.setActive(true);await settle();
+ };
  const read=()=>({...kiln.read(),objectId:asset.id,ignition:mode,heating:pulse>0,paused:runtime.debugState().simulationPaused,
   combustion:app.burningState(asset.id),bloom:bloom.read(),glow,flame:flame.read().clock,scope:'native-material-study-no-model-inference'});
  const sync=()=>{if(status)status.textContent=pulse>0?'Igniting the lettering…':'Heating is off. The material continues responding.';syncFields();};
- const reset=async()=>{if(closed)throw Error('Material study is closed');runtime.setSimulationPaused(true);pulse=0;setFeed(false);
+ const reset=async()=>{if(closed)throw Error('Material study is closed');runtime.setSimulationPaused(true);await activate();pulse=0;setFeed(false);
   app.setBurnable(asset.id,false);await settle();runtime.resetThermalExperimentFluid();app.setBurnable(asset.id,true);await settle();applyGlow();session.redraw();sync();return read();};
  async function dispose(){if(closed)return;closed=true;stop();
+  if(runtime&&flame&&!flame.read().active){runtime.setSimulationPaused(true);await activate();}
   try{if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,false);await settle();}}
   finally{try{await session.dispose();}finally{kiln?.dispose();if(restoreBloom)bloom.set(restoreBloom);if(cameraMatch)cameraMatch.checked=savedCameraMatch;if(restore)flame.setControls(restore);if(emitterPose&&host.scene.objects().some(row=>row.id===emitter.id))host.scene.setTransform(emitter.id,emitterPose);if(runtime)runtime.setSimulationPaused(paused);if(ground){ground.checked=groundVisible;ground.onchange({target:ground});}}}
  }
@@ -40,12 +48,12 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   emitter=host.scene.objects().find(entry=>entry.type==='flame-emitter');if(!emitter)throw Error('Scene flame emitter is absent');
   emitterPose={position:emitter.object.position.toArray(),rotation:[emitter.object.rotation.x,emitter.object.rotation.y,emitter.object.rotation.z],scale:emitter.object.scale.toArray()};
   const operations={read,
-   async setPrompt(value){if(typeof value!=='string'||!value.trim())throw Error('Enter a prompt to burn');if(closed)throw Error('Material study is closed');runtime.setSimulationPaused(true);pulse=0;setFeed(false);app.setBurnable(asset.id,false);await settle();kiln.setPrompt(value);app.setBurnable(asset.id,true);await settle();applyGlow();host.scene.refreshPresentation(asset);record({kind:'kiln.material.prompt',effective:read()});return read();},
+   async setPrompt(value){if(typeof value!=='string'||!value.trim())throw Error('Enter a prompt to burn');if(closed)throw Error('Material study is closed');runtime.setSimulationPaused(true);await activate();pulse=0;setFeed(false);app.setBurnable(asset.id,false);await settle();kiln.setPrompt(value);app.setBurnable(asset.id,true);await settle();applyGlow();host.scene.refreshPresentation(asset);record({kind:'kiln.material.prompt',effective:read()});return read();},
    setGlow(value){assertOpen();if(!Number.isFinite(value)||value<0)throw Error('Invalid incineration glow');if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{glow:value});glow=value;session.redraw();sync();record({kind:'kiln.material.glow',effective:read()});return read();},
    setBloom(value){assertOpen();bloom.set(value);sync();record({kind:'kiln.material.bloom',effective:read()});return read();},
    setAppearance(value){assertOpen();if(!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');app.setBurnAppearance(asset.id,{profile:value,glow});kiln.setAppearance(value);session.redraw();sync();record({kind:'kiln.material.appearance',effective:read()});return read();},
    setIgnition(value){assertOpen();if(!['lettering','below'].includes(value))throw Error('Unknown ignition placement');mode=value;sync();return read();},
-   ignite(){if(closed)throw Error('Material study is closed');const center=kiln.text.position.toArray();
+   async ignite(){if(closed)throw Error('Material study is closed');await activate();const center=kiln.text.position.toArray();
     const position=[center[0],mode==='below'?center[1]-.4:center[1],mode==='below'?center[2]:center[2]-.1];
     host.scene.setTransform(emitter.id,{position,rotation:mode==='below'?[0,0,0]:[Math.PI/2,0,0],scale:emitterPose.scale});
     ignitionStart=app.burningState(asset.id).state?.fields?.[0]?.referenceSeconds??0;pulse=3;setFeed(true);runtime.setSimulationPaused(false);sync();record({kind:'kiln.material.ignite',effective:read()});return read();},
