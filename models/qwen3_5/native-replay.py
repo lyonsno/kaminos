@@ -131,14 +131,16 @@ def run_native(args, browser, report):
         report['summary'] = {'promptTokens':len(prompt),'decodeCalls':len(generated),'predictions':len(report['calls']),
           'prefillMs':report['calls'][0]['ms'],'decodeMs':decode_ms,'decodeTokensPerSecond':1000*len(generated)/decode_ms,
           'greedyMatches':len(report['calls'])-len(report['greedyMismatches'])}
-        report['sourceAfter'] = source_identity()
-        if report['sourceAfter'] != report['source']:
-            raise ValueError('native replay source changed during execution')
-        report.update(status='passed',phase='complete')
     finally:
+        prior_phase = report['phase']; report['phase'] = 'native-cleanup'
         cache = None; model = None
         mx.synchronize(); mx.clear_cache()
         report['cleanup'] = {'cacheDiscarded':True,'allocatorCacheCleared':True}
+        report['phase'] = prior_phase
+    report['sourceAfter'] = source_identity()
+    if report['sourceAfter'] != report['source']:
+        raise ValueError('native replay source changed during execution')
+    report.update(status='passed',phase='complete')
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -158,6 +160,7 @@ def main():
         browser = admit_browser(args.browser_report, args.expected_browser_sha256)
         run_native(args, browser, report)
     except BaseException:
+        report['status'] = 'failed'
         report['error'] = traceback.format_exc()
     finally:
         args.report.parent.mkdir(parents=True, exist_ok=True)

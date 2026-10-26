@@ -1,6 +1,8 @@
 # kaminos-test: python
 import hashlib
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -58,5 +60,21 @@ class ReplayTests(unittest.TestCase):
             self.assertEqual(result.returncode,1)
             saved=json.loads(report.read_text()); self.assertEqual(saved['phase'],'browser-admission')
             self.assertIn('SHA256',saved['error'])
+
+    def test_cleanup_failure_cannot_preserve_an_earlier_success_status(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); source=root/'browser.json'; raw=json.dumps(fixture()).encode(); source.write_bytes(raw)
+            report=root/'report.json'; original=replay.run_native; argv=sys.argv
+            def broken_cleanup(args,browser,state):
+                state.update(status='passed',phase='native-cleanup')
+                raise RuntimeError('cleanup fence failed')
+            try:
+                replay.run_native=broken_cleanup
+                sys.argv=[str(SCRIPT),'--browser-report',str(source),'--expected-browser-sha256',hashlib.sha256(raw).hexdigest(),
+                  '--model-dir',str(root/'model'),'--out',str(root/'out'),'--report',str(report)]
+                with contextlib.redirect_stdout(io.StringIO()): result=replay.main()
+                self.assertEqual(result,1)
+                saved=json.loads(report.read_text()); self.assertEqual(saved['status'],'failed'); self.assertIn('cleanup fence failed',saved['error'])
+            finally: replay.run_native=original; sys.argv=argv
 
 if __name__ == '__main__': unittest.main()
