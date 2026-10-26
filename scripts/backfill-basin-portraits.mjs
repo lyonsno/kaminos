@@ -50,10 +50,10 @@ try{
    await evaluate(`portraitFlame.applyBasin(${JSON.stringify(entry.presetId)})`);
    phase('field-warm');
    item.application=await evaluate('({clamps:window.__kaminosFlameBasinClampReport,source:portraitFlame.settings().source})');
-   item.warm=await evaluate(`(async()=>{const p=window.__kaminosVolumePrototype;while(!p?.debugState().active)await new Promise(r=>setTimeout(r,50));const start=p.debugState().simStepCount;const r=await p.pauseSelectiveHeadLiveAtSimStep(start+${steps});if(!r.ok)throw Error(JSON.stringify(r));return {start,requestedSteps:${steps},receipt:r,settings:portraitFlame.settings(),runtime:p.debugState()};})()`);
+   item.warm=await evaluate(`(async()=>{const p=window.__kaminosVolumePrototype;while(!p?.debugState().active)await new Promise(r=>setTimeout(r,50));const {warmFlamePortraitField}=await import('./flame-portrait.mjs');return warmFlamePortraitField(portraitFlame,p,${steps});})()`);
    phase('portrait-capture');
    const capture=await evaluate(`(async()=>{const before=portraitFlame.read().view,settings=portraitFlame.settings(),p=await portraitFlame.capturePortrait({origin:${JSON.stringify(smoke?'current-field':'backfill')}}),after=portraitFlame.read().view;if(JSON.stringify(before)!==JSON.stringify(after))throw Error('Capture changed the operator camera');if(JSON.stringify(settings)!==JSON.stringify(portraitFlame.settings()))throw Error('Capture changed settings');return p;})()`);
-   capture.basinApplication={presetId:entry.presetId,clamps:item.application.clamps,projection:item.application.source?.serverProjection,appearanceModel:item.warm.runtime.appearanceModel};
+   capture.basinApplication={presetId:entry.presetId,clamps:item.application.clamps,projection:item.application.source?.serverProjection,appearanceModel:item.warm.runtime.appearanceModel,warmupOverride:item.warm.warmupOverride};
    item.portrait=capture;writeFileSync(out+'/'+entry.presetId+'.png',Buffer.from(capture.image.split(',')[1],'base64'));
    if(smoke){
     phase('endpoint-library-exercise');

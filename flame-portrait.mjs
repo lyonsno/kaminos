@@ -64,3 +64,14 @@ export async function readOptionalFlamePortrait(presetId,{fetch=globalThis.fetch
   const cover=await response.json();if(!cover?.portrait?.image)throw Error('Cover image is missing');return {portrait:cover.portrait};
  }catch(error){return {portraitError:'Basin portrait could not be read: '+error.message};}
 }
+
+// Only batch preparation starts a new field. A stored freeze flag is restored
+// before its portrait; ordinary Save/Capture never warms or resets the flame.
+export async function warmFlamePortraitField(flame,runtime,steps){
+ if(!Number.isInteger(steps)||steps<=0)throw Error('Warmup needs a positive step count');
+ if(!runtime.debugState().active)throw Error('Flame runtime is inactive');
+ const before=flame.settings(),frozen=Number(before.domControls['volume-look-freeze']?.value)>=.5,start=runtime.debugState().simStepCount;
+ let receipt;try{if(frozen)flame.setPaused(false);receipt=await runtime.pauseSelectiveHeadLiveAtSimStep(start+steps);if(!receipt.ok)throw Error(JSON.stringify(receipt));}
+ finally{if(frozen)flame.setPaused(true);}
+ return {start,requestedSteps:steps,receipt,settings:flame.settings(),runtime:runtime.debugState(),warmupOverride:frozen?{lookFreeze:0,restored:before.domControls['volume-look-freeze'].value}:null};
+}

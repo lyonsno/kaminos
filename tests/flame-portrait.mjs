@@ -48,3 +48,12 @@ test('optional cover outages preserve basin loading with an explicit pending war
  }
  assert.deepEqual(await module.readOptionalFlamePortrait('vsp-example',{fetch:async()=>({ok:false,status:404})}),{});
 });
+test('backfill warmup restores authored freeze before capturing and after failure',async()=>{
+ assert.equal(typeof module.warmFlamePortraitField,'function','Frozen basin warmup is unavailable');
+ for(const fail of [false,true]){let frozen=1,steps=2;const changes=[];
+ const flame={settings:()=>({domControls:{'volume-look-freeze':{value:frozen}}}),setPaused(value){frozen=value?1:0;changes.push(frozen);}};
+ const runtime={debugState:()=>({active:true,simStepCount:steps}),async pauseSelectiveHeadLiveAtSimStep(target){assert.equal(frozen,0);if(fail)throw Error('GPU failure');steps=target;return {ok:true,effectiveSimStepCount:steps};}};
+ if(fail)await assert.rejects(module.warmFlamePortraitField(flame,runtime,90),/GPU failure/);else{const result=await module.warmFlamePortraitField(flame,runtime,90);assert.equal(result.receipt.effectiveSimStepCount,92);assert.equal(result.settings.domControls['volume-look-freeze'].value,1);assert.equal(result.warmupOverride.lookFreeze,0);}
+ assert.deepEqual(changes,[0,1]);assert.equal(frozen,1);
+ }
+});
