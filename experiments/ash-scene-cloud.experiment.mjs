@@ -16,7 +16,7 @@ export default {id:'ash-scene-cloud',title:'Ash — across the scene',async crea
    cloudTime(value){if(!Number.isFinite(value)||value<0)throw Error('Invalid cloud time');paused=true;seconds=value;atmosphere.tick(seconds);session.redraw();return read();},
    cloudPlay(value){if(typeof value!=='boolean')throw Error('Cloud playback requires Boolean');paused=!value;last=null;return read();},
    wide(){return session.setView({position:[6,3.4,8],target:[0,.7,0]});},
-   renderProfile:async()=>{const renderer=host.scene.renderer();if(!renderer.backend.trackTimestamp)throw Error('Render timestamps not enabled on this route');const ms=await renderer.resolveTimestampsAsync('render');if(!Number.isFinite(ms))throw Error('Render timestamps unavailable');return {ms,scope:'Three render passes since previous resolve; flame canvas and ash raw compute excluded',drawingBuffer:[renderer.domElement.width,renderer.domElement.height]};},
+   renderProfile:async()=>{const renderer=host.scene.renderer();if(!renderer.backend.trackTimestamp)throw Error('Render timestamps not enabled on this route');const ms=await renderer.resolveTimestampsAsync('render');if(!Number.isFinite(ms))throw Error('Render timestamps unavailable');return {ms,scope:'Three last collected frame total render duration; flame canvas and ash raw compute excluded',drawingBuffer:[renderer.domElement.width,renderer.domElement.height]};},
    view:value=>value?session.setView(value):session.readView(),
    flame:async({presetId,controls}={})=>{const f=await host.flame.open();if(presetId)await f.applyBasin(presetId);if(controls)f.setControls(controls);return f.read();},
    listBasins:async()=>{const f=await host.flame.open();return f.listBasins();},

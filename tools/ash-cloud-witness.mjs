@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
+import {acceptAshFlameRaster} from './ash-cloud-contracts.mjs';
 const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
 const out=resolve(args.get('--out')),repo=resolve(args.get('--repo')),origin=args.get('--url'),profile=args.get('--profile')==='yes',width=Number(args.get('--width')??1440),height=Number(args.get('--height')??1000);
 mkdirSync(out,{recursive:true});let browser,page;
@@ -12,7 +13,7 @@ const write=()=>writeFileSync(resolve(out,'report.json'),JSON.stringify(report,n
 const hash=buffer=>createHash('sha256').update(buffer).digest('hex');
 try{
  report.server=await verifyAuthoringServer({origin,repoRoot:repo});report.hashes={};
- for(const path of ['index.html','volume-core.js','ash/atmosphere-plan.mjs','ash/atmosphere-gpu.mjs','experiments/ash-scene-cloud.experiment.mjs','tools/ash-cloud-witness.mjs']){const response=await fetch(new URL(path,origin));assert.ok(response.ok,path);assert.equal(hash(Buffer.from(await response.arrayBuffer())),hash(readFileSync(resolve(repo,path))));report.hashes[path]=hash(readFileSync(resolve(repo,path)));}
+ for(const path of ['index.html','volume-core.js','ash/atmosphere-plan.mjs','ash/atmosphere-gpu.mjs','experiments/ash-scene-cloud.experiment.mjs','tools/ash-cloud-witness.mjs','tools/ash-cloud-contracts.mjs']){const response=await fetch(new URL(path,origin));assert.ok(response.ok,path);assert.equal(hash(Buffer.from(await response.arrayBuffer())),hash(readFileSync(resolve(repo,path))));report.hashes[path]=hash(readFileSync(resolve(repo,path)));}
  report.launch=fluidBrowserLaunch({executable:args.get('--browser'),debugPort:0,userDataDir:resolve(out,'profile'),width,height});
  const {chromium}=await import(args.get('--playwright'));browser=await chromium.launchPersistentContext(resolve(out,'profile'),{executablePath:report.launch.executable,headless:true,viewport:{width,height},deviceScaleFactor:report.requested.dpr,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--disable-gpu-sandbox','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  if(args.get('--negative-hidden')==='yes'){
@@ -52,16 +53,18 @@ try{
   if(args.get('--basin')){
    report.phase='same-field-flame-profile';write();
    report.flameProfiles=await page.evaluate(async()=>{
-    const v=window.__kaminosVolumePrototype,original=v.sharedAshAtmosphere(),results=[];
-    v.setSelectiveHeadLiveCapturePaused(true);
+    const {acceptAshFlameRaster}=await import('/tools/ash-cloud-contracts.mjs');
+    const v=window.__kaminosVolumePrototype,original=v.sharedAshAtmosphere(),results=[],wasPaused=v.debugState().simulationPaused;
+    v.setSimulationPaused(true);v.setSelectiveHeadLiveCapturePaused(true);let expected=null;
     try{for(const enabled of [false,true,false,true]){
      v.setSharedAshAtmosphere({...original,density:enabled?original.density:0});const samples=[];
-     for(let n=0;n<24;n++){const r=await v.captureSelectiveHeadLiveFrame({advanceSim:false,presentToCanvas:true,collectGpuTiming:true,now:10000,presentationArm:enabled?'ash-on':'ash-off'});if(!r.ok||r.gpuStageTiming?.timestampStatus!=='available')throw Error('Flame GPU timing failed: '+JSON.stringify(r));samples.push({width:r.width,height:r.height,simStepCount:r.simStepCount,route:r.selectiveHeadLivePassReceipt,timing:r.gpuStageTiming});}
+     for(let n=0;n<24;n++){const r=await v.sampleEmissiveRaymarchProfile({now:10000});if(!acceptAshFlameRaster(r,expected))throw Error('Ordinary flame raster admission failed: '+JSON.stringify(r));expected??=r;samples.push(r);}
      results.push({enabled,samples});
-    }}finally{v.setSharedAshAtmosphere(original);v.setSelectiveHeadLiveCapturePaused(false);}return results;
+    }}finally{v.setSharedAshAtmosphere(original);v.setSimulationPaused(wasPaused);v.setSelectiveHeadLiveCapturePaused(false);}return results;
    });write();
   }
  }
+ if(report.flameProfiles)for(const arm of report.flameProfiles)for(const sample of arm.samples)assert.ok(acceptAshFlameRaster(sample,report.flameProfiles[0].samples[0]));
  report.phase='cleanup';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);if(page){report.lastPage=await page.evaluate(()=>({text:document.body.innerText,state:window.kaminosWorkbenchExperiments?.state()})).catch(String);await page.screenshot({path:resolve(out,'failed.png')}).catch(()=>{});}process.exitCode=1;
 }finally{await browser?.close();report.browserClosed=true;write();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:resolve(out,'report.json')}));}
