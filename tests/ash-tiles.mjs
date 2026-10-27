@@ -41,3 +41,11 @@ test('cached face contract removes internal faces and retains fractional side st
  assert.ok(!faces.some(f=>f.cell===1&&f.face===0));
  assert.equal(exposedFaces(p,new Float32Array([1,1])).length,10);
 });
+test('removing a settled contact wakes the material it held above an empty cell',()=>{
+ const p=patchLayout({cellSize:1,bounds:{min:[0,0,0],max:[1,2,1]},tileSize:1}),contact=[.5,.5,.5,.6];
+ const held=referenceTileStep(p,{values:[0,1],pending:new Set([1]),contact});
+ assert.deepEqual(Array.from(held.values),[0,1]);assert.equal(held.pending.size,0);
+ const removed=referenceTileStep(p,{values:held.values,pending:held.pending,previous:contact});
+ const full=referenceTileStep(p,{values:held.values,previous:contact,all:true});
+ assert.deepEqual(Array.from(removed.values),Array.from(full.values));assert.deepEqual(Array.from(removed.values),[1,0]);
+});
