@@ -116,6 +116,40 @@ class LimoQuantizationTests(unittest.TestCase):
                 quant.main(['--output-dir', temp, '--route-check'])
             self.assertEqual((Path(temp) / 'conversion.json').read_bytes(), before)
 
+    def test_actual_clip_nonpersistent_positions_survive_meta_reload(self):
+        from transformers import CLIPTextConfig, CLIPTextModel
+        config = CLIPTextConfig(vocab_size=32, hidden_size=32, intermediate_size=64,
+                               num_hidden_layers=1, num_attention_heads=4)
+        for bits in (4, 8):
+            with self.subTest(bits=bits), tempfile.TemporaryDirectory() as temp:
+                torch.manual_seed(7)
+                model = CLIPTextModel(config).half().eval()
+                quant.quantize_linears(model, bits)
+                tokens = torch.tensor([[1, 2, 3, 4]])
+                with torch.no_grad():
+                    expected = model(tokens).last_hidden_state
+                root = Path(temp) / 'model'
+                quant.save_package(model, root, {})
+                with torch.device('meta'):
+                    target = CLIPTextModel(config).half()
+                restored, _ = quant.load_package(target, root)
+                restored.to('cpu')
+                self.assertFalse(any(value.is_meta for value in restored.buffers()))
+                with torch.no_grad():
+                    torch.testing.assert_close(restored(tokens).last_hidden_state, expected, rtol=0, atol=0)
+
+    def test_output_storage_failure_is_recorded_on_independent_report_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'unavailable'
+            output.write_text('not a directory')
+            report = Path(temp) / 'reports' / 'terminal.json'
+            with self.assertRaises(FileExistsError):
+                quant.main(['--output-dir', str(output), '--report-path', str(report), '--route-check'])
+            result = json.loads(report.read_text())
+            self.assertEqual(result['status'], 'failed')
+            self.assertEqual(result['phase'], 'initialization')
+            self.assertIn('FileExistsError', result['error'])
+
 
 if __name__ == '__main__':
     unittest.main()

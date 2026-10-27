@@ -84,8 +84,15 @@ def load_package(model, root):
     # Quanto's requantize materializes full float parameters before loading. Assign
     # directly into a meta model instead, so reload retains the memory benefit.
     model.load_state_dict(state, strict=False, assign=True)
+    from transformers.models.clip.modeling_clip import CLIPTextEmbeddings
+    for module in model.modules():
+        if isinstance(module, CLIPTextEmbeddings) and module.position_ids.is_meta:
+            module.register_buffer('position_ids', torch.arange(module.position_embedding.num_embeddings)
+                                   .expand((1, -1)), persistent=False)
     if any(parameter.device.type == 'meta' for parameter in model.parameters()):
         raise ValueError('unloaded meta parameter')
+    if any(buffer.device.type == 'meta' for buffer in model.buffers()):
+        raise ValueError('unloaded meta buffer')
     if tensor_specs(model.state_dict()) != record['tensors']:
         raise ValueError('loaded tensor coverage mismatch')
     for name, config in record['quantization'].items():
@@ -191,9 +198,11 @@ def main(argv=None):
     parser.add_argument('--bits', choices=(4, 8), type=int, default=4)
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--support', type=Path)
+    parser.add_argument('--report-path', type=Path,
+                        help='Keep the terminal report on stable storage independently of model output')
     args = parser.parse_args(argv)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    path = args.output_dir / 'conversion.json'
+    path = args.report_path or args.output_dir / 'conversion.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         raise FileExistsError('preserve prior conversion; choose a fresh output directory')
     report = {'schema': 'kaminos.limo-compression.v1', 'status': 'failed', 'phase': 'initialization',
@@ -205,6 +214,7 @@ def main(argv=None):
         print(name, flush=True)
     phase('initialization')
     try:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
         if args.route_check:
             route_check(args, report, phase)
         else:
