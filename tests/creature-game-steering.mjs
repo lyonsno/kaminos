@@ -5,7 +5,7 @@ import {createWalkingCreature,prepareWalkingSetup} from '../experiments/creature
 class Element {constructor(){this.children=[];this.style={};}append(...xs){this.children.push(...xs);}setAttribute(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null};
 const scene=new THREE.Scene();let tick=null,calls=0,hold=true,invalid=false,received;
-const session={async attach(root){scene.add(root);return {id:root.uuid,root,owned:true};},onFrame(fn){assert.equal(tick,null);tick=fn;return ()=>tick=null;},redraw(){},readView:()=>({}),async dispose(){scene.clear();tick=null;}};
+const session={async attach(root){scene.add(root);return {id:root.uuid,root,owned:true};},onFrame(fn){assert.equal(tick,null);tick=fn;return ()=>tick=null;},redraw(){},setView(){},readView:()=>({}),async dispose(){scene.clear();tick=null;}};
 const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
 const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[0,.2,0,0,.2,1,0,.2,2],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
 let destination=[6,0,4];
@@ -35,8 +35,22 @@ assert.equal(restB.restMotion.source.motionSha256,'d'.repeat(64));assert.equal(r
 hold=false;tick({deltaSeconds:.1});assert.ok(resting.read().action.motion.path.distance>0);assert.ok(resting.read().restMotion.weight<1);
 tick({deltaSeconds:.3});assert.equal(resting.read().restMotion.weight,0,'Resumed pursuit must return to the locomotion source');
 await resting.dispose();assert.equal(scene.children.length,0);assert.equal(tick,null);
+for(const scenario of ['partial-entry','standing','partial-resume']){
+ hold=true;
+ const dependencies={loadSources:async inputs=>inputs.motion==='/rest.json'?restData:data,steering};
+ const item=await createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{blend_frames:1,radius:20,rest:{motion:'/rest.json',motion_sha256:'d'.repeat(64),blend_seconds:.3}}},dependencies);
+ await item.operations.action({kind:'wander'});tick({deltaSeconds:scenario==='partial-entry'?.1:.33});
+ if(scenario==='partial-resume'){hold=false;tick({deltaSeconds:.1});}
+ item.operations.pause();const saved=item.read();await item.dispose();
+ const reopened=await createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:saved.recipe},dependencies),restored=reopened.read();
+ assert.deepEqual(restored.restMotion,saved.restMotion,'Paused '+scenario+' reconstruction must preserve rest playback and transition state');
+ assert.deepEqual(restored.playback.actualLocalPose,saved.playback.actualLocalPose,'Paused '+scenario+' must present the exact saved body pose before any clock step');
+ assert.deepEqual(restored.action.motion.path.position,saved.action.motion.path.position);assert.equal(tick,null,'Rest reconstruction must not start the shared clock');
+ await reopened.dispose();assert.equal(scene.children.length,0);
+}
 const restRecipe={rest:{motion:'/rest.json',motion_sha256:'d'.repeat(64),blend_seconds:.3}};
 await assert.rejects(()=>prepareWalkingSetup(restRecipe,{loadSources:async inputs=>inputs.motion==='/rest.json'?{...restData,source:{...restData.source,frameSha256:'e'.repeat(64)}}:data}),/bind frame/);
 await assert.rejects(()=>prepareWalkingSetup({...restRecipe,rest:{...restRecipe.rest,blend_seconds:0}},{loadSources:async()=>data}),/blend duration/);
 await assert.rejects(()=>prepareWalkingSetup(restRecipe,{loadSources:async inputs=>{if(inputs.motion==='/rest.json')throw Error('Rest source digest mismatch');return data;}}),/digest mismatch/);
+await assert.rejects(()=>prepareWalkingSetup({...restRecipe,rest:{...restRecipe.rest,state:{schema:'kaminos.creature-rest-motion.v1',sourceKey:'wrong-rest-source',weight:1,elapsed:.33,resting:true,blendSeconds:.3,seamFrames:2}}},{loadSources:async inputs=>inputs.motion==='/rest.json'?restData:data}),/snapshot/,'Preflight must reject a snapshot for a different retained rest source');
 console.log('Game steering uses the actual shared clock, world frame, gait hold and failure cleanup');

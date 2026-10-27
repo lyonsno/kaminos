@@ -1,12 +1,17 @@
 // A retained standing clip supplies posture; the journey still owns position
 // and heading. No stopped gait frame or accumulated source drift drives it.
-export function createRestMotion({THREE,adapter,blendSeconds=.3,seamFrames=Math.min(6,adapter.frames-1)}){
+export function createRestMotion({THREE,adapter,sourceKey,blendSeconds=.3,seamFrames=Math.min(6,adapter.frames-1),snapshot}){
+ if(typeof sourceKey!=='string'||!sourceKey)throw Error('Rest requires retained source identity');
  if(!Number.isFinite(blendSeconds)||blendSeconds<=0)throw Error('Rest blend duration must be positive');
  if(!Number.isInteger(seamFrames)||seamFrames<1||seamFrames>=adapter.frames)throw Error('Rest seam must fit the retained clip');
  const poses=Array.from({length:adapter.frames},(_,i)=>adapter.frame(i));
  if(poses.length<2)throw Error('Rest requires a multi-frame retained motion');
  const root=poses[0].bones.findIndex(b=>b.parent===null);
  let amount=0,elapsed=0,resting=false;
+ if(snapshot!==undefined){
+  if(snapshot?.schema!=='kaminos.creature-rest-motion.v1'||snapshot.sourceKey!==sourceKey||snapshot.blendSeconds!==blendSeconds||snapshot.seamFrames!==seamFrames||!Number.isFinite(snapshot.weight)||snapshot.weight<0||snapshot.weight>1||!Number.isFinite(snapshot.elapsed)||snapshot.elapsed<0||typeof snapshot.resting!=='boolean')throw Error('Rest snapshot time, transition, source or configuration differs');
+  amount=snapshot.weight;elapsed=snapshot.elapsed;resting=snapshot.resting;
+ }
  const matrix=a=>new THREE.Matrix4().fromArray(a);
  function blendMatrix(a,b,t){
   const ap=new THREE.Vector3(),aq=new THREE.Quaternion(),as=new THREE.Vector3(),bp=new THREE.Vector3(),bq=new THREE.Quaternion(),bs=new THREE.Vector3();
@@ -40,5 +45,5 @@ export function createRestMotion({THREE,adapter,blendSeconds=.3,seamFrames=Math.
   for(const row of result.bones)world(row);
   return {...result,derived:true};
  }
- return {advance,frame,read:()=>({resting,weight:amount,elapsed,blendSeconds,seamFrames,frames:adapter.frames,fps:adapter.fps,rootTravel:'journey-owned',sourceVertical:true})};
+ return {advance,frame,snapshot:()=>({schema:'kaminos.creature-rest-motion.v1',sourceKey,weight:amount,elapsed,resting,blendSeconds,seamFrames}),read:()=>({resting,weight:amount,elapsed,blendSeconds,seamFrames,frames:adapter.frames,fps:adapter.fps,rootTravel:'journey-owned',sourceVertical:true})};
 }

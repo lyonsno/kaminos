@@ -65,7 +65,8 @@ async function prepareRestSetup(inputs,data,loadSources){
  const rest=await loadSources({...inputs,motion:inputs.rest.motion,motion_sha256:inputs.rest.motion_sha256,motion_data:inputs.rest.motion_data,prefix:inputs.rest.prefix,prefix_sha256:inputs.rest.prefix_sha256});
  if(rest.source.caseSha256!==data.source.caseSha256||rest.source.frameSha256!==data.source.frameSha256||rest.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Rest motion body, bind frame or conditioning differs');
  const adapter=createGivenPaletteMotion({THREE,motion:rest.motion,rigFrame:data.frame});
- const motion=createRestMotion({THREE,adapter,blendSeconds:inputs.rest.blend_seconds??.3});
+ const sourceKey=[rest.source.caseSha256,rest.source.frameSha256,rest.source.motionSha256].join(':');
+ const motion=createRestMotion({THREE,adapter,sourceKey,blendSeconds:inputs.rest.blend_seconds??.3,snapshot:inputs.rest.state});
  return {motion,source:rest.source};
 }
 export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySources}={}){
@@ -127,7 +128,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   motionWorkspace:workspace?.read()??null,restMotion:restMotion?{...restMotion.read(),source:structuredClone(restSetup.source)}:null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{time:clock/1000,steering:steering?.read()??null,engagement:{...engagement.read(),enabled:!steering&&chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+  recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),...(restMotion?{rest:{...structuredClone(chosenInputs.rest),state:restMotion.snapshot()}}:{}),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
 
 
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
