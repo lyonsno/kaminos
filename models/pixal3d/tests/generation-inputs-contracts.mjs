@@ -32,11 +32,11 @@ const baseManifest = {
   models: {
     naf: {
       config: {
-        dim: 128,
+        dim: 256,
         headsAttn: 4,
         headsRope: 4,
         imgLayers: 2,
-        numGroups: 32,
+        numGroups: 8,
         kernelSize: 9,
         imageHeight: 512,
         imageWidth: 512,
@@ -48,11 +48,11 @@ const baseManifest = {
         outputWidth: 512,
       },
       highResolutionConfig: {
-        dim: 128,
+        dim: 256,
         headsAttn: 4,
         headsRope: 4,
         imgLayers: 2,
-        numGroups: 32,
+        numGroups: 8,
         kernelSize: 9,
         imageHeight: 1024,
         imageWidth: 1024,
@@ -64,11 +64,11 @@ const baseManifest = {
         outputWidth: 512,
       },
       textureConfig: {
-        dim: 128,
+        dim: 256,
         headsAttn: 4,
         headsRope: 4,
         imgLayers: 2,
-        numGroups: 32,
+        numGroups: 8,
         kernelSize: 9,
         imageHeight: 1024,
         imageWidth: 1024,
