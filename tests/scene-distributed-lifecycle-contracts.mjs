@@ -25,10 +25,11 @@ function fixture(castShadow=true) {
   const scene=new THREE.Scene();scene.add(mesh);
   const statuses=[];
   const emitter={position:[0,-.76,0],radius:.19,height:2.2,depth:.24};
-  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,onStatus:s=>statuses.push(s)});
+  const regions=[{id:'left',lo:[-.8,-.8,-.8],hi:[-.1,.8,.8]},{id:'right',lo:[.1,-.8,-.8],hi:[.8,.8,.8]}];
+  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,getSourceRegions:()=>regions,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
   prototype.sceneVolumeSourceField=()=>field.source;
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,regions,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
 if(!selected||selected==='domain'){
@@ -68,6 +69,27 @@ if(!selected||selected==='source-guide'){
  assert.equal(f.mount.debugState().geometryBuilds,1,'guide changes retain receivers/caster BVH');
  f.mount.setDirections(16);f.prepare();assert.equal(f.mount.debugState().frame.angularCache.lastPreparedDirections,4,'guided count growth reuses fixed prefixes');
  assert(f.buffers.find(b=>b.label==='source guide bounds').usage&GPUBufferUsage.COPY_SRC,'inspection must copy consumed guide uniform');
+ f.mount.dispose();
+}
+if(!selected||selected==='source-regions'){
+ const f=fixture();f.mount.setAngularPattern('regions');f.mount.setDirections(24);f.prepare();
+ let s=f.mount.debugState().frame;assert.equal(s.angularPattern,'regions');assert.deepEqual(s.sourceGuide.counts,[6,9,9]);
+ assert.equal(s.angularCache.preparedRayDirections,24);
+ f.field.source.generation++;f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,24,'new emission reuses stable regional visibility');
+ f.regions.reverse();f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,24,'source iteration order does not change ray identity');
+ f.mount.setDirections(48);f.prepare();s=f.mount.debugState().frame;
+ assert.equal(s.angularCache.preparedRayDirections,48);assert.equal(s.angularCache.lastPreparedDirections,24,'count growth traces only the new prefix');
+ f.mount.setDirections(24);f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,48,'count reduction retains the longer prefix');
+ f.regions[0].hi[0]=.9;f.prepare();s=f.mount.debugState().frame;
+ assert.equal(s.angularCache.preparedRayDirections,72,'changed bounds prepare new rays');assert.equal(s.angularCache.lastPreparedDirections,24);
+ assert.equal(f.mount.debugState().geometryBuilds,1,'regional changes preserve receiver and caster topology');
+ assert.equal(f.uploads.length,1,'regional changes do not reupload receiver rows');
+ const prior=s;f.regions[0].hi[0]=2;
+ assert.throws(()=>f.prepare(),/positive extent inside the volume/);
+ assert.equal(f.mount.debugState().frame,prior,'invalid bounds retain the last effective frame for diagnosis');
+ f.regions[0].hi[0]=.9;f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,72,'refused bounds did not destroy valid visibility');
+ f.regions.length=0;f.prepare();assert.equal(f.mount.debugState().frame.sourceGuide.regions[0].id,'@volume');
+ assert.equal(f.mount.debugState().frame.sourceGuide.effective,'full-volume-fallback');
  f.mount.dispose();
 }
 if(!selected||selected==='receiver-material-groups'){
@@ -144,12 +166,12 @@ if(!selected||selected==='reconstruction') {
 if(!selected||selected==='failure') {
   const f=fixture();f.prepare();
   const previous=f.mount.debugState().frame;
-  f.device.limits.maxStorageBufferBindingSize=4096;
-  f.mount.setDirections(96);
+  f.device.limits.maxStorageBufferBindingSize=40000;
+  f.mount.setDirections(1024);
   assert.throws(()=>f.prepare(),/cached first solid distance/);
   const state=f.mount.debugState();
   assert.equal(state.status,'preparation-failed','failed angular preparation must not retain successful status');
-  assert.equal(state.directions,96);assert.equal(state.frame.directions,24);
+  assert.equal(state.directions,1024);assert.equal(state.frame.directions,24);
   assert.equal(state.frame,previous,'last effective frame retained for diagnosis');
   assert.match(state.error,/cached first solid distance/);
   assert.equal(f.statuses.at(-1).status,'preparation-failed');

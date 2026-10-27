@@ -1,3 +1,4 @@
+export {authoredSourceRegions} from './scene-source-regions.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-light-geometry.mjs';
@@ -12,7 +13,7 @@ import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
 import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,onStatus=()=>{}}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,getSourceRegions=null,onStatus=()=>{}}) {
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
@@ -194,6 +195,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
         handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
       }
+      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');handle.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment,sceneLights});
@@ -219,7 +221,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
     setReceiverSpacing(value){value=validateReceiverSpacing(value);if(value!==receiverSpacing){receiverSpacing=value;status.receiverSpacingRequested=value;editCommitted=true;rebuildAnnounced=false;}},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
-    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided','regions'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},

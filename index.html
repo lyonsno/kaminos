@@ -2824,7 +2824,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
         <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
         <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
-        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option><option value="guided">Emitter-informed progressive (experimental)</option></select>
+        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option><option value="guided">Emitter-informed progressive (experimental)</option><option value="regions">Multi-emitter complementary (experimental)</option></select>
         <p class="rendering-description" id="rendering-source-guide-status" hidden>Stable authored emitter envelope plus full-volume coverage. Sampling weights change, not source energy.</p>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
@@ -19750,7 +19750,7 @@ async function mountSceneRadianceRoute(params) {
     if(distributed)renderingMode='shared';
     const module=await import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs');
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(params),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(params),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceRegions:(transform,domain)=>module.authoredSourceRegions(authoredFlameSourceRecords(),{transform,domain,controls:readVolumeControls()}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           window.kaminosFireLightingSettings?.syncStatus(state);
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
@@ -19758,7 +19758,8 @@ async function mountSceneRadianceRoute(params) {
           const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
           const guideLabel=document.getElementById('rendering-source-guide-status'),guide=window.__kaminosSceneRadiance?.debugState().frame?.sourceGuide;
           guideLabel.hidden=!guide;
-          if(guide)guideLabel.textContent=`${guide.effective}: [${guide.lo.map(x=>x.toFixed(2))}] to [${guide.hi.map(x=>x.toFixed(2))}]. Three of each four rays target the stable envelope (radius 2× inlet radius); the rest cover the full volume. ${guide.reason||'No source-energy change; visibility reused while the flame flickers.'}`;
+          if(guide?.regions)guideLabel.textContent=`${guide.regions.length} stable source regions · ${guide.counts[0]} broad rays · ${guide.counts.slice(1).join(' / ')} targeted rays. Complementary receiver phases; no emission redistribution.`;
+          else if(guide)guideLabel.textContent=`${guide.effective}: [${guide.lo.map(x=>x.toFixed(2))}] to [${guide.hi.map(x=>x.toFixed(2))}]. Three of each four rays target the stable envelope (radius 2× inlet radius); the rest cover the full volume. ${guide.reason||'No source-energy change; visibility reused while the flame flickers.'}`;
           if(cache){
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');
@@ -19782,7 +19783,7 @@ async function mountSceneRadianceRoute(params) {
         sceneRadianceDebugView=debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()});
       }
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
-      if(hybrid){const savedLight=readFireShadowSceneSettings(params);if(savedLight.directions!==undefined)selectAngularCount(savedLight.directions);}
+      if(hybrid){const savedLight=readFireShadowSceneSettings(params);if(savedLight.directions!==undefined)selectAngularCount(savedLight.directions);if(savedLight.angularPattern)document.getElementById('rendering-angular-pattern').value=savedLight.angularPattern;}
       window.__kaminosSceneRadianceSetup.status='mounted';
       flameInspector?.sync();
       if(hybrid){
