@@ -321,19 +321,5 @@ try{
  }
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
- {
-  const timers={set:globalThis.setInterval,clear:globalThis.clearInterval};let poll,heldWalker,calls=0,power=0;
-  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
-  try{
-   fire={active:true,paused:false};emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);
-   window.kaminosFireLightProbe={sample:async points=>{calls++;return {status:'effective',source:{power},values:points.map(()=>({luminance:power*.1}))};}};
-   heldWalker=await createWalkingCreature({host,inputs:{...inputs,choices:[],action:'wander',play:false,attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
-   assert.equal(typeof heldWalker.operations.observeWorld,'function','Held scene steps need an explicit actual sensory acquisition');
-   await poll();assert.equal(calls,0,'Ordinary timer remains held with the player');
-   await heldWalker.operations.observeWorld({seconds:0});heldWalker.operations.advance({seconds:0});power=8;
-   await heldWalker.operations.observeWorld({seconds:.1});heldWalker.operations.advance({seconds:.1});
-   const state=heldWalker.read();assert.equal(calls,2);assert.equal(state.attention.light.sampleTime,.1);assert.ok(state.attention.startle,'The held creature consumes the newly measured rise');assert.equal(state.playback.status,'paused');
-  }finally{await heldWalker?.dispose();globalThis.setInterval=timers.set;globalThis.clearInterval=timers.clear;delete window.kaminosFireLightProbe;}
- }
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}
 console.log('Attention uses the applied cast profile and clears its turn when switched off while paused');

@@ -1,8 +1,6 @@
 // kaminos-test: node
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createFlameSceneClock} from '../flame-scene-clock.mjs';
-const borrowTestClock=()=>{let steps=0,paused=false;return createFlameSceneClock({readRuntime:()=>({active:true,simStepCount:steps,simulationPaused:paused,timeStep:{effective:{dtScale:1}}}),pauseSimulation:value=>{paused=value;},stepSimulation:value=>{steps+=value.steps;},now:()=>0});};
 import * as THREE from 'three';
 import {createLivingScene} from '../experiments/creature-motion/living-scene.experiment.mjs';
 import {createCourtyard} from '../experiments/creature-motion/courtyard.experiment.mjs';
@@ -19,14 +17,14 @@ const program={duration:8,events:[{at:0,source:'traveler',patch:{moving:false}},
 async function courtyard(){
  let living,failNext=false,sourceSteps=0,sourcePaused=false;
  const inputs={...structuredClone(setup),program,view:{}};
- const definition={id:'rubberneck/courtyard',title:'Creatures · furnace courtyard',create:context=>createCourtyard(context,{loadSources:async()=>data,openFlame:()=>({read:()=>({active:true}),borrowSceneClock:()=>createFlameSceneClock({readRuntime:()=>({active:true,simStepCount:sourceSteps,simulationPaused:sourcePaused,timeStep:{effective:{dtScale:1}}}),pauseSimulation:value=>{sourcePaused=value;},stepSimulation:value=>{sourceSteps+=value.steps;},now:()=>0}),setControls(){}}),createLivingScene:async(context,deps)=>{if(failNext){failNext=false;throw Error('Synthetic construction refusal');}const {attention,...simple}=context.inputs;living=await createLivingScene({...context,inputs:simple},deps);return living;}})};
- const room=await openExperiment(definition,{host,inputs});return {room,tickSource:steps=>{sourceSteps+=steps;},sourceRead:()=>({steps:sourceSteps,paused:sourcePaused}),failConstruction:()=>{failNext=true;},get living(){return living;}};
+ const definition={id:'rubberneck/courtyard',title:'Creatures · furnace courtyard',create:context=>createCourtyard(context,{loadSources:async()=>data,openFlame:()=>({read:()=>({active:true}),setControls(){}}),createLivingScene:async(context,deps)=>{if(failNext){failNext=false;throw Error('Synthetic construction refusal');}const {attention,...simple}=context.inputs;living=await createLivingScene({...context,inputs:simple},deps);return living;}})};
+ const room=await openExperiment(definition,{host,inputs});return {room,frame:seconds=>{for(const fn of [...callbacks])fn({deltaSeconds:seconds});},tickSource:steps=>{sourceSteps+=steps;},sourceRead:()=>({steps:sourceSteps,paused:sourcePaused}),failConstruction:()=>{failNext=true;},get living(){return living;}};
 }
 test('manual source motion keeps running when event scheduling is held',async()=>{
- const {room}=await courtyard();try{
-  await room.invoke('manual',{source:'traveler',patch:{moving:true}});await room.invoke('advance',{seconds:1});const a=await room.read();await room.invoke('advance',{seconds:1});const b=await room.read();
+ const c=await courtyard(),{room}=c;try{
+  await room.invoke('manual',{source:'traveler',patch:{moving:true}});c.frame(1);const a=await room.read();c.frame(1);const b=await room.read();
   assert.notDeepEqual(a.sources.traveler.position,b.sources.traveler.position,'Manual Lantern move must continue across simulation steps');
-  await room.invoke('repeat');await room.invoke('advance',{seconds:2});await room.invoke('manual',{source:'beacon',patch:{visible:true}});const c=await room.read();await room.invoke('advance',{seconds:1});assert.notDeepEqual((await room.read()).sources.traveler.position,c.sources.traveler.position,'Holding automation during scheduled travel must not stop the object');
+  await room.invoke('repeat');await room.invoke('automatic',{enabled:true});c.frame(2);await room.invoke('manual',{source:'beacon',patch:{visible:true}});const current=await room.read();c.frame(1);assert.notDeepEqual((await room.read()).sources.traveler.position,current.sources.traveler.position,'Holding automation during scheduled travel must not stop the object');
  }finally{await room.dispose();}
 });
 test('restart reconstructs the original cohort and flags after supported edits',async()=>{
@@ -47,23 +45,13 @@ test('failed baseline construction keeps the held prior cohort and reports no su
  const c=await courtyard();try{const before=(await c.room.read()).creatures.actors.map(a=>a.state.host.id);c.failConstruction();await assert.rejects(c.room.invoke('restart'),/construction refusal/);const after=await c.room.read();assert.deepEqual(after.creatures.actors.map(a=>a.state.host.id),before);assert.equal(after.creatures.running,false);assert.equal(after.log.at(-1).kind,'courtyard.restart-failed');}finally{await c.room.dispose();}
 });
 
-test('the actual living join follows fluid time rather than delayed host frames',async()=>{
- const c=await courtyard();try{
-  assert.equal(c.sourceRead().paused,true);await c.room.invoke('setRunning',{running:true});assert.equal(c.sourceRead().paused,false);c.tickSource(6);for(const fn of [...callbacks])fn({deltaSeconds:10});assert.ok(Math.abs((await c.room.read()).time-.1)<1e-10,'Ten delayed wall seconds cannot become ten creature seconds when the fluid advanced only six ticks');
-  await c.room.invoke('setRunning',{running:false});assert.equal(c.sourceRead().paused,true);const held=(await c.room.read()).time;for(const fn of [...callbacks])fn({deltaSeconds:20});assert.equal((await c.room.read()).time,held);await c.room.invoke('advance',{seconds:.1});assert.equal(c.sourceRead().steps,12);assert.ok(Math.abs((await c.room.read()).time-.2)<1e-10);
- }finally{await c.room.dispose();}
-});
-test('world-step failure holds the real joined clock as well as creatures',async()=>{
- const c=await courtyard();try{
-  await c.room.invoke('setRunning',{running:true});scene.children.find(x=>x.name==='Crossing bronze lantern').removeFromParent();c.tickSource(120);
-  assert.throws(()=>{for(const fn of [...callbacks])fn({deltaSeconds:2});},/Source removed/);
-  assert.equal((await c.room.read()).creatures.running,false);assert.equal(c.sourceRead().paused,true,'The solver must stop when a scheduled world edit fails');assert.ok(((await c.room.read()).creatures.frameFailure?.message??'').includes('Source removed'),'The stopped scene must retain the failure reason');
- }finally{await c.room.dispose();}
+test('removed timed source does not stop creatures or acquire the fluid clock',async()=>{
+ const c=await courtyard();try{await c.room.invoke('automatic',{enabled:true});await c.room.invoke('setRunning',{running:true});scene.children.find(x=>x.name==='Crossing bronze lantern').removeFromParent();c.frame(2);assert.equal((await c.room.read()).creatures.running,true);assert.equal(c.sourceRead().paused,false);assert.equal((await c.room.read()).sources.traveler.mounted,false);}finally{await c.room.dispose();}
 });
 test('event repeat restores the analytic path phase and preserves authored placement',async()=>{
  const c=await courtyard();try{
-  await c.room.invoke('advance',{seconds:2});const first=(await c.room.read()).sources.traveler.position;
-  await c.room.invoke('repeat');await c.room.invoke('advance',{seconds:2});assert.deepEqual((await c.room.read()).sources.traveler.position,first,'The same source program needs the same moving path phase');
+  await c.room.invoke('automatic',{enabled:true});c.frame(2);const first=(await c.room.read()).sources.traveler.position;
+  await c.room.invoke('repeat');c.frame(2);assert.deepEqual((await c.room.read()).sources.traveler.position,first,'The same source program needs the same moving path phase');
   await c.room.invoke('manual',{source:'traveler',patch:{moving:false}});scene.children.find(x=>x.name==='Crossing bronze lantern').position.x+=1;
   await c.room.invoke('repeat');assert.equal((await c.room.read()).sources.traveler.position[0],1,'Repeating the scripted path must retain an ordinary placement edit');
  }finally{await c.room.dispose();}

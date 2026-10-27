@@ -86,7 +86,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightTask=null,observeLight=async()=>null,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
@@ -323,12 +323,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(inputs.attention.enabled===false)attention.setEnabled(false);
    // Light sense: while moving, sample the fire's light at a ring of ground
    // points around the creature (world space, independent of any camera).
-   const senseLight=async({held=false,time=clock/1000}={})=>{
+   const senseLight=async()=>{
     const probe=globalThis.window?.kaminosFireLightProbe;
-    if(disposed||!attention||(!held&&player?.read().status!=='playing'))return null;
-    if(lightTask){await lightTask;if(!held)return null;if(disposed||!attention)return null;}
-    if(!probe){attention.sense({time,status:'unavailable',samples:null});return;}
-    const task=(async()=>{try{
+    if(disposed||lightBusy||!attention||player?.read().status!=='playing')return;
+    if(!probe){attention.sense({time:clock/1000,status:'unavailable',samples:null});return;}
+    lightBusy=true;
+    try{
      runtime.group.updateMatrixWorld(true);
      const at=name=>new THREE.Vector3().setFromMatrixPosition(runtime.bones.get(name).matrixWorld),head=at('head'),chest=at('spine-chest');
      // Sample in the air at chest height, snapped like the ground grid, so a
@@ -344,11 +344,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      // while disabled. A known disabled emitter contributes zero radiance even
      // behind the observer; unavailable source state supplies no such evidence.
      const off=flame?.sensed!==false&&flame?.active===false;
-     attention.sense({time,status:flame?.sensed===false?'unavailable':result.status,sourcePower:off?0:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:off?0:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
-    }catch(error){if(!disposed&&attention)attention.sense({time,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
-    } )();lightTask=task;try{return await task;}finally{if(lightTask===task)lightTask=null;}
+     attention.sense({time:clock/1000,status:flame?.sensed===false?'unavailable':result.status,sourcePower:off?0:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:off?0:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+    }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
+    finally{lightBusy=false;}
    };
-   observeLight=senseLight;
    lightTimer=setInterval(senseLight,250);
   }
   placement.name=inputs.label??'Creature';
@@ -394,7 +393,6 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
   };
   const operations={
-   observeWorld:operation('observeWorld',async({seconds=0}={})=>{if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative observation offset required');await observeLight({held:true,time:clock/1000+seconds});return read();}),
    action:operation('action',async input=>{
     if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
     unsubscribe();player.pause();

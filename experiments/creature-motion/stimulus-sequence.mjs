@@ -1,5 +1,5 @@
 // A deterministic event clock. It schedules world edits, never creature actions.
-// Consumers exercise every returned segment on their existing simulation clock.
+// Consumers exercise every returned segment on their existing clock.
 export function validateStimulusProgram(program){
  if(!program||!Number.isFinite(program.duration)||program.duration<=0||!Array.isArray(program.events))throw Error('Stimulus program requires positive duration and events');
  let previous=-Infinity;
@@ -12,7 +12,7 @@ export function validateStimulusProgram(program){
 }
 export function createStimulusSequence(input){
  const program=validateStimulusProgram(input);let time=0,cycle=0,index=0;
- const read=()=>({schema:'kaminos.creature-stimulus-sequence.v1',clock:'scene simulation seconds',time,cycle:Math.floor(time/program.duration),program:structuredClone(program)});
+ const read=()=>({schema:'kaminos.creature-stimulus-sequence.v1',clock:'viewer seconds',time,cycle:Math.floor(time/program.duration),program:structuredClone(program)});
  function advance(seconds){
   if(!Number.isFinite(seconds)||seconds<0)throw Error('Sequence advance requires finite nonnegative seconds');
   const target=time+seconds;if(!Number.isFinite(target))throw Error('Sequence time overflow');
