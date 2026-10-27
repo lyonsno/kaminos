@@ -11438,7 +11438,7 @@ async function initScene() {
     unboundedMax:source=>source.id==='volume-immersed-radius',
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
-  const bloomControls=installSceneBloomControls({document,host:bloomHost,edits:scenePlacementTools.edits,read:()=>sceneBloom.read().settings,write:value=>sceneBloom.set(value)});
+  bloomControls=installSceneBloomControls({document,host:bloomHost,edits:scenePlacementTools.edits,read:()=>sceneBloom.read().settings,write:value=>sceneBloom.set(value)});
   authoringControlSessions.push(bloomControls);scenePlacementTools.addHistoryScope(bloomHost);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
