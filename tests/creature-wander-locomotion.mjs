@@ -97,4 +97,23 @@ assert.deepEqual(accepted.read().path.target,goal,'Obstruction chose a replaceme
 assert.equal(accepted.snapshot().path.rng,before.path.rng);
 assert.ok(accepted.read().contactRate<1e-8);
 
+// Real clips contain zero/nonuniform root-travel intervals. Steering must
+// integrate their phase together with travel, not invert one whole host frame.
+const z=[0,.01,.01,.01,.02,.03];
+const plateau={frames:z.length,fps:30,frame(i){
+ const root=new THREE.Matrix4().makeTranslation(0,.5,z[i]).toArray();
+ return {actorMatrix:identity(),frame:i,bones:[{name:'pelvis',parent:null,localMatrix:root,worldMatrix:root},{name:'head',parent:0,localMatrix:new THREE.Matrix4().makeTranslation(0,0,1).toArray(),worldMatrix:new THREE.Matrix4().makeTranslation(0,.5,z[i]+1).toArray()}]};
+}};
+const plateauWalking=createWalkingPoseAdapter({THREE,adapter:plateau,blendFrames:0});
+const rates=[30,60,120,240].map(hz=>{
+ const m=createWanderMotion({THREE,adapter:plateau,walking:plateauWalking,sourceKey:'nonuniform-source-with-stationary-interval',locomotion:true,area:{center:[0,0],radii:[10,10],yaw:0},position:[0,0],direction:[0,1],seed:1});
+ m.setDestination([4,4]);for(let i=0;i<4*hz;i++)m.advance(1/hz);
+ return {hz,...m.read()};
+});
+for(const r of rates.slice(1)){
+ assert.ok(distance(r.path.position,rates[0].path.position)<.001,'Stationary source intervals made root travel depend on host update frequency');
+ assert.ok(Math.abs(r.path.distance-rates[0].path.distance)<.001,'Achieved source travel depends on host update frequency');
+ assert.ok(Math.abs(r.elapsed-rates[0].elapsed)<1/plateau.fps/8,'Stationary source intervals made gait phase depend on host update frequency');
+}
+
 console.log('Goal-owned wandering bounds body-scale turns, holds gait during reorientation, stays in zones and reconstructs physical feedback');
