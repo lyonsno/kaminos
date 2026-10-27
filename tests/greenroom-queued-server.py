@@ -42,6 +42,10 @@ class QueuedAdmission(unittest.TestCase):
             with self.subTest(response=response), self.assertRaises(RuntimeError):
                 self.call(response)
 
+    def test_explicit_operator_hold_has_no_fabricated_queue_position(self):
+        response = dict(status='waiting', jobId='external-kaminos-page-run1', position=None, queueHeld=True)
+        self.assertEqual(self.call(response), response)
+
     def test_withdrawal_is_bound_to_this_run(self):
         result = self.call(dict(status='cancelled', jobId='external-kaminos-page-run1'), action='withdraw-queued')
         self.assertEqual(result['status'], 'cancelled')
