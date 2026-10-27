@@ -336,8 +336,8 @@ def main():
         "samplingSteps": a.steps,
         "seed": a.seed,
         "camera": {
-            "cameraAngleX": a.camera_angle_x,
-            "meshScale": a.mesh_scale,
+            "cameraAngleX": a.camera_angle_x if math.isfinite(a.camera_angle_x) else str(a.camera_angle_x),
+            "meshScale": a.mesh_scale if math.isfinite(a.mesh_scale) else str(a.mesh_scale),
             "distance": None,
         },
         "producer": {},
@@ -571,8 +571,16 @@ def main():
             exp_shapes = {f"{role}.{k}": shp for k, _, shp in specs}
             if has_phases:
                 mapping["sparse.phases"] = "rope_phases"
-                exp_shapes["sparse.phases"] = ([4096, 64, 2], [4096, 128])
-            rows, identity, _ = read_safetensors(f_path, mapping, expected_shapes=exp_shapes)
+                exp_shapes["sparse.phases"] = [4096, 64, 2]
+
+            def flow_transform(key, val):
+                if key == "rope_phases" and val.shape == (4096, 128):
+                    return val.reshape(4096, 64, 2)
+                return val
+
+            rows, identity, _ = read_safetensors(
+                f_path, mapping, transform=flow_transform, expected_shapes=exp_shapes
+            )
             tensors = {k: rows[f"{role}.{k}"] for k, _, _ in specs}
             tensors["gelu"] = gelu_name
             model_entry = {
@@ -672,7 +680,7 @@ def main():
         m["error"] = {"message": str(e), "class": type(e).__name__}
         print(str(e), file=sys.stderr)
     finally:
-        (a.out / "manifest.json").write_text(json.dumps(m, indent=2) + "\n")
+        (a.out / "manifest.json").write_text(json.dumps(m, indent=2, allow_nan=False) + "\n")
     if m["status"] != "succeeded":
         raise SystemExit(1)
     print(json.dumps({"status": m["status"], "modelCalls": 0, "tensorCount": len(m["tensors"]), "manifest": str(a.out / "manifest.json")}))

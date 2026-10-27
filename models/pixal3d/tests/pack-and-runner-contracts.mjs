@@ -12,6 +12,7 @@ assert.ok(existsSync(runnerModuleUrl), 'Missing models/pixal3d/generate-image.mj
 
 const {
   PIXAL3D_LOCAL_CONFIG_SCHEMA,
+  validatePixal3dBinaryGlb,
   validatePixal3dLocalGenerationConfig,
   resolvePixal3dGenerationFinishing,
   runPixal3dNativeGeneration,
@@ -21,6 +22,7 @@ const {
   validatePixal3dGenerationInputs,
   loadPixal3dGenerationInputs,
 } = await import('../generation-inputs.js');
+const { computePixal3dDistanceFromFov } = await import('../proj-grid.js');
 const { PIXAL3D_GLB_NODE_MATRIX } = await import('../pixal3d-mesh.js');
 
 assert.equal(PIXAL3D_LOCAL_CONFIG_SCHEMA, 'pixal3d.local-generation-config.v0');
@@ -146,6 +148,37 @@ try {
   assert.equal(zeroFovManifest.modelCalls, 0);
   assert.match(zeroFovManifest.error?.message ?? '', /cameraAngleX/);
 
+  // 2c. Nonfinite --camera-angle-x nan must serialize as strict parseable JSON without bare NaN
+  const nanFovOut = path.join(scratch, 'nan-fov-out');
+  const nanFovRun = spawnSync(
+    'python3',
+    [
+      packScript,
+      '--repo-root',
+      repoRoot,
+      '--expected-commit',
+      '0'.repeat(40),
+      '--pixal-ckpts',
+      path.join(scratch, 'missing-ckpts'),
+      '--naf-weights',
+      path.join(scratch, 'missing-naf.safetensors'),
+      '--dino-weights',
+      path.join(scratch, 'missing-dino.safetensors'),
+      '--image',
+      path.join(scratch, 'missing.png'),
+      '--out',
+      nanFovOut,
+      '--camera-angle-x',
+      'nan',
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(nanFovRun.status, 0, 'packager must fail on --camera-angle-x nan');
+  const nanFovManifest = JSON.parse(readFileSync(path.join(nanFovOut, 'manifest.json'), 'utf8'));
+  assert.equal(nanFovManifest.status, 'failed');
+  assert.equal(nanFovManifest.phase, 'configuration');
+  assert.equal(nanFovManifest.camera.cameraAngleX, 'nan');
+
   // 3. Build a synthetic miniature safetensors checkpoint set & RGB ppm image, run pack-generation.py
   const synthDir = path.join(scratch, 'synth-ckpts');
   const outDir = path.join(scratch, 'packed-out');
@@ -208,9 +241,9 @@ for stem, ci, co, proj_in, has_phases in [
     ):
         f_tensors[ckpt_k] = (np.zeros(shape, dtype="<u2"), "BF16")
     if has_phases:
-        phases = np.zeros((4096, 64, 2), dtype="<f4")
-        phases[..., 0] = 1.0
-        f_tensors["rope_phases"] = (phases.view("<c8").reshape(4096, 64), "C64")
+        phases = np.zeros((4096, 128), dtype="<f4")
+        phases[:, 0::2] = 1.0
+        f_tensors["rope_phases"] = (phases, "F32")
     write_safetensors(root / f"{stem}.safetensors", f_tensors)
 
 # 3. Occupancy decoder (num_res_blocks=0, num_res_blocks_middle=0, channels=[16,8,4] for fast test)
@@ -310,6 +343,7 @@ with open(ppm, "wb") as f:
   const packedManifest = JSON.parse(readFileSync(path.join(outDir, 'manifest.json'), 'utf8'));
   assert.equal(packedManifest.status, 'succeeded');
   assert.equal(packedManifest.modelCalls, 0);
+  assert.deepEqual(packedManifest.tensors['sparse.phases']?.shape, [4096, 64, 2]);
   const plan = validatePixal3dGenerationInputs(packedManifest);
   assert.ok(plan.tensorCount > 400);
 
@@ -604,7 +638,11 @@ with open(out_path, "wb") as f:
     camera: {
       cameraAngleX: nonDefaultConfig.cameraAngleX,
       meshScale: nonDefaultConfig.meshScale,
-      distance: 1.5,
+      distance: computePixal3dDistanceFromFov({
+        cameraAngleX: nonDefaultConfig.cameraAngleX,
+        meshScale: nonDefaultConfig.meshScale,
+        imageResolution: 512,
+      }),
     },
     models: {
       ...packedManifest.models,
@@ -700,6 +738,83 @@ with open(out_path, "wb") as f:
   assert.equal(okResult.status, 'succeeded');
   assert.equal(existsSync(okGlbPath), true);
   assert.equal(okResult.artifact?.byteLength, nativeRun.asset.glb.byteLength);
+
+  // 5c. Malformed 20-byte GLB (magic + zeros) must be rejected (S3-F1)
+  const badGlbHeader = Buffer.alloc(20);
+  badGlbHeader.writeUInt32LE(0x46546c67, 0);
+  assert.throws(() => validatePixal3dBinaryGlb(badGlbHeader), /container header and JSON chunk/);
+  const malformedResult = await generatePixal3dImage(
+    {
+      config: cfgPath,
+      input: path.join(synthDir, 'input.ppm'),
+      output: path.join(cmdDir, 'malformed.glb'),
+      report: path.join(cmdDir, 'malformed-report.json'),
+      'run-id': 'run-malformed-glb',
+    },
+    {
+      ...stubDeps,
+      executeGeneration: async ({ output }) => {
+        writeFileSync(output, badGlbHeader);
+        return { routeId: 'malformed-route' };
+      },
+    },
+  );
+  assert.equal(malformedResult.ok, false, 'malformed 20-byte GLB must not report success');
+  assert.equal(malformedResult.status, 'failed');
+
+  // 5d. Pre-existing final output file must not be reused when executor writes nothing (S3-F1)
+  const staleGlbPath = path.join(cmdDir, 'preexisting-stale.glb');
+  writeFileSync(staleGlbPath, Buffer.from(nativeRun.asset.glb));
+  const staleResult = await generatePixal3dImage(
+    {
+      config: cfgPath,
+      input: path.join(synthDir, 'input.ppm'),
+      output: staleGlbPath,
+      report: path.join(cmdDir, 'stale-report.json'),
+      'run-id': 'run-stale-output',
+    },
+    {
+      ...stubDeps,
+      executeGeneration: async () => ({ routeId: 'noop-route' }),
+    },
+  );
+  assert.equal(staleResult.ok, false, 'executor returning without writing current run output must fail');
+  assert.equal(staleResult.status, 'failed');
+  assert.match(staleResult.error?.message ?? '', /did not produce its staged GLB/);
+
+  // 5e. Packaged manifest omitting camera fields must be rejected when nondefault camera was requested (S3-F2)
+  const noCamResult = await generatePixal3dImage(
+    {
+      config: cfgPath,
+      input: path.join(synthDir, 'input.ppm'),
+      output: path.join(cmdDir, 'nocam.glb'),
+      report: path.join(cmdDir, 'nocam-report.json'),
+      'run-id': 'run-missing-camera',
+    },
+    {
+      ...stubDeps,
+      createGenerationCommandRunner: ({ record }) => ({
+        stop: async () => {},
+        run: async (argv, label) => {
+          record.commands.push({ argv, label, exit: { code: 0 } });
+          const outIdx = argv.indexOf('--out');
+          if (outIdx !== -1) {
+            const preparedDir = argv[outIdx + 1];
+            mkdirSync(preparedDir, { recursive: true });
+            const { camera: _omitted, ...manifestWithoutCam } = stubManifest;
+            writeFileSync(path.join(preparedDir, 'manifest.json'), JSON.stringify(manifestWithoutCam));
+          }
+        },
+      }),
+      executeGeneration: async ({ output }) => {
+        writeFileSync(output, Buffer.from(nativeRun.asset.glb));
+        return { routeId: 'should-not-run' };
+      },
+    },
+  );
+  assert.equal(noCamResult.ok, false, 'manifest omitting camera fields must fail config agreement');
+  assert.equal(noCamResult.status, 'failed');
+  assert.match(noCamResult.error?.message ?? '', /disagrees with requested config/);
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

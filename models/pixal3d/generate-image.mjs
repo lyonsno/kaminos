@@ -26,6 +26,53 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export const PIXAL3D_LOCAL_CONFIG_SCHEMA = 'pixal3d.local-generation-config.v0';
 
+export function validatePixal3dBinaryGlb(glbBytes) {
+  if (!(glbBytes instanceof Uint8Array) || glbBytes.byteLength < 20) {
+    throw new Error('complete valid binary glTF (.glb) output required before reporting success');
+  }
+  const view = new DataView(glbBytes.buffer, glbBytes.byteOffset, glbBytes.byteLength);
+  const magic = view.getUint32(0, true);
+  const version = view.getUint32(4, true);
+  const totalLen = view.getUint32(8, true);
+  const jsonChunkLen = view.getUint32(12, true);
+  const jsonChunkType = view.getUint32(16, true);
+  if (
+    magic !== 0x46546c67 ||
+    version !== 2 ||
+    totalLen !== glbBytes.byteLength ||
+    jsonChunkType !== 0x4e4f534a ||
+    jsonChunkLen < 2 ||
+    20 + jsonChunkLen > glbBytes.byteLength
+  ) {
+    throw new Error('complete valid binary glTF (.glb) container header and JSON chunk required');
+  }
+  let gltf;
+  try {
+    gltf = JSON.parse(
+      new TextDecoder().decode(
+        glbBytes.subarray(20, 20 + jsonChunkLen),
+      ),
+    );
+  } catch {
+    throw new Error('valid glTF 2.0 JSON chunk required in binary glTF (.glb)');
+  }
+  if (gltf?.asset?.version !== '2.0' || !Array.isArray(gltf?.meshes) || gltf.meshes.length < 1) {
+    throw new Error('glTF 2.0 asset with at least one mesh required in binary glTF (.glb)');
+  }
+  let offset = 20 + jsonChunkLen;
+  while (offset < glbBytes.byteLength) {
+    if (offset + 8 > glbBytes.byteLength) {
+      throw new Error('truncated trailing chunk header in binary glTF (.glb)');
+    }
+    const chunkLen = view.getUint32(offset, true);
+    if (offset + 8 + chunkLen > glbBytes.byteLength) {
+      throw new Error('truncated trailing chunk payload in binary glTF (.glb)');
+    }
+    offset += 8 + chunkLen;
+  }
+  return gltf;
+}
+
 export function resolvePixal3dGenerationFinishing(c = {}) {
   const cleanupMode = c.cleanupMode ?? 'reference-cleanup';
   if (!['reference-cleanup', 'mlx-surface-preserving', 'source-metal-remesh'].includes(cleanupMode)) {
@@ -346,13 +393,28 @@ export async function generatePixal3dImage(values, deps = {}) {
     const manifestRaw = await fs.readFile(manifestPath);
     const manifest = JSON.parse(manifestRaw);
     validatePixal3dGenerationInputs(manifest);
+    const pkgCameraAngleX = manifest.camera?.cameraAngleX;
+    const pkgMeshScale = manifest.camera?.meshScale;
+    const pkgDistance = manifest.camera?.distance;
+    const expectedDistance = computePixal3dDistanceFromFov({
+      cameraAngleX: effectiveCameraAngleX,
+      meshScale: effectiveMeshScale,
+      imageResolution: 512,
+    });
     if (
       manifest.pipelineType !== c.pipelineType ||
       manifest.conditioningMode !== effectiveConditioningMode ||
       manifest.samplingSteps !== c.steps ||
       manifest.seed !== c.seed ||
-      Math.abs((manifest.camera?.cameraAngleX ?? NaN) - effectiveCameraAngleX) > 1e-6 ||
-      Math.abs((manifest.camera?.meshScale ?? NaN) - effectiveMeshScale) > 1e-6
+      typeof pkgCameraAngleX !== 'number' ||
+      !Number.isFinite(pkgCameraAngleX) ||
+      Math.abs(pkgCameraAngleX - effectiveCameraAngleX) > 1e-6 ||
+      typeof pkgMeshScale !== 'number' ||
+      !Number.isFinite(pkgMeshScale) ||
+      Math.abs(pkgMeshScale - effectiveMeshScale) > 1e-6 ||
+      typeof pkgDistance !== 'number' ||
+      !Number.isFinite(pkgDistance) ||
+      Math.abs(pkgDistance - expectedDistance) > 1e-5
     ) {
       throw new Error('packaged manifest configuration disagrees with requested config');
     }
@@ -374,9 +436,11 @@ export async function generatePixal3dImage(values, deps = {}) {
       const buf = await fs.readFile(path.join(prepared, row.file));
       return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
     };
+    const stagedOutput = path.join(work, 'generated-asset.glb');
+    await fs.rm(stagedOutput, { force: true });
     const executeGeneration =
       deps.executeGeneration ??
-      (async () => {
+      (async ({ output: runOutput }) => {
         if (!deps.route) {
           throw new Error(
             'registered WebGPU route required to execute Pixal3D generation after package preparation',
@@ -400,13 +464,10 @@ export async function generatePixal3dImage(values, deps = {}) {
           },
         });
         try {
-          if (!(nativeRes.asset?.glb instanceof ArrayBuffer) || nativeRes.asset.glb.byteLength < 12) {
+          if (!(nativeRes.asset?.glb instanceof ArrayBuffer) || nativeRes.asset.glb.byteLength < 20) {
             throw new Error('complete finished GLB buffer required from native generation');
           }
-          await fs.mkdir(path.dirname(output), { recursive: true });
-          const pending = output + '.pending-' + runId;
-          await fs.writeFile(pending, Buffer.from(nativeRes.asset.glb));
-          await fs.rename(pending, output);
+          await fs.writeFile(runOutput, Buffer.from(nativeRes.asset.glb));
           return { routeId: deps.route.routeId ?? 'injected-route' };
         } finally {
           nativeRes.dispose();
@@ -417,16 +478,19 @@ export async function generatePixal3dImage(values, deps = {}) {
       manifest,
       manifestPath,
       prepared,
-      output,
+      output: stagedOutput,
+      finalOutput: output,
       config: report.config,
       fetchTensor: fetchDiskTensor,
       runner,
     });
-    const glbBytes = await fs.readFile(output);
-    const magic = glbBytes.length >= 4 ? glbBytes.readUInt32LE(0) : 0;
-    if (magic !== 0x46546c67 || glbBytes.length < 20) {
-      throw new Error('complete valid binary glTF (.glb) output required before reporting success');
+    let glbBytes;
+    try {
+      glbBytes = await fs.readFile(stagedOutput);
+    } catch {
+      throw new Error('current generation run did not produce its staged GLB output artifact');
     }
+    validatePixal3dBinaryGlb(glbBytes);
     report.memory = await monitor.stop();
     monitor = undefined;
     if (report.memory?.status && report.memory.status !== 'observed') {
@@ -435,6 +499,10 @@ export async function generatePixal3dImage(values, deps = {}) {
     if (report.safety) {
       throw new Error('generation halted before publication');
     }
+    await fs.mkdir(path.dirname(output), { recursive: true });
+    const pending = output + '.pending-' + runId;
+    await fs.writeFile(pending, glbBytes);
+    await fs.rename(pending, output);
     report.artifact = {
       path: output,
       sha256: sha(glbBytes),
