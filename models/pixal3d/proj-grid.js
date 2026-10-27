@@ -334,7 +334,7 @@ function projGridSampleShader(plan) {
   const total = plan.rows * plan.outChannels;
   const R = plan.gridResolution;
   const rr = R * R;
-  const coordLookup = plan.tokenRows !== undefined
+  const coordLookup = plan.tokenRows !== null
     ? `let ix = f32(coords[row * 3u]);
   let iy = f32(coords[row * 3u + 1u]);
   let iz = f32(coords[row * 3u + 2u]);`
@@ -353,7 +353,7 @@ function projGridSampleShader(plan) {
     hrBinding = nextBinding++;
     bindings.push(`@group(0) @binding(${hrBinding}) var<storage, read> high_res: array<f32>;`);
   }
-  if (plan.tokenRows !== undefined) {
+  if (plan.tokenRows !== null) {
     coordBinding = nextBinding++;
     bindings.push(`@group(0) @binding(${coordBinding}) var<storage, read> coords: array<i32>;`);
   }

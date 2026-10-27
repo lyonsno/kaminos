@@ -52,7 +52,30 @@ export function pixal3dGenerationRoles(options = {}) {
 }
 
 export function preparePixal3dRgbInputs({ pixels, width = 512, height = 512 } = {}) {
-  const dinoPixelValues = normalizePreparedTrellisRgb({ pixels, width, height });
+  if (
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width < 16 ||
+    height < 16 ||
+    width !== height ||
+    width % 16 !== 0 ||
+    !(pixels instanceof Uint8Array || pixels instanceof Uint8ClampedArray) ||
+    pixels.length !== width * height * 3
+  ) {
+    throw new TypeError('complete prepared square RGB bytes (divisible by 16) and explicit dimensions required');
+  }
+  const dinoPixelValues =
+    width === 512 && height === 512
+      ? normalizePreparedTrellisRgb({ pixels, width, height })
+      : (() => {
+          const mean = [0.485, 0.456, 0.406];
+          const std = [0.229, 0.224, 0.225];
+          const values = new Float32Array(pixels.length);
+          for (let i = 0; i < pixels.length; i++) {
+            values[i] = (Math.fround(pixels[i] / 255) - mean[i % 3]) / std[i % 3];
+          }
+          return values;
+        })();
   const rawImageValues = new Float32Array(pixels.length);
   for (let i = 0; i < pixels.length; i++) {
     rawImageValues[i] = Math.fround(pixels[i] / 255);
@@ -85,14 +108,32 @@ function browserNoise(seed) {
   };
 }
 
+function resolveConditioningMode(pipelineType, conditioningMode) {
+  const cascade = pixal3dGenerationPipelineType({ pipelineType }) === '1024_cascade';
+  const mode = conditioningMode ?? (cascade ? 'stage-specific-1024' : 'source-512');
+  if (cascade) {
+    if (!['stage-specific-1024', 'shared-512-preview'].includes(mode)) {
+      throw new TypeError('1024_cascade conditioningMode must be stage-specific-1024 or shared-512-preview');
+    }
+  } else if (mode !== 'source-512') {
+    throw new TypeError('512 pipelineType requires conditioningMode source-512');
+  }
+  return mode;
+}
+
 export function createPixal3dImageGenerationAdapter({
   route,
   pixelValues,
   rawImageTensor,
   rawImageValues,
   preparedPixels,
+  highResolutionPixelValues,
+  highResolutionRawImageTensor,
+  highResolutionRawImageValues,
+  highResolutionPreparedPixels,
   camera = {},
   prefixWeights,
+  highResolutionPrefixWeights,
   loadLayerWeights,
   dinoIdentity = null,
   models,
@@ -101,6 +142,7 @@ export function createPixal3dImageGenerationAdapter({
   loadModel,
   meshResolution = 1024,
   pipelineType = '1024_cascade',
+  conditioningMode,
   seed = 42,
   initialNoise = {},
   onPhase,
@@ -109,6 +151,8 @@ export function createPixal3dImageGenerationAdapter({
   if (onNoiseInput !== undefined && typeof onNoiseInput !== 'function') {
     throw new TypeError('noise input observer must be a function');
   }
+  const effectiveConditioningMode = resolveConditioningMode(pipelineType, conditioningMode);
+  const needsHrConditioning = effectiveConditioningMode === 'stage-specific-1024';
   const staged = loadModel !== undefined || modelInputs !== undefined;
   if (staged) {
     if (typeof loadModel !== 'function' || !modelInputs || models !== undefined || loadModels !== undefined) {
@@ -136,6 +180,39 @@ export function createPixal3dImageGenerationAdapter({
     throw new TypeError('rawImageTensor, rawImageValues, or preparedPixels required for Pixal3D NAF upsampling');
   }
 
+  let effectiveHrDinoPixels = highResolutionPixelValues;
+  let effectiveHrRawValues = highResolutionRawImageValues;
+  if (highResolutionPreparedPixels !== undefined) {
+    if (
+      highResolutionPixelValues !== undefined ||
+      highResolutionRawImageValues !== undefined ||
+      highResolutionRawImageTensor !== undefined
+    ) {
+      throw new TypeError(
+        'highResolutionPreparedPixels cannot be combined with explicit highResolutionPixelValues or highResolutionRawImage inputs',
+      );
+    }
+    const preparedHr = preparePixal3dRgbInputs({
+      pixels: highResolutionPreparedPixels,
+      width: 1024,
+      height: 1024,
+    });
+    effectiveHrDinoPixels = preparedHr.dinoPixelValues;
+    effectiveHrRawValues = preparedHr.rawImageValues;
+  }
+  if (needsHrConditioning) {
+    if (effectiveHrDinoPixels === undefined) {
+      throw new TypeError(
+        'highResolutionPixelValues or highResolutionPreparedPixels (1024x1024) required for default 1024_cascade conditioning',
+      );
+    }
+    if (highResolutionRawImageTensor === undefined && effectiveHrRawValues === undefined) {
+      throw new TypeError(
+        'highResolutionRawImageTensor, highResolutionRawImageValues, or highResolutionPreparedPixels required for 1024_cascade NAF upsampling',
+      );
+    }
+  }
+
   let state = 'new', phase = 'new', result, disposed = false, generation;
   const enter = async e => {
     phase = e.phase;
@@ -144,11 +221,23 @@ export function createPixal3dImageGenerationAdapter({
   const producer = createTrellisDinoV3ConditioningAdapter({
     route,
     pixelValues: effectiveDinoPixels,
+    imageSize: 512,
     prefixWeights,
     loadLayerWeights,
     modelIdentity: dinoIdentity,
     onPhase: enter,
   });
+  const hrProducer = needsHrConditioning
+    ? createTrellisDinoV3ConditioningAdapter({
+        route,
+        pixelValues: effectiveHrDinoPixels,
+        imageSize: 1024,
+        prefixWeights: highResolutionPrefixWeights ?? prefixWeights,
+        loadLayerWeights,
+        modelIdentity: dinoIdentity,
+        onPhase: enter,
+      })
+    : null;
 
   return Object.freeze({
     runtime: route.runtime,
@@ -157,6 +246,7 @@ export function createPixal3dImageGenerationAdapter({
     get phase() { return phase; },
     get outputs() { return result; },
     get conditioning() { return producer.outputs?.conditioning; },
+    get highResolutionConditioning() { return hrProducer?.outputs?.conditioning; },
     get noiseInputs() { return generation?.noiseInputs ?? Object.freeze({}); },
     get decoderFailureContext() { return disposed ? undefined : generation?.decoderFailureContext; },
     async run(invocation) {
@@ -165,6 +255,7 @@ export function createPixal3dImageGenerationAdapter({
       state = 'running';
       try {
         const dino = await producer.run(invocation);
+        const hrDino = hrProducer ? await hrProducer.run(invocation) : null;
         if (loadModels) await enter({ phase: 'generation-checkpoint-input-loading' });
         const checkpointModels = staged ? modelInputs : models ?? (await loadModels());
         generation = createPixal3dGenerationFromConditioningAdapter({
@@ -172,18 +263,36 @@ export function createPixal3dImageGenerationAdapter({
           conditioningTensor: dino.conditioning,
           rawImageTensor,
           rawImageValues: effectiveRawValues,
+          ...(hrDino
+            ? {
+                highResolutionConditioningTensor: hrDino.conditioning,
+                highResolutionRawImageTensor,
+                highResolutionRawImageValues: effectiveHrRawValues,
+              }
+            : {}),
           camera,
           models: checkpointModels,
           ...(staged ? { loadModel } : {}),
           meshResolution,
           pipelineType,
+          conditioningMode: effectiveConditioningMode,
           seed,
           initialNoise,
           onPhase: enter,
           onNoiseInput,
         });
         const fields = await generation.run(invocation);
-        result = Object.freeze({ ...fields, conditioning: dino.conditioning, dino });
+        result = Object.freeze({
+          ...fields,
+          conditioning: dino.conditioning,
+          dino,
+          ...(hrDino
+            ? {
+                highResolutionConditioning: hrDino.conditioning,
+                highResolutionDino: hrDino,
+              }
+            : {}),
+        });
         state = 'completed';
         phase = 'completed';
         return result;
@@ -198,6 +307,7 @@ export function createPixal3dImageGenerationAdapter({
       if (disposed) return;
       disposed = true;
       generation?.dispose();
+      hrProducer?.dispose();
       producer.dispose();
     },
   });
@@ -208,11 +318,18 @@ export function createPixal3dGenerationFromConditioningAdapter({
   conditioningTensor,
   rawImageTensor,
   rawImageValues,
+  highResolutionConditioningTensor,
+  highResolutionRawImageTensor,
+  highResolutionRawImageValues,
+  textureConditioningTensor,
+  textureRawImageTensor,
+  textureRawImageValues,
   camera = {},
   models,
   loadModel,
   meshResolution = 1024,
   pipelineType = '1024_cascade',
+  conditioningMode,
   seed = 42,
   initialNoise = {},
   onPhase,
@@ -221,6 +338,8 @@ export function createPixal3dGenerationFromConditioningAdapter({
   const runtime = route?.runtime;
   const roles = pixal3dGenerationRoles({ pipelineType });
   const cascade = pipelineType === '1024_cascade';
+  const effectiveConditioningMode = resolveConditioningMode(pipelineType, conditioningMode);
+  const stageSpecificCascade = cascade && effectiveConditioningMode === 'stage-specific-1024';
   if (!runtime?.runKernel || !conditioningTensor?.buffer) {
     throw new TypeError('registered runtime and resident image conditioning required');
   }
@@ -229,6 +348,40 @@ export function createPixal3dGenerationFromConditioningAdapter({
   }
   if (rawImageTensor === undefined && !(rawImageValues instanceof Float32Array)) {
     throw new TypeError('complete rawImageTensor or Float32Array rawImageValues required for NAF');
+  }
+  if (stageSpecificCascade) {
+    if (!highResolutionConditioningTensor?.buffer) {
+      throw new TypeError(
+        'highResolutionConditioningTensor (1024-stage DINO conditioning) required for 1024_cascade unless conditioningMode is shared-512-preview',
+      );
+    }
+    if (
+      highResolutionConditioningTensor === conditioningTensor ||
+      highResolutionConditioningTensor.buffer === conditioningTensor.buffer
+    ) {
+      throw new TypeError(
+        'source 1024_cascade requires separate highResolutionConditioningTensor extracted at 1024 pixels, not 512 conditioningTensor reuse',
+      );
+    }
+    if (highResolutionRawImageTensor !== undefined && highResolutionRawImageValues !== undefined) {
+      throw new TypeError(
+        'provide either resident highResolutionRawImageTensor or CPU highResolutionRawImageValues, not both',
+      );
+    }
+    if (
+      highResolutionRawImageTensor === undefined &&
+      !(highResolutionRawImageValues instanceof Float32Array)
+    ) {
+      throw new TypeError(
+        'complete highResolutionRawImageTensor or Float32Array highResolutionRawImageValues required for 1024-stage NAF',
+      );
+    }
+    if (highResolutionRawImageTensor !== undefined && highResolutionRawImageTensor === rawImageTensor) {
+      throw new TypeError('separate highResolutionRawImageTensor required for 1024-stage NAF');
+    }
+  }
+  if (textureRawImageTensor !== undefined && textureRawImageValues !== undefined) {
+    throw new TypeError('provide either resident textureRawImageTensor or CPU textureRawImageValues, not both');
   }
   const staged = loadModel !== undefined;
   if (staged && typeof loadModel !== 'function') {
@@ -255,6 +408,72 @@ export function createPixal3dGenerationFromConditioningAdapter({
     throw new TypeError('noise input observer must be a function');
   }
 
+  const deriveStageNafConfig = (baseConfig, overrideConfig, condTensor, rawTensor, rawVals) => {
+    if (overrideConfig) return overrideConfig;
+    const prefix = baseConfig.prefixTokens ?? 5;
+    const tokens = condTensor.shape.length === 3 ? condTensor.shape[1] : condTensor.shape[0];
+    const patches = tokens - prefix;
+    const fSide = Math.round(Math.sqrt(patches));
+    let imgH = baseConfig.imageHeight ?? 512;
+    let imgW = baseConfig.imageWidth ?? 512;
+    if (rawTensor?.shape) {
+      imgH = rawTensor.shape[1];
+      imgW = rawTensor.shape[2];
+    } else if (rawVals instanceof Float32Array) {
+      const side = Math.round(Math.sqrt(rawVals.length / 3));
+      imgH = side;
+      imgW = side;
+    }
+    return {
+      ...baseConfig,
+      imageHeight: imgH,
+      imageWidth: imgW,
+      featureHeight: fSide,
+      featureWidth: fSide,
+    };
+  };
+
+  const lrNafPlan = buildPixal3dNafPlan(models.naf.config);
+  const hrCondTensor = stageSpecificCascade ? highResolutionConditioningTensor : conditioningTensor;
+  const hrNafPlan = stageSpecificCascade
+    ? buildPixal3dNafPlan(
+        deriveStageNafConfig(
+          models.naf.config,
+          models.naf.highResolutionConfig,
+          hrCondTensor,
+          highResolutionRawImageTensor,
+          highResolutionRawImageValues,
+        ),
+      )
+    : lrNafPlan;
+  const texCondTensor = textureConditioningTensor ?? hrCondTensor;
+  const texRawTensor =
+    textureRawImageTensor ?? (stageSpecificCascade ? highResolutionRawImageTensor : rawImageTensor);
+  const texRawValues =
+    textureRawImageValues ?? (stageSpecificCascade ? highResolutionRawImageValues : rawImageValues);
+  const hasExplicitTextureConditioning = Boolean(
+    textureConditioningTensor || textureRawImageTensor || textureRawImageValues,
+  );
+  const texNafPlan =
+    models.naf.textureConfig && (stageSpecificCascade || hasExplicitTextureConditioning)
+      ? buildPixal3dNafPlan(models.naf.textureConfig)
+      : hasExplicitTextureConditioning
+        ? buildPixal3dNafPlan(
+            deriveStageNafConfig(models.naf.config, null, texCondTensor, texRawTensor, texRawValues),
+          )
+        : hrNafPlan;
+
+  if (stageSpecificCascade) {
+    if (
+      hrNafPlan.imageHeight <= lrNafPlan.imageHeight &&
+      hrNafPlan.featureHeight <= lrNafPlan.featureHeight
+    ) {
+      throw new TypeError(
+        'stage-specific 1024_cascade requires higher-resolution conditioning/NAF config than 512 LR stage',
+      );
+    }
+  }
+
   const cameraConfig = {
     cameraAngleX: camera.cameraAngleX ?? PIXAL3D_DEFAULT_FOV_RAD,
     ...(camera.distance !== undefined ? { distance: camera.distance } : {}),
@@ -263,7 +482,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
 
   const gaussian = browserNoise(seed);
   const owned = new Set(), ownedTensors = new Set(), noiseInputs = {}, phases = [];
-  let state = 'new', phase = 'new', result, disposed = false, lastDecoder;
+  let state = 'new', phase = 'new', result, disposed = false, lastDecoder, nafCheckpointCache;
   const decode = (decoder, invocation) => {
     lastDecoder = decoder;
     return decoder.run(invocation);
@@ -300,18 +519,24 @@ export function createPixal3dGenerationFromConditioningAdapter({
     await onPhase?.({ phase: name, routeId: route.routeId });
   };
   const consume = async (role, name, factory) => {
-    if (staged) {
-      phase = 'generation-checkpoint-input-loading';
-      await onPhase?.({ phase, modelRole: role, routeId: route.routeId });
-    }
-    const checkpoint = staged
-      ? await loadModel(role, {
-          streamBlocks: true,
-          streamParameters: ['shapeDecoder', 'textureDecoder'].includes(role),
-        })
-      : models[role];
-    if (!checkpoint?.weights || (checkpoint.role !== undefined && checkpoint.role !== role)) {
-      throw new TypeError('actual checkpoint weights for model role required: ' + role);
+    let checkpoint;
+    if (role === 'naf' && nafCheckpointCache) {
+      checkpoint = nafCheckpointCache;
+    } else {
+      if (staged) {
+        phase = 'generation-checkpoint-input-loading';
+        await onPhase?.({ phase, modelRole: role, routeId: route.routeId });
+      }
+      checkpoint = staged
+        ? await loadModel(role, {
+            streamBlocks: true,
+            streamParameters: ['shapeDecoder', 'textureDecoder'].includes(role),
+          })
+        : models[role];
+      if (!checkpoint?.weights || (checkpoint.role !== undefined && checkpoint.role !== role)) {
+        throw new TypeError('actual checkpoint weights for model role required: ' + role);
+      }
+      if (role === 'naf') nafCheckpointCache = checkpoint;
     }
     if (name) await enter(name);
     return factory({
@@ -323,6 +548,71 @@ export function createPixal3dGenerationFromConditioningAdapter({
       loadWeight: checkpoint.loadWeight,
     });
   };
+  const runNafStage = async ({ phaseName, plan, stageCondTensor, stageRawTensor, stageRawValues, invocation }) => {
+    let ownedImageTensor;
+    const imageTensor =
+      stageRawTensor ??
+      (() => {
+        const expectedCount = plan.imageHeight * plan.imageWidth * 3;
+        if (
+          !(stageRawValues instanceof Float32Array) ||
+          stageRawValues.length !== expectedCount ||
+          !stageRawValues.every(Number.isFinite)
+        ) {
+          throw new TypeError(`complete finite rawImageValues of length ${expectedCount} required`);
+        }
+        const t = runtime.createTensor({
+          name: `pixal3d.generation.raw-image.${phaseName}`,
+          shape: [1, plan.imageHeight, plan.imageWidth, 3],
+          dtype: 'f32',
+          usage: U.storage | U.copyDst | U.copySrc,
+        });
+        ownedTensors.add(t);
+        runtime.uploadTensor(t, stageRawValues);
+        ownedImageTensor = t;
+        return t;
+      })();
+    const naf = await consume('naf', phaseName, model =>
+      own(
+        createPixal3dNafAdapter({
+          route,
+          config: plan,
+          weights: model.weights,
+          imageTensor,
+          conditioningTensor: stageCondTensor,
+        }),
+      ),
+    );
+    await naf.run(invocation);
+    await runtime.device?.queue?.onSubmittedWorkDone?.();
+    naf.releaseParameters();
+    if (ownedImageTensor) {
+      ownedImageTensor.buffer?.destroy?.();
+      ownedTensors.delete(ownedImageTensor);
+    }
+    return naf;
+  };
+  const buildSparseProj = (gridResolution, coordTensor, stageNaf, stageCondTensor) =>
+    own(
+      createPixal3dProjGridAdapter({
+        route,
+        config: {
+          gridResolution,
+          imageResolution: stageNaf.plan.imageHeight,
+          featureHeight: stageNaf.plan.featureHeight,
+          featureWidth: stageNaf.plan.featureWidth,
+          channels: stageNaf.plan.featureChannels,
+          highResFeatureHeight: stageNaf.plan.outputHeight,
+          highResFeatureWidth: stageNaf.plan.outputWidth,
+          highResChannels: stageNaf.plan.featureChannels,
+          tokenRows: coordTensor.shape[0],
+          prefixTokens: stageNaf.plan.prefixTokens,
+        },
+        conditioningTensor: stageCondTensor,
+        highResTensor: stageNaf.outputs.highResFeatures,
+        coordinateTensor: coordTensor,
+      }),
+    );
   const releaseFlow = async flow => {
     await runtime.device?.queue?.onSubmittedWorkDone?.();
     flow.releaseParameters();
@@ -374,9 +664,12 @@ export function createPixal3dGenerationFromConditioningAdapter({
   return Object.freeze({
     runtime,
     routeId: route.routeId,
+    conditioningMode: effectiveConditioningMode,
     inputs: Object.freeze({
       conditioning: conditioningTensor,
       ...(rawImageTensor ? { rawImage: rawImageTensor } : {}),
+      ...(highResolutionConditioningTensor ? { highResolutionConditioning: highResolutionConditioningTensor } : {}),
+      ...(highResolutionRawImageTensor ? { highResolutionRawImage: highResolutionRawImageTensor } : {}),
     }),
     get state() { return state; },
     get phase() { return phase; },
@@ -392,45 +685,14 @@ export function createPixal3dGenerationFromConditioningAdapter({
       }
       state = 'running';
       try {
-        const nafPlan = buildPixal3dNafPlan(models.naf.config);
-        let ownedImageTensor;
-        const imageTensor =
-          rawImageTensor ??
-          (() => {
-            const expectedCount = nafPlan.imageHeight * nafPlan.imageWidth * 3;
-            if (rawImageValues.length !== expectedCount || !rawImageValues.every(Number.isFinite)) {
-              throw new TypeError(`complete finite rawImageValues of length ${expectedCount} required`);
-            }
-            const t = runtime.createTensor({
-              name: 'pixal3d.generation.raw-image',
-              shape: [1, nafPlan.imageHeight, nafPlan.imageWidth, 3],
-              dtype: 'f32',
-              usage: U.storage | U.copyDst | U.copySrc,
-            });
-            ownedTensors.add(t);
-            runtime.uploadTensor(t, rawImageValues);
-            ownedImageTensor = t;
-            return t;
-          })();
-
-        const naf = await consume('naf', 'naf-feature-upsampling', model =>
-          own(
-            createPixal3dNafAdapter({
-              route,
-              config: model.config,
-              weights: model.weights,
-              imageTensor,
-              conditioningTensor,
-            }),
-          ),
-        );
-        await naf.run(invocation);
-        await runtime.device?.queue?.onSubmittedWorkDone?.();
-        naf.releaseParameters();
-        if (ownedImageTensor) {
-          ownedImageTensor.buffer?.destroy?.();
-          ownedTensors.delete(ownedImageTensor);
-        }
+        const lrNaf = await runNafStage({
+          phaseName: 'naf-feature-upsampling',
+          plan: lrNafPlan,
+          stageCondTensor: conditioningTensor,
+          stageRawTensor: rawImageTensor,
+          stageRawValues: rawImageValues,
+          invocation,
+        });
 
         const denseResolution = models.sparseFlow.config?.resolution ?? 16;
         const denseProj = own(
@@ -438,17 +700,17 @@ export function createPixal3dGenerationFromConditioningAdapter({
             route,
             config: {
               gridResolution: denseResolution,
-              imageResolution: naf.plan.imageHeight,
-              featureHeight: naf.plan.featureHeight,
-              featureWidth: naf.plan.featureWidth,
-              channels: naf.plan.featureChannels,
-              prefixTokens: naf.plan.prefixTokens,
+              imageResolution: lrNaf.plan.imageHeight,
+              featureHeight: lrNaf.plan.featureHeight,
+              featureWidth: lrNaf.plan.featureWidth,
+              channels: lrNaf.plan.featureChannels,
+              prefixTokens: lrNaf.plan.prefixTokens,
             },
             conditioningTensor,
           }),
         );
         await denseProj.run(cameraConfig, invocation);
-        const globalConditioning = denseProj.outputs.globalConditioning;
+        const lrGlobalConditioning = denseProj.outputs.globalConditioning;
 
         const sparse = await consume('sparseFlow', 'sparse-structure-sampling', async model =>
           own(
@@ -458,7 +720,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
               weights: model.weights,
               loadBlockWeights: model.loadBlockWeights,
               phases: model.phases,
-              conditioningTensor: globalConditioning,
+              conditioningTensor: lrGlobalConditioning,
               projectedConditioningTensor: denseProj.outputs.projectedConditioning,
             }),
           ),
@@ -468,7 +730,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
             route,
             flow: sparse,
             config: models.sparseFlow.config,
-            conditioningTensor: globalConditioning,
+            conditioningTensor: lrGlobalConditioning,
           }),
         );
         await sparseSampler.run({ sample: await noise('sparse', sparse.plan.prefix.inputShape) }, invocation);
@@ -498,44 +760,30 @@ export function createPixal3dGenerationFromConditioningAdapter({
         const lrResolution = coordinates.plan.outputResolution;
         await retire(occupancy, sparseSampler, sparse);
 
-        const buildSparseProj = (gridResolution, coordTensor) =>
-          own(
-            createPixal3dProjGridAdapter({
-              route,
-              config: {
-                gridResolution,
-                imageResolution: naf.plan.imageHeight,
-                featureHeight: naf.plan.featureHeight,
-                featureWidth: naf.plan.featureWidth,
-                channels: naf.plan.featureChannels,
-                highResFeatureHeight: naf.plan.outputHeight,
-                highResFeatureWidth: naf.plan.outputWidth,
-                highResChannels: naf.plan.featureChannels,
-                tokenRows: coordTensor.shape[0],
-                prefixTokens: naf.plan.prefixTokens,
-              },
-              conditioningTensor,
-              highResTensor: naf.outputs.highResFeatures,
-              coordinateTensor: coordTensor,
-            }),
-          );
-
-        const lrProj = buildSparseProj(lrResolution, lrCoordinates);
+        const lrProj = buildSparseProj(lrResolution, lrCoordinates, lrNaf, conditioningTensor);
         await lrProj.run(cameraConfig, invocation);
-        if (!cascade) await retire(naf);
+        if (!cascade || stageSpecificCascade) await retire(lrNaf);
 
         const lrFlow = await shapeFlow(
           'lowResolutionShape',
           lrCoordinates,
-          globalConditioning,
+          lrGlobalConditioning,
           lrProj.outputs.projectedConditioning,
         );
-        const lr = await sampleShape('lowResolutionShape', lrFlow, 'lowResolutionShape', globalConditioning, invocation);
+        const lr = await sampleShape(
+          'lowResolutionShape',
+          lrFlow,
+          'lowResolutionShape',
+          lrGlobalConditioning,
+          invocation,
+        );
 
         let finalCoordinates = lrCoordinates;
         let finalResolution = lrResolution;
         let finalSample = lr.sample;
         let finalProj = lrProj;
+        let finalGlobalConditioning = lrGlobalConditioning;
+        let activeHrNaf = null;
         let sampledAdapters;
         if (cascade) {
           const support = await consume('shapeDecoder', 'learned-cascade-support', async model =>
@@ -554,26 +802,44 @@ export function createPixal3dGenerationFromConditioningAdapter({
           );
           const hr = await support.run(invocation);
           await retire(lr.sampler, lrFlow, lrProj, coordinates);
-          const hrProj = buildSparseProj(hr.resolution, hr.coordinates);
+          if (stageSpecificCascade) {
+            await retire(denseProj);
+            activeHrNaf = await runNafStage({
+              phaseName: 'naf-hr-feature-upsampling',
+              plan: hrNafPlan,
+              stageCondTensor: hrCondTensor,
+              stageRawTensor: highResolutionRawImageTensor,
+              stageRawValues: highResolutionRawImageValues,
+              invocation,
+            });
+          } else {
+            activeHrNaf = lrNaf;
+          }
+          const hrProj = buildSparseProj(hr.resolution, hr.coordinates, activeHrNaf, hrCondTensor);
           await hrProj.run(cameraConfig, invocation);
-          await retire(naf);
+          await retire(activeHrNaf);
+          activeHrNaf = null;
+          const hrGlobalConditioning = stageSpecificCascade
+            ? hrProj.outputs.globalConditioning
+            : lrGlobalConditioning;
           const hrFlow = await shapeFlow(
             'highResolutionShape',
             hr.coordinates,
-            globalConditioning,
+            hrGlobalConditioning,
             hrProj.outputs.projectedConditioning,
           );
           const hrSample = await sampleShape(
             'highResolutionShape',
             hrFlow,
             'highResolutionShape',
-            globalConditioning,
+            hrGlobalConditioning,
             invocation,
           );
           finalCoordinates = hr.coordinates;
           finalResolution = hr.resolution;
           finalSample = hrSample.sample;
           finalProj = hrProj;
+          finalGlobalConditioning = hrGlobalConditioning;
           sampledAdapters = [hrSample.sampler, hrFlow];
         } else {
           sampledAdapters = [lr.sampler, lrFlow];
@@ -599,6 +865,30 @@ export function createPixal3dGenerationFromConditioningAdapter({
         );
         const geometry = await decode(geometryDecoder, invocation);
 
+        const needsSeparateTexProjection =
+          texCondTensor !== (cascade ? hrCondTensor : conditioningTensor) ||
+          texRawTensor !== (stageSpecificCascade ? highResolutionRawImageTensor : rawImageTensor) ||
+          texRawValues !== (stageSpecificCascade ? highResolutionRawImageValues : rawImageValues) ||
+          JSON.stringify(texNafPlan) !== JSON.stringify(cascade ? hrNafPlan : lrNafPlan);
+
+        let texProj = finalProj;
+        let texGlobalConditioning = finalGlobalConditioning;
+        if (needsSeparateTexProjection) {
+          await retire(finalProj);
+          const texNaf = await runNafStage({
+            phaseName: 'naf-texture-feature-upsampling',
+            plan: texNafPlan,
+            stageCondTensor: texCondTensor,
+            stageRawTensor: texRawTensor,
+            stageRawValues: texRawValues,
+            invocation,
+          });
+          texProj = buildSparseProj(finalResolution, finalCoordinates, texNaf, texCondTensor);
+          await texProj.run(cameraConfig, invocation);
+          await retire(texNaf);
+          texGlobalConditioning = texProj.outputs.globalConditioning ?? finalGlobalConditioning;
+        }
+
         const shapeNormalize = own(
           createTrellisSLatScaleAdapter({
             route,
@@ -610,12 +900,12 @@ export function createPixal3dGenerationFromConditioningAdapter({
         const textureFlow = await shapeFlow(
           'textureFlow',
           finalCoordinates,
-          globalConditioning,
-          finalProj.outputs.projectedConditioning,
+          texGlobalConditioning,
+          texProj.outputs.projectedConditioning,
           shapeNormalize.outputs.sample,
         );
         await shapeNormalize.run(invocation);
-        const textureSample = await sampleShape('textureFlow', textureFlow, 'texture', globalConditioning, invocation);
+        const textureSample = await sampleShape('textureFlow', textureFlow, 'texture', texGlobalConditioning, invocation);
         const textureScale = own(
           createTrellisSLatScaleAdapter({
             route,
@@ -625,7 +915,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
           }),
         );
         await textureScale.run(invocation);
-        await retire(textureSample.sampler, textureFlow, shapeNormalize, finalProj, denseProj);
+        await retire(textureSample.sampler, textureFlow, shapeNormalize, texProj, denseProj);
 
         const textureDecoder = await consume('textureDecoder', 'shape-guided-material-decoding', async model =>
           own(
@@ -643,6 +933,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
         );
         const material = await decode(textureDecoder, invocation);
         await runtime.device?.queue?.onSubmittedWorkDone?.();
+        nafCheckpointCache = undefined;
         result = Object.freeze({
           geometry,
           material,
@@ -652,6 +943,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
           highResolutionRows: rows,
           meshResolution,
           pipelineType,
+          conditioningMode: effectiveConditioningMode,
           camera: Object.freeze({ ...cameraConfig }),
           modelIdentities: Object.freeze(Object.fromEntries(roles.map(role => [role, models[role].identity ?? null]))),
           phases: Object.freeze(phases.map(Object.freeze)),
@@ -659,12 +951,16 @@ export function createPixal3dGenerationFromConditioningAdapter({
           featureBytesToCPUDuringServing: 0,
           coordinateBytesToCPUDuringServing: 0,
           handoff: 'resident learned geometry/material fields; post-model mesh/UV/PBR consumers outstanding',
-          comparison: 'browser generation; no assertion of matched MLX noise or model fidelity',
+          comparison:
+            effectiveConditioningMode === 'shared-512-preview'
+              ? 'browser preview generation reusing 512 conditioning across cascade stages; non-source-faithful preview'
+              : 'browser generation with stage-specific conditioning resolutions; no assertion of matched MLX noise or model fidelity',
         });
         state = 'completed';
         phase = 'completed';
         return result;
       } catch (error) {
+        nafCheckpointCache = undefined;
         state = 'failed';
         result = undefined;
         throw error;
@@ -674,6 +970,7 @@ export function createPixal3dGenerationFromConditioningAdapter({
       if (state === 'running') throw new Error('pixal3d generation adapter in use');
       if (disposed) return;
       disposed = true;
+      nafCheckpointCache = undefined;
       for (const a of [...owned].reverse()) a.dispose();
       owned.clear();
       for (const t of ownedTensors) t.buffer?.destroy?.();
