@@ -8,10 +8,10 @@ export function describeLayerTiming({object,layer,timeScale=1,phase,stage,hasSuc
   basis='observed-progress';const fraction=Math.max(0,Math.min(1,phase.progress/scale));interrupted=fraction<1;
   text=`Recorded progress: ${Math.round(phase.progress*100)}%. Response reached ${Math.round(fraction*100)}%.`;
  }else{
-  const fitted=layer.timing==='phase'&&stage!=='complete'&&length!==null;
-  basis=fitted?'phase':layer.timing==='progress'&&stage!=='complete'?'authored-fallback':'seconds';
-  durationMs=(fitted?length:object.recipe.duration*1000)*scale;
-  text=(basis==='authored-fallback'?'Progress unknown · using authored seconds. ':'')+(length!==null&&stage!=='complete'?`Recorded phase: ${seconds(length)}. `:'')+`Response: ${seconds(durationMs)}${stage==='complete'?' after inference.':'.'}`;
+  const fitted=layer.timing==='phase'&&stage!=='complete'&&Number.isFinite(phase?.fitDurationMs);
+  basis=fitted?'phase':['phase','progress'].includes(layer.timing)&&stage!=='complete'?'authored-fallback':'seconds';
+  durationMs=(fitted?phase.fitDurationMs:object.recipe.duration*1000)*scale;
+  text=(basis==='authored-fallback'?(layer.timing==='progress'?'Progress unknown · using authored seconds. ':'No complete phase span · using authored seconds. '):'')+(length!==null&&stage!=='complete'?`Recorded phase: ${seconds(length)}. `:'')+`Response: ${seconds(durationMs)}${stage==='complete'?' after inference.':'.'}`;
   interrupted=length!==null&&stage!=='complete'&&durationMs>length;
  }
  if(interrupted)text+=hasSuccessor?' Next phase interrupts it.':' Recording ends before this response finishes.';
