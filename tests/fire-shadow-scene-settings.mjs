@@ -26,3 +26,6 @@ for(const pointCount of [6,8]){const restored=readFireShadowSceneSettings(new UR
 
 const lightQuality=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,volumeGrid:32,directions:96})));
 assert.equal(lightQuality.volumeGrid,32);assert.equal(lightQuality.directions,96);
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:'regions'}))).angularPattern,'regions');
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_light_pattern=typo')),/angular pattern/);

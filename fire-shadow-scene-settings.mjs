@@ -16,6 +16,7 @@ export function readFireShadowSceneSettings(params) {
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
   if(params.has(prefix+'light_grid')){const value=number('light_grid',16);if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');smoke.volumeGrid=value;}
+  if(params.has(prefix+'light_pattern')){const value=params.get(prefix+'light_pattern');if(!['fixed','spatial','source','guided','regions'].includes(value))throw Error('valid light angular pattern required');smoke.angularPattern=value;}
   if(params.has(prefix+'light_directions')){const value=number('light_directions',24);lightingDirections(value);smoke.directions=value;}
   const edge=params.get(prefix+'shadow_edge_filter');
   if(edge!==null){if(!['0','1'].includes(edge))throw Error('shadow edge filter must be 0 or 1');smoke.shadowEdgeFilter=edge==='1';}
@@ -44,6 +45,7 @@ export function fireShadowSceneRoute(state) {
   if(state.shadowEdgeFilter!==undefined){if(typeof state.shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');values.shadow_edge_filter=state.shadowEdgeFilter?'1':'0';}
   if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;
   if(state.directions!==undefined)values.light_directions=state.directions;
+  if(state.angularPattern!==undefined)values.light_pattern=state.angularPattern;
   const route=Object.fromEntries(Object.entries(values).map(([key,value])=>[prefix+key,String(value)]));
   if(state.smokeShadowFilter!==undefined){
     if(typeof state.smokeShadowFilter!=='boolean')throw Error('smoke shadow filter must be boolean');
