@@ -31,7 +31,7 @@ export function createImageIterationHistory({storage,key=IMAGE_HISTORY_KEY,chang
    if(entry?.kind!=='image')return null;
    if(assetWithheld(entry)){const prior=find(sourceOf(entry));if(prior){Object.assign(prior,{visibility:copy(entry.visibility)});if(state.viewedSource===sourceOf(entry))state.viewedSource=null;if(state.referenceSource===sourceOf(entry))state.referenceSource=null;persist();}return null;}
    if(state.viewedSource===sourceOf(entry)&&find(state.viewedSource))return copy(find(state.viewedSource));
-   const next=upsert(entry);state.viewedSource=next.source;state.compareSource=null;
+   const next=upsert({...entry,visibility:entry.visibility??null});state.viewedSource=next.source;state.compareSource=null;
    if(!state.referenceSource)state.referenceSource=next.source;persist();return copy(next);
   },
   record(entry){const next=upsert(entry);state.viewedSource=next.source;state.compareSource=null;persist();return copy(next);},
