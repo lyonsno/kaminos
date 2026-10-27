@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
+import {createWalkingCreature,prepareWalkingSetup} from '../experiments/creature-motion/walking.experiment.mjs';
 class Element {constructor(){this.children=[];this.style={};}append(...xs){this.children.push(...xs);}setAttribute(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null};
 const scene=new THREE.Scene();let tick=null,calls=0,hold=true,invalid=false,received;
@@ -23,4 +23,20 @@ destination=[3.9,0,4];tick({deltaSeconds:1/30});assert.deepEqual(entry.read().re
 invalid=true;assert.throws(()=>tick({deltaSeconds:1/30}),/steering/i);assert.equal(tick,null,'Malformed intent must stop the owner clock');
 assert.equal(entry.read().playback.status,'paused');
 await entry.dispose();assert.equal(scene.children.length,0);
+hold=true;invalid=false;
+const restData={...data,motion:{...data.motion,positions:[0,.7,0,0,.8,0,0,.7,0]},source:{...data.source,motionSha256:'d'.repeat(64)}};
+const resting=await createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{blend_frames:1,radius:20,rest:{motion:'/rest.json',motion_sha256:'d'.repeat(64),blend_seconds:.3}}},{loadSources:async inputs=>inputs.motion==='/rest.json'?restData:data,steering});
+await resting.operations.action({kind:'wander'});
+const parked=resting.read().action.motion.path.position;
+tick({deltaSeconds:.31});const restA=resting.read();tick({deltaSeconds:.02});const restB=resting.read();
+assert.notDeepEqual(restB.playback.actualLocalPose.actor,restA.playback.actualLocalPose.actor,'Held task must animate the retained rest source instead of freezing a gait pose');
+assert.deepEqual(restB.action.motion.path.position,parked,'Rest animation must not move the held task destination');
+assert.equal(restB.restMotion.source.motionSha256,'d'.repeat(64));assert.equal(restB.restMotion.weight,1);
+hold=false;tick({deltaSeconds:.1});assert.ok(resting.read().action.motion.path.distance>0);assert.ok(resting.read().restMotion.weight<1);
+tick({deltaSeconds:.3});assert.equal(resting.read().restMotion.weight,0,'Resumed pursuit must return to the locomotion source');
+await resting.dispose();assert.equal(scene.children.length,0);assert.equal(tick,null);
+const restRecipe={rest:{motion:'/rest.json',motion_sha256:'d'.repeat(64),blend_seconds:.3}};
+await assert.rejects(()=>prepareWalkingSetup(restRecipe,{loadSources:async inputs=>inputs.motion==='/rest.json'?{...restData,source:{...restData.source,frameSha256:'e'.repeat(64)}}:data}),/bind frame/);
+await assert.rejects(()=>prepareWalkingSetup({...restRecipe,rest:{...restRecipe.rest,blend_seconds:0}},{loadSources:async()=>data}),/blend duration/);
+await assert.rejects(()=>prepareWalkingSetup(restRecipe,{loadSources:async inputs=>{if(inputs.motion==='/rest.json')throw Error('Rest source digest mismatch');return data;}}),/digest mismatch/);
 console.log('Game steering uses the actual shared clock, world frame, gait hold and failure cleanup');

@@ -3,6 +3,7 @@ import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
 import {createPoseOverlay} from './pose-overlay.mjs';
+import {createRestMotion} from './rest-motion.mjs';
 import {loadCreatureFlesh,createCreatureFleshDeformer,validateCreatureFleshPoses} from '../creature-flesh/creature.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
@@ -38,6 +39,7 @@ function checkRecipeInputs(inputs){
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
  if(inputs.cycle!==undefined&&(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0))throw Error('Invalid authored repeat cycle');
  if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
+ if(inputs.rest!==undefined){const r=inputs.rest;if(!r||typeof r.motion!=='string'||!r.motion.trim()||!/^[a-f0-9]{64}$/i.test(r.motion_sha256??'')||r.blend_seconds!==undefined&&(!Number.isFinite(r.blend_seconds)||r.blend_seconds<=0))throw Error('Rest requires a retained motion URL, digest and positive blend duration');}
  if(inputs.gizmos!==undefined&&typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
  if(inputs.ground==='source-start'){const size=inputs.floor_size??5*(inputs.radius??10);if(!Number.isFinite(size)||size<=0)throw Error('Reference floor size must be positive');}
  const choices=inputs.motions??[];if(!Array.isArray(choices))throw Error('Motion choices must be an array');
@@ -58,9 +60,18 @@ async function checkRecipeView(view,current){
 
 // Validate every source consumed by construction before Open disposes the
 // current scene. The room and selected-object file controls share this path.
+async function prepareRestSetup(inputs,data,loadSources){
+ if(!inputs.rest)return null;
+ const rest=await loadSources({...inputs,motion:inputs.rest.motion,motion_sha256:inputs.rest.motion_sha256,motion_data:inputs.rest.motion_data,prefix:inputs.rest.prefix,prefix_sha256:inputs.rest.prefix_sha256});
+ if(rest.source.caseSha256!==data.source.caseSha256||rest.source.frameSha256!==data.source.frameSha256||rest.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Rest motion body, bind frame or conditioning differs');
+ const adapter=createGivenPaletteMotion({THREE,motion:rest.motion,rigFrame:data.frame});
+ const motion=createRestMotion({THREE,adapter,blendSeconds:inputs.rest.blend_seconds??.3});
+ return {motion,source:rest.source};
+}
 export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySources}={}){
  checkRecipeInputs(recipe);
  const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
+ await prepareRestSetup(recipe,loaded,loadSources);
  const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
  const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
  validateCreatureFleshPoses(loaded,[check.frame(0),wander?wander.frame(wander.read().frame):walking.frame(recipe.sample??0,{mode:recipe.action==='wander'?'cycle':recipe.mode??'source',cycle:recipe.cycle??0})]);
@@ -72,6 +83,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  if(steering!==null&&(typeof steering.update!=='function'||typeof steering.read!=='function'))throw Error('Game steering requires update and read');
  const choices=[...checkRecipeInputs(inputs)];
  const data=await loadCreatureFlesh(inputs.flesh,await loadSources(inputs)),document=host.controls.document;
+ const restSetup=await prepareRestSetup(inputs,data,loadSources),restMotion=restSetup?.motion;
  let workspace=null,assigned=null;const sessionChoices=new Map();
  const deformation=inputs.deformation??(inputs.flesh?'gpu':'cpu'),deformerFactory=inputs.flesh?createCreatureFleshDeformer(inputs.flesh):deformation==='gpu'?await loadGpuDeformer():null;
  if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
@@ -101,7 +113,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const instruments=document.createElement('div');
  let releaseEncounter=()=>{},frameStamp=0;
  const poseOverlay=createPoseOverlay({THREE});let resolvedOverlay=null;
- const composedPose=pose=>resolvedOverlay?resolvedOverlay(pose):pose;
+ const restingPose=pose=>restMotion&&wander?restMotion.frame(pose,walking.frame(pose.frame,{mode:'cycle',cycle:0})):pose;
+ const composedPose=pose=>{const body=restingPose(pose);return resolvedOverlay?resolvedOverlay(body):body;};
  const poseObservers=new Set();
  let readingZoneState=false;
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();runtime?.flesh.setRunning(false);};
@@ -111,7 +124,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   // syncArea refreshes presentation, so guard its nested state reads.
   if(zoneProvider&&wander&&!readingZoneState){readingZoneState=true;try{syncArea();}finally{readingZoneState=false;}}
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
+  motionWorkspace:workspace?.read()??null,restMotion:restMotion?{...restMotion.read(),source:structuredClone(restSetup.source)}:null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{time:clock/1000,steering:steering?.read()??null,engagement:{...engagement.read(),enabled:!steering&&chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
@@ -162,11 +175,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function presentWander(delta,playing,from=clock/1000-delta,physicalSeconds=delta){
   if(!syncArea())return read();
-  if(attention&&encounterContext){
-   const frame=authoredPlacement();frame.updateMatrixWorld(true);
-   resolvedOverlay=poseOverlay.resolve(wander.frame(wander.read().frame),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
-  }
-  let moving=delta;
+  let moving=delta,resting=false;
   if(steering){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
@@ -179,7 +188,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const local=intent.destination===null?null:frame.worldToLocal(new THREE.Vector3(...intent.destination));
    const next=local?[local.x,local.z]:null,prior=wander.snapshot().path,old=prior.destination??null;
    if(next===null?old!==null:!old||prior.constrainDestination!==false||next.some((v,i)=>Math.abs(v-old[i])>1e-8))wander.setDestination(next,{constrainToArea:false});
-   if(intent.hold)moving=0;
+   if(intent.hold){moving=0;resting=true;}
   }else if(attention&&chosenInputs.attention.engage===true){
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
@@ -190,7 +199,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
     if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
    }else if(intent.phase!=='inspecting')wander.setDestination(null);
-   if(intent.hold)moving=0;
+   if(intent.hold){moving=0;resting=true;}
+  }
+  restMotion?.advance(clock/1000-from,resting);
+  if(attention&&encounterContext){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);
+   resolvedOverlay=poseOverlay.resolve(restingPose(wander.frame(wander.read().frame)),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
   }
   let constraint;
   if(encounterContext&&moving>0){const frame=authoredPlacement(),path=wander.read().path;frame.updateMatrixWorld(true);const direction=new THREE.Vector3(path.direction[0],0,path.direction[1]).transformDirection(frame.matrixWorld),scale=frame.getWorldScale(new THREE.Vector3()).x;
