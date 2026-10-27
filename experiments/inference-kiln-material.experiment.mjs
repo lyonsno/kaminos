@@ -11,6 +11,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
  if(inputs.prompt!==undefined&&(typeof inputs.prompt!=='string'||!inputs.prompt.trim()))throw Error('Enter a prompt to burn');
  const session=await host.scene.open();
  const applyGlow=()=>{if(kiln.read().appearance==='incineration')app.setBurnAppearance(asset.id,{glow,kelvinPerHeat:Number(doc.getElementById('volume-physical-kelvin-per-heat')?.value??1600)});};
+ let restoredPrompt,restoredBurnable,borrowedPrompt=false;
  let kiln,asset,flame,runtime,restore,emitter,emitterPose,paused,ground,groundVisible,stop=()=>{},closed=false,pulse=0,status,mode='lettering',ignitionStart=0;
  const assertOpen=()=>{if(closed)throw Error('Material study is closed');};
  const setFeed=enabled=>flame.setControls({'volume-flow-rate':enabled?2.5:0,'volume-immersed-fuel':enabled?.55:0});
@@ -29,7 +30,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   app.setBurnable(asset.id,false);await settle();runtime.resetThermalExperimentFluid();app.setBurnable(asset.id,true);await settle();applyGlow();session.redraw();sync();return read();};
  async function dispose(){if(closed)return;closed=true;stop();
   try{if(runtime&&flame&&!flame.read().active){runtime.setSimulationPaused(true);await activate();}
-   if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,false);await settle();}}
+   if(asset&&host.scene.objects().some(row=>row.id===asset.id)){app.setBurnable(asset.id,borrowedPrompt?restoredBurnable:false);await settle();}}
   finally{try{await session.dispose();}finally{kiln?.dispose();if(restoreBloom)bloom.set(restoreBloom);if(cameraMatch)cameraMatch.checked=savedCameraMatch;if(restore)flame.setControls(restore);if(emitterPose&&host.scene.objects().some(row=>row.id===emitter.id))host.scene.setTransform(emitter.id,emitterPose);if(runtime)runtime.setSimulationPaused(paused);if(ground){ground.checked=groundVisible;ground.onchange({target:ground});}}}
  }
  try{
@@ -40,9 +41,12 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   const original=flame.read().settings;
   restore=Object.fromEntries(['volume-flow-rate','volume-immersed-fuel','volume-ray-start-noise','volume-ray-noise-animated'].map(id=>[id,(original.domControls[id]??original.rendererControls[id]).value]));
   flame.setControls({'volume-ray-start-noise':false,'volume-ray-noise-animated':false});setFeed(false);runtime.resetThermalExperimentFluid();
-  kiln=createInferenceKiln({document:doc,prompt:inputs.prompt??'A weathered bronze lantern',representation:'relief',appearance:inputs.appearance??'incineration'});
-  kiln.text.removeFromParent();await session.attach(kiln.root,{owned:true,presentation:true});
-  asset=await session.attach(kiln.text,{owned:true,metadata:{type:'pbr',label:'Prompt lettering'}});
+  restoredPrompt=host.scene.objects().find(row=>row.object?.userData?.kaminosPromptRelief);
+  borrowedPrompt=!!restoredPrompt;restoredBurnable=restoredPrompt?.burnable?.enabled===true;
+  const savedPrompt=restoredPrompt?.object.userData.kaminosPromptRelief;
+  kiln=createInferenceKiln({document:doc,prompt:savedPrompt?.prompt??inputs.prompt??'A weathered bronze lantern',representation:'relief',appearance:inputs.appearance??savedPrompt?.appearance??'incineration',promptMesh:restoredPrompt?.object});
+  if(!borrowedPrompt)kiln.text.removeFromParent();await session.attach(kiln.root,{owned:true,presentation:true});
+  asset=await session.attach(kiln.text,{owned:!borrowedPrompt,metadata:{type:'pbr',label:'Prompt lettering'}});
   ground=doc.getElementById('composition-ground-visible');groundVisible=ground?.checked;if(ground){ground.checked=false;ground.onchange({target:ground});}
   app.setBurnable(asset.id,true);await settle();applyGlow();restoreBloom=bloom.read().settings;bloom.set(bloomSettings);
   emitter=host.scene.objects().find(entry=>entry.type==='flame-emitter');if(!emitter)throw Error('Scene flame emitter is absent');

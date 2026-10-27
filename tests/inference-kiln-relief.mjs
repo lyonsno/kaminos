@@ -18,3 +18,9 @@ assert.equal(new Raycaster(new Vector3(0,0,1),new Vector3(0,0,-1)).intersectObje
 assert.ok(new Raycaster(new Vector3(.3,0,1),new Vector3(0,0,-1)).intersectObject(prompt).length>0,'glyph strokes remain solid');
 assert.equal(kiln.read().burnAuthority,'scene-owned-thermal');
 kiln.dispose();
+
+// A saved asset is borrowed by the study, preserving its exact geometry/pose.
+const saved=createInferenceKiln({document:{createElement:()=>canvas},prompt:'SAVED',representation:'relief'});
+saved.text.position.set(1,2,3);const geometry=saved.text.geometry;let released=false;geometry.addEventListener('dispose',()=>released=true);
+saved.text.removeFromParent();const adopted=createInferenceKiln({document:{createElement:()=>canvas},prompt:'SAVED',representation:'relief',promptMesh:saved.text});
+assert.equal(adopted.text,saved.text);assert.equal(adopted.text.geometry,geometry);assert.deepEqual(adopted.text.position.toArray(),[1,2,3]);adopted.dispose();assert.equal(released,false,'closing the study must not dispose a saved scene asset');saved.dispose();

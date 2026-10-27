@@ -1,7 +1,7 @@
 // One fluid consumer gathers any number of independently owned material fields.
 export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,onError=()=>{},dirty=()=>{}}){
   const bodies=new Map(),failures=new Map(),generations=new WeakMap();
-  let binding=null,pending=null,disposed=false,fault=null;
+  let binding=null,pending=null,disposed=false,fault=null,resync=false;
   const mounted=entry=>objects().some(row=>row.id===entry.id&&row.object===entry.object&&row.burnable?.enabled);
   function active(){return [...bodies.values()].filter(row=>mounted(row.entry));}
   function release(){binding?.detach();binding?.gas.dispose();binding=null;}
@@ -53,8 +53,8 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
   }
   function sync(){
     if(disposed)return Promise.resolve();
-    if(pending)return pending;
-    pending=reconcile().catch(error=>{fault={host:runtime(),message:error.message};onError(error);}).finally(()=>{pending=null;});
+    if(pending){resync=true;return pending;}
+    pending=(async()=>{do{resync=false;await reconcile();}while(resync&&!disposed);})().catch(error=>{fault={host:runtime(),message:error.message};onError(error);}).finally(()=>{pending=null;});
     return pending;
   }
   return {sync,forget,

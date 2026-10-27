@@ -6,7 +6,7 @@ import {uniform,texture,uv,float,vec3,sin,smoothstep,mix} from './lib/three.tsl.
 
 // A prompt ceremony: erosion is presentation, not a physical combustion claim.
 // The original text survives every burn and is never edited by the animation.
-export function createInferenceKiln({document,prompt='A weathered bronze lantern',duration=6,representation='billboard',appearance='crust'}){
+export function createInferenceKiln({document,prompt='A weathered bronze lantern',duration=6,representation='billboard',appearance='crust',promptMesh=null}){
   if(!['crust','incineration'].includes(appearance))throw Error('Unknown kiln appearance');
   if(!['billboard','relief'].includes(representation))throw Error('Unknown prompt representation');
   if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');
@@ -23,9 +23,9 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
   paper.colorNode=mix(vec3(.56,.51,.44),vec3(.1,.022,.004),ember);
   paper.opacityNode=texture(map,p).a.mul(remaining);
   paper.emissiveNode=vec3(1,.11,.008).mul(ember.mul(1.8));
-  const text=new Mesh(new PlaneGeometry(2,.5),paper);text.position.set(0,.15,.13);text.name='Prompt';root.add(text);
+  const text=promptMesh??new Mesh(new PlaneGeometry(2,.5),paper);if(!promptMesh){text.position.set(0,.15,.13);text.name='Prompt';root.add(text);}
   const solid=representation==='relief'?new MeshStandardMaterial({color:0xb8b2a8,roughness:.8,metalness:0}):null;
-  if(solid){solid.userData.kaminosBurnAppearance=appearance;text.material=solid;text.castShadow=true;text.receiveShadow=true;}
+  if(solid){solid.userData.kaminosBurnAppearance=appearance;if(!promptMesh)text.material=solid;text.castShadow=true;text.receiveShadow=true;}
   const floorMaterial=new MeshStandardMaterial({color:0x181a1e,roughness:.97,metalness:0});
   const floor=new Mesh(new PlaneGeometry(200,200),floorMaterial);floor.rotation.x=-Math.PI/2;floor.position.y=-1.8;floor.receiveShadow=true;root.add(floor);
   const backdrop=new Mesh(new PlaneGeometry(200,200),floorMaterial);backdrop.position.z=-2.5;root.add(backdrop);
@@ -55,6 +55,6 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
     return read();
   }
   function read(){if(solid)return {prompt:source,representation:'shallow-glyph-mesh',burnAuthority:'scene-owned-thermal',appearance};return {prompt:source,elapsed,duration,running,consumed:elapsed>=duration,progress:Math.min(1,elapsed/duration),representation:'transparent-text-billboard',burnAuthority:'presentation-clock'};}
-  setPrompt(prompt);
-  return {root,text,setPrompt,setAppearance(value){if(!solid||!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;text.userData.kaminosPromptRelief=promptReliefMetadata(source,value);return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();text.geometry.dispose();paper.dispose();solid?.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
+  if(promptMesh){source=prompt;text.userData.kaminosPromptRelief=promptReliefMetadata(prompt,appearance);reset();}else setPrompt(prompt);
+  return {root,text,setPrompt,setAppearance(value){if(!solid||!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;text.userData.kaminosPromptRelief=promptReliefMetadata(source,value);return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();if(!promptMesh)text.geometry.dispose();paper.dispose();solid?.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
 }
