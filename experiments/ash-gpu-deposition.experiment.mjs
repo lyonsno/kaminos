@@ -1,13 +1,14 @@
 import {Box3,Vector3,Mesh,SphereGeometry,MeshStandardMaterial,TorusGeometry} from '../lib/three.core.js';
 import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
 import {createGpuAshPatch} from '../ash/gpu-patch.mjs';
+import {createGpuTiledAsh} from '../ash/tile-gpu.mjs';
 import {disposeAsh} from '../ash/lifecycle.mjs';
 import {sourceSettings} from '../ash/fall-plan.mjs';
 import {patchLayout} from '../ash/gpu-plan.mjs';
 const kilnSha='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 const finitePoint=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
 export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async create({host,inputs={},record}){
- const session=await host.scene.open(),renderer=host.scene.renderer(),device=renderer?.backend?.device;
+ const session=await host.scene.open(),renderer=host.scene.renderer(),device=renderer?.backend?.device;const tiled=inputs.tiled===true,tileSize=inputs.tileSize??16;
  let producer,patch,asset,playing=true,busy=false,disposed=false,status,contactField,pauseButton,lastPose,lastTick=0;
  let emitting=false,fallRate=.008,fallSpread=.24;let emitter,emitterAsset,emissionButton,rateField,fallSpreadField;const controls=[];const gpuErrors=[];const onError=e=>gpuErrors.push(e.error.message);device?.addEventListener('uncapturederror',onError);
  try{
@@ -29,11 +30,11 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
   emitterAsset=await session.attach(emitter,{owned:true,metadata:{label:emitter.name,source:'ash:falling-source',type:'experiment'}});
   const source=()=>({position:emitter.position.toArray(),spread:fallSpread,rate:emitting?fallRate:0,dt:1/30});
   const read=()=>({...patch.read(),identity,playing,busy,contactObjectId:contactAsset.id,contact:marker.position.toArray(),contactRadius:marker.scale.x,errors:[...gpuErrors],source:'controllable GPU fallout plus optional settled fixture; no combustion coupling',emitter:{position:emitter.position.toArray(),rate:fallRate,spread:fallSpread,emitting,objectId:emitterAsset.id},view:session.readView()});
-  const sync=()=>{if(status)status.textContent=`GPU · ${patch.layout.cellSize} cell width · ${patch.read().volume.toFixed(3)} introduced volume · ${emitting?'emitting · ':''}${playing?'live':'paused'} · bounded patch`;if(contactField&&host.controls.document.activeElement!==contactField)contactField.value=String(marker.scale.x);if(pauseButton)pauseButton.textContent=playing?'Pause':'Resume';if(emissionButton)emissionButton.textContent=emitting?'Stop emitting':'Start emitting';for(const [field,value] of [[rateField,fallRate],[fallSpreadField,fallSpread]])if(field&&host.controls.document.activeElement!==field)field.value=String(value);};
+  const sync=()=>{if(status)status.textContent=`GPU · ${patch.layout.cellSize} cell width · ${patch.read().volume.toFixed(3)} introduced volume · ${emitting?'emitting · ':''}${playing?'live':'paused'} · ${tiled?'connected tiles':'bounded patch'}`;if(contactField&&host.controls.document.activeElement!==contactField)contactField.value=String(marker.scale.x);if(pauseButton)pauseButton.textContent=playing?'Pause':'Resume';if(emissionButton)emissionButton.textContent=emitting?'Stop emitting':'Start emitting';for(const [field,value] of [[rateField,fallRate],[fallSpreadField,fallSpread]])if(field&&host.controls.document.activeElement!==field)field.value=String(value);};
   const create=async({cellSize=.012,width=1.8,height=.6,centerZ=1}={})=>{
    check();if(busy)throw Error('Ash operation in progress');busy=true;
    try{
-    const bounds={min:[-width/2,groundY,centerZ-width/2],max:[width/2,groundY+height,centerZ+width/2]},layout=patchLayout({cellSize,bounds});
+    const bounds={min:[-width/2,groundY,centerZ-width/2],max:[width/2,groundY+height,centerZ+width/2]},layout=patchLayout({cellSize,bounds,...(tiled?{tileSize}:{})});
     // Reject impossible allocation before allocating a CPU support map.
     if(layout.count*16>device.limits.maxStorageBufferBindingSize||Math.ceil(layout.count/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Requested patch exceeds effective GPU capacity');
     const solid=new Uint8Array(layout.count),[nx,ny,nz]=layout.dims;
@@ -42,7 +43,7 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
      const sx=Math.floor(wx/.06+32),sy=Math.floor(wy/.06),sz=Math.floor(wz/.06+32);
      if(sx>=0&&sx<64&&sy>=0&&sy<64&&sz>=0&&sz<64)solid[x+nx*(y+ny*z)]=support.cells[sx+64*(sy+64*sz)]?1:0;
     }
-    const next=await createGpuAshPatch({renderer,cellSize,bounds,solid});
+    const next=await (tiled?createGpuTiledAsh:createGpuAshPatch)({renderer,cellSize,bounds,solid,tileSize});
     if(asset){asset.root.add(next.root);patch?.dispose();}else asset=await session.attach(next.root,{owned:true,presentation:true,metadata:{label:'GPU ash patch',source:'ash:gpu-patch',type:'experiment'}});
     // Stable registration root cannot be disposed when replacing its child.
     patch=next;lastPose=null;sync();session.redraw();return read();
@@ -57,6 +58,7 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
   const frame=()=>session.setView({position:[2.9,groundY+2.6,4.5],target:[0,groundY+.3,.65]});frame();
   const locked=async fn=>{check();if(busy)throw Error('Ash operation in progress');busy=true;try{return await fn();}finally{busy=false;sync();session.redraw();}};
   const operations={read,frame,
+   diagnostics:options=>locked(()=>{if(!patch.diagnostics)throw Error('Tile diagnostics require tiled ash');return patch.diagnostics(options);}),
    burst(volume){check();if(busy)throw Error('Ash operation in progress');patch.burst(volume);record({kind:'ash.burst',phase:'applied',effective:{volume,source:source()}});sync();return read();},
    emit(value){check();emitting=Boolean(value);sync();record({kind:'ash.emission',phase:'applied',effective:read().emitter});return read();},
    setSource(input){check();const value=sourceSettings({position:emitter.position.toArray(),rate:fallRate,spread:fallSpread,...input});const l=patch.layout,position=value.position;if(position[0]<l.bounds.min[0]||position[0]>l.bounds.max[0]||position[2]<l.bounds.min[2]||position[2]>l.bounds.max[2]||position[1]<groundY)throw Error('Place ash source above the patch footprint');emitter.position.fromArray(position);fallRate=value.rate;fallSpread=value.spread;emitter.scale.setScalar(Math.max(fallSpread,.01));host.scene.refreshPresentation(emitterAsset);record({kind:'ash.source',phase:'applied',effective:read().emitter});return read();},

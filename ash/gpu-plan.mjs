@@ -1,10 +1,17 @@
 // Setup/checkpoint work only. Live evolution and surface compaction stay on GPU.
-export function patchLayout({cellSize,bounds}){
+export function patchLayout({cellSize,bounds,tileSize}){
  if(!Number.isFinite(cellSize)||cellSize<=0)throw Error('Invalid cell width');
  if(!bounds||![bounds.min,bounds.max].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||bounds.max.some((v,i)=>v<=bounds.min[i]))throw Error('Invalid patch bounds');
  const dims=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cellSize-1e-10));
  const count=dims.reduce((a,b)=>a*b,1);if(!Number.isSafeInteger(count))throw Error('Patch capacity is not representable');
- return {cellSize,bounds:structuredClone(bounds),dims,count,origin:[...bounds.min]};
+ const p={cellSize,bounds:structuredClone(bounds),dims,count,origin:[...bounds.min]};
+ if(tileSize!==undefined){
+  if(!Number.isSafeInteger(tileSize)||tileSize<1)throw Error('Invalid tile width');
+  const td=dims.map(n=>Math.ceil(n/tileSize)),tiles=td.reduce((a,b)=>a*b,1),cells=tileSize**3;
+  if(!Number.isSafeInteger(tiles*cells*6))throw Error('Tile capacity is not representable');
+  p.tiles={width:tileSize,dims:td,count:tiles,cellsPerTile:cells,groupsPerTile:Math.ceil(cells/64),phaseHalo:Math.ceil(6/tileSize)};
+ }
+ return p;
 }
 export function seedPatch(p,solid,{volume,radius,center},previous=new Float32Array(p.count)){
  if(!Number.isFinite(volume)||volume<=0||!Number.isFinite(radius)||radius<=0||!Array.isArray(center)||center.length!==3||!center.every(Number.isFinite))throw Error('Invalid deposit');
