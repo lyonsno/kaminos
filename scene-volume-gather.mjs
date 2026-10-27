@@ -40,19 +40,31 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
+// Shared allocation-free admission for edits and construction. Direction caches
+// can dominate prepared reconstruction storage, especially at refinement one.
+export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],surfaceCount=0,directions=24,smokeRefinement=4,sceneLightCount=0},limits){
+  sceneSourceDomain(sourceDimensions);
+  const height=volumeGrid*sourceDimensions[1]/sourceDimensions[0];
+  if(!Number.isSafeInteger(volumeGrid)||volumeGrid<1||!Number.isSafeInteger(height)||height<1)throw Error('smoke receiver dimensions must exactly represent the source domain');
+  if(![surfaceCount,sceneLightCount].every(n=>Number.isSafeInteger(n)&&n>=0))throw Error('nonnegative receiver and scene light counts required');
+  if(!Number.isSafeInteger(directions)||directions<2||directions%2)throw Error('even angular sample count required');
+  const volumeDimensions=[volumeGrid,height,volumeGrid],volumeCount=volumeGrid*height*volumeGrid,total=surfaceCount+volumeCount;
+  const prepared=preparedSmokePlan(volumeDimensions,smokeRefinement,limits);
+  for(const [name,size]of [['surface and smoke receivers',total*32],['distributed incident directions',directions*16],['cached first solid distance per receiver ray',total*directions*4],['scene-light first solid distances',volumeCount*sceneLightCount*4]]){
+    if(!Number.isSafeInteger(size)||Math.max(16,size)>limits.maxStorageBufferBindingSize)throw Error(`${name} needs ${Math.max(16,size)} bytes; device supports ${limits.maxStorageBufferBindingSize}`);
+  }
+  for(const count of [total*directions,volumeCount*sceneLightCount,prepared.sampleCount])receiverDispatch(count,limits.maxComputeWorkgroupsPerDimension);
+  const surfaceWidth=surfaceCount?Math.min(1024,limits.maxTextureDimension2D):1;
+  if(Math.max(1,Math.ceil(surfaceCount/surfaceWidth))>limits.maxTextureDimension2D)throw Error('surface receiver texture exceeds device capacity');
+  return {volumeDimensions,volumeCount,total};
+}
+
 export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false}) {
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   lightingDirections(directions); // Validate before allocating shared resources.
-  const domain=sceneSourceDomain(sourceDimensions),volumeHeight=volumeGrid*sourceDimensions[1]/sourceDimensions[0];
-  // The natural runtime's 16-wide receiver lattice represents every admitted
-  // source aspect exactly. Reject incompatible custom lattices, never crop or
-  // round the domain and silently change the meaning of its camera lookup.
-  if(!Number.isInteger(volumeGrid)||volumeGrid<1||!Number.isInteger(volumeHeight))throw Error('smoke receiver dimensions must exactly represent the source domain');
-  const volumeDimensions=[volumeGrid,volumeHeight,volumeGrid];
-  const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
-  const total=receivers.length+volumeCount;
-  // Capacity rejection precedes all allocation. No hidden refinement downgrade.
-  preparedSmokePlan(volumeDimensions,smokeRefinement,device.limits);
+  const domain=sceneSourceDomain(sourceDimensions);
+  const {volumeDimensions,volumeCount,total}=volumeGatherPlan({volumeGrid,sourceDimensions,surfaceCount:receivers.length,directions,smokeRefinement},device.limits);
+  const volumeHeight=volumeDimensions[1];
   const receiverValues=new Float32Array(total*8);
   receivers.forEach((r,i)=>receiverValues.set([...r.position,r.twoSided?2:1,...r.normal,0],i*8));
   for(let z=0;z<volumeGrid;z++) for(let y=0;y<volumeHeight;y++) for(let x=0;x<volumeGrid;x++) {
@@ -140,7 +152,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   }
   return {surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
     setGeometryTransforms(value){geometryTransforms=value;},
-    setDirections(value){lightingDirections(value);directions=value;},
+    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,surfaceCount:receivers.length,directions:value,smokeRefinement},device.limits);directions=value;},
     setAngularPattern(pattern,rotation=0){
       if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
       if(pattern===angularPattern&&rotation===angularRotation)return;
