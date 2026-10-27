@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 let history={};try{history=await import('../authoring-image-history.mjs');}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;}
 const storage=()=>{const data=new Map();return{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};};
-const image=(source,provenance)=>({kind:'image',source,name:source,provenance});
+const image=(source,provenance)=>({kind:'image',source,name:source,...(provenance?{provenance}:{})});
 test('history retains every result, lineage and prompt provenance across reload without changing the pinned reference',()=>{
  assert.equal(typeof history.createImageIterationHistory,'function','Generate needs persistent iteration history independent of the current asset selection');
  const store=storage(),c=history.createImageIterationHistory({storage:store});
@@ -45,4 +45,11 @@ test('a visible thumbnail becoming withheld drops its rendered payload and disab
  let button=nodes.get('asset-history-strip').children[0];assert.equal(button.children[0].src,'/visible.png');
  c.observe({...image('/visible.png'),visibility:{status:'withheld'}});ui.render();
  button=nodes.get('asset-history-strip').children[0];assert.equal(button.children[0].src,undefined,'withheld thumbnail must not retain its image payload');assert.equal(button.disabled,true);
+});
+test('fresh available catalog observation clears a prior hold while retaining provenance through reload',()=>{
+ const store=storage(),c=history.createImageIterationHistory({storage:store});const p={prompt:'retained instruction',seed:7};
+ c.observe(image('/one.png',p));c.observe({...image('/one.png'),visibility:{status:'withheld',reason:'check failed'}});
+ const fresh=image('/one.png');assert.equal(Object.hasOwn(fresh,'visibility'),false);c.observe(fresh);c.useReference('/one.png');
+ assert.equal(c.reference().source,'/one.png');assert.equal(c.read().viewed.visibility,null);assert.deepEqual(c.read().viewed.provenance,p);
+ const reloaded=history.createImageIterationHistory({storage:store});assert.equal(reloaded.reference().source,'/one.png');assert.equal(reloaded.read().viewed.visibility,null);
 });
