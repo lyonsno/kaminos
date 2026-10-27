@@ -10,11 +10,11 @@ export function admittedTiles(p,pending,contact=null,previous=null){
  for(const tile of pending){const c=[tile%t.dims[0],Math.floor(tile/t.dims[0])%t.dims[1],Math.floor(tile/(t.dims[0]*t.dims[1]))];
   for(let z=Math.max(0,c[2]-h);z<=Math.min(t.dims[2]-1,c[2]+h);z++)for(let y=Math.max(0,c[1]-h);y<=Math.min(t.dims[1]-1,c[1]+h);y++)for(let x=Math.max(0,c[0]-h);x<=Math.min(t.dims[0]-1,c[0]+h);x++)active.add(x+t.dims[0]*(y+t.dims[1]*z));
  }
- if(contact&&JSON.stringify(contact)!==JSON.stringify(previous)){
-  const old=previous??contact,r=Math.max(contact[3],old[3])+6*p.cellSize;
+ if((contact||previous)&&JSON.stringify(contact)!==JSON.stringify(previous)){
+  const current=contact??previous,old=previous??current,r=Math.max(current[3],old[3])+6*p.cellSize;
   for(let tile=0;tile<t.count;tile++){
    const c=[tile%t.dims[0],Math.floor(tile/t.dims[0])%t.dims[1],Math.floor(tile/(t.dims[0]*t.dims[1]))];
-   if(c.every((n,k)=>p.origin[k]+n*t.width*p.cellSize<=Math.max(contact[k],old[k])+r&&p.origin[k]+Math.min((n+1)*t.width,p.dims[k])*p.cellSize>=Math.min(contact[k],old[k])-r))active.add(tile);
+   if(c.every((n,k)=>p.origin[k]+n*t.width*p.cellSize<=Math.max(current[k],old[k])+r&&p.origin[k]+Math.min((n+1)*t.width,p.dims[k])*p.cellSize>=Math.min(current[k],old[k])-r))active.add(tile);
   }
  }
  return active;
