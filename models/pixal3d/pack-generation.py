@@ -312,9 +312,14 @@ def main():
     p.add_argument("--mesh-scale", type=float, default=1.0)
     p.add_argument("--gelu-table", type=Path)
     p.add_argument("--flow-blocks", type=int, default=30)
+    p.add_argument("--flow-channels", type=int, default=1536)
+    p.add_argument("--flow-heads", type=int, default=12)
+    p.add_argument("--flow-hidden", type=int, default=8192)
     p.add_argument("--occ-res-blocks", type=int, default=2)
     p.add_argument("--occ-mid-blocks", type=int, default=2)
+    p.add_argument("--occ-channels", default="512,128,32")
     p.add_argument("--slat-dec-blocks", default="4,16,8,4,0")
+    p.add_argument("--slat-dec-channels", default="1024,512,256,128,64")
     p.add_argument("--naf-output-size", type=int, default=512)
     p.add_argument("--skip-clean-check", action="store_true")
     a = p.parse_args()
@@ -323,7 +328,7 @@ def main():
     m = {
         "schema": "pixal3d.generation-inputs.v0",
         "status": "failed",
-        "phase": "source-identity",
+        "phase": "configuration",
         "modelCalls": 0,
         "pipelineType": a.pipeline_type,
         "conditioningMode": cond_mode,
@@ -333,7 +338,7 @@ def main():
         "camera": {
             "cameraAngleX": a.camera_angle_x,
             "meshScale": a.mesh_scale,
-            "distance": compute_distance_from_fov(a.camera_angle_x, a.mesh_scale, 512),
+            "distance": None,
         },
         "producer": {},
         "tensors": {},
@@ -342,6 +347,20 @@ def main():
         "image": {},
     }
     try:
+        if not math.isfinite(a.camera_angle_x) or a.camera_angle_x <= 0.0 or a.camera_angle_x >= math.pi:
+            raise ValueError("cameraAngleX in (0, pi) rad required")
+        if not math.isfinite(a.mesh_scale) or a.mesh_scale <= 0.0:
+            raise ValueError("positive meshScale required")
+        if a.steps < 1:
+            raise ValueError("positive samplingSteps required")
+        if a.seed < 0 or a.seed > 0xFFFFFFFF:
+            raise ValueError("unsigned32 seed required")
+        valid_cond = ["stage-specific-1024", "shared-512-preview"] if a.pipeline_type == "1024_cascade" else ["source-512"]
+        if cond_mode not in valid_cond:
+            raise ValueError(f"unsupported conditioningMode {cond_mode} for {a.pipeline_type}")
+        m["camera"]["distance"] = compute_distance_from_fov(a.camera_angle_x, a.mesh_scale, 512)
+
+        m["phase"] = "source-identity"
         git = lambda *args: subprocess.check_output(["git", "-C", str(a.repo_root), *args], text=True).strip()
         m["producer"] = {
             "root": str(a.repo_root.resolve()),
@@ -369,7 +388,7 @@ def main():
             }
             return name
 
-        def read_safetensors(file, mapping, transform=lambda k, v: v, allow_extra=False):
+        def read_safetensors(file, mapping, transform=lambda k, v: v, allow_extra=False, expected_shapes=None):
             if not file.is_file():
                 raise FileNotFoundError(f"missing safetensors checkpoint: {file}")
             identity = {
@@ -393,7 +412,15 @@ def main():
                     start, end = row["data_offsets"]
                     f.seek(8 + length + start)
                     raw = f.read(end - start)
-                    values = transform(key, decode_tensor(raw, row["dtype"], row["shape"]))
+                    decoded = decode_tensor(raw, row["dtype"], row["shape"])
+                    values = transform(key, decoded)
+                    if expected_shapes is not None and name in expected_shapes:
+                        exp = expected_shapes[name]
+                        valid_shapes = [list(s) for s in exp] if (isinstance(exp, tuple) and exp and isinstance(exp[0], (list, tuple))) else [list(exp)]
+                        if list(values.shape) not in valid_shapes:
+                            raise ValueError(
+                                f"checkpoint tensor shape mismatch for {name} ({key}) in {file}: got {list(values.shape)}, expected {valid_shapes}"
+                            )
                     rows[name] = save(
                         name,
                         values,
@@ -425,35 +452,44 @@ def main():
             "dino.prefix.patchProjection": "embeddings.patch_embeddings.weight",
             "dino.prefix.patchBias": "embeddings.patch_embeddings.bias",
         }
+        dino_shapes = {
+            "dino.prefix.classToken": [1, 1, 1024],
+            "dino.prefix.registerTokens": [1, 4, 1024],
+            "dino.prefix.patchProjection": [1024, 16, 16, 3],
+            "dino.prefix.patchBias": [1024],
+        }
         layer_map = {
-            "norm1Weight": "norm1.weight",
-            "norm1Bias": "norm1.bias",
-            "qWeight": "attention.q_proj.weight",
-            "qBias": "attention.q_proj.bias",
-            "kWeight": "attention.k_proj.weight",
-            "vWeight": "attention.v_proj.weight",
-            "vBias": "attention.v_proj.bias",
-            "oWeight": "attention.o_proj.weight",
-            "oBias": "attention.o_proj.bias",
-            "layerScale1": "layer_scale1.lambda1",
-            "norm2Weight": "norm2.weight",
-            "norm2Bias": "norm2.bias",
-            "mlpUpWeight": "mlp.up_proj.weight",
-            "mlpUpBias": "mlp.up_proj.bias",
-            "mlpDownWeight": "mlp.down_proj.weight",
-            "mlpDownBias": "mlp.down_proj.bias",
-            "layerScale2": "layer_scale2.lambda1",
+            "norm1Weight": ("norm1.weight", [1024]),
+            "norm1Bias": ("norm1.bias", [1024]),
+            "qWeight": ("attention.q_proj.weight", [1024, 1024]),
+            "qBias": ("attention.q_proj.bias", [1024]),
+            "kWeight": ("attention.k_proj.weight", [1024, 1024]),
+            "vWeight": ("attention.v_proj.weight", [1024, 1024]),
+            "vBias": ("attention.v_proj.bias", [1024]),
+            "oWeight": ("attention.o_proj.weight", [1024, 1024]),
+            "oBias": ("attention.o_proj.bias", [1024]),
+            "layerScale1": ("layer_scale1.lambda1", [1024]),
+            "norm2Weight": ("norm2.weight", [1024]),
+            "norm2Bias": ("norm2.bias", [1024]),
+            "mlpUpWeight": ("mlp.up_proj.weight", [4096, 1024]),
+            "mlpUpBias": ("mlp.up_proj.bias", [4096]),
+            "mlpDownWeight": ("mlp.down_proj.weight", [1024, 4096]),
+            "mlpDownBias": ("mlp.down_proj.bias", [1024]),
+            "layerScale2": ("layer_scale2.lambda1", [1024]),
         }
         for i in range(24):
-            for k, v in layer_map.items():
+            for k, (v, shp) in layer_map.items():
                 dino_mapping[f"dino.l{i}.{k}"] = f"layer.{i}.{v}"
+                dino_shapes[f"dino.l{i}.{k}"] = shp
 
         def dino_transform(key, val):
             if key == "embeddings.patch_embeddings.weight" and val.shape == (1024, 3, 16, 16):
                 return np.transpose(val, (0, 2, 3, 1))
             return val
 
-        dino_rows, dino_id, _ = read_safetensors(a.dino_weights, dino_mapping, dino_transform, allow_extra=True)
+        dino_rows, dino_id, _ = read_safetensors(
+            a.dino_weights, dino_mapping, dino_transform, allow_extra=True, expected_shapes=dino_shapes
+        )
         rope_cos, rope_sin = compute_dinov3_rope(32, 32, 64, 100.0)
         m["dino"] = {
             "identity": {"files": {"model.safetensors": {"sha256": dino_id["sha256"]}}},
@@ -476,6 +512,7 @@ def main():
         naf_rows, naf_id, _ = read_safetensors(
             a.naf_weights,
             {f"naf.{k}": k for k in naf_keys},
+            expected_shapes={f"naf.{k}": s for k, s in naf_keys.items()},
         )
         naf_base_cfg = {
             "dim": 256,
@@ -520,30 +557,32 @@ def main():
         for role, stem, ci, co, proj_in, gs, gr, gi, rt, has_phases in flow_roles:
             f_path = a.pixal_ckpts / f"{stem}.safetensors"
             specs = flow_checkpoint_specs(
-                channels=1536,
-                heads=12,
+                channels=a.flow_channels,
+                heads=a.flow_heads,
                 context_channels=1024,
                 proj_in_channels=proj_in,
-                hidden=8192,
+                hidden=a.flow_hidden,
                 frequency_dim=256,
                 num_blocks=a.flow_blocks,
                 in_channels=ci,
                 out_channels=co,
             )
             mapping = {f"{role}.{k}": ckpt_k for k, ckpt_k, _ in specs}
+            exp_shapes = {f"{role}.{k}": shp for k, _, shp in specs}
             if has_phases:
                 mapping["sparse.phases"] = "rope_phases"
-            rows, identity, _ = read_safetensors(f_path, mapping)
+                exp_shapes["sparse.phases"] = ([4096, 64, 2], [4096, 128])
+            rows, identity, _ = read_safetensors(f_path, mapping, expected_shapes=exp_shapes)
             tensors = {k: rows[f"{role}.{k}"] for k, _, _ in specs}
             tensors["gelu"] = gelu_name
             model_entry = {
                 "config": {
-                    "channels": 1536,
-                    "heads": 12,
+                    "channels": a.flow_channels,
+                    "heads": a.flow_heads,
                     "contextChannels": 1024,
                     "contextRows": 5,
                     "projInChannels": proj_in,
-                    "hidden": 8192,
+                    "hidden": a.flow_hidden,
                     "frequencyDim": 256,
                     "numBlocks": a.flow_blocks,
                     "steps": a.steps,
@@ -561,19 +600,24 @@ def main():
             m["models"][role] = model_entry
 
         m["phase"] = "decoder-checkpoint-expansion"
+        occ_ch = [int(x) for x in a.occ_channels.split(",")]
         occ_path = a.pixal_ckpts / "ss_dec_conv3d_16l8_fp16.safetensors"
         occ_keys = occupancy_decoder_shapes(
-            channels=[512, 128, 32],
+            channels=occ_ch,
             num_res_blocks=a.occ_res_blocks,
             num_res_blocks_middle=a.occ_mid_blocks,
         )
-        occ_rows, occ_id, _ = read_safetensors(occ_path, {f"occupancyDecoder.{k}": k for k in occ_keys})
+        occ_rows, occ_id, _ = read_safetensors(
+            occ_path,
+            {f"occupancyDecoder.{k}": k for k in occ_keys},
+            expected_shapes={f"occupancyDecoder.{k}": s for k, s in occ_keys.items()},
+        )
         m["models"]["occupancyDecoder"] = {
             "config": {
                 "resolution": 16,
                 "latentChannels": 8,
                 "outChannels": 1,
-                "channels": [512, 128, 32],
+                "channels": occ_ch,
                 "numResBlocks": a.occ_res_blocks,
                 "numResBlocksMiddle": a.occ_mid_blocks,
             },
@@ -582,6 +626,7 @@ def main():
         }
 
         slat_blocks = [int(x) for x in a.slat_dec_blocks.split(",")]
+        slat_ch = [int(x) for x in a.slat_dec_channels.split(",")]
         def remap_slat(k):
             return re.sub(r"(blocks\.\d+\.\d+\.mlp)\.([02])", r"\1_\2", k)
 
@@ -598,7 +643,7 @@ def main():
         ]:
             d_path = a.pixal_ckpts / f"{stem}.safetensors"
             dec_ckpt_keys = slat_decoder_checkpoint_shapes(
-                channels=[1024, 512, 256, 128, 64],
+                channels=slat_ch,
                 num_blocks=slat_blocks,
                 out_channels=out_c,
             )
@@ -606,11 +651,12 @@ def main():
                 d_path,
                 {f"{role}.{remap_slat(k)}": k for k in dec_ckpt_keys},
                 slat_conv_layout,
+                expected_shapes={f"{role}.{remap_slat(k)}": s for k, s in dec_ckpt_keys.items()},
             )
             m["models"][role] = {
                 "config": {
                     "latentChannels": 32,
-                    "channels": [1024, 512, 256, 128, 64],
+                    "channels": slat_ch,
                     "numBlocks": slat_blocks,
                     **({"mode": "texture"} if mode == "texture" else {}),
                     **({"resolution": 32} if a.pipeline_type == "512" else {}),

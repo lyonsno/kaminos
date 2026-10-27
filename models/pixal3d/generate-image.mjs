@@ -153,56 +153,82 @@ export async function runPixal3dNativeGeneration({
     onPhase,
     onNoiseInput,
   });
-  let completedOutput;
-  if (typeof route.enqueue === 'function') {
-    const job = route.enqueue({
-      jobId: 'pixal3d-image-to-geometry-material',
-      execute: invocation => implementation.run(invocation),
-    });
-    const completed = await job.completion;
-    if (completed.status !== 'succeeded') {
-      const err = new Error(completed.failure?.message ?? 'Pixal3D image generation ' + completed.status);
-      err.name = completed.failure?.name ?? 'Error';
-      throw err;
+  let consumer = null;
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    try {
+      consumer?.dispose();
+    } finally {
+      implementation.dispose();
     }
-    completedOutput = completed.output;
-  } else {
-    completedOutput = await implementation.run();
-  }
-  if (completedOutput !== implementation.outputs) {
-    throw new Error('complete Pixal3D generation output identity required');
-  }
+  };
 
-  let asset = null;
-  if (assetMode === 'raw-glb') {
-    const consumer = createPixal3dAssetAdapter({
-      runtime: route.runtime,
-      geometry: completedOutput.geometry,
-      material: completedOutput.material,
-      unwrapMesh: unwrapMesh ?? uvUnwrapper,
-      bakeMaterial,
-      WorkerClass,
-      postprocessMesh,
-      textureSize,
-      provenance: {
-        route: route.routeId,
-        pipelineType: pixal3dGenerationPipelineType(manifest),
-        modelIdentities: completedOutput.modelIdentities,
-        ...provenance,
+  try {
+    let completedOutput;
+    if (typeof route.enqueue === 'function') {
+      const job = route.enqueue({
+        jobId: 'pixal3d-image-to-geometry-material',
+        execute: invocation => implementation.run(invocation),
+      });
+      const completed = await job.completion;
+      if (completed.status !== 'succeeded') {
+        const err = new Error(completed.failure?.message ?? 'Pixal3D image generation ' + completed.status);
+        err.name = completed.failure?.name ?? 'Error';
+        throw err;
+      }
+      completedOutput = completed.output;
+    } else {
+      completedOutput = await implementation.run();
+    }
+    if (completedOutput !== implementation.outputs) {
+      throw new Error('complete Pixal3D generation output identity required');
+    }
+
+    let asset = null;
+    if (assetMode === 'raw-glb') {
+      consumer = createPixal3dAssetAdapter({
+        runtime: route.runtime,
+        geometry: completedOutput.geometry,
+        material: completedOutput.material,
+        unwrapMesh: unwrapMesh ?? uvUnwrapper,
+        bakeMaterial,
+        WorkerClass,
+        postprocessMesh,
+        textureSize,
+        provenance: {
+          route: route.routeId,
+          pipelineType: pixal3dGenerationPipelineType(manifest),
+          modelIdentities: completedOutput.modelIdentities,
+          ...provenance,
+        },
+        onPhase,
+      });
+      try {
+        asset = await consumer.run();
+      } finally {
+        consumer.dispose();
+        consumer = null;
+      }
+    }
+
+    return Object.freeze({
+      generation: completedOutput,
+      asset,
+      noiseInputs: implementation.noiseInputs,
+      get disposed() {
+        return disposed;
       },
-      onPhase,
+      dispose,
     });
-    asset = await consumer.run();
+  } catch (error) {
+    dispose();
+    throw error;
   }
-
-  return Object.freeze({
-    generation: completedOutput,
-    asset,
-    noiseInputs: implementation.noiseInputs,
-  });
 }
 
-export async function generatePixal3dImage(values) {
+export async function generatePixal3dImage(values, deps = {}) {
   if (!values.report || !values.output) throw new Error('explicit output and report required');
   const output = path.resolve(values.output);
   const reportPath = path.resolve(values.report);
@@ -236,14 +262,30 @@ export async function generatePixal3dImage(values) {
     if (c.repoRoot !== ownRoot) {
       throw new Error('effective generation repo root differs from config');
     }
-    const sourceIdentity = gitSourceIdentity(ownRoot);
+    const sourceIdentity = (deps.gitSourceIdentity ?? gitSourceIdentity)(ownRoot);
     if (sourceIdentity.commit !== c.expectedCommit || sourceIdentity.dirty) {
       throw new Error('exact clean generation source required');
     }
+    const cascade = c.pipelineType === '1024_cascade';
+    const effectiveConditioningMode =
+      c.conditioningMode ?? (cascade ? 'stage-specific-1024' : 'source-512');
+    const effectiveCameraAngleX = c.cameraAngleX ?? PIXAL3D_DEFAULT_FOV_RAD;
+    const effectiveMeshScale = c.meshScale ?? 1.0;
+
     report.source = { repoRoot: ownRoot, ...sourceIdentity };
-    report.config = { ...c, sha256: sha(configRaw) };
-    const runner = createGenerationCommandRunner({ cwd: ownRoot, record: report, persist });
-    monitor = await startProcessMemory({
+    report.config = {
+      ...c,
+      conditioningMode: effectiveConditioningMode,
+      cameraAngleX: effectiveCameraAngleX,
+      meshScale: effectiveMeshScale,
+      sha256: sha(configRaw),
+    };
+    const runner = (deps.createGenerationCommandRunner ?? createGenerationCommandRunner)({
+      cwd: ownRoot,
+      record: report,
+      persist,
+    });
+    monitor = await (deps.startProcessMemory ?? startProcessMemory)({
       python: c.memoryPython,
       script: path.join(ownRoot, 'models/trellis2/process-memory.py'),
       rawPath: path.join(work, 'process-memory.jsonl'),
@@ -286,26 +328,138 @@ export async function generatePixal3dImage(values) {
         prepared,
         '--pipeline-type',
         c.pipelineType,
+        '--conditioning-mode',
+        effectiveConditioningMode,
         '--steps',
         String(c.steps),
         '--seed',
         String(c.seed),
+        '--camera-angle-x',
+        String(effectiveCameraAngleX),
+        '--mesh-scale',
+        String(effectiveMeshScale),
       ],
       'Pixal3D package preparation',
     );
+
+    const manifestPath = path.join(prepared, 'manifest.json');
+    const manifestRaw = await fs.readFile(manifestPath);
+    const manifest = JSON.parse(manifestRaw);
+    validatePixal3dGenerationInputs(manifest);
+    if (
+      manifest.pipelineType !== c.pipelineType ||
+      manifest.conditioningMode !== effectiveConditioningMode ||
+      manifest.samplingSteps !== c.steps ||
+      manifest.seed !== c.seed ||
+      Math.abs((manifest.camera?.cameraAngleX ?? NaN) - effectiveCameraAngleX) > 1e-6 ||
+      Math.abs((manifest.camera?.meshScale ?? NaN) - effectiveMeshScale) > 1e-6
+    ) {
+      throw new Error('packaged manifest configuration disagrees with requested config');
+    }
+    report.package = {
+      manifestPath,
+      manifestSha256: sha(manifestRaw),
+      pipelineType: manifest.pipelineType,
+      conditioningMode: manifest.conditioningMode,
+      samplingSteps: manifest.samplingSteps,
+      seed: manifest.seed,
+      camera: manifest.camera,
+    };
+
+    report.phase = 'webgpu-generation';
+    await persist();
+    const fetchDiskTensor = async name => {
+      const row = manifest.tensors?.[name];
+      if (!row) throw new Error('missing packaged tensor descriptor ' + name);
+      const buf = await fs.readFile(path.join(prepared, row.file));
+      return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+    };
+    const executeGeneration =
+      deps.executeGeneration ??
+      (async () => {
+        if (!deps.route) {
+          throw new Error(
+            'registered WebGPU route required to execute Pixal3D generation after package preparation',
+          );
+        }
+        const nativeRes = await runPixal3dNativeGeneration({
+          route: deps.route,
+          manifest,
+          fetchTensor: fetchDiskTensor,
+          assetMode: 'raw-glb',
+          unwrapMesh: deps.unwrapMesh,
+          bakeMaterial: deps.bakeMaterial,
+          WorkerClass: deps.WorkerClass,
+          postprocessMesh: deps.postprocessMesh,
+          textureSize: c.textureSize ?? 1024,
+          onPhase: async e => {
+            if (e?.phase) {
+              report.phase = e.phase;
+              await persist();
+            }
+          },
+        });
+        try {
+          if (!(nativeRes.asset?.glb instanceof ArrayBuffer) || nativeRes.asset.glb.byteLength < 12) {
+            throw new Error('complete finished GLB buffer required from native generation');
+          }
+          await fs.mkdir(path.dirname(output), { recursive: true });
+          const pending = output + '.pending-' + runId;
+          await fs.writeFile(pending, Buffer.from(nativeRes.asset.glb));
+          await fs.rename(pending, output);
+          return { routeId: deps.route.routeId ?? 'injected-route' };
+        } finally {
+          nativeRes.dispose();
+        }
+      });
+
+    const execInfo = await executeGeneration({
+      manifest,
+      manifestPath,
+      prepared,
+      output,
+      config: report.config,
+      fetchTensor: fetchDiskTensor,
+      runner,
+    });
+    const glbBytes = await fs.readFile(output);
+    const magic = glbBytes.length >= 4 ? glbBytes.readUInt32LE(0) : 0;
+    if (magic !== 0x46546c67 || glbBytes.length < 20) {
+      throw new Error('complete valid binary glTF (.glb) output required before reporting success');
+    }
     report.memory = await monitor.stop();
     monitor = undefined;
+    if (report.memory?.status && report.memory.status !== 'observed') {
+      throw new Error('complete process-memory observation required before publication');
+    }
+    if (report.safety) {
+      throw new Error('generation halted before publication');
+    }
+    report.artifact = {
+      path: output,
+      sha256: sha(glbBytes),
+      byteLength: glbBytes.length,
+      role: 'textured-mesh',
+    };
+    if (execInfo) report.execution = execInfo;
     report.ok = true;
     report.status = 'succeeded';
     report.phase = null;
   } catch (error) {
+    report.ok = false;
     report.status = 'failed';
     report.error = { message: error.message, stack: error.stack };
   } finally {
     if (monitor) {
       try {
         report.memory = await monitor.stop();
+        if ((report.memory?.status && report.memory.status !== 'observed') || report.safety) {
+          report.ok = false;
+          report.status = 'failed';
+        }
       } catch (e) {
+        report.ok = false;
+        report.status = 'failed';
         report.memoryError = e.message;
       }
     }
