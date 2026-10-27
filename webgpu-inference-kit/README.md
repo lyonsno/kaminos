@@ -1,6 +1,6 @@
 # @kaminos/webgpu-inference-kit
 
-Run generative and vision models with WebGPU in responsive browser applications.
+Run image generation, image-to-3D, skeletal animation, hand tracking and material estimation with WebGPU in responsive browser applications.
 
 Kaminos WebGPU Inference Kit gives model ports a shared session and device lifecycle, persistent model routes, queued invocations, cooperative scheduling, progress and terminal state, resource residency, and runtime telemetry. Ports retain ownership of their weights, kernels, tensor semantics, execution order, and output construction.
 
@@ -10,7 +10,7 @@ npm install @kaminos/webgpu-inference-kit
 
 ## Start With A Model Application
 
-For image generation and material estimation, start with the model's application entry point. It owns loading, queued inference, pause/resume, cancellation and cleanup; your code supplies model inputs and uses the result. These examples use the model packages and kit built together from this checkout. Follow [application setup](./docs/model-applications.md) to pack and install them.
+For image generation, material estimation and background removal, start with the model's application entry point. It owns loading, queued inference, pause/resume, cancellation and cleanup; your code supplies model inputs and uses the result. Install the [matching model packages](./docs/model-applications.md#install) for the examples below. Each package keeps its model-specific interface and lower-level exports.
 
 ```js
 import { createKleinApp } from '@kaminos/flux2-klein';
@@ -47,7 +47,9 @@ try {
 
 Pass `{ device }` to share your renderer's GPU, or `{ session, foreground }` to share an existing coordinated host. Destruction preserves borrowed resources. Model options and outputs remain model-specific: Klein exposes `pipelineOptions` and `app.pipeline`; SuperMat exposes `adapterOptions` and `app.adapter`. Each accepts scheduling policy at creation or per run. Their application wrappers use the kit's shared admitted-run/control/cleanup runner, while each model retains its own loading and resource lifecycle.
 
-UniMate uses the same runner through its existing host-injected `createUniMateConsumer(host)`: provide a skeleton and prompt, receive an animated GLB, and retain solver controls and partial motion. Its `run/read/togglePause/stop/destroy` interface borrows your rendering host. [Animate a skeleton](./docs/model-applications.md#animate-a-skeleton-with-unimate) shows the source-package integration.
+UniMate uses the same runner through its existing host-injected `createUniMateConsumer(host)`: provide a skeleton and prompt, receive an animated GLB, and retain solver controls and partial motion. Its `run/read/togglePause/stop/destroy` interface borrows your rendering host. [Animate a skeleton](./docs/model-applications.md#animate-a-skeleton-with-unimate) shows the host integration.
+
+[U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) uses `createU2NetApp().removeForeground(...)` for RGBA cutouts. It shares the application controls and preserves the loaded low-level runner at `app.model`.
 
 ## Segment Images With SAM 3
 
@@ -75,7 +77,8 @@ No Python, MLX, diagnostic server or Kaminos application is needed. Model setup 
 **[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
 [relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
 [generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
-or [explore a photograph's depth with MoGe](https://lyonsno.github.io/moge-webgpu/).
+[animate a skeleton with UniMate](https://lyonsno.github.io/kaminos/inference-kit/unimate/),
+or [reconstruct your hand](https://lyonsno.github.io/kaminos/inference-kit/hand-mesh/).
 The generation demos run inference locally on your GPU.
 
 ## Generate Images In Your Browser
@@ -172,17 +175,19 @@ The kit connects a growing family of browser model ports: generate an image from
 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared device helpers, cooperative encoder and decoder work, bounded in-flight submissions, reusable GPU buffers, and a library build for embedding in a host application. |
+| [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
+| [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
+| [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
+| [Hand reconstruction](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction use the shared application runner. The hand guide supplies checkout integration and model setup. |
 | [SuperMat](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo) · [Application guide](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md) | Albedo, roughness and metalness for relighting a photograph | Shared-device material inference with reusable resources and queued invocations, composed with MoGe geometry and a live renderer. |
+| [U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) | Foreground cutouts from opaque images | A background-removal application with loading, queued inference, controls and cleanup; lower-level runner and complete output provenance remain available. |
+| [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared device helpers, cooperative encoder and decoder work, bounded in-flight submissions, reusable GPU buffers, and a library build for embedding in a host application. |
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative reconstruction and baking, bounded in-flight submissions, reusable scratch memory, worker offload, and a callable producer that can use the application's GPU device. |
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
-| [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
-| [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
-| [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
-| [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
 
-These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
+Choose a port by its input, useful output and integration guide. Model implementations live either in this repository or in the linked standalone repositories; both use the same runtime family. Application interfaces, model setup and supported routes are described by each model guide. The kit package supplies the shared runtime; model packages and weights are installed separately.
 
 TRELLIS 2 generates a textured 3D mesh from an image using WebGPU. It supports
 512-resolution previews and higher-detail 1024-resolution generation, with

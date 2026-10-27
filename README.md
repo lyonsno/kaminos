@@ -36,7 +36,8 @@ The repository spans four connected capabilities:
 **[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
 [relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
 [generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
-or [explore a photograph's depth with MoGe](https://lyonsno.github.io/moge-webgpu/).
+[animate a skeleton with UniMate](https://lyonsno.github.io/kaminos/inference-kit/unimate/),
+or [reconstruct your hand](https://lyonsno.github.io/kaminos/inference-kit/hand-mesh/).
 The generation demos run inference locally on your GPU.
 
 | Surface | What it demonstrates | Entry point |
@@ -89,27 +90,23 @@ and outputs.
 npm install @kaminos/webgpu-inference-kit
 ```
 
-For a simpler application interface, start with [`createKleinApp` or
-`createSuperMatApp`](webgpu-inference-kit/README.md#start-with-a-model-application).
-Generate images or infer material maps with a reusable model, pause/resume/stop
-controls, and explicit resource ownership. Both use the same run lifecycle and
-can share the host renderer's device and foreground service. The
-[application guide](webgpu-inference-kit/docs/model-applications.md) covers source
-package installation, a rendering loop, and access to model-specific controls.
+Start with a [model application](webgpu-inference-kit/docs/model-applications.md) to generate images with Klein, estimate materials with SuperMat, animate a skeleton with UniMate, or remove a background with U2Net. The applications handle loading, queued inference, controls and cleanup while preserving each model's options, complete output and lower-level pipeline. Connect your renderer once through the foreground service to share the GPU across runs.
 
 The same runtime supports several kinds of model:
 
 | Port | Browser-native result | Runtime integration |
 | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth, normals, and point maps from one image | Embeddable feed-forward pipeline with reusable buffers and bounded submissions |
-| [SuperMat](demos/material-photo/README.md) | Albedo, roughness and metalness from one image | Shared-device material inference, reusable model resources and a relightable MoGe composition |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
-| [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
-| [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
 | [FLUX.2 [klein] 4B](models/flux2-klein/README.md) | Images from a text prompt ([try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | Text encoder, 4-step transformer and image decoder in the browser, with cached int4 weights and throughput-sized command duties that leave room for rendering |
+| [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
 | [UniMate](models/unimate/README.md) | Skeletal motion from a text prompt for different rigged skeletons | Browser text encoder, motion transformer, adaptive ODE sampling and joint-rotation decoding through the inference kit |
+| [Hand reconstruction](models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction with a shared application lifecycle and model setup command |
+| [SuperMat](demos/material-photo/README.md) | Albedo, roughness and metalness from one image | Shared-device material inference, reusable model resources and a relightable MoGe composition |
+| [U2Net](models/u2net/README.md) | RGBA foreground cutouts from opaque images | Background-removal application with queued execution, controls and a borrowed-device option |
+| [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth, normals, and point maps from one image | Embeddable feed-forward pipeline with reusable buffers and bounded submissions |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
 
 TRELLIS 2 turns an image into a textured 3D mesh. Its neural networks run on
 WebGPU, with 512-resolution previews and a higher-detail 1024-resolution mode.
@@ -244,8 +241,11 @@ Other WebGPU devices may expose different performance and feature boundaries.
 
 Kaminos is an active research workbench. The inference runtime is published as
 a reusable npm package; the combustion material, generated-world controls, and
-spatial authoring surfaces continue to evolve in the workbench; focused model
-ports graduate into their own repositories.
+spatial authoring surfaces continue to evolve in the workbench. Model ports live
+either under `models/` here or in linked repositories. The
+[model catalog](webgpu-inference-kit/README.md#one-runtime-different-models)
+links to each current implementation and application guide; repository location
+does not indicate maturity or integration support.
 
 For technical or collaboration inquiries, contact
 [Noah Lyons](https://github.com/lyonsno).
