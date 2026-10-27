@@ -68,7 +68,9 @@ try{
  await edit('pressureSolverIterations',7);await page.keyboard.press('Tab');
  assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).controls.pressureSolverIterations,7,'iterations apply live');
  assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).fluidStateResetCount,resetBefore,'iterations preserve field allocation');
- await page.keyboard.press('Escape');await page.keyboard.press('Meta+z');
+ await page.locator('#grid-draft-intermediateIterations').focus();
+ assert.equal((await page.evaluate(()=>window.kaminosSceneEdits.state())).active?.id,'@flame-settings','focus-only live gesture is active before close');
+ await page.keyboard.press('Escape');assert.equal((await page.evaluate(()=>window.kaminosSceneEdits.state())).active,null,'closing settles the live gesture');await page.keyboard.press('Meta+z');
  await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().controls.pressureSolverIterations===12);await page.keyboard.press('Alt+g');
  await edit('worldSmokeFlow','');await edit('worldSmokeFlow',13);assert.equal(Number(await page.locator('#grid-draft-collarReach').inputValue()),.5);await page.keyboard.press('Control+Enter');
  assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).controls.worldSmokeTransition,.5*13/4);
