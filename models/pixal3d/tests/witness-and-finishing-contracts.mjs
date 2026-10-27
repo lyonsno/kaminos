@@ -56,6 +56,11 @@ const {
   resolvePixal3dGenerationFinishing,
 } = await import('../generate-image.mjs');
 
+const {
+  PYTHON_POSTPROCESS_SNIPPET,
+  PYTHON_UNWRAP_SNIPPET,
+} = await import(finalizerUrl);
+
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 // Helper: build a valid synthetic Pixal3D manifest in memory (fast, zero disk I/O)
@@ -655,6 +660,60 @@ try {
   assert.equal(badCommitReport.status, 'failed');
   assert.equal(badCommitReport.phase, 'source-identity');
 
+  // 4c. Required-argument rejection with explicit --report must write fresh failure report and overwrite stale success
+  const missingArgFreshPath = path.join(scratch, 'missing-arg-fresh.json');
+  const missingArgFreshRun = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(runnerWitnessUrl),
+      '--repo-root',
+      repoRoot,
+      '--expected-commit',
+      headCommit,
+      '--fixture',
+      fixtureDir,
+      '--chrome',
+      '/opt/chrome-for-testing',
+      '--report',
+      missingArgFreshPath,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(missingArgFreshRun.status, 0, 'omitting --receiver must exit non-zero');
+  assert.equal(existsSync(missingArgFreshPath), true, 'missing required flag with explicit --report must write report');
+  const missingArgFreshReport = JSON.parse(readFileSync(missingArgFreshPath, 'utf8'));
+  assert.equal(missingArgFreshReport.status, 'failed');
+  assert.equal(missingArgFreshReport.phase, 'argument-admission');
+  assert.match(missingArgFreshReport.error?.message ?? '', /--receiver is required/);
+
+  const missingArgStalePath = path.join(scratch, 'missing-arg-stale.json');
+  writeFileSync(
+    missingArgStalePath,
+    JSON.stringify({ schema: 'pixal3d.image-generation-browser.v0', status: 'succeeded' }) + '\n',
+  );
+  const missingArgStaleRun = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(runnerWitnessUrl),
+      '--repo-root',
+      repoRoot,
+      '--expected-commit',
+      headCommit,
+      '--fixture',
+      fixtureDir,
+      '--chrome',
+      '/opt/chrome-for-testing',
+      '--report',
+      missingArgStalePath,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(missingArgStaleRun.status, 0);
+  const missingArgStaleReport = JSON.parse(readFileSync(missingArgStalePath, 'utf8'));
+  assert.equal(missingArgStaleReport.status, 'failed', 'stale succeeded report must be overwritten on argument failure');
+  assert.equal(missingArgStaleReport.phase, 'argument-admission');
+  assert.match(missingArgStaleReport.error?.message ?? '', /--receiver is required/);
+
   // 5. finalize-retained-generation.mjs end-to-end model-free finishing on retained fields
   const nativeDir = path.join(scratch, 'native');
   const rawDir = path.join(nativeDir, 'raw');
@@ -770,6 +829,115 @@ try {
   );
   assert.deepEqual(finDoc.nodes[0].matrix, [...PIXAL3D_GLB_NODE_MATRIX]);
   assert.equal(finDoc.extras?.pixal3d?.stage, 'learned-geometry-and-material');
+
+  // 5a-py. Embedded Python postprocess and unwrap snippets compile cleanly and default reference-cleanup / mlx-surface-preserving routes execute end-to-end
+  assert.equal(typeof PYTHON_POSTPROCESS_SNIPPET, 'string');
+  assert.equal(typeof PYTHON_UNWRAP_SNIPPET, 'string');
+  for (const [label, snippet] of [
+    ['PYTHON_POSTPROCESS_SNIPPET', PYTHON_POSTPROCESS_SNIPPET],
+    ['PYTHON_UNWRAP_SNIPPET', PYTHON_UNWRAP_SNIPPET],
+  ]) {
+    const compileCheck = spawnSync(
+      'python3',
+      ['-B', '-c', `import sys; compile(sys.stdin.read(), ${JSON.stringify(label)}, "exec")`],
+      { input: snippet, encoding: 'utf8' },
+    );
+    assert.equal(compileCheck.status, 0, `${label} failed to compile:\n${compileCheck.stderr}`);
+  }
+
+  // Create a clean git-initialized synthetic Pixal3D-MLX source repo exercising both cleanup branches
+  const pySourceRoot = path.join(scratch, 'pixal3d-mlx-source');
+  mkdirSync(path.join(pySourceRoot, 'trellmlx'), { recursive: true });
+  writeFileSync(
+    path.join(pySourceRoot, 'generate.py'),
+    [
+      'def _cleanup_and_simplify_mesh(vertices, faces, target_faces=100, no_cleanup=False, keep_largest=False, cleanup_mesh=None, log=None):',
+      '    if log is not None:',
+      '        log("synthetic _cleanup_and_simplify_mesh pass 1")',
+      '    if cleanup_mesh is not None:',
+      '        vertices, faces = cleanup_mesh(vertices, faces, min_component_area=1e-5, keep_largest=keep_largest)',
+      '        vertices, faces = cleanup_mesh(vertices, faces, min_component_area=1e-5, keep_largest=keep_largest)',
+      '    return vertices, faces',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(path.join(pySourceRoot, 'trellmlx', '__init__.py'), '\n');
+  writeFileSync(
+    path.join(pySourceRoot, 'trellmlx', 'mesh_cleanup.py'),
+    [
+      'def cleanup_mesh(vertices, faces, *, preserve_surface_parts=True, min_component_area=1e-5, keep_largest=False, **kw):',
+      '    return vertices, faces',
+      '',
+      'def orient_faces_by_adjacency(vertices, faces, verbose=False):',
+      '    return vertices, faces',
+      '',
+    ].join('\n'),
+  );
+  execFileSync('git', ['init'], { cwd: pySourceRoot, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: pySourceRoot, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: pySourceRoot, stdio: 'ignore' });
+  execFileSync('git', ['add', '.'], { cwd: pySourceRoot, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', 'init synthetic pixal3d-mlx source'], { cwd: pySourceRoot, stdio: 'ignore' });
+  const pySourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: pySourceRoot,
+    encoding: 'utf8',
+  }).trim();
+  const pythonWithNumpy = execFileSync('python3', ['-c', 'import sys; print(sys.executable)'], {
+    encoding: 'utf8',
+  }).trim();
+
+  for (const mode of ['reference-cleanup', 'mlx-surface-preserving']) {
+    const pyFinDir = path.join(scratch, `finished-py-${mode}`);
+    const pyFinGlb = path.join(pyFinDir, 'asset.glb');
+    const pyFinRun = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(finalizerUrl),
+        '--repo-root',
+        repoRoot,
+        '--expected-commit',
+        headCommit,
+        '--input-root',
+        nativeDir,
+        '--expected-native-commit',
+        headCommit,
+        '--cleanup-mode',
+        mode,
+        '--uv-backend',
+        'browser-xatlas',
+        '--python',
+        pythonWithNumpy,
+        '--source-root',
+        pySourceRoot,
+        '--expected-source-commit',
+        pySourceCommit,
+        '--target-faces',
+        '100',
+        '--receiver',
+        `test-finisher-${mode}`,
+        '--output',
+        pyFinGlb,
+        '--skip-clean-check',
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(pyFinRun.status, 0, `${mode} finalizer failed:\n${pyFinRun.stderr || pyFinRun.stdout}`);
+    assert.equal(existsSync(pyFinGlb), true);
+    const pyFinReport = JSON.parse(readFileSync(path.join(pyFinDir, 'report.json'), 'utf8'));
+    assert.equal(pyFinReport.status, 'succeeded');
+    assert.equal(pyFinReport.cleanupMode, mode);
+    assert.equal(pyFinReport.meshPostprocess?.status, 'succeeded');
+    assert.equal(pyFinReport.meshPostprocess?.schema, 'pixal3d.mesh-postprocess.v0');
+    assert.equal(pyFinReport.meshPostprocess?.requestedMode, mode);
+    assert.equal(pyFinReport.meshPostprocess?.source?.commit, pySourceCommit);
+    const pyGlbBytes = readFileSync(pyFinGlb);
+    const pyView = new DataView(pyGlbBytes.buffer, pyGlbBytes.byteOffset, pyGlbBytes.byteLength);
+    const pyJsonLen = pyView.getUint32(12, true);
+    const pyDoc = JSON.parse(
+      new TextDecoder().decode(pyGlbBytes.subarray(20, 20 + pyJsonLen)).trim(),
+    );
+    assert.equal(pyDoc.extras?.pixal3d?.geometry?.postprocess?.schema, 'pixal3d.mesh-postprocess.v0');
+  }
 
   // 5b. Fail-first on corrupted retained field bytes
   writeFileSync(path.join(rawDir, 'geometry.features.f32'), Buffer.alloc(numRows * 7 * 4));

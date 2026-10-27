@@ -44,9 +44,7 @@ const { values } = parseArgs({
   },
 });
 
-for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
-  if (!values[name]) throw new Error(`--${name} is required`);
-}
+if (!values.report) throw new Error('--report is required');
 
 let root;
 let fixture;
@@ -56,13 +54,13 @@ const evidenceRoot = path.join(path.dirname(output), 'raw');
 const report = {
   schema: 'pixal3d.image-generation-browser.v0',
   status: 'failed',
-  phase: 'repo-root-admission',
-  receiver: values.receiver,
+  phase: 'argument-admission',
+  receiver: values.receiver ?? null,
   terminalEvidence: output,
-  requestedRepoRoot: values['repo-root'],
-  requestedFixtureRoot: values.fixture,
+  requestedRepoRoot: values['repo-root'] ?? null,
+  requestedFixtureRoot: values.fixture ?? null,
   command: process.argv,
-  expectedCommit: values['expected-commit'],
+  expectedCommit: values['expected-commit'] ?? null,
   servedSources: {},
 };
 const persist = async () => {
@@ -157,6 +155,10 @@ async function connect(url) {
 
 try {
   await persist();
+  for (const name of ['repo-root', 'fixture', 'chrome', 'expected-commit', 'receiver']) {
+    if (!values[name]) throw new Error(`--${name} is required`);
+  }
+  report.phase = 'repo-root-admission';
   root = await fs.realpath(values['repo-root']);
   report.repoRoot = root;
   report.phase = 'fixture-admission';

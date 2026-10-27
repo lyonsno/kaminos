@@ -29,7 +29,7 @@ import {
 
 const hash = data => createHash('sha256').update(data).digest('hex');
 
-const PYTHON_POSTPROCESS_SNIPPET = `
+export const PYTHON_POSTPROCESS_SNIPPET = `
 import argparse, ast, hashlib, importlib, inspect, json, sys, time, traceback
 from importlib import metadata
 from pathlib import Path
@@ -155,15 +155,14 @@ try:
             log=log,
         )
     else:
-        component_filter_applied = False
+        filter_state = {'applied': False}
         def custom_cleanup(v, f, **kw):
-            nonlocal component_filter_applied
-            if component_filter_applied:
+            if filter_state['applied']:
                 kw['min_component_area'] = 0
                 kw['keep_largest'] = False
             kw['preserve_surface_parts'] = preserving
             res = cleanup_module.cleanup_mesh(v, f, **kw)
-            component_filter_applied = True
+            filter_state['applied'] = True
             return res
         vertices, faces = cleanup_fn(
             vertices, faces,
@@ -196,7 +195,7 @@ finally:
 sys.exit(0 if report['status'] == 'succeeded' else 1)
 `;
 
-const PYTHON_UNWRAP_SNIPPET = `
+export const PYTHON_UNWRAP_SNIPPET = `
 import argparse, ast, hashlib, importlib.metadata, inspect, json, sys, time, traceback
 from pathlib import Path
 import numpy as np
@@ -350,7 +349,15 @@ function createPixal3dSourceAtlasUnwrapper({
       await stdout.close();
       await stderr.close();
     }
-    const raw = await fs.readFile(path.join(out, 'report.json'));
+    const stderrText = (await fs.readFile(path.join(out, 'stderr.log'), 'utf8').catch(() => '')).trim();
+    let raw;
+    try {
+      raw = await fs.readFile(path.join(out, 'report.json'));
+    } catch (error) {
+      throw new Error(
+        `identified source atlas exited before writing report.json (code=${code}): ${stderrText || error.message}`,
+      );
+    }
     const r = JSON.parse(raw);
     const clean = await fs.readFile(path.join(cleanRoot, 'report.json'));
     if (
@@ -362,7 +369,9 @@ function createPixal3dSourceAtlasUnwrapper({
       r.completeTrianglePositionsUnchanged !== true ||
       r.fixWinding !== false
     ) {
-      throw new Error('identified source atlas failed: ' + (r.error?.message ?? r.status));
+      throw new Error(
+        'identified source atlas failed: ' + (r.error?.message ?? stderrText ?? r.status),
+      );
     }
     const readArr = async (row, Type) => {
       const bytes = await fs.readFile(path.join(out, row.file));
@@ -853,7 +862,18 @@ export async function finalizePixal3dRetainedGeneration(rawArgv = process.argv.s
                   resolve(code);
                 });
               });
-              const raw = await fs.readFile(path.join(cleanupDir, 'report.json'));
+              const stderrText = (
+                await fs.readFile(path.join(cleanupDir, 'stderr.log'), 'utf8').catch(() => '')
+              ).trim();
+              if (stderrText) report.postprocessStderr = stderrText;
+              let raw;
+              try {
+                raw = await fs.readFile(path.join(cleanupDir, 'report.json'));
+              } catch (error) {
+                throw new Error(
+                  `requested source finishing exited before writing report.json (code=${code}): ${stderrText || error.message}`,
+                );
+              }
               const r = JSON.parse(raw);
               report.postprocessReport = {
                 path: path.join(cleanupDir, 'report.json'),
@@ -873,7 +893,8 @@ export async function finalizePixal3dRetainedGeneration(rawArgv = process.argv.s
                 r.targetFaces !== targetFaces
               ) {
                 throw new Error(
-                  'requested source finishing failed: ' + (r.error?.message ?? r.status),
+                  'requested source finishing failed: ' +
+                    (r.error?.message ?? (stderrText || r.status)),
                 );
               }
               const vertices = await readTyped(
