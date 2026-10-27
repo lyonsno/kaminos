@@ -1,6 +1,7 @@
 import * as THREE from './lib/three.core.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
+import {coarseRestFrame} from './fracture-coarse-rest-frame.mjs';
 export const ARCH_GPU_ROUTE='kaminos.fracture.coarse-cohesive.webgpu.v1';
 const xyz=values=>({x:values[0],y:values[1],z:values[2]});
 const v=value=>new THREE.Vector3(value.x,value.y,value.z),q=value=>new THREE.Quaternion(value.x,value.y,value.z,value.w);
@@ -10,6 +11,8 @@ const faceNormals=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].map(value
 export async function createCoarseFractureDynamics(fixture, renderer) {
   if(!renderer.backend.isWebGPUBackend)throw new Error('GPU collapse requires a native WebGPU renderer');
   const {cells,bonds,config,dimensions,floorY}=fixture;
+  const restFrame=config.elasticModulus?coarseRestFrame(fixture):{origin:[0,0,0],cells,bonds,floorY};
+  const origin=restFrame.origin,solverCells=restFrame.cells,solverBonds=restFrame.bonds;
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
   const degree=cells.map(()=>0);for(const b of bonds){degree[b.a]++;degree[b.b]++;}
   const jointCapacity=Math.max(8,...degree.map(n=>n+1));
@@ -28,12 +31,12 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
     enableBvhBuild:false,maxJointsPerBodySolver:jointCapacity,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
   engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
-  for(const cell of cells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='floor-only'?2:0});
-  engine.addBody({position:[0,floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
-  for(const bond of bonds){const j=engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,bond.linearStiffness??config.stiffness,true),data=engine.jointRecordsData,arm=Math.max(data[j*44+7],1);
+  for(const cell of solverCells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='floor-only'?2:0});
+  engine.addBody({position:[0,restFrame.floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
+  for(const bond of solverBonds){const j=engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,bond.linearStiffness??config.stiffness,true),data=engine.jointRecordsData,arm=Math.max(data[j*44+7],1);
     data[j*44+16]=bond.linearStiffness??config.stiffness;data[j*44+17]=bond.rotationalStiffness===undefined?config.stiffness:bond.rotationalStiffness/(arm*arm);
   }
-  for(const cell of cells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
+  for(const cell of solverCells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
   for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.elasticModulus?data[j*44+16]:Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=config.elasticModulus?data[j*44+17]:Math.min(config.initialJointPenalty,data[j*44+17]);}}
@@ -44,7 +47,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
   const allocate=(label,data,usage)=>{const buffer=acquire({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);return buffer;};
   const geometry=new Float32Array(Math.max(1,bonds.length)*12);
-  bonds.forEach((bond,i)=>{geometry.set([bond.area,...bond.normal],i*12);geometry.set([...bond.anchorA,0],i*12+4);geometry.set([...bond.anchorB,0],i*12+8);});
+  solverBonds.forEach((bond,i)=>{geometry.set([bond.area,...bond.normal],i*12);geometry.set([...bond.anchorA,0],i*12+4);geometry.set([...bond.anchorB,0],i*12+8);});
   const buffers={geometry:allocate('Arch contact geometry',geometry,GPUBufferUsage.STORAGE),damage:allocate('Arch persistent damage',new Float32Array(Math.max(1,bonds.length)*12),GPUBufferUsage.STORAGE),
     grip:allocate('Arch hand commands',new Float32Array(cells.length*12),GPUBufferUsage.STORAGE),parameters:allocate('Arch parameters',new Float32Array(16),GPUBufferUsage.UNIFORM),
     output:acquire({label:'Arch pose and damage mirror',size:(cells.length*5+bonds.length*4)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),
@@ -59,17 +62,17 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   let stepIndex=1,epoch=0,hand=null,gripGeneration=0,bindRequest=null;
   const events=[],samples=[];
   const state={bodies:cells.map(cell=>({...cell,position:xyz(cell.position),rest:xyz(cell.position),quaternion:{x:0,y:0,z:0,w:1},velocity:{x:0,y:0,z:0},angularVelocity:{x:0,y:0,z:0}})),
-    bonds:bonds.map(bond=>({...bond,alive:true,reaction:0,bendingReaction:0,stress:0,lastBreakStep:null}))};
+    bonds:solverBonds.map(bond=>({...bond,alive:true,reaction:0,bendingReaction:0,stress:0,lastBreakStep:null}))};
   const gripData=new Float32Array(cells.length*12);
   function parameters(){const buffer=new ArrayBuffer(64),f=new Float32Array(buffer),u=new Uint32Array(buffer);
-    f.set([hand?.target.x??0,hand?.target.y??0,hand?.target.z??0,Math.min(dx,dy,dz)*.15]);u.set([cells.length,bonds.length,stepIndex,0],4);f[7]=config.initialJointPenalty;
+    f.set([hand?hand.target.x-origin[0]:0,hand?hand.target.y-origin[1]:0,hand?hand.target.z-origin[2]:0,Math.min(dx,dy,dz)*.15]);u.set([cells.length,bonds.length,stepIndex,0],4);f[7]=config.initialJointPenalty;
     f.set([config.strength,config.timeStep,config.gripStiffness,bindRequest?.radius??Math.max(dx,dy)*2],8);
     u.set([bindRequest?1:0,bindRequest?.index??0,hand?1:0,0],12);device.queue.writeBuffer(buffers.parameters,0,buffer);}
   function dispatch(name){const encoder=device.createCommandEncoder({label:`Arch ${name}`}),pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(Math.max(cells.length,bonds.length)/64));pass.end();device.queue.submit([encoder.finish()]);}
   async function read(){dispatch('pack');const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffers.output,0,buffers.readback,0,buffers.output.size);device.queue.submit([encoder.finish()]);await buffers.readback.mapAsync(GPUMapMode.READ);
     const data=new Float32Array(buffers.readback.getMappedRange()).slice();buffers.readback.unmap();
     if(!data.every(Number.isFinite))throw new Error('Non-finite GPU physical state');
-    state.bodies.forEach((body,i)=>{const start=i*20;body.position=xyz(data.slice(start,start+3));body.quaternion={...xyz(data.slice(start+4,start+7)),w:data[start+7]};body.velocity=xyz(data.slice(start+8,start+11));body.angularVelocity=xyz(data.slice(start+12,start+15));});
+    state.bodies.forEach((body,i)=>{const start=i*20;body.position=xyz(Array.from(data.subarray(start,start+3),(x,k)=>x+origin[k]));body.quaternion={...xyz(data.slice(start+4,start+7)),w:data[start+7]};body.velocity=xyz(data.slice(start+8,start+11));body.angularVelocity=xyz(data.slice(start+12,start+15));});
     const changed=[];
     state.bonds.forEach((bond,i)=>{const start=cells.length*20+i*16;bond.reaction=data[start];bond.bendingReaction=data[start+1];bond.stress=data[start+2];bond.lastBreakStep=data[start+3]||null;bond.alive=data[start+12]===1;bond.linearPenaltyMaximum=data[start+13];bond.angularPenaltyMaximum=data[start+14];bond.penaltyMinimum=data[start+15];
       for(const offset of [8,4]){const eventStep=data[start+offset+1],kind=data[start+offset+2];if(kind&&eventStep===stepIndex)changed.push({kind:kind===1?'crack':'bind',id:bond.id,step:eventStep,time:eventStep*config.timeStep,reaction:bond.reaction,bendingReaction:bond.bendingReaction,stress:bond.stress,area:bond.area,energyProxy:data[start+offset],handActive:data[start+offset+3]===1});}});
@@ -101,7 +104,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   return {cells:cells.map(cell=>({...cell,half:xyz(cell.halfExtents)})),bonds:state.bonds,step,setSurfaceHand,moveHand,release,isExposedFace,bind,
     worldToLocalPoint:(index,point)=>{if(!cells[index]||!finitePoint(point))throw new Error('World point requires known cell and finite x, y and z');return v(point).sub(v(state.bodies[index].position)).applyQuaternion(q(state.bodies[index].quaternion).invert());},
     setStrength:value=>{if(!Number.isFinite(value)||value<=0)throw new Error('Cohesion must be positive and finite');config.strength=value;},
-    snapshot:()=>{const graph=components();return{route:ARCH_GPU_ROUTE,backend:'webgpu-avbd',engineVersion:ENGINE_REVISION,config:{...config},step:stepIndex,time:stepIndex*config.timeStep,connectivityEpoch:epoch,floorY,dimensions,constructionLoad:{duration:config.gravityRampSeconds,gravityScale:gravityScale(stepIndex),complete:gravityScale(stepIndex)===1,effectiveGravity:engine.getGravity()},
+    snapshot:()=>{const graph=components();return{route:ARCH_GPU_ROUTE,backend:'webgpu-avbd',engineVersion:ENGINE_REVISION,config:{...config},step:stepIndex,time:stepIndex*config.timeStep,connectivityEpoch:epoch,floorY,dimensions,restEncoding:config.elasticModulus?{origin,quantum:restFrame.quantum,maxPositionAdjustment:restFrame.maxPositionAdjustment}:null,constructionLoad:{duration:config.gravityRampSeconds,gravityScale:gravityScale(stepIndex),complete:gravityScale(stepIndex)===1,effectiveGravity:engine.getGravity()},
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,contactSurface:hand.contactSurface,localPoint:{...hand.localPoint},target:{...hand.target},force:{...hand.force}}:null,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
