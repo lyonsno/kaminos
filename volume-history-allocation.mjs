@@ -1,6 +1,6 @@
 // A proposal distribution over ray distance, never a cache of rendered color.
 // Every stratum covers its complete distance interval using fresh coefficients.
-export function allocateRayStrata(segments, count, phase=.5) {
+export function allocateRayStrata(segments, count, phase=.5, freshPhase=undefined) {
   if (!Number.isInteger(count)||count<1||!Number.isFinite(phase)||phase<=0||phase>=1) throw Error('positive count and interior phase required');
   let end=segments[0]?.start, mass=0;
   for(const s of segments){
@@ -8,6 +8,17 @@ export function allocateRayStrata(segments, count, phase=.5) {
     mass+=(s.end-s.start)*s.weight;end=s.end;
   }
   if(!segments.length||!Number.isFinite(mass))throw Error('nonempty finite proposal required');
+  if(freshPhase!==undefined){
+    if(!Number.isFinite(freshPhase)||freshPhase<=0||freshPhase>=1)throw Error('interior fresh phase required');
+    const start=segments[0].start;
+    const points=count===1?[]:allocateRayStrata(segments,count-1,phase).map(b=>b.sample);
+    points.push(start+(end-start)*freshPhase);points.sort((a,b)=>a-b);
+    return points.map((sample,i)=>{
+      const left=i===0?start:(points[i-1]+sample)*.5;
+      const right=i===count-1?end:(sample+points[i+1])*.5;
+      return {start:left,end:right,sample,width:right-left};
+    });
+  }
   let i=0,before=0;
   function at(q){
     while(i<segments.length-1&&before+(segments[i].end-segments[i].start)*segments[i].weight<q){
@@ -45,7 +56,12 @@ export function createRayAllocationHistory(device){
     const nextKey=JSON.stringify([next,identity]);
     if(key!==nextKey||step<lastStep){
       resetReason=key===null?'cold-start':step<lastStep?'simulation-rewind':'geometry-or-settings-change';
-      if(!geometry||geometry.bytes!==next.bytes){buffer.destroy();buffer=device.createBuffer({label:'two-bank last-march spatial guidance',size:next.bytes*2,usage});}
+      if(!geometry||geometry.bytes!==next.bytes){
+        // Earlier passes in this same encoder can reference the previous buffer.
+        // Drop our ownership; WebGPU retains it through those encoded uses.
+        // Explicit destroy here invalidates the entire later queue submission.
+        buffer=device.createBuffer({label:'two-bank last-march spatial guidance',size:next.bytes*2,usage});
+      }
       encoder.clearBuffer(buffer);
       for(let bank=0;bank<2;bank++){
         const data=new ArrayBuffer(32);new Float32Array(data).set([...next.min,next.pitch]);
@@ -56,10 +72,10 @@ export function createRayAllocationHistory(device){
     lastStep=step;index=1-index;encoder.clearBuffer(buffer,index*geometry.bytes,geometry.bytes);frames++;
     return read();
   }
-  function read(){return {frames,historyFrames:Math.max(0,frames-1),resetReason,geometry,
+  function read(){return {frames,historyFrames:frames>1?1:0,resetReason,geometry,
     previousOffset:geometry?(1-index)*geometry.bytes:0,observationsOffset:geometry?index*geometry.bytes:0,
     representation:'previous-draw-spatial-importance-max',prediction:'one-cell-neighborhood; no velocity advection',
-    freshCoverage:'positive uniform proposal everywhere',colorReuse:false};}
+    freshCoverage:'one uniform-distance observation per ray; remaining observations guided',colorReuse:false};}
   async function sample(){
     if(!geometry||frames<1)throw Error('ray allocation history has no executed draw');
     const encoder=device.createCommandEncoder({label:'explicit ray guidance readback'});
@@ -146,9 +162,11 @@ fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{
 struct GuidedRay {
   cursor:f32, end:f32, mass:f32, total:f32,
   segmentEnd:f32, weight:f32, left:f32, width:f32,
+  start:f32, freshPoint:f32, candidate:f32, currentPoint:f32,
+  guidedCount:u32, guidedIndex:u32, freshPending:u32,
 }
 fn guidedRayInit(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->GuidedRay{
-  var s:GuidedRay;s.cursor=start;s.left=start;s.end=end;
+  var s:GuidedRay;s.cursor=start;s.left=start;s.start=start;s.end=end;
   var t=start;
   loop{
     if(t>=end){break;}
@@ -172,10 +190,33 @@ fn guidedQuantile(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,quantileMa
     (*s).weight=guidanceWeight(ro+rd*(((*s).cursor+(*s).segmentEnd)*.5));
   }
 }
-fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32)->f32{
-  let sample=guidedQuantile(s,ro,rd,(*s).total*(f32(index)+phase)/f32(count));
-  var right=(*s).end;
-  if(index+1u<count){right=guidedQuantile(s,ro,rd,(*s).total*f32(index+1u)/f32(count));}
-  (*s).width=max(0.0,right-(*s).left);(*s).left=right;return sample;
+fn guidedPop(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32{
+  if((*s).freshPending==1u&&((*s).guidedIndex>=(*s).guidedCount||(*s).freshPoint<=(*s).candidate)){
+    (*s).freshPending=0u;return (*s).freshPoint;
+  }
+  let point=(*s).candidate;(*s).guidedIndex++;
+  if((*s).guidedIndex<(*s).guidedCount){
+    (*s).candidate=guidedQuantile(s,ro,rd,(*s).total*(f32((*s).guidedIndex)+phase)/f32((*s).guidedCount));
+  }
+  return point;
+}
+fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32,freshPhase:f32)->f32{
+  if(OPTICAL_STEP_MODE==4u){
+    let sample=guidedQuantile(s,ro,rd,(*s).total*(f32(index)+phase)/f32(count));
+    var right=(*s).end;
+    if(index+1u<count){right=guidedQuantile(s,ro,rd,(*s).total*f32(index+1u)/f32(count));}
+    (*s).width=max(0.0,right-(*s).left);(*s).left=right;return sample;
+  }
+  // One observation is chosen in uniform distance independently of importance.
+  // Merge it into the ordered proposal points and integrate their Voronoi cells.
+  if(index==0u){
+    (*s).guidedCount=count-1u;(*s).guidedIndex=0u;(*s).freshPending=1u;
+    (*s).freshPoint=mix((*s).start,(*s).end,freshPhase);
+    if(count>1u){(*s).candidate=guidedQuantile(s,ro,rd,(*s).total*phase/f32(count-1u));}
+    (*s).currentPoint=guidedPop(s,ro,rd,phase);
+  }
+  let sample=(*s).currentPoint;var next=(*s).end;var right=(*s).end;
+  if(index+1u<count){next=guidedPop(s,ro,rd,phase);right=(sample+next)*.5;}
+  (*s).width=max(0.0,right-(*s).left);(*s).left=right;(*s).currentPoint=next;return sample;
 }
 `;

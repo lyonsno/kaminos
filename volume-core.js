@@ -8036,10 +8036,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   loop {
     if(guided && rayMaterialSamples>=expensiveSampleBudget){break;}
     if (!opticalStepping && ((!worldActive && expensiveSamples >= expensiveSampleBudget) || traversalSteps >= maxTraversalSteps)) { break; }
-    if (!opticalStepping && !fullGridCapture && !opticalTrace && (raymarchEarlyTermination(trans) || (!guided && t > endT))) { break; }
+    if (!opticalStepping && !fullGridCapture && !opticalTrace && (!guided && (raymarchEarlyTermination(trans) || t > endT))) { break; }
     if(guided){
-      let phase=select(.5,.05+.9*rayNoiseSample(in.pos.xy,u.occupancy_controls.y,rayMaterialSamples+1u),u.reserved_render_controls.w>.5);
-      t=guidedNext(&guidedRay,ro,rd,rayMaterialSamples,expensiveSampleBudget,phase);
+      let phase=select(.5,.05+.9*rayNoiseSample(in.pos.xy,u.occupancy_controls.y,1u),u.reserved_render_controls.w>.5 && u.occupancy_controls.w>.5);
+      t=guidedNext(&guidedRay,ro,rd,rayMaterialSamples,expensiveSampleBudget,phase,rayPhase);
     }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
