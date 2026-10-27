@@ -97,6 +97,8 @@ the existing investigation tools below.
    {owned: true, metadata})`, or load a GLB with `session.loadAsset({url})`.
    Register source identity and a useful label in metadata. Existing registered
    roots can be borrowed explicitly with `owned: false`.
+   A feature-owned authored source uses the [scene record contribution](scene-record-domains.md)
+   shared by native admission, history and document reconstruction.
 3. Return `read`, `operations`, optional `mount`, and `dispose`. `read` describes
    actual state. Operations perform meaningful domain actions and record their
    effective values. `mount({root, document, invoke})` connects controls to those

@@ -2855,6 +2855,7 @@ import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, lo
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
+import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
@@ -3921,6 +3922,22 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 const workingScene = createWorkingScene();
+const sceneRecords = createSceneRecordOperations({
+  readers:{transform:object=>sceneObjectTransformState(object),materials:object=>getMaterialStateForObject(object),splatTransform:entry=>splatSceneTransformState(entry)},
+  loaders:{
+    camera:record=>mountAuthoredCamera(record).object,
+    light:record=>mountSceneSpotLight(record).object,
+    procedural:record=>mountProceduralMesh(record).object,
+    flame(record,{activate}){authoredFlamePresent=true;const object=ensureAuthoredFlameEmitter(record,{activate});if(!object)throw Error('The saved analytic flame source is not mounted');return object;},
+    water(record,{activate}){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate});return object;},
+    constructed(object,record,{activate}){scene.add(object);registerSceneObject(object,record,{activate});return object;},
+    async pbr(record,{activate}){const files=await loadDemoFiles(record.source);if(!files)throw Error(`Scene object "${record.fileName||record.id}" demo source "${record.source}" is not readable`);return handleFiles(files,{clear:false,activate,metadata:record});},
+    image:(record,{activate})=>showImagePlane(record.source,{clear:false,activate,metadata:record}),
+    splat:(record,{activate,loadRequestId})=>greenroomImportSplat(record.source,record.fileName||'splat.ply',{title:record.label||record.fileName||'Splat',raw_name:record.fileName||record.source},{clear:false,activate,metadata:record,isCurrent:loadRequestId===null?undefined:()=>sceneLoadRequests.isCurrent(loadRequestId)}),
+    async glb(record,{activate}){const object=await showGLB(record.source,{clear:false,activate,normalize:false,metadata:record});const leveling=normalizeArrivalLeveling(record.arrivalLeveling);if(leveling)object.userData.kaminosLeveling=leveling;return object;},
+  },
+});
+
 let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
@@ -24438,38 +24455,7 @@ function getMaterialStateForObject(object) {
 }
 
 function serializeSceneObject(entry) {
-  const object = entry.object;
-  const metadata = sceneObjectMetadataFor(object) || entry;
-  return {
-    id: entry.id,
-    source: metadata.source ?? entry.source,
-    type: metadata.type ?? entry.type,
-    fileName: metadata.fileName ?? entry.fileName,
-    label: metadata.label ?? entry.label,
-    groupId: metadata.groupId ?? entry.groupId ?? null,
-    createdAt: metadata.createdAt ?? entry.createdAt,
-    transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
-    sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
-    // Finite source geometry is a transient initial-particle/guide preview.
-    materials: entry.type===LOCAL_LIQUID_EMITTER_TYPE&&(metadata.localLiquidEmitter??entry.localLiquidEmitter)?.mode==='finite_drop'?null:getMaterialStateForObject(object),
-    splat: metadata.splat ?? entry.splat ?? null,
-    image: metadata.image ?? entry.image ?? null,
-    ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
-    ...((metadata.assetOrigin ?? entry.assetOrigin)?{assetOrigin:structuredClone(metadata.assetOrigin ?? entry.assetOrigin)}:{}),
-    renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
-    renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
-    renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
-    localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
-    ...(entry.type===FLAME_EMITTER_TYPE?{emissionEnabled:entry.emissionEnabled!==false,...(entry.emission?{emission:structuredClone(entry.emission)}:{})}:{}),
-    ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
-    ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
-
-    ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
-    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
-    ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
-    ...(entry.giProxy?{giProxy:structuredClone(entry.giProxy)}:{}),
-    ...(entry.repetition?{repetition:checkedRepetition(entry.repetition)}:{}),
-  };
+  return sceneRecords.serialize(entry);
 }
 
 function readNumberControl(id, fallback = 0) {
@@ -24479,61 +24465,7 @@ function readNumberControl(id, fallback = 0) {
 }
 
 async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
-  if (!record?.source) throw new Error('Scene object missing source');
-  if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
-  if(record.type==='light')return mountSceneSpotLight(record).object;
-  if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
-  if (record.type === FLAME_EMITTER_TYPE) {
-    authoredFlamePresent=true;
-    const object = ensureAuthoredFlameEmitter(record,{activate});
-    if (!object) throw new Error('The saved analytic flame source is not mounted');
-    return object;
-  }
-  if (record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE) {
-    const { object } = createLocalLiquidEmitterObject(THREE, record,{sampling:localLiquidSetup?.waterSampling});
-    scene.add(object);
-    registerSceneObject(object, record, {activate});
-    return object;
-  }
-  if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
-    const files = await loadDemoFiles(record.source);
-    if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
-    return handleFiles(files, {
-      clear: false,
-      activate,
-      metadata: record,
-    });
-  }
-  if (isReloadableSceneObjectRecord(record)) {
-    if (record.type === 'image') {
-      return showImagePlane(record.source, {
-        clear: false,
-        activate,
-        metadata: record,
-      });
-    }
-    if (record.type === 'splat') {
-      return greenroomImportSplat(record.source, record.fileName || 'splat.ply', {
-        title: record.label || record.fileName || 'Splat',
-        raw_name: record.fileName || record.source,
-      }, {
-        clear: false,
-        activate,
-        metadata: record,
-        isCurrent: loadRequestId === null ? undefined : () => sceneLoadRequests.isCurrent(loadRequestId),
-      });
-    }
-    const object = await showGLB(record.source, {
-      clear: false,
-      activate,
-      normalize: false,
-      metadata: record,
-    });
-    const leveling = normalizeArrivalLeveling(record.arrivalLeveling);
-    if (leveling) object.userData.kaminosLeveling = leveling;
-    return object;
-  }
-  throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
+  return sceneRecords.load(record,{loadRequestId,activate});
 }
 
 function assertSceneObjectsReloadable(records) {

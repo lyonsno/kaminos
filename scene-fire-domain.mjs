@@ -7,6 +7,11 @@ import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDom
 export const FIRE_DOMAIN_ID='flame-field';
 export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
+export const fireDomainRecordDomain={type:FIRE_DOMAIN_TYPE,documentOnly:true,check:checkedFireDomainRecord,fields:()=>({})};
+export const fireSourceRecordDomain={type:FLAME_EMITTER_TYPE,
+ check:r=>checkedFireSourceRecord({...r,id:String(r.id||r.fileName||r.source||'object')}),
+ fields:r=>({emissionEnabled:r.emissionEnabled!==false,...(r.emission?{emission:r.emission}:{})}),
+ reloadable:r=>{checkedFireSourceRecord(r);return true;},load:(r,loaders,options)=>loaders.flame(r,options)};
 const clone=value=>structuredClone(value);
 const sourceIds=new Set(['emitter-assay-family','volume-input-radius','volume-flow-rate','volume-fixed-source-dephase']);
 const materialIds=new Set(['volume-exposure','volume-density','volume-fire','volume-radiance','volume-absorption','volume-glow','volume-smoke','volume-fire-scale','volume-detail-scale','volume-microdetail','volume-interface-shred','volume-fire-licks']);

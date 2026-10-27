@@ -1,5 +1,8 @@
 import {Vector3,Quaternion,Euler} from './lib/three.core.js';
 import {checkedPose} from './scene-edit-session.mjs';
+export const spotLightRecordDomain={type:'light',check:checkedSceneLightRecord,
+ fields:r=>({light:r.light}),reloadable:r=>{checkedSceneLightRecord(r);return true;},
+ load:(r,loaders,options)=>loaders.light(r,options)};
 
 export function checkedSceneLightRecord(raw) {
  if(raw.type!=='light'||raw.source!=='kaminos:scene-spot-light'||raw.light?.kind!=='spot')throw Error('Unsupported light data');

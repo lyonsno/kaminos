@@ -2,6 +2,9 @@ import {Vector3,Quaternion,Euler,Matrix4} from './lib/three.core.js';
 import {checkedPose} from './scene-edit-session.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 export const CAMERA_TYPE='camera',CAMERA_SOURCE='kaminos:camera',SCENE_CAMERA_SCHEMA='kaminos.scene-camera.v1';
+export const cameraRecordDomain={type:CAMERA_TYPE,check:checkedCameraRecord,
+ fields:r=>({camera:r.camera}),reloadable:r=>{checkedCameraRecord(r);return true;},
+ load:(r,loaders,options)=>loaders.camera(r,options)};
 const copy=value=>structuredClone(value),rad=Math.PI/180;
 export function checkedCameraRecord(raw){
  if(raw?.type!==CAMERA_TYPE||raw.source!==CAMERA_SOURCE||typeof raw.id!=='string'||!raw.id)throw Error('Unsupported camera object');

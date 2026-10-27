@@ -1,5 +1,13 @@
 import vm from 'node:vm';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
+import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
+import {readFileSync} from 'node:fs';
+
+const page=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
+const recordStart=page.indexOf('const sceneRecords = createSceneRecordOperations(');
+const recordEnd=page.indexOf('\n});',recordStart)+4;
+if(recordStart<0||recordEnd<recordStart)throw Error('Missing production scene-record installation');
+const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneRecords =','globalThis.sceneRecords =');
 
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
 // while exercising extracted page consumers. Ownership/integration tests use
@@ -50,7 +58,9 @@ export function sceneContext(context, options) {
     clearHistoryTargets(){for(const id of context.sceneMembershipEditTargets??[])context.scenePlacementTools.edits.unregister(id);context.sceneMembershipEditTargets?.clear();context.compoundRetentionTargets?.clear();},
   };
   context.sceneMembershipBatch ??= {clearHistoryTargets(){},attachHistory(){}};
-  return vm.createContext(context,options);
+  const result=vm.createContext(context,options);
+  if(!context.sceneRecords){context.createSceneRecordOperations=createSceneRecordOperations;vm.runInContext(recordInstallation,result);}
+  return result;
 }
 
 export function runInSceneContext(code, context, options) {
