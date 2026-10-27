@@ -7,25 +7,25 @@ export function checkedSceneBloom(value){
  if(next.radius>1)throw Error('Bloom radius must be between zero and one');
  return next;
 }
-// The vendored five-scale Gaussian weights sum to three for every radius.
-// Normalize that kernel so the UI gain does not silently triple emission.
+// Fade from no halo into the finest scale, then blend normalized adjacent
+// scales from fine to broad.
 // One optional display stage in the existing renderer. Raw lighting and the
 // independent flame canvas remain owned by their current producers.
-export function createSceneBloom({bloom,convertToTexture,vec4,rebuild,redraw}){
- let settings={...defaults};const graphs=new Map();
+export function createSceneBloom({bloom,convertToTexture,vec4,rebuild,redraw,initial={}}){
+ let settings=checkedSceneBloom(initial);const graphs=new Map();
  return {
   output(input,emission){
-   if(!settings.enabled)return input;
+   if(!settings.enabled||settings.radius===0||settings.strength===0)return input;
    if(!emission)throw Error('Bloom requires a physical emission input');
    if(graphs.has(input)&&graphs.get(input).emission!==emission)throw Error('Bloom emission source changed without a new graph');
    if(!graphs.has(input)){
-    const effect=bloom(convertToTexture(emission),settings.strength/3,settings.radius,settings.threshold);
+    const effect=bloom(convertToTexture(emission),settings.strength,settings.radius,settings.threshold);
     graphs.set(input,{effect,emission,output:vec4(input.rgb.add(effect.rgb),input.a)});
    }
    return graphs.get(input).output;
   },
-  set(patch){const next=checkedSceneBloom({...settings,...patch}),changed=next.enabled!==settings.enabled||next.composeFlame!==settings.composeFlame;settings=next;
-   for(const {effect}of graphs.values())for(const [key,field]of [['strength','strength'],['radius','radius'],['threshold','threshold']])effect[field].value=key==='strength'?next[key]/3:next[key];
+  set(patch){const next=checkedSceneBloom({...settings,...patch}),changed=next.enabled!==settings.enabled||next.composeFlame!==settings.composeFlame||(next.radius===0)!==(settings.radius===0)||(next.strength===0)!==(settings.strength===0);settings=next;
+   for(const {effect}of graphs.values())for(const [key,field]of [['strength','strength'],['radius','radius'],['threshold','threshold']])effect[field].value=next[key];
    if(changed)rebuild();redraw();return this.read();
   },
   read:()=>({settings:{...settings},signal:'physical-emission',independentFlameCanvas:false}),

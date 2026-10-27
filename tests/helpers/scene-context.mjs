@@ -1,3 +1,4 @@
+import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
 import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
 import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
@@ -7,6 +8,7 @@ import {createSceneAOState} from '../../scene-ao-state.mjs';
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.checkedBurnAppearance??=checkedBurnAppearance;
   context.sceneAO ??= createSceneAOState();
   context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;

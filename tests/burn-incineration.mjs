@@ -20,15 +20,15 @@ test('incineration is opt-in, preserves authored maps and uses the resident mate
  assert.equal(binding.read().stateAuthority,'resident-test');
  assert.equal(binding.material.map,original.map);assert.equal(binding.material.normalMap,original.normalMap);
  assert.equal(binding.material.opacityNode,presence);assert.equal(binding.material.alphaTest,.5);
- binding.setAppearance({glow:28});assert.equal(binding.read().appearance.glow,28);
+ binding.setAppearance({glow:2.8});assert.equal(binding.read().appearance.glow,2.8);
  const resident=binding.material;binding.update(12);binding.setAppearance({profile:'crust'});assert.equal(binding.read().appearanceModel,'char-facet-crust-v1');assert.equal(binding.material,resident);assert.equal(binding.material.opacityNode,presence);assert.equal(binding.read().appearanceSeconds,12);
- binding.setAppearance({profile:'incineration'});assert.equal(binding.material,resident);assert.equal(binding.read().appearance.glow,28);
- assert.throws(()=>binding.setAppearance({glow:NaN}),/glow/);assert.equal(binding.read().appearance.glow,28);
+ binding.setAppearance({profile:'incineration'});assert.equal(binding.material,resident);assert.equal(binding.read().appearance.glow,2.8);
+ assert.throws(()=>binding.setAppearance({glow:NaN}),/gain|glow/);assert.equal(binding.read().appearance.glow,2.8);
  binding.dispose();original.dispose();
 });
-test('ordinary burn materials retain the existing crust appearance',()=>{
+test('ordinary burn materials retain crust and can select the shared thermal response',()=>{
  const {binding,original}=material(undefined);assert.equal(binding.read().appearanceModel,'char-facet-crust-v1');
- binding.dispose();original.dispose();
+ binding.setAppearance({profile:'incineration',glow:.75});assert.equal(binding.read().appearance.glow,.75);assert.equal(binding.read().appearanceModel,'thermal-incineration-v1');binding.dispose();original.dispose();
 });
 
 test('thermal appearance composes the original scorch and reports the shared thermal law',()=>{

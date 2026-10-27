@@ -2835,7 +2835,8 @@ import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
 import {createSceneBloom} from './scene-bloom.mjs';
 import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
-import {bloom} from './lib/addons/tsl/display/BloomNode.js';
+import {bloom} from './scene-bloom-node.mjs';
+import {installSceneBloomControls} from './scene-bloom-controls.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
@@ -3128,7 +3129,8 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
-import {PROMPT_RELIEF_SOURCE,promptReliefRecord,restorePromptRelief} from './inference-kiln-record.mjs';
+import {createPromptLettering} from './prompt-lettering.mjs';
+import {PROMPT_RELIEF_SOURCE,promptReliefRecord,restorePromptRelief,checkedPromptRelief} from './inference-kiln-record.mjs';
 import { COMPOSITION_SCHEMA, resolveFlameLightingRoute, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
@@ -3248,7 +3250,7 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
-import {checkedBurnable} from './scene-burning-settings.mjs';
+import {checkedBurnable,checkedBurnAppearance} from './scene-burning-settings.mjs';
 import {resolveBurnableTarget} from './burnable-target.mjs';
 import {createSceneBurning} from './scene-burning.mjs';
 import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
@@ -11089,8 +11091,10 @@ async function initScene() {
   let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
   let sceneEmissionSource=null,sceneFlameHDR=null;
-  const sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
-  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){sceneBloom.set(settings);return this.read();}};
+  const sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
+  const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('scene-gi-mode').closest('.field').before(bloomHost);
+  let bloomControls;
+  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
@@ -11105,7 +11109,7 @@ async function initScene() {
       sceneEmissionSource=beauty.getTextureNode('emissive');
     }
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&!diagnostic}`;
+    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11434,6 +11438,8 @@ async function initScene() {
     unboundedMax:source=>source.id==='volume-immersed-radius',
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
+  const bloomControls=installSceneBloomControls({document,host:bloomHost,edits:scenePlacementTools.edits,read:()=>sceneBloom.read().settings,write:value=>sceneBloom.set(value)});
+  authoringControlSessions.push(bloomControls);scenePlacementTools.addHistoryScope(bloomHost);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
@@ -25019,6 +25025,25 @@ function addProceduralMesh(kind,parameters={}) {
   renderSceneObjectList();return id;
 }
 function cloneSceneMaterial(material){const copy=originalBurnMaterial(material).clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
+async function addPromptLettering(prompt){
+  assertSceneConstructionAvailable();
+  const id=makeSceneObjectId('pbr'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  const object=createPromptLettering(document,prompt);scene.add(object);
+  try{registerSceneObject(object,{id,type:'pbr',source:PROMPT_RELIEF_SOURCE,label:'Prompt lettering',fileName:'Prompt lettering',burnable:{enabled:true,material:'wood',appearance:{profile:'incineration',glow:1}}});await recordSceneObjectInsertion(id);}
+  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  setActiveSceneObject(id);return id;
+}
+const promptEditTargets=new Set();
+function setPromptLettering(id,prompt){
+  assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);if(!entry?.object.userData.kaminosPromptRelief)throw Error('Select prompt lettering');
+  if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');if(entry.object.userData.kaminosPromptRelief.prompt===prompt)return;
+  const target='@prompt-lettering:'+id;
+  if(!promptEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>promptReliefRecord(entry.object).promptRelief,check:checkedPromptRelief,write:value=>{
+    const replacement=restorePromptRelief({promptRelief:value});sceneBurning.forget(entry.object);entry.object.geometry.dispose();entry.object.geometry=replacement.geometry;replacement.material.dispose();const {geometry,...metadata}=value;entry.object.userData.kaminosPromptRelief=metadata;void sceneBurning.sync();window._kaminosDirty?.();
+  }});promptEditTargets.add(target);}
+  const object=createPromptLettering(document,prompt,entry.burnable?.appearance?.profile??'incineration');
+  try{return scenePlacementTools.edits.apply(target,promptReliefRecord(object).promptRelief,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
+}
 function addSceneSpotLight() {
   assertSceneConstructionAvailable();const id=makeSceneObjectId('light');
   const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
@@ -25169,6 +25194,8 @@ function syncSceneDataInspector() {
     let supported=false,reason='';try{resolveBurnableTarget(workingScene.objects,entry?.id);supported=true;}catch(error){reason=error.message;}
     burnPanel.hidden=!canCollideWithFire(entry);
     const burnInput=document.getElementById('object-burnable');burnInput.disabled=!supported;burnInput.checked=entry?.burnable?.enabled===true;
+    const burnAppearance=checkedBurnAppearance(entry?.burnable?.appearance??{profile:entry?.object?.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
+    for(const [key,id]of [['profile','object-burn-profile'],['glow','object-burn-glow']]){const input=document.getElementById(id);if(input){input.disabled=!supported||(key==='glow'&&burnAppearance.profile==='crust');if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=String(burnAppearance[key]);}}
     if(supported)syncBurnableStatus();else document.getElementById('object-burnable-status').textContent=reason;
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
@@ -25292,10 +25319,19 @@ function installSceneConstruction() {
   burnPanel.innerHTML='<h3>Combustion</h3><label class="slider-row"><span class="slider-label">Burnable wood</span><input id="object-burnable" type="checkbox"></label><p id="object-burnable-status" role="status"></p>';
   collisionPanel.after(burnPanel);scenePlacementTools.addHistoryScope(burnPanel);
   const burnInput=document.getElementById('object-burnable');
-  burnInput.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({enabled:burnInput.checked,material:'wood'});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  burnInput.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({...workingScene.objects.find(row=>row.id===workingScene.activeObjectId)?.burnable,enabled:burnInput.checked,material:'wood'});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[burnInput],edits,id:()=>ensureObjectBurnableTarget(workingScene.activeObjectId),label:'Set burnable wood',onError:error=>setInfo(error.message)}));
+  for(const [key,label,type,max,step]of [['profile','Surface response','select',null,0],['glow','Emission gain','number',10,.01]]){
+    const row=document.createElement('label');row.className='slider-row';const grip=document.createElement('span');grip.className='slider-label';grip.textContent=label;const input=document.createElement(type==='select'?'select':'input');input.id=key==='profile'?'object-burn-profile':'object-burn-glow';input.className='transform-input';
+    if(type==='select'){for(const [value,text]of [['crust','Original crust'],['incineration','Thermal incandescence']]){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}}
+    else{input.type='number';input.min='0';input.max=String(max);input.step='any';}
+    row.append(grip,input);burnPanel.append(row);
+    input.addEventListener(type==='select'?'change':'input',()=>{const id=workingScene.activeObjectId;if(edits.state().active?.id!=='@object-burnable:'+id||input.value===''||!input.validity.valid)return;const entry=workingScene.objects.find(row=>row.id===id);const prior=entry.burnable??{enabled:false,material:'wood'};edits.preview({...prior,appearance:checkedBurnAppearance({...checkedBurnAppearance(prior.appearance??{profile:entry.object.userData.kaminosPromptRelief?.appearance??'crust',glow:1}),[key]:type==='number'?Number(input.value):input.value})});});
+    authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureObjectBurnableTarget(workingScene.activeObjectId),label:'Edit '+label,onError:error=>{setInfo(error.message);syncSceneDataInspector();}}));
+    if(type==='number'){const scrub=installRelativeNumberDrag({input,grip,step});edits.subscribe(()=>{if(!edits.state().active)scrub.stop();});input.addEventListener('blur',syncSceneDataInspector);}
+  }
   sceneBurning=createSceneBurning({objects:()=>workingScene.objects,retained:()=>[...workingScene.retainedObjects(),...workingScene.suspendedObjects()],runtime:()=>activeSceneComposition?volumePrototype:null,
-    createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame}),
+    createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame}),
     onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
   workbenchSceneFrames.onFrame(()=>void sceneBurning.sync().then(syncBurnableStatus));
   // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier.
@@ -25321,9 +25357,10 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
-    setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled,material:'wood'},'Set burnable wood');},
+    addPrompt:addPromptLettering,setPrompt:setPromptLettering,
+    setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);return edits.apply(ensureObjectBurnableTarget(id),{...entry?.burnable,enabled,material:'wood'},'Set burnable wood');},
     burningState:id=>sceneBurning.read(id),
-    setBurnAppearance:(id,value)=>sceneBurning.setAppearance(id,value),
+    setBurnAppearance:(id,value)=>{const entry=workingScene.objects.find(row=>row.id===id);if(!entry)throw Error('Select a burnable mesh');if(value.kelvinPerHeat!==undefined)throw Error('Change Kelvin per heat in the flame physical controls');const prior=entry.burnable??{enabled:false,material:'wood'};const appearance=checkedBurnAppearance({...checkedBurnAppearance(prior.appearance??{profile:entry.object.userData.kaminosPromptRelief?.appearance??'crust',glow:1}),...value});return edits.apply(ensureObjectBurnableTarget(id),{...prior,appearance},'Edit burn appearance');},
     settleCombustion:()=>sceneBurning.sync(),
     burningSnapshot:id=>sceneBurning.snapshot(id),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
