@@ -16,7 +16,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
  const actions=(...nodes)=>{const row=el('div',null,'if-actions');row.append(...nodes);return row;};
  const button=(label,fn,title)=>{const b=el('button',label,'btn');b.type='button';b.onclick=fn;if(title)b.title=title;return b;};
  const run=async(name,value)=>{message='';try{return await invoke(name,value);}catch(error){message=error.message;return null;}finally{sync();}};
- const number=(label,value,change,step=.1)=>{const n=el('input');n.type='number';n.step='any';n.min='.001';n.value=value;n.setAttribute('aria-label',label);n.onchange=()=>change(Number(n.value));const drag=host.controls.installNumberDrag({input:n,step});drags.add(drag);return n;};
+ const number=(label,value,change,step=.1)=>{const n=el('input');n.type='number';n.step='any';n.min='0';n.value=value;n.setAttribute('aria-label',label);n.onchange=()=>change(Number(n.value));const drag=host.controls.installNumberDrag({input:n,step});drags.add(drag);return n;};
  const detail=(title)=>{const d=el('details');d.append(el('summary',title));return d;};
  const select=(label,options,change)=>{const n=el('select');n.setAttribute('aria-label',label);for(const [id,text] of options){const o=el('option',text);o.value=id;n.append(o);}n.onchange=()=>change(n.value);return n;};
  const heading=actions(el('strong','Flame score'),button('Frame flame',()=>run('frame')));heading.classList.add('if-heading');panel.append(heading);
