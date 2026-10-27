@@ -17,7 +17,7 @@ export function materialMeasure(a,filter=()=>true){
  }
  return {area,min,max,center:moment.map(v=>v/(area||1)),volume:Math.abs(volume)};
 }
-function select(a,owners,mask){const out=extractFaces(a,mask).part;return {arrays:out,faceInterfaces:Int32Array.from(owners.filter((_,i)=>mask[i]))};}
+function select(a,owners,mask,planes=null){const out=extractFaces(a,mask).part;return {arrays:out,faceInterfaces:Int32Array.from(owners.filter((_,i)=>mask[i])),faceSectionPlanes:planes?planes.filter((_,i)=>mask[i]):new Array(out.indices.length/3).fill(null)};}
 function insideDistance(p,leaf){return Math.hypot(...p.map((v,k)=>Math.max(leaf.bounds.min[k]-v,0,v-leaf.bounds.max[k])));}
 function closest(p,leaves){let winner=null,best=Infinity;for(const l of leaves){const distance=insideDistance(p,l);const score=distance+Math.hypot(...sub(p,l.center))*1e-8;if(score<best){best=score;winner=l;}}return winner;}
 
@@ -43,10 +43,10 @@ function attachmentCaps(edges,normal){
  }
  return {triangles,openEdges,loops:loops.length};
 }
-function addCaps(leaf,triangles,id,normal,material){
- const a=leaf.arrays,P=Array.from(a.positions),N=Array.from(a.normals??new Float32Array(P.length)),U=Array.from(a.uvs??new Float32Array(P.length/3*2)),I=Array.from(a.indices),M=Array.from(a.faceMaterial??new Uint8Array(I.length/3)),O=Array.from(leaf.faceInterfaces);
- for(const t of triangles){const start=P.length/3;for(const p of t){P.push(...p);N.push(...normal);U.push(p[0],p[1]);}I.push(start,start+1,start+2);M.push(material);O.push(id);}
- leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);
+function addCaps(leaf,triangles,id,normal,material,planes){
+ const a=leaf.arrays,P=Array.from(a.positions),N=Array.from(a.normals??new Float32Array(P.length)),U=Array.from(a.uvs??new Float32Array(P.length/3*2)),I=Array.from(a.indices),M=Array.from(a.faceMaterial??new Uint8Array(I.length/3)),O=Array.from(leaf.faceInterfaces),S=leaf.faceSectionPlanes.slice();
+ for(const [ti,t]of triangles.entries()){const start=P.length/3;for(const p of t){P.push(...p);N.push(...normal);U.push(p[0],p[1]);}I.push(start,start+1,start+2);M.push(material);O.push(id);S.push(planes[ti]);}
+ leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);leaf.faceSectionPlanes=S;
 }
 
 export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e10}={}){
@@ -63,7 +63,8 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  for(const {parts:[a,b],edges}of grouped.values()){
   const normal=unit(sub(parts.get(b).bounds.center,parts.get(a).bounds.center)),id=nextInterface++,cap=attachmentCaps(edges,normal);
   interfaces.set(id,{id,normal,kind:'attachment',parts:[a,b],edges});
-  addCaps(parts.get(a),cap.triangles,id,normal,capMaterial);addCaps(parts.get(b),cap.triangles.map(t=>[t[0],t[2],t[1]]),-id,normal.map(v=>-v),capMaterial);
+  const capPlanes=cap.triangles.map(points=>({points}));
+  addCaps(parts.get(a),cap.triangles,id,normal,capMaterial,capPlanes);addCaps(parts.get(b),cap.triangles.map(t=>[t[0],t[2],t[1]]),-id,normal.map(v=>-v),capMaterial,capPlanes);
   if(cap.openEdges||!cap.triangles.length)diagnostics.uncappedAttachments.push({id,openEdges:cap.openEdges,capTriangles:cap.triangles.length});
  }
  const leaves=[];
@@ -71,8 +72,8 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
   const bounds=materialMeasure(leaf.arrays),spans=sub(bounds.max,bounds.min),axes=[0,1,2].sort((a,b)=>spans[b]-spans[a]);leaf.bounds=bounds;
   if(spans[axes[0]]<=cellExtent*(1+1e-6)){leaves.push(leaf);return;}
   for(const axis of axes){if(spans[axis]<=cellExtent*(1+1e-6))continue;
-   const normal=[0,0,0];normal[axis]=1;const center=bounds.min.map((v,k)=>(v+bounds.max[k])/2),plane={point:center,normal},mask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),cut=bisectFaces(leaf.arrays,mask,plane),cutOwners=Int32Array.from(cut.sourceFace,i=>leaf.faceInterfaces[i]);
-   const raw=[-1,1].map(side=>select(cut.arrays,cutOwners,Uint8Array.from(cut.side,x=>Number(side===-1?x<0:x>=0))));
+   const normal=[0,0,0];normal[axis]=1;const center=bounds.min.map((v,k)=>(v+bounds.max[k])/2),plane={point:center,normal},mask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),cut=bisectFaces(leaf.arrays,mask,plane),cutOwners=Int32Array.from(cut.sourceFace,i=>leaf.faceInterfaces[i]),cutPlanes=Array.from(cut.sourceFace,i=>leaf.faceSectionPlanes[i]);
+   const raw=[-1,1].map(side=>select(cut.arrays,cutOwners,Uint8Array.from(cut.side,x=>Number(side===-1?x<0:x>=0)),cutPlanes));
    if(raw.some(child=>!child.arrays.indices.length))continue;
    const caps=raw.map(child=>{try{return capPlanarOpenings(child.arrays,plane,{material:capMaterial});}catch{return null;}});
    const areas=caps.map((cap,i)=>cap?materialMeasure(cap.arrays,f=>f>=raw[i].arrays.indices.length/3).area:0);
@@ -95,8 +96,9 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
     }
    }
    if(!shared.length)continue;
+   const sharedPlanes=shared.map(points=>({points}));
    const children=raw.map((child,i)=>{const side=i===0?-1:1;
-    addCaps(child,side===-1?shared:shared.map(t=>[t[0],t[2],t[1]]),side===-1?nextInterface:-nextInterface,normal.map(v=>-side*v),capMaterial);
+    addCaps(child,side===-1?shared:shared.map(t=>[t[0],t[2],t[1]]),side===-1?nextInterface:-nextInterface,normal.map(v=>-side*v),capMaterial,sharedPlanes);
     return {...child,part:leaf.part};
    });
    interfaces.set(nextInterface,{id:nextInterface,normal,kind:'internal',parts:[leaf.part,leaf.part]});nextInterface++;
@@ -114,7 +116,7 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  }
  leaves.forEach((leaf,index)=>{const m=materialMeasure(leaf.arrays),spans=sub(m.max,m.min);leaf.index=index;leaf.center=m.min.map((v,k)=>(v+m.max[k])/2);leaf.halfExtents=spans.map(v=>Math.max(v/2,extent*1e-6));leaf.bounds=m;leaf.volume=Math.max(m.volume,m.area*Math.min(...leaf.halfExtents)/3,extent**3*1e-12);});
  const sections=new Map();for(const leaf of leaves)for(let f=0;f<leaf.faceInterfaces.length;f++){
-  const id=leaf.faceInterfaces[f];if(!id)continue;const key=Math.abs(id);if(!sections.has(key))sections.set(key,{positive:[],negative:[]});const p=triangle(leaf.arrays,f),area=areaOf(p),center=[0,1,2].map(k=>(p[0][k]+p[1][k]+p[2][k])/3);sections.get(key)[id>0?'positive':'negative'].push({leaf,area,center,points:p});
+  const id=leaf.faceInterfaces[f];if(!id)continue;const key=Math.abs(id);if(!sections.has(key))sections.set(key,{positive:[],negative:[]});const p=triangle(leaf.arrays,f),area=areaOf(p),center=[0,1,2].map(k=>(p[0][k]+p[1][k]+p[2][k])/3);sections.get(key)[id>0?'positive':'negative'].push({leaf,area,center,points:p,sourcePlane:leaf.faceSectionPlanes[f]});
  }
  const bonds=[];
  for(const [id,interface_]of interfaces){
@@ -153,5 +155,5 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');
  return {route:WHOLE_FRACTURE_ROUTE,pieces:leaves,bonds,cells,capMaterial,dimensions:{dx:cellExtent,dy:cellExtent,dz:cellExtent},floorY:total.min[1]-extent*.02,
   config:{elasticModulus,gravity,timeStep:1/60,substeps:2,solverIterations:20,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
-  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',sectionMatching:'shared-cap-polygon-intersection',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
+  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',sectionMatching:'shared-cap-lineage-polygon-intersection',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
 }

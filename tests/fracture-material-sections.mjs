@@ -24,3 +24,11 @@ for(const offset of [0,1e6]){
  assert.equal(matchMaterialSections([row(0,oblique)],[row(1,separated)]).size,0,'Translation cannot turn a resolvable gap into shared material');
  const same=[...matchMaterialSections([row(0,oblique)],[row(1,oblique)]).values()][0];assert.ok(Math.abs(same.area-Math.sqrt(12))<1e-12);assert.ok(Math.abs(same.moment[0]/same.area-(offset+4/3))<1e-8);
 }
+
+// The actual cutter rounds descendant vertices into Float32 buffers.
+const {bisectFaces}=await import('../poly-mesh-edit.mjs');
+const original=[[0,0,0],[1,1,0],[1,0,1]],sectionPlane={points:original};
+const split=bisectFaces({positions:Float32Array.from(original.flat()),indices:Uint32Array.of(0,1,2)},Uint8Array.of(1),{point:[0,.2,0],normal:[0,1,0]}).arrays;
+const descendants=Array.from({length:split.indices.length/3},(_,f)=>({leaf:{index:1},sourcePlane:sectionPlane,points:Array.from(split.indices.subarray(f*3,f*3+3),i=>Array.from(split.positions.subarray(i*3,i*3+3)))}));
+const restored=[...matchMaterialSections([{leaf:{index:0},sourcePlane:sectionPlane,points:original}],descendants).values()].reduce((sum,p)=>sum+p.area,0);
+assert.ok(Math.abs(restored-Math.sqrt(3)/2)<1e-7,'Float32 subdivision must preserve the shared source section');

@@ -27,12 +27,15 @@ function intersect(subject,clip){
  }
  return result;
 }
-function sharedPolygon(a,b){
- const origin=a[0],e0=sub(a[1],origin),e1=sub(a[2],origin),planeNormal=cross(e0,e1),u=unit(e0),n=unit(planeNormal);if(!u||!n)return null;
+function sharedPolygon(a,b,sourcePlane){
+ const frame=sourcePlane?.points??a,origin=frame[0],e0=sub(frame[1],origin),e1=sub(frame[2],origin),planeNormal=cross(e0,e1),u=unit(e0),n=unit(planeNormal);if(!u||!n)return null;
+ // Descendants of the same producer-owned cap triangle are projected into
+ // its original plane. This restores interpolation roundoff without assigning
+ // shared identity to independent surfaces. Otherwise use a strict bound.
  // Bound roundoff in the scalar triple product itself. Absolute world
  // coordinates must not expand the admitted separation of two represented
  // planes; Float32 rounding has already happened in the supplied vertices.
- for(const p of b){
+ if(!sourcePlane)for(const p of b){
   const d=sub(p,origin),det=dot(d,planeNormal);
   const permanent=Math.abs(d[0])*(Math.abs(e0[1]*e1[2])+Math.abs(e0[2]*e1[1]))+Math.abs(d[1])*(Math.abs(e0[2]*e1[0])+Math.abs(e0[0]*e1[2]))+Math.abs(d[2])*(Math.abs(e0[0]*e1[1])+Math.abs(e0[1]*e1[0]));
   if(Math.abs(det)>16*Number.EPSILON*permanent)return null;
@@ -51,7 +54,10 @@ export function matchMaterialSections(positive,negative){
  const pairs=new Map();if(!positive.length||!negative.length)return pairs;
  const index=tree(negative.map(t=>({t,box:bounds(t.points)})));
  for(const a of positive){const rows=[];candidates(index,bounds(a.points),rows);
-  for(const {t:b}of rows){const shared=sharedPolygon(a.points,b.points);if(!shared)continue;
+  for(const {t:b}of rows){
+   if(a.sourcePlane&&b.sourcePlane&&a.sourcePlane!==b.sourcePlane)continue;
+   const sourcePlane=a.sourcePlane&&a.sourcePlane===b.sourcePlane?a.sourcePlane:null;
+   const shared=sharedPolygon(a.points,b.points,sourcePlane);if(!shared)continue;
    const key=a.leaf.index+':'+b.leaf.index;
    if(!pairs.has(key))pairs.set(key,{a:a.leaf.index,b:b.leaf.index,area:0,moment:[0,0,0]});
    const pair=pairs.get(key);pair.area+=shared.area;for(let k=0;k<3;k++)pair.moment[k]+=shared.moment[k];
