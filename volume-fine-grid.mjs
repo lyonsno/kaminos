@@ -37,8 +37,9 @@ fn idx(p:vec3<u32>,d:vec3<u32>)->u32{return p.x+d.x*(p.y+d.y*p.z);}
 fn solid(p:vec3<i32>)->bool{return textureDimensions(fineSolid).x==s.material.x&&all(p>=vec3<i32>(0))&&all(p<vec3<i32>(s.material.xyz))&&textureLoad(fineSolid,p,0).x!=0u;}
 fn sourceFace(c:vec3<i32>,a:u32,prior:bool)->f32{
  var p=clamp(c,vec3<i32>(0),vec3<i32>(s.material.xyz)-1);
- if(solid(p)){return 0.0;}var next=p;next[a]++;if(solid(next)){return 0.0;}
+ if(solid(p)){return 0.0;}
  if(c[a]<0){return textureLoad(fineLowerRead,vec2<i32>(p[(a+1u)%3u],p[(a+2u)%3u]),i32(a),0).x;}
+ var next=p;next[a]++;if(solid(next)){return 0.0;}
  let i=idx(vec3<u32>(p),s.material.xyz)*4u;
  if(prior){return finePrior[i][a];}return fine[i][a];
 }

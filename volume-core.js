@@ -1,4 +1,5 @@
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
+import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
@@ -5354,21 +5355,24 @@ fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
   return clamp(max(smoothstep(0.010, 0.13, flowEnergy), smoothstep(0.025, 0.74, materialEnergy) * 0.72), 0.0, 1.0);
 }
 
+${TRANSFER_GEOMETRY_WGSL}
 fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1));
-  // The uploaded cue remains on the material lattice. Average the physical
-  // material block covered by this velocity cell; equal resolution is identity.
-  let ratio = u32(round(1.0 / VELOCITY_UNIT_SCALE));
-  let width = GRID * ratio;
-  let height = GRID_Y * ratio;
+  // The uploaded cue remains on the material lattice. Integrate its physical
+  // overlap with this velocity cell, including finer velocity lattices.
+  let destination = vec3<u32>(u32(GRID), u32(GRID_Y), u32(GRID));
+  let source = vec3<u32>(round(vec3<f32>(destination) / VELOCITY_UNIT_SCALE));
   var externalCue = 0.0;
   if (u.oracle_activity_controls2.y >= 0.5) {
-    let start = vec3<u32>(safe) * ratio;
-    for (var z=0u; z<ratio; z++) { for (var y=0u; y<ratio; y++) { for (var x=0u; x<ratio; x++) {
-      let q = start + vec3<u32>(x,y,z);
-      externalCue += clamp(oracleActivityCue[q.x + width * (q.y + height * q.z)], 0.0, 1.0);
+    let cell = vec3<u32>(safe);
+    let lo = transferLo(cell,source,destination);let hi = transferHi(cell,source,destination);
+    let begin = transferBegin(cell,source,destination);let end = transferEnd(cell,source,destination);
+    var weightSum = 0.0;
+    for (var z=begin.z; z<end.z; z++) { for (var y=begin.y; y<end.y; y++) { for (var x=begin.x; x<end.x; x++) {
+      let q = vec3<u32>(vec3<i32>(x,y,z));let o = transferOverlap(vec3<i32>(q),lo,hi);let w = o.x*o.y*o.z;
+      externalCue += clamp(oracleActivityCue[q.x + source.x * (q.y + source.y * q.z)], 0.0, 1.0)*w;weightSum+=w;
     } } }
-    externalCue /= f32(ratio * ratio * ratio);
+    externalCue /= weightSum;
   }
   let proceduralCue = proceduralReceiverActivityCue(c);
   let externalCueEnabled = step(0.5, u.oracle_activity_controls2.y);

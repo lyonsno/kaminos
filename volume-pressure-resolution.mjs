@@ -30,8 +30,8 @@ export function pressureResolutionPlan({ dims, mode = 'off', width = 0, solver =
 // stencils. Velocity is stored in cell-displacement units, not world units.
 // Dividing the face mean by r makes coarse divergence equal the volume mean
 // of fine divergence; therefore the expansion target needs NO extra r factor.
-export function restrictPressureReference({ dims, divisor, fluid, expansion, solids }) {
-  if(!Number.isInteger(divisor))return restrictPressureOverlapReference({dims,divisor,fluid,expansion,solids});
+export function restrictPressureReference({ dims, divisor, fluid, expansion, solids, lower }) {
+  if(!Number.isInteger(divisor))return restrictPressureOverlapReference({dims,divisor,fluid,expansion,solids,lower});
   const coarse = dims.map(n => n / divisor);
   if (coarse.some(n => !Number.isInteger(n) || n < 1)) throw Error('Nonintegral restriction');
   const count = coarse.reduce((a,b) => a*b,1), data = new Float32Array(count * 16), burn = new Float32Array(count), mask = new Uint32Array(count);
@@ -97,8 +97,8 @@ fn solid(p: vec3<i32>) -> bool {
 }
 fn pressureSourceFace(c:vec3<i32>,a:u32)->f32{
  let p=clamp(c,vec3<i32>(0),vec3<i32>(shape.fine.xyz)-1);if(solid(p)){return 0.0;}
- var next=p;next[a]++;if(solid(next)){return 0.0;}
  if(c[a]<0){if(shape.bounds.z<.5){return 0.0;}return textureLoad(fineLowerRead,vec2<i32>(p[(a+1u)%3u],p[(a+2u)%3u]),i32(a),0).x;}
+ var next=p;next[a]++;if(solid(next)){return 0.0;}
  return fine[idx(vec3<u32>(p),shape.fine.xyz)*4u][a];
 }
 fn pressureTransferFace(c:vec3<u32>,a:u32)->f32{
