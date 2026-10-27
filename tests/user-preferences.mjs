@@ -1,8 +1,15 @@
 // kaminos-test: node
 import {test} from 'node:test';import {readFileSync} from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {planSceneRestore} from '../scene-persistence-core.js';
+import {createSceneAOState} from '../scene-ao-state.mjs';
 import {PREFERENCES_SCHEMA,SCENE_DEFAULT_RANGES,checkedPreferences,sceneDefaultsFromDocument,newSceneDocument,sceneDefaultsApplyToLocation,createUserPreferences} from '../user-preferences.mjs';
 const blank=()=>({schema:'kaminos.scene.v1',version:10,objects:[{id:'a'}],sceneId:'old',camera:{position:[0,1,4],target:[0,0,0],up:[0,1,0],fov:50,near:.01,far:100},sceneCamera:{schema:'kaminos.scene-camera.v1',activeId:'camera-a',aspect:[16,9]},environment:{name:'studio',exposure:1},editorDisplay:{hiddenIds:['a']},postprocessing:{},composition:{flame:{presetId:'old'}},localLiquid:{particleCount:4096}});
+test('preference capture preserves values the accepted AO owner can restore exactly',()=>{
+ const state=createSceneAOState();state.patch({intensity:.654321,radius:27.123456});
+ const captured=sceneDefaultsFromDocument({postprocessing:{ao:state.document()}});
+ assert.equal(captured.postprocessing.ao.intensity,.654321);assert.equal(captured.postprocessing.ao.radius,27.123456);
+ const restored=createSceneAOState();restored.restoreDocument(newSceneDocument(blank(),captured).postprocessing.ao);assert.deepEqual(restored.document(),state.document());
+});
 test('capturing defaults copies settings without scene membership or camera references',()=>{const doc=blank(),value=sceneDefaultsFromDocument(doc);assert.equal(value.environment.exposure,1);assert.equal(value.sceneCamera.activeId,null);assert.deepEqual(value.editorDisplay.hiddenIds,[]);assert.equal('sceneId' in value,false);assert.equal('objects' in value,false);value.environment.exposure=3;assert.equal(doc.environment.exposure,1);});
 test('new scenes use defaults and never inherit source-scene identities or simulations',()=>{const factory=blank(),defaults=sceneDefaultsFromDocument(factory);defaults.environment.exposure=.7;const value=newSceneDocument(factory,defaults);assert.equal(value.environment.exposure,.7);assert.deepEqual(value.objects,[]);assert.equal(value.composition,null);assert.equal(value.localLiquid,null);assert.equal(value.sceneId,undefined);assert.equal(value.sceneCamera.activeId,null);assert.equal(factory.sceneId,'old');});
 test('saved scenes and explicit asset, experiment or fire routes bypass scene defaults',()=>{for(const url of ['/#scene=look.kaminos.json','/?mesh=a.glb','/?experiment=material-study','/#volume_light_field=1','/?load=splat/a.ply','/?image=a.png','/#note=note-a'])assert.equal(sceneDefaultsApplyToLocation(url),false,url);for(const url of ['/','/#workspace=authoring','/?workspace=workbench','#authoring=1'])assert.equal(sceneDefaultsApplyToLocation(url),true,url);});
@@ -27,9 +34,10 @@ test('Preferences number admission uses setting validity rather than copied slid
 });
 
 
-test('saved postprocessing defaults must survive their fixed range consumers without clamping or rounding',()=>{
+test('saved defaults use accepted AO semantics and retain fixed ranges for the unchanged consumers',()=>{
  const defaults=postprocessing=>({schema:PREFERENCES_SCHEMA,sceneDefaults:{postprocessing}});
- for(const ao of [{radius:25},{falloff:2},{radius:.1},{intensity:4},{scale:6},{thickness:6},{radius:1.234}])assert.throws(()=>checkedPreferences(defaults({ao})),/AO|ao/);
+ for(const ao of [{radius:-1},{intensity:'1'},{scale:-.1},{thickness:NaN},{enabled:'false'}])assert.throws(()=>checkedPreferences(defaults({ao})),/AO|ao|finite/);
+ for(const ao of [{radius:25},{falloff:2},{radius:.1},{intensity:4},{scale:6},{thickness:6},{radius:1.234}])assert.deepEqual(checkedPreferences(defaults({ao})).sceneDefaults.postprocessing.ao,ao);
  for(const dof of [{focus:11},{aperture:.02},{maxblur:.06}])assert.throws(()=>checkedPreferences(defaults({dof})),/Depth|dof/);
  assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{backdropBrightness:3}}),/Backdrop|backdrop/);
  const valid={ao:{radius:7.5,intensity:1.25,scale:.75,thickness:1.45,falloff:.37},dof:{focus:2.5,aperture:.002,maxblur:.01}};
