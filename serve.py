@@ -3153,6 +3153,29 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
     running = Path(queue_dir) / "running"
     def running_jobs():
         return sorted(p.name for p in running.iterdir() if p.is_dir()) if running.is_dir() else []
+    if action in ("queued-claim", "withdraw-queued"):
+        run_id = str(payload.get("runId") or "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
+            raise ValueError("queued admission needs the run id")
+        lease_id = f"kaminos-page-{run_id}"
+        args = [action, "--lease-id", lease_id]
+        if action == "queued-claim":
+            args += ["--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
+                     "--repo-root", str(repo_root), "--pid", str(server_pid),
+                     "--effective-route", str(payload.get("route") or "kaminos-page"),
+                     "--backend", "webgpu", "--device", "apple-gpu", "--profile", "interactive-generation",
+                     "--ttl-seconds", str(ttl_seconds)]
+        done = cli(*args)
+        if done.returncode != 0:
+            raise RuntimeError("Greenroom queued admission failed: " + (done.stderr or done.stdout).strip())
+        result = json.loads(done.stdout)
+        if not isinstance(result, dict) or result.get("jobId") != f"external-{lease_id}":
+            raise RuntimeError("Greenroom returned an unverified admission identity")
+        if result.get("status") == "held" and result.get("leaseId") != lease_id:
+            raise RuntimeError("Greenroom returned a different page lease")
+        if result.get("status") == "waiting" and (type(result.get("position")) is not int or result["position"] < 1):
+            raise RuntimeError("Greenroom did not report a verified queue position")
+        return result
     if action == "claim":
         run_id = str(payload.get("runId") or "")
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
@@ -3181,7 +3204,7 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
         if done.returncode != 0:
             raise RuntimeError((done.stderr or done.stdout).strip()[-300:] or "lease release failed")
         return {"status": "released", "leaseId": lease_id}
-    raise ValueError("lease action must be claim, renew or release")
+    raise ValueError("lease action must be queued-claim, withdraw-queued, claim, renew or release")
 
 
 def trellis_generation_availability():

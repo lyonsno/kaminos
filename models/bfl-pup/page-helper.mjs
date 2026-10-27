@@ -18,12 +18,14 @@ export function createPagePromptHelper({modelUrl,post,providerFactory=createWork
    active=true;const started=performance.now();
    try{
     const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'bfl-pup.prompt-expansion.webgpu.v0',signal:options.signal,
-     sleep:ms=>sleep(ms,options.signal),onWait,
+     admission:options.admission??'queue',bypassSignal:options.bypassSignal,
+     sleep:(ms,signal)=>sleep(ms,signal),onWait,
      // Resident weights are idle after request settlement. Only active work
      // retains execution authority; abort/error terminates the owned context.
      unsettledWork:async()=>provider?.busy?['prompt worker']:[],
     },async held=>{
-     onLease(held);provider??=providerFactory({modelUrl,onProgress,keepLoaded});
+     onLease(held);if(held.status==='bypassed')onProgress({phase:'outside-queue'});
+     provider??=providerFactory({modelUrl,onProgress,keepLoaded});
      let succeeded=false;
      try{const result=await provider.expand(options);succeeded=true;return result;}finally{if(!keepLoaded||!succeeded){await provider.dispose();provider=null;}}
     });

@@ -58,3 +58,14 @@ test('resident application operation reuses its provider and explicit unload rel
  await c.expand({prompt:'first'});await c.expand({prompt:'second'});assert.equal(creates,1);assert.equal(disposed,0);assert.equal(c.read().resident,true);
  await c.setKeepLoaded(false);assert.equal(disposed,1);assert.equal(c.read().resident,false);assert.equal(c.read().keepLoaded,false);
 });
+
+test('waiting operation exposes queue position and skip choice to the retained provider',async()=>{
+ let callbacks,input;const gate=deferred();
+ const c=prompt.createAuthoringPromptExpansion({keepLoaded:true,createHelper:x=>{callbacks=x;return{expand:async options=>{input=options;callbacks.onWait({jobId:'canonical',position:4,heldBy:['other-job']});return gate.promise;},dispose:async()=>{}};}});
+ const run=c.expand({prompt:'a kettle'});await tick();
+ assert.equal(input.admission,'queue');assert.equal(c.read().queue.jobId,'canonical');assert.match(c.read().progress,/position 4/);
+ assert.equal(c.runOutsideQueue(),true);assert.equal(input.bypassSignal.aborted,true);
+ gate.resolve({text:'expanded',gpuLease:{status:'bypassed'}});await run;
+ assert.match(c.read().coordination,/outside Greenroom/);assert.equal(c.runOutsideQueue(),false);
+ await c.dispose();
+});

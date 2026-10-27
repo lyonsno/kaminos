@@ -7,18 +7,47 @@
 // Greenroom runs without a lease and says so. An unreachable server, or a broken Greenroom configuration,
 // fails the run: running unleased silently is what the lease exists to prevent.
 export async function withGreenroomLease({post,runId,route,signal=null,onWait=()=>{},unsettledWork=async()=>[],
+  admission='lease',bypassSignal=null,
   retryMs=15000,sleep=ms=>new Promise(r=>setTimeout(r,ms)),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)},run){
+  if(!['lease','queue','outside'].includes(admission))throw Error('Unknown GPU admission mode');
   const stopped=()=>{if(signal?.aborted)throw Object.assign(Error('GPU wait stopped'),{name:'AbortError'});};
-  let lease;
-  for(;;){
-    stopped();
-    try{lease=await post({action:'claim',runId,route});}
-    catch(error){throw Error(`Greenroom lease claim failed: ${error?.message||error}`);}
-    if(lease?.status!=='waiting')break;
-    onWait(lease);await sleep(retryMs);
+  let lease,queued=false,withdrawAttempted=false;
+  const withdraw=async()=>{
+    withdrawAttempted=true;
+    try{
+      const result=await post({action:'withdraw-queued',runId,route});
+      if(!['cancelled','unconfigured'].includes(result?.status))throw Error(result?.error||result?.status||'no withdrawal answer');
+      queued=false;
+    }catch(error){
+      error.greenroomHandback={state:'withdrawal-failed',runId,reason:'The admission entry or reserved lease may still block Greenroom.',error:String(error.message||error)};
+      throw error;
+    }
+  };
+  try{
+    for(;;){
+      stopped();
+      if(admission==='outside'||bypassSignal?.aborted){
+        if(queued)await withdraw();
+        lease={status:'bypassed',coordination:'outside-queue',route,reason:'explicit user choice'};break;
+      }
+      queued=admission==='queue';
+      try{lease=await post({action:queued?'queued-claim':'claim',runId,route});}
+      catch(error){throw Error(`Greenroom lease claim failed: ${error?.message||error}`);}
+      if(queued&&(signal?.aborted||bypassSignal?.aborted)){
+        await withdraw();stopped();
+        lease={status:'bypassed',coordination:'outside-queue',route,reason:'explicit user choice'};break;
+      }
+      if(lease?.status!=='waiting')break;
+      onWait(lease);
+      const waitSignal=signal&&bypassSignal?AbortSignal.any([signal,bypassSignal]):signal||bypassSignal;
+      try{await sleep(retryMs,waitSignal);}catch(error){if(!bypassSignal?.aborted)throw error;}
+    }
+    if(!['held','unconfigured','bypassed'].includes(lease?.status))throw Error(`Greenroom lease claim failed: ${lease?.error||lease?.status||'no answer'}`);
+  }catch(error){
+    if(queued&&!withdrawAttempted){try{await withdraw();}catch(cleanup){error.greenroomHandback=cleanup.greenroomHandback;}}
+    throw error;
   }
-  if(!['held','unconfigured'].includes(lease?.status))throw Error(`Greenroom lease claim failed: ${lease?.error||lease?.status||'no answer'}`);
-  if(lease.status!=='held')return {result:await run(lease),lease};
+  if(lease.status!=='held'){stopped();return {result:await run(lease),lease};}
   let timer=null,renewError=null;
   const renewEvery=Math.max(5000,(lease.ttlSeconds??120)*1000/4);
   const renew=()=>{timer=setTimer(async()=>{
@@ -32,7 +61,7 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
   // Release needs positive settlement: no unsettled GPU work in the host's ledger, and no held-route marker.
   const pending=async()=>{try{return await unsettledWork();}catch(error){return [`settlement unknown: ${error?.message||error}`];}};
   let result;
-  try{result=await run(lease);}
+  try{stopped();result=await run(lease);}
   catch(error){
     stopRenewing();
     const unsettled=await pending();

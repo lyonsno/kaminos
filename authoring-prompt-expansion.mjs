@@ -13,7 +13,7 @@ export function promptExpansionMatches(request,current){
 // Application operation, independent of the provider's runtime/device ownership.
 // A provider expands {prompt,images,signal,onText} and disposes its own resources.
 export function createAuthoringPromptExpansion({createHelper,changed=()=>{},blocked=()=>null,clock=()=>performance.now(),keepLoaded=false}){
- let active=false,abort=null,helper=null,started=null,state={status:'idle',draft:'',request:null,result:null,error:null};
+ let active=false,abort=null,bypass=null,helper=null,started=null,state={status:'idle',draft:'',request:null,result:null,error:null};
  const set=patch=>{if(Object.entries(patch).every(([key,value])=>Object.is(state[key],value)))return;state={...state,...patch};changed();};
  return {
   busy:()=>active,
@@ -23,22 +23,24 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
   async dispose(){if(active)abort.abort(Error('Prompt page closed.'));await helper?.dispose();helper=null;},
   clear(){if(active)throw Error('Finish the prompt expansion first.');started=null;state={status:'idle',draft:'',request:null,result:null,error:null};changed();},
   stop(){if(!active)return false;abort.abort(Error('Prompt expansion cancelled.'));set({status:'stopping'});return true;},
-  async expand({prompt,model='flux3',reference=null}){
+  runOutsideQueue(){if(!active||state.status!=='waiting')return false;bypass.abort(Error('Run outside queue selected.'));set({status:'leaving-queue',progress:'Leaving the queue…'});return true;},
+  async expand({prompt,model='flux3',reference=null,admission='queue'}){
    if(active)throw Error('Prompt expansion is already running');
    const reason=blocked();if(reason)throw Error(reason);
    if(!String(prompt||'').trim())throw Error('Describe the image before expanding its prompt');
    if(reference&&(reference.kind!=='image'||assetWithheld(reference)))throw Error('Choose an available reference image');
-   const request={prompt:String(prompt),model,reference:reference?structuredClone(reference):null};
-   active=true;abort=new AbortController();started=clock();
-   set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,progress:'Loading the prompt helper…'});
+   if(!['queue','outside'].includes(admission))throw Error('Choose queued or outside-queue execution');
+   const request={prompt:String(prompt),model,reference:reference?structuredClone(reference):null,admission};
+   active=true;abort=new AbortController();bypass=new AbortController();started=clock();
+   set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
    try{
-    helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
-     onWait:wait=>set({status:'waiting',progress:`Waiting for the shared GPU${wait.heldBy?.length?': '+wait.heldBy.join(', '):''}`})});
-    const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,
+    helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:event.phase==='outside-queue'?{coordination:'Running outside Greenroom by your choice.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
+     onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
+    const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
      onText:text=>set({status:'running',draft:text,progress:'Expanding your request…'})});
     if(typeof result?.text!=='string'||!result.text.trim())throw Error('The prompt helper returned an empty expansion');
     // Preserve the result before cleanup so a handback/disposal error cannot erase it.
-    set({result,draft:result.text});if(!keepLoaded){await helper.dispose();helper=null;}
+    set({result,draft:result.text,...(result.gpuLease?.status==='bypassed'?{coordination:'Ran outside Greenroom by your choice.'}:{})});if(!keepLoaded){await helper.dispose();helper=null;}
     set({status:result.partial?'partial':'complete',progress:result.partial?'Partial expansion retained. Review it before use.':'Prompt expanded. You can edit it before generating.'});
     return result;
    }catch(error){
@@ -49,7 +51,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
     return null;
    }finally{
     try{if(!keepLoaded||state.status==='failed'||state.status==='stopped')await helper?.dispose();}catch(error){set({status:'failed',error:`Prompt cleanup failed: ${error.message}`});}
-    if(!keepLoaded||state.status==='failed'||state.status==='stopped')helper=null;active=false;abort=null;set({elapsedMs:clock()-started});
+    if(!keepLoaded||state.status==='failed'||state.status==='stopped')helper=null;active=false;abort=null;bypass=null;set({elapsedMs:clock()-started});
    }
   },
  };
@@ -60,6 +62,9 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  const root=document.createElement('div');root.className='asset-prompt-help';
  root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
  prompt.insertAdjacentElement('afterend',root);
+ const admissionControls=document.createElement('div');admissionControls.className='asset-prompt-residency';
+ admissionControls.innerHTML=`<label title="Start without waiting for Greenroom. This can overlap another job and share its GPU and memory."><input type="checkbox" id="asset-prompt-outside-queue"> Run outside queue</label><button type="button" id="asset-prompt-skip-queue" hidden title="Remove this expansion from the queue and start it alongside any current job">Run outside queue now</button>`;root.append(admissionControls);
+ byId('asset-prompt-skip-queue').onclick=()=>controller.runOutsideQueue();
  const residentControls=document.createElement('div');residentControls.className='asset-prompt-residency';residentControls.innerHTML=`<label title="Retain prompt-helper weights between edits. Each expansion still waits for and releases the shared GPU. Closing the tab unloads them."><input type="checkbox" id="asset-prompt-keep-loaded"> Keep prompt helper loaded</label><button type="button" id="asset-prompt-unload" hidden>Unload</button><span id="asset-prompt-residency-status"></span>`;root.append(residentControls);
  const preference='kaminos.prompt-helper-residency.v1';let explicitPreference=false,residencyError='';
  const chooseResidency=async value=>{try{await controller.setKeepLoaded(value);render();}catch(error){residencyError=error.message;render();}};
@@ -75,6 +80,8 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  };
  function render(){
   const state=controller.read(),busy=controller.busy(),unavailable=imageController.busy()||!!imageController.read().pending;
+  byId('asset-prompt-outside-queue').disabled=busy;
+  byId('asset-prompt-skip-queue').hidden=!busy||state.status!=='waiting';
   byId('asset-prompt-keep-loaded').checked=state.keepLoaded;byId('asset-prompt-keep-loaded').disabled=busy;byId('asset-prompt-unload').hidden=!state.resident;byId('asset-prompt-unload').disabled=busy;byId('asset-prompt-residency-status').textContent=residencyError||(state.resident?'Loaded in this tab':state.keepLoaded?'Retains weights after the first expansion':'Unloads after each expansion');
   byId('asset-prompt-expand').disabled=busy||unavailable||!prompt.value.trim();
   byId('asset-prompt-cancel').hidden=!busy;byId('asset-prompt-cancel').disabled=state.status==='stopping';
@@ -97,7 +104,7 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  const expand=async()=>{
   const selection=current();if(selection.reference?.kind!=='image'&&byId('asset-use-reference').checked){byId('asset-prompt-help-status').textContent='Choose a source image in Browse or Open file first.';return;}
   applied=null;
-  try{const result=await controller.expand({...selection,prompt:prompt.value});if(result&&!result.partial&&promptExpansionMatches(controller.read().request,current()))use();}
+  try{const result=await controller.expand({...selection,prompt:prompt.value,admission:byId('asset-prompt-outside-queue').checked?'outside':'queue'});if(result&&!result.partial&&promptExpansionMatches(controller.read().request,current()))use();}
   catch{/* the operation retains the full failure and any draft */}
   render();changed();
  };
