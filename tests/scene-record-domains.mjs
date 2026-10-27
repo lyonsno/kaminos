@@ -62,6 +62,19 @@ test('an owner-created root supplies the same source at admission and capture',(
   assert.deepEqual(captured.transform,raw.transform);
 });
 
+test('the actual parametric lettering constructor retains rendered vertices before combustion setup',()=>{
+  const shape=new THREE.Shape();shape.moveTo(0,0);shape.lineTo(1,0);shape.lineTo(1,1);shape.lineTo(0,1);shape.closePath();
+  const object=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.035,bevelEnabled:false}),new THREE.MeshStandardMaterial());
+  object.userData.kaminosPromptRelief={schema:'kaminos.prompt-relief.v1',prompt:'ACTUAL CONSTRUCTOR',appearance:'crust'};
+  const entry=createSceneObjectRecord(object,{type:'pbr',label:'Lettering'},{id:'actual'});
+  const saved=createSceneRecordOperations({readers}).serialize(entry);
+  assert.equal(saved.source,'kaminos:prompt-relief-v1');
+  assert.deepEqual(saved.promptRelief.geometry.data.attributes.position.array,[...object.geometry.attributes.position.array]);
+  const restored=restorePromptRelief(saved);
+  assert.deepEqual([...restored.geometry.attributes.position.array],[...object.geometry.attributes.position.array]);
+  assert.deepEqual(restored.geometry.groups,object.geometry.groups);
+});
+
 test('actual membership Undo reconstructs feature geometry through its domain contribution',async()=>{
   const state=createWorkingScene(),scene=new THREE.Scene();
   const edits=createSceneEdits({read:()=>null,write(){}});

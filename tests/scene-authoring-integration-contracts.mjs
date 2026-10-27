@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import {createSceneRecordOperations} from '../scene-record-operations.mjs';
+import {isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
+import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE} from '../local-liquid-setup.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const editTools = readFileSync(new URL('../scene-placement-tools.mjs', import.meta.url), 'utf8');
@@ -10,7 +13,10 @@ test('viewport modal edits read and write the same scene-object pose that save s
   assert.match(html, /import \{ installScenePlacementTools \} from '\.\/scene-placement-tools\.mjs'/);
   assert.match(html, /read: id => \{[\s\S]*splatSceneTransformState\(entry\) : sceneObjectTransformState\(entry\.object\)/);
   assert.match(html, /write: applyAuthoredScenePose/);
-  assert.match(html, /transform: entry\.type === 'splat' \? splatSceneTransformState\(entry\) : sceneObjectTransformState\(object\)/);
+  const pose={position:[1,2,3],rotation:[.1,.2,.3],scale:[2,2,2]},splatPose={...pose,position:[4,5,6]};
+  const records=createSceneRecordOperations({readers:{transform:()=>pose,splatTransform:()=>splatPose,materials:()=>null}});
+  assert.deepEqual(records.serialize({id:'mesh',type:'glb',object:{userData:{}}}).transform,pose);
+  assert.deepEqual(records.serialize({id:'splat',type:'splat',object:{userData:{}}}).transform,splatPose);
   assert.match(editTools, /Enter \/ LMB confirm · Esc \/ RMB cancel/);
   assert.match(editTools, /if \(gizmoEditing && event\.key === 'Escape'\).*finish\(false\)/);
   assert.match(editTools, /event\.metaKey\) && key === 'z'[\s\S]*edits\.redo\(\) : edits\.undo\(\)/);
@@ -25,11 +31,15 @@ test('F frames the selected authored object through generic geometry bounds', ()
   assert.doesNotMatch(framing, /record\?\.type\s*===?\s*['"]splat['"]/);
 });
 
-test('clearing resets scene history while typed water objects join chronological membership history', () => {
+test('clearing resets scene history while typed water objects join chronological membership history', async () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*return removeSceneObjectInternal\(id\);/);
   assert.doesNotMatch(html, /record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
-  assert.match(persistence, /if \(type === LOCAL_LIQUID_EMITTER_TYPE\) return source === LOCAL_LIQUID_EMITTER_SOURCE/);
-  assert.match(html, /record\.type === LOCAL_LIQUID_EMITTER_TYPE && record\.source === LOCAL_LIQUID_EMITTER_SOURCE/);
+  const water={id:'water',type:LOCAL_LIQUID_EMITTER_TYPE,source:LOCAL_LIQUID_EMITTER_SOURCE};
+  assert.equal(isReloadableSceneObjectRecord(water),true);
+  assert.equal(isReloadableSceneObjectRecord({...water,source:'unknown'}),false);
+  const mounted=[];const records=createSceneRecordOperations({loaders:{water:(record,options)=>{mounted.push({record,options});return 'water-root';}}});
+  assert.equal(await records.load(water,{activate:false}),'water-root');
+  assert.equal(mounted[0].record,water);assert.equal(mounted[0].options.activate,false);
   assert.match(html, /mergeAndValidateLocalLiquidEmitterPose\(entry\.localLiquidEmitter, sceneObjectTransformState\(entry\.object\), transform\)/,
     'partial scene transform patches are checked against the full accepted emitter pose');
   // Membership admission, retention, selection and restoration run as imported

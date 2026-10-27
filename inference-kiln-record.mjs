@@ -1,4 +1,4 @@
-import {BufferGeometryLoader,Mesh,MeshStandardMaterial} from './lib/three.core.js';
+import {BufferGeometry,BufferGeometryLoader,Mesh,MeshStandardMaterial} from './lib/three.core.js';
 export const PROMPT_RELIEF_SOURCE='kaminos:prompt-relief-v1';
 export const promptReliefRecordDomain={type:'pbr',source:PROMPT_RELIEF_SOURCE,
  recognize:object=>Boolean(object?.userData?.kaminosPromptRelief),
@@ -31,7 +31,10 @@ export function checkedPromptRelief(value){
 }
 export function promptReliefRecord(object){
  const value=object?.userData?.kaminosPromptRelief;if(!value)return null;
- return {source:PROMPT_RELIEF_SOURCE,type:'pbr',promptRelief:checkedPromptRelief({...value,geometry:object.geometry.toJSON()})};
+ // Parametric geometry normally serializes a constructor recipe. Retain the
+ // rendered buffers instead; reopening must not depend on fonts or shaping.
+ const geometry=object.geometry.parameters?new BufferGeometry().copy(object.geometry):object.geometry;
+ return {source:PROMPT_RELIEF_SOURCE,type:'pbr',promptRelief:checkedPromptRelief({...value,geometry:geometry.toJSON()})};
 }
 export function restorePromptRelief(record){
  const value=checkedPromptRelief(record.promptRelief),geometry=new BufferGeometryLoader().parse(value.geometry);
