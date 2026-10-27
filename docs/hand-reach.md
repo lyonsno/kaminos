@@ -1,7 +1,7 @@
 # Hand Reach Experiment
 
 `?experiment=hand-reach&workspace=workbench` mounts a registered hand, a fingertip
-target and a pinchable cube in the ordinary Workbench scene. Camera acquisition,
+target and a physical cube/table in the ordinary Workbench scene. Camera acquisition,
 mesh inference and rendering use the existing hand application and scene host.
 Start camera loads the prepared models before requesting camera access; Stop
 camera releases its tracks and clears contact/grab state. Target and cube
@@ -38,11 +38,38 @@ native camera `[x,y,z]` maps to `[-x,0.2-y,z-0.6]`. The initial scene camera see
 the back of a right hand whose palm faces the physical camera, with its thumb
 on screen-left. Only left-hand reconstruction reverses triangle winding.
 
-Index-tip contact uses actual 3D distance. Thumb/index pinch can attach the cube
-when its midpoint lies inside it, preserving the initial offset. Opening releases
-it at its current position. This is kinematic attachment, not rigid-body grasp
-physics. Detector misses and stale/ended camera input hide the hand and release
-interaction; reacquisition requires an open hand before another grab.
+Index-tip target proximity uses actual 3D distance and increases the target's
+brightness. Contact physics is the default interaction: Cannon0.20.0 integrates
+the cube's translation/rotation, gravity, table support and friction. Overlapping
+sphere proxies along all five fingers and across the palm follow the measured
+pose through finite-strength motors. Contact surfaces, rather than a pinch
+predicate or attachment, move the cube. The raw mesh remains measured geometry;
+the visible wireframe contact hand shows the solved proxies, and contacting
+proxies/cube become amber. Proxy separation from the mesh is real compliance,
+not an improved neural prediction. These proxies approximate hand volume; they
+are not an anatomically constrained skeleton or mesh collision solver.
+
+The physical clock uses the shared scene loop, with small travel-aware steps.
+Pause physics freezes that clock; a hidden document does not accrue simulation
+time. Detector misses and stale/ended camera input remove the physical hand;
+the cube loses its support and continues falling/settling. Finger force,
+friction and contact radius are editable. Contact records contain finger/object
+identity, contact point, normal, separation and simulated force. No force is
+measured from the camera, and stable frictional pickup remains an experimental
+interaction rather than a demonstrated tracking-quality guarantee.
+
+Pinch attachment remains a separate comparison mode. Its thumb/index midpoint
+must enter a pinch inside the cube, preserving the initial offset. Opening
+releases it in place; it has no gravity or physical grasp. Reacquisition requires
+an open hand in this mode only. Changing modes stops camera acquisition.
+
+Placement fit defaults to the released all-joint objective. The optional wrist
+and knuckle fit uses joints0/1/5/9/13/17, omitting articulated finger joints from
+translation estimation. Both fits, their all-joint reprojection errors and their
+translation disagreement are recorded. This is a reversible comparison for
+pose-coupled drift, not a calibrated correction or ground-truth anchor. A
+synthetic inconsistent-finger case distinguishes the fits; the reported live
+drift has not yet been attributed from the operator's original trial.
 
 ## Retained Input And Verification
 
@@ -67,3 +94,9 @@ a retained camera recording and writes a phase-bearing report plus desktop/mobil
 screenshots. Browser, Playwright module, Python interpreter, recording, replay
 and output paths are explicit command arguments; run it through the shared GPU
 queue. It does not establish operator-live depth stability.
+
+`advancePhysics(seconds)` and `presentContactFixture({source:{id},proxies})`
+exercise the same contact engine with explicit synthetic input. The fixture
+source stays labelled separately from recorded predictions and camera inference.
+These operations support deterministic push/torque checks without pretending
+that the model supplied the fixture. They do not establish live manipulation.

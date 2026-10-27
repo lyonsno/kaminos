@@ -10,11 +10,12 @@ export function cameraToOperator([x, y, z]) {
   return [-x, .2 - y, z - .6];
 }
 
-export function fitCameraTranslation(joints, uv, camera) {
+export function fitCameraTranslation(joints, uv, camera, {indices=Array.from({length:21},(_,i)=>i)}={}) {
   finite(joints, 63, 'joints'); finite(uv, 42, 'UV');
   const {fx, fy, cx, cy} = camera;
   if (![fx,fy,cx,cy].every(Number.isFinite) || fx<=0 || fy<=0) throw Error('invalid camera');
-  let active=Array.from({length:21}, (_,i)=>i), translation=[0,0,.6], passes=0;
+  if(!Array.isArray(indices)||indices.length<3||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=21))throw Error('invalid fit joint indices');
+  let active=[...indices], translation=[0,0,.6], passes=0;
   let meanLoss=5;
   // Five passes, threshold2 and minimum13 are the released registration policy.
   while (meanLoss>2 && passes<5) {
@@ -40,7 +41,7 @@ export function fitCameraTranslation(joints, uv, camera) {
     meanLoss=loss.reduce((s,v)=>s+v,0)/loss.length;
     const std=Math.sqrt(loss.reduce((s,v)=>s+(v-meanLoss)**2,0)/loss.length);
     const next=active.filter((_,i)=>loss[i]<meanLoss+std);
-    if (next.length<13) break;
+    if (next.length<Math.min(13,indices.length)) break;
     active=next;
   }
   let error=0;
@@ -51,7 +52,7 @@ export function fitCameraTranslation(joints, uv, camera) {
     const v=fy*(joints[i*3+1]+translation[1])/depth+cy;
     error+=(u-uv[i*2])**2+(v-uv[i*2+1])**2;
   }
-  return {valid:true,translation,rmsePx:Math.sqrt(error/21),passes,
+  return {valid:true,translation,rmsePx:Math.sqrt(error/21),passes,fitJointIndices:[...active],
     depthAtBound:translation[2]===.3 || translation[2]===2};
 }
 
@@ -77,10 +78,11 @@ export function createHandRegistration(resource) {
   const identity=Object.freeze({route:'mobrecon.camera-registration.cpu-linear.v0',
     source:structuredClone(resource.source), cameraAuthority:'assumed_not_calibrated',
     translationBounds:[.3,2], presentation:'operator-side-rotation-not-reflection'});
-  function place(result,{width,height,focalRatio=1}={}) {
+  function place(result,{width,height,focalRatio=1,fitPolicy='all-joints'}={}) {
     if (!result?.hasHand) return {valid:false,reason:'no_hand',source:result?.identity??null};
     if (!['left','right'].includes(result.handedness)) throw Error('invalid handedness');
     if (![width,height,focalRatio].every(Number.isFinite) || width<=0 || height<=0 || focalRatio<=0) throw Error('invalid camera dimensions or focal ratio');
+    if(!['all-joints','palm'].includes(fitPolicy))throw Error('invalid placement fit policy');
     finite(result.nativeVertices,778*3,'native vertices'); finite(result.nativeUV,42,'native UV');
     finite(result.cropBox,4,'crop box');
     const [x0,y0,x1,y1]=result.cropBox;
@@ -99,14 +101,18 @@ export function createHandRegistration(resource) {
     }
     const focal=Math.max(width,height)*focalRatio;
     const camera={fx:focal,fy:focal,cx:width/2,cy:height/2,width,height,focalRatio,authority:'assumed_not_calibrated'};
-    const fit=fitCameraTranslation(joints,uv,camera);
+    const allFit=fitCameraTranslation(joints,uv,camera);
+    const palmFit=fitCameraTranslation(joints,uv,camera,{indices:[0,1,5,9,13,17]});
+    const fit=fitPolicy==='palm'?palmFit:allFit;
     if (!fit.valid) return {...fit,camera,source:result.identity};
     const cameraVertices=Float32Array.from(vertices,(v,i)=>v+fit.translation[i%3]);
     const worldVertices=new Float32Array(vertices.length), worldJoints=new Float32Array(63);
     for(let v=0;v<778;v++) worldVertices.set(cameraToOperator(cameraVertices.subarray(v*3,v*3+3)),v*3);
     for(let j=0;j<21;j++) worldJoints.set(cameraToOperator(Array.from(joints.subarray(j*3,j*3+3),(v,i)=>v+fit.translation[i])),j*3);
     if (cameraVertices.some((v,i)=>i%3===2 && v<=0)) return {valid:false,reason:'nonpositive_mesh_depth',camera,source:result.identity};
-    return {...fit,cameraVertices,worldVertices,worldJoints,camera,source:result.identity,
+    return {...fit,fitPolicy,comparison:{authority:'self-consistency-not-ground-truth',all:allFit,palm:palmFit,
+      translationDifference:allFit.valid&&palmFit.valid?allFit.translation.map((v,i)=>palmFit.translation[i]-v):null},
+      cameraVertices,worldVertices,worldJoints,camera,source:result.identity,
       handedness:result.handedness,registration:identity,observedUV:uv};
   }
   return Object.freeze({identity,place});

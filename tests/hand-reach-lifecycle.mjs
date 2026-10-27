@@ -6,9 +6,33 @@ import {createHandReachExperiment} from '../experiments/hand-reach.experiment.mj
 import {createWorkbenchSceneHost, disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
+import {createHandContactState} from '../models/mobrecon/hand-contact-state.js';
 
 const deferred = () => {let resolve, reject; const promise = new Promise((a, b) => {resolve = a; reject = b;}); return {promise, resolve, reject};};
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('physical interaction is advanced by the shared scene clock and disposed with the experiment',async()=>{
+  let state;
+  const f=await fixture({createState:()=>state=createHandContactState({tableHeight:0,cube:{position:[0,.3,0],size:.045}})});
+  assert.equal(f.instance.read().interaction,'physical-contact');
+  f.tick(100);assert.ok(f.instance.read().state.cubePosition[1]<.28);
+  await f.instance.operations.setPhysicsPaused(true);const held=f.instance.read().state.cubePosition;
+  f.tick(100);assert.deepEqual(f.instance.read().state.cubePosition,held);
+  await f.instance.operations.setPhysicsPaused(false);f.tick(100);
+  assert.ok(f.instance.read().state.cubePosition[1]<held[1]);
+  await f.instance.dispose();assert.throws(()=>state.advance(.01),/disposed/);
+});
+
+test('a newer live start supersedes a contact-mode change waiting on an old inference',async()=>{
+  const gate=deferred();
+  const f=await fixture({infer:async options=>{await options.getFrame();await gate.promise;return prediction();}});
+  await f.instance.operations.start();await f.videoFrame();
+  const changing=f.instance.operations.setInteraction('pinch-attachment');
+  const restarting=f.instance.operations.start();gate.resolve();
+  await Promise.all([changing,restarting]);
+  assert.equal(f.instance.read().interaction,'physical-contact');
+  assert.equal(f.instance.read().running,true);await f.instance.dispose();
+});
 const prediction = (overrides = {}) => ({hasHand: true, handedness: 'right', width: 640, height: 480,
   nativeVertices: new Float32Array(9), nativeUV: new Float32Array(42),
   verticesMeters: new Float32Array([0, 0, 0, .02, 0, 0, 0, .02, 0]), cropBox: [10, 20, 200, 210],
@@ -179,8 +203,8 @@ test('scene mounts without loading models; owns registered geometry and uses ope
   assert.ok(f.rows.size > 0, 'scene mounts before any model loading');
   assert.deepEqual(f.counts(), {loads: 0, destroyed: 0, appCreates: 0, registrationLoads: 0});
   const state = f.instance.read();
-  assert.deepEqual(state.view.position, [0, .25, .75]);
-  assert.deepEqual(state.view.target, [0, .25, 0]);
+  assert.ok(state.view.position[2]>state.view.target[2], 'operator looks from the opposite side of the camera-facing hand');
+  assert.ok(state.view.position[1]>state.view.target[1], 'tabletop remains visible beneath the hand');
   assert.equal(state.visible, false);
   await f.instance.operations.load();
   assert.ok(f.appOptions.device, 'the model app borrows the host device');
@@ -482,7 +506,7 @@ test('controls invoke production operations, retain numeric choices, and label l
   const f = await fixture();
   f.instance.mount({root: document.createElement('section'), document,
     invoke: async (operation, value) => f.instance.operations[operation](value)});
-  assert.equal(f.drags.length, 10, 'every numeric control installs the shared number drag');
+  assert.equal(f.drags.length, 13, 'every numeric control installs the shared number drag');
   const threshold = nodes.find(node => node.attributes['aria-label'] === 'Threshold');
   threshold.value = '.91'; threshold.dispatchEvent(new Event('input')); await settle();
   assert.equal(f.instance.read().detectorThreshold, .91);

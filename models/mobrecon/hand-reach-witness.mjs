@@ -112,6 +112,23 @@ async function main() {
     });
     await step('mobile',async()=>{await page.setViewportSize({width:390,height:844});return {...await capture('mobile'),body:await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}))};});
     await page.setViewportSize({width:1440,height:1000});
+    await step('physical-contact',async()=>{
+      await invoke('setPhysicsPaused',true);
+      await invoke('setCube',{position:[0,.1825,0],size:.045});
+      const source={id:'deterministic-open-index-contact',authority:'synthetic-physics-fixture-not-neural-input'};
+      await invoke('presentContactFixture',{source,proxies:[{id:'index-tip',finger:'index',position:[-.065,.186,.014],radius:.008}]});
+      const before=await read();assert.equal(before.state.backend,'cannon-es-cpu');
+      for(let i=0;i<120;i++){
+        await invoke('presentContactFixture',{source,proxies:[{id:'index-tip',finger:'index',position:[-.065+i*.00065,.186,.014],radius:.008}]});
+        await invoke('advancePhysics',1/120);
+      }
+      const after=await read();assert.ok(after.state.cubePosition[0]>.01,'open finger must push cube');
+      assert.ok(Math.abs(after.state.cubeQuaternion[1])+Math.abs(after.state.cubeQuaternion[2])>.015,'off-centre contact rotates cube');
+      assert.equal(after.state.grabbed,false);assert.ok(after.state.contactEvents>0);
+      const image=await capture('physical-contact');
+      await invoke('setPhysicsPaused',false);
+      return {source,before,after,...image};
+    });
     await step('actual-inference',async()=>{
       await page.getByRole('button',{name:'Start camera',exact:true}).click();
       await wait('r.received >= 3 && r.visible');const first=await read();assertLivePlacement(first);

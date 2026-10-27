@@ -32,6 +32,13 @@ assert.equal(fitCameraTranslation(joints, Array(42).fill(320), camera).valid, fa
 assert.throws(() => fitCameraTranslation(joints, [NaN, ...project(joints, [0,0,.6]).slice(1)], camera), /finite/);
 assert.throws(() => fitCameraTranslation(joints, project(joints,[0,0,.6]), {...camera,fx:0}), /camera/);
 
+const palmIndices=[0,1,5,9,13,17],articulatedUV=project(joints,[.02,-.03,.6]);
+for(let j=0;j<21;j++)if(!palmIndices.includes(j)){articulatedUV[j*2]+=18;articulatedUV[j*2+1]-=12;}
+const palmFit=fitCameraTranslation(joints,articulatedUV,camera,{indices:palmIndices});
+close(palmFit.translation,[.02,-.03,.6],1e-6);
+assert.equal(palmFit.fitJointIndices.length,6);
+assert.ok(palmFit.rmsePx>10,'unfitted finger disagreement remains visible, not hidden');
+
 const regressor = Array.from({length:21}, (_, j) => Array.from({length:778}, (_, v) => v === j ? 1 : 0)).flat();
 const resource = {schema:'mobrecon.hand-registration.v0', jointOrder:'mpii', vertexCount:778, regressor,
   source:{kind:'synthetic-contract-fixture'}};

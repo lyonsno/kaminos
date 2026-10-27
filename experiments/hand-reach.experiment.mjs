@@ -23,6 +23,10 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   let handedness = side(inputs.handedness ?? 'right');
   let detectorThreshold = thresholdValue(inputs.detectorThreshold ?? .8);
   let focalRatio = positive(inputs.focalRatio ?? 1, 'Focal ratio');
+  const interactionValue=value=>{if(!['physical-contact','pinch-attachment'].includes(value))throw Error('Invalid hand interaction');return value;};
+  let interaction=interactionValue(inputs.interaction??'physical-contact'),physicsPaused=false,showProxies=inputs.showProxies??true;
+  const fitValue=value=>{if(!['all-joints','palm'].includes(value))throw Error('Invalid placement fit');return value;};
+  let fitPolicy=fitValue(inputs.fitPolicy??'all-joints');
   const packages = {mobrecon: inputs.mobreconPackage ?? '/scratch/mobrecon/package/', detector: inputs.detectorPackage ?? '/scratch/hand-detector/package/'};
   const registrationUrl = inputs.registrationUrl ?? '/scratch/hand-registration/registration.json';
   const document = host.controls.document;
@@ -41,7 +45,10 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   });
   let retainTrial = inputs.retainTrial ?? true, trial = null, trialFinish = null;
   let retention = {status:'idle',id:null,frames:0,error:null};
-  const state = await (dependencies.createState ?? (async () => (await import('../models/mobrecon/hand-reach-state.js')).createHandReachState()))();
+  const makeState=dependencies.createState??(async mode=>mode==='physical-contact'
+    ? (await import('../models/mobrecon/hand-contact-state.js')).createHandContactState(inputs.physics)
+    : (await import('../models/mobrecon/hand-reach-state.js')).createHandReachState());
+  let state=await makeState(interaction);
   if (inputs.target) state.setTarget({position: position(inputs.target.position), radius: positive(inputs.target.radius, 'Target radius')});
   if (inputs.cube) state.setCube({position: position(inputs.cube.position), size: positive(inputs.cube.size, 'Cube size')});
   const initial = state.read();
@@ -52,12 +59,18 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const target = new Mesh(new SphereGeometry(1, 24, 16), new MeshStandardMaterial({color: 0xe6c448, roughness: .4, transparent: true, opacity: .65}));
   target.name = 'Fingertip target';
   const cube = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({color: 0x40a6c8, roughness: .45}));
-  cube.name = 'Pinch cube'; cube.castShadow = true; cube.receiveShadow = true;
+  cube.name = 'Contact cube'; cube.castShadow = true; cube.receiveShadow = true;
+  const table=new Mesh(new BoxGeometry(.65,.012,.5),new MeshStandardMaterial({color:0x89938f,roughness:.85}));
+  table.name='Contact table';table.receiveShadow=true;
+  const proxies=new Group();proxies.name='Physical contact hand';
+  const proxyGeometry=new SphereGeometry(1,10,8),proxyMeshes=new Map();
+  const proxyMaterial=new MeshStandardMaterial({color:0x6ed5d0,wireframe:true,transparent:true,opacity:.38});
+  const contactMaterial=new MeshStandardMaterial({color:0xffce65,emissive:0x725016,transparent:true,opacity:.85});
   const indexMarker = new Mesh(new SphereGeometry(.004, 16, 12), new MeshStandardMaterial({color: 0x91f0c5, emissive: 0x174c33}));
   indexMarker.name = 'Index tip'; indexMarker.visible = false;
   const pinchMarker = new Mesh(new SphereGeometry(.005, 16, 12), new MeshStandardMaterial({color: 0xf7d16f, emissive: 0x593c0e}));
   pinchMarker.name = 'Pinch midpoint'; pinchMarker.visible = false;
-  root.add(hand, target, cube, indexMarker, pinchMarker);
+  root.add(hand, target, cube, table, proxies, indexMarker, pinchMarker);
   let asset;
   try {asset = await session.attach(root, {owned: true, metadata: {label: root.name, type: 'experiment', source: {experiment: 'hand-reach', registrationUrl}}});}
   catch (error) {disposeOwnedSceneTree(root, []); await session.dispose(); throw error;}
@@ -91,7 +104,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const read = () => ({
     authority: 'uncalibrated-hand-reach-experiment', interactionAuthority: 'local-target-and-cube-only',
     running, starting, disposed, loading: Boolean(loading), progress, error, presentation, visible: hand.visible,
-    handedness, detectorThreshold, focalRatio, packages, registrationUrl,
+    handedness, detectorThreshold, focalRatio, packages, registrationUrl,interaction,showProxies,fitPolicy,
+    physicsClock:{paused:physicsPaused,hidden:document.visibilityState==='hidden'},
     retainTrial, retention:{...retention},
     inputSource: inputSource ? structuredClone(inputSource) : null,
     identity: app?.identity ?? null, application: app?.snapshot() ?? null, registrationIdentity: registration?.identity ?? null,
@@ -102,7 +116,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       sourceBudgetMs: sourceBudget(), predictionBudgetMs: predictionBudget(),
       sourceAgeMs: sourceAt === null ? null : now() - sourceAt, captureAgeMs: lastCaptureAt === null ? null : now() - lastCaptureAt},
     camera: track() ? {trackId: track().id, readyState: track().readyState, muted: track().muted, settings: track().getSettings()} : null,
-    received, state: state.read(), objects: Object.fromEntries(Object.entries({root, hand, target, cube, indexMarker, pinchMarker})
+    received, state: state.read(), objects: Object.fromEntries(Object.entries({root, hand, target, cube,table,proxies,indexMarker,pinchMarker})
       .map(([key, value]) => [key, {id: asset.id, uuid: value.uuid, name: value.name, visible: value.visible}])),
     view: session.readView(),
   });
@@ -110,11 +124,13 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (cameraButton) {cameraButton.textContent = starting ? 'Cancel camera' : running ? 'Stop camera' : 'Start camera'; cameraButton.disabled = disposed;}
     const s = state.read();
     if (status) {
-      const origin = inputSource?.kind === 'retained-prediction' ? `REPLAY: ${inputSource.label}` : running ? 'LIVE CAMERA' : starting ? 'STARTING CAMERA' : 'CAMERA OFF';
-      const condition = s.grabbed ? 'Cube grabbed' : s.contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
+      const origin = inputSource?.kind === 'contact-fixture' ? `CONTACT FIXTURE: ${inputSource.label}` : inputSource?.kind === 'retained-prediction' ? `REPLAY: ${inputSource.label}` : running ? 'LIVE CAMERA' : starting ? 'STARTING CAMERA' : 'CAMERA OFF';
+      const touching=s.contacts?.filter(c=>c.finger)??[];
+      const condition = touching.length ? `${new Set(touching.map(c=>c.finger)).size} contacting fingers` : s.grabbed ? 'Cube grabbed' : s.contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
       status.textContent = `${origin} | ${condition}${loading ? ' | Loading models' : ''}${error ? ` | ${error}` : ''}${retention.id ? ` | Local trial: ${retention.status}, ${retention.frames} frames` : ''}`;
     }
-    const values = {handedness, detectorThreshold, focalRatio, radius: s.target.radius, size: s.cubeSize};
+    const values = {handedness, detectorThreshold, focalRatio,interaction,fitPolicy,radius: s.target.radius, size: s.cubeSize,
+      motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius};
     for (const [i, axis] of ['x', 'y', 'z'].entries()) {values[`target-${axis}`] = s.target.position[i]; values[`cube-${axis}`] = s.cubePosition[i];}
     for (const [key, field] of fields) if (force || fieldDocument.activeElement !== field || field.readOnly) field.value = String(values[key]);
   };
@@ -122,8 +138,21 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     const s = state.read();
     target.position.fromArray(s.target.position); target.scale.setScalar(s.target.radius);
     target.material.color.setHex(s.contact ? 0x46d39a : 0xe6c448);
+    target.material.emissive.setHex(s.contact?0x195c40:0x6b5010);
+    target.material.emissiveIntensity=.1+(s.targetProximity??0)*1.5;
     cube.position.fromArray(s.cubePosition); cube.scale.setScalar(s.cubeSize);
-    cube.material.color.setHex(s.grabbed ? 0xf2ba57 : 0x40a6c8);
+    if(s.cubeQuaternion)cube.quaternion.fromArray(s.cubeQuaternion);else cube.quaternion.set(0,0,0,1);
+    const touching=new Set((s.contacts??[]).filter(c=>c.finger).map(c=>c.other));
+    cube.material.color.setHex(touching.size||s.grabbed ? 0xf2ba57 : 0x40a6c8);
+    table.visible=interaction==='physical-contact';table.position.set(0,(s.tableHeight??.16)-.006,0);
+    const live=new Set();
+    for(const p of s.proxies??[]) {
+      live.add(p.id);let mesh=proxyMeshes.get(p.id);
+      if(!mesh){mesh=new Mesh(proxyGeometry,proxyMaterial);mesh.name=p.id;proxies.add(mesh);proxyMeshes.set(p.id,mesh);}
+      mesh.position.fromArray(p.position);mesh.scale.setScalar(p.radius);mesh.material=touching.has(p.id)?contactMaterial:proxyMaterial;
+    }
+    for(const [id,mesh]of proxyMeshes)if(!live.has(id)){proxies.remove(mesh);proxyMeshes.delete(id);}
+    proxies.visible=showProxies&&interaction==='physical-contact';
     indexMarker.visible = hand.visible && s.tracking && Boolean(s.indexTip);
     pinchMarker.visible = hand.visible && s.tracking && Boolean(s.pinchPoint);
     if (indexMarker.visible) indexMarker.position.fromArray(s.indexTip);
@@ -136,7 +165,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     presentation = reason; hand.visible = false; state.lose(); drawState();
   };
   const applied = kind => {sync(); const effective = read(); record({kind: `hand-reach.${kind}`, phase: 'applied', target: asset.id, effective}); return effective;};
-  const remember = () => {const s = state.read(); updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,
+  const remember = () => {const s = state.read(); updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,interaction,showProxies,fitPolicy,
+    physics:s.backend?{motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius,tableHeight:s.tableHeight}:inputs.physics,
     target: s.target, cube: {position: s.cubePosition, size: s.cubeSize}});};
   const finishTrial = () => {
     if (!trial) return trialFinish;
@@ -203,11 +233,11 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (result.hasHand === false) {placement = null; lose(origin.kind === 'retained-prediction' ? 'replay-no-hand' : 'no-hand'); return;}
     if (result.hasHand !== true) throw Error('Prediction must declare hasHand');
     side(result.handedness);
-    const placed = registration.place(result, {width: origin.width, height: origin.height, focalRatio});
+    const placed = registration.place(result, {width: origin.width, height: origin.height, focalRatio,fitPolicy});
     placement = {valid: placed.valid, reason: placed.reason ?? null, translation: placed.translation ? Array.from(placed.translation) : null,
       rmsePx: placed.rmsePx ?? null, camera: placed.camera ?? null, source: placed.source ?? null,
       registrationIdentity: registration.identity, vertexCount: (placed.worldVertices?.length ?? 0) / 3,
-      jointCount: (placed.worldJoints?.length ?? 0) / 3};
+      jointCount: (placed.worldJoints?.length ?? 0) / 3,fitPolicy,comparison:placed.comparison??null};
     if (!placed.valid) {lose(origin.kind === 'retained-prediction' ? 'replay-unplaced' : 'unplaced'); return;}
     const vertices = placed.worldVertices, joints = placed.worldJoints;
     if (!vertices?.length || vertices.length % 3 || !vertices.every(Number.isFinite) || joints?.length !== 63 || !joints.every(Number.isFinite)) throw Error('Registration returned invalid world geometry');
@@ -341,8 +371,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     } catch (cause) {if (current(ticket)) {failCamera(cause);await finishTrial();throw cause;} return read();}
     finally {if (current(ticket)) {starting = false; sync();}}
   };
-  const frame = () => {assertOpen(); session.setView({position: [0, .25, .75], target: [0, .25, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
-  const unsubscribe = session.onFrame(() => {
+  const frame = () => {assertOpen(); session.setView({position: [0, .36, .7], target: [0, .23, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
+  const unsubscribe = session.onFrame(({deltaSeconds=0}={}) => {
     if (disposed) return;
     if (running) {
       if (!video.requestVideoFrameCallback && video.readyState >= 2) observeFrame(generation, video.currentTime);
@@ -350,11 +380,34 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       else if (hand.visible && lastCaptureAt !== null && now() - lastCaptureAt > predictionBudget()) lose('prediction-stale');
       infer(generation);
     }
-    sync();
+    if(state.advance&&!physicsPaused&&document.visibilityState!=='hidden') {
+      try{state.advance(deltaSeconds);drawState();}catch(cause){physicsPaused=true;error=message(cause);sync();}
+    }else sync();
   });
   drawState(); frame();
   const operations = {
     load, start, stop, frame,
+    async setInteraction(value) {
+      assertOpen();const mode=interactionValue(value);if(mode===interaction)return read();
+      const stopping=stop(),ticket=generation;await stopping;if(!current(ticket))return read();
+      const previous=state.read(),next=await makeState(mode);
+      if(!current(ticket)){next.dispose?.();return read();}
+      next.setTarget(previous.target);next.setCube({position:previous.cubePosition,size:previous.cubeSize});
+      state.dispose?.();state=next;interaction=mode;drawState();remember();return applied('interaction');
+    },
+    setPhysicsPaused(value){assertOpen();physicsPaused=Boolean(value);return applied('physics-paused');},
+    setFitPolicy(value){assertOpen();fitPolicy=fitValue(value);configRevision++;lose('awaiting-frame');remember();return applied('placement-fit');},
+    setShowProxies(value){assertOpen();showProxies=Boolean(value);drawState();remember();return applied('contact-hand');},
+    configurePhysics(value){assertOpen();if(!state.configure)throw Error('Select contact physics first');state.configure(value);remember();return applied('physics');},
+    advancePhysics(seconds){assertOpen();if(!state.advance)throw Error('Select contact physics first');state.advance(seconds);drawState();return applied('physics-advance');},
+    async presentContactFixture(value) {
+      assertOpen();if(!value?.source?.id||!state.setProxies)throw Error('Contact fixture requires source identity and physical mode');
+      if(running||starting||inputSource?.kind!=='contact-fixture'){
+        const stopping=stop(),ticket=generation;await stopping;if(!current(ticket))return read();
+      }
+      assertOpen();state.setProxies(value.proxies);inputSource={kind:'contact-fixture',label:value.source.id,source:structuredClone(value.source)};
+      presentation='contact-fixture';drawState();return applied('contact-fixture');
+    },
     setRetainTrial(value) {assertOpen();if(running||starting)throw Error('Stop camera before changing trial recording');retainTrial=Boolean(value);remember();return applied('retain-trial');},
     async readTrial(id=retention.id) {
       if(!id)throw Error('No recorded trial');
@@ -411,6 +464,20 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       status = doc.createElement('div'); status.setAttribute('role', 'status'); status.dataset.handReachStatus = '';
       status.style.cssText = 'font-size:12px;overflow-wrap:anywhere';
       panel.append(commands, handLabel, status);
+      const modeLabel=doc.createElement('label');modeLabel.textContent='Interaction ';
+      const mode=doc.createElement('select');mode.setAttribute('aria-label','Interaction');
+      for(const [value,label]of [['physical-contact','Contact physics'],['pinch-attachment','Pinch attachment']]){const option=doc.createElement('option');option.value=value;option.textContent=label;mode.append(option);}
+      mode.addEventListener('change',()=>call('setInteraction',mode.value));fields.set('interaction',mode);modeLabel.append(mode);panel.append(modeLabel);
+      const proxyLabel=doc.createElement('label'),proxyToggle=doc.createElement('input');proxyToggle.type='checkbox';proxyToggle.checked=showProxies;
+      const proxyText=doc.createElement('span');proxyText.textContent='Contact hand';
+      proxyToggle.addEventListener('change',()=>call('setShowProxies',proxyToggle.checked));proxyLabel.append(proxyToggle,proxyText);panel.append(proxyLabel);
+      const pauseLabel=doc.createElement('label'),pauseToggle=doc.createElement('input');pauseToggle.type='checkbox';
+      const pauseText=doc.createElement('span');pauseText.textContent='Pause physics';
+      pauseToggle.addEventListener('change',()=>call('setPhysicsPaused',pauseToggle.checked));pauseLabel.append(pauseToggle,pauseText);panel.append(pauseLabel);
+      const fitLabel=doc.createElement('label');fitLabel.textContent='Placement fit ';
+      const fit=doc.createElement('select');fit.setAttribute('aria-label','Placement fit');
+      for(const [value,label]of [['all-joints','All joints'],['palm','Wrist + knuckles']]){const option=doc.createElement('option');option.value=value;option.textContent=label;fit.append(option);}
+      fit.addEventListener('change',()=>call('setFitPolicy',fit.value));fields.set('fitPolicy',fit);fitLabel.append(fit);panel.append(fitLabel);
       const recordingLabel=doc.createElement('label'),recordingInput=doc.createElement('input');
       recordingInput.type='checkbox';recordingInput.checked=retainTrial;
       recordingInput.addEventListener('change',()=>call('setRetainTrial',recordingInput.checked).finally(()=>{recordingInput.checked=retainTrial;}));
@@ -443,9 +510,13 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       };
       number(panel, 'Threshold', 'detectorThreshold', .01, value => call('setThreshold', value), 0, 1);
       number(panel, 'Focal ratio', 'focalRatio', .01, value => call('setFocalRatio', value), .001);
+      const physics=doc.createElement('details'),physicsTitle=doc.createElement('summary');physicsTitle.textContent='Contact response';physics.append(physicsTitle);panel.append(physics);
+      number(physics,'Finger force (N)','motorForce',.05,value=>call('configurePhysics',{motorForce:value}),.001);
+      number(physics,'Friction','friction',.05,value=>call('configurePhysics',{friction:value}),0);
+      number(physics,'Finger radius (m)','fingerRadius',.001,value=>call('configurePhysics',{fingerRadius:value}),.001);
       for (const name of ['target', 'cube']) {
         const group = doc.createElement('details'); group.open = true;
-        const title = doc.createElement('summary'); title.textContent = name === 'target' ? 'Fingertip target (m)' : 'Pinch cube (m)'; group.append(title); panel.append(group);
+        const title = doc.createElement('summary'); title.textContent = name === 'target' ? 'Fingertip target (m)' : 'Cube (m)'; group.append(title); panel.append(group);
         const operation = name === 'target' ? 'setTarget' : 'setCube';
         for (const [i, axis] of ['x', 'y', 'z'].entries()) number(group, axis.toUpperCase(), `${name}-${axis}`, .005, value => {
           const s = state.read(), next = [...(name === 'target' ? s.target.position : s.cubePosition)]; next[i] = value; call(operation, {position: next});
@@ -462,6 +533,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       closing = (async () => {
         const results = await Promise.allSettled([stopped, destroyApp(app), loading, registrationLoading]);
         for (const scrub of scrubs) scrub?.dispose?.();
+        state.dispose?.();proxyGeometry.dispose();proxyMaterial.dispose();contactMaterial.dispose();
         await session.dispose();
         const failures = results.filter(result => result.status === 'rejected' && result.reason?.name !== 'AbortError' && !/experiment is closed/.test(message(result.reason))).map(result => result.reason);
         if (failures.length) throw new AggregateError(failures, 'Hand reach disposal failed');
