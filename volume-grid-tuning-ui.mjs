@@ -12,7 +12,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const reset=element('button','btn','Discard draft');reset.type='button';reset.id='grid-tuning-reset';
  const close=element('button','btn','Close · Esc');close.type='button';close.id='grid-tuning-close';toolbar.append(applyButton,reset,close);panel.append(toolbar);
  const status=element('p','grid-editor-status');status.id='grid-tuning-status';status.setAttribute('role','status');panel.append(status);
- const intro=element('p','flame-scope','Material holds detail; velocity carries motion; pressure corrects flow. Cell counts grow cubically. Edit together, then apply.');panel.append(intro);
+ const intro=element('p','flame-scope','Material holds detail; velocity carries motion; pressure corrects flow. Cell counts grow cubically. Apply dimension changes together; iterations update live.');panel.append(intro);
  const fields=new Map(),summaries=new Map();let baseline=null,draft=null,dirty=false,applying=false,selected='Fine',layer='material',lastPreview='',physicalReach=0;
  const pick=c=>Object.fromEntries(GRID_TUNING_FIELDS.map(([key])=>[key,c[key]]));
  const signature=c=>JSON.stringify(pick(c));
@@ -34,7 +34,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  }
  const shape=element('label','grid-editor-shape');shape.append(element('span',null,'Fine height / width'),field('gridHeightRatio','Fine height / width'));panel.append(shape);
  const table=element('table','grid-editor-table');const head=element('thead'),headRow=element('tr');
- for(const name of ['Region','Coverage × Fine','Material','Velocity','Pressure','Iterations'])headRow.append(element('th',null,name));head.append(headRow);table.append(head);
+ for(const name of ['Region','Coverage × Fine','Material','Velocity','Pressure','Iterations · live'])headRow.append(element('th',null,name));head.append(headRow);table.append(head);
  const body=element('tbody');
  const keys=[['resolution','fineVelocity','finePressure','pressureSolverIterations'],['intermediateMaterial','intermediateFlow','intermediatePressure','intermediateIterations'],['worldSmokeMaterial','worldSmokeFlow','worldSmokePressure','worldSmokeIterations']];
  for(const [i,group] of GRID_TUNING_GROUPS.entries()){
@@ -45,8 +45,8 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   for(const [j,key] of keys[i].entries()){const td=element('td');td.append(field(key,`${name}: ${['Material','Velocity','Pressure','Pressure iterations'][j]}`));row.append(td);}
   body.append(row);
  }table.append(body);panel.append(table);
- const collar=element('label','grid-editor-shape');const reach=element('input','transform-input');reach.id='grid-draft-collarReach';reach.type='number';reach.min='0';reach.step='any';reach.setAttribute('aria-label','Momentum collar reach / Fine width');
- const collarReadout=element('span','flame-scope');collar.append(element('span',null,'Momentum reach / Fine width'),reach,collarReadout);panel.append(collar);
+ const collar=element('label','grid-editor-shape');const reach=element('input','transform-input');reach.id='grid-draft-collarReach';reach.type='number';reach.min='0';reach.step='any';reach.setAttribute('aria-label','World momentum collar reach / Fine width');
+ const collarReadout=element('span','flame-scope');collar.append(element('span',null,'World momentum reach / Fine width'),reach,collarReadout);panel.append(collar);
  reach.addEventListener('input',()=>{const c={...read(),...draft};physicalReach=reach.value===''?NaN:Number(reach.value);draft.worldSmokeTransition=physicalReach*Number(c.worldSmokeFlow)/Number(c.worldSmokeExtent);dirty=true;refresh();});
  const fit=element('button','btn');fit.type='button';fit.id='grid-tuning-fit';panel.append(fit);
  const previewControls=element('div','grid-editor-preview-controls');previewControls.append(element('span',null,'Front view · select a region above'));

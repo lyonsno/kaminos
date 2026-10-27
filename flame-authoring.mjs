@@ -125,12 +125,12 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
   ] },
-  { name:'World smoke', view:'quality', open:true, scope:'World-anchored field with one-way outward coupling. Pressure width must divide velocity width. Material resolution is independent.', fields:[
+  { name:'World smoke', view:'quality', open:true, scope:'World-anchored field with one-way outward coupling. Material, velocity and pressure detail are independent.', fields:[
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
     ['volume-world-smoke-pressure','Pressure width (0 = flow)'], ['volume-world-smoke-iterations','Pressure iterations'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
   ] },
-  { name:'Intermediate region', view:'quality', open:true, scope:'Independent material and velocity mode uses its own material field. Width changes preserve the physical extent. Pressure width must divide velocity width.', fields:[
+  { name:'Intermediate region', view:'quality', open:true, scope:'Independent material and velocity mode uses its own material field. Width changes preserve the physical extent. Material, velocity and pressure detail are independent.', fields:[
     ['volume-world-smoke-intermediate','Mode'],
     ['volume-intermediate-flow','Velocity width'], ['volume-intermediate-material','Material width'],
     ['volume-intermediate-pressure','Pressure width'], ['volume-intermediate-iterations','Pressure iterations'],
