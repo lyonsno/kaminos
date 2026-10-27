@@ -1535,6 +1535,11 @@ export async function requestKaminosSharedWebGpuDevice({
   }
   const features = new Set(hostFeatures);
   if (adapter.features?.has?.('timestamp-query')) features.add('timestamp-query');
+  // GPU-compressed mesh textures remain compressed only when the shared device
+  // enables a format the adapter supports. Unsupported devices retain RGBA.
+  for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc']) {
+    if(adapter.features?.has?.(feature))features.add(feature);
+  }
   for (const feature of features) {
     if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
   }

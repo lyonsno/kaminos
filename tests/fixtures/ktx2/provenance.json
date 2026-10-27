@@ -1,0 +1,6 @@
+{
+  "textureSource": "https://raw.githubusercontent.com/mrdoob/three.js/2431a09f46f34c560bc8e44b33be0e567723d5b9/examples/textures/ktx2/2d_uastc.ktx2",
+  "textureSHA256": "21b6912cae1f074ae3eda1b751f43c36eafc7eb83f3af71f85bba2ccbafce125",
+  "glbSHA256": "c368b72dd38f86b5581eab64e8699c63751f0387fe17b1c5a959d8910ec5c213",
+  "geometry": "local deterministic quad; texture is canonical Three r185 UASTC fixture"
+}
