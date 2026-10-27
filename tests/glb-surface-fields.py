@@ -92,6 +92,22 @@ class Sampling(unittest.TestCase):
             fixture(p,extension={'KHR_materials_transmission':{'transmissionFactor':1}})
             with self.assertRaisesRegex(ValueError,'material extension'):sampler.sample_glb(p,16)
 
+    def test_spatial_cli_exact_count_and_triangle_provenance(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t); p=root/'source.glb'; fixture(p)
+            original=p.read_bytes(); out=root/'spatial'
+            command=[sys.executable,str(Path(sampler.__file__)),str(p),str(out),'--count','32','--sampling','spatial']
+            result=subprocess.run(command,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            meta=json.loads((out/'report.json').read_text())
+            self.assertEqual(meta['count'],32);self.assertEqual(meta['spatialSampling']['candidateCount'],128)
+            rows=np.fromfile(out/'surfels.f32',dtype='<f4').reshape(-1,12)
+            parents=np.fromfile(out/'parent-triangles.u32',dtype='<u4')
+            bary=np.fromfile(out/'barycentrics.f32',dtype='<f4').reshape(-1,3)
+            np.testing.assert_allclose(rows[:,:2],np.c_[bary[:,1]+2*parents,bary[:,2]],atol=1e-7)
+            self.assertEqual(np.fromfile(out/'footprints.f32',dtype='<f4').size,32*8)
+            self.assertEqual(p.read_bytes(),original)
+
     def test_cli_failure_report_and_source_preservation(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t); p=root/'source.glb';fixture(p,alpha='BLEND')
