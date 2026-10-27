@@ -12,7 +12,7 @@ for (const unsupported of [{solver:'legacy'}, {inflow:true}, {joined:true}, {dim
 }
 assert.equal(pressureResolutionPlan({dims:[32,64,32], mode:'equal'}).effective, 'equal');
 assert.deepEqual(pressureResolutionPlan({dims:[32,64,32],width:8}).pressureDims,[8,16,8]);
-assert.equal(pressureResolutionPlan({dims:[32,64,32],width:12}).reason,'nonintegral-pressure-dimensions');
+assert.deepEqual(pressureResolutionPlan({dims:[32,64,32],width:12}).pressureDims,[12,24,12]);
 assert.throws(() => pressureResolutionPlan({dims:[32,0,32]}), /Invalid/);
 console.log('pressure resolution admission passed');
 

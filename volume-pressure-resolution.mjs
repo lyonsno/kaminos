@@ -1,3 +1,4 @@
+import {latticeDimensions,transferWork,cellOverlaps,TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 // First separation checkpoint: material/forces/transport keep their grid;
 // only pressure is restricted. This is not a coarse dynamics implementation.
 import {createOpenBoundary} from './volume-open-boundary.mjs';
@@ -14,14 +15,15 @@ export function pressureResolutionPlan({ dims, mode = 'off', width = 0, solver =
   if (!Array.isArray(dims) || dims.length !== 3 || !dims.every(n => Number.isInteger(n) && n > 0)) throw Error('Invalid material dimensions');
   const requested=width?'explicit':mode;
   const divisor = width ? dims[0]/width : mode === 'half' ? 2 : 1;
+  let pressureDims,shapeError=null;try{pressureDims=latticeDimensions(dims,width||dims[0]/divisor,'Pressure');}catch(e){shapeError=e.message;}
   const reason = !width && !['off', 'equal', 'half'].includes(mode) ? 'unknown-mode'
     : requested === 'off' ? null
     : solver !== 'converged' ? 'requires-converged-pressure'
     : inflow ? 'floor-inflow-not-yet-restricted'
     : joined ? 'joined-boundary-not-supported'
-    : !Number.isInteger(divisor)||divisor<1||dims.some(n => n % divisor) ? 'nonintegral-pressure-dimensions' : null;
+    : shapeError ? shapeError : null;
   const effective = reason ? 'off' : requested;
-  return { requested, requestedWidth:width, effective, materialDims: [...dims], pressureDims: dims.map(n => n / (effective === 'off' ? 1 : divisor)), divisor: effective === 'off' ? 1 : divisor, reason };
+  return { requested, requestedWidth:width, effective, materialDims: [...dims], pressureDims: effective==='off'?[...dims]:pressureDims, divisor: effective === 'off' ? 1 : divisor, transfer:pressureDims?transferWork(dims,pressureDims):null, reason };
 }
 
 // Cell-average scalars and upper-face velocities have different restriction
@@ -29,6 +31,7 @@ export function pressureResolutionPlan({ dims, mode = 'off', width = 0, solver =
 // Dividing the face mean by r makes coarse divergence equal the volume mean
 // of fine divergence; therefore the expansion target needs NO extra r factor.
 export function restrictPressureReference({ dims, divisor, fluid, expansion, solids }) {
+  if(!Number.isInteger(divisor))return restrictPressureOverlapReference({dims,divisor,fluid,expansion,solids});
   const coarse = dims.map(n => n / divisor);
   if (coarse.some(n => !Number.isInteger(n) || n < 1)) throw Error('Nonintegral restriction');
   const count = coarse.reduce((a,b) => a*b,1), data = new Float32Array(count * 16), burn = new Float32Array(count), mask = new Uint32Array(count);
@@ -50,8 +53,33 @@ export function restrictPressureReference({ dims, divisor, fluid, expansion, sol
   return { dims:coarse, fluid:data, expansion:burn, solids:mask };
 }
 
+// Independent CPU oracle: integrate scalar overlaps and normal-linear MAC
+// face flux. Source velocities are source-cell displacements per step.
+function restrictPressureOverlapReference({dims,divisor,fluid,expansion,solids,lower}) {
+ const coarse=latticeDimensions(dims,dims[0]/divisor,'Pressure');const n=coarse.reduce((a,b)=>a*b,1),data=new Float32Array(n*16),burn=new Float32Array(n),mask=new Uint32Array(n);
+ const index=(p,d)=>p[0]+d[0]*(p[1]+d[1]*p[2]);
+ const solid=p=>p.every((v,a)=>v>=0&&v<dims[a])&&!!solids?.[index(p,dims)];
+ const face=(p,a)=>{if(solid(p))return 0;const next=[...p];next[a]++;if(solid(next))return 0;if(p[a]<0)return lower?.(p,a)??0;return fluid[index(p.map((v,k)=>Math.min(dims[k]-1,Math.max(0,v))),dims)*16+a];};
+ for(let z=0;z<coarse[2];z++)for(let y=0;y<coarse[1];y++)for(let x=0;x<coarse[0];x++){
+  const c=[x,y,z],ci=index(c,coarse),spans=c.map((v,a)=>cellOverlaps(dims[a],coarse[a],v));
+  for(const pz of spans[2])for(const py of spans[1])for(const px of spans[0]){
+   const p=[px.index,py.index,pz.index],fi=index(p,dims),w=px.weight*py.weight*pz.weight;
+   mask[ci]|=solid(p)?1:0;if(!solid(p))burn[ci]+=(expansion?.[fi]??0)*w;
+   for(let k=4;k<16;k++)data[ci*16+k]+=fluid[fi*16+k]*w;
+  }
+  for(let a=0;a<3;a++){
+   const b=(a+1)%3,d=(a+2)%3,at=(c[a]+1)*dims[a]/coarse[a]-1,base=Math.floor(at),f=at-base;let value=0;
+   for(const pb of spans[b])for(const pd of spans[d]){const p=[0,0,0];p[a]=base;p[b]=pb.index;p[d]=pd.index;const q=[...p];q[a]++;value+=((1-f)*face(p,a)+f*face(q,a))*pb.weight*pd.weight/divisor;}
+   data[ci*16+a]=value;
+  }
+ }
+ return {dims:coarse,fluid:data,expansion:burn,solids:mask};
+}
+
 export const PRESSURE_TRANSFER_WGSL = /* wgsl */`
-struct Shape { fine: vec4<u32>, coarse: vec4<u32>, bounds: vec4<f32> };
+struct Shape { fine: vec4<u32>, coarse: vec4<u32>, bounds: vec4<f32>, ratio:vec4<f32> };
+override GENERAL_TRANSFER:bool=false;
+${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> shape: Shape;
 @group(0) @binding(1) var<storage, read_write> fine: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> before: array<vec4<f32>>;
@@ -62,13 +90,38 @@ struct Shape { fine: vec4<u32>, coarse: vec4<u32>, bounds: vec4<f32> };
 @group(0) @binding(7) var coarseBurn: texture_storage_3d<r32float, read_write>;
 @group(0) @binding(8) var fineLower: texture_storage_2d_array<r32float, write>;
 @group(0) @binding(9) var coarseLower: texture_2d_array<f32>;
+@group(0) @binding(10) var fineLowerRead:texture_2d_array<f32>;
 fn idx(p: vec3<u32>, d: vec3<u32>) -> u32 { return p.x + d.x * (p.y + d.y*p.z); }
 fn solid(p: vec3<i32>) -> bool {
   return textureDimensions(fineSolid).x == shape.fine.x && all(p >= vec3<i32>(0)) && all(p < vec3<i32>(shape.fine.xyz)) && textureLoad(fineSolid,p,0).x != 0u;
 }
+fn pressureSourceFace(c:vec3<i32>,a:u32)->f32{
+ let p=clamp(c,vec3<i32>(0),vec3<i32>(shape.fine.xyz)-1);if(solid(p)){return 0.0;}
+ var next=p;next[a]++;if(solid(next)){return 0.0;}
+ if(c[a]<0){if(shape.bounds.z<.5){return 0.0;}return textureLoad(fineLowerRead,vec2<i32>(p[(a+1u)%3u],p[(a+2u)%3u]),i32(a),0).x;}
+ return fine[idx(vec3<u32>(p),shape.fine.xyz)*4u][a];
+}
+fn pressureTransferFace(c:vec3<u32>,a:u32)->f32{
+ let r=shape.ratio.x;let lo=transferLo(c,shape.fine.xyz,shape.coarse.xyz);let hi=transferHi(c,shape.fine.xyz,shape.coarse.xyz);
+ var begin=transferBegin(c,shape.fine.xyz,shape.coarse.xyz);var end=transferEnd(c,shape.fine.xyz,shape.coarse.xyz);let normal=hi[a]-1.0;let base=i32(floor(normal));let f=fract(normal);begin[a]=base;end[a]=base+1;var v=0.0;var area=0.0;
+ for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
+ let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);var q=p;q[a]++;let w=o[(a+1u)%3u]*o[(a+2u)%3u];area+=w;v+=mix(pressureSourceFace(p,a),pressureSourceFace(q,a),f)*w;
+ }}}return v/(area*r);
+}
+fn restrictPressureGeneral(c:vec3<u32>){
+ let r=shape.ratio.x;let lo=transferLo(c,shape.fine.xyz,shape.coarse.xyz);let hi=transferHi(c,shape.fine.xyz,shape.coarse.xyz);let begin=transferBegin(c,shape.fine.xyz,shape.coarse.xyz);let end=transferEnd(c,shape.fine.xyz,shape.coarse.xyz);var a=vec4<f32>(0);var b=a;var d=a;var burn=0.0;var mask=0u;var weightSum=0.0;
+ for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
+ let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;let fi=idx(vec3<u32>(p),shape.fine.xyz)*4u;let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));
+ if(!blocked){burn+=textureLoad(fineBurn,p).x*w;}a+=fine[fi+1u]*w;b+=fine[fi+2u]*w;d+=fine[fi+3u]*w;
+ }}}
+ var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=pressureTransferFace(c,axis);}let ci=idx(c,shape.coarse.xyz)*4u;
+ before[ci]=vec4<f32>(v,0);before[ci+1u]=a/weightSum;before[ci+2u]=b/weightSum;before[ci+3u]=d/weightSum;
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseBurn,vec3<i32>(c),vec4<f32>(burn/weightSum,0,0,0));
+}
 @compute @workgroup_size(4,4,4)
 fn restrictField(@builtin(global_invocation_id) c: vec3<u32>) {
   if(any(c >= shape.coarse.xyz)) { return; }
+  if(GENERAL_TRANSFER){restrictPressureGeneral(c);return;}
   let r=shape.fine.w; let weight=1.0/f32(r*r*r); let ci=idx(c,shape.coarse.xyz)*4u;
   var velocity=vec3<f32>(0.0); var a=vec4<f32>(0.0); var b=a; var d=a; var burn=0.0; var mask=0u;
   for(var z=0u;z<r;z++) { for(var y=0u;y<r;y++) { for(var x=0u;x<r;x++) {
@@ -106,7 +159,7 @@ fn interpolateDelta(p:vec3<f32>,axis:u32)->f32 {
 @compute @workgroup_size(4,4,4)
 fn prolong(@builtin(global_invocation_id) c:vec3<u32>) {
   if(any(c>=shape.fine.xyz)) { return; }
-  let f=idx(c,shape.fine.xyz)*4u; var velocity=fine[f].xyz; let r=f32(shape.fine.w);
+  let f=idx(c,shape.fine.xyz)*4u; var velocity=fine[f].xyz; let r=shape.ratio.x;
   for(var axis=0u;axis<3u;axis++) {
     var offset=vec3<f32>(0.5); offset[axis]=1.0;
     let p=(vec3<f32>(c)+offset)/r-offset;
@@ -152,24 +205,24 @@ export function createPressureTransfer(device, plan) {
   const boundary=createOpenBoundary(device,plan.pressureDims,lower);
   // Closed-domain consumers do not own lower faces. Keep their API valid
   // without binding the same texture for both reading and writing.
-  const closedLower=device.createTexture({label:'closed pressure lower-face placeholder',size:[1,1,3],format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING});owned.push(closedLower);
-  const params=buffer('pressure transfer geometry',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+  const closedLower=device.createTexture({label:'closed pressure lower-face placeholder',size:[1,1,3],format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(closedLower);
+  const params=buffer('pressure transfer geometry',64,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
   const module=device.createShaderModule({label:'material-pressure transfer',code:PRESSURE_TRANSFER_WGSL});
-  const pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module,entryPoint:kind==='restrict'?'restrictField':kind}})]));
+  const pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module,entryPoint:kind==='restrict'?'restrictField':kind,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.divisor)}}})]));
   let bindings=null, prior=[];
   function prepare({fluid,solidTexture,burnTexture,openTop,nonLegacy,maxSpeed,fineLower,openBoundary=false,velocityScale=1}) {
     if(openBoundary&&!fineLower)throw Error('Open pressure transfer requires fine lower-face texture');
     fineLower??=closedLower;
-    const values=new ArrayBuffer(48);new Uint32Array(values).set([...plan.materialDims,plan.divisor,...plan.pressureDims,openTop?1:0]);
+    const values=new ArrayBuffer(64);new Uint32Array(values).set([...plan.materialDims,Math.floor(plan.divisor),...plan.pressureDims,openTop?1:0]);new Float32Array(values)[12]=plan.divisor;
     new Float32Array(values).set([nonLegacy?1:0,maxSpeed,openBoundary?1:0,velocityScale],8);device.queue.writeBuffer(params,0,values);
     const current=[fluid,solidTexture,burnTexture,fineLower];
     if(current.every((v,i)=>v===prior[i]) && bindings) return;
     prior=current;
     const entries=[{binding:0,resource:{buffer:params}},{binding:1,resource:{buffer:fluid}},{binding:2,resource:{buffer:before}},{binding:3,resource:{buffer:after}},
       {binding:4,resource:solidTexture.createView()}, {binding:5,resource:solid.createView()}, {binding:6,resource:burnTexture.createView()}, {binding:7,resource:burn.createView()},
-      {binding:8,resource:fineLower.createView({dimension:'2d-array'})},{binding:9,resource:lower.createView({dimension:'2d-array'})}];
-    bindings={restrict:device.createBindGroup({layout:pipelines.restrict.getBindGroupLayout(0),entries:entries.filter(e=>e.binding!==3&&e.binding<8)}),
-      prolong:device.createBindGroup({layout:pipelines.prolong.getBindGroupLayout(0),entries:entries.filter(e=>e.binding<=4||e.binding>=8)})};
+      {binding:8,resource:fineLower.createView({dimension:'2d-array'})},{binding:9,resource:lower.createView({dimension:'2d-array'})},{binding:10,resource:fineLower.createView({dimension:'2d-array'})}];
+    bindings={restrict:device.createBindGroup({layout:pipelines.restrict.getBindGroupLayout(0),entries:entries.filter(e=>(e.binding!==3&&e.binding<8)||e.binding===10)}),
+      prolong:device.createBindGroup({layout:pipelines.prolong.getBindGroupLayout(0),entries:entries.filter(e=>e.binding<=4||e.binding===8||e.binding===9)})};
   }
   function encode(encoder,kind,timestampWrites) {
     if(!bindings) throw Error('Pressure transfer not prepared');

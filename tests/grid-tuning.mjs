@@ -6,7 +6,7 @@ test('draft plan exposes independent dimensions and actual spatial scale',()=>{
  const p=gridTuningPlan(c);assert.deepEqual(p.rows.map(r=>r.materialDims),[[64,128,64],[48,80,48],[32,64,32]]);
  assert.match(gridTuningSummary(p.rows[1],64),/cell width 2× fine material/);
  assert.match(gridTuningSummary(p.rows[0],64),/98,304 cell-iterations/);
- assert.deepEqual(gridWidthChoices(c,'finePressure'),[2,4,8,16,32]);
+ assert.ok(gridWidthChoices(c,'finePressure').includes(24),'suggestions include non-divisors');
 });
 test('incompatible intermediate widths have constructive coverage choices',()=>{
  const d={...c,intermediateMaterial:32};assert.throws(()=>gridTuningPlan(d),/tile/);
@@ -15,7 +15,7 @@ test('incompatible intermediate widths have constructive coverage choices',()=>{
  assert.equal(d.intermediateExtent,1.5,'Offering a fit never changes authored coverage');
 });
 test('active dimensions and GPU limits reject; dormant middle does not block',()=>{
- for(const patch of [{fineVelocity:7},{worldSmokePressure:7},{intermediateExtent:9},{intermediateIterations:-1}])assert.throws(()=>gridTuningPlan({...c,...patch}));
+ for(const patch of [{fineVelocity:7.5},{worldSmokePressure:-1},{intermediateExtent:9},{intermediateIterations:-1}])assert.throws(()=>gridTuningPlan({...c,...patch}));
  assert.throws(()=>gridTuningPlan(c,{maxStorageBufferBindingSize:1024}),/GPU/);
  assert.throws(()=>gridTuningPlan(c,{maxTextureDimension3D:32}),/GPU/);
  assert.doesNotThrow(()=>gridTuningPlan({...c,worldSmokeIntermediate:'off',intermediateExtent:9}));

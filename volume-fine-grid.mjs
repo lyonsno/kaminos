@@ -1,18 +1,20 @@
+import {latticeDimensions,transferWork,TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
- if(!Array.isArray(materialDims)||materialDims.length!==3||materialDims.some(n=>!Number.isInteger(n)||n<2))throw Error('Invalid fine material dimensions');
+ if(!Array.isArray(materialDims)||materialDims.length!==3||materialDims.some(n=>!Number.isSafeInteger(n)||n<2))throw Error('Invalid fine material dimensions');
  velocity=Number(velocity);pressure=Number(pressure);
  if(velocity===0)velocity=materialDims[0];if(pressure===0)pressure=velocity;
- const materialPerVelocity=materialDims[0]/velocity,velocityPerPressure=velocity/pressure;
- if(!Number.isInteger(velocity)||velocity<2||!Number.isInteger(materialPerVelocity)||materialPerVelocity<1||materialDims.some(n=>n%materialPerVelocity))throw Error('Fine velocity must be an integral subdivision of material dimensions');
- const velocityDims=materialDims.map(n=>n/materialPerVelocity);
- if(!Number.isInteger(pressure)||pressure<2||!Number.isInteger(velocityPerPressure)||velocityPerPressure<1||velocityDims.some(n=>n%velocityPerPressure))throw Error('Fine pressure must be an integral subdivision of velocity dimensions');
- return {materialDims:[...materialDims],velocityDims,pressureDims:velocityDims.map(n=>n/velocityPerPressure),materialPerVelocity,velocityPerPressure};
+ const velocityDims=latticeDimensions(materialDims,velocity,'Fine velocity');
+ const pressureDims=latticeDimensions(materialDims,pressure,'Fine pressure');
+ return {materialDims:[...materialDims],velocityDims,pressureDims,materialPerVelocity:materialDims[0]/velocity,velocityPerPressure:velocity/pressure,
+  materialTransfer:transferWork(materialDims,velocityDims),pressureTransfer:transferWork(velocityDims,pressureDims)};
 }
 
 // The velocity lattice owns its history. Scalar restriction never replaces
 // that history with a filtered copy of its material-grid interpolation.
 export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
-struct Shape { material:vec4<u32>, velocity:vec4<u32> };
+struct Shape { material:vec4<u32>, velocity:vec4<u32>, ratio:vec4<f32> };
+override GENERAL_TRANSFER:bool=false;
+${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> s:Shape;
 @group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
 @group(0) @binding(2) var<storage,read_write> coarse:array<vec4<f32>>;
@@ -30,11 +32,48 @@ struct Shape { material:vec4<u32>, velocity:vec4<u32> };
 @group(0) @binding(14) var fineLower:texture_storage_2d_array<r32float,write>;
 @group(0) @binding(15) var coarseLower:texture_2d_array<f32>;
 @group(0) @binding(16) var<storage,read> finePrior:array<vec4<f32>>;
+@group(0) @binding(17) var fineLowerRead:texture_2d_array<f32>;
 fn idx(p:vec3<u32>,d:vec3<u32>)->u32{return p.x+d.x*(p.y+d.y*p.z);}
 fn solid(p:vec3<i32>)->bool{return textureDimensions(fineSolid).x==s.material.x&&all(p>=vec3<i32>(0))&&all(p<vec3<i32>(s.material.xyz))&&textureLoad(fineSolid,p,0).x!=0u;}
+fn sourceFace(c:vec3<i32>,a:u32,prior:bool)->f32{
+ var p=clamp(c,vec3<i32>(0),vec3<i32>(s.material.xyz)-1);
+ if(solid(p)){return 0.0;}var next=p;next[a]++;if(solid(next)){return 0.0;}
+ if(c[a]<0){return textureLoad(fineLowerRead,vec2<i32>(p[(a+1u)%3u],p[(a+2u)%3u]),i32(a),0).x;}
+ let i=idx(vec3<u32>(p),s.material.xyz)*4u;
+ if(prior){return finePrior[i][a];}return fine[i][a];
+}
+// Area average on a destination face. Along its normal, reconstruct the
+// source's MAC component; tangentially integrate intersecting cell faces.
+fn transferFace(c:vec3<u32>,a:u32,prior:bool)->f32{
+ let r=s.ratio.x;let lo=transferLo(c,s.material.xyz,s.velocity.xyz);let hi=transferHi(c,s.material.xyz,s.velocity.xyz);
+ var begin=transferBegin(c,s.material.xyz,s.velocity.xyz);var end=transferEnd(c,s.material.xyz,s.velocity.xyz);
+ let normal=hi[a]-1.0;let base=i32(floor(normal));let f=fract(normal);
+ begin[a]=base;end[a]=base+1;var v=0.0;var area=0.0;
+ for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
+  let p=vec3<i32>(x,y,z);let overlap=transferOverlap(p,lo,hi);var q=p;q[a]++;
+  let weight=overlap[(a+1u)%3u]*overlap[(a+2u)%3u];area+=weight;
+  v+=mix(sourceFace(p,a,prior),sourceFace(q,a,prior),f)*weight;
+ }}}
+ return v/(area*r);
+}
+fn restrictGeneral(c:vec3<u32>){
+ let ci=idx(c,s.velocity.xyz);let r=s.ratio.x;let lo=transferLo(c,s.material.xyz,s.velocity.xyz);let hi=transferHi(c,s.material.xyz,s.velocity.xyz);
+ let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;
+ for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
+  let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
+  let fi=idx(vec3<u32>(p),s.material.xyz);a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;
+  front+=fineFront[fi]*w;wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
+  if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
+ }}}
+ if(s.velocity.w==1u){var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=transferFace(c,axis,false);}coarse[ci*4u]=vec4<f32>(v,0);}
+ coarse[ci*4u+1u]=a/weightSum;coarse[ci*4u+2u]=b/weightSum;coarse[ci*4u+3u]=d/weightSum;coarseFront[ci]=front/weightSum;coarseQuench[ci]=u32(wet/weightSum+0.5);
+ if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react/weightSum);
+}
 @compute @workgroup_size(4,4,4)
 fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
  if(any(c>=s.velocity.xyz)){return;}
+ if(GENERAL_TRANSFER){restrictGeneral(c);return;}
  let ci=idx(c,s.velocity.xyz);let r=s.material.w;let weight=1.0/f32(r*r*r);
  var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
@@ -54,7 +93,9 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
 // increment, preserving the independently evolved coarse velocity history.
 @compute @workgroup_size(4,4,4)
 fn injectMomentum(@builtin(global_invocation_id) c:vec3<u32>){
- if(any(c>=s.velocity.xyz)){return;}let r=s.material.w;var v=vec3<f32>(0.0);
+ if(any(c>=s.velocity.xyz)){return;}
+ if(GENERAL_TRANSFER){var delta=vec3<f32>(0);for(var a=0u;a<3u;a++){delta[a]=transferFace(c,a,false)-transferFace(c,a,true);}let ci=idx(c,s.velocity.xyz)*4u;coarse[ci]=vec4<f32>(coarse[ci].xyz+delta,coarse[ci].w);return;}
+ let r=s.material.w;var v=vec3<f32>(0.0);
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
   let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz)*4u;
   for(var a=0u;a<3u;a++){var next=vec3<i32>(p);next[a]++;
@@ -64,7 +105,11 @@ fn injectMomentum(@builtin(global_invocation_id) c:vec3<u32>){
 }
 @compute @workgroup_size(4,4,4)
 fn restrictBurn(@builtin(global_invocation_id) c:vec3<u32>){
- if(any(c>=s.velocity.xyz)){return;}let r=s.material.w;var v=0.0;
+ if(any(c>=s.velocity.xyz)){return;}
+ if(GENERAL_TRANSFER){let r=s.ratio.x;let lo=transferLo(c,s.material.xyz,s.velocity.xyz);let hi=transferHi(c,s.material.xyz,s.velocity.xyz);let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var value=0.0;var weightSum=0.0;
+ for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;weightSum+=w;value+=textureLoad(fineBurn,p).x*w;}}}
+ textureStore(coarseBurn,vec3<i32>(c),vec4<f32>(value/weightSum,0,0,0));return;}
+ let r=s.material.w;var v=0.0;
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){v+=textureLoad(fineBurn,vec3<i32>(c*r+vec3<u32>(x,y,z))).x;}}}
  textureStore(coarseBurn,vec3<i32>(c),vec4<f32>(v/f32(r*r*r),0.0,0.0,0.0));
 }
@@ -79,7 +124,7 @@ fn sampleFace(p:vec3<f32>,axis:u32)->f32{
 }
 @compute @workgroup_size(4,4,4)
 fn prolongVelocity(@builtin(global_invocation_id) c:vec3<u32>){
- if(any(c>=s.material.xyz)){return;}let fi=idx(c,s.material.xyz)*4u;let r=f32(s.material.w);var v=vec3<f32>(0.0);
+ if(any(c>=s.material.xyz)){return;}let fi=idx(c,s.material.xyz)*4u;let r=s.ratio.x;var v=vec3<f32>(0.0);
  for(var axis=0u;axis<3u;axis++){
   var offset=vec3<f32>(0.5);offset[axis]=1.0;var p=(vec3<f32>(c)+offset)/r-offset;
   v[axis]=sampleFace(p,axis)*r;var next=vec3<i32>(c);next[axis]++;
@@ -102,11 +147,10 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
  resetWavelet();
  const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
  const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
- const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
- device.queue.writeBuffer(shape,0,new Uint32Array([...plan.materialDims,plan.materialPerVelocity,...d,0]));
- device.queue.writeBuffer(seedShape,0,new Uint32Array([...plan.materialDims,plan.materialPerVelocity,...d,1]));
+ const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
+ for(const [buffer,seed] of [[shape,0],[seedShape,1]]){const data=new ArrayBuffer(48);new Uint32Array(data).set([...plan.materialDims,Math.floor(plan.materialPerVelocity),...d,seed]);new Float32Array(data)[8]=plan.materialPerVelocity;device.queue.writeBuffer(buffer,0,data);}
  const module=device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL});
- const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint}})]));
+ const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity)}}})]));
  let current=0,seed=true,bindings,prior=[];
  function prepare(f) {
   const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current];
@@ -116,8 +160,8 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
   const entries=bs.map((b,binding)=>({binding,resource:{buffer:b}}));
   [f.solid,solid,f.reactant,reactant[0],f.burn,burn].forEach((t,i)=>entries.push({binding:8+i,resource:t.createView()}));
   entries.push({binding:14,resource:f.lower.createView({dimension:'2d-array'})},{binding:15,resource:lower.createView({dimension:'2d-array'})});
-  entries.push({binding:16,resource:{buffer:f.prior??f.fluid}});
-  const used={injectMomentum:[0,1,2,8,16],restrictScalars:[0,1,2,4,5,6,7,8,9,10,11],restrictBurn:[0,12,13],prolongVelocity:[0,1,3,8,14,15]};
+  entries.push({binding:16,resource:{buffer:f.prior??f.fluid}});entries.push({binding:17,resource:f.lower.createView({dimension:'2d-array'})});
+  const used={injectMomentum:[0,1,2,8,16,17],restrictScalars:[0,1,2,4,5,6,7,8,9,10,11,16,17],restrictBurn:[0,12,13],prolongVelocity:[0,1,3,8,14,15]};
   bindings=Object.fromEntries(Object.entries(used).map(([k,ids])=>[k,device.createBindGroup({layout:pipelines[k].getBindGroupLayout(0),entries:entries.filter(e=>ids.includes(e.binding))})]));
   bindings.seed=device.createBindGroup({layout:pipelines.restrictScalars.getBindGroupLayout(0),entries:entries.filter(e=>used.restrictScalars.includes(e.binding)).map(e=>e.binding===0?{binding:0,resource:{buffer:seedShape}}:e)});
  }

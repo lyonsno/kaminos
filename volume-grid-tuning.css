@@ -1,0 +1,24 @@
+.flame-grid-tuning { padding: 4px 0 10px; }
+.flame-grid-tuning > button { width: 100%; }
+.grid-editor[hidden] { display: none; }
+.grid-editor { position: fixed; right: 24px; top: 88px; z-index: 1500; width: min(900px, calc(100vw - 48px)); max-height: calc(100vh - 112px); min-width: min(620px, calc(100vw - 48px)); min-height: 300px; resize: both; overflow: auto; color: #e1e7e9; background: #1b2024; border: 1px solid #54616b; border-radius: 10px; padding: 0 16px 12px; box-shadow: 0 12px 48px #0009; }
+.grid-editor-toolbar { display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 2; padding: 12px 0 8px; background: #1b2024; border-bottom: 1px solid #3a454d; }
+.grid-editor-toolbar strong { flex: 1; }
+.grid-editor-status { position: sticky; top: 55px; z-index: 1; background: #1b2024; padding: 7px 0; margin: 0; font-size: 12px; }
+.grid-editor .flame-scope { font-size: 11px; color: #aab9c1; }
+.grid-editor-table { width: 100%; border-collapse: collapse; margin: 12px 0; table-layout: fixed; }
+.grid-editor-table th { text-align: left; font-size: 11px; color: #aab9c1; padding: 4px 5px 9px; }
+.grid-editor-table th:first-child { width: 150px; }
+.grid-editor-table td { padding: 9px 5px; border-top: 1px solid #34414a; vertical-align: top; }
+.grid-editor .transform-input { width: 100%; min-width: 0; box-sizing: border-box; padding: 7px; background: #13191d; color: #e5edef; border: 1px solid #46535d; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.grid-editor .transform-input:focus { outline: 2px solid #d9b67b; outline-offset: 1px; }
+.grid-editor-table td:first-child select { margin-top: 7px; font-size: 10px; }
+.grid-region { border: 0; background: transparent; color: #e5c898; padding: 0; cursor: pointer; font: inherit; font-weight: 600; }
+.grid-editor-shape { display: flex; align-items: center; gap: 12px; margin: 10px 0; font-size: 12px; }
+.grid-editor-shape .transform-input { width: 85px; }
+.grid-editor-preview-controls { display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin-top: 16px; }
+.grid-editor-preview-controls select { width: 120px !important; }
+.grid-editor-preview { display: block; width: 100%; height: 240px; margin: 8px 0; border-radius: 6px; background: #11191e; }
+.grid-editor-details { font-size: 12px; }
+.grid-editor-details summary { cursor: pointer; padding: 8px 0; }
+@media (max-width: 680px) { .grid-editor { right: 8px; top: 72px; width: calc(100vw - 16px); min-width: 0; box-sizing: border-box; padding: 0 8px 10px; } .grid-editor-table { min-width: 570px; } .grid-editor-toolbar { flex-wrap: wrap; } .grid-editor-shape { flex-wrap: wrap; } }

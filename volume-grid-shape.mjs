@@ -7,14 +7,15 @@
 //
 // A requested height is clamped to [width, 4 x width] and snapped to the
 // nearest admissible height. Admissible means two things at once:
-//   - a multiple of 4, the compute workgroup edge;
 //   - every lattice derived from the box at equal pitch has an integral
 //     height: the shared scene-source / emissive lattice (32 wide) and the
 //     fire irradiance lattice (32 or 48 wide) are derivedWidth x height /
 //     width tall, and createSceneVolumeSource refuses a fractional or
 //     mismatched-aspect lattice (review GH-02 of the first cut).
-// The admissible step at a width is lcm(4, width / gcd(width, d)) over the
-// derived widths d. Width itself is always admissible (the step divides it),
+// The admissible step at a width is lcm(width / gcd(width, d)) over the
+// derived widths d, retaining the previous four-cell height step where the
+// width supports it. Kernels dispatch partial workgroups for other widths.
+// Width itself is always admissible (the step divides it),
 // so the clamp bounds w, 2w and 4w are admissible too.
 //
 // Pure functions, no browser: the core, the cockpit receipt and the capture
@@ -34,15 +35,15 @@ const lcm = (a, b) => a / gcd(a, b) * b;
 
 function validWidth(width) {
   const w = Number(width);
-  if (!Number.isInteger(w) || w <= 0 || w % GRID_HEIGHT_WORKGROUP !== 0) {
-    throw new Error(`grid width must be a positive multiple of ${GRID_HEIGHT_WORKGROUP}: ${width}`);
+  if (!Number.isSafeInteger(w) || w <= 0) {
+    throw new Error(`grid width must be a positive integer: ${width}`);
   }
   return w;
 }
 
 export function gridHeightStep(width, derivedWidths = GRID_HEIGHT_DERIVED_LATTICE_WIDTHS) {
   const w = validWidth(width);
-  return derivedWidths.reduce((step, d) => lcm(step, w / gcd(w, d)), GRID_HEIGHT_WORKGROUP);
+  return derivedWidths.reduce((step, d) => lcm(step, w / gcd(w, d)), gcd(w, GRID_HEIGHT_WORKGROUP));
 }
 
 export function resolveGridHeight(controls = {}, width, derivedWidths = GRID_HEIGHT_DERIVED_LATTICE_WIDTHS) {

@@ -11,7 +11,7 @@ test('independent region controls select the actual plans and pressure sweeps',(
  assert.equal(old.middle.extraMaterialCells,0);assert.equal(old.worldIterations,16);
  assert.deepEqual(old.world.pressureDims,old.world.flowDims);
  assert.throws(()=>resolveWorldRegions({worldSmokeIterations:-1},[64,128,64]),/iterations/);
- assert.throws(()=>resolveWorldRegions({worldSmokePressure:7},[64,128,64]),/pressure/);
+ assert.deepEqual(resolveWorldRegions({worldSmokePressure:7},[64,128,64]).world.pressureDims,[7,14,7]);
 });
 
 test('legacy mode keeps its original sixteen sweeps with additive control defaults',()=>{

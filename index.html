@@ -582,6 +582,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #grid-tuning-status[data-state="draft"] { color: #f0d486; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./volume-grid-tuning.css">
 <link rel="stylesheet" href="./startup-veil.css">
 <script src="./startup-veil-guard.js"></script>
 <noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
@@ -16984,6 +16985,7 @@ function setVolumeControlValue(id, value) {
   }
   const el = document.getElementById(id);
   if (!el) return;
+  if(GRID_TUNING_FIELDS.some(([,key])=>key===id)&&el.tagName==='SELECT'&&Number.isFinite(Number(value))&&![...el.options].some(o=>o.value===String(value))){const option=document.createElement('option');option.value=String(value);option.textContent=String(value);el.append(option);}
   if(id==='volume-immersed-radius'&&Number.isFinite(Number(value)))el.max=String(Math.max(Number(el.max)||0,Number(value)));
   if (el.type === 'checkbox') {
     el.checked = value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -19886,8 +19888,8 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
-  if ([32, 48, 64, 96, 128, 136, 140, 160].includes(routeResolution)) {
-    document.getElementById('volume-resolution').value = String(routeResolution);
+  if (Number.isSafeInteger(routeResolution)&&routeResolution>=4) {
+    setVolumeControlValue('volume-resolution',routeResolution);
   }
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
   const routePressureMode = normalizeVolumePressureMode(params.get('volume_pressure_mode'));
@@ -22036,7 +22038,7 @@ function createFlameQuickFields() {
       validate:c=>volumePrototype.validateGridControls(c),
       apply:patch=>{
         const next=window.kaminosFlameAuthoring.read();
-        for(const [key,id] of GRID_TUNING_FIELDS){const d=next.domControls[id];if(!d)throw Error(`Missing grid setting ${id}`);d.value=patch[key];if('rawValue' in d)d.rawValue=String(patch[key]);}
+        for(const [key,id] of GRID_TUNING_FIELDS){const d=next.domControls[id];if(!d)throw Error(`Missing grid setting ${id}`);d.value=d.tagName==='SELECT'?String(patch[key]):patch[key];if('rawValue' in d)d.rawValue=String(patch[key]);}
         window.kaminosFlameAuthoring.apply(next,'Change simulation grids');
       },
     },
@@ -22117,7 +22119,8 @@ function flameSettingsStateProblems(state) {
       if(!source){problem(`Missing flame setting ${id}`);continue;}
       if(source.tagName==='SELECT') {
         const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
-        if(!retired&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
+        const gridNumber=GRID_TUNING_FIELDS.some(([,key])=>key===id)&&!['volume-world-smoke','volume-world-smoke-intermediate'].includes(id)&&Number.isFinite(Number(value));
+        if(!retired&&!gridNumber&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}

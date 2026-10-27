@@ -1,10 +1,11 @@
+import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 import { THERMAL_MOMENTS_WGSL } from './volume-thermal-moments.mjs';
 import { REACTANT_COMBUSTION_WGSL, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { SOOT_BURNOUT_WGSL, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 // An independently allocated world field. Fine pressure is never read or written.
 export function worldSmokePlan({flow=16,material=32,pressure=flow,extent=3,fineHeightRatio=2}={}) {
   if(!Number.isInteger(flow)||flow<2||!Number.isInteger(material)||material<2||!Number.isFinite(extent)||extent<=1||!Number.isFinite(fineHeightRatio)||fineHeightRatio<=0)throw Error('Invalid world smoke dimensions');
-  if(!Number.isInteger(pressure)||pressure<2||pressure>flow||flow%pressure)throw Error('Invalid world pressure dimensions: use an integral subdivision of velocity');
+  if(!Number.isSafeInteger(pressure)||pressure<2)throw Error('Invalid world pressure dimensions: use an integral subdivision of velocity');
   // Preserve cubic cells and the default field, while retaining at least one
   // extent of headroom above every admitted fine outlet.
   const height=Math.max(2,Math.ceil((2*fineHeightRatio-1+2*extent)/(2*extent)));
@@ -50,7 +51,7 @@ export function intermediateSmokePlan(world,{flow=24,material=48,pressure=flow,e
   const min=[-extent,-extent,-extent],max=[extent,2*fineHeightRatio-2+extent,extent];
   if(min.some((v,i)=>v<world.min[i])||max.some((v,i)=>v>world.max[i]))throw Error('Intermediate field exceeds world bounds');
   for(const n of [flow,material,pressure])if(!Number.isInteger(n)||n<2||Math.abs(n*height-Math.round(n*height))>1e-8)throw Error('Intermediate dimensions must tile the requested coverage with cubic cells');
-  if(pressure>flow||flow%pressure)throw Error('Invalid intermediate pressure subdivision');
+
   const dims=n=>[n,Math.round(n*height),n],cells=n=>n*n*Math.round(n*height);
   return {flowDims:dims(flow),materialDims:dims(material),pressureDims:dims(pressure),
     flowCells:cells(flow),materialCells:cells(material),pressureCells:cells(pressure),
@@ -106,6 +107,7 @@ struct Gas { a:vec4<f32>, b:vec4<f32> } // soot,heat,fuel,oxygen; fresh burn, so
 ${REACTANT_COMBUSTION_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${THERMAL_MOMENTS_WGSL}
+${TRANSFER_GEOMETRY_WGSL}
 fn idx(c:vec3<i32>,d:vec3<f32>)->u32{return u32(c.x)+u32(d.x)*(u32(c.y)+u32(d.y)*u32(c.z));}
 fn inside(c:vec3<i32>,d:vec3<f32>)->bool{return all(c>=vec3<i32>(0))&&all(c<vec3<i32>(d));}
 fn blocked(c:vec3<i32>)->bool{if(u.time.w<.5){return false;}return inside(c,u.flow.xyz)&&textureLoad(solids,c,0).x!=0u;}
@@ -255,12 +257,20 @@ fn divergence(c:vec3<i32>)->f32{var d=0.0;for(var a=0u;a<3u;a++){d+=face(c,a)-fa
 // pressure solve has its own lattice; fine velocity is never downsampled away.
 @compute @workgroup_size(4,4,4) fn restrictPressure(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.pressureGrid.xyz)){return;}
- let r=i32(u.pressureControl.y);var rhs=0.0;var solid=0.0;
- for(var z=0;z<r;z++){for(var y=0;y<r;y++){for(var x=0;x<r;x++){
-   let q=c*r+vec3<i32>(x,y,z);
-   if(blocked(q)){solid=1.0;}else{rhs+=divergence(q);}
- }}}
- pressureRhs[idx(c,u.pressureGrid.xyz)]=vec2<f32>(rhs/f32(r*r*r),solid);
+ let ratio=u.pressureControl.y;var rhs=0.0;var solid=0.0;
+ if(ratio==floor(ratio)){
+  let r=i32(ratio);
+  for(var z=0;z<r;z++){for(var y=0;y<r;y++){for(var x=0;x<r;x++){
+   let q=c*r+vec3<i32>(x,y,z);if(blocked(q)){solid=1.0;}else{rhs+=divergence(q);}
+  }}}rhs/=ratio*ratio*ratio;
+ }else{
+  let src=vec3<u32>(u.flow.xyz);let dst=vec3<u32>(u.pressureGrid.xyz);let lo=transferLo(gid,src,dst);let hi=transferHi(gid,src,dst);let begin=transferBegin(gid,src,dst);let end=transferEnd(gid,src,dst);
+  for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
+   let q=vec3<i32>(x,y,z);let o=transferOverlap(q,lo,hi);let w=o.x*o.y*o.z/(ratio*ratio*ratio);if(w<=0.0){continue;}
+   if(blocked(q)){solid=1.0;}else{rhs+=divergence(q)*w;}
+  }}}
+ }
+ pressureRhs[idx(c,u.pressureGrid.xyz)]=vec2<f32>(rhs,solid);
 }
 fn pressureBlocked(c:vec3<i32>)->bool{
  if(!inside(c,u.pressureGrid.xyz)){return false;}
@@ -367,7 +377,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
     encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={}}){
       if(flowOnly)m=materialIndex;
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
-      if(![0,1,2].includes(transitionCells))throw Error('Invalid world transition collar');
+      if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
       const mapping=worldSmokeMapping(plan,anchor,transform);
       values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,transitionCells,time.dtScale,time.backtraceScale,buoyancy,solids===fallback?0:1]);

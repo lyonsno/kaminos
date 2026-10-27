@@ -602,7 +602,7 @@ const CANONICAL_CONTENT_MODE_VALUES = {
 
 function normalizeGridSize(value) {
   const requested = Number(value);
-  if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
+  if (Number.isSafeInteger(requested) && requested>=4) return requested;
   return DEFAULT_GRID_SIZE;
 }
 
@@ -2846,7 +2846,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   return { identity: IMMERSED_SOURCE_IDENTITY, requested, effective };
 }
 export function immersedSourceUniformValues(config, { materialPerVelocity = 1 } = {}) {
-  if (!Number.isInteger(materialPerVelocity) || materialPerVelocity < 1) throw Error("Invalid immersed source lattice ratio");
+  if (!Number.isFinite(materialPerVelocity) || materialPerVelocity <= 0) throw Error("Invalid immersed source lattice ratio");
   const e = config?.effective;
   if (!e?.admitted) return new Array(IMMERSED_SOURCE_UNIFORM_FLOATS).fill(0);
   return [
@@ -5322,7 +5322,7 @@ fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
   let n = immersedDirection();
   let e1 = u.immersed_source_e.xyz;
   let e2 = normalize(cross(e1, n));
-  let materialPerVelocity = max(1.0, u.immersed_source_f.y);
+  let materialPerVelocity = max(1e-8, u.immersed_source_f.y);
   let patternWidth = i32(round(f32(GRID) * materialPerVelocity));
   let patternCentre = f32(patternWidth) * 0.5;
   let slabCell = vec2<i32>(clamp(i32(floor(patternCentre + dot(d, e1) * materialPerVelocity)), 0, patternWidth - 1), clamp(i32(floor(patternCentre + dot(d, e2) * materialPerVelocity)), 0, patternWidth - 1));
@@ -17429,7 +17429,7 @@ export function createKaminosVolumePrototype({
   function fineTransferInputs(){return {fluid:fluidBuffers[currentFluid],prior:fluidBuffers[1-currentFluid],front:frontBuffers[currentFront],quench:quenchBuffers[currentQuench],solid:sceneSolidTexture,reactant:reactantTextures[currentFluid],burn:burnRateTexture,lower:joinedLowerFaceTexture};}
   function pressureResidualAvailability(){
     if (!state.fineGrid) return {available:false,reason:'fine-grid-not-seated'};
-    return state.fineGrid.materialPerVelocity > 1
+    return state.fineGrid.materialPerVelocity !== 1
       ? {available:false,reason:'independent-velocity-residual-unavailable'}
       : {available:true,reason:null};
   }
@@ -17518,7 +17518,7 @@ export function createKaminosVolumePrototype({
     // Runs every simulation step, before any pressure early-out, so a disabled
     // projection cannot leave a stale copy or map pending forever.
     const disposition = pressureResidualProbeDisposition({
-      independentVelocity: state.fineGrid?.materialPerVelocity > 1,
+      independentVelocity: !!state.fineGrid && state.fineGrid.materialPerVelocity !== 1,
       copyPending: pressureResidualCopyPending,
       mapPending: pressureResidualMapPending,
       frameCount: state.frameCount,
@@ -27768,8 +27768,8 @@ export function createKaminosVolumePrototype({
     validateGridControls(next) {
       const candidate={...controlsSnapshot,...next};
       // Match the runtime's existing fine-width normalization.
-      const plan=gridTuningPlan({...candidate,resolution:normalizeGridSize(candidate.resolution)},device?.limits,{joined:state.joinedBoundary?.admitted===true});
-      if(plan.fine.materialPerVelocity>1) {
+      const plan=gridTuningPlan(candidate,device?.limits,{joined:state.joinedBoundary?.admitted===true});
+      if(plan.fine.materialPerVelocity!==1) {
         if(resolvePressureSolverConfig(candidate).effective.solver!=='converged')throw Error('Independent fine velocity requires converged pressure');
         if(candidate.emitterSourceLaw==='inflow-boundary')throw Error('Independent fine velocity does not yet admit floor inflow');
         if(state.joinedBoundary?.admitted)throw Error('Independent fine velocity does not admit joined pressure');

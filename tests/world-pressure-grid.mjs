@@ -10,7 +10,7 @@ test('pressure allocation has its own resolution without changing velocity, mate
  for(const key of ['flowDims','materialDims','min','max'])assert.deepEqual(coarse[key],base[key]);
  assert.equal(coarse.pressurePitch,2*coarse.flowPitch);
  assert.equal(coarse.pressureCells,base.flowCells/8);
- assert.throws(()=>worldSmokePlan({flow:16,pressure:6}),/pressure/i);
+ assert.deepEqual(worldSmokePlan({flow:16,pressure:6}).pressureDims,[6,12,6]);
 });
 
 test('material can be coarser than velocity without changing coverage',()=>{

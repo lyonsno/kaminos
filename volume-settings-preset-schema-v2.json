@@ -93,11 +93,6 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "0",
-      "allowedValues": [
-        "0",
-        "1",
-        "2"
-      ],
       "additiveSinceControlCount": 267
     },
     {
@@ -134,12 +129,6 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "16",
-      "allowedValues": [
-        "8",
-        "16",
-        "24",
-        "32"
-      ],
       "additiveSinceControlCount": 262
     },
     {
@@ -148,12 +137,6 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "32",
-      "allowedValues": [
-        "16",
-        "32",
-        "48",
-        "64"
-      ],
       "additiveSinceControlCount": 263
     },
     {
@@ -162,12 +145,6 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "3",
-      "allowedValues": [
-        "2",
-        "3",
-        "4",
-        "6"
-      ],
       "additiveSinceControlCount": 264
     },
     {
