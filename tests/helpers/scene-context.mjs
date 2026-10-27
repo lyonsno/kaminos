@@ -10,6 +10,7 @@ import {createSceneAOState} from '../../scene-ao-state.mjs';
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
   context.checkedBurnAppearance??=checkedBurnAppearance;
+  context.promptEditTargets??=new Set();
   context.checkedSceneBloom??=checkedSceneBloom;context.bloomControls??=null;
   context.sceneBloom??=createSceneBloom({rebuild(){},redraw(){}});
   context.sceneAO ??= createSceneAOState();
