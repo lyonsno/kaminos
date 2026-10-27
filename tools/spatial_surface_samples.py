@@ -71,6 +71,8 @@ def spatial_samples(rows, count, area):
     tangent_cov = np.einsum('nki,nkl,nlj->nij', frame, local, frame)
     eigenvalue, eigenvector = np.linalg.eigh(tangent_cov)
     axes = frame @ eigenvector
+    reflected = np.sum(np.cross(axes[:, :, 0], axes[:, :, 1])*n, axis=1) < 0
+    axes[reflected, :, 1] *= -1  # Ellipse unchanged; quad winding follows the source normal.
     # sqrt(6*variance) covers a uniformly occupied cell's tangent-plane corners.
     sigma = np.sqrt(np.maximum(eigenvalue, (width*.04)**2)*6)/3
     sigma[population[inverse[ids]] == 1] = width*.7/3

@@ -38,13 +38,16 @@ class SpatialSamples(unittest.TestCase):
         np.testing.assert_allclose(np.linalg.norm(f[:,4:7],axis=1),1,atol=1e-6)
         np.testing.assert_allclose(np.sum(f[:,:3]*f[:,4:7],axis=1),0,atol=1e-6)
         np.testing.assert_allclose(f[:,[2,6]],0,atol=1e-6)
+        handedness=np.sum(np.cross(f[:,:3],f[:,4:7])*rows[ids,3:6],axis=1)
+        self.assertTrue((handedness>.999999).all(), 'Footprint winding must agree with its source normal')
         self.assertGreater(np.median(np.maximum(f[:,3],f[:,7])/np.minimum(f[:,3],f[:,7])),3)
 
     def test_opposed_normals_remain_separate_and_invalid_input_refuses(self):
         rows=np.r_[points(np.linspace(0,1,8),np.linspace(0,1,8)),
                    points(np.linspace(0,1,8),np.linspace(0,1,8),normal=-1)]
-        ids, _, meta=spatial.spatial_samples(rows,32,2)
+        ids, f, meta=spatial.spatial_samples(rows,32,2)
         self.assertEqual(set(rows[ids,5]),{-1,1})
+        self.assertTrue((np.sum(np.cross(f[:,:3],f[:,4:7])*rows[ids,3:6],axis=1)>.999999).all())
         self.assertEqual(meta['normalBins'],6)
         for count, area in [(0,2),(1000,2),(32,0)]:
             with self.assertRaises(ValueError):spatial.spatial_samples(rows,count,area)
