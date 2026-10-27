@@ -17,10 +17,6 @@ const context = vm.createContext({
 vm.runInContext(source.slice(start, end), context);
 const lights = [];
 scene.traverse(object => { if (object.isLight) lights.push(object); });
-assert.ok(restored, 'authored rim settings are restored');
-assert.equal(lights.filter(light => light.isDirectionalLight).length, 0,
-  'startup must not install an uncontrolled directional light');
-assert.equal(lights.length, 1, 'only the authored rim light is installed');
-assert.equal(lights[0], context.rimLight);
-assert.equal(lights[0].visible, false, 'authored off state is preserved');
+assert.equal(restored, false, 'startup must not restore an implicit singleton light');
+assert.equal(lights.length, 0, 'startup installs no light outside authored scene objects');
 console.log('scene default light contracts passed');

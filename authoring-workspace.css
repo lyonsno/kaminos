@@ -59,7 +59,6 @@ body[data-workspace=authoring] #authoring-right { display:flex; grid-column:3; g
 #authoring-inspector .slider-label { flex:0 0 83px; color:#a3a5ab; font-size:11px; }
 #authoring-inspector .slider-row input[type=range] { min-width:25px; accent-color:#a99778; }
 #authoring-inspector input[type=checkbox] { accent-color:#bca176; }
-#authoring-inspector .rim-number { width:62px; font:11px 'SF Mono',monospace; padding:3px; }
 #authoring-inspector details { border-top:1px solid #333438; margin-top:15px; padding-top:12px; }
 #authoring-inspector summary { font-size:11px; color:#c0c2c8; cursor:pointer; }
 #authoring-inspector section[hidden] { display:none; }
@@ -87,10 +86,10 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 
 /* Source/provenance diagnostics remain available in the full workbench. */
 #authoring-tree .scene-object-meta, #authoring-tree .scene-object-chip { display:none; }
-#authoring-tree #scene-select-rim, #authoring-tree #scene-add-water-emitter { display:none; }
+#authoring-tree #scene-add-water-emitter { display:none; }
 #authoring-tree .scene-object-list { gap:2px; }
 #authoring-tree .scene-object-row { min-height:34px; }
-#authoring-inspector #selected-light-properties > h2, #authoring-inspector #selected-flame-properties > h2 { font-size:11px; text-transform:none; letter-spacing:0; }
+#authoring-inspector #selected-flame-properties > h2 { font-size:11px; text-transform:none; letter-spacing:0; }
 
 #selected-flame-fields .flame-scope { font-size:10px; line-height:1.5; color:#92949c; margin:9px 0; }
 #selected-flame-fields .slider-label { flex-basis:126px; }
@@ -184,13 +183,6 @@ body[data-component-editing="true"] button[onclick="snapToGround()"] { display:n
 
 #transform-inspector[hidden], #authoring-object-tools[hidden] { display:none !important; }
 #selected-bed-properties select { background:#25262a; color:#d6d7db; border:1px solid #37383d; padding:6px; }
-
-#authoring-inspector #rim-controls .slider-row:has(#rim-azimuth),
-#authoring-inspector #rim-controls .slider-row:has(#rim-elevation),
-#authoring-inspector #rim-controls .slider-row:has(#rim-distance),
-#authoring-inspector #rim-controls .slider-row:has(#rim-target-x),
-#authoring-inspector #rim-controls .slider-row:has(#rim-target-y),
-#authoring-inspector #rim-controls .slider-row:has(#rim-target-z) { display:none; }
 
 #selected-spot-properties { padding:12px 0; }
 #selected-spot-properties h3 { font-size:12px; }

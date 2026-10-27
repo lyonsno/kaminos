@@ -314,7 +314,7 @@ test('one data control can select per-object targets without merging their histo
 test('flame aperture refusal ends its scrub so further pointer motion cannot escape history',async()=>{
   const {readFileSync}=await import('node:fs');const vm=await import('node:vm');
   const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=index.indexOf("  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields'");
+  const start=index.indexOf("  for(const scope of ['#burner-controls','#selected-flame-fields'");
   const setup=index.slice(start,index.indexOf('  edits.subscribe(()=>{',start));
   for(const [scale,initial,motions] of [[.8,.05,[-20,-25]],[2,.2,[35,40]]]){
     const doc=new Control();globalThis.document=doc;globalThis.window=new Control();

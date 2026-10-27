@@ -121,11 +121,20 @@ export async function witness(args){
    await page.getByRole('button',{name:'Frame',exact:true}).click();report.creatureFrameCamera=await page.evaluate(()=>window.kaminosCameraDebugState());await capture('frame-creature');
    report.phase='shadow';await mode.selectOption('source');await page.getByLabel('Creature motion',{exact:true}).selectOption('continued-trot');await page.waitForFunction(()=>window.kaminosWalkingCreature({geometry:false}).motion.id==='continued-trot');
    await page.evaluate(view=>window.__kaminosSetSceneCameraFrame(view.position,view.target),setup.view);
-   report.shadowLight=await page.evaluate(()=>{
-    const values={intensity:160,azimuth:135,elevation:45,distance:6,angle:45,penumbra:.2,'target-x':0,'target-y':-1,'target-z':-1};
-    for(const [key,value]of Object.entries(values)){const input=document.getElementById('rim-'+key+'-number');input.value=String(value);input.dispatchEvent(new Event('input',{bubbles:true}));}
-    const enabled=document.getElementById('rim-enabled');enabled.checked=true;enabled.dispatchEvent(new Event('change',{bubbles:true}));window.kaminosViewportSettings.set({helpers:false});return {requested:values,effective:window.kaminosSceneLightState()};
-   });report.shadowRead=await read();validateCreatureDisplayRead(report.shadowRead,{helpers:false,bones:false,paths:true,mode:'source'});assert.equal(report.shadowRead.referenceFloor.visible,true);await capture('shadow-start');
+   report.shadowLight=await page.evaluate(async()=>{
+    const {Vector3,Quaternion,Euler}=await import('/lib/three.core.js');
+    const direction=new Vector3(.5,Math.SQRT1_2,-.5),target=new Vector3(0,-1,-1),position=target.clone().addScaledVector(direction,6);
+    const rotation=new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0,0,-1),direction.negate()));
+    const id=window.kaminosSceneAuthoring.addLight(),values={enabled:true,intensity:160,angle:45,penumbra:.2,aimDistance:6};
+    window.kaminosSceneAuthoring.setLight(id,values);
+    window.kaminosSetSceneObjectTransform(id,{position:position.toArray(),rotation:[rotation.x,rotation.y,rotation.z],scale:[1,1,1]});
+    window.kaminosViewportSettings.set({helpers:false});return {requested:{id,...values,position:position.toArray(),target:target.toArray()},effective:window.kaminosSceneLightState()};
+   });
+   // Check the authored shadow light before reading the creature frame.
+   const requestedShadowLight=report.shadowLight.requested,effectiveShadowLight=report.shadowLight.effective.find(light=>light.id===requestedShadowLight.id);
+   assert.ok(effectiveShadowLight,'requested ordinary shadow light is missing');assert.equal(effectiveShadowLight.visible,true);assert.equal(effectiveShadowLight.power,requestedShadowLight.intensity);
+   for(const key of ['position','target'])requestedShadowLight[key].forEach((value,axis)=>assert.ok(Math.abs(effectiveShadowLight[key][axis]-value)<1e-9,`shadow light ${key} was not applied`));
+   report.shadowRead=await read();validateCreatureDisplayRead(report.shadowRead,{helpers:false,bones:false,paths:true,mode:'source'});assert.equal(report.shadowRead.referenceFloor.visible,true);await capture('shadow-start');
    await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:20}));await page.getByRole('button',{name:'Frame',exact:true}).click();await capture('shadow-frame20');
    report.phase='travelled-frame';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:259}));
    const travelled=await read({geometry:true});assert.equal(travelled.playback.frame,259);report.travelledFrames=[];

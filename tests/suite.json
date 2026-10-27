@@ -577,9 +577,6 @@
     "tests/scene-receiving-witness-contracts.mjs": {
       "kind": "node"
     },
-    "tests/scene-rim-authoring.mjs": {
-      "kind": "node"
-    },
     "tests/scene-roundtrip.mjs": {
       "kind": "node"
     },

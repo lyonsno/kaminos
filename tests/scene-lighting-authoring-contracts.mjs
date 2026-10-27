@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
-import {checkedRimRecipe} from '../scene-rim-light.mjs';
 import {bindSceneExposureControls} from '../scene-emissive-camera.mjs';
 
 import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
@@ -20,7 +19,7 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
     return elements.get(id);
   }};
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),environmentLegacySettings,checkedRimRecipe,document, scene, sceneObjects: [],
+  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),environmentLegacySettings,document, scene, sceneObjects: [],
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentLoadToken: 0, currentEnvMap: null,
@@ -37,8 +36,6 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
   bindSceneEnvironmentControls({state:context.sceneEnvironment,document,onError:error=>{throw error;}});
   if (startup) {
     vm.runInContext(between('// --- Settings Persistence ---', '// --- HDR Environments ---'), context);
-    vm.runInContext(between('// --- Authored Rim Light ---', '// --- Exposure / Intensity Controls ---'), context);
-    context.setRimLight();
   }
   return context;
 }
@@ -95,7 +92,7 @@ test('environment A/B/A recalls each lighting recipe, including exposure', async
   await c.loadEnvironment('warehouse'); assert.deepEqual(snapshot(c),b);
 });
 
-test('two startups without edits retain stored map recipes, selection, and rim settings', async () => {
+test('two startups retain map recipes and selection while ignoring obsolete browser rim settings', async () => {
   const storage = new Map();
   const recipe = { exposure: 2.3, intensity: 1.7, rotation: 2.1, backgroundBrightness: 0.85, backgroundContrast: 1.6, backgroundBlur: 0.4 };
   const saved = { 'exposure-slider': '2.3', 'show-env-bg': false, environmentName: 'warehouse',
@@ -107,7 +104,6 @@ test('two startups without edits retain stored map recipes, selection, and rim s
     await c.loadEnvironment(c.restoreSettings() || 'studio');
     assert.equal(c.sceneEnvironment.read().name,'warehouse');
     assert.deepEqual(JSON.parse(JSON.stringify(c.sceneEnvironment.read().recipes)),saved.environmentRecipes);
-    assert.deepEqual(JSON.parse(JSON.stringify(c.readRimLightSettings())),saved.rimLight);
     assert.deepEqual(JSON.parse(storage.get('kaminos-settings')),saved,'restoring controls must not overwrite storage with partial startup state');
   }
 });
@@ -134,20 +130,6 @@ test('recipe validation preserves fine values and rejects invalid authored light
   for (const invalid of [{ intensity: -1 }, { exposure: '1' }, { rotation: Infinity }, { backgroundBlur: 2 }]) {
     assert.throws(()=>normalizeEnvironmentRecipe(c.HDR_ENVS,'studio',invalid));
   }
-});
-
-test('rim off/on preserves its aim and fine-valued recipe', () => {
-  const elements = new Map();
-  const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,{ value:'',min:'0',max:'1',dataset:{},checked:false,addEventListener(){} }); return elements.get(id); } };
-  const c=sceneContext({checkedRimRecipe,document,rimLight:null,window:{},controls:{},saveSettings(){}});
-  vm.runInContext(between('// --- Authored Rim Light ---','// --- Exposure / Intensity Controls ---'),c);
-  const recipe={enabled:true,color:'#d6e5ff',intensity:123.45,azimuth:-237.89,elevation:34.56,distance:5.4321,angle:45.67,penumbra:0.1234,target:[1.234,2.345,-3.456]};
-  c.setRimLight(recipe);document.getElementById('rim-enabled').checked=false;c.updateRimLight();
-  assert.equal(document.getElementById('rim-controls').hidden,true);
-  document.getElementById('rim-enabled').checked=true;c.updateRimLight();
-  assert.deepEqual(JSON.parse(JSON.stringify(c.readRimLightSettings())),recipe);
-  c.setRimLight();assert.equal(c.readRimLightSettings().enabled,false);
-  assert.throws(()=>c.setRimLight({...recipe,distance:0}),/range/);
 });
 
 test('AO is attached to material indirect lighting, not multiplied over lit output', () => {
@@ -184,12 +166,4 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
   const injected=source.replace(normal,normal.replace(': scenePass;',': scenePass.mul(aoOutput);'));
   assert.notEqual(injected,source,'negative injection reaches the actual final output');
   assert.throws(()=>preservesLitOutput(injected),/direct\/emissive scene output/,'the harness must fail when final lighting is incorrectly attenuated');
-});
-
-test('rim light has authorable controls and is saved independently of map recipes', () => {
-  for (const id of ['rim-enabled','rim-intensity','rim-color','rim-azimuth','rim-elevation','rim-distance','rim-angle','rim-penumbra','rim-target-x','rim-target-y','rim-target-z']) {
-    assert.ok(source.includes(`id="${id}"`), `missing ${id}`);
-  }
-  assert.match(between('function buildSceneData(', 'function isCompositionAuthoring()'), /rimLight:/);
-  assert.match(between('  // Load environment first', '  if (objectRecords.length > 0)'), /setRimLight/);
 });

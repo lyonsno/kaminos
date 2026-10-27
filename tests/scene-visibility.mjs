@@ -73,11 +73,11 @@ test('visibility-owned selection cannot cancel its own shared edit and releases 
  sceneContext(c);vm.runInContext(html.slice(a,b),c);assert.deepEqual(c.restoreVisibilitySelection(['mesh'],'mesh'),['mesh']);assert.equal(c.burnerGraphWriting,false);assert.throws(()=>c.restoreVisibilitySelection([],null),/selection failure/);assert.equal(c.burnerGraphWriting,false);
 });
 import * as THREE from '../lib/three.core.js';
-import {checkedSceneLightRecord,RIM_LIGHT_ID} from '../scene-rim-light.mjs';
+import {checkedSceneLightRecord} from '../scene-spot-light.mjs';
 test('actual viewport submission masks mounted light and group illumination while preserving authored settings',()=>{
  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const grab=name=>{const a=html.indexOf(`function ${name}(`);return a<0?'':html.slice(a,html.indexOf('\n}',a)+2);};
- const c={THREE,checkedSceneLightRecord,RIM_LIGHT_ID,scene:new THREE.Scene(),sceneObjects:[],sceneSpotLights:new Map(),viewportHelpersVisible:true,window:{},applySceneObjectTransformState(root,pose){root.position.fromArray(pose.position);root.rotation.fromArray(pose.rotation);root.scale.fromArray(pose.scale);}};
+ const c={THREE,checkedSceneLightRecord,scene:new THREE.Scene(),sceneObjects:[],sceneSpotLights:new Map(),viewportHelpersVisible:true,window:{},applySceneObjectTransformState(root,pose){root.position.fromArray(pose.position);root.rotation.fromArray(pose.rotation);root.scale.fromArray(pose.scale);}};
  sceneContext(c);vm.runInContext(grab('mountSceneSpotLight')+grab('viewportVisibilityObjects'),c);
  const record={id:'spot',type:'light',source:'kaminos:scene-spot-light',transform:{position:[2,3,2],rotation:[-.6,.7,0],scale:[1,1,1]},light:{kind:'spot',enabled:true,color:'#ffffff',intensity:120,angle:30,penumbra:.3,aimDistance:3}};
  const entry=c.mountSceneSpotLight(record),{light}=c.sceneSpotLights.get('spot');

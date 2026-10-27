@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
-import { checkedSceneLightRecord, sceneLightRuntimeRecipe } from '../scene-rim-light.mjs';
+import { checkedSceneLightRecord } from '../scene-spot-light.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 function source(start, end) {
@@ -19,7 +19,7 @@ function source(start, end) {
 function context() {
   const scene = new THREE.Scene();
   const state = sceneContext({
-    THREE, checkedSceneLightRecord, sceneLightRuntimeRecipe, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
+    THREE, checkedSceneLightRecord, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
     scene, sceneObjects: [], sceneGroups: [], rimLight: new THREE.SpotLight(), RIM_LIGHT_ID: '@rim-light',
     window: { _kaminosDirty() {} }, document: { getElementById: () => ({ checked: false, classList: { remove() {} } }) },
     sceneMutationToken: 0, greenroomPreviewGeneration: 0, greenroomPreviewState: null,
@@ -35,8 +35,6 @@ function context() {
     greenroomMeshMetadata: () => ({}), setInfo() {}, console: { warn() {} }, disposeObjectTree() {},
     previewTransformState: () => ({}), applyPreviewTransformState() {},
   });
-  state.updateRimLight = () => { state.rimLight.visible = false; };
-  state.setRimLight = recipe => { state.rimLight.visible = recipe.enabled; };
   state.workingScene=createWorkingScene();state.createSceneLifecycle=createSceneLifecycle;
   for(const [name,get,set] of [
     ['sceneObjects',()=>state.workingScene.objects,value=>state.workingScene.replaceObjects(value)],

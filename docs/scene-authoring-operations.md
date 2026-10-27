@@ -6,21 +6,22 @@ For scripted comparisons and editable human handoff, use [repeatable visual work
 
 `window.kaminosSceneObjectDebugState()` lists IDs, types, sources and poses. `window.selectSceneObject(id)` selects an object. `window.kaminosSetSceneObjectTransform(id, patch)` applies an accepted pose edit; position and scale are triples, rotation is an XYZ Euler triple in radians. `window.kaminosSceneEdits` exposes `begin(id, label)`, `preview(patch)`, `commit()`, `cancel()`, `undo()`, `redo()` and `state()`. Await undo/redo when membership replay can load assets. Complete or cancel an active gesture before another operation or saving.
 
-Spot lights are ordinary scene objects: Add → Light → Spot creates a new object, and selected light properties own enabled state, color, power, cone angle and blend. Object transforms own placement. `window.kaminosSceneAuthoring.addLight()` returns its ID; `setLight(id, patch)` applies one accepted data edit. Lights participate in grouping, duplication, removal and save/reopen. Their data lives on the object, with no duplicate placement recipe in `environment`. The legacy `@rim-settings` and `@rim-light` interfaces remain adapters for an older scene's migrated rim light; new lights have their own IDs. The current spot adapter changes spread through cone angle rather than object scale.
+Spot lights are ordinary scene objects: Add → Light → Spot creates a new object, and selected light properties own enabled state, color, power, cone angle and blend. Object transforms own placement. `window.kaminosSceneAuthoring.addLight()` returns its ID; `setLight(id, patch)` applies one accepted data edit. Lights participate in grouping, duplication, removal and save/reopen. Their data lives on the object, with no duplicate placement recipe in `environment`. Older saved rim lights load as ordinary spot lights, retaining their saved object identity and pose. No startup rim light or separate rim-settings target is installed. The current spot adapter changes spread through cone angle rather than object scale.
 
 `window.kaminosAuthoringParameters.list()` returns bound target IDs and values. `read(id)` returns a copy; `set(id, patch)` applies one accepted history edit. Discover targets rather than assuming every DOM control is adapted.
 
 ```js
 const parameters = window.kaminosAuthoringParameters;
-parameters.set('@rim-settings', { enabled: true, intensity: 170 });
-window.kaminosSetSceneObjectTransform('@rim-light', { position: [3, 4, -2] });
+const lightId = window.kaminosSceneAuthoring.addLight();
+window.kaminosSceneAuthoring.setLight(lightId, { intensity: 170 });
+window.kaminosSetSceneObjectTransform(lightId, { position: [3, 4, -2] });
 parameters.set('@parameter:volume-exposure', { value: 1.2 });
 parameters.set('@burner-controls', { flow: 1.6 });
 await window.kaminosSceneEdits.undo();
 await window.saveSceneAs();
 ```
 
-`@rim-settings` accepts the existing light recipe fields or a partial patch. Invalid recipe values are rejected before acquiring a transaction. `@burner-controls` pairs the burner recipe, source radius and flow across Assets and Volume. Bound Volume range/number/checkbox/color inputs and selects use `@parameter:<control-id>` with `{value}`. Text fields and arbitrary buttons are not implicitly history adapters. Volume parameter writes capture the complete flame settings, so undo also restores coupled coefficients changed by the original control handler. The experimental Cluster route is rejected by the authored Shape control and parameter API; it remains in Workbench. Environment and fire-light targets are also discoverable through `list()`.
+Light edits validate their object data before acquiring a transaction. `@burner-controls` pairs the burner recipe, source radius and flow across Assets and Volume. Bound Volume range/number/checkbox/color inputs and selects use `@parameter:<control-id>` with `{value}`. Text fields and arbitrary buttons are not implicitly history adapters. Volume parameter writes capture the complete flame settings, so undo also restores coupled coefficients changed by the original control handler. The experimental Cluster route is rejected by the authored Shape control and parameter API; it remains in Workbench. Environment and fire-light targets are also discoverable through `list()`.
 
 Selecting a flame emitter presents its Emission controls. Selecting **Fire & smoke** in the scene hierarchy presents the field's preset, Appearance, Motion, Simulation and Legacy appearance controls. The runtime retains its existing singleton analytic source and whole-settings preset backing; selecting an emitter does not imply that it owns field-wide appearance. Selecting Water simulation opens the existing local-liquid field controls. Field selection does not pretend to be a mesh transform and survives save/reopen. Workbench retains the original controls on the same working state.
 

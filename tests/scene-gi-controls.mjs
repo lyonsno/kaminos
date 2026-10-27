@@ -34,7 +34,7 @@ try {
     assert.equal(await page.inputValue('#scene-gi-gain'),'2');
     await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]));
     await page.locator('.env-btn[data-env="neutral"]').click();
-    await page.locator('#rim-enabled').check();
+    await page.evaluate(()=>window.kaminosSceneAuthoring.addLight());
     await page.waitForTimeout(2000);
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/'+(extra.futureQuality?'additive':'ordinary')+'.png'});

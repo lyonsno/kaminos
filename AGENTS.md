@@ -69,6 +69,8 @@ Landing does not go through `node tools/land.mjs` for now, and main has no requi
 
 ## Retiring Surfaces
 
+- The special Rim Light controls and startup singleton are removed. Create and edit lights as ordinary scene objects through Add → Light and the selected light inspector. Saved legacy rim lights convert to ordinary spot-light records on load.
+
 Do not build on these; put new work where the successor lives.
 
 - **The Pipeline tab and its graph** (dock, generator library, graph workbench, run shelf, `pipeline-ui-witness.mjs`) are removed. Generation UI belongs in the Generate tab. The server routes `/api/pipeline-manifest` and `/api/run-pipeline`, `pipelines/asset-pipelines.json`, `pipeline-witness.mjs` and the `pipeline-runs` browse root stay so the Generate tab can host routes such as TRELLIS image-to-mesh; until it does, they are callable headlessly only.

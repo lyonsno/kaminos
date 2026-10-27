@@ -3,7 +3,7 @@ import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
 import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,checkedFireSourceRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
-import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
+import {legacyRimLightRecord,checkedSceneLightRecord} from './scene-spot-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
@@ -110,9 +110,8 @@ export function sceneObjectToLegacyModel(data) {
 export function getSceneObjectRecords(data) {
   const records=Array.isArray(data?.objects)?data.objects.map(normalizeSceneObjectRecord)
     :data?.model?.source?[normalizeSceneObjectRecord(sceneObjectToLegacyModel(data))]:[];
-  if(data?.version<7 && data.environment?.rimLight?.enabled && !records.some(r=>r.id===RIM_LIGHT_ID)){
-    const light={...checkedRimRecipe(data.environment.rimLight),kind:'spot',role:'rim'};
-    records.push(normalizeSceneObjectRecord({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:'Rim light',fileName:'Spot light',light,transform:rimRecipePose(light)}));
+  if(data?.version<7 && data.environment?.rimLight?.enabled && !records.some(r=>r.id==='@rim-light')){
+    records.push(normalizeSceneObjectRecord(legacyRimLightRecord(data.environment.rimLight)));
   }
   if(data?.version<10 && (data.composition || records.some(record=>record.type===FIRE_DOMAIN_TYPE))) {
     const kiln=records.find(record=>record.id==='kiln'&&canCollideWithFire(record));

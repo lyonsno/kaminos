@@ -700,7 +700,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <h2>Scene Objects</h2>
     <div class="panel">
       <div class="scene-object-tools">
-        <button type="button" class="btn" id="scene-select-rim">Rim Light</button>
         <button type="button" class="btn" id="scene-add-water-emitter">Add Water Emitter</button>
         <button type="button" class="btn" data-scene-group-create>Group loose objects</button>
       </div>
@@ -708,26 +707,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-object-list" class="scene-object-list"></div>
     </div>
 
-    <section id="selected-light-properties" hidden>
-    <h2>Selected Light</h2>
-    <label><input type="checkbox" id="rim-enabled"> Enabled</label>
-    <div id="rim-controls" hidden>
-      <div class="field"><label for="rim-color">Color</label><input type="color" id="rim-color" value="#d6e5ff"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-intensity">Intensity</label><input type="range" id="rim-intensity" min="0" max="500" step="1" value="120"><input class="rim-number" id="rim-intensity-number" aria-label="Rim intensity" type="number" min="0" step="1" value="120"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-angle">Cone Angle</label><input type="range" id="rim-angle" min="1" max="89" step="1" value="35"><input class="rim-number" id="rim-angle-number" aria-label="Rim cone half-angle" type="number" min="1" max="89" step="1" value="35"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-penumbra">Soft Edge</label><input type="range" id="rim-penumbra" min="0" max="1" step="0.01" value="0.65"><input class="rim-number" id="rim-penumbra-number" aria-label="Rim soft edge" type="number" min="0" max="1" step="0.01" value="0.65"></div>
-      <details><summary>Placement values</summary>
-      <div class="slider-row"><label class="slider-label" for="rim-azimuth">Azimuth</label><input type="range" id="rim-azimuth" min="-180" max="180" step="1" value="135"><input class="rim-number" id="rim-azimuth-number" aria-label="Rim azimuth" type="number" step="1" value="135"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-elevation">Elevation</label><input type="range" id="rim-elevation" min="-90" max="90" step="1" value="30"><input class="rim-number" id="rim-elevation-number" aria-label="Rim elevation" type="number" min="-90" max="90" step="1" value="30"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-distance">Distance</label><input type="range" id="rim-distance" min="0.1" max="15" step="0.1" value="6"><input class="rim-number" id="rim-distance-number" aria-label="Rim distance" type="number" min="0.1" step="0.1" value="6"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-x">Target X</label><input type="range" id="rim-target-x" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-x-number" aria-label="Rim target X" type="number" step="0.05" value="0"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-y">Target Y</label><input type="range" id="rim-target-y" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-y-number" aria-label="Rim target Y" type="number" step="0.05" value="0"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-z">Target Z</label><input type="range" id="rim-target-z" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-z-number" aria-label="Rim target Z" type="number" step="0.05" value="0"></div>
-      </details>
-      <button class="btn" id="rim-aim" title="Aim at the orbit camera's current target">Aim at View Target</button>
-    </div>
-
-    </section>
     <section id="selected-flame-properties" hidden><h2>Selected Flame</h2><div id="selected-flame-fields"></div></section>
 
     <!-- Hidden from the sidebar (Noah, 2026-10-07). Saved compositions still store and
@@ -3303,7 +3282,7 @@ import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmen
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
-import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
+import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
@@ -3341,7 +3320,6 @@ let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
 const workbenchSceneFrames=createWorkbenchFrameService({onError:error=>{window.kaminosWorkbenchSceneFrameError=error.message;setInfo('Experiment frame failed: '+error.message);}});
-let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
 const publishVolumeCockpitLayoutPhase = phase => {
@@ -3558,7 +3536,6 @@ let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
 let environmentLoadToken = 0;
-let rimLight = null;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
@@ -6042,7 +6019,6 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
 window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
 
 function sceneObjectReloadabilityLabel(record) {
-  if (record.id === RIM_LIGHT_ID) return 'scene recipe';
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
   if (!record.source) return 'unsourced';
   if (record.type === 'pbr') return 'procedural';
@@ -6538,11 +6514,11 @@ function renderSceneObjectRow(record, options = {}) {
   const typeLabel = record.type===LOCAL_LIQUID_EMITTER_TYPE?(record.localLiquidEmitter?.mode==='finite_drop'?'Water drop':'Water emitter'):(record.type || 'object');
   const reloadability = sceneObjectReloadabilityLabel(record);
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
-  const source = record.type===LOCAL_LIQUID_EMITTER_TYPE?'':record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
+  const source = record.type===LOCAL_LIQUID_EMITTER_TYPE?'':record.source || 'no source';
   return `
     <div class="${rowClass}" title="${escapeHtml(typeLabel+' · '+reloadability+' · '+source)}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
+        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name">
         <span class="scene-object-meta">${escapeHtml(typeLabel)}${source?' / '+escapeHtml(source):''}</span>
       </span>
       <span class="scene-object-actions">
@@ -7277,7 +7253,6 @@ function applyAuthoredScenePose(id, transform = {}) {
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
   if(entry.type===CAMERA_TYPE){mountAuthoredCamera({...serializeSceneObject(entry),transform});}
   else if (entry.type==='light') {
-    if(id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe({...serializeSceneObject(entry),transform}));}finally{restoringSceneLight=false;}}
     mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
     writeAuthoredFlameEmitterPose(transform,id);
@@ -10139,7 +10114,7 @@ function createPageSceneMembershipOperations() {
     domains:{
       glb:{retainRoot:true},
       light:{retainRoot:true,
-        detached(entry){setSceneObjectMounted(entry,false);if(entry.id===RIM_LIGHT_ID)bindingRimHideForRemoval();},
+        detached(entry){setSceneObjectMounted(entry,false);},
         attach:(_entry,snapshot)=>mountSceneSpotLight(snapshot.record),
         dispose:entry=>disposeSceneSpotLight(entry.id),
       },
@@ -10252,7 +10227,6 @@ function saveSettings() {
     if (el) settings[id] = el.checked;
   }
   Object.assign(settings,environmentLegacySettings(sceneEnvironment),sceneAO.legacySettings());
-  settings.rimLight = readRimLightSettings();
   try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
 
@@ -10280,7 +10254,6 @@ function restoreSettings() {
     sceneAO.restoreLegacy(settings);
     sceneEnvironment.restoreRecipes(settings.environmentRecipes);
     if(typeof settings['show-env-bg']==='boolean')sceneEnvironment.patch({showBackground:settings['show-env-bg']});
-    setRimLight(settings.rimLight);
     return Object.hasOwn(HDR_ENVS, settings.environmentName) ? settings.environmentName : 'studio';
   } finally {
     restoringSettings = false;
@@ -11018,15 +10991,6 @@ async function initScene() {
     controls.update();
   }
 
-  rimLight = new THREE.SpotLight(0xd6e5ff, 120);
-  rimLight.name = 'Authored rim light';
-  rimLight.castShadow = true;
-  rimLight.shadow.mapSize.set(1024, 1024);
-  rimLight.shadow.bias = -0.0001;
-  rimLight.shadow.normalBias = 0.02;
-  scene.add(rimLight, rimLight.target);
-  setRimLight();
-
   // Transform gizmo
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', e => {
@@ -11307,11 +11271,7 @@ async function initScene() {
           }
         }
       }
-      if(entry?.type==='light'&&entry.id!==RIM_LIGHT_ID&&transformControls.dragging){try{mountSceneSpotLight({...serializeSceneObject(entry),transform:sceneObjectTransformState(entry.object)});}catch(error){scenePlacementTools?.finish(false);setInfo(error.message);}}
-      if (entry?.id === RIM_LIGHT_ID && transformControls.dragging) {
-        try { applyAuthoredScenePose(RIM_LIGHT_ID,sceneObjectTransformState(entry.object)); }
-        catch(error) { scenePlacementTools?.finish(false); setInfo(error.message); }
-      }
+      if(entry?.type==='light'&&transformControls.dragging){try{mountSceneSpotLight({...serializeSceneObject(entry),transform:sceneObjectTransformState(entry.object)});}catch(error){scenePlacementTools?.finish(false);setInfo(error.message);}}
       if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE && validateLiveLocalLiquidEmitterPose(entry)) syncLocalLiquidHostEmitters();
     }
     updateTransformInspector();
@@ -11403,7 +11363,7 @@ async function initScene() {
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
-    historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-light-properties'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
+    historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
   sceneMembership.attachHistory(scenePlacementTools.edits);
   scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
@@ -11818,7 +11778,7 @@ async function initScene() {
   // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
   const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
     const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,keep=object=>{if(object)hidden.push([object,object.visible]);};
-    if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);}
+    if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type))keep(entry.object);}
     for(const id of hide)keep(workingScene.objects.find(entry=>entry.id===id)?.object);
     if(all){if(helper)helper.visible=false;selectionCaptureSuspended=true;selectionFeedback?.suspend(true);for(const box of selectionBoxes.values())box.visible=false;}
     for(const [object] of hidden)object.visible=false;
@@ -11830,7 +11790,7 @@ async function initScene() {
   const hideEditorObjectsForIdPass=({hide=[],bridges=false}={})=>{
     const hidden=[],keep=object=>{if(object?.visible)hidden.push(object);};
     scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly||(bridges&&object.userData.kaminosVolumeBridge))keep(object);});
-    for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);
+    for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type))keep(entry.object);
     for(const id of hide)keep(workingScene.objects.find(entry=>entry.id===id)?.object);
     keep(transformControls?.getHelper());for(const box of selectionBoxes.values())keep(box);
     for(const object of hidden)object.visible=false;
@@ -12100,8 +12060,7 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function createPageSceneLifecycle(){
   return createSceneLifecycle({scene:workingScene,
-    roots:{detach:entry=>scene.remove(entry.object),dispose:disposeObjectTree,mount:setSceneObjectMounted,
-      resumed(entry){if(entry.id===RIM_LIGHT_ID){const record=serializeSceneObject(entry);setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}}},
+    roots:{detach:entry=>scene.remove(entry.object),dispose:disposeObjectTree,mount:setSceneObjectMounted},
     records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
@@ -12109,7 +12068,6 @@ function createPageSceneLifecycle(){
       beginLoad:setup=>{localLiquidSetup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
       capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,currentSceneFile,sceneSaveBlockedByFailedRestore,volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
-        if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
         renderSceneObjectList();updateTransformInspector();
@@ -12165,7 +12123,6 @@ function clearSceneTransient(registeredObjects){
   }
 }
 function projectClearedScene(){
-  if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -21557,103 +21514,9 @@ document.getElementById('env-reset').onclick = () => {
   loadEnvironment(name, { remember: false }).then(saveSettings).catch(error => setInfo(error.message));
 };
 
-// --- Authored Rim Light ---
-const RIM_DEFAULTS = { enabled: false, color: '#d6e5ff', intensity: 120, azimuth: 135, elevation: 30,
-  distance: 6, angle: 35, penumbra: 0.65, target: [0, 0, 0] };
-const rimFields = ['intensity', 'azimuth', 'elevation', 'distance', 'angle', 'penumbra', 'target-x', 'target-y', 'target-z'];
-
-function readRimLightSettings() {
-  const settings = { enabled: document.getElementById('rim-enabled').checked, color: document.getElementById('rim-color').value };
-  for (const key of rimFields.slice(0, 6)) settings[key] = Number(document.getElementById(`rim-${key}`).value);
-  settings.target = ['x','y','z'].map(axis => Number(document.getElementById(`rim-target-${axis}`).value));
-  return settings;
-}
-
-function updateRimLight() {
-  const settings = readRimLightSettings();
-  document.getElementById('rim-controls').hidden = !settings.enabled;
-  if (!rimLight) return;
-  rimLight.visible = settings.enabled;
-  rimLight.color.set(settings.color);
-  rimLight.intensity = settings.intensity;
-  rimLight.angle = THREE.MathUtils.degToRad(settings.angle);
-  rimLight.penumbra = settings.penumbra;
-  const azimuth = THREE.MathUtils.degToRad(settings.azimuth), elevation = THREE.MathUtils.degToRad(settings.elevation);
-  rimLight.target.position.fromArray(settings.target);
-  rimLight.position.set(
-    settings.target[0] + settings.distance * Math.cos(elevation) * Math.sin(azimuth),
-    settings.target[1] + settings.distance * Math.sin(elevation),
-    settings.target[2] + settings.distance * Math.cos(elevation) * Math.cos(azimuth));
-  rimLight.shadow.camera.near = Math.min(0.1, settings.distance * 0.05);
-  rimLight.shadow.camera.far = Math.max(20, settings.distance * 3);
-  rimLight.shadow.camera.updateProjectionMatrix();
-  syncRimAuthoringHandle();
-  window._kaminosDirty?.();
-}
-
-function setRimLight(recipe = null) {
-  const settings = checkedRimRecipe({ ...RIM_DEFAULTS, ...recipe });
-  document.getElementById('rim-enabled').checked = settings.enabled;
-  document.getElementById('rim-color').value = settings.color;
-  for (const key of rimFields) {
-    const value = key.startsWith('target-') ? settings.target['xyz'.indexOf(key.at(-1))] : settings[key];
-    const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
-    range.min = Math.min(Number(range.min), value);
-    range.max = Math.max(Number(range.max), value);
-    range.step = 'any';
-    range.value = number.value = value;
-  }
-  updateRimLight();
-}
-
-for (const key of rimFields) {
-  const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
-  number.dataset.authoringDragStep = number.step;
-  number.step = 'any';
-  range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
-  number.addEventListener('input', () => {
-    if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) return;
-    range.min = Math.min(Number(range.min), number.valueAsNumber);
-    range.max = Math.max(Number(range.max), number.valueAsNumber);
-    range.value = number.value;
-    updateRimLight();
-  });
-  number.addEventListener('change', () => { number.value = range.value; });
-}
-document.getElementById('rim-enabled').addEventListener('change', updateRimLight);
-document.getElementById('rim-color').addEventListener('input', updateRimLight);
-document.getElementById('rim-aim').onclick = () => {
-  scenePlacementTools.edits.apply('@rim-settings', { target: controls.target.toArray() }, 'Aim rim at view');
-  saveSettings();
-};
-
-// Editor representation of the existing environment light. Its recipe remains the save authority.
-function syncRimAuthoringHandle() {
-  if(!scene||!rimLight||!scenePlacementTools)return;
-  const recipe=readRimLightSettings(),previous=workingScene.objects.find(o=>o.id===RIM_LIGHT_ID);
-  if(!previous&&!recipe.enabled&&!restoringSceneLight)return;
-  mountSceneSpotLight({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:previous?.label||'Rim light',fileName:'Spot light',groupId:previous?.groupId||null,createdAt:previous?.createdAt||new Date().toISOString(),
-    light:{...recipe,kind:'spot',role:previous?.light?.role??'rim'},transform:{...rimRecipePose(recipe),scale:previous?sceneObjectTransformState(previous.object).scale:[1,1,1]}});
-  renderSceneObjectList();updateTransformInspector();
-}
-function writeAuthoredRimPose(pose) {
-  setRimLight(rimRecipeFromPose(readRimLightSettings(),pose));
-}
-function selectAuthoredRimLight() {
-  try {
-    scenePlacementTools?.finish(false);
-    if(!readRimLightSettings().enabled)scenePlacementTools.edits.apply('@rim-settings',{enabled:true},'Enable rim light');
-    syncRimAuthoringHandle();setActiveTab('assets');window.selectSceneObject(RIM_LIGHT_ID);
-    document.getElementById('selected-light-properties').scrollIntoView({block:'nearest'});
-    document.activeElement?.blur?.();
-  } catch(error){setInfo(error.message);}
-}
 window.kaminosApplyBurnerPreset=()=>window.kaminosBurnerAuthoring.add('burner-assembly');
-window.kaminosSelectSceneRimLight=selectAuthoredRimLight;
-document.getElementById('scene-select-rim').onclick=selectAuthoredRimLight;
 function updateAuthoringPropertySelection() {
-  const light=document.getElementById('selected-light-properties'),flame=document.getElementById('selected-flame-properties');
-  if(light)light.hidden=true;
+  const flame=document.getElementById('selected-flame-properties');
   if(flame)flame.hidden=selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE;
   if(!flame?.hidden){flameInspector?.sync(true);const enabled=document.getElementById('selected-flame-enabled');if(enabled)enabled.checked=selectedSceneObjectEntry()?.emissionEnabled!==false;}
   const sourceAction=document.getElementById('field-source-action');if(sourceAction)sourceAction.textContent=authoredFlamePresent?'Select emitter':'Restore emitter';
@@ -22015,10 +21878,6 @@ function installAuthoringParameterEditing() {
     authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({...definition,edits,id,onError:error=>setInfo(error.message)}));
   };
-  bind('@rim-settings',{
-    controls:document.querySelectorAll('#rim-enabled, #rim-color, #rim-controls input'),label:'Tune rim light',
-    read:readRimLightSettings,write:setRimLight,check:checkedRimRecipe,
-  });
   const giControls=document.querySelectorAll('#scene-gi-mode, #scene-gi-controls input, #scene-gi-view');
   bind('@scene-gi',{controls:giControls,label:'Tune surface illumination',
     read:readSceneGIControls,write:setSceneGIControls,check:resolveSceneGIControlState});
@@ -22121,7 +21980,7 @@ function installAuthoringParameterEditing() {
       return edits.apply(id,patch,'Set authored parameter');
     },
   };
-  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties']) {
+  for(const scope of ['#burner-controls','#selected-flame-fields','#shared-flame-domain-properties']) {
     for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {
       const row=input.closest('.slider-row,.burner-field');const grip=row?.querySelector('label');if(!grip)continue;
       const source=row.querySelector('input[type=range]');
@@ -24621,7 +24480,7 @@ function readNumberControl(id, fallback = 0) {
 async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
   if (!record?.source) throw new Error('Scene object missing source');
   if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
-  if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
+  if(record.type==='light')return mountSceneSpotLight(record).object;
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
   if (record.type === FLAME_EMITTER_TYPE) {
     authoredFlamePresent=true;
@@ -24774,7 +24633,6 @@ function buildSceneData(capture = null) {
     },
     environment: {
       ...sceneEnvironment.document(),
-      rimLight: readRimLightSettings(),
       ground: { visible: groundPlane.visible, height: groundPlane.position.y,
         color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
     },
@@ -24905,7 +24763,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
   const visible = helper?.visible;
   const captureHelpers=[];
   scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)captureHelpers.push([object,object.visible]);});
-  for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)captureHelpers.push([entry.object,entry.object.visible]);
+  for(const entry of workingScene.objects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type))captureHelpers.push([entry.object,entry.object.visible]);
   const controlsEnabled=controls.enabled;
   let data;
   try {
@@ -25027,7 +24885,7 @@ window.kaminosSceneLightState=()=>Array.from(sceneSpotLights,([id,{light,marker}
 function mountSceneSpotLight(raw) {
   const record=checkedSceneLightRecord(raw);let entry=workingScene.objects.find(o=>o.id===record.id),binding=sceneSpotLights.get(record.id);
   if(!binding){
-    const light=record.id===RIM_LIGHT_ID?rimLight:new THREE.SpotLight();
+    const light=new THREE.SpotLight();
     light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;
     const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
     const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
@@ -25042,11 +24900,10 @@ function mountSceneSpotLight(raw) {
   if(!entry){entry={...record,object:marker};sceneMembership.admit(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   marker.userData.kaminosSceneObject={...record};window._kaminosDirty?.();return entry;
 }
-function bindingRimHideForRemoval(){if(rimLight)rimLight.visible=false;document.getElementById('rim-enabled').checked=false;}
 function disposeSceneSpotLight(id) {
   const binding=sceneSpotLights.get(id);if(!binding)return;
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
-  if(id===RIM_LIGHT_ID)binding.light.visible=false;else {binding.light.removeFromParent();binding.light.target.removeFromParent();binding.light.dispose?.();}
+  binding.light.removeFromParent();binding.light.target.removeFromParent();binding.light.dispose?.();
   sceneSpotLights.delete(id);
 }
 
@@ -25106,7 +24963,7 @@ function checkedObjectData(raw){if(raw.type===PROCEDURAL_MESH_TYPE)return checke
 function ensureMeshDataTarget(id) {
   const target=`@mesh-data:${id}`;
   if(!meshDataTargets.has(target)){
-    scenePlacementTools.edits.register(target,{read:()=>serializeSceneObject(workingScene.objects.find(o=>o.id===id)),check:checkedObjectData,write:record=>{if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}mountSceneSpotLight(record);}else mountProceduralMesh(record);renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();}});meshDataTargets.add(target);
+    scenePlacementTools.edits.register(target,{read:()=>serializeSceneObject(workingScene.objects.find(o=>o.id===id)),check:checkedObjectData,write:record=>{if(record.type==='light')mountSceneSpotLight(record);else mountProceduralMesh(record);renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();}});meshDataTargets.add(target);
   }
   return target;
 }
@@ -25140,7 +24997,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
-  else if(entry.type==='light'){if(entry.id===RIM_LIGHT_ID)setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}
+  else if(entry.type==='light')mountSceneSpotLight(record);
   else {
     const copy=withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     scene.add(copy);registerSceneObject(copy,record);
@@ -26343,7 +26200,6 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
 
 
   }
-  setRimLight(data.environment?.rimLight);
 
   const restoredFlame=objectRecords.find(record=>record.id===FLAME_EMITTER_ID)??objectRecords.find(record=>record.type===FLAME_EMITTER_TYPE);
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
@@ -26398,7 +26254,6 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   }
 
   syncRimAuthoringHandle();
-  if (!Array.isArray(data.selectionIds) && data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
 
   // Apply camera
   if (data.camera) {
