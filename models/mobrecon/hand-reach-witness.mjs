@@ -25,6 +25,18 @@ export function assertRuntimeSource(runtime, expectedCommit) {
   assert.ok(typeof runtime.source.repoRoot === 'string' && runtime.source.repoRoot.length > 0,'served root required');
 }
 
+export function assertFingerContactResponse(before,after,{minimumImpulse=1e-4}={}) {
+  assert.equal(before.backend,'cannon-es-cpu');assert.equal(after.backend,'cannon-es-cpu');
+  assert.ok(Array.isArray(before.fingerContactImpulses)&&Array.isArray(after.fingerContactImpulses),'finger normal impulse provenance required');
+  const prior=new Map(before.fingerContactImpulses.map(c=>[c.proxy,c.normalImpulse]));
+  const contacts=after.fingerContactImpulses.map(c=>({...c,normalImpulse:c.normalImpulse-(prior.get(c.proxy)??0)}));
+  assert.ok(contacts.every(c=>c.object==='cube'&&typeof c.finger==='string'&&Number.isFinite(c.normalImpulse)&&c.normalImpulse>=0),'valid finger normal impulse interval required');
+  const normalImpulse=contacts.reduce((n,c)=>n+c.normalImpulse,0);
+  assert.ok(normalImpulse>minimumImpulse,'meaningful solved finger normal impulse required; gravity/contact rows alone do not qualify');
+  assert.equal(after.grabbed,false,'finger response must not use pinch attachment');
+  return {normalImpulse,contacts:contacts.filter(c=>c.normalImpulse>0),authority:'simulated-finger-to-cube-normal-impulse'};
+}
+
 async function main() {
   const {values:a}=parseArgs({options:Object.fromEntries(['out','chrome','playwright','python','fixture','replay','base','expected-commit'].map(k=>[k,{type:'string'}]))});
   if(!a.out) throw Error('--out required');
@@ -156,11 +168,12 @@ async function main() {
       for(let i=0;i<30;i++)await invoke('advancePhysics',1/120);
       const after=await read();assertLivePlacement(after);
       assert.ok(after.state.contactEvents>events,'actual inferred hand must generate solver contact');
+      const response=assertFingerContactResponse(before.state,after.state);
       assert.equal(after.state.grabbed,false,'actual contact must not use pinch attachment');
       assert.ok(Math.hypot(...after.state.cubePosition.map((v,i)=>v-cubePosition[i]))>.001,'contact exercise moves the dynamic cube');
       const image=await capture('inferred-hand-contact');
       await invoke('setPhysicsPaused',false);
-      return {setup:'cube placed beside current inferred index collider; not an autonomous grasp',input:before.inputSource,before,after,...image};
+      return {setup:'cube placed beside current inferred index collider; not an autonomous grasp',input:before.inputSource,response,before,after,...image};
     });
     await step('miss-clears-contact',async()=>{await invoke('setThreshold',1);await wait('r.presentation === "no-hand"');const r=await read();assert.equal(r.visible,false);assert.equal(r.state.grabbed,false);assert.equal(r.state.contact,false);return r;});
     await step('reacquire-stop',async()=>{await invoke('setThreshold',.8);await wait('r.visible');const r=await read();assertLivePlacement(r);await invoke('stop');const stopped=await read();assert.equal(stopped.running,false);assert.equal(stopped.visible,false);assert.equal(stopped.camera,null);return {r,stopped};});

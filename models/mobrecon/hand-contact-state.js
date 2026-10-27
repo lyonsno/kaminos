@@ -50,7 +50,7 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
   table.position.y=tableHeight-HAND_CONTACT_TABLE.thickness/2;world.addBody(table);
   const box=new CANNON.Body({mass:.04,material:cubeMaterial,collisionFilterGroup:1,collisionFilterMask:2|4,
     linearDamping:.05,angularDamping:.08,allowSleep:true});world.addBody(box);
-  const bodies=new Map();
+  const bodies=new Map(),fingerImpulses=new Map();
   let targetState,cubeSize,tracking=false,indexTip=null,thumbTip=null,pinchPoint=null,pinchDistance=null,
     disposed=false,contacts=[],steps=0,simulationSeconds=0,contactEvents=0,maximumMotorForce=0,maximumProxyError=0;
   const assertOpen=()=>{if(disposed)throw Error('hand contact disposed');};
@@ -76,6 +76,8 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
       target:structuredClone(targetState),cubePosition:box.position.toArray(),cubeQuaternion:box.quaternion.toArray(),
       cubeVelocity:box.velocity.toArray(),cubeAngularVelocity:box.angularVelocity.toArray(),cubeSize,tableHeight,
       motorForce,friction,fingerRadius,maximumMotorForce,maximumProxyError,steps,simulationSeconds,contactEvents,
+      fingerContactNormalImpulse:[...fingerImpulses.values()].reduce((n,r)=>n+r.normalImpulse,0),
+      fingerContactImpulses:structuredClone([...fingerImpulses.values()]),
       contacts:structuredClone(contacts),proxies:[...bodies].map(([id,{body,goal,finger,radius}])=>({id,finger,radius,
         position:body.position.toArray(),velocity:body.velocity.toArray(),target:goal.toArray(),error:body.position.distanceTo(goal)}))};
   }
@@ -133,8 +135,15 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
         const a=c.bi.position.vadd(c.ri),b=c.bj.position.vadd(c.rj),other=c.bi===box?c.bj:c.bi;
         return {object:'cube',other:other===table?'table':other.handProxy?.id??'unknown',finger:other.handProxy?.finger??null,
           point:(c.bi===box?a:b).toArray(),normal:c.ni.scale(c.bj===box?1:-1).toArray(),
-          separation:c.ni.dot(b.vsub(a)),force:c.multiplier,authority:'simulated-not-measured-force'};
+          separation:c.ni.dot(b.vsub(a)),force:c.multiplier,normalImpulse:Math.max(0,c.multiplier)*h,
+          step:steps,simulationSeconds,authority:'simulated-not-measured-force'};
       });
+      for(const c of contacts)if(c.finger){
+        if(!Number.isFinite(c.normalImpulse))throw Error('non-finite finger contact impulse');
+        let row=fingerImpulses.get(c.other);
+        if(!row){row={proxy:c.other,finger:c.finger,object:'cube',normalImpulse:0,contactEquations:0,firstAt:simulationSeconds,lastAt:simulationSeconds};fingerImpulses.set(c.other,row);}
+        row.normalImpulse+=c.normalImpulse;row.contactEquations++;row.lastAt=simulationSeconds;
+      }
       contactEvents+=contacts.filter(c=>c.finger).length;
       if(!box.position.toArray().every(Number.isFinite))throw Error('non-finite cube dynamics');
     }
@@ -146,7 +155,7 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
     for(const [k,v]of Object.entries(next))(k==='friction'?nonnegative:positive)(v,k);
     ({motorForce,friction,fingerRadius}=next);handContact.friction=friction;return read();
   }
-  function reset(){lose();setTarget(initial.target);setCube(initial.cube);steps=0;simulationSeconds=0;contactEvents=0;maximumMotorForce=0;maximumProxyError=0;return read();}
+  function reset(){lose();setTarget(initial.target);setCube(initial.cube);fingerImpulses.clear();steps=0;simulationSeconds=0;contactEvents=0;maximumMotorForce=0;maximumProxyError=0;return read();}
   targetState=structuredClone(target);setTarget(target);setCube(cube);
   return {read,setTarget,setCube,setProxies,update,advance,configure,lose,reset,
     dispose(){if(disposed)return;lose();world.removeBody(box);world.removeBody(table);disposed=true;}};

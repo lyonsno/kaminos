@@ -91,7 +91,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   let frameIntervalMs = null, inferenceLatencyMs = null, blocked = false;
   let presentation = 'camera-off', error = null, inputSource = null, placement = null, last = null, received = 0;
   let status, cameraButton, fieldDocument;
-  const fields = new Map(), scrubs = [], trackListeners = [];
+  const fields = new Map(),checks=new Map(),scrubs = [], trackListeners = [];
   const assertOpen = () => {if (disposed) throw Error('Hand reach experiment is closed');};
   const current = ticket => !disposed && generation === ticket;
   const destroyApp = value => {
@@ -131,7 +131,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     const s = state.read();
     if (status) {
       const origin = inputSource?.kind === 'contact-fixture' ? `CONTACT FIXTURE: ${inputSource.label}` : inputSource?.kind === 'retained-prediction' ? `REPLAY: ${inputSource.label}` : running ? 'LIVE CAMERA' : starting ? 'STARTING CAMERA' : 'CAMERA OFF';
-      const touching=s.contacts?.filter(c=>c.finger)??[];
+      const touching=s.contacts?.filter(c=>c.finger&&c.force>0)??[];
       const condition = touching.length ? `${new Set(touching.map(c=>c.finger)).size} contacting fingers` : s.grabbed ? 'Cube grabbed' : s.contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
       status.textContent = `${origin} | ${condition}${loading ? ' | Loading models' : ''}${error ? ` | ${error}` : ''}${retention.id ? ` | Local trial: ${retention.status}, ${retention.frames} frames` : ''}`;
     }
@@ -139,6 +139,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius};
     for (const [i, axis] of ['x', 'y', 'z'].entries()) {values[`target-${axis}`] = s.target.position[i]; values[`cube-${axis}`] = s.cubePosition[i];}
     for (const [key, field] of fields) if (force || fieldDocument.activeElement !== field || field.readOnly) field.value = String(values[key]);
+    for(const [key,field]of checks)field.checked=Boolean({showProxies,physicsPaused,retainTrial}[key]);
   };
   const drawState = () => {
     const s = state.read();
@@ -148,7 +149,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     target.material.emissiveIntensity=.1+(s.targetProximity??0)*1.5;
     cube.position.fromArray(s.cubePosition); cube.scale.setScalar(s.cubeSize);
     if(s.cubeQuaternion)cube.quaternion.fromArray(s.cubeQuaternion);else cube.quaternion.set(0,0,0,1);
-    const touching=new Set((s.contacts??[]).filter(c=>c.finger).map(c=>c.other));
+    const touching=new Set((s.contacts??[]).filter(c=>c.finger&&c.force>0).map(c=>c.other));
     cube.material.color.setHex(touching.size||s.grabbed ? 0xf2ba57 : 0x40a6c8);
     table.visible=interaction==='physical-contact';table.position.set(0,(s.tableHeight??.16)-HAND_CONTACT_TABLE.thickness/2,0);
     const live=new Set();
@@ -377,7 +378,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     } catch (cause) {if (current(ticket)) {failCamera(cause);await finishTrial();throw cause;} return read();}
     finally {if (current(ticket)) {starting = false; sync();}}
   };
-  const frame = () => {assertOpen(); session.setView({position: [0, .36, .7], target: [0, .23, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
+  const frame = () => {assertOpen(); session.setView({position: [0, .41, .8], target: [0, .28, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
   const unsubscribe = session.onFrame(() => {
     if (disposed) return;
     if (running) {
@@ -476,9 +477,11 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       for(const [value,label]of [['physical-contact','Contact physics'],['pinch-attachment','Pinch attachment']]){const option=doc.createElement('option');option.value=value;option.textContent=label;mode.append(option);}
       mode.addEventListener('change',()=>call('setInteraction',mode.value));fields.set('interaction',mode);modeLabel.append(mode);panel.append(modeLabel);
       const proxyLabel=doc.createElement('label'),proxyToggle=doc.createElement('input');proxyToggle.type='checkbox';proxyToggle.checked=showProxies;
+      checks.set('showProxies',proxyToggle);
       const proxyText=doc.createElement('span');proxyText.textContent='Contact hand';
       proxyToggle.addEventListener('change',()=>call('setShowProxies',proxyToggle.checked));proxyLabel.append(proxyToggle,proxyText);panel.append(proxyLabel);
       const pauseLabel=doc.createElement('label'),pauseToggle=doc.createElement('input');pauseToggle.type='checkbox';
+      checks.set('physicsPaused',pauseToggle);
       const pauseText=doc.createElement('span');pauseText.textContent='Pause physics';
       pauseToggle.addEventListener('change',()=>call('setPhysicsPaused',pauseToggle.checked));pauseLabel.append(pauseToggle,pauseText);panel.append(pauseLabel);
       const fitLabel=doc.createElement('label');fitLabel.textContent='Placement fit ';
@@ -487,6 +490,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       fit.addEventListener('change',()=>call('setFitPolicy',fit.value));fields.set('fitPolicy',fit);fitLabel.append(fit);panel.append(fitLabel);
       const recordingLabel=doc.createElement('label'),recordingInput=doc.createElement('input');
       recordingInput.type='checkbox';recordingInput.checked=retainTrial;
+      checks.set('retainTrial',recordingInput);
       recordingInput.addEventListener('change',()=>call('setRetainTrial',recordingInput.checked).finally(()=>{recordingInput.checked=retainTrial;}));
       const recordingText=doc.createElement('span');recordingText.textContent='Record trial locally';
       recordingLabel.append(recordingInput,recordingText);panel.append(recordingLabel);

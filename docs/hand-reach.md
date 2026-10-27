@@ -54,7 +54,10 @@ Pause physics freezes that clock; a hidden document does not accrue simulation
 time. Detector misses and stale/ended camera input remove the physical hand;
 the cube loses its support and continues falling/settling. Finger force,
 friction and contact radius are editable. Contact records contain finger/object
-identity, contact point, normal, separation and simulated force. No force is
+identity, contact point, normal, separation and simulated force. Finger-attributed
+normal impulse accumulates across solver substeps, with the proxy, object and
+simulation-time span retained; separating zero-force rows do not qualify as a
+causal response in the witness. No force is
 measured from the camera, and stable frictional pickup remains an experimental
 interaction rather than a demonstrated tracking-quality guarantee.
 

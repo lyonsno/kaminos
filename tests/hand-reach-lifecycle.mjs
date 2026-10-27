@@ -541,6 +541,9 @@ test('controls invoke production operations, retain numeric choices, and label l
   hand.value = 'left'; hand.dispatchEvent(new Event('change')); await settle();
   assert.equal(f.instance.read().handedness, 'left');
   const status = nodes.find(node => node.attributes.role === 'status');
+  const pause=nodes.find(node=>node.tagName==='label'&&node.children.some(c=>c.textContent==='Pause physics')).children.find(c=>c.tagName==='input');
+  f.instance.operations.setPhysicsPaused(true);assert.equal(pause.checked,true,'agent pause is projected into the same checkbox');
+  f.instance.operations.setPhysicsPaused(false);assert.equal(pause.checked,false);
   const button = nodes.find(node => node.tagName === 'button' && node.textContent === 'Start camera');
   button.dispatchEvent(new Event('click')); await settle(); await f.videoFrame();
   assert.match(status.textContent, /^LIVE CAMERA/);
