@@ -13,12 +13,14 @@ export function checkedPromptRelief(value){
  }
  if(value.geometry.data.morphAttributes&&Object.keys(value.geometry.data.morphAttributes).length)throw Error('Unsupported saved prompt attribute representation');
  const index=value.geometry.data.index,maximum=index?.type==='Uint16Array'?65535:4294967295;
- if(index&&(!['Uint16Array','Uint32Array'].includes(index.type)||!Array.isArray(index.array)||index.array.length%3||!index.array.every(i=>Number.isSafeInteger(i)&&i>=0&&i<p.array.length/3&&i<=maximum)))throw Error('Invalid saved prompt triangles');
- if(!index&&p.array.length%9)throw Error('Invalid saved prompt triangles');
+ if(index!==undefined&&(!index||!['Uint16Array','Uint32Array'].includes(index.type)||!Array.isArray(index.array)||index.array.length%3||!index.array.every(i=>Number.isSafeInteger(i)&&i>=0&&i<p.array.length/3&&i<=maximum)))throw Error('Invalid saved prompt triangles');
+ if(index===undefined&&p.array.length%9)throw Error('Invalid saved prompt triangles');
+ // This source emits current groups only; the decoder's legacy fallbacks are unsupported.
+ if(value.geometry.data.drawcalls!==undefined||value.geometry.data.offsets!==undefined)throw Error('Unsupported saved prompt triangle representation');
  const triangleVertices=index?.array.length??p.array.length/3;
  if(value.geometry.data.groups?.some(g=>!Number.isSafeInteger(g.start)||!Number.isSafeInteger(g.count)||g.start<0||g.count<0||g.start%3||g.count%3||g.start+g.count>triangleVertices||!Number.isSafeInteger(g.materialIndex)||g.materialIndex<0))throw Error('Invalid saved prompt triangles');
  const sphere=value.geometry.data.boundingSphere;
- if(sphere&&(!Array.isArray(sphere.center)||sphere.center.length!==3||!sphere.center.every(Number.isFinite)||!Number.isFinite(sphere.radius)||sphere.radius<0))throw Error('Invalid saved prompt geometry bounds');
+ if(sphere!==undefined&&(!sphere||!Array.isArray(sphere.center)||sphere.center.length!==3||!sphere.center.every(Number.isFinite)||!Number.isFinite(sphere.radius)||sphere.radius<0))throw Error('Invalid saved prompt geometry bounds');
  return structuredClone(value);
 }
 export function promptReliefRecord(object){

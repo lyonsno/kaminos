@@ -36,3 +36,15 @@ test('saved-source guard checks the effective float and index decoder before ove
  const wrappedIndex=structuredClone(base);wrappedIndex.geometry.data.attributes.position.array=Array(65537*3).fill(0);wrappedIndex.geometry.data.index={type:'Uint16Array',array:[0,1,65536]};
  for(const value of [interleaved,overflow,wrappedIndex]){assert.throws(()=>checkedPromptRelief(value),/attribute|geometry|triangles|representation/);assert.throws(()=>assertSceneSourcesReloadable([{id:'bad',type:'pbr',source:PROMPT_RELIEF_SOURCE,promptRelief:value}]),/reloadable/);}
 });
+
+
+test('pre-overwrite validation rejects explicit null decoder fields and unsupported legacy groups',async()=>{
+ const {PROMPT_RELIEF_SOURCE}=await import('../inference-kiln-record.mjs');const core=await import('../scene-persistence-core.js');
+ const base={schema:'kaminos.prompt-relief.v1',prompt:'A',appearance:'incineration',geometry:{data:{attributes:{position:{itemSize:3,type:'Float32Array',array:[0,0,0,1,0,0,0,1,0]}}}}};
+ for(const patch of [{index:null},{boundingSphere:null},{drawcalls:[{start:-3,count:99,materialIndex:0}]},{offsets:[{start:-3,count:99,materialIndex:0}]}]){
+  const promptRelief=structuredClone(base);Object.assign(promptRelief.geometry.data,patch);let sent=false;
+  const context={...core,fetch:async()=>{sent=true;return {ok:true,json:async()=>({saved:'existing.kaminos.json'})};},setInfo(){},compositionRestoreUrl:()=>'',readOwnerExperimentAddress:()=>({}),authoringWorkspace:null,location:{origin:'http://test',href:'http://test'},history:{replaceState(){}},savedSceneLocation:()=>'',grBrowseScenes(){}};
+  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function saveToServer('),source.indexOf('function sceneIsEmpty()',source.indexOf('async function saveToServer('))),context);
+  const result=await context.saveToServer({objects:[{id:'bad',type:'pbr',source:PROMPT_RELIEF_SOURCE,promptRelief}]},'existing.kaminos.json',{result:true});assert.equal(sent,false,'Invalid effective decoder fields must not reach overwrite');assert.equal(result.ok,false);assert.match(result.error,/reloadable/);
+ }
+});
