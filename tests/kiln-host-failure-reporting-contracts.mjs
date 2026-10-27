@@ -1,3 +1,4 @@
+import {sceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -31,7 +32,7 @@ assert.equal(state.sharedDeviceFailureReason, 'WebGPU adapter unavailable');
 const restore = slice('  const startupSceneHash = ', '  // An owner enters the effective authored starting scene,');
 async function runRestore(hash, environmentLoaded) {
   const calls = { info: [], composition: [], console: [] };
-  const context = vm.createContext({
+  const context = sceneContext({
     Promise, URLSearchParams, location: { hash, search: '' }, document: { body: { classList: { add() {} } } },
     environmentLoaded, volumeLoaded: Promise.resolve(), sceneSaveBlockedByFailedRestore: false,
     setActiveTab() {}, setInfo: message => calls.info.push(message),
@@ -41,7 +42,7 @@ async function runRestore(hash, environmentLoaded) {
   });
   vm.runInContext(restore, context);
   for (let turn = 0; turn < 10; turn += 1) await new Promise(resolve => setImmediate(resolve));
-  return { blocked: context.sceneSaveBlockedByFailedRestore, calls };
+  return { blocked: context.sceneDocument.state().blocked, calls };
 }
 const ordinary = await runRestore('', Promise.reject(new Error('mesh route failed')));
 assert.equal(ordinary.blocked, false, 'ordinary-route load failure does not block saving');

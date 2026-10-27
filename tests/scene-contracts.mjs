@@ -247,7 +247,6 @@ assert.match(index, /addSceneObjectFromSource/, 'multi-object loading reuses the
 assert.match(index, /registerSceneObject\(model,[\s\S]*source:/, 'GLB load registers source identity for persistence');
 assert.match(index, /registerSceneObject\(obj,[\s\S]*source:/, 'OBJ load registers source identity for persistence');
 assert.match(index, /function sceneIsEmpty\(\)[\s\S]*workingScene.objects\.length === 0 && volumePrimitives\.length === 0 && !persistableFlame && !localLiquidSetup/, 'shared save guard rejects truly empty scenes while allowing volume, flame, and liquid-domain scenes');
-assert.match(index, /let sceneSaveBlockedByFailedRestore\s*=\s*false/, 'failed scene restores latch a save block instead of leaving prior scene targets writable');
 assert.match(index, /function sceneSaveIsBlocked\(\)[\s\S]*Scene save blocked until a scene loads successfully/, 'save routes report failed-restore save blocking');
 assert.match(index, /window\.saveScene\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save refuses to write after a failed scene restore');
 assert.match(index, /window\.saveSceneAs\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save As refuses to write after a failed scene restore');
@@ -255,12 +254,8 @@ assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the s
 assert.match(index, /setInfo\(localLiquidFailure \? `Scene loaded; water host unavailable: \$\{localLiquidFailure\}` : 'Volume scene loaded'\)/, 'volume-only loads succeed while surfacing a missing liquid host');
 assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\{loadRequestId\}\);[\s\S]*\}/, 'volume-only scene loads clear stale object state under their current request');
 assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\|/, 'object-only scene loads clear stale volume primitive state even when a diagnostic smoke route is requested');
-assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
-assert.match(index, /claimLoadedSceneFile\(file, sceneFile\)/, 'scene load claims current scene file only after successful restore');
 assert.match(index, /function assertSceneObjectsReloadable\(/, 'scene load preflights object reloadability before mutating scene state');
-assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*await sceneLoadRequests\.awaitStage\(loadRequestId, loadSceneObjects\(objectRecords,[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load defers volume mutation until its current object restore succeeds');
-assert.match(index, /catch \(e\) \{[\s\S]*setVolumePrimitivesState\(previousVolumePrimitiveState\);[\s\S]*sceneSaveBlockedByFailedRestore = true;[\s\S]*currentSceneFile = null;[\s\S]*Scene load failed/, 'failed actual object restore rolls volume back and breaks overwrite ownership');
 assert.doesNotMatch(index, /if \(!data\.version \|\| \(!data\.model\?\.source && !hasVolumePrimitiveScene\)\)/, 'scene validation must not reject object-only multi-object scenes');
 
 assert.match(index, /"three": "\.\/lib\/three\.webgpu\.js"/, 'AO recovery must make the local Three WebGPU/TSL dependency explicit instead of relying on CDN r171');

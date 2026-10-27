@@ -69,13 +69,18 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
   function reloadable(record) {
     try{return domainFor(record)?.reloadable?.(record)===true;}catch{return false;}
   }
+  function assertReloadable(records) {
+    for(const record of records) {
+      if(!domainFor(record)?.documentOnly && !reloadable(record))throw Error(`Scene object "${record.fileName||record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
+    }
+  }
   async function load(record,options={}) {
     if(!record?.source)throw Error('Scene object missing source');
     const domain=domainFor(record);
     if(!reloadable(record)||typeof domain?.load!=='function')throw Error(`Scene object "${record.fileName||record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
     return domain.load(record,loaders,options);
   }
-  return Object.freeze({normalize,properties,describe,serialize,reloadable,load});
+  return Object.freeze({normalize,properties,describe,serialize,reloadable,assertReloadable,load});
 }
 
 export const defaultSceneRecordOperations=createSceneRecordOperations();

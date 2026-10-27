@@ -19,8 +19,8 @@ function mounted() {
     grBrowseScenes() {}, compositionRestoreUrl,savedSceneLocation:authoring.savedSceneLocation,URL,URLSearchParams,location: { origin: 'http://localhost:9000',href:'http://localhost:9000/?mesh_root=generated-meshes#authoring=1&scene=input.kaminos.json' },history:{replaceState(_state,_title,url){context.location.href=url;}},
     sceneSaveIsBlocked: () => false, sceneIsEmpty: () => false,
     collectSceneComposition: async () => () => {},
-    buildSceneData: capture => ({ label: 'Comparison', composition: null,
-      objects: [{ id: 'actual-object', transform: { position: [1, 2, 3] } }], capture: capture || null }),
+    buildSceneData: capture => ({ version:8, label: 'Comparison', composition: null,
+      objects: [{ id: 'actual-object',type:'pbr',source:'demos/cube.glb', transform: { position: [1, 2, 3] } }], capture: capture || null }),
     fetch: async () => ({ ok: true, json: async () => ({ saved: 'accepted.kaminos.json' }) }),
     selectionCaptureSuspended:false,selectionFeedback:null,selectionBoxes:new Map(),updateSelectionFeedback(){},
     sceneObjects: [], volumePrototype: null, activeSceneComposition: null,sceneCameras:null,
@@ -69,7 +69,7 @@ test('failed or malformed server response cannot reuse an earlier success', asyn
     assert.equal(result.filename, undefined);
     assert.equal(result.url, undefined);
     assert.ok(result.error);
-    assert.equal(run('currentSceneFile'), 'accepted.kaminos.json');
+    assert.equal(run('sceneDocument.state().filename'), 'accepted.kaminos.json');
   }
 });
 
@@ -107,7 +107,7 @@ test('overlapping invocation cannot claim the first save result', async () => {
 
 test('result retains the submitted scene while later edits continue independently', async () => {
   const { context, run } = mounted();
-  const scene = { objects: [{ id: 'object', transform: { position: [1, 2, 3] } }], composition: null };
+  const scene = { version:8, objects: [{ id: 'object',type:'pbr',source:'demos/cube.glb', transform: { position: [1, 2, 3] } }], composition: null };
   context.buildSceneData = () => scene;
   const result = await run('window.saveSceneAs({result:true})');
   scene.objects[0].transform.position[0] = 9;

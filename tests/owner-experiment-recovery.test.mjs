@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext} from './helpers/scene-context.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -26,8 +27,8 @@ async function startup(url,{matching=false}={}){
  const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
  initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
  fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,json:async()=>({})}),
- async loadSceneFile(){loads++;c.sceneSaveBlockedByFailedRestore=false;},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
- vm.createContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,blocked:c.sceneSaveBlockedByFailedRestore};
+ async loadSceneFile(){loads++;c.sceneDocument.authoringChanged();},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
+ sceneContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,blocked:c.sceneDocument.state().blocked};
 }
 function destination(recovery){const url=new URL(recovery),target='http://localhost/index.html?settings_preset='+preset;return new URL(vm.runInNewContext(forwardedExpression,{forwardCompositionHash,target,location:{hash:url.hash,search:url.search}}));}
 async function openActualEntry(url){

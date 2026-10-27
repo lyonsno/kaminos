@@ -2856,6 +2856,7 @@ import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-l
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
+import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
@@ -3544,7 +3545,6 @@ let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
-let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let activeSceneComposition = null;
 let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
@@ -3970,6 +3970,28 @@ let sceneViewerPaused = null;
 let localLiquidGeneration = 0;
 let authoredWaterReleaseRequest = 0;
 const sceneLoadRequests = workingScene.loads;
+function createPageSceneDocumentSession(options = {}) {
+  return createSceneDocumentSession({
+    requests:sceneLoadRequests, records:sceneRecords, planRestore:(...args)=>planSceneRestore(...args),
+    post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
+    readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
+    restoreUrl:(data,filename,address)=>compositionRestoreUrl(data.composition,filename,address.origin,address.workspace,address.owner),
+    apply:(...args)=>applySceneDocument(...args),
+    requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
+    navigate:url=>location.assign(url),
+    assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
+    bound:filename=>{
+      const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+      if(filename)history.replaceState(history.state,'',savedSceneLocation(location.href,filename));
+      else {hash.delete('scene');url.hash=hash.toString();history.replaceState(history.state,'',url.href);}
+    },
+    saved:result=>{setInfo(`Scene saved: ${result.filename}`);grBrowseScenes();},
+    status:text=>setInfo(text),
+    ...options,
+  });
+}
+const sceneDocument = createPageSceneDocumentSession();
+
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getGeneration: () => localLiquidGeneration,
   getHost: () => localLiquidHost,
@@ -3999,7 +4021,6 @@ const repetitionEditTargets=new Set();
 
 
 
-let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 
@@ -6837,7 +6858,7 @@ async function mountLocalLiquidHost() {
 async function applyLocalLiquidPerformance(values) {
   if (!localLiquidSetup) throw Error('Add a Water Emitter first');
   const edit = scenePlacementTools?.edits.state();
-  if (authoringBusy || sceneSaveBlockedByFailedRestore || edit?.active || edit?.replaying || localLiquidHostMount.isLoading()) {
+  if (authoringBusy || sceneDocument.state().blocked || edit?.active || edit?.replaying || localLiquidHostMount.isLoading()) {
     throw Error('Finish the current scene action before restarting water');
   }
   const next = normalizeLocalLiquidSetup({...localLiquidSetup,
@@ -7015,7 +7036,7 @@ function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
   const record = createSceneObjectRecord(object, metadata, {id, sceneTransform});
   const admitted = sceneMembership.admit(record, {activate,
     group:metadata.groupLabel?{label:metadata.groupLabel,source:metadata.groupSource??metadata.source,select:false}:null});
-  sceneSaveBlockedByFailedRestore = false;
+  sceneDocument.authoringChanged();
   return admitted;
 }
 
@@ -10116,7 +10137,7 @@ function createPageSceneMembershipOperations() {
     records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
     roots:{
       prepare(entry){sceneNavigation?.prepare(entry.object);applyGiProxySetting(entry);},
-      attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneSaveBlockedByFailedRestore=false;},
+      attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneDocument.authoringChanged();},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
@@ -11456,7 +11477,7 @@ async function initScene() {
     changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
     capture:item=>window.captureComposition({result:true,cameraView:item}),
   });
-  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>workingScene.objects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>workingScene.objects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneDocument.state().blocked||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
   cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>window.selectSceneObject(id),selectCreated:setActiveSceneObject,onError:error=>setInfo(error.message)});
@@ -11479,7 +11500,7 @@ async function initScene() {
   window.kaminosPolyEdit=polyEdit.api;
   const sceneCommandBlocked=()=>{
       const edit=scenePlacementTools.edits.state();
-      if(authoringBusy||sceneSaveBlockedByFailedRestore)return 'Finish the scene document action first';
+      if(authoringBusy||sceneDocument.state().blocked)return 'Finish the scene document action first';
       if(vantageCaptureHeld)return 'The agent sub is taking a picture';
       if(edit.active||edit.replaying||scenePlacementTools.edits.isSettling())return 'Finish or cancel the current edit first';
       if(transformGizmoDragging||transformControls.dragging||sceneNavigation.state().gesture||(controls.state??-1)!==-1)return 'Finish navigating or dragging first';
@@ -11818,7 +11839,7 @@ async function initScene() {
   const outputProfiles=createOutputProfiles({controller:createUserPreferences()});
   const renderOutput=captureStill({async begin({settings,pixels,signal}){
     const busy=recordingExtent?'A viewport recording is running':vantageBusy();if(busy)throw Error(busy);
-    if(sceneSaveBlockedByFailedRestore)throw Error('Restore the scene before rendering output');
+    if(sceneDocument.state().blocked)throw Error('Restore the scene before rendering output');
     if(workingScene.objects.some(item=>item.type==='splat'))throw Error('Splat overlay output is not supported by the mesh/flame capture');
     const limit=renderer.backend.device?.limits?.maxTextureDimension2D;
     if(!limit)throw Error('Output requires the WebGPU renderer');
@@ -11877,7 +11898,7 @@ async function initScene() {
   const viewportRecording=createViewportRecording({makeSink:createRecordingSink,host:{async begin({settings,pixels,signal}){
     const busy=vantageBusy();if(busy)throw Error(busy);
     if(vantageCaptureHeld||outputCaptureExtent||recordingExtent)throw Error('Another output operation is running');
-    if(sceneSaveBlockedByFailedRestore)throw Error('Restore the scene before recording');
+    if(sceneDocument.state().blocked)throw Error('Restore the scene before recording');
     if(workingScene.objects.some(item=>item.type==='splat'))throw Error('Splat overlay recording is not supported');
     const limit=renderer.backend.device?.limits?.maxTextureDimension2D;
     if(!limit||pixels.width>limit||pixels.height>limit)throw Error('Recording size exceeds the WebGPU texture capacity');
@@ -11964,7 +11985,7 @@ async function initScene() {
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>workingScene.objects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>window.selectSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
-        sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
+        sceneFile:()=>sceneDocument.state().filename,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
         linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
         avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')],ownView:viewportOwnForNotes});
       window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
@@ -12085,13 +12106,13 @@ function createPageSceneLifecycle(){
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
       beginLoad:setup=>{localLiquidSetup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
-      capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,currentSceneFile,sceneSaveBlockedByFailedRestore,volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+      capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
         renderSceneObjectList();updateTransformInspector();
       },
-      restorePreview(authored){currentSceneFile=authored.currentSceneFile;sceneSaveBlockedByFailedRestore=authored.sceneSaveBlockedByFailedRestore;modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
+      restorePreview(authored){sceneDocument.resume(authored.documentSession);modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
       previewResumed(){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}},
     },
   });
@@ -12142,6 +12163,7 @@ function clearSceneTransient(registeredObjects){
   }
 }
 function projectClearedScene(){
+  sceneDocument.sceneCleared();
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -24279,7 +24301,7 @@ async function grBrowseScenes() {
       const div = document.createElement('div');
       div.className = 'gr-entry';
       div.dataset.sceneFile = entry.name;
-      if (currentSceneFile === entry.name) div.style.borderLeft = '2px solid #1976d2';
+      if (sceneDocument.state().filename === entry.name) div.style.borderLeft = '2px solid #1976d2';
 
       const icon = document.createElement('span');
       icon.className = 'gr-icon';
@@ -24469,11 +24491,7 @@ async function addSceneObjectFromSource(record, loadRequestId = null, {activate 
 }
 
 function assertSceneObjectsReloadable(records) {
-  for (const record of records) {
-    if (!isReloadableSceneObjectRecord(record)) {
-      throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
-    }
-  }
+  return sceneRecords.assertReloadable(records);
 }
 
 function restoreLoadedSceneRecord(entry,record){
@@ -24732,7 +24750,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
     controls.enabled=controlsEnabled;
     window._kaminosDirty?.();
   }
-  const saved = await saveToServer(data, null, { result });
+  const saved = await sceneDocument.capture(data, null, { result });
   if (!saved || saved.ok === false) throw new Error(saved?.error || 'Capture was not saved');
   compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
   return saved;
@@ -24889,7 +24907,7 @@ function attachSceneObject(id,groupId) {
 }
 function assertSceneConstructionAvailable() {
   if(workingScene.isSuspended)throw Error('Finish preview before editing the scene');
-  if(authoringBusy||sceneSaveBlockedByFailedRestore)throw Error('Wait for the document to finish loading');
+  if(authoringBusy||sceneDocument.state().blocked)throw Error('Wait for the document to finish loading');
   const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying||scenePlacementTools.edits.isSettling())throw Error('Finish the current edit first');
 }
 function checkedObjectData(raw){if(raw.type===PROCEDURAL_MESH_TYPE)return checkedProceduralMesh(raw);if(raw.type==='light')return checkedSceneLightRecord(raw);throw Error('This data provider is read only');}
@@ -25894,38 +25912,8 @@ document.getElementById('composition-library').onclick = () => {
   grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
 };
 
-async function saveToServer(sceneData, filename, { result: detailed = false, saveAsName = null, overwrite = false } = {}) {
-  const body = { ...sceneData };
-  if (filename) body._filename = filename; // hint to server to overwrite
-  if (saveAsName) { body._saveAsName = saveAsName; if (overwrite) body._overwrite = true; }
-  const jsonStr = JSON.stringify(body, null, 2);
-  try {
-    const resp = await fetch('/api/save-scene', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: jsonStr,
-    });
-    const result = await resp.json();
-    if (resp.status === 409 && result.exists) return detailed ? { ok: false, exists: result.exists, error: result.error } : false;
-    if (!resp.ok) throw new Error(result.error || `Scene save failed: HTTP ${resp.status}`);
-    if (typeof result.saved === 'string' && result.saved.endsWith('.kaminos.json') && !/[/\\]/.test(result.saved)) {
-      const document = JSON.parse(jsonStr);
-      delete document._filename;
-      delete document._saveAsName;
-      delete document._overwrite;
-      const url = compositionRestoreUrl(document.composition, result.saved, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location));
-      currentSceneFile = result.saved;
-      history.replaceState(history.state,'',savedSceneLocation(location.href,result.saved));
-      setInfo(`Scene saved: ${result.saved}`);
-      grBrowseScenes();
-      return detailed ? { ok: true, filename: result.saved, url, document } : true;
-    }
-    throw new Error(result.error || 'Server did not return a valid saved scene filename');
-  } catch (error) {
-    setInfo(`Save failed: ${error.message || error}`);
-    if (detailed) return { ok: false, error: error.message || String(error) };
-  }
-  return false;
+async function saveToServer(sceneData, filename, options = {}) {
+  return sceneDocument.save(sceneData, filename, options);
 }
 
 function sceneIsEmpty() {
@@ -25944,7 +25932,7 @@ function sceneSaveIsBlocked() {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
   }
-  if (!sceneSaveBlockedByFailedRestore) return false;
+  if (!sceneDocument.state().blocked) return false;
   setInfo('Scene save blocked until a scene loads successfully');
   return true;
 }
@@ -25958,7 +25946,7 @@ window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => 
   }
   await collectSceneComposition();
   const data = buildSceneData();
-  return saveToServer(data, currentSceneFile, { result });
+  return saveToServer(data, sceneDocument.state().filename, { result });
 }, { result });
 
 // Save As: always create a new scene file
@@ -25966,7 +25954,7 @@ window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => 
 // confirms before replacing an existing scene; script callers that pass no
 // promptName keep the generated name and no dialog.
 function defaultSceneSaveStem() {
-  if (currentSceneFile) return currentSceneFile.replace(/\.kaminos\.json$/, '');
+  if (sceneDocument.state().filename) return sceneDocument.state().filename.replace(/\.kaminos\.json$/, '');
   return sanitizeFileStem(document.getElementById('composition-label')?.value || '', '.kaminos.json') || 'scene';
 }
 
@@ -26028,19 +26016,7 @@ function applyMaterialState(state) {
   applyMaterialStateToObject(currentMesh, state);
 }
 
-function claimLoadedSceneFile(file, sceneFile = null) {
-  if (sceneFile) {
-    history.replaceState(history.state,'',savedSceneLocation(location.href,sceneFile));
-  } else {
-    // Disk bytes have no server-backed identity until the user saves a copy.
-    const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
-    hash.delete('scene');url.hash=hash.toString();
-    history.replaceState(history.state,'',url.href);
-  }
-  currentSceneFile=sceneFile;
-}
-
-async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySettings = false } = {}) {
+async function loadSceneFile(file, options = {}) {
   if (authoringBusy || vantageCaptureHeld) {
     setInfo('Wait for the current capture or save');
     return;
@@ -26049,53 +26025,14 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     setInfo('Wait for the current scene history action to finish');
     return;
   }
-  const loadRequestId = sceneLoadRequests.begin();
-  const previousSceneFile = currentSceneFile;
-  const previousSceneSaveBlockedByFailedRestore = sceneSaveBlockedByFailedRestore;
-  const previousVolumePrimitiveState = getVolumePrimitiveState();
-  const previousFlameDomainTranslation = [...flameDomainTranslation],previousFlameDomainScale=flameDomainScale,previousFlameDomainFollowSource=flameDomainFollowSource;
-  sceneSaveBlockedByFailedRestore = true;
-  const text = await file.text();
-  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-    setInfo('Invalid scene file');
-    return;
-  }
-  let restorePlan;
-  try {
-    restorePlan = planSceneRestore(data, {allowEmpty:emptySettings});
-  } catch {
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-    setInfo('Invalid scene format');
-    return;
-  }
+  return sceneDocument.restore(file, options);
+}
+
+async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
-
-  try {
-    assertSceneObjectsReloadable(objectRecords);
-    if(objectRecords.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');
-  } catch (e) {
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-    sceneSaveBlockedByFailedRestore = previousSceneSaveBlockedByFailedRestore;
-    currentSceneFile = previousSceneFile;
-    setInfo('Scene load failed: ' + e.message);
-    return;
-  }
-
-  if ((restorePlan.composition || isCompositionAuthoring()) && !mounted) {
-    if (!sceneFile) {
-      if (!await saveToServer(data, null)) return;
-      if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-      sceneFile = currentSceneFile;
-    }
-    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location)));
-    return;
-  }
+  const previousVolumePrimitiveState = getVolumePrimitiveState();
+  const previousFlameDomainTranslation = [...flameDomainTranslation],previousFlameDomainScale=flameDomainScale,previousFlameDomainFollowSource=flameDomainFollowSource;
   window.kaminosViewportSettings.set({...viewportDisplay,hiddenIds:[],...restorePlan.editorDisplay});
   activeSceneComposition = restorePlan.composition;
   if(restorePlan.fireDomain)writeKilnCollisionState({enabled:restorePlan.fireDomain.simulation.collision});
@@ -26119,7 +26056,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     const name = env.name || 'studio';
     sceneEnvironment.restoreDocument(env);
     await loadEnvironment(name, { remember: false });
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
 
     groundPlane.visible = env.ground?.visible ?? true;
     groundPlane.position.y = Number.isFinite(env.ground?.height) ? env.ground.height : -0.85;
@@ -26139,15 +26076,12 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   try {
     const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
-    if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
+    if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } catch (e) {
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
     setFlameDomainTranslation(previousFlameDomainTranslation,previousFlameDomainScale);flameDomainFollowSource=previousFlameDomainFollowSource;
     setVolumePrimitivesState(previousVolumePrimitiveState);
-    sceneSaveBlockedByFailedRestore = true;
-    currentSceneFile = null;
-    setInfo('Scene load failed: ' + e.message);
-    return;
+    throw e;
   }
   if (activeSceneComposition && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster') {
     ensureAuthoredFlameEmitter();
@@ -26161,7 +26095,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
       if(!response.ok)throw Error('Fire settings schema lookup failed');
       return response.json();
     })());
-    if(!schemaStage.current)return;
+    if(!schemaStage.current)return false;
     const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
     writeFlameSettingsState({...fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
   }
@@ -26180,10 +26114,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
     await volumePrototype?.setActive?.(!activeSceneComposition||isSceneItemVisible('flame-field'));
     if(activeSceneComposition)await syncAuthoredFireActivity();
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } else {
     await volumePrototype?.setActive?.(false);
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
   }
 
 
@@ -26243,8 +26177,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     document.getElementById('backdrop-toggle').checked = false;
   }
 
-  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-  claimLoadedSceneFile(file, sceneFile);
+  if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {
     const gain = document.getElementById('fire-light-gain-stops');
@@ -26257,12 +26190,12 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   cameraViews?.restore(restorePlan.cameraViews);
   sceneNavigation?.resetView();
   cameraAuthoring?.refresh();
-  sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${sceneFile ? '' : ' · Imported file; Save to keep a local copy'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
   } else {
     setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
   }
+  return true;
 }
 
 // File input handler for Load Scene
@@ -26294,7 +26227,7 @@ window.openSavedScene = async function() {
     // A failed restore clears the document and blocks Save; keep its error and
     // add which assets were unavailable rather than claiming the scene opened.
     const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
-    const opened = !sceneSaveBlockedByFailedRestore && currentSceneFile === imported.saved;
+    const opened = !sceneDocument.state().blocked && sceneDocument.state().filename === imported.saved;
     setInfo(opened
       ? `Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
       : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.store.label}: ${names})`);
@@ -26360,7 +26293,7 @@ sceneInitialization.then(async () => {
     if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
       const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
       await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
-      if(sceneSaveBlockedByFailedRestore)throw Error('Default scene settings did not finish loading');
+      if(sceneDocument.state().blocked)throw Error('Default scene settings did not finish loading');
       sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');
     }
 
@@ -26432,7 +26365,7 @@ sceneInitialization.then(async () => {
     }
     const sceneFile = hash.get('scene');
     if (!sceneFile) return;
-    sceneSaveBlockedByFailedRestore = true;
+    sceneDocument.holdRestore();
     const response = await fetch(`/api/read?root=scenes&path=${encodeURIComponent(sceneFile)}`);
     if (!response.ok) throw new Error(`Scene unavailable: ${sceneFile}`);
     const data = await response.json();
@@ -26449,7 +26382,7 @@ sceneInitialization.then(async () => {
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.
-    if (sceneSaveBlockedByFailedRestore) throw new Error('Starting scene restoration did not complete');
+    if (sceneDocument.state().blocked) throw new Error('Starting scene restoration did not complete');
   });
   startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
@@ -26459,7 +26392,7 @@ sceneInitialization.then(async () => {
       console.error('Scene route load failed:', error);
       return;
     }
-    sceneSaveBlockedByFailedRestore = true;
+    sceneDocument.holdRestore();
     compositionStatus(`Restore failed: ${error.message || error}`, true);
     setInfo(`Composition restore failed: ${error.message || error}`);
   });
