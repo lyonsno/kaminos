@@ -88,7 +88,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   clearFlare(){return editScore(s=>{s.flare=null;});},
   previewStage(stage){if(!recording)throw Error('Load a recording first');const index=getPlan().phases.findIndex(p=>p.stage===stage);if(index<0)throw Error('Phase is not in this recording');stop();begin();previewPhase=index;position=getPlan().phases[index].startMs;playing=true;apply();notify();return read();},
   play(){if(!recording)throw Error('Load a recording first');stop();if(position>=playbackEnd())position=0;begin();playing=true;apply();notify();return read();},
-  seek(value){if(!recording)throw Error('Load a recording first');if(!Number.isFinite(value)||value<0||value>playbackEnd())throw Error('Choose a position inside the recording');if(live)stop();begin();playing=false;position=value;apply();notify();return read();},
+  seek(value){if(!recording)throw Error('Load a recording first');if(!Number.isFinite(value)||value<0||value>playbackEnd())throw Error('Choose a position inside the recording');if(live)stop();previewPhase=null;begin();playing=false;position=value;apply();notify();return read();},
   pause(){stop();return read();},cancel(){stop(true);return read();},
   follow(){stop();live=true;recording=null;invalidate();baseline=null;position=0;lastView=null;unsubscribe=source.subscribe(receive,{previews:true});notify();return read();},
   export(){return {schema:'kaminos.inference-flame.v2',recording:recording&&clone(recording),score:mapScorePortraits(score,exportFlamePortrait)};},

@@ -81,7 +81,7 @@ export function compileScore(recording,score,baseline){
   if(direct)end=Math.max(end,span.stage==='complete'?span.start+direct.duration*1000*scale:span.events.at(-1).atMs+transition);if(Number.isFinite(span.end))before=at(span,span.end);
   else {for(const l of span.layers)if(l.object.kind!=='state')end=Math.max(end,span.start+duration(span,l));const r=score.stages[span.stage];if(r)end=Math.max(end,span.stage==='complete'?span.start+r.duration*1000*scale:span.events.at(-1).atMs+transition);}
  }
- return {end,fields:[...allFields],phases:spans.map(span=>({stage:span.stage,startMs:span.start,recordedEndMs:Number.isFinite(span.end)?span.end:recording.durationMs,endMs:Number.isFinite(span.end)?span.end:end})),evaluate(time,{phaseIndex}={}){
+ return {end,fields:[...allFields],phases:spans.map(span=>({stage:span.stage,startMs:span.start,recordedEndMs:Number.isFinite(span.end)?span.end:recording.durationMs,endMs:Number.isFinite(span.end)?span.end:span.stage==='complete'?end:recording.durationMs,progress:progressAt(span,Number.isFinite(span.end)?span.end:recording.durationMs)})),evaluate(time,{phaseIndex}={}){
   let span=null;for(const candidate of spans){if(candidate.start>time)break;span=candidate;}
   if(phaseIndex!==undefined)span=spans[phaseIndex];
   const out=span?at(span,time):{...initial};let preview=null,p=null;for(const item of previews){if(item.event.atMs>time)break;preview=item.event;p=item.pulse;}

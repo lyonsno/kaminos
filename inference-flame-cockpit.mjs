@@ -1,3 +1,4 @@
+import {describeLayerTiming} from './inference-flame-timing.mjs';
 import {portraitImage} from './flame-portrait.mjs';
 import {INFERENCE_STAGES} from './inference-flame.mjs';
 const names={weights:'Weights',text:'Prompt',denoise:'Denoise',decode:'Decode',saving:'Save',complete:'Finished'};
@@ -110,11 +111,8 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
   layerControls.hidden=!layer;
   if(layer){enabled.checked=layer.enabled;timing.value=layer.timing;timingRow.hidden=object.kind==='state';timingUnit.textContent=layer.timing==='seconds'?'seconds':'%';
    if(document.activeElement!==timingValue)timingValue.value=layer.timing==='seconds'?object.recipe.duration*layer.scale*(score.timeScale??1):layer.scale*100;
-   const span=state.phases.find(p=>p.stage===selectedStage),length=span?span.recordedEndMs-span.startMs:null;
-   let hint=object.kind==='state'?'Holds B through this phase.':layer.timing==='progress'?'Follows observed inference progress; unknown progress uses authored seconds.':layer.timing==='phase'&&selectedStage!=='complete'&&length!==null?`Recorded phase: ${seconds(length)}. Response: ${seconds(length*layer.scale*(score.timeScale??1))}.`:`Response: ${seconds(object.recipe.duration*layer.scale*(score.timeScale??1)*1000)}${selectedStage==='complete'?' after inference.':'.'}`;
-   const effective=(layer.timing==='phase'&&selectedStage!=='complete'&&length!==null?length:object.recipe.duration*1000)*layer.scale*(score.timeScale??1);
-   if(object.kind!=='state'&&length!==null&&selectedStage!=='complete'&&effective>length)hint+=' Next phase interrupts it.';
-   timingHint.textContent=hint;const index=score.stacks[selectedStage].indexOf(layer);up.disabled=index===0;down.disabled=index===score.stacks[selectedStage].length-1;
+   const phaseIndex=state.phases.findIndex(p=>p.stage===selectedStage),span=state.phases[phaseIndex];
+   timingHint.textContent=describeLayerTiming({object,layer,timeScale:score.timeScale??1,phase:span,stage:selectedStage,hasSuccessor:phaseIndex>=0&&phaseIndex<state.phases.length-1}).text;const index=score.stacks[selectedStage].indexOf(layer);up.disabled=index===0;down.disabled=index===score.stacks[selectedStage].length-1;
   }
   phaseHint.textContent=selectedLayer?`${names[selectedStage]} · selected layer. Later cards override shared parameters.`:`${names[selectedStage]} selected · add or drop a saved look.`;
   if(document.activeElement!==scale)scale.value=score.timeScale??1;
@@ -137,6 +135,6 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
  }
  let framed=false;
  const frameInitial=()=>{if(!framed&&flame.read().active){framed=true;flame.frame();}};
- const unsubscribe=flame.subscribe(frameInitial);frameInitial();sync();
+ const unsubscribe=flame.subscribe(frameInitial);frameInitial();sync();panel.scrollIntoView({block:'start'});
  return {sync,dispose(){alive=false;unsubscribe();for(const drag of drags)drag?.dispose?.();drags.clear();}};
 }
