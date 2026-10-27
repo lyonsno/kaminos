@@ -25,6 +25,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
  const attentionNow=el('p'),attentionRecent=el('ol');attentionNow.style.cssText='margin:0';attentionRecent.style.cssText='margin:0;padding-left:18px;color:#a5b7bd;font-size:11px';
  const engageLabel=el('label'),engageToggle=el('input');engageToggle.type='checkbox';engageToggle.setAttribute('aria-label','Investigate interests');engageLabel.style.cssText='display:flex;gap:6px;align-items:center';engageLabel.append(engageToggle,el('span','Investigate interests'));engageToggle.onchange=()=>call('engagement',{enabled:engageToggle.checked});
  attentionBox.append(attentionLabel,engageLabel,attentionNow,attentionRecent);properties.append(attentionBox);
+ const senses=el('details'),senseReadout=el('pre');senseReadout.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:11px ui-monospace,monospace';senses.append(el('summary','Senses & concern'),senseReadout);attentionBox.append(senses);
  const tuning=el('details'),tuningBody=el('div'),tuningInputs=new Map(),tuningDrags=[];tuning.append(el('summary','Reactions & motivation'),tuningBody);attentionBox.append(tuning);
  for(const {key,label,description} of behaviorControls){
   const row=el('label',label+' ×'),input=el('input');input.type='number';input.min=['recoveryTime','habituation'].includes(key)?'0.01':'0';input.step='any';input.title=description;input.setAttribute('aria-label','Creature '+label.toLowerCase());
@@ -91,6 +92,10 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
   const a=r.attention;attentionBox.hidden=!a;
   if(a){
    for(const [key,input] of tuningInputs)if(document.activeElement!==input)input.value=String(a.behavior?.[key]??1);
+   if(senses.open){
+    const motivation=r.action.engagement,light=a.light,number=x=>Number.isFinite(x)?x.toFixed(3):'—';
+    senseReadout.textContent=[`Gaze model: ${a.sensoryField?.visibilityModel??'unavailable'}`,`Attention: ${a.focus?.id??'none'}${a.focus?.remembered?' (remembered)':''}`,`Behavior: ${motivation?.phase??'none'} · ${motivation?.motivation?.remembered?'remembered concern':'current observation'}`,`Interest ${number(motivation?.motivation?.drive)} · aversion ${number(motivation?.motivation?.aversion)} · caution ${number(motivation?.motivation?.caution)}`,`Light: ${light.status} · sample time ${number(light.time)} s · received rise ${number(light.receivedRise)} · local ${number(light.local)}`,`Raw samples: ${(light.measurements??[]).map(x=>number(x.luminance)).join(', ')}`,...a.candidates.map(c=>`${c.label}: ${c.gate??c.cause} · distance ${number(c.distance)} / ${number(c.noticeRadius)} · view ${number(c.view)} · sensory ${number(c.sensoryStrength)} · score ${number(c.score)} · familiarity ${number(c.familiarity)}`)].join('\n');
+   }
    attentionToggle.checked=a.enabled;engageToggle.checked=r.action.engagement?.enabled===true;engageToggle.disabled=!a.enabled;
    attentionNow.textContent=!a.enabled?'Off':a.interruption?`Stopped to check · ${a.interruption.cause}`:a.startle?'Startled · recovering':a.why?`Looking at ${a.why.label} · ${a.why.cause}`:'Not looking at anything in particular';
    const looks=a.history.filter(e=>e.kind==='look').slice(-5).reverse(),key=looks.map(e=>e.time).join('|');

@@ -29,8 +29,18 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
  const actors=new Map(),pending=new Set(),sourceCache=new Map(),skinCache=new Map(),zones=new Map();
  const encounters=inputs.encounters?createEncounterWorld(inputs.encounters):null;
  const frameCallbacks=new Set();let frameSession=null,stopFrame=null,bodyGuide=null;
- const onCreatureFrame=fn=>{frameCallbacks.add(fn);if(!stopFrame)stopFrame=frameSession.onFrame(frame=>{try{const observation=encounters.beginStep();for(const callback of [...frameCallbacks])callback({...frame,observation});encounters.finishStep();refreshBodyGuide();}catch(error){for(const row of actors.values())row.entry.operations.pause();throw error;}});return()=>{frameCallbacks.delete(fn);if(!frameCallbacks.size){stopFrame?.();stopFrame=null;}};};
- if(encounters)frameSession=await host.scene.open();
+ const coordinated=Boolean(encounters||dependencies.worldSteps);
+ const worldSteps=seconds=>dependencies.worldSteps?.(seconds)??[{seconds}];
+ function ensureFrame(){
+  if(stopFrame||!frameSession)return;
+  stopFrame=frameSession.onFrame(frame=>{try{
+   const steps=running?worldSteps(frame.deltaSeconds):[{seconds:frame.deltaSeconds}];
+   for(const step of steps){if(running)dependencies.beforeStep?.(step);const observation=encounters?.beginStep();for(const callback of [...frameCallbacks])callback({...frame,deltaSeconds:step.seconds,observation});encounters?.finishStep();}refreshBodyGuide();
+  }catch(error){running=false;for(const row of actors.values())row.entry.operations.pause();stopFrame?.();stopFrame=null;throw error;}});
+ }
+ const stopUnusedFrame=()=>{if(!frameCallbacks.size&&!(running&&dependencies.worldSteps)){stopFrame?.();stopFrame=null;}};
+ const onCreatureFrame=fn=>{frameCallbacks.add(fn);ensureFrame();return()=>{frameCallbacks.delete(fn);stopUnusedFrame();};};
+ if(coordinated)frameSession=await host.scene.open();
  function refreshBodyGuide(){
   if(!bodyGuide?.visible)return;const shapes=encounters.read().physics?.shapes??[];
   while(bodyGuide.children.length>shapes.length){const m=bodyGuide.children.at(-1);m.removeFromParent();m.geometry.dispose();m.material.dispose();}
@@ -74,7 +84,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   if(inputs.attention!==undefined&&creature.attention===undefined)creature.attention=structuredClone(inputs.attention);
   if(creature.actor_root!==undefined&&creature.actor_root!=='live'){pending.delete(spec.id);throw Error('Unknown living creature root mode; actors require live roots');}
   const scopedHost={...host,controls:{...host.controls}};
-  if(encounters)scopedHost.scene={...host.scene,open:async()=>{const session=await host.scene.open();const releases=[];return {...session,onFrame:fn=>{const release=onCreatureFrame(fn);releases.push(release);return release;},async dispose(){for(const release of releases)release();await session.dispose();}};}};
+  if(coordinated)scopedHost.scene={...host.scene,open:async()=>{const session=await host.scene.open();const releases=[];return {...session,onFrame:fn=>{const release=onCreatureFrame(fn);releases.push(release);return release;},async dispose(){for(const release of releases)release();await session.dispose();}};}};
   if(host.controls.mountObject)scopedHost.controls.mountObject=options=>{
    const document=host.controls.document,bar=document.createElement('div'),title=document.createElement('strong'),duplicate=document.createElement('button'),remove=document.createElement('button'),error=document.createElement('output');
    title.textContent=spec.label;duplicate.textContent='Duplicate creature';remove.textContent='Remove creature';error.setAttribute('role','alert');
@@ -104,9 +114,9 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
  const operations={
   contactBodies:async({visible}={})=>{if(!encounters||typeof visible!=='boolean')throw Error('Encounter bodies require boolean visibility');if(!bodyGuide){bodyGuide=new THREE.Group();bodyGuide.name='Physical contact bodies';bodyGuide.userData.kaminosEditorOnly=true;await frameSession.attach(bodyGuide,{owned:true,metadata:{fileName:bodyGuide.name}});}bodyGuide.visible=visible;refreshBodyGuide();frameSession.redraw();return read();},
   avoidance:({enabled}={})=>{if(!encounters)throw Error('This room has no encounter settings');encounters.setAvoidance(enabled);sceneControls?.avoidance&&(sceneControls.avoidance.checked=enabled);return read();},
-  advance:async({seconds}={})=>{if(running)throw Error('Pause scene before exact encounter advance');if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative encounter time required');const observation=encounters?.beginStep();for(const row of actors.values())if(row.active&&!row.preview&&row.entry.read().action.kind==='wander')await row.entry.operations.advance({seconds,observation});encounters?.finishStep();refreshBodyGuide();return read();},
+  advance:async({seconds}={})=>{if(running)throw Error('Pause scene before exact encounter advance');if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative encounter time required');for(const step of worldSteps(seconds)){dependencies.beforeStep?.(step);const observation=encounters?.beginStep();for(const row of actors.values())if(row.active&&!row.preview&&row.entry.read().action.kind==='wander')await row.entry.operations.advance({seconds:step.seconds,observation});encounters?.finishStep();}refreshBodyGuide();return read();},
   actor:async({id,operation,input}={})=>{const row=get(id);if(!Object.hasOwn(row.entry.operations,operation))throw Error(`Unknown actor operation: ${operation}`);if(authored&&operation==='action'){if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');return operations.setPreview({id,preview:input.kind==='preview'});}if(authored&&!row.preview){if(operation==='play'||operation==='pause')return operations.setActive({id,active:operation==='play'});if(['replay','seek','mode'].includes(operation))throw Error('Enter explicit motion preview before clip playback');}return row.entry.operations[operation](input);},
-  setRunning:({running:value}={})=>serialEdit(async()=>{if(!authored||typeof value!=='boolean')throw Error('Scene behavior requires an explicit running flag');running=value;for(const row of actors.values()){if(!running)row.entry.operations.pause();else await applyGate(row);}refreshAll();record({kind:'living.run',running});return read();}),
+  setRunning:({running:value}={})=>serialEdit(async()=>{if(!authored||typeof value!=='boolean')throw Error('Scene behavior requires an explicit running flag');running=value;for(const row of actors.values()){if(!running)row.entry.operations.pause();else await applyGate(row);}if(running&&dependencies.worldSteps)ensureFrame();else stopUnusedFrame();refreshAll();record({kind:'living.run',running});return read();}),
   setActive:({id,active:value}={})=>serialEdit(async()=>{if(typeof value!=='boolean')throw Error('Behavior active must be boolean');const row=get(id);row.active=value;await applyGate(row);refreshAll();record({kind:'living.active',id,active:value});return read();}),
   setPlaces:({id,places}={})=>serialEdit(async()=>{const next=checkPlaces(places,new Set(zones.keys())),row=get(id);row.places=next;await applyGate(row);refreshAll();record({kind:'living.places',id,places:next});return read();}),
   setPreview:({id,preview}={})=>serialEdit(async()=>{if(typeof preview!=='boolean')throw Error('Preview must be boolean');const row=get(id),state=row.entry.read();if(preview||liveZones(row).length||state.recipe.held_wander||state.recipe.wander)await row.entry.operations.action({kind:preview?'preview':'wander'});row.preview=preview;if(preview)row.entry.operations.pause();else await applyGate(row);refreshAll();return read();}),

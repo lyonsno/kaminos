@@ -1,0 +1,507 @@
+{
+  "running": false,
+  "zoneHeight": 0,
+  "zones": [
+    {
+      "id": "court",
+      "label": "Open court",
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          4.2,
+          1,
+          3.1
+        ]
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "strong",
+      "label": "Strong v025",
+      "active": true,
+      "places": [
+        {
+          "zoneId": "court",
+          "enabled": true,
+          "preference": 1
+        }
+      ],
+      "creature": {
+        "case": "/scratch/corrected-casts32-1017/strong-v025",
+        "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166",
+        "frame": "/scratch/healthy-paw32-1017/bind-frame-r1/rig-frame.json",
+        "frame_sha256": "df7f88bfb1895fd73828b105ee21a6778cda3ab31a4cacc7a7a3257a43af06e4",
+        "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/00/motion.json",
+        "motion_sha256": "9d397c3db8d7a7f050ff93322c546c2c95c585df22e42f500c6e656b03861bdf",
+        "motions": [
+          {
+            "id": "walk",
+            "label": "Walk \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/00/motion.json",
+            "motion_sha256": "9d397c3db8d7a7f050ff93322c546c2c95c585df22e42f500c6e656b03861bdf",
+            "prompt": "A cat walks forward.",
+            "seed": 1
+          },
+          {
+            "id": "trot",
+            "label": "Trot variation \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/01/motion.json",
+            "motion_sha256": "55896c98436d1db4a8ddb3ce8c5e1a30ab7a4390445afcc7c78a67f9015a8cc9",
+            "prompt": "A cat trots forward.",
+            "seed": 1
+          },
+          {
+            "id": "stroll",
+            "label": "Rolling stroll \u00b7 run prompt",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/02/motion.json",
+            "motion_sha256": "9b8c5505c7a322c3179e325cb79436c4616d18e1fd455b0d54facb3130673bb7",
+            "prompt": "A cat runs forward.",
+            "seed": 1
+          }
+        ],
+        "choices": [
+          {
+            "cast": "strong-v025",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "Strong v025",
+            "case": "/scratch/corrected-casts32-1017/strong-v025",
+            "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166"
+          },
+          {
+            "cast": "sf3d",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "SF3D",
+            "case": "/scratch/corrected-casts32-1017/sf3d",
+            "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471"
+          },
+          {
+            "cast": "trellis80302",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "TRELLIS 80302",
+            "case": "/scratch/corrected-casts32-1017/trellis80302",
+            "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5"
+          }
+        ],
+        "deformation": "gpu",
+        "actor_root": "live",
+        "action": "wander",
+        "play": false,
+        "blend_frames": 6,
+        "radius": 5,
+        "transform": {
+          "position": [
+            -1.1,
+            0.5454,
+            1.2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.2226666666666666,
+            0.2226666666666666,
+            0.2226666666666666
+          ]
+        },
+        "wander_travel": "stance",
+        "flesh": {
+          "enabled": true,
+          "interpolation": "smooth",
+          "preparations": [
+            {
+              "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5",
+              "url": "/scratch/satiation-preparations/772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5/prepared.json",
+              "sha256": "0e52c0969bb727d4f4ffaa53e29f96e7b067c94c304f15c14ff1d81093aa5499"
+            },
+            {
+              "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166",
+              "url": "/scratch/satiation-preparations/29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166/prepared.json",
+              "sha256": "fb8fe064b10d267d657ecfdc86fa51e7a28df815754065d3ba5f87585afab4c0"
+            },
+            {
+              "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471",
+              "url": "/scratch/satiation-preparations/a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471/prepared.json",
+              "sha256": "16f06a3b3ed26b6a1e97b4d84f6c3a9e77cf69e6b481b6cecec2a0bddff047b1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lean",
+      "label": "SF3D",
+      "active": true,
+      "places": [
+        {
+          "zoneId": "court",
+          "enabled": true,
+          "preference": 1
+        }
+      ],
+      "creature": {
+        "case": "/scratch/corrected-casts32-1017/sf3d",
+        "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471",
+        "frame": "/scratch/healthy-paw32-1017/bind-frame-r1/rig-frame.json",
+        "frame_sha256": "df7f88bfb1895fd73828b105ee21a6778cda3ab31a4cacc7a7a3257a43af06e4",
+        "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/02/motion.json",
+        "motion_sha256": "9b8c5505c7a322c3179e325cb79436c4616d18e1fd455b0d54facb3130673bb7",
+        "motions": [
+          {
+            "id": "walk",
+            "label": "Walk \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/00/motion.json",
+            "motion_sha256": "9d397c3db8d7a7f050ff93322c546c2c95c585df22e42f500c6e656b03861bdf",
+            "prompt": "A cat walks forward.",
+            "seed": 1
+          },
+          {
+            "id": "trot",
+            "label": "Trot variation \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/01/motion.json",
+            "motion_sha256": "55896c98436d1db4a8ddb3ce8c5e1a30ab7a4390445afcc7c78a67f9015a8cc9",
+            "prompt": "A cat trots forward.",
+            "seed": 1
+          },
+          {
+            "id": "stroll",
+            "label": "Rolling stroll \u00b7 run prompt",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/02/motion.json",
+            "motion_sha256": "9b8c5505c7a322c3179e325cb79436c4616d18e1fd455b0d54facb3130673bb7",
+            "prompt": "A cat runs forward.",
+            "seed": 1
+          }
+        ],
+        "choices": [
+          {
+            "cast": "strong-v025",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "Strong v025",
+            "case": "/scratch/corrected-casts32-1017/strong-v025",
+            "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166"
+          },
+          {
+            "cast": "sf3d",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "SF3D",
+            "case": "/scratch/corrected-casts32-1017/sf3d",
+            "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471"
+          },
+          {
+            "cast": "trellis80302",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "TRELLIS 80302",
+            "case": "/scratch/corrected-casts32-1017/trellis80302",
+            "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5"
+          }
+        ],
+        "deformation": "gpu",
+        "actor_root": "live",
+        "action": "wander",
+        "play": false,
+        "blend_frames": 6,
+        "radius": 5,
+        "transform": {
+          "position": [
+            0.0,
+            0.5454,
+            1.2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.2226666666666666,
+            0.2226666666666666,
+            0.2226666666666666
+          ]
+        },
+        "wander_travel": "stance",
+        "flesh": {
+          "enabled": true,
+          "interpolation": "smooth",
+          "preparations": [
+            {
+              "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5",
+              "url": "/scratch/satiation-preparations/772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5/prepared.json",
+              "sha256": "0e52c0969bb727d4f4ffaa53e29f96e7b067c94c304f15c14ff1d81093aa5499"
+            },
+            {
+              "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166",
+              "url": "/scratch/satiation-preparations/29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166/prepared.json",
+              "sha256": "fb8fe064b10d267d657ecfdc86fa51e7a28df815754065d3ba5f87585afab4c0"
+            },
+            {
+              "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471",
+              "url": "/scratch/satiation-preparations/a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471/prepared.json",
+              "sha256": "16f06a3b3ed26b6a1e97b4d84f6c3a9e77cf69e6b481b6cecec2a0bddff047b1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trellis",
+      "label": "TRELLIS 80302",
+      "active": true,
+      "places": [
+        {
+          "zoneId": "court",
+          "enabled": true,
+          "preference": 1
+        }
+      ],
+      "creature": {
+        "case": "/scratch/corrected-casts32-1017/trellis80302",
+        "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5",
+        "frame": "/scratch/healthy-paw32-1017/bind-frame-r1/rig-frame.json",
+        "frame_sha256": "df7f88bfb1895fd73828b105ee21a6778cda3ab31a4cacc7a7a3257a43af06e4",
+        "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/02/motion.json",
+        "motion_sha256": "9b8c5505c7a322c3179e325cb79436c4616d18e1fd455b0d54facb3130673bb7",
+        "motions": [
+          {
+            "id": "walk",
+            "label": "Walk \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/00/motion.json",
+            "motion_sha256": "9d397c3db8d7a7f050ff93322c546c2c95c585df22e42f500c6e656b03861bdf",
+            "prompt": "A cat walks forward.",
+            "seed": 1
+          },
+          {
+            "id": "trot",
+            "label": "Trot variation \u00b7 corrected paws",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/01/motion.json",
+            "motion_sha256": "55896c98436d1db4a8ddb3ce8c5e1a30ab7a4390445afcc7c78a67f9015a8cc9",
+            "prompt": "A cat trots forward.",
+            "seed": 1
+          },
+          {
+            "id": "stroll",
+            "label": "Rolling stroll \u00b7 run prompt",
+            "motion": "/scratch/healthy-paw32-1017/motion-run-r1/motions/02/motion.json",
+            "motion_sha256": "9b8c5505c7a322c3179e325cb79436c4616d18e1fd455b0d54facb3130673bb7",
+            "prompt": "A cat runs forward.",
+            "seed": 1
+          }
+        ],
+        "choices": [
+          {
+            "cast": "strong-v025",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "Strong v025",
+            "case": "/scratch/corrected-casts32-1017/strong-v025",
+            "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166"
+          },
+          {
+            "cast": "sf3d",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "SF3D",
+            "case": "/scratch/corrected-casts32-1017/sf3d",
+            "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471"
+          },
+          {
+            "cast": "trellis80302",
+            "attachment": "distributed",
+            "attachmentLabel": "Automatic body \u00b7 corrected paw pools",
+            "label": "TRELLIS 80302",
+            "case": "/scratch/corrected-casts32-1017/trellis80302",
+            "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5"
+          }
+        ],
+        "deformation": "gpu",
+        "actor_root": "live",
+        "action": "wander",
+        "play": false,
+        "blend_frames": 6,
+        "radius": 5,
+        "transform": {
+          "position": [
+            1.1,
+            0.5454,
+            1.2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.2226666666666666,
+            0.2226666666666666,
+            0.2226666666666666
+          ]
+        },
+        "wander_travel": "stance",
+        "flesh": {
+          "enabled": true,
+          "interpolation": "smooth",
+          "preparations": [
+            {
+              "case_sha256": "772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5",
+              "url": "/scratch/satiation-preparations/772603a50edb864ff14e8455640d36315f4950d020ebf92cbb915578b49e60a5/prepared.json",
+              "sha256": "0e52c0969bb727d4f4ffaa53e29f96e7b067c94c304f15c14ff1d81093aa5499"
+            },
+            {
+              "case_sha256": "29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166",
+              "url": "/scratch/satiation-preparations/29d7d8cf0505d906a1539bd0d770810ccbaff3d595bed88750a64b86ae281166/prepared.json",
+              "sha256": "fb8fe064b10d267d657ecfdc86fa51e7a28df815754065d3ba5f87585afab4c0"
+            },
+            {
+              "case_sha256": "a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471",
+              "url": "/scratch/satiation-preparations/a30b8fb1fc774721c2352a1f1e2d14a3e3b1d1511d1ac087922679f49586d471/prepared.json",
+              "sha256": "16f06a3b3ed26b6a1e97b4d84f6c3a9e77cf69e6b481b6cecec2a0bddff047b1"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "view": {
+    "position": [
+      8,
+      6,
+      9
+    ],
+    "target": [
+      0,
+      0.5,
+      0
+    ]
+  },
+  "attention": {
+    "interests": [],
+    "flame": {
+      "interest": 1.5
+    },
+    "engage": true
+  },
+  "encounters": {
+    "response": "physical",
+    "avoidance": false
+  },
+  "program": {
+    "duration": 48,
+    "events": [
+      {
+        "at": 0,
+        "source": "fire",
+        "patch": {
+          "flow": 0
+        },
+        "label": "Quiet baseline"
+      },
+      {
+        "at": 0,
+        "source": "beacon",
+        "patch": {
+          "visible": false
+        }
+      },
+      {
+        "at": 0,
+        "source": "traveler",
+        "patch": {
+          "moving": false
+        }
+      },
+      {
+        "at": 4,
+        "source": "fire",
+        "patch": {
+          "flow": 1.2
+        },
+        "label": "Small fire onset"
+      },
+      {
+        "at": 12,
+        "source": "fire",
+        "patch": {
+          "flow": 0
+        },
+        "label": "Fire settles"
+      },
+      {
+        "at": 18,
+        "source": "beacon",
+        "patch": {
+          "visible": true,
+          "scale": 0.22
+        },
+        "label": "Small nearby appearance"
+      },
+      {
+        "at": 20,
+        "source": "beacon",
+        "patch": {
+          "scale": 0.75
+        },
+        "label": "Larger visible expansion"
+      },
+      {
+        "at": 24,
+        "source": "fire",
+        "patch": {
+          "flow": 6
+        },
+        "label": "Large fire onset"
+      },
+      {
+        "at": 28,
+        "source": "beacon",
+        "patch": {
+          "visible": false
+        },
+        "label": "Beacon goes quiet"
+      },
+      {
+        "at": 32,
+        "source": "fire",
+        "patch": {
+          "flow": 0
+        },
+        "label": "Large fire settles"
+      },
+      {
+        "at": 36,
+        "source": "traveler",
+        "patch": {
+          "moving": true
+        },
+        "label": "Bronze object crosses the court"
+      },
+      {
+        "at": 42,
+        "source": "traveler",
+        "patch": {
+          "moving": false
+        },
+        "label": "Movement stops"
+      }
+    ]
+  }
+}

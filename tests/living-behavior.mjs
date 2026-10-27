@@ -43,3 +43,12 @@ const exact=async reverse=>{
 assert.deepEqual(await exact(false),await exact(true),'Divergent actor clocks must share a pre-movement room observation in either iteration order');
 let replaced=false;const badPhysical=structuredClone(setup);badPhysical.actors[0].creature.flesh={preparations:[]};
 await assert.rejects(()=>openLivingSetup({entry:{open(){replaced=true;}},inputs:badPhysical,loadSources:deps.loadSources}),/matching physical preparation/);assert.equal(replaced,false,'Invalid physical Open must preserve current room');
+// The courtyard's world advances on the same step before consumers observe it,
+// including when all creatures have been held or removed.
+{
+ const order=[];
+ const r=await createLivingScene({host,inputs:{...setup,actors:[]}}, {...deps,worldSteps:seconds=>[{seconds,time:seconds,events:[]}],beforeStep:step=>order.push(step.seconds)});
+ await r.operations.advance({seconds:.25});assert.deepEqual(order,[.25],'Exact scene advance must also advance the world before creature observations');
+ await r.operations.setRunning({running:true});assert.equal(callbacks.size,1,'A running world must retain its clock with no active creatures');for(const fn of callbacks)fn({deltaSeconds:.1});assert.deepEqual(order,[.25,.1]);
+ await r.operations.setRunning({running:false});assert.equal(callbacks.size,0);await r.dispose();
+}

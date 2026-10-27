@@ -80,7 +80,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const localLevels=new Map();
  let gazeLocal=null,gaze=null,perceived=[],engagementId=null;
  let watchIntent=null,watchCheck=null,watchNext=null,watchDiversion=null;
- let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
+ let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],sensoryField=null,reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
  Object.assign(reticle.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosAttentionReticle:true});
@@ -165,6 +165,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const sight=(point,range=o.noticeRadius,fov=o.fieldOfView)=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
     const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=fov>=2*Math.PI?1:Math.max(0,1-Math.max(0,actualGaze.angleTo(toward)-fov*.5)/(fov*.35));
     return {distance,angle,view,visible:view>0&&distance<range};};
+   sensoryField={time,eye:headAt.toArray(),gaze:actualGaze.toArray(),fieldOfView:o.fieldOfView,noticeRadius:o.noticeRadius,visibilityModel:'angular field and distance; no occlusion test'};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    if(interruption&&time>=interruption.until){remember('settled',time,{id:interruption.id,cause:interruption.cause});interruption=null;restUntil=time+o.restSeconds;}
    if(startle&&time>=startle.until)startle=null;
@@ -285,8 +286,13 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const withinReach=s.angle<=o.reach||m.alerted||focus?.id===source.id;
     // Hysteresis: catching the eye takes the full threshold, keeping it less.
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
-    if(perceivedNow)perceived.push({id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1,eventAt:m.eventAt??null,eventStrength:m.impulse,familiarity:m.familiarity});
-    candidates.push({visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
+    // The same angular and distance attenuation that makes a thing easy to
+    // notice sets its initial motivational excitation. Memory then decays on
+    // its own clock; looking away cannot erase an already observed concern.
+    const sensoryGain=plain.visible?plain.view*(.5+.5*Math.max(0,1-plain.distance/range)):0;
+    const sensoryStrength=significance*sensoryGain;
+    if(perceivedNow)perceived.push({drive:sensoryStrength,id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1,eventAt:m.eventAt??null,eventStrength:m.impulse*sensoryGain,familiarity:m.familiarity});
+    candidates.push({point:[...source.point],active,perceived:perceivedNow,view:plain.view,noticeRadius:range,sensoryStrength,gate:!active?'inactive':plain.distance>=range?'out of range':!plain.visible?'outside gaze':!withinReach?'beyond neck reach':score<=0?'below attention threshold':'eligible',visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
     if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest',...(observed&&pursuing?{velocity:m.track.velocity,memorySeconds:o.pursuitMemorySeconds}:{})});
@@ -445,6 +451,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   // scene's typical light here, the way eyes stop resolving deep shade.
   const current=samples.map(x=>x.luminance).filter(Number.isFinite).sort((p,q)=>p-q),typical=current.length?current[Math.floor(current.length/2)]:0;
   const eps=Math.max(o.lightFloor,typical*o.darkFraction);
+  const localRises=seen.map(c=>Math.log((c.luminance+eps)/(c.patch.usual+eps))).sort((a,b)=>a-b);
+  const receivedRise=Math.max(0,contrast,localRises.length?localRises[Math.floor(localRises.length/2)]:0);
   const changes=seen.map(c=>({change:Math.log((c.patch.now+eps)/(c.patch.usual+eps)),point:c.point,patch:c.patch}));
   for(const c of seen){c.patch.usual+=(c.luminance-c.patch.usual)*slow;c.patch.seen=time;}
   const sorted=changes.map(c=>c.change).sort((p,q)=>p-q),overall=sorted.length?sorted[Math.floor(sorted.length/2)]:0;
@@ -483,17 +491,19 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const brightest=surge;
   for(const [key,patch] of patches)if(time-patch.seen>o.lightForgetSeconds)patches.delete(key);
   if(brightest<o.flareAt*.5)light.flareArmed=true;
-  if(flare)light.flareArmed=false;
+  if(flare&&receivedRise>o.flareAt)light.flareArmed=false;
   if(shadow)for(const c of shadow.area)c.patch.armed=false;
-  if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change),urgency:flare.change*(1+flare.rise/2),evidence:{power:sourcePower,powerNow:light.powerNow,powerUsual:light.powerUsual,surge:flare.change}});
+  // Source output identifies the cause; received change supplies the signal.
+  // Power alone cannot orient an animal sitting in an unchanged dark field.
+  if(flare&&source&&receivedRise>o.flareAt)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+Math.min(flare.change,receivedRise)),urgency:Math.min(flare.change,receivedRise)*(1+flare.rise/2),evidence:{receivedRise,local,power:sourcePower,powerNow:light.powerNow,powerUsual:light.powerUsual,surge:flare.change}});
   // Each light event carries what was sensed, so a look's why can be checked.
   // Off by default: the fire's own light flickers locally as much as a real
   // shadow darkens, so luminance alone cannot tell them apart yet.
   if(shadow&&o.lightShadows)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6+shadow.depth),urgency:shadow.depth,evidence:{overall,typical,patches:shadow.area.map(c=>({point:c.point,now:c.patch.now,usual:c.patch.usual,depth:c.depth}))}});
-  light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
+  light={...light,status,time,samples:samples.length,last:structuredClone(samples),receivedRise,local,contrast,sourcePower};
  }
  function read(){
-  return {behavior:{...behavior},watch:watchIntent?{...structuredClone(watchIntent),checking:Boolean(watchCheck),diverted:Boolean(watchDiversion)}:null,gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {sensoryField:structuredClone(sensoryField),behavior:{...behavior},watch:watchIntent?{...structuredClone(watchIntent),checking:Boolean(watchCheck),diverted:Boolean(watchDiversion)}:null,gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples,receivedRise:light.receivedRise??null,local:light.local??null,contrast:light.contrast??null,sourcePower:light.sourcePower??null,measurements:structuredClone(light.last??[])},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
