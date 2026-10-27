@@ -2,7 +2,7 @@
 // This is spatial quadrature, not a fresh random draw each frame. Weight two
 // conserves the four-source sum over a cell with constant incident radiance.
 export function validateSourceQuadrature(count,sampling='all') {
-  if(![1,2,4].includes(count))throw Error('surface point count must be 1, 2 or 4 for this comparison');
+  if(!Number.isSafeInteger(count)||count<1)throw Error('surface point count must be a positive integer');
   if(!['all','paired'].includes(sampling))throw Error('unknown surface point sampling');
   if(sampling==='paired'&&count!==4)throw Error('paired sampling requires four surface points');
 }

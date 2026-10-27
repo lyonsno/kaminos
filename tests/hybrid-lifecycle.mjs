@@ -71,6 +71,9 @@ assert.throws(()=>mount.setQuadrature(2,'paired'),/four/);
 assert.equal(mount.debugState().pointCount,4,'rejected mode must preserve current source resources');
 mount.setPointSampling('all');assert.equal(mount.debugState().evaluatedPointCount,4);
 mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointSampling,'all');
+for(const count of [6,8]){mount.setPointCount(count);consume(field);assert.equal(mount.debugState().capturedPointCount,count);assert.equal(mount.debugState().evaluatedPointCount,count);assert.equal(mount.debugState().shadows.length,count);}
+mount.setPointCount(2);consume(field);
+
 assert.throws(()=>mount.setPointCount(0),/point count/);assert.equal(mount.canRender(),true);
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
 const first=mount.debugState();mount.setReceiverSpacing(.8);mount.setSurfaceReconstruction(8);field.source.generation++;field.source.frame++;consume(field);

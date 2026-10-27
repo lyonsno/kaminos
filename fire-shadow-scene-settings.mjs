@@ -14,6 +14,8 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  const edge=params.get(prefix+'shadow_edge_filter');
+  if(edge!==null){if(!['0','1'].includes(edge))throw Error('shadow edge filter must be 0 or 1');smoke.shadowEdgeFilter=edge==='1';}
   const smokeFilter=params.get(prefix+'smoke_shadow_filter');
   if(smokeFilter!==null){
     if(!['0','1'].includes(smokeFilter))throw Error('smoke shadow filter must be 0 or 1');
@@ -36,6 +38,7 @@ export function fireShadowSceneRoute(state) {
     blocker_samples:state.blockerSamples,filter_samples:state.filterSamples,shadow_sampling:state.shadowSampling,
     shadow_softness:state.shadowSoftness,shadow_implementation:state.shadowImplementation,
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
+  if(state.shadowEdgeFilter!==undefined){if(typeof state.shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');values.shadow_edge_filter=state.shadowEdgeFilter?'1':'0';}
   const route=Object.fromEntries(Object.entries(values).map(([key,value])=>[prefix+key,String(value)]));
   if(state.smokeShadowFilter!==undefined){
     if(typeof state.smokeShadowFilter!=='boolean')throw Error('smoke shadow filter must be boolean');

@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {sourceQuadratureReference,validateSourceQuadrature} from '../fire-source-quadrature.mjs';
-for(const count of [1,2,4])validateSourceQuadrature(count);
+for(const count of [1,2,3,4,6,8])validateSourceQuadrature(count);
 validateSourceQuadrature(4,'paired');
 assert.throws(()=>validateSourceQuadrature(2,'paired'),/four/);
 assert.throws(()=>validateSourceQuadrature(4,'random'),/sampling/);
