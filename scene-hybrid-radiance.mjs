@@ -2,8 +2,7 @@ import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-field-shadow.mjs';
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
-import {preparedSmokePlan} from './scene-prepared-smoke.mjs';
-import {createVolumeGather,lightingDirections} from './scene-volume-gather.mjs';
+import {createVolumeGather,volumeGatherPlan,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
@@ -208,9 +207,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   return {
     setLightGrid(value){
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
-      const height=value*sourceDomain.dimensions[1]/sourceDomain.dimensions[0];
-      if(!Number.isInteger(height))throw Error('light grid must represent the source aspect exactly');
-      preparedSmokePlan([value,height,value],smokeRefinement,device.limits);
+      volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,
+        sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);
       if(value!==volumeGrid){volumeGrid=value;status.volumeGrid=value;builtDomain=null;valid=false;}
     },
     setShadowEdgeFilter(value){if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');shadowEdgeFilter=value;for(const light of lights)light.shadow.setEdgeFilter(value);},
@@ -234,7 +232,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
-    setDirections(value){lightingDirections(value);directions=value;status.directions=value;},
+    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);directions=value;status.directions=value;},
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
