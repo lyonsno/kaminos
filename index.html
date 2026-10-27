@@ -1942,6 +1942,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="current">Old adaptive</option>
         <option value="numerical" selected>New adaptive</option>
         <option value="fixed" title="Uniform reference: four integration panels per authored base interval">Standard (fixed)</option>
+        <option value="budgeted">Fixed count</option>
+        <option value="joins">Fixed count · joins</option>
+        <option value="history">Fixed count · joins + history</option>
       </select>
     </div>
     <div class="slider-row">
@@ -19447,7 +19450,7 @@ function refreshVolumeReadout() {
   const s = volumePrototype.debugState();
   const stepping=s.opticalStepping;
   const requested=document.getElementById('volume-raymarch-mode').value;
-  const modeNames={current:'Old adaptive',numerical:'New adaptive',fixed:'Standard (fixed)','fixed-dense':'Fixed reference 2x'};
+  const modeNames={current:'Old adaptive',numerical:'New adaptive',fixed:'Standard (fixed)','fixed-dense':'Fixed reference 2x',budgeted:'Fixed count',joins:'Fixed count · joins',history:'Fixed count · joins + history'};
   document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
   const telemetry=s.rayStepTelemetry;

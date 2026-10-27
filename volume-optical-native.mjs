@@ -1,19 +1,20 @@
 export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = {}) {
-  const modes = ['current', 'fixed', 'numerical', 'fixed-dense'];
+  const modes = ['current', 'fixed', 'numerical', 'fixed-dense', 'budgeted', 'joins', 'history'];
   if (!modes.includes(mode)) throw new Error(`unknown optical stepping mode: ${mode}`);
   if (!Number.isFinite(tolerance) || tolerance <= 0) throw new Error('positive finite optical tolerance required');
   if (!Number.isFinite(Math.fround(tolerance)) || Math.fround(tolerance) <= 0) throw new Error('optical tolerance must fit a positive finite GPU coefficient');
   return {mode, value: modes.indexOf(mode), tolerance,
-    authority: 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
-    floor: 'four integration panels per authored base step',
-    jitter: 'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
+    authority: modes.indexOf(mode)>=4 ? 'experimental fixed-count nonuniform quadrature; no continuous-field error bound' : 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
+    floor: modes.indexOf(mode)>=4 ? 'one fresh material evaluation per allocated stratum' : 'four integration panels per authored base step',
+    jitter: modes.indexOf(mode)>=4 ? 'interior mass-stratum sampling; full ray interval retained' : 'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
-  if (config.mode !== 'current' && (!emissive || trace || exterior)) {
+  const wrongExterior=config.value>=4 ? !exterior : exterior;
+  if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {
     if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
     return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
-      reason:exterior?'joined-exterior':trace?'diagnostic-trace-capture':'non-emissive-renderer'};
+      reason:wrongExterior?(exterior?'joined-exterior':'requires-joined-exterior'):trace?'diagnostic-trace-capture':'non-emissive-renderer'};
   }
   return {...config,requested:config.mode,reason:null};
 }
@@ -28,6 +29,12 @@ export function validateOpticalPreviewArm(sample, state, {mode, tolerance, step,
   if (!frame || !Number.isInteger(frame.width) || !Number.isInteger(frame.height) || frame.width <= 0 || frame.height <= 0
     || frame.rgba?.length !== frame.width * frame.height * 4 || !frame.rgba.some((x,i) => i%4 !== 3 && x > 0)) {
     throw new Error('missing/partial/blank frame');
+  }
+  if(['budgeted','joins','history'].includes(mode)){
+    const a=state.opticalStepping.allocation;
+    if(state.worldSmoke?.effective!=='one-way-world-field'||!a?.geometry?.cells||!Number.isInteger(a.frames)||a.frames<1||a.colorReuse!==false){
+      throw Error('missing effective spatial guidance on joined route');
+    }
   }
 }
 
