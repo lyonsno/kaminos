@@ -18,6 +18,8 @@ assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_steps=-1')),/smoke shadow/);
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,surfaceEnabled:false}))).surfaceEnabled,false,'off persists through scene restore');
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowGrain:'screen-animated'}))).shadowComparison.grain,'screen-animated','animated grain survives authored scene serialization');
-for(const [key,value] of [['points','3'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
+for(const [key,value] of [['points','0'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
   assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({...route,['volume_light_field_hybrid_'+key]:value})));
 console.log('PASS scene lighting settings preserve actual quality, quadrature, grain and softness');
+
+for(const pointCount of [6,8]){const restored=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,pointCount,pointSampling:'all',shadowEdgeFilter:true})));assert.equal(restored.pointCount,pointCount);assert.equal(restored.shadowEdgeFilter,true);}

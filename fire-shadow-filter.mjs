@@ -35,17 +35,52 @@ export function shadowDisk(count,center=false){
 export const BLOCKER_DISK=shadowDisk(9,true);
 export const FILTER_DISK=shadowDisk(16);
 
+// Four nearest distance reads, compared separately before bilinear weighting.
+// Directions beyond a face edge are sampled through the adjacent cube face.
+export function cubeComparisonFootprint(ray,resolution){
+  const a=ray.map(Math.abs),axis=a[0]>=a[1]&&a[0]>=a[2]?0:a[1]>=a[2]?1:2;
+  const other=axis===0?[1,2]:axis===1?[0,2]:[0,1];
+  const p=other.map(i=>(ray[i]/a[axis]+1)*resolution/2-.5),base=p.map(Math.floor),f=p.map((v,i)=>v-base[i]);
+  return [0,1].flatMap(y=>[0,1].map(x=>{const d=[0,0,0];d[axis]=ray[axis]>=0?1:-1;
+    other.forEach((i,j)=>d[i]=(base[j]+(j===0?x:y)+.5)*2/resolution-1);
+    const length=Math.hypot(...d);return {direction:d.map(v=>v/length),weight:(x?f[0]:1-f[0])*(y?f[1]:1-f[1])};}));
+}
+export function cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,resolution}){
+  const {Fn,vec2,vec3,float}=THREE.TSL;
+  return Fn(()=>{
+    const a=ray.abs(),isX=a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),isY=isX.not().and(a.y.greaterThanEqual(a.z));
+    const major=a.x.max(a.y).max(a.z).max(1e-8);
+    const uv=isX.select(ray.yz,isY.select(vec2(ray.x,ray.z),ray.xy)).div(major);
+    const p=uv.add(1).mul(resolution/2).sub(.5),base=p.floor(),f=p.sub(base);
+    const sign=isX.select(ray.x,isY.select(ray.y,ray.z)).greaterThanEqual(0).select(1,-1);
+    const plane=normal.dot(delta),lit=float(0).toVar(),weight=float(0).toVar();
+    for(const y of [0,1])for(const x of [0,1]){
+      const q=base.add(vec2(x+.5,y+.5)).mul(2/resolution).sub(1);
+      const d=isX.select(vec3(sign,q.x,q.y),isY.select(vec3(q.x,sign,q.y),vec3(q.x,q.y,sign))).normalize();
+      const denominator=normal.dot(d),valid=plane.mul(denominator).greaterThan(0);
+      const receiver=plane.abs().div(denominator.abs().max(1e-6));
+      const w=(x?f.x:float(1).sub(f.x)).mul(y?f.y:float(1).sub(f.y));
+      lit.addAssign(valid.select(sampleDepth(d).greaterThanEqual(receiver.sub(bias)).select(w,0),0));
+      weight.addAssign(valid.select(w,0));
+    }
+    return weight.greaterThan(0).select(lit.div(weight.max(1e-8)),0);
+  })();
+}
+
 // Fixed sample pattern, no temporal history or additional cube rendering.
 // Compare taps against the receiver plane: using the center's radial distance
 // at every tap would treat a tilted floor as a sphere and cause grazing acne.
-export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null}) {
+export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null,edgeFilter=null,resolution=256}) {
   if(filterPattern&&filterPattern.count!==filterSamples)throw Error('shadow filter pattern count mismatch');
   const blockers=shadowDisk(blockerSamples,true),samples=shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
   const {Fn,If,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
   return Fn(()=>{
+    const direction=delta.div(distance.max(1e-5));
+    const compare=ray=>cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,resolution});
     const result=hardVisibility.toVar();
+    if(edgeFilter)If(edgeFilter.and(softness.lessThanEqual(0)),()=>result.assign(compare(direction)));
     If(softness.greaterThan(0),()=>{
-    const direction=delta.div(distance.max(1e-5)),radius=sourceRadius.max(0).mul(softness);
+    const radius=sourceRadius.max(0).mul(softness);
     const axis=direction.y.abs().lessThan(.9).select(vec3(0,1,0),vec3(1,0,0));
     const tangent=axis.cross(direction).normalize(),plane=normal.dot(delta);
     // Align filter strata with the receiver-to-screen differential, while the
@@ -62,7 +97,7 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       const ray=direction.add(basis.mul(width.mul(xy.x??xy[0]))).add(bitangent.mul(width.mul(xy.y??xy[1]))).normalize();
       const denominator=normal.dot(ray),valid=plane.mul(denominator).greaterThan(0);
       const receiver=plane.abs().div(denominator.abs().max(1e-6));
-      return {depth:sampleDepth(ray),receiver,valid};
+      return {depth:sampleDepth(ray),receiver,valid,ray};
     };
     const blockerSum=float(0).toVar(),blockerCount=float(0).toVar(),searchRadius=radius.div(distance.max(1e-5));
     for(const xy of blockers){
@@ -86,7 +121,9 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       }
       const sample=complementary.select(complementaryOffset,vec2(...xy));
       const p=tap(sample,width,filterTangent);
-      lit.addAssign(p.valid.select(p.depth.greaterThanEqual(p.receiver.sub(bias)).select(1,0),0));
+      const visibility=float(0).toVar(),nearest=()=>visibility.assign(p.depth.greaterThanEqual(p.receiver.sub(bias)).select(1,0));
+      if(edgeFilter)If(edgeFilter.and(width.lessThan(2/resolution)),()=>visibility.assign(compare(p.ray))).Else(nearest);else nearest();
+      lit.addAssign(p.valid.select(visibility,0));
       weight.addAssign(p.valid.select(1,0));
     }
     result.assign(weight.greaterThan(0).select(lit.div(weight.max(1)),hardVisibility));

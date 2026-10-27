@@ -109,10 +109,12 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits)}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits)}) {
   validateShadowQuality({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
+  if(typeof shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');
+  const edgeFilter=uniform(shadowEdgeFilter,'bool');
   const softness=uniform(validateSoftness(shadowSoftness));
   const complementary=uniform(validateShadowSampling(shadowSampling)==='complementary','bool');
   if(shadowSoftness>0&&sourceSizeNode===null)throw Error('soft shadows require a source size node');
@@ -156,7 +158,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
   const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern});
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
   // Hard visibility of the same cube from any world point (no screen
   // derivatives), for world-point light probes such as creature senses.
@@ -168,7 +170,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     const hard=step(pointDistance.sub(pointDistance.mul(2/resolution).max(.001)),radial);
     return mix(float(1),hard,enabled.mul(effective));
   };
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,
@@ -203,6 +205,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
       } catch(error) {status.reason=String(error.message);throw error;}
     },
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
+    setEdgeFilter(value) {if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');edgeFilter.value=value;status.shadowEdgeFilter=value;},
     setSoftness(value) {validateSoftness(value);if(sourceSizeNode===null&&value>0)throw Error('soft shadows require a source size node');softness.value=value;status.shadowSoftness=value;status.filter=value===0?'hard':'radial-pcss';return {...status};},
     debugState:()=>({...status,filterPattern:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
     dispose() {target.dispose();material.dispose();for(const row of coverageMaterials.values())row.material.dispose();coverageMaterials.clear();},

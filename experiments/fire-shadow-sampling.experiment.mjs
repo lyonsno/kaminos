@@ -15,7 +15,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[],mediumControls=[],numberScrubs=[];
@@ -30,6 +30,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
+      if(edgeSwitch)edgeSwitch.checked=medium?.shadowEdgeFilter===true;
       if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
       for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:16));
       if(surfaceSwitch)surfaceSwitch.checked=win.__kaminosSceneRadiance?.debugState().surfaceEnabled!==false;
@@ -81,6 +82,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     return {
       read,sync,
       operations:{
+        setShadowEdgeFilter(value){source().setShadowEdgeFilter(value);sync();session.redraw();record({kind:'fire-shadow.edge-filter',effective:value});return read();},
         setSurfaceEnabled(value){source().setSurfaceEnabled(value);sync();session.redraw();record({kind:'fire-shadow.surface-enabled',effective:value});return read();},
         setSmokeShadowQuality(value){source().setSmokeShadowQuality(value);sync();session.redraw();record({kind:'fire-shadow.smoke-quality',requested:value,effective:source().debugState().frame?.smokeShadow??null});return source().debugState();},
         async setCasterLevel(value){await source().setShadowCasterLevel(value);sync();session.redraw();const effective=source().debugState().casters;record({kind:'fire-shadow.caster-level',requested:value,effective});return effective;},
@@ -108,7 +110,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         surfaceSwitch=document.createElement('input');surfaceSwitch.type='checkbox';surfaceSwitch.setAttribute('aria-label','Fire surface lighting');surfaceSwitch.addEventListener('change',()=>invoke('setSurfaceEnabled',surfaceSwitch.checked).catch(failed));surfaceLabel.append(surfaceSwitch);panel.append(surfaceLabel);
         const pointLabel=document.createElement('label');pointLabel.textContent='Flame lighting sources ';
         pointSelector=document.createElement('select');pointSelector.setAttribute('aria-label','Flame lighting sources');
-        for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
+        for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],[6,'Six sources — evaluate all'],[8,'Eight sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
         pointSelector.addEventListener('change',()=>invoke('setQuadrature',{points:pointSelector.value==='4-paired'?4:Number(pointSelector.value),pointSampling:pointSelector.value==='4-paired'?'paired':'all'}).catch(failed));
         pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel);if(diagnostics)panel.append(label);
         const comparisonControl=(text,choices,key)=>{
@@ -133,6 +135,10 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         for(const [value,text]of [['original','Original geometry'],['10k','10k triangles — reduced caster'],['5k','5k triangles — reduced caster']]){const option=document.createElement('option');option.value=value;option.textContent=text;casterSelector.append(option);}
         casterSelector.addEventListener('change',()=>invoke('setCasterLevel',casterSelector.value).catch(failed));
         casterStatus=document.createElement('div');casterStatus.setAttribute('aria-live','polite');casterLabel.append(casterSelector);panel.append(casterLabel,casterStatus);
+        const edgeLabel=document.createElement('label');edgeLabel.textContent='Smooth solid shadow texels';
+        edgeLabel.title='Compare four neighboring cubemap texels for narrow shadow edges. Broad penumbras keep the ordinary tap count.';
+        edgeSwitch=document.createElement('input');edgeSwitch.type='checkbox';edgeSwitch.setAttribute('aria-label','Smooth solid shadow texels');
+        edgeSwitch.addEventListener('change',()=>invoke('setShadowEdgeFilter',edgeSwitch.checked).catch(failed));edgeLabel.append(edgeSwitch);panel.append(edgeLabel);
         const heading=document.createElement('h3');heading.textContent='Shadow quality';panel.append(heading);
         for(const [key,text,help] of [
           ['resolution','Shadow cube resolution','Pixels per cube face. Lower values reduce capture size and shadow detail.'],
