@@ -1,5 +1,6 @@
 import {bisectFaces,extractFaces,capPlanarOpenings,sectionSegments,sectionLoops,sectionCap} from './poly-mesh-edit.mjs';
 import {ShapeUtils,Vector2} from './lib/three.core.js';
+import {matchMaterialSections} from './fracture-material-sections.mjs';
 
 export const WHOLE_FRACTURE_ROUTE='kaminos.fracture.whole-object-coarse-material.v1';
 const sub=(a,b)=>a.map((v,k)=>v-b[k]),dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
@@ -55,7 +56,7 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  if(!(cellExtent>0&&Number.isFinite(cellExtent)))throw Error('Positive finite coarse cell extent required');
  const capMaterial=Math.max(0,...new Set(source.faceMaterial??[0]))+1;
  if(capMaterial>255)throw Error('No material slot available for fracture interiors');
- const parts=new Map(),interfaces=new Map(),diagnostics={uncappedAttachments:[],unsplitRegions:[],inferredAttachments:[],stitchedSections:[],windingSections:[]};let nextInterface=1;
+ const parts=new Map(),interfaces=new Map(),diagnostics={uncappedAttachments:[],unsplitRegions:[],inferredAttachments:[],stitchedSections:[],windingSections:[],sectionCoverage:[]};let nextInterface=1;
  const sourceLabels=[...new Set(view.labels)].sort((a,b)=>a-b);
  for(const part of sourceLabels){const mask=Uint8Array.from(view.labels,x=>Number(x===part)),leaf=select(source,new Int32Array(faceCount),mask);leaf.part=part;leaf.bounds=materialMeasure(leaf.arrays);parts.set(part,leaf);}
  const grouped=new Map();for(const boundary of view.boundaries??[]){const [a,b]=boundary.parts;if(a===b)continue;const ids=a<b?[a,b]:[b,a],key=ids.join(':');if(!grouped.has(key))grouped.set(key,{parts:ids,edges:[]});grouped.get(key).edges.push(boundary.points);}
@@ -105,17 +106,14 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  }
  leaves.forEach((leaf,index)=>{const m=materialMeasure(leaf.arrays),spans=sub(m.max,m.min);leaf.index=index;leaf.center=m.min.map((v,k)=>(v+m.max[k])/2);leaf.halfExtents=spans.map(v=>Math.max(v/2,extent*1e-6));leaf.bounds=m;leaf.volume=Math.max(m.volume,m.area*Math.min(...leaf.halfExtents)/3,extent**3*1e-12);});
  const sections=new Map();for(const leaf of leaves)for(let f=0;f<leaf.faceInterfaces.length;f++){
-  const id=leaf.faceInterfaces[f];if(!id)continue;const key=Math.abs(id);if(!sections.has(key))sections.set(key,{positive:[],negative:[]});const p=triangle(leaf.arrays,f),area=areaOf(p),center=[0,1,2].map(k=>(p[0][k]+p[1][k]+p[2][k])/3);sections.get(key)[id>0?'positive':'negative'].push({leaf,area,center});
+  const id=leaf.faceInterfaces[f];if(!id)continue;const key=Math.abs(id);if(!sections.has(key))sections.set(key,{positive:[],negative:[]});const p=triangle(leaf.arrays,f),area=areaOf(p),center=[0,1,2].map(k=>(p[0][k]+p[1][k]+p[2][k])/3);sections.get(key)[id>0?'positive':'negative'].push({leaf,area,center,points:p});
  }
  const bonds=[];
  for(const [id,interface_]of interfaces){
   const section=sections.get(id),pairs=new Map();
   if(section?.positive.length&&section.negative.length){
-   const sides=[section.positive,section.negative];
-   for(let side=0;side<2;side++)for(const t of sides[side]){
-    const other=closest(t.center,[...new Set(sides[1-side].map(x=>x.leaf))]),a=side===0?t.leaf:other,b=side===0?other:t.leaf,key=a.index+':'+b.index;
-    if(!pairs.has(key))pairs.set(key,{a:a.index,b:b.index,area:0,moment:[0,0,0]});const pair=pairs.get(key);pair.area+=t.area/2;for(let k=0;k<3;k++)pair.moment[k]+=t.center[k]*t.area/2;
-   }
+   for(const [key,pair]of matchMaterialSections(section.positive,section.negative))pairs.set(key,pair);
+   diagnostics.sectionCoverage.push({interfaceId:id,positiveArea:section.positive.reduce((sum,t)=>sum+t.area,0),negativeArea:section.negative.reduce((sum,t)=>sum+t.area,0),sharedArea:[...pairs.values()].reduce((sum,pair)=>sum+pair.area,0)});
   }else if(interface_.kind==='attachment'){
    const [a,b]=interface_.parts,as=leaves.filter(l=>l.part===a),bs=leaves.filter(l=>l.part===b),edges=interface_.edges;
    let length=0,center=[0,0,0];for(const [p,q]of edges){const w=Math.hypot(...sub(p,q));length+=w;for(let k=0;k<3;k++)center[k]+=(p[k]+q[k])/2*w;}if(!length)continue;center=center.map(v=>v/length);
@@ -147,5 +145,5 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');
  return {route:WHOLE_FRACTURE_ROUTE,pieces:leaves,bonds,cells,capMaterial,dimensions:{dx:cellExtent,dy:cellExtent,dz:cellExtent},floorY:total.min[1]-extent*.02,
   config:{elasticModulus,gravity,timeStep:1/60,substeps:2,solverIterations:20,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
-  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
+  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',sectionMatching:'shared-cap-polygon-intersection',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
 }
