@@ -2,7 +2,7 @@ import {Raycaster,Vector2,Vector3,Plane} from './lib/three.core.js';
 
 // One scoped physical gesture over the existing camera and controls. Empty
 // space, other owners and declined contacts keep their ordinary editor behavior.
-export function bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,callback}){
+export function bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,sceneRoots=roots,callback}){
  if(!canvas?.addEventListener)throw Error('Surface dragging requires the live viewport canvas');
  const raycaster=new Raycaster(),pointer=new Vector2();let grab=null,skipClick=false,disposed=false;
  function ray(event){const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);camera.updateMatrixWorld(true);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}
@@ -13,7 +13,9 @@ export function bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,callback}
  }
  function start(event){if(disposed||grab||event.button!==0||event.ctrlKey||event.metaKey||event.altKey)return;
   ray(event);const visible=o=>{for(let n=o;n;n=n.parent)if(!n.visible)return false;return true;};
-  const hit=raycaster.intersectObjects(roots(),true).find(h=>visible(h.object));if(!hit)return;
+  raycaster.layers.mask=camera.layers.mask;
+  const hit=raycaster.intersectObjects(sceneRoots(),true).find(h=>h.object.isMesh&&visible(h.object));if(!hit)return;
+  const own=new Set(roots());let belongs=false;for(let n=hit.object;n;n=n.parent)if(own.has(n)){belongs=true;break;}if(!belongs)return;
   const value={phase:'start',object:hit.object,faceIndex:hit.faceIndex,normal:hit.face?.normal.toArray(),point:hit.point.toArray(),pointerId:event.pointerId};
   if(callback(value)!==true)return;
   grab={object:hit.object,pointerId:event.pointerId,point:hit.point.clone(),plane:new Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new Vector3()),hit.point),controlsEnabled:controls.enabled};

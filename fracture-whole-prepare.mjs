@@ -8,11 +8,11 @@ const point=(a,id)=>Array.from(a.positions.subarray(id*3,id*3+3));
 function triangle(a,f){return Array.from(a.indices.subarray(f*3,f*3+3),i=>point(a,i));}
 function areaOf(p){const u=sub(p[1],p[0]),v=sub(p[2],p[0]);return Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])/2;}
 export function materialMeasure(a,filter=()=>true){
- const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity],moment=[0,0,0];let area=0,volume=0;
+ const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity],moment=[0,0,0];const origin=a.indices.length?point(a,a.indices[0]):[0,0,0];let area=0,volume=0;
  for(let f=0;f<a.indices.length/3;f++)if(filter(f)){
   const p=triangle(a,f),w=areaOf(p);area+=w;
   for(let k=0;k<3;k++){moment[k]+=w*(p[0][k]+p[1][k]+p[2][k])/3;for(const q of p){min[k]=Math.min(min[k],q[k]);max[k]=Math.max(max[k],q[k]);}}
-  volume+=dot(p[0],[p[1][1]*p[2][2]-p[1][2]*p[2][1],p[1][2]*p[2][0]-p[1][0]*p[2][2],p[1][0]*p[2][1]-p[1][1]*p[2][0]])/6;
+  const x=p.map(q=>sub(q,origin));volume+=dot(x[0],[x[1][1]*x[2][2]-x[1][2]*x[2][1],x[1][2]*x[2][0]-x[1][0]*x[2][2],x[1][0]*x[2][1]-x[1][1]*x[2][0]])/6;
  }
  return {area,min,max,center:moment.map(v=>v/(area||1)),volume:Math.abs(volume)};
 }
@@ -48,7 +48,7 @@ function addCaps(leaf,triangles,id,normal,material){
  leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);
 }
 
-export function prepareWholeFracture(source,view,{cellExtent,strength=1000000,gravity=9.81}={}){
+export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81}={}){
  const faceCount=source.indices.length/3;
  if(!view?.labels||view.labels.length!==faceCount)throw Error('Every original triangle requires a detected part owner');
  const total=materialMeasure(source),extent=Math.max(...sub(total.max,total.min));cellExtent??=extent/4;
@@ -146,5 +146,5 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=1000000,gr
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');
  return {route:WHOLE_FRACTURE_ROUTE,pieces:leaves,bonds,cells,capMaterial,dimensions:{dx:cellExtent,dy:cellExtent,dz:cellExtent},floorY:total.min[1]-extent*.02,
   config:{gravity,timeStep:1/60,substeps:2,solverIterations:20,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
-  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
+  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
 }

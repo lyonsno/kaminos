@@ -90,6 +90,6 @@ export function createWorkbenchSceneHost({scene,camera,controls,canvas=controls.
    catch(error){scene.remove(root);throw error;}
   },
   remove:handle=>{if(!handle.presentation)return removeObject(handle);handle.root.removeFromParent();disposeOwnedSceneTree(handle.root,resourceConsumers(),[scene.environment,scene.background]);redraw();},readView,setView,redraw,onFrame,onPick,
-   onSurfaceDrag:(callback,roots)=>bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,callback}),
+   onSurfaceDrag:(callback,roots)=>bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,sceneRoots:()=>scene.children,callback}),
  })});
 }

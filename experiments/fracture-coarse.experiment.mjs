@@ -9,17 +9,17 @@ export default {
   if(typeof inputs.source!=='string'||!inputs.source)throw Error('Choose a source mesh');
   const session=await host.scene.open(),workers=new Set(),workerCalls=new Map(),drags=[],owned=new Group(),tints=[];
   owned.name='Fracturable material';
-  let disposed=false,model,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,separation=0,strength=Number(inputs.strength??1000000),lastEpoch=-1;
+  let disposed=false,model,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,colorParts=inputs.colorParts??true,inspectionWasRunning=false,separation=0,strength=Number(inputs.strength??3000000),lastEpoch=-1;
   const capMaterial=new MeshStandardMaterial({color:0xa57850,roughness:1});
   function callWorker(file,data){return new Promise((resolve,reject)=>{const worker=new Worker(new URL(file,import.meta.url),{type:'module'}),id=++workerId;workers.add(worker);workerCalls.set(worker,reject);const finish=()=>{workers.delete(worker);workerCalls.delete(worker);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(Error(data.error)):resolve(data);};worker.onerror=e=>{finish();reject(Error(e.message));};worker.postMessage({id,...data});});}
   const event=(kind,value)=>record({kind:`fracture-coarse:${kind}`,value});
-  const read=()=>({route:'kaminos.fracture.whole-object-direct-grab.v1',source:inputs.source,busy,error,running,strength,inspectParts,separation,selectedCell,
+  const read=()=>({route:'kaminos.fracture.whole-object-direct-grab.v1',source:inputs.source,busy,error,running,strength,inspectParts,colorParts,separation,selectedCell,
    parts:view?.parts.map(p=>({id:p.id,triangles:p.triangles,areaFraction:p.areaFraction})),
    prepared:prepared?{route:prepared.route,receipt:prepared.receipt,cells:prepared.cells.length,bonds:prepared.bonds.length,internalBonds:prepared.bonds.filter(b=>b.kind==='internal').length,attachmentBonds:prepared.bonds.filter(b=>b.kind!=='internal').length}:null,
    material:model?.snapshot()??null,visibleCapTriangles:meshes.reduce((s,m)=>s+(m.userData.visibleCapTriangles??0),0),setup:{...inputs,strength},
    claim:'Whole detected object with breakable coarse material and direct surface grabbing; detailed original exterior retained, approximate mass/inertia and floor collisions'});
   function sync(){if(status){const s=model?.snapshot();status.textContent=busy?'Preparing all material…':error||`${view.parts.length} detected parts · ${prepared.cells.length} live material cells\n${s.broken} broken connections · ${s.components.length} separate bodies\n${grip?'Dragging material':inspectParts?'Inspecting all detected parts':'Drag the surface to pull; release to let go.'}`;}
-   if(playButton)playButton.textContent=running?'Pause':'Play';if(inspectInput)inspectInput.checked=inspectParts;
+   if(playButton)playButton.textContent=running?'Pause':'Play';if(inspectInput)inspectInput.checked=colorParts;
    for(const [input,value]of [[strengthInput,strength],[separationInput,separation]])if(input&&input.ownerDocument.activeElement!==input)input.value=String(value);
   }
   function draw(){if(!model||disposed)return;const state=model.snapshot(),alive=new Map(state.bonds.map(b=>[b.id,b.alive]));
@@ -27,7 +27,7 @@ export default {
    for(let i=0;i<meshes.length;i++){
     const b=state.bodies[i],m=meshes[i],piece=prepared.pieces[i];m.position.set(b.position.x,b.position.y,b.position.z);m.quaternion.set(b.quaternion.x,b.quaternion.y,b.quaternion.z,b.quaternion.w);
     if(inspectParts){const p=view.parts.find(p=>p.id===piece.part),offset=new Vector3(...p.center).sub(objectCenter);if(offset.lengthSq()<1e-12)offset.set(0,1,0);m.position.addScaledVector(offset,separation*2);}
-    m.material=inspectParts?m.userData.tinted:m.userData.original;
+    m.material=colorParts?m.userData.tinted:m.userData.original;
     if(lastEpoch!==state.connectivityEpoch){const indices=[],materials=[],source=piece.arrays;let visibleCaps=0;
      for(let f=0;f<piece.faceInterfaces.length;f++){const id=Math.abs(piece.faceInterfaces[f]);if(id&&state.bonds[piece.faceBonds[f]]?.alive!==false)continue;if(id)visibleCaps++;indices.push(...source.indices.subarray(f*3,f*3+3));materials.push(source.faceMaterial[f]);}
      m.geometry.setIndex(indices);m.geometry.clearGroups();let previous=-1,start=0;for(let f=0;f<=materials.length;f++){const current=f<materials.length?materials[f]:-1;if(current!==previous){if(previous>=0)m.geometry.addGroup(start*3,(f-start)*3,previous);start=f;previous=current;}}
@@ -50,7 +50,7 @@ export default {
   async function reset(){const token=++generation;busy=true;running=false;release();sync();try{await stepFinished;const candidate=await createCoarseFractureDynamics({...prepared,config:{...prepared.config,strength}},host.scene.renderer());if(disposed||token!==generation){candidate.dispose();return read();}model?.dispose();model=candidate;clearMeshes();
     const materials=[...surface.materials];materials[prepared.capMaterial]=capMaterial;
     meshes=prepared.pieces.map((p,index)=>{const m=createCoarseSurfaceMesh(p.arrays,materials,p.center);m.name=`Material ${index+1} · part ${p.part+1}`;m.userData.materialCell=index;m.userData.original=materials;
-     const color=new Color().setHSL((p.part*.61803398875)%1,.5,.6),tinted=materials.map(material=>{const tint=material.clone();tint.color?.multiply(color);tints.push(tint);return tint;});tinted[prepared.capMaterial]=capMaterial;m.userData.tinted=tinted;owned.add(m);return m;});
+     const color=new Color().setHSL((p.part*.61803398875)%1,.5,.6),tinted=materials.map(material=>{const tint=new MeshStandardMaterial({color,roughness:.9,metalness:0,side:material.side});tints.push(tint);return tint;});tinted[prepared.capMaterial]=capMaterial;m.userData.tinted=tinted;owned.add(m);return m;});
     lastEpoch=-1;grip=null;selectedCell=null;busy=false;running=false;error='';draw();event('reset',{cells:prepared.cells.length,bonds:prepared.bonds.length});return read();
    }catch(e){busy=false;error=e.message;sync();throw e;}}
   let objectCenter;
@@ -70,9 +70,9 @@ export default {
     if(hit.phase==='end'||hit.phase==='cancel'){release();return true;}return false;
    });
    unframe=session.onFrame(()=>{if(running&&!inspectParts&&!busy&&!stepping&&!disposed)void advance().catch(()=>{});});
-   const operations={reset,advance,pause:async()=>{running=false;await stepFinished;sync();return read();},play:()=>{inspectParts=false;running=true;sync();return read();},grab,move,release:()=>{release();return read();},
+   const operations={reset,advance,pause:async()=>{running=false;await stepFinished;sync();return read();},play:()=>{inspectParts=false;separation=0;running=true;draw();return read();},grab,move,release:()=>{release();return read();},
     strength:value=>{if(!(value>0&&Number.isFinite(value)))throw Error('Positive finite cohesion required');model.setStrength(value);strength=value;updateInputs({...inputs,strength});sync();return read();},
-    inspect:value=>{release();inspectParts=Boolean(value);running=!inspectParts;draw();return read();},separation:value=>{if(!Number.isFinite(value)||value<0)throw Error('Nonnegative separation required');separation=value;inspectParts=value>0;running=!inspectParts;release();draw();return read();},frame,
+    inspect:value=>{colorParts=Boolean(value);draw();return read();},separation:value=>{if(!Number.isFinite(value)||value<0)throw Error('Nonnegative separation required');if(value>0&&!inspectParts)inspectionWasRunning=running;separation=value;inspectParts=value>0;running=inspectParts?false:inspectionWasRunning;release();draw();return read();},frame,
     view:()=>session.readView(),contacts:()=>meshes.flatMap((mesh,index)=>{const a=prepared.pieces[index].arrays,candidates=[];for(let f=0;f<a.indices.length/3;f++){if(prepared.pieces[index].faceInterfaces[f])continue;const ids=Array.from(a.indices.subarray(f*3,f*3+3)),points=ids.map(i=>new Vector3(...a.positions.subarray(i*3,i*3+3))),normal=points[1].clone().sub(points[0]).cross(points[2].clone().sub(points[0])),area=normal.length()/2;const local=points[0].clone().add(points[1]).add(points[2]).multiplyScalar(1/3).sub(new Vector3(...prepared.pieces[index].center));candidates.push({index,area,point:mesh.localToWorld(local).toArray(),normal:normal.normalize().toArray()});}return candidates.sort((a,b)=>b.area-a.area);}),
     export:()=>({...read(),preparation:prepared})};
    return {read,operations,mount({root,document,invoke}){

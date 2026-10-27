@@ -22,3 +22,9 @@ assert.ok(Math.abs(whole.receipt.exteriorAreaAfter-whole.receipt.exteriorAreaBef
 const inverted={...source,indices:Uint32Array.from(source.indices)};for(let i=0;i<inverted.indices.length;i+=3)[inverted.indices[i+1],inverted.indices[i+2]]=[inverted.indices[i+2],inverted.indices[i+1]];
 const reverse=prepareWholeFracture(inverted,{labels:new Uint32Array(12),boundaries:[]},{cellExtent:1});
 assert.equal(reverse.cells.length,8,'Source winding must not disable coarse material subdivision');
+for(const a of [source,inverted]){
+ const first=prepareWholeFracture(a,{labels:new Uint32Array(12),boundaries:[]},{cellExtent:1});
+ const moved={...a,positions:Float32Array.from(a.positions,v=>v+10)},second=prepareWholeFracture(moved,{labels:new Uint32Array(12),boundaries:[]},{cellExtent:1});
+ assert.equal(second.cells.length,first.cells.length);
+ for(let i=0;i<first.cells.length;i++)assert.ok(Math.abs(first.cells[i].volume-second.cells[i].volume)<1e-6,'Material mass cannot depend on source coordinate offset, including reversed source winding');
+}
