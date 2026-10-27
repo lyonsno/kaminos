@@ -40,7 +40,7 @@ try{
  browser=await chromium.launchPersistentContext(dirs.profile,{executablePath:report.executable,headless:true,viewport:{width:1100,height:800},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  browser.setDefaultTimeout(0);browser.setDefaultNavigationTimeout(0);page=await browser.newPage();
  page.on('response',r=>{if(r.status()>=400)report.errors.push(`HTTP ${r.status()} ${r.url()}`);});
- page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+ page.on('pageerror',e=>{report.errors.push(String(e));void save();});page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());void save();}});
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=authoring');
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
  report.phase='scene-create';await save();
@@ -49,8 +49,8 @@ try{
  for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':materialWidth,'volume-grid-height-ratio':2,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':12,'volume-world-smoke':'on','volume-world-smoke-flow':materialWidth/4,'volume-world-smoke-material':materialWidth/2,'volume-world-smoke-pressure':materialWidth/8,'volume-world-smoke-iterations':12,'volume-intermediate-flow':materialWidth*3/8,'volume-intermediate-material':materialWidth*3/4,'volume-intermediate-pressure':materialWidth*3/16,'volume-intermediate-iterations':12,'volume-intermediate-extent':1.5}))await control(id,v);
  await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[10,6,13],target:[0,3,0]});});
  await page.keyboard.press('Alt+g');
- await page.waitForFunction(()=>!document.getElementById('grid-tuning-editor').hidden);
- const edit=async(key,value)=>{const e=page.locator('#grid-draft-'+key);if(await e.evaluate(n=>n.tagName==='SELECT'))await e.selectOption(String(value));else await e.fill(String(value));};
+ await page.waitForFunction(()=>!document.getElementById('grid-tuning-editor').hidden);report.phase='draft-edit';await save();
+ const edit=async(key,value)=>{report.phase='edit-'+key;await save();const e=page.locator('#grid-draft-'+key);if(await e.evaluate(n=>n.tagName==='SELECT'))await e.selectOption(String(value));else {await e.click();assert.equal(await e.isEditable(),true,'click enables typing in '+key);await e.fill(String(value));}};
  const base={resolution:37,fineVelocity:21,finePressure:13,gridHeightRatio:2,pressureSolverIterations:12,worldSmoke:'on',worldSmokeIntermediate:'fields',intermediateExtent:2,intermediateMaterial:18,intermediateFlow:14,intermediatePressure:10,intermediateIterations:12,worldSmokeExtent:4,worldSmokeMaterial:19,worldSmokeFlow:11,worldSmokePressure:7,worldSmokeIterations:12,collarReach:.5};
  for(const [key,value] of Object.entries(base))await edit(key,value);
  assert.equal(await page.locator('#grid-tuning-apply').isEnabled(),true,await page.locator('#grid-tuning-status').innerText());
@@ -69,7 +69,7 @@ try{
  const geometry=await page.evaluate(()=>{const p=document.getElementById('grid-tuning-editor'),a=document.getElementById('grid-tuning-apply'),b=a.getBoundingClientRect();p.scrollTop=p.scrollHeight;return {applyBefore:{x:b.x,y:b.y,width:b.width,height:b.height},panel:p.getBoundingClientRect().toJSON()};});
  assert.equal(await page.locator('#grid-tuning-apply').isVisible(),true);
  report.geometry=geometry;
- await page.locator('#grid-draft-fineVelocity').fill('41');await page.locator('#grid-draft-finePressure').fill('43');await page.keyboard.press('Control+Enter');await verify('finer-velocity-and-pressure',41,43);
+ await edit('fineVelocity',41);await edit('finePressure',43);await page.keyboard.press('Control+Enter');await verify('finer-velocity-and-pressure',41,43);
  await edit('finePressure',-1);assert.equal(await page.locator('#grid-tuning-apply').isEnabled(),false);assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).controls.finePressure,43);
  await page.locator('#grid-tuning-reset').click();await edit('fineVelocity',21);await edit('finePressure',13);await page.keyboard.press('Control+Enter');await verify('return-to-coarse',21,13);
  await page.keyboard.press('Escape');

@@ -26,11 +26,11 @@ export function gridTuningPlan(c,limits={},context={}) {
  if(regions?.middle)rows.push({name:'Intermediate',...regions.middle,iterations:regions.middleIterations});
  if(regions)rows.push({name:'World',...regions.world,iterations:regions.worldIterations});
  for(const r of rows) {
-  const fine=r.name==='Fine';
+  const fine=r.name==='Fine';const materialForcePlanes=fine&&r.materialPerVelocity===1&&Number(c.waveletTurbulence)>0?9:3;
   if(fine&&r.materialPerVelocity!==1&&Math.max(9*r.flowDims[0],r.flowDims[1])>(limits.maxTextureDimension3D??Infinity))throw Error('Fine velocity auxiliary textures exceed this GPU texture limit');
   for(const [kind,dims,bytesPerCell] of [['material',r.materialDims,fine?64:32],['velocity',r.flowDims,fine?64:16],['pressure',r.pressureDims,fine?64:8]]) {
    if(!dims)continue; // The legacy middle flow borrows world material.
-   if(dims.some(n=>n>(limits.maxTextureDimension3D??Infinity)) || (fine&&3*width>(limits.maxTextureDimension3D??Infinity)))throw Error(`${r.name} ${kind} dimensions exceed this GPU's texture limit`);
+   if(dims.some(n=>n>(limits.maxTextureDimension3D??Infinity)) || (fine&&materialForcePlanes*width>(limits.maxTextureDimension3D??Infinity)))throw Error(`${r.name} ${kind} dimensions exceed this GPU's texture limit`);
    if(cells(dims)*bytesPerCell>Math.min(limits.maxStorageBufferBindingSize??Infinity,limits.maxBufferSize??Infinity))throw Error(`${r.name} ${kind} buffer exceeds this GPU's storage limit; reduce its width or extent height`);
   }
  }

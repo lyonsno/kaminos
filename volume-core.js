@@ -14071,7 +14071,7 @@ export function createKaminosVolumePrototype({
       return buffer;
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
-    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted) && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)<gridSize));
+    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted) && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)!==gridSize));
     prepareImmersedCollectionTexture();
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
@@ -16612,7 +16612,7 @@ export function createKaminosVolumePrototype({
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     uniforms.set(waveletOctaveUniformValues(waveletTurbulence), WAVELET_TURBULENCE_UNIFORM_OFFSET + 4);
-    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)<gridSize))) {
+    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)!==gridSize))) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();

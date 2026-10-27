@@ -22036,6 +22036,13 @@ function createFlameQuickFields() {
     gridTuning:{
       read:()=>readVolumeControls(),
       validate:c=>volumePrototype.validateGridControls(c),
+      bindLiveField:input=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label:'Tune pressure iterations',onError:error=>showFlameEditRefused(error)}),
+      live:(key,value)=>{
+        const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
+        const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
+        descriptor.value=value;if('rawValue' in descriptor)descriptor.rawValue=String(value);
+        writeFlameSettingsState(checkFlameSettingsState(next));
+      },
       apply:patch=>{
         const next=window.kaminosFlameAuthoring.read();
         for(const [key,id] of GRID_TUNING_FIELDS){const d=next.domControls[id];if(!d)throw Error(`Missing grid setting ${id}`);d.value=d.tagName==='SELECT'?String(patch[key]):patch[key];if('rawValue' in d)d.rawValue=String(patch[key]);}

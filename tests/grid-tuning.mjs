@@ -41,3 +41,7 @@ test('shared velocity uses material auxiliaries, independent velocity uses its l
  assert.doesNotThrow(()=>gridTuningPlan({...c,resolution:64,fineVelocity:0,finePressure:0},limits));
  assert.throws(()=>gridTuningPlan({...c,resolution:64,fineVelocity:32},limits),/auxiliary/);
 });
+test('shared wavelet sidecar is included in texture admission',()=>{
+ assert.throws(()=>gridTuningPlan({...c,resolution:64,fineVelocity:0,finePressure:0,waveletTurbulence:1},{maxTextureDimension3D:256}),/texture/);
+ assert.doesNotThrow(()=>gridTuningPlan({...c,resolution:64,fineVelocity:24,finePressure:12,waveletTurbulence:1},{maxTextureDimension3D:256}));
+});
