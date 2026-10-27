@@ -8,6 +8,19 @@ export function captureInstructions(c) {
 
 export function mountCaptureControls({root,document,invoke,read}) {
   const section=document.createElement('section');section.dataset.ironCapture='';
+  const layout=document.createElement('style');
+  layout.textContent=`
+    body:has([data-iron-capture]) #viewport :is(#navigation-hint,#scene-edit-hud,#info-bar) { display:none; }
+    @media(max-width:800px) {
+      body.has-authoring-workspace.experiment-workspace[data-workspace=workbench]:has([data-iron-capture]) {
+        height:auto;min-height:100vh;overflow:auto;
+        grid-template-columns:minmax(0,1fr);
+        grid-template-rows:42px minmax(620px,calc(100dvh - 42px)) auto auto;
+      }
+      body:has([data-iron-capture]) #experiment-instruments { grid-column:1;grid-row:3;max-height:none;overflow:visible; }
+      body.experiment-workspace.has-workbench-inspector:has([data-iron-capture]) #authoring-right { grid-column:1;grid-row:4;height:320px; }
+    }`;
+  section.append(layout);
   section.style.cssText='border-top:1px solid #465051;margin-top:14px;padding-top:14px;letter-spacing:0;min-width:0';
   const heading=document.createElement('h3');heading.textContent='Gesture capture';heading.style.cssText='font-size:16px;margin:0 0 10px';
   const modes=document.createElement('fieldset');modes.setAttribute('aria-label','Capture mode');
