@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createGivenPaletteMotion} from '../experiments/creature-motion/given-palette-motion.mjs';
 import {createWalkingPoseAdapter} from '../experiments/creature-motion/walking-pose.mjs';
-import {createWanderMotion} from '../experiments/creature-motion/wander-motion.mjs';
+import {createWanderMotion,readWanderPath} from '../experiments/creature-motion/wander-motion.mjs';
 let module={};try{module=await import('../experiments/creature-motion/living-scene.experiment.mjs');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
 assert.equal(typeof module.createLivingScene,'function','Independent actors need a shared-scene composition, not the last-created creature singleton');
 class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}}
@@ -39,6 +39,10 @@ const adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.f
 const motion=createWanderMotion({THREE,adapter,walking,sourceKey:'a'.repeat(64)+':'+'b'.repeat(64),area:{center:[0,0],radii:[4,4],yaw:0},position:[0,0],direction:[0,1],seed:1}).snapshot();
 const saved={...template,action:'wander',play:false,transform:{position:[7,0,0],quaternion:[0,0,0,1],scale:[1,1,1]},wander:{area:{position:[7+1e-12,0,0],quaternion:[0,0,0,1],scale:[4,1,4]},motion}};
 const held=await module.createLivingScene({host,inputs:{actors:[{id:'held',label:'Held',creature:saved}]}},deps);
-assert.deepEqual(held.read().actors[0].state.recipe.wander.motion,motion,'Floating frame conversion consumed RNG/replanned a saved Wander setup');
+const migrated=held.read().actors[0].state.recipe.wander.motion,prior=readWanderPath(motion.path),current=readWanderPath(migrated.path);
+assert.equal(migrated.path.schema,'kaminos.creature-wander-locomotion.v1','The ordinary owner must migrate retained journeys to goal steering');
+for(const key of ['sourceKey','elapsed','heldFrame','contactRate','travel'])assert.deepEqual(migrated[key],motion[key]);
+for(const key of ['position','direction','target','area','distance','segments'])assert.deepEqual(current[key],prior[key],'Floating frame conversion changed the retained '+key);
+assert.equal(migrated.path.rng,motion.path.rng,'Migrating a held journey consumed random state');
 await held.dispose();
 console.log('Stable independent actor identity, source sharing, local clocks/poses/removal, truthful pose reads and retained cohort reconstruction');
