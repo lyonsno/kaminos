@@ -231,6 +231,53 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(num_workgroups) g
   output_values[index] = value;
 }`;
 
+const ATTENTION_ONLINE_CONTEXT_WGSL = `
+struct OnlineContextDims { token_count:u32, channels:u32, heads:u32, head_dim:u32, total_rows:u32, _pad0:u32, _pad1:u32, _pad2:u32, };
+@group(0) @binding(0) var<storage, read> q_values: array<f32>;
+@group(0) @binding(1) var<storage, read> k_values: array<f32>;
+@group(0) @binding(2) var<storage, read> v_values: array<f32>;
+@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(4) var<uniform> dims: OnlineContextDims;
+var<workgroup> reduction: array<f32, 64>;
+@compute @workgroup_size(64)
+fn main(
+  @builtin(workgroup_id) wid: vec3<u32>,
+  @builtin(num_workgroups) grid: vec3<u32>,
+  @builtin(local_invocation_id) lid: vec3<u32>,
+) {
+  let row = wid.x + wid.y * grid.x + wid.z * grid.x * grid.y;
+  if (row >= dims.total_rows) { return; }
+  let lane = lid.x;
+  let query = row / dims.heads;
+  let head = row % dims.heads;
+  let q_base = query * dims.channels + head * dims.head_dim;
+  let q_val = q_values[q_base + lane] * inverseSqrt(f32(dims.head_dim));
+  var m = -3.402823466e+38;
+  var l = 0.0;
+  var acc = 0.0;
+  for (var key = 0u; key < dims.token_count; key = key + 1u) {
+    let kv_base = key * dims.channels + head * dims.head_dim;
+    reduction[lane] = q_val * k_values[kv_base + lane];
+    workgroupBarrier();
+    var stride = 32u;
+    loop {
+      if (lane < stride) { reduction[lane] = reduction[lane] + reduction[lane + stride]; }
+      workgroupBarrier();
+      if (stride == 1u) { break; }
+      stride = stride / 2u;
+    }
+    let score = reduction[0];
+    let m_new = max(m, score);
+    let alpha = exp(m - m_new);
+    let beta = exp(score - m_new);
+    l = l * alpha + beta;
+    acc = acc * alpha + beta * v_values[kv_base + lane];
+    m = m_new;
+    workgroupBarrier();
+  }
+  output_values[q_base + lane] = acc / l;
+}`;
+
 const LAYER_SCALE_RESIDUAL_WGSL = `
 struct ResidualDims { total_values:u32, channels:u32, _pad0:u32, _pad1:u32, };
 @group(0) @binding(0) var<storage, read> residual: array<f32>;
@@ -457,6 +504,7 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
     uniformBuffers.push(uniform);
     return uniform;
   };
+  const useOnlineAttention=tokenCount>TOKEN_COUNT;
   const tensors={
     qWeight:tensor('attention.q.weight',[CHANNELS,CHANNELS],readonly),qBias:tensor('attention.q.bias',[CHANNELS],readonly),
     kWeight:tensor('attention.k.weight',[CHANNELS,CHANNELS],readonly),kBias:tensor('attention.k.bias.architecture-zero',[CHANNELS],readonly),
@@ -466,7 +514,7 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
     ropeCos:tensor('rope.cos',[patchTokens,HEAD_DIM],readonly),ropeSin:tensor('rope.sin',[patchTokens,HEAD_DIM],readonly),
     q:tensor('attention.q',[1,tokenCount,CHANNELS]),k:tensor('attention.k',[1,tokenCount,CHANNELS]),v:tensor('attention.v',[1,tokenCount,CHANNELS]),
     qRope:tensor('attention.q-rope',[1,tokenCount,CHANNELS]),kRope:tensor('attention.k-rope',[1,tokenCount,CHANNELS]),
-    scores:tensor('attention.scores-f32',[HEADS,tokenCount,tokenCount]),
+    ...(useOnlineAttention ? {} : { scores:tensor('attention.scores-f32',[HEADS,tokenCount,tokenCount]) }),
     context:tensor('attention.context',[1,tokenCount,CHANNELS]),projected:tensor('attention.projection',[1,tokenCount,CHANNELS]),
     afterAttention:tensor('attention.residual-output',[1,tokenCount,CHANNELS],outputUsage),
   };
@@ -483,21 +531,26 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
     schema:['token_count','prefix_tokens','channels','head_dim','patch_count','total_values','_pad0','_pad1'].map(name=>({name,type:'u32'})),
     values:{token_count:tokenCount,prefix_tokens:PREFIX_TOKENS,channels:CHANNELS,head_dim:HEAD_DIM,patch_count:patchTokens,total_values:tokenCount*CHANNELS,_pad0:0,_pad1:0},
   });
-  const attentionDims=createUniformBuffer({
+  const attentionDims=useOnlineAttention ? null : createUniformBuffer({
     label:`trellis.dinov3.${layerName}.attention.score-dims`,
     schema:['token_count','channels','heads','head_dim','total_scores','_pad0','_pad1','_pad2'].map(name=>({name,type:'u32'})),
     values:{token_count:tokenCount,channels:CHANNELS,heads:HEADS,head_dim:HEAD_DIM,total_scores:HEADS*tokenCount*tokenCount,_pad0:0,_pad1:0,_pad2:0},
   });
-  const softmaxDims=createUniformBuffer({
+  const softmaxDims=useOnlineAttention ? null : createUniformBuffer({
     label:`trellis.dinov3.${layerName}.attention.softmax-dims`,
     schema:['row_count','key_count','total_scores','_pad0'].map(name=>({name,type:'u32'})),
     values:{row_count:HEADS*tokenCount,key_count:tokenCount,total_scores:HEADS*tokenCount*tokenCount,_pad0:0},
   });
-  const contextDims=createUniformBuffer({
+  const contextDims=useOnlineAttention ? null : createUniformBuffer({
     label:`trellis.dinov3.${layerName}.attention.context-dims`,
     schema:['token_count','channels','heads','head_dim','total_values','_pad0','_pad1','_pad2'].map(name=>({name,type:'u32'})),
     values:{token_count:tokenCount,channels:CHANNELS,heads:HEADS,head_dim:HEAD_DIM,total_values:tokenCount*CHANNELS,_pad0:0,_pad1:0,_pad2:0},
   });
+  const onlineContextDims=useOnlineAttention ? createUniformBuffer({
+    label:`trellis.dinov3.${layerName}.attention.online-context-dims`,
+    schema:['token_count','channels','heads','head_dim','total_rows','_pad0','_pad1','_pad2'].map(name=>({name,type:'u32'})),
+    values:{token_count:tokenCount,channels:CHANNELS,heads:HEADS,head_dim:HEAD_DIM,total_rows:HEADS*tokenCount,_pad0:0,_pad1:0,_pad2:0},
+  }) : null;
   const residualDims=createUniformBuffer({
     label:`trellis.dinov3.${layerName}.attention.residual-dims`,
     schema:['total_values','channels','_pad0','_pad1'].map(name=>({name,type:'u32'})),
@@ -519,18 +572,22 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
   const vProjection=linear('attention.v-projection',inputTensor,tensors.vWeight,tensors.vBias,tensors.v);
   const qRope=rope('attention.q-rope',tensors.q,tensors.qRope);
   const kRope=rope('attention.k-rope',tensors.k,tensors.kRope);
-  const scoreKernel=runtime.defineComputeKernel({
+  const scoreKernel=useOnlineAttention ? null : runtime.defineComputeKernel({
     name:`trellis.dinov3.${layerName}.attention.score`,code:ATTENTION_SCORE_WGSL,entryPoint:'main',
     bindings:[read('q_values',tensors.qRope),read('k_values',tensors.kRope),write('scores',tensors.scores),uniform('dims',attentionDims)],
   });
-  const softmaxKernel=runtime.defineComputeKernel({
+  const softmaxKernel=useOnlineAttention ? null : runtime.defineComputeKernel({
     name:`trellis.dinov3.${layerName}.attention.softmax`,code:ATTENTION_SOFTMAX_WGSL,entryPoint:'main',
     bindings:[{...read('scores',tensors.scores),access:'storage'},uniform('dims',softmaxDims)],
   });
-  const contextKernel=runtime.defineComputeKernel({
+  const contextKernel=useOnlineAttention ? null : runtime.defineComputeKernel({
     name:`trellis.dinov3.${layerName}.attention.context`,code:ATTENTION_CONTEXT_WGSL,entryPoint:'main',
     bindings:[read('probabilities',tensors.scores),read('v_values',tensors.v),write('output_values',tensors.context),uniform('dims',contextDims)],
   });
+  const onlineContextKernel=useOnlineAttention ? runtime.defineComputeKernel({
+    name:`trellis.dinov3.${layerName}.attention.online-context`,code:ATTENTION_ONLINE_CONTEXT_WGSL,entryPoint:'main',
+    bindings:[read('q_values',tensors.qRope),read('k_values',tensors.kRope),read('v_values',tensors.v),write('output_values',tensors.context),uniform('dims',onlineContextDims)],
+  }) : null;
   const outputProjection=linear('attention.o-projection',tensors.context,tensors.oWeight,tensors.oBias,tensors.projected);
   const residualKernel=runtime.defineComputeKernel({
     name:`trellis.dinov3.${layerName}.attention.layer-scale-residual`,code:LAYER_SCALE_RESIDUAL_WGSL,entryPoint:'main',
@@ -540,8 +597,14 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
   const linearDispatch=total=>createLinearDispatch(total,{workgroupSize:64,maxWorkgroupsPerDimension});
   const dispatch={
     qkvProjection:linearDispatch(tokenCount*CHANNELS),patchRope:linearDispatch(tokenCount*CHANNELS),
-    attentionScore:linearDispatch(HEADS*tokenCount*tokenCount),attentionSoftmax:linearDispatch(HEADS*tokenCount),
-    attentionContext:linearDispatch(tokenCount*CHANNELS),outputProjection:linearDispatch(tokenCount*CHANNELS),
+    ...(useOnlineAttention
+      ? { onlineContext:linearDispatch(HEADS*tokenCount*64) }
+      : {
+          attentionScore:linearDispatch(HEADS*tokenCount*tokenCount),
+          attentionSoftmax:linearDispatch(HEADS*tokenCount),
+          attentionContext:linearDispatch(tokenCount*CHANNELS),
+        }),
+    outputProjection:linearDispatch(tokenCount*CHANNELS),
     attentionResidual:linearDispatch(tokenCount*CHANNELS),
   };
   const invoke=async (kernel,stage,plan)=>{
@@ -553,9 +616,13 @@ async function runTrellisDinoV3AttentionResident(input = {}, layerIndex) {
   await invoke(vProjection,`dinov3-${layerName}-qkv-projection-resident`,dispatch.qkvProjection);
   await invoke(qRope,`dinov3-${layerName}-patch-rope-resident`,dispatch.patchRope);
   await invoke(kRope,`dinov3-${layerName}-patch-rope-resident`,dispatch.patchRope);
-  await invoke(scoreKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionScore);
-  await invoke(softmaxKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionSoftmax);
-  await invoke(contextKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionContext);
+  if (useOnlineAttention) {
+    await invoke(onlineContextKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.onlineContext);
+  } else {
+    await invoke(scoreKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionScore);
+    await invoke(softmaxKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionSoftmax);
+    await invoke(contextKernel,`dinov3-${layerName}-global-attention-resident`,dispatch.attentionContext);
+  }
   await invoke(outputProjection,`dinov3-${layerName}-output-residual-resident`,dispatch.outputProjection);
   await invoke(residualKernel,`dinov3-${layerName}-output-residual-resident`,dispatch.attentionResidual);
   completed=true;

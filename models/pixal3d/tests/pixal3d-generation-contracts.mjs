@@ -616,6 +616,10 @@ assert.ok(!hrConditioning.destroyed);
   assert.deepEqual(imgOut.highResolutionConditioning.shape, [1, 4101, 1024]);
   assert.equal(imgOut.dino.blocksExecuted, 24);
   assert.equal(imgOut.highResolutionDino.blocksExecuted, 24);
+  assert.ok(
+    dinoAllocs.every(b => (b.size ?? 0) <= 134217728),
+    '1024-stage DINOv3 must not allocate a >128 MiB [16,4101,4101] scores buffer',
+  );
   imgAdapter.dispose();
   assert.ok(imgOut.conditioning.buffer.destroyed);
   assert.ok(imgOut.highResolutionConditioning.buffer.destroyed);

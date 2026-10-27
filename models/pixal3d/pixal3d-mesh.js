@@ -3,6 +3,16 @@ import {
   createTrellisMeshAdapter,
   compareTrellisMeshes,
 } from '../trellis2/trellis-mesh.js';
+import {
+  sampleTrellisMaterial,
+  rasterizeTrellisMaterialUV,
+  bakeTrellisMaterialTextures,
+  encodeTrellisTexturePNG,
+  encodeTrellisPbrGLB,
+  unwrapTrellisMesh,
+  finishTrellisMesh,
+} from '../trellis2/trellis-material.js';
+import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
 
 export {
   extractTrellisDualGridMesh,
@@ -11,6 +21,11 @@ export {
   extractTrellisDualGridMesh as extractPixal3dDualGridMesh,
   createTrellisMeshAdapter as createPixal3dMeshAdapter,
   compareTrellisMeshes as comparePixal3dMeshes,
+  sampleTrellisMaterial as samplePixal3dMaterial,
+  rasterizeTrellisMaterialUV as rasterizePixal3dMaterialUV,
+  bakeTrellisMaterialTextures as bakePixal3dMaterialTextures,
+  encodeTrellisTexturePNG as encodePixal3dTexturePNG,
+  unwrapTrellisMesh as unwrapPixal3dMesh,
 };
 
 // Upstream Pixal3D grid2mesh applies (x, y, z) -> (x, z, -y), and upstream
@@ -135,4 +150,175 @@ export function encodePixal3dGeometryGLB(mesh, { provenance = {} } = {}) {
   bytes.set(new Uint8Array(triangles.buffer, triangles.byteOffset, triangles.byteLength), binStart + vertices.byteLength);
   bytes.set(new Uint8Array(normals.buffer), binStart + vertices.byteLength + triangles.byteLength);
   return buffer;
+}
+
+function rewritePbrGlbToPixal3d(baseGlb) {
+  const view = new DataView(baseGlb);
+  const jsonLength = view.getUint32(12, true);
+  const document = JSON.parse(new TextDecoder().decode(new Uint8Array(baseGlb, 20, jsonLength)).trim());
+  const binStart = 28 + jsonLength;
+  const binLength = view.getUint32(20 + jsonLength, true);
+  const binBytes = new Uint8Array(baseGlb, binStart, binLength);
+
+  document.nodes[0].matrix = [...PIXAL3D_GLB_NODE_MATRIX];
+  document.asset.generator = 'Kaminos Pixal3D learned material consumer';
+  if (document.materials?.[0]) {
+    document.materials[0].name = 'Pixal3D learned PBR';
+  }
+  const meta = document.extras?.trellis ?? {};
+  document.extras = { pixal3d: meta };
+
+  const json = new TextEncoder().encode(JSON.stringify(document));
+  const paddedJsonLen = Math.ceil(json.byteLength / 4) * 4;
+  const output = new ArrayBuffer(28 + paddedJsonLen + binLength);
+  const header = new DataView(output);
+  const outBytes = new Uint8Array(output);
+  header.setUint32(0, 0x46546c67, true);
+  header.setUint32(4, 2, true);
+  header.setUint32(8, output.byteLength, true);
+  header.setUint32(12, paddedJsonLen, true);
+  header.setUint32(16, 0x4e4f534a, true);
+  outBytes.fill(32, 20, 20 + paddedJsonLen);
+  outBytes.set(json, 20);
+  header.setUint32(20 + paddedJsonLen, binLength, true);
+  header.setUint32(24 + paddedJsonLen, 0x004e4942, true);
+  outBytes.set(binBytes, 28 + paddedJsonLen);
+  return output;
+}
+
+export async function encodePixal3dPbrGLB(mesh, options = {}) {
+  const baseGlb = await encodeTrellisPbrGLB(mesh, options);
+  return rewritePbrGlbToPixal3d(baseGlb);
+}
+
+export async function finishPixal3dMesh(mesh, options = {}) {
+  const finished = await finishTrellisMesh(mesh, options);
+  return {
+    ...finished,
+    glb: rewritePbrGlbToPixal3d(finished.glb),
+  };
+}
+
+export function createPixal3dAssetAdapter({
+  runtime,
+  geometry,
+  material,
+  textureSize = 1024,
+  WorkerClass,
+  postprocessMesh,
+  unwrapMesh,
+  bakeMaterial,
+  provenance = {},
+  onPhase = () => {},
+}) {
+  if (postprocessMesh !== undefined && typeof postprocessMesh !== 'function') {
+    throw new TypeError('mesh postprocess provider must be a function');
+  }
+  if (unwrapMesh !== undefined && typeof unwrapMesh !== 'function') {
+    throw new TypeError('explicit UV provider must be a function');
+  }
+  if (bakeMaterial !== undefined && typeof bakeMaterial !== 'function') {
+    throw new TypeError('texture bake provider must be a function');
+  }
+  const a = material?.features;
+  const b = material?.coordinates;
+  const n = a?.shape?.[0];
+  if (
+    !runtime?.readTensor ||
+    !a?.buffer ||
+    !b?.buffer ||
+    a.dtype !== 'f32' ||
+    b.dtype !== 'i32' ||
+    !(a.usage & U.storage) ||
+    !(b.usage & U.storage) ||
+    !Number.isSafeInteger(n) ||
+    n < 1 ||
+    JSON.stringify(a.shape) !== JSON.stringify([n, 6]) ||
+    JSON.stringify(b.shape) !== JSON.stringify([n, 3]) ||
+    a.byteLength !== n * 24 ||
+    b.byteLength !== n * 12 ||
+    n !== geometry?.features?.shape?.[0] ||
+    material.resolution !== geometry?.resolution
+  ) {
+    throw new TypeError('complete borrowed guided material tensors required');
+  }
+  const meshConsumer = createTrellisMeshAdapter({ runtime, decoded: geometry });
+  let status = 'new';
+  let phase = 'new';
+  let output;
+  const enter = async name => {
+    phase = name;
+    await onPhase({ phase: name });
+  };
+  return Object.freeze({
+    inputs: { geometry, material },
+    async run() {
+      if (status !== 'new') throw new Error('asset consumer is ' + status);
+      status = 'running';
+      try {
+        await enter('post-model-mesh-extraction');
+        const mesh = await meshConsumer.run();
+        if (mesh.status !== 'surface') throw new Error('learned geometry has no surface; no asset');
+        await enter('post-model-material-readback');
+        const raw = await runtime.readTensor(a);
+        const coords = await runtime.readTensor(b);
+        const rawBuf = ArrayBuffer.isView(raw)
+          ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+          : raw;
+        const coordBuf = ArrayBuffer.isView(coords)
+          ? coords.buffer.slice(coords.byteOffset, coords.byteOffset + coords.byteLength)
+          : coords;
+        if (
+          !(rawBuf instanceof ArrayBuffer) ||
+          !(coordBuf instanceof ArrayBuffer) ||
+          rawBuf.byteLength !== a.byteLength ||
+          coordBuf.byteLength !== b.byteLength
+        ) {
+          throw new Error('complete material readback required');
+        }
+        const finished = await finishPixal3dMesh(mesh, {
+          postprocessMesh,
+          unwrapMesh,
+          bakeMaterial,
+          WorkerClass,
+          textureSize,
+          provenance,
+          materialFields: {
+            features: new Float32Array(rawBuf),
+            coordinates: new Int32Array(coordBuf),
+            resolution: material.resolution,
+          },
+          onPhase: e => enter(e.phase),
+        });
+        output = {
+          ...finished,
+          handoff: {
+            phase: 'post-model-asset-consumer',
+            input: 'exact borrowed learned decoder tensors; no NPZ or fixture replacement',
+            featureBytesToCPU: geometry.features.byteLength + a.byteLength,
+            coordinateBytesToCPU: geometry.coordinates.byteLength + b.byteLength,
+            inference: 'WebGPU producer complete before CPU mesh/UV/texture postprocessing',
+            placement: 'GLB produced in Pixal3D (-x, y, -z) frame',
+          },
+        };
+        status = 'completed';
+        phase = 'completed';
+        return output;
+      } catch (error) {
+        status = 'failed';
+        throw error;
+      }
+    },
+    get phase() {
+      return phase;
+    },
+    get output() {
+      return output;
+    },
+    dispose() {
+      if (status === 'running') throw new Error('asset consumer is running');
+      meshConsumer.dispose();
+      status = 'disposed';
+    },
+  });
 }

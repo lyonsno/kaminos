@@ -7,6 +7,9 @@ const {
   PIXAL3D_GLB_NODE_MATRIX,
   toPixal3dGlbFrame,
   encodePixal3dGeometryGLB,
+  encodePixal3dPbrGLB,
+  finishPixal3dMesh,
+  createPixal3dAssetAdapter,
   extractPixal3dDualGridMesh,
   createPixal3dMeshAdapter,
   comparePixal3dMeshes,
@@ -63,5 +66,46 @@ assert.equal(doc.extras.pixal3d.provenance.model, 'pixal3d');
 assert.equal(typeof extractPixal3dDualGridMesh, 'function');
 assert.equal(typeof createPixal3dMeshAdapter, 'function');
 assert.equal(typeof comparePixal3dMeshes, 'function');
+assert.equal(typeof encodePixal3dPbrGLB, 'function');
+assert.equal(typeof finishPixal3dMesh, 'function');
+assert.equal(typeof createPixal3dAssetAdapter, 'function');
+
+// 5. Verify encodePixal3dPbrGLB and finishPixal3dMesh produce a PBR GLB with PIXAL3D_GLB_NODE_MATRIX
+const unwrappedMesh = {
+  vertices: new Float32Array([0, 0, 0, 0.25, 0, 0, 0, 0.25, 0]),
+  normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+  triangles: new Uint32Array([0, 1, 2]),
+  uvs: new Float32Array([0.1, 0.1, 0.9, 0.1, 0.1, 0.9]),
+  metadata: { resolution: 4 },
+  uvMetadata: { route: 'test-uv-route' },
+};
+const finished = await finishPixal3dMesh(
+  {
+    vertices: unwrappedMesh.vertices,
+    triangles: unwrappedMesh.triangles,
+    metadata: unwrappedMesh.metadata,
+  },
+  {
+    textureSize: 4,
+    async unwrapMesh() {
+      return unwrappedMesh;
+    },
+    materialFields: {
+      coordinates: new Int32Array([2, 2, 2]),
+      features: new Float32Array([0.2, 0.4, 0.6, -0.2, 0.8, 1.0]),
+      resolution: 4,
+    },
+    provenance: { model: 'pixal3d-pbr' },
+  },
+);
+assert.ok(finished.glb instanceof ArrayBuffer);
+const pbrView = new DataView(finished.glb);
+const pbrJsonLen = pbrView.getUint32(12, true);
+const pbrDoc = JSON.parse(new TextDecoder().decode(new Uint8Array(finished.glb, 20, pbrJsonLen)).trim());
+assert.deepEqual(pbrDoc.nodes[0].matrix, Array.from(PIXAL3D_GLB_NODE_MATRIX));
+assert.equal(pbrDoc.asset.generator, 'Kaminos Pixal3D learned material consumer');
+assert.equal(pbrDoc.materials[0].name, 'Pixal3D learned PBR');
+assert.equal(pbrDoc.extras.pixal3d.stage, 'learned-geometry-and-material');
+assert.equal(pbrDoc.extras.pixal3d.provenance.model, 'pixal3d-pbr');
 
 console.log('pixal3d-mesh-contracts.mjs: PASS');
