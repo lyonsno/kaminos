@@ -1,8 +1,13 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {createGoinPursuit} from '../experiments/lerms/goin-pursuit.experiment.mjs';
+import goinContribution,{createGoinPursuit} from '../experiments/lerms/goin-pursuit.experiment.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
+import {existsSync,readFileSync} from 'node:fs';
+const cataloguePath=new URL('../experiments/lerms/goin-pursuit.experiment.json',import.meta.url);
+assert.ok(existsSync(cataloguePath),'Goin experiment must supply metadata for current shared discovery');
+const catalogue=JSON.parse(readFileSync(cataloguePath));
+assert.equal(catalogue.id,goinContribution.id);assert.equal(catalogue.title,goinContribution.title);
 class Element{constructor(){this.children=[];this.style={};}append(...xs){this.children.push(...xs);}setAttribute(){}addEventListener(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene(),ticks=new Set();
 let opens=0,closes=0;const presented=new Map();
