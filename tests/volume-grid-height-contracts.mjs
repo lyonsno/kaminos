@@ -52,8 +52,9 @@ test('resolveGridHeight: no value or 2 is twice the width; a multiplier is clamp
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 2.5 }, 32).heightCells, 80, 'the same multiplier at another width');
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 'abc' }, 64).mode, 'auto-twice-width', 'nonfinite reads as auto');
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 0 }, 64).mode, 'auto-twice-width', 'zero reads as auto');
-  assert.throws(() => shape.resolveGridHeight({}, 0), /positive multiple of 4/);
-  assert.throws(() => shape.resolveGridHeight({}, 50), /positive multiple of 4/);
+  assert.throws(() => shape.resolveGridHeight({}, 0), /positive integer/);
+  assert.equal(shape.resolveGridHeight({}, 50).heightCells,100,'material width need not divide a workgroup');
+  assert.equal(shape.resolveGridHeight({},37).heightCells,74,'odd material width retains exact physical aspect');
   // The core re-exports the one law.
   assert.equal(core.resolveGridHeight, shape.resolveGridHeight);
 });

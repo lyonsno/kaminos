@@ -6,8 +6,7 @@
 // 0 keeps twice the width, which is what every saved basin was authored at.
 //
 // A requested height is clamped to [width, 4 x width] and snapped to the
-// nearest admissible height. Admissible means two things at once:
-//   - every lattice derived from the box at equal pitch has an integral
+// nearest admissible height. Every lattice derived from the box at equal pitch has an integral
 //     height: the shared scene-source / emissive lattice (32 wide) and the
 //     fire irradiance lattice (32 or 48 wide) are derivedWidth x height /
 //     width tall, and createSceneVolumeSource refuses a fractional or
