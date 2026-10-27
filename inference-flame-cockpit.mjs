@@ -43,7 +43,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
  const editorHeading=el('strong'),objectName=el('input');objectName.type='text';objectName.placeholder='Name optional';objectName.setAttribute('aria-label','Flame object name');
  objectName.onchange=()=>{if(selectedObject)run('response.renameObject',{id:selectedObject,label:objectName.value.trim()});};
  const kind=select('Saved flame object kind',Object.entries(kinds),value=>{if(selectedObject)run('response.updateObject',{id:selectedObject,kind:value});});kind.value='ramp';
- const previewObject=button('▶ Preview look',async()=>{if(!selectedObject)return;const result=await run('response.editObject',selectedObject);if(result)await run('play');});
+ const previewObject=button('▶ Preview look',async()=>{if(!selectedObject)return;const result=await run('response.editObject',selectedObject);if(result){const object=score.objects.find(o=>o.id===selectedObject);await run(object.kind==='ramp'?'play':'setAmount',1);}});
  const editLooks=button('Edit A/B',async()=>{if(selectedObject&&!await run('response.editObject',selectedObject))return;author.open=true;author.scrollIntoView({block:'nearest'});});
  const addObject=button('Add to Denoise',()=>run('response.addLayer',{stage:selectedStage,objectId:selectedObject}));
  const objectActions=actions(previewObject,editLooks,addObject);editor.append(editorHeading,objectName,kind,objectActions);
@@ -84,7 +84,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
   for(const stage of INFERENCE_STAGES){
    const span=state.phases.find(p=>p.stage===stage),row=el('section',null,'if-phase');row.dataset.stage=stage;row.dataset.selected=String(stage===selectedStage);
    const choose=button(names[stage],()=>{selectedStage=stage;selectedLayer=null;sync();});choose.classList.add('if-phase-name');choose.setAttribute('aria-pressed',String(stage===selectedStage));
-   const duration=el('small',span?seconds(span.recordedEndMs-span.startMs):state.live?'Waiting':state.recording?'Not in recording':'No recording');
+   const duration=el('small',span?(stage==='complete'?seconds(span.endMs-span.startMs)+' tail':seconds(span.recordedEndMs-span.startMs)):state.live?'Waiting':state.recording?'Not in recording':'No recording');
    const audition=button('▶',()=>{selectedStage=stage;selectedLayer=null;return run('response.previewStage',stage);},'Preview '+names[stage]);audition.setAttribute('aria-label','Preview '+names[stage]);audition.disabled=!span||state.live;
    const add=button('+',()=>run('response.addLayer',{stage,objectId:selectedObject}),'Add selected look to '+names[stage]);add.setAttribute('aria-label','Add selected to '+names[stage]);add.disabled=!selectedObject;
    const header=actions(choose,duration,audition,add);header.classList.add('if-phase-head');row.append(header);const layers=el('div',null,'if-layers');
@@ -105,7 +105,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
   if(document.activeElement!==objectName)objectName.value=object?.label??'';
   if(object)kind.value=object.kind;
   previewObject.disabled=editLooks.disabled=addObject.disabled=update.disabled=remove.disabled=!object;
-  addObject.textContent='Add to '+names[selectedStage];
+  addObject.textContent='Add to '+names[selectedStage];previewObject.textContent=object?.kind==='state'?'Show state B':object?.kind==='pulse'?'Show peak B':'▶ Preview A → B';
   remove.disabled=!object||Object.values(score.stacks??{}).some(layers=>layers.some(l=>l.objectId===selectedObject));remove.title=remove.disabled&&object?'Remove its phase assignments before deleting':'';
   update.hidden=!object;remove.hidden=!object;saveNew.textContent=object?'Save as new':'Save new from A/B';
   layerControls.hidden=!layer;
