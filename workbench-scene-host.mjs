@@ -1,3 +1,4 @@
+import {bindWorkbenchSurfaceDrag} from './workbench-surface-drag.mjs';
 import {createOwnerSceneSession} from './owner-scene-session.mjs';
 
 // This clock is driven by the application's existing frame loop. Each new
@@ -51,7 +52,7 @@ function vector(value,name){
  return [...value];
 }
 
-export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,onPick,resourceConsumers=()=>[scene]}) {
+export function createWorkbenchSceneHost({scene,camera,controls,canvas=controls.domElement,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,onPick,resourceConsumers=()=>[scene]}) {
  const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
  const setView=view=>{
   const next={...readView(),...view};
@@ -89,5 +90,6 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
    catch(error){scene.remove(root);throw error;}
   },
   remove:handle=>{if(!handle.presentation)return removeObject(handle);handle.root.removeFromParent();disposeOwnedSceneTree(handle.root,resourceConsumers(),[scene.environment,scene.background]);redraw();},readView,setView,redraw,onFrame,onPick,
+   onSurfaceDrag:(callback,roots)=>bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,callback}),
  })});
 }

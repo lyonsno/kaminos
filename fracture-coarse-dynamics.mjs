@@ -11,6 +11,8 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   if(!renderer.backend.isWebGPUBackend)throw new Error('GPU collapse requires a native WebGPU renderer');
   const {cells,bonds,config,dimensions,floorY}=fixture;
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
+  const degree=cells.map(()=>0);for(const b of bonds){degree[b.a]++;degree[b.b]++;}
+  const jointCapacity=Math.max(8,...degree.map(n=>n+1));
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
   let engine,disposed=false;
   const ownedBuffers=[];
@@ -23,18 +25,18 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   try {
   engine=new ArchGpuEngine(device,{maxBodies:n,gravity:[0,-config.gravity,0],deltaTime:config.timeStep,
     substeps:config.substeps,solverIterations:config.solverIterations,maxFixedStepsPerFrame:1,
-    enableBvhBuild:false,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
+    enableBvhBuild:false,maxJointsPerBodySolver:jointCapacity,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
   engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
-  for(const cell of cells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionMask:0});
-  engine.addBody({position:[0,floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction});
+  for(const cell of cells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='floor-only'?2:0});
+  engine.addBody({position:[0,floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
   for(const bond of bonds)engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,config.stiffness,true);
   for(const cell of cells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
-  if(counts.some(count=>count+1>8))throw new Error('Fixture exceeds observed engine joint-per-body capacity');
+  if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
   for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.initialJointPenalty;data[j*44+40+axis]=config.initialJointPenalty;}}
   const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
-  engine.setGravity([0,-config.gravity*gravityScale(1),0]);
+  engine.setGravity([0,0,0]);
   engine.step(config.timeStep,renderer);
   const attrs=engine.getResidentAttributes();
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
@@ -79,7 +81,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   function release(){hand=null;gripData.fill(0);device.queue.writeBuffer(buffers.grip,0,gripData);}
   function setSurfaceHand(index,target,localPoint,normal,contactSurface='box-face'){if(![target,localPoint,normal].every(finitePoint))throw new Error('Hand coordinates must contain finite x, y and z');
     if(!['box-face','embedded-visual'].includes(contactSurface))throw new Error('Unknown contact surface');
-    const cell=cells[index];if(!cell||cell.pinned||!isExposedFace(index,normal))throw new Error('Surface hand requires unpinned exposed face');
+    const cell=cells[index];if(!cell||cell.pinned||(contactSurface==='box-face'&&!isExposedFace(index,normal)))throw new Error('Surface hand requires unpinned exposed face');
     const h=xyz(cell.halfExtents),expected=Math.abs(normal.x)*h.x+Math.abs(normal.y)*h.y+Math.abs(normal.z)*h.z;
     if(['x','y','z'].some(axis=>Math.abs(localPoint[axis])>h[axis]+1e-6))throw new Error('Hand point must lie inside body envelope');
     if(contactSurface==='box-face'&&Math.abs(v(localPoint).dot(v(normal))-expected)>1e-6)throw new Error('Hand point must lie on selected face');
@@ -101,7 +103,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,contactSurface:hand.contactSurface,localPoint:{...hand.localPoint},target:{...hand.target},force:{...hand.force}}:null,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
-      residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:'disabled-for-supported-pull-comparison',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:8,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
+      residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:config.collisions??'disabled-for-supported-pull-comparison',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:jointCapacity,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
     dispose};
   }catch(error){try{dispose();}catch(cleanupError){throw new AggregateError([error,cleanupError],'GPU arch construction and cleanup failed');}throw error;}
 }

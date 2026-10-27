@@ -11565,7 +11565,7 @@ async function initScene() {
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
   const sceneResourceConsumers=()=>[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)];
-  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,resourceConsumers:sceneResourceConsumers,
+  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,canvas:renderer.domElement,resourceConsumers:sceneResourceConsumers,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
     registerObject:registerSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
     removeObject:handle=>sceneMembership.removeOwned(handle,

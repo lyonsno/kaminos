@@ -172,3 +172,13 @@ test('piece picks belong to this session and stop on disposal',async()=>{
  await f.session.dispose();deliver({id:own.id,object:child,faceIndex:2});
  assert.equal(unsubscribed,true);assert.equal(received.length,1);
 });
+
+test('surface drag is scoped to current registered roots and ends during session disposal',async()=>{
+ let callback,roots,stopped=0;
+ const f=fixture({onSurfaceDrag:(fn,readRoots)=>{callback=fn;roots=readRoots;return()=>{stopped++;};}});
+ assert.equal(typeof f.session.onSurfaceDrag,'function','Experiments need the shared native-camera surface drag path');
+ const handle=await f.session.loadAsset('body');const seen=[];
+ f.session.onSurfaceDrag(hit=>{seen.push(hit.phase);return true;});
+ assert.deepEqual(roots(),[handle.root]);assert.equal(callback({phase:'start'}),true);
+ await f.session.dispose();assert.equal(stopped,1);callback({phase:'move'});assert.deepEqual(seen,['start']);
+});

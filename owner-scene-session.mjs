@@ -47,7 +47,7 @@ export function createOwnerSceneSession(hooks) {
     }
     entry.cancel = cancel; frames.add(entry);
     try {
-      const unsubscribe = hook(value => {if (!disposed && entry.enabled) callback(value);});
+      const unsubscribe = hook(value => {if (!disposed && entry.enabled) return callback(value);});
       if (typeof unsubscribe !== 'function') throw Error('Scene host subscription must return unsubscribe');
       entry.unsubscribe = unsubscribe;
       if (!entry.enabled || disposed) unsubscribe();
@@ -72,6 +72,11 @@ export function createOwnerSceneSession(hooks) {
     setView(view) {active(); return structuredClone(hooks.setView(structuredClone(view)));},
     redraw() {active(); return hooks.redraw();},
     onFrame:callback=>subscribe(hooks.onFrame,callback),
+    onSurfaceDrag(callback){
+      active();
+      if(typeof hooks.onSurfaceDrag!=='function')throw Error('Scene host does not support surface dragging');
+      return subscribe(fn=>hooks.onSurfaceDrag(fn,()=>[...objects.keys()]),callback);
+    },
     onPick(callback){
       active();
       if(typeof hooks.onPick!=='function')throw Error('Scene host does not support surface picking');

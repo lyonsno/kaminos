@@ -1,0 +1,35 @@
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
+import {assertCoarseWitnessSource} from './fracture-coarse-witness-contract.mjs';
+const [url,out,specPath]=process.argv.slice(2);fs.mkdirSync(out,{recursive:true});
+const report={status:'running',phase:'input',url,specPath,root:process.cwd(),errors:[],console:[],gestures:[]},save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));save();let context;
+try{
+ const spec=JSON.parse(fs.readFileSync(specPath));report.spec=spec;report.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.dirty=execFileSync('git',['status','--short'],{encoding:'utf8'});report.phase='launch';save();
+ const {chromium}=await import('/Users/noahlyons/.local/state/sammy-kaminos-masks-0922/browser-tools/node_modules/playwright/index.mjs');
+ report.executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+ context=await chromium.launchPersistentContext(path.join(out,'browser-profile'),{headless:true,executablePath:report.executable,viewport:{width:1440,height:1100},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});context.setDefaultTimeout(0);context.setDefaultNavigationTimeout(0);
+ const page=context.pages()[0];page.on('pageerror',e=>{report.errors.push(e.message);save();});page.on('console',m=>{report.console.push({type:m.type(),text:m.text()});save();});
+ const requested=new URL(url),setup=JSON.parse(requested.searchParams.get('experiment_inputs')??'{}'),entry=new URL(url);entry.searchParams.delete('experiment');entry.searchParams.delete('experiment_inputs');await page.goto(entry.href,{waitUntil:'domcontentloaded'});report.phase='experiment-load';save();
+ await page.waitForFunction(()=>Boolean(window.kaminosWorkbenchExperiments));await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('fracture-coarse',setup),setup);
+ const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),invoke=(op,value)=>page.evaluate(({op,value})=>window.kaminosWorkbenchExperiments.invoke(op,value),{op,value}),capture=async name=>{await page.waitForTimeout(250);await page.screenshot({path:path.join(out,name+'.png')});};
+ await invoke('pause');report.initial=await read();report.runtime=await page.evaluate(async()=>({config:await(await fetch('/api/runtime-config')).json(),scene:window.kaminosWorkbenchSceneState?.()}));report.phase='source-conformance';save();
+ const response=await page.request.get(new URL(report.initial.source,page.url()).href);report.sourceDigest=createHash('sha256').update(await response.body()).digest('hex');assertCoarseWitnessSource({initial:report.initial,runtime:report.runtime,commit:report.commit,spec,digest:report.sourceDigest});
+ assert.equal(report.initial.route,'kaminos.fracture.whole-object-direct-grab.v1');assert.ok(report.initial.material.bodies.length>=report.initial.parts.length,'Detected parts remain outside simulation');assert.ok(report.initial.prepared.internalBonds>1,'Only one prescribed internal break');assert.ok(report.initial.prepared.attachmentBonds>1,'Parts are isolated specimens');assert.equal(report.initial.prepared.receipt.sourceCoverage.reduce((s,p)=>s+p.triangles,0),spec.triangles);await capture('initial');
+ report.phase='unloaded';save();await invoke('advance',20);report.unloaded=await read();await capture('unloaded');
+ await invoke('inspect',true);await invoke('separation',.25);await capture('all-parts');await invoke('separation',0);await invoke('inspect',false);await invoke('pause');
+ for(let attempt=0;attempt<2;attempt++){
+  report.phase='direct-pointer-'+attempt;save();
+  const candidates=await page.evaluate(async()=>{
+   const api=window.kaminosWorkbenchExperiments,contacts=await api.invoke('contacts'),s=await api.read(),view=await api.invoke('view'),THREE=await import('/lib/three.core.js'),canvas=document.querySelector('#viewer-canvas')??[...document.querySelectorAll('canvas')].find(c=>c.width>500&&c.height>500),r=canvas.getBoundingClientRect();
+   const camera=new THREE.PerspectiveCamera(view.fov,r.width/r.height,view.near,view.far);camera.position.fromArray(view.position);camera.up.fromArray(view.up);camera.zoom=view.zoom;camera.lookAt(new THREE.Vector3(...view.target));camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+   return contacts.filter(c=>!s.material.bodies[c.index].pinned&&s.material.bonds.some(b=>b.alive&&(b.a===c.index||b.b===c.index))).map(c=>{const p=new THREE.Vector3(...c.point).project(camera);return{...c,x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2,z:p.z};}).filter(p=>p.z>-1&&p.z<1&&p.x>r.left+10&&p.x<r.right-10&&p.y>r.top+10&&p.y<r.bottom-10).sort((a,b)=>b.area-a.area);
+  });
+  let chosen;for(const p of candidates){await page.mouse.move(p.x,p.y);await page.mouse.down();const state=await read();if(state.material.hand){chosen={...p,actualCell:state.material.hand.index};break;}await page.mouse.up();}
+  assert.ok(chosen,'No direct visible surface contact could be grabbed');const before=(await read()).material.broken;report.gestures.push({start:chosen,inputs:[]});save();
+  const end={x:chosen.x+(attempt?140:-140),y:chosen.y-95};report.gestures.at(-1).inputs.push({type:'pointermove',...end});await page.mouse.move(end.x,end.y,{steps:12});await invoke('pause');await invoke('advance',45);report.gestures.at(-1).held=await read();await capture('drag-'+attempt);
+  await page.mouse.up();await invoke('pause');report.gestures.at(-1).released=await read();assert.equal(report.gestures.at(-1).released.material.hand,null,'Pointer release left an artificial hand active');assert.ok(report.gestures.at(-1).held.material.broken>before,'Dragging did not produce another stress-driven fracture');save();
+ }
+ report.phase='reset';save();await page.getByRole('button',{name:'Reset fracture',exact:true}).click();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).busy);await invoke('pause');report.reset=await read();assert.equal(report.reset.material.broken,0);assert.equal(report.reset.material.hand,null);await capture('reset');
+ assert.equal(await page.getByRole('button',{name:'Prepare selected piece',exact:true}).count(),0);assert.equal(await page.getByRole('spinbutton',{name:'Pull distance (% object extent)',exact:true}).count(),0);
+ report.phase='dispose';save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.equal((await page.evaluate(()=>window.kaminosWorkbenchExperiments.state())).id,null);assert.deepEqual(report.errors,[]);report.status='passed';report.phase='completed';
+}catch(error){report.status='failed';report.error=error.stack;fs.writeFileSync(path.join(out,'failure.json'),JSON.stringify(report,null,2));process.exitCode=1;}finally{if(context)await context.close();save();}
+console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));

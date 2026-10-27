@@ -1,3 +1,4 @@
+import {prepareWholeFracture} from './fracture-whole-prepare.mjs';
 import {bisectFaces,extractFaces,sectionCap} from './poly-mesh-edit.mjs';
 export const COARSE_PREPARATION_ROUTE='kaminos.fracture.preserved-surface-two-chunks.v1';
 const dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
@@ -11,7 +12,8 @@ function measure(a,material=null){
  }
  return {area,center:center.map(v=>v/area),min,max};
 }
-export function prepareCoarseFracture(source,faces,{normal,offset=0}={}){
+export function prepareCoarseFracture(source,faces,{normal,offset=0,cellExtent,partition,...options}={}){
+ if(cellExtent!==undefined)return prepareWholeFracture(source,partition??{labels:new Uint32Array(source.indices.length/3),boundaries:[]},{...options,cellExtent});
  if(!faces?.length||new Set(faces).size!==faces.length||faces.some(f=>!Number.isInteger(f)||f<0||f>=source.indices.length/3))throw Error('Unique valid source faces required');
  if(!Number.isFinite(offset))throw Error('Finite cut offset required');
  const mask=new Uint8Array(source.indices.length/3);for(const f of faces)mask[f]=1;
