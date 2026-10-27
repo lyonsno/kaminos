@@ -21,15 +21,16 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   if(inputs.prompt!==undefined&&(typeof inputs.prompt!=='string'||!inputs.prompt.trim()))throw Error('Enter a prompt to burn');
   const savedScene=new URLSearchParams(doc.defaultView.location?.search??'').has('scene')||new URLSearchParams((doc.defaultView.location?.hash??'').slice(1)).has('scene');
   if(inputs.setup===true&&!savedScene&&!host.scene.objects().some(row=>row.object?.userData?.kaminosPromptRelief)){
+   const fresh=host.scene.objects().every(row=>['flame-emitter','simulation-domain'].includes(row.type));
    const flame=await host.flame.open();if(flame.read().active)await ensureKilnSceneDomain(host,flame);
    if(host.scene.objects().every(row=>['flame-emitter','simulation-domain'].includes(row.type))){
     for(const [label,parameters,position]of [['Kiln floor',{width:8,height:.02,depth:8},[0,-.85,0]],['Kiln backdrop',{width:8,height:6,depth:.05},[0,1,-2.5]]]){const id=app.addMesh('box',parameters);doc.defaultView.renameSceneObject(id,label);host.scene.setTransform(id,{position});app.setMaterial(id,{color:'#181a1e',roughness:.97,metalness:0});}
    }
-   await operations.addPrompt();
+   await operations.addPrompt();if(fresh){const row=target();if(row)host.scene.frame([row.object]);}
   }
   const stop=session.onFrame(()=>sync());
   return {read,operations,mount({root,document,invoke}){
-   const field=document.createElement('textarea');field.rows=3;field.setAttribute('aria-label','Prompt lettering');field.style.cssText='width:100%;box-sizing:border-box;';
+   const field=document.createElement('textarea');field.rows=3;field.setAttribute('aria-label','Prompt lettering');field.style.cssText='width:100%;box-sizing:border-box;background:#202327;color:#eee;padding:10px;border:1px solid #42464c;border-radius:6px;';
    const status=document.createElement('p');status.setAttribute('role','status');
    const fail=error=>{status.textContent=error.message;sync(true);};
    field.addEventListener('change',()=>{if(field.dataset.target!==target()?.id){sync(true);return;}invoke('setPrompt',field.value).catch(fail);});
