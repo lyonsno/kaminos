@@ -78,14 +78,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents",
       "testLastChanged": "2026-07-10 1769320f"
     },
-    "tests/scene-ao-depth-contracts.mjs": {
-      "class": "regression",
-      "owner": "modal",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-07 b5ed0f98 Use Noah's viewing defaults; hide Fire Light and demo assets; live toolbar poses; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "ReferenceError: document is not defined",
-      "testLastChanged": "2026-09-17 3512d1d0"
-    },
     "tests/scene-authoring-integration-contracts.mjs": {
       "class": "regression",
       "owner": "modal",

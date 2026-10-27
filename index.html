@@ -2859,6 +2859,7 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
+import {createSceneAOState,bindSceneAOControls,AO_CONTROL_FIELDS} from './scene-ao-state.mjs';
 import { installRenderingNumberControls } from './rendering-number-controls.mjs';
 import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
 import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
@@ -3519,12 +3520,12 @@ window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPrese
 // viewport render drew.
 window.kaminosViewportShadingDebugState=()=>{
  const objects=workingScene.objects.map(entry=>{let wire=0,solid=0;const sides=new Set();entry.object?.traverse?.(o=>{if(!o.isMesh||o.userData?.kaminosEditorOnly||!o.material)return;const m=Array.isArray(o.material)?o.material:[o.material];for(const x of m)sides.add(x.side);if(m.every(x=>x.wireframe))wire++;else solid++;});return {id:entry.id,type:entry.type,wireMeshes:wire,solidMeshes:solid,sides:[...sides].sort()};});
- return {mode:viewportDisplay.shading,aoIntensity:aoIntensity?.value??null,aoToggle:document.getElementById('ao-toggle')?.checked??null,lastRender:lastViewportShadingRender,objects};
+ return {mode:viewportDisplay.shading,aoIntensity:aoIntensity?.value??null,aoToggle:sceneAO.read().enabled,lastRender:lastViewportShadingRender,objects};
 };
 // Wire materials do not reach the solid AO depth override, so AO would shade
 // empty space where surfaces used to be.
 function effectiveAOIntensity() {
- return viewportDisplay.shading==='wireframe'||!document.getElementById('ao-toggle').checked?0:parseFloat(document.getElementById('ao-intensity').value);
+ return viewportDisplay.shading==='wireframe'||!sceneAO.read().enabled?0:sceneAO.read().intensity;
 }
 window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
@@ -10235,10 +10236,9 @@ const userPreferences=createUserPreferences();
 const startupPreferencesLoaded=userPreferences.load().then(value=>{startupPreferences=value;}).catch(error=>console.warn('User preferences unavailable:',error.message));
 let restoringSettings = false;
 const PERSISTED_SLIDERS = [
-  'ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff',
   'backdrop-brightness', 'dof-focus', 'dof-aperture', 'dof-maxblur'
 ];
-const PERSISTED_CHECKBOXES = ['ao-toggle', 'backdrop-toggle', 'dof-toggle'];
+const PERSISTED_CHECKBOXES = ['backdrop-toggle', 'dof-toggle'];
 
 function saveSettings() {
   if (restoringSettings) return;
@@ -10251,7 +10251,7 @@ function saveSettings() {
     const el = document.getElementById(id);
     if (el) settings[id] = el.checked;
   }
-  Object.assign(settings,environmentLegacySettings(sceneEnvironment));
+  Object.assign(settings,environmentLegacySettings(sceneEnvironment),sceneAO.legacySettings());
   settings.rimLight = readRimLightSettings();
   try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
@@ -10277,6 +10277,7 @@ function restoreSettings() {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
+    sceneAO.restoreLegacy(settings);
     sceneEnvironment.restoreRecipes(settings.environmentRecipes);
     if(typeof settings['show-env-bg']==='boolean')sceneEnvironment.patch({showBackground:settings['show-env-bg']});
     setRimLight(settings.rimLight);
@@ -10331,6 +10332,9 @@ const HDR_ENVS = {
   },
 };
 
+const sceneAO=createSceneAOState();
+let sceneAOControls=null;
+sceneAO.subscribe(applySceneAOParameters);
 const sceneEnvironment=createSceneEnvironmentState({presets:HDR_ENVS});
 sceneEnvironment.subscribe(applyEnvironmentParameters);
 const envCache = {};
@@ -11071,12 +11075,8 @@ async function initScene() {
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
-  // The sliders own the AO starting values; the addon's constructor defaults
-  // are not Kaminos defaults.
-  for (const [id, key] of [['ao-radius', 'radius'], ['ao-scale', 'scale'], ['ao-thickness', 'thickness'], ['ao-falloff', 'distanceFallOff']]) {
-    const value = parseFloat(document.getElementById(id)?.value);
-    if (Number.isFinite(value)) aoPass[key].value = value;
-  }
+  const acceptedAO=sceneAO.read();
+  for(const [field,key] of [['radius','radius'],['scale','scale'],['thickness','thickness'],['falloff','distanceFallOff']])aoPass[key].value=acceptedAO[field];
   configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
@@ -22080,11 +22080,19 @@ function installAuthoringParameterEditing() {
     if(fireControlOwner(alias.dataset.authoringAlias)!=='source')continue;
     authoringControlSessions.push(installSceneControlHistory({controls:[alias],edits,id:()=>ensureFlameSourceDataTarget(workingScene.activeObjectId),label:'Edit flame source',onError:error=>setInfo(error.message)}));
   }
-  for(const id of ['fire-light-gain-stops','exposure-slider',...Object.values(ENVIRONMENT_CONTROL_FIELDS)]) {
+  for(const id of ['fire-light-gain-stops','exposure-slider',...Object.values(ENVIRONMENT_CONTROL_FIELDS),...Object.values(AO_CONTROL_FIELDS)]) {
     const control=document.getElementById(id);if(!control)continue;
     if(id==='exposure-slider') {
       bind('@parameter:exposure-slider',{controls:[control,document.getElementById('rendering-match-flame-camera')],label:'Adjust scene camera',
         read:()=>sceneExposureControls.read(),write:state=>sceneExposureControls.write(state),check:state=>sceneExposureControls.check(state)});
+      continue;
+    }
+    const aoField=Object.keys(AO_CONTROL_FIELDS).find(key=>AO_CONTROL_FIELDS[key]===id);
+    if(aoField){
+      bind(`@parameter:${id}`,{controls:[control],label:'Adjust ambient occlusion',
+        read:()=>({value:sceneAO.read()[aoField]}),
+        write:state=>{sceneAO.patch({[aoField]:state.value});sceneAOControls.sync({force:true});saveSettings();},
+        check:state=>({value:sceneAO.check({[aoField]:state.value})[aoField]})});
       continue;
     }
     const environmentField=Object.keys(ENVIRONMENT_CONTROL_FIELDS).find(key=>ENVIRONMENT_CONTROL_FIELDS[key]===id);
@@ -22204,48 +22212,12 @@ for (const key of [...Object.keys(sceneGISettings).filter(key=>key!=='estimator'
   control.addEventListener('change',()=>setSceneGIControls(sceneGISettings));
 }
 setSceneGIControls(sceneGISettings);
-document.getElementById('ao-toggle').addEventListener('change', e => {
-  document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
-  if (aoIntensity) {
-    aoIntensity.value = effectiveAOIntensity();
-  }
+function applySceneAOParameters(value){
+  if(aoPass)for(const [field,key] of [['radius','radius'],['scale','scale'],['thickness','thickness'],['falloff','distanceFallOff']])aoPass[key].value=value[field];
+  if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
   window._kaminosDirty?.();
-});
-
-document.getElementById('ao-radius').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  document.getElementById('ao-radius-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.radius.value = v;
-  window._kaminosDirty?.();
-});
-
-document.getElementById('ao-intensity').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoIntensity) aoIntensity.value = effectiveAOIntensity();
-  window._kaminosDirty?.();
-});
-
-document.getElementById('ao-scale').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  document.getElementById('ao-scale-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.scale.value = v;
-  window._kaminosDirty?.();
-});
-
-document.getElementById('ao-thickness').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  document.getElementById('ao-thickness-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.thickness.value = v;
-  window._kaminosDirty?.();
-});
-
-document.getElementById('ao-falloff').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  document.getElementById('ao-falloff-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.distanceFallOff.value = v;
-  window._kaminosDirty?.();
-});
+}
+sceneAOControls=bindSceneAOControls({state:sceneAO,document,onAccepted:saveSettings,onError:error=>setInfo(error.message)});
 
 // --- Backdrop ---
 function createBackdrop() {
@@ -24810,15 +24782,7 @@ function buildSceneData(capture = null) {
     flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
     postprocessing: {
       sceneGI: {...sceneGISettings},
-      ao: {
-        enabled: document.getElementById('ao-toggle').checked,
-        radius: readNumberControl('ao-radius'),
-        intensity: readNumberControl('ao-intensity', 1),
-        scale: readNumberControl('ao-scale', 1.62),
-        thickness: readNumberControl('ao-thickness', 1.81),
-        falloff: readNumberControl('ao-falloff', 0.74),
-        farBlend: readNumberControl('ao-falloff', 0.74),
-      },
+      ao: sceneAO.document(),
       dof: {
         enabled: document.getElementById('dof-toggle').checked,
         focus: parseFloat(document.getElementById('dof-focus').value),
@@ -26456,39 +26420,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
-    if (ao) {
-      const aoEnabled = ao.enabled ?? true;
-      document.getElementById('ao-toggle').checked = aoEnabled;
-      document.getElementById('ao-controls').style.display = aoEnabled ? '' : 'none';
-      if (ao.radius !== undefined) {
-        document.getElementById('ao-radius').value = ao.radius;
-        document.getElementById('ao-radius-val').textContent = ao.radius.toFixed(2);
-      }
-      if (ao.intensity !== undefined) {
-        document.getElementById('ao-intensity').value = ao.intensity;
-        document.getElementById('ao-intensity-val').textContent = ao.intensity.toFixed(1);
-      } else if (ao.scale !== undefined) {
-        document.getElementById('ao-intensity').value = ao.scale;
-        document.getElementById('ao-intensity-val').textContent = ao.scale.toFixed(1);
-      }
-      if (ao.scale !== undefined && document.getElementById('ao-scale')) {
-        document.getElementById('ao-scale').value = ao.scale;
-        document.getElementById('ao-scale-val').textContent = ao.scale.toFixed(2);
-      }
-      if (ao.thickness !== undefined && document.getElementById('ao-thickness')) {
-        document.getElementById('ao-thickness').value = ao.thickness;
-        document.getElementById('ao-thickness-val').textContent = ao.thickness.toFixed(2);
-      }
-      const aoFalloff = ao.falloff ?? ao.farBlend;
-      if (aoFalloff !== undefined && document.getElementById('ao-falloff')) {
-        document.getElementById('ao-falloff').value = aoFalloff;
-        document.getElementById('ao-falloff-val').textContent = aoFalloff.toFixed(2);
-      }
-      for (const id of ['ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff']) {
-        document.getElementById(id)?.dispatchEvent(new Event('input'));
-      }
-      document.getElementById('ao-toggle').dispatchEvent(new Event('change'));
-    }
+    if (ao) sceneAO.restoreDocument(ao);
     const dof = data.postprocessing.dof;
     if (dof) {
       const dofEnabled = dof.enabled ?? false;

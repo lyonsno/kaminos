@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
+import {createSceneAOState} from '../scene-ao-state.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const helper = new URL('../scene-ao-depth.mjs', import.meta.url);
@@ -39,6 +40,7 @@ const RendererUtils = {
   },
 };
 const node = {
+  ...Object.fromEntries(['radius','scale','thickness','distanceFallOff'].map(key=>[key,{value:0}])),
   setDepthPass(...args) { configuredDepth = args; },
   updateBefore({ renderer }) {
     // Observed bundled GTAOCompute route: reset, override, draw, restore, compute.
@@ -57,6 +59,7 @@ const end = source.indexOf('  const aoResolved', start);
 assert.ok(start >= 0 && end > start);
 vm.runInNewContext(source.slice(start, end), {
   aoPass: null, aoCompute: () => node, depthTexNode: {}, normalTexNode: {},
+  sceneAO:createSceneAOState(),
   scene, camera, depthRT, depthMaterial, configureMaterialSideAODepth, THREE: { RendererUtils },
 });
 node.updateBefore({ renderer });

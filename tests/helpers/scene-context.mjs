@@ -1,9 +1,11 @@
 import vm from 'node:vm';
+import {createSceneAOState} from '../../scene-ao-state.mjs';
 
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.sceneAO ??= createSceneAOState();
   context.sceneComponents ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {

@@ -196,3 +196,14 @@ Exposure keeps its existing `@parameter:exposure-slider` contract: while matched
 it edits flame-camera EV; otherwise it edits the independent environment multiplier.
 The independent multiplier survives matching and environment recall. UI bounds
 expand to display valid stored recipes without rounding their accepted values.
+
+Ambient occlusion uses `scene-ao-state.mjs` for accepted enable, strength, radius,
+scale, thickness and falloff. The native controls and `@parameter:ao-toggle`,
+`@parameter:ao-intensity`, `@parameter:ao-radius`, `@parameter:ao-scale`,
+`@parameter:ao-thickness` and `@parameter:ao-falloff` history targets edit that same
+owner. Saved scenes, preferences and new renderer passes read accepted values;
+unfinished editor text stays local. Wireframe suppresses effective AO without
+changing its authored settings. Existing `postprocessing.ao` and browser-local
+settings remain supported, including legacy intensity-from-scale and
+falloff-from-farBlend restoration. GTAO/combined-GI shading keeps its existing
+rendering owner. Depth-of-field remains the existing placeholder.
