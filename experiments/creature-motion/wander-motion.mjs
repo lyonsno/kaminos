@@ -1,5 +1,12 @@
 import {createWanderPath} from './wander-path.mjs';
 import {deriveStanceTravel} from './stance-travel.mjs';
+import {createWanderLocomotion} from './wander-locomotion.mjs';
+
+export function readWanderPath(snapshot){
+ return snapshot?.schema==='kaminos.creature-wander-locomotion.v1'
+  ?createWanderLocomotion({snapshot,bodyLength:snapshot.bodyLength,referenceSpeed:snapshot.referenceSpeed}).read()
+  :createWanderPath({snapshot}).read();
+}
 
 export function wanderAreaInPlacement({THREE,areaRoot,placement}) {
  placement.updateMatrixWorld(true);areaRoot.updateMatrixWorld(true);
@@ -14,7 +21,7 @@ export function wanderAreaInPlacement({THREE,areaRoot,placement}) {
 
 // The owner supplies elapsed active time. This adapter creates no clock, makes
 // no new joint motion and leaves source vertical action/local Bone poses intact.
-export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source'}={}) {
+export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source',locomotion=false}={}) {
  if(typeof sourceKey!=='string'||!sourceKey)throw Error('Wander requires explicit motion/bind source identity');
  if(!Number.isInteger(adapter?.frames)||adapter.frames<2||!(adapter.fps>0))throw Error('Wander requires a retained multi-frame pose source');
  const poses=Array.from({length:adapter.frames},(_,i)=>adapter.frame(i));
@@ -28,13 +35,22 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
  const transport=travel==='stance'?deriveStanceTravel({poses,fps:adapter.fps}):{kind:'source-root-distance',unitsPerSecond:sourceDistance/period,forward:sourceForward,contactSolver:false};
  const forward=transport.forward;
  if(!(transport.unitsPerSecond>0)||!(Math.hypot(...forward)>0))throw Error('Wander source has no horizontal root travel/direction');
+ // Use the source axial span rather than the size of an authored region. Small
+ // synthetic/root-only adapters use their measured stride as an explicit scale.
+ const head=poses[0].bones.findIndex(b=>b.name==='head'),axial=head>=0?head:poses[0].bones.findIndex(b=>b.name==='spine-chest');
+ const spans=axial<0?[]:poses.map((p,i)=>Math.hypot(p.bones[axial].worldMatrix[12]-roots[i][0],p.bones[axial].worldMatrix[14]-roots[i][2])).filter(x=>x>0).sort((a,b)=>a-b);
+ const sourceLength=spans.length?spans[Math.floor(spans.length/2)]:transport.unitsPerSecond*period;
+ const inherited=snapshot?.path??pathSnapshot;
+ const navigation=Boolean(locomotion)||inherited?.schema==='kaminos.creature-wander-locomotion.v1';
+ const bodyLength=locomotion?.bodyLength??inherited?.bodyLength??sourceLength;
+ const pathFrom=options=>navigation?createWanderLocomotion({...options,bodyLength,referenceSpeed:transport.unitsPerSecond}):createWanderPath(options);
  let elapsed=0,heldFrame=null,path,contactRate=1;
  if(snapshot!==undefined) {
   if(snapshot?.schema!=='kaminos.creature-wander-motion.v1'||snapshot.sourceKey!==sourceKey||!Number.isFinite(snapshot.elapsed)||snapshot.elapsed<0||(snapshot.heldFrame!==null&&(!Number.isInteger(snapshot.heldFrame)||snapshot.heldFrame<0||snapshot.heldFrame>=adapter.frames)))throw Error('Wander snapshot has invalid time, frame or source identity');
   if((snapshot.travel??'source')!==travel)throw Error('Wander snapshot travel policy differs from requested travel');
   contactRate=snapshot.contactRate??1;if(!Number.isFinite(contactRate)||contactRate<0||contactRate>1)throw Error('Invalid physical gait rate');
-  elapsed=snapshot.elapsed;heldFrame=snapshot.heldFrame;path=createWanderPath({snapshot:snapshot.path});
- } else path=pathSnapshot?createWanderPath({snapshot:pathSnapshot}):createWanderPath({area,position,direction,seed});
+  elapsed=snapshot.elapsed;heldFrame=snapshot.heldFrame;path=pathFrom({snapshot:snapshot.path});
+ } else path=pathSnapshot?pathFrom({snapshot:pathSnapshot}):pathFrom({area,position,direction,seed});
  function timing(time=elapsed) {
   const sourceFrames=time*adapter.fps,nearest=Math.round(sourceFrames);
   const stableFrames=Math.abs(sourceFrames-nearest)<=16*Number.EPSILON*Math.max(1,sourceFrames)?nearest:sourceFrames;
@@ -50,7 +66,7 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   if(direction)path.redirect(direction);
   const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;heldFrame=null;
   const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
-  path.advance(Math.max(0,distance)*distanceScale);
+  path.advance(Math.max(0,distance)*distanceScale,{seconds:delta});
   const consumed=path.read().distance-pathBefore;
   if(consumed<distance-1e-10){
    // Stop the retained gait at the same travelled distance as the root.
@@ -65,20 +81,20 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
    const to=path.read(),allowed=admit({from,to,turnOnly:false});
    if(!Number.isFinite(allowed)||allowed<0||allowed>1)throw Error('Motion admission must return a fraction in [0,1]');
    if(allowed<1){
-    path=createWanderPath({snapshot:prior.path});elapsed=prior.elapsed;heldFrame=prior.heldFrame;
+    path=pathFrom({snapshot:prior.path});elapsed=prior.elapsed;heldFrame=prior.heldFrame;
     // A blocked journey may still turn out of contact. Keep its gait held and
     // admit that rotation separately; never apply a fraction of an unchecked
     // rebuilt curve or silently consume its random state.
     const angle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);
     const fraction=admit({from,to:{...from,direction:to.direction},turnOnly:true});
     if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Motion admission must return a fraction in [0,1]');
-    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction);path.redirect([c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]]);}
+    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);}
    }
   }
   return read();
  }
  function contact(before,{position,direction}){
-  const start=before.path,prior=createWanderPath({snapshot:start}).read(),proposed=path.read();
+  const start=before.path,prior=pathFrom({snapshot:start}).read(),proposed=path.read();
   const wanted=proposed.position.map((x,i)=>x-prior.position[i]),actual=position.map((x,i)=>x-prior.position[i]);
   const length2=wanted.reduce((n,x)=>n+x*x,0),fraction=length2>1e-16?Math.max(0,Math.min(1,actual.reduce((n,x,i)=>n+x*wanted[i],0)/length2)):1;
   // A stationary source interval has no travel to obstruct; allow its next
