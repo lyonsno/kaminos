@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import {sceneContext} from './helpers/scene-context.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
 import {createSceneMembershipOperations} from '../scene-membership-operations.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
@@ -307,7 +308,7 @@ test('geometry replacement after membership Undo survives release of the old roo
     const {object, ...record} = entry;
     return structuredClone(record);
   };
-  const context = vm.createContext({
+  const context = sceneContext({
     structuredClone, THREE, workingScene, scene, proceduralMeshes, edits,
     createSceneMembershipOperations, checkedProceduralMesh, createProceduralMesh,
     PROCEDURAL_MESH_TYPE, CAMERA_TYPE:'camera', LOCAL_LIQUID_EMITTER_TYPE:'water', FLAME_EMITTER_TYPE:'flame',
