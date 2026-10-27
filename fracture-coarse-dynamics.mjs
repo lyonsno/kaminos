@@ -36,7 +36,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   for(const cell of cells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
-  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=Math.min(config.initialJointPenalty,data[j*44+17]);}}
+  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.elasticModulus?data[j*44+16]:Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=config.elasticModulus?data[j*44+17]:Math.min(config.initialJointPenalty,data[j*44+17]);}}
   const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
   engine.setGravity([0,0,0]);
   engine.step(config.timeStep,renderer);
