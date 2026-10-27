@@ -48,3 +48,10 @@ test('failed withdrawal prevents outside-queue execution and records the unresol
   onWait:()=>bypass.abort(),sleep:async()=>{}},async()=>assert.fail('not started')).catch(e=>e);
  assert.match(error.message,/server unavailable/);assert.equal(error.greenroomHandback?.state,'withdrawal-failed');
 });
+
+test('queued admission rechecks within one normal worker polling interval',async()=>{
+ const delays=[];let claims=0;
+ await withGreenroomLease({admission:'queue',runId:'r',route:'prompt',sleep:async ms=>delays.push(ms),
+  post:async body=>body.action==='queued-claim'&&claims++===0?{status:'waiting'}:body.action==='queued-claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'}},async()=>{});
+ assert.deepEqual(delays,[2000]);
+});

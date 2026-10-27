@@ -8,7 +8,7 @@
 // fails the run: running unleased silently is what the lease exists to prevent.
 export async function withGreenroomLease({post,runId,route,signal=null,onWait=()=>{},unsettledWork=async()=>[],
   admission='lease',bypassSignal=null,
-  retryMs=15000,sleep=ms=>new Promise(r=>setTimeout(r,ms)),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)},run){
+  retryMs=admission==='queue'?2000:15000,sleep=ms=>new Promise(r=>setTimeout(r,ms)),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)},run){
   if(!['lease','queue','outside'].includes(admission))throw Error('Unknown GPU admission mode');
   const stopped=()=>{if(signal?.aborted)throw Object.assign(Error('GPU wait stopped'),{name:'AbortError'});};
   let lease,queued=false,withdrawAttempted=false;
