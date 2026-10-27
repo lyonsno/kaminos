@@ -108,7 +108,7 @@ const renderEnd = html.indexOf('\n  }\n', renderStart) + 6;
 assert.ok(frameStart >= 0 && frameEnd > frameStart && renderStart >= 0 && renderEnd > renderStart);
 const skippedHost = vm.runInNewContext(`${html.slice(renderStart, renderEnd)}\n({${html.slice(frameStart, frameEnd).trim().replace(/,$/, '')}})`, {
   foregroundServiceActive: true, insideForegroundFrame: false, sceneRenderedForVolume: false, sceneFrameCount: 7,
-  authoredWaterFlameTransportActive:false,exclusiveInspectionRender: false, manualInspectionRender: false, renderer: {},
+  authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,exclusiveInspectionRender: false, manualInspectionRender: false, renderer: {},
   document: { getElementById: () => ({ value: 'custom' }) }, THREE: { ACESFilmicToneMapping: 1, AgXToneMapping: 2 },
   window: { __kaminosSceneRadiance: { canRender: () => false } },
   syncViewportRendererSize() {}, camera: { updateMatrixWorld() {} }, fireLightFieldPass: null,

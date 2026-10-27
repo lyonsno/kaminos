@@ -3,6 +3,11 @@ import {createFireLightFieldShadow} from './fire-light-field-shadow.mjs';
 import {validateScenePointSource} from './scene-volume-source.mjs';
 import {SCENE_MEDIUM_LOOKUP_WGSL,SCENE_POINT_TRANSFER_WGSL} from './scene-point-light.mjs';
 
+const sourceMaterials=new WeakMap();
+export function sceneRadianceSourceMaterial(material){
+  while(sourceMaterials.has(material))material=sourceMaterials.get(material);
+  return material;
+}
 export function cloneSceneRadianceMaterial(library, original) {
   const material=library.fromMaterial(original).clone();
   // Bundled NodeMaterial.copy preserves node slots but omits the ordinary
@@ -10,6 +15,7 @@ export function cloneSceneRadianceMaterial(library, original) {
   // as well; adding irradiance must not replace the kiln's material.
   const physical=original.isMeshPhysicalMaterial || original.isMeshPhysicalNodeMaterial;
   (physical?THREE.MeshPhysicalMaterial:THREE.MeshStandardMaterial).prototype.copy.call(material,original);
+  sourceMaterials.set(material,original);
   return material;
 }
 

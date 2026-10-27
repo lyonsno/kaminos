@@ -1,3 +1,4 @@
+import {assertSceneSourcesReloadable} from '../scene-persistence-core.js';
 import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import {readOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 import assert from 'node:assert/strict';
@@ -13,14 +14,14 @@ const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end
 function mounted() {
   let status = '';
   const context = sceneContext({
-    window: {}, authoringWorkspace:null,readOwnerExperimentAddress, authoringBusy: false, vantageCaptureHeld: false, currentSceneFile: 'input.kaminos.json',
+    assertSceneSourcesReloadable,window: {}, authoringWorkspace:null,readOwnerExperimentAddress, authoringBusy: false, vantageCaptureHeld: false, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
     grBrowseScenes() {}, compositionRestoreUrl,savedSceneLocation:authoring.savedSceneLocation,URL,URLSearchParams,location: { origin: 'http://localhost:9000',href:'http://localhost:9000/?mesh_root=generated-meshes#authoring=1&scene=input.kaminos.json' },history:{replaceState(_state,_title,url){context.location.href=url;}},
     sceneSaveIsBlocked: () => false, sceneIsEmpty: () => false,
     collectSceneComposition: async () => () => {},
     buildSceneData: capture => ({ label: 'Comparison', composition: null,
-      objects: [{ id: 'actual-object', transform: { position: [1, 2, 3] } }], capture: capture || null }),
+      objects: [{ id: 'actual-object',type:'glb',source:'/api/read?root=generated-meshes&path=fixture.glb', transform: { position: [1, 2, 3] } }], capture: capture || null }),
     fetch: async () => ({ ok: true, json: async () => ({ saved: 'accepted.kaminos.json' }) }),
     selectionCaptureSuspended:false,selectionFeedback:null,selectionBoxes:new Map(),updateSelectionFeedback(){},
     sceneObjects: [], volumePrototype: null, activeSceneComposition: null,sceneCameras:null,
@@ -107,7 +108,7 @@ test('overlapping invocation cannot claim the first save result', async () => {
 
 test('result retains the submitted scene while later edits continue independently', async () => {
   const { context, run } = mounted();
-  const scene = { objects: [{ id: 'object', transform: { position: [1, 2, 3] } }], composition: null };
+  const scene = { objects: [{ id:'object',type:'glb',source:'/api/read?root=generated-meshes&path=fixture.glb', transform: { position: [1, 2, 3] } }], composition: null };
   context.buildSceneData = () => scene;
   const result = await run('window.saveSceneAs({result:true})');
   scene.objects[0].transform.position[0] = 9;

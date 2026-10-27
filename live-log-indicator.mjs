@@ -1,7 +1,11 @@
 import * as THREE from './lib/three.webgpu.js';
 
-export function createLogBurnIndicator({object,fields,document}) {
+export function createLogBurnIndicator({object,fields,document,fitObject=false}) {
   const group=new THREE.Group(),owned=[];
+  group.userData.kaminosBurnIndicator=true;
+  group.userData.kaminosEditorHelper=true;
+  const bounds=new THREE.Box3().setFromObject(object),size=bounds.getSize(new THREE.Vector3()),worldScale=object.getWorldScale(new THREE.Vector3());
+  const width=fitObject?Math.min(.9,Math.max(size.x,size.z)*1.2):.9;
   let summary=fields[0].summaryNode;
   for(const field of fields.slice(1))summary=summary.max(field.summaryNode);
   const burning=summary.z.greaterThan(.002),warm=summary.x.greaterThan(.08);
@@ -15,10 +19,10 @@ export function createLogBurnIndicator({object,fields,document}) {
     ctx.font='bold 36px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=color;ctx.fillText(text,256,48);
     const texture=new THREE.CanvasTexture(canvas),material=new THREE.SpriteNodeMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false});
     material.opacityNode=condition.select(THREE.TSL.float(1),THREE.TSL.float(0));
-    const sprite=new THREE.Sprite(material);sprite.scale.set(.9,.17,1);sprite.renderOrder=10000;group.add(sprite);owned.push(texture,material);
+    const sprite=new THREE.Sprite(material);sprite.scale.set(width/Math.abs(worldScale.x),width*(.17/.9)/Math.abs(worldScale.y),1);sprite.renderOrder=10000;group.add(sprite);owned.push(texture,material);
   }
   object.add(group);
-  const bounds=new THREE.Box3().setFromObject(object),local=object.worldToLocal(bounds.getCenter(new THREE.Vector3()));
-  local.y+=bounds.getSize(new THREE.Vector3()).y/object.getWorldScale(new THREE.Vector3()).y*.7;group.position.copy(local);
+  const local=object.worldToLocal(bounds.getCenter(new THREE.Vector3()));
+  local.y+=size.y/worldScale.y*.7;group.position.copy(local);
   return {dispose(){object.remove(group);for(const resource of owned)resource.dispose();}};
 }

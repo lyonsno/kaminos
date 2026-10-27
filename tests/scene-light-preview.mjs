@@ -138,7 +138,7 @@ test('clearing during preview releases the detached authored roots',async()=>{
  state.disposeObjectTree=object=>{if(object===root)disposed++;};
  await state.greenroomViewMesh('/preview.glb','preview.glb',{});
  Object.assign(state,{authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
- groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
+ groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
  localLiquidDomainGuide:null,flameDomainGuide:null,localLiquidGeneration:0,localLiquidHost:null});
  state.sceneLoadRequests=state.workingScene.loads??{invalidate(){},isCurrent:()=>false};
  state.sceneLifecycle=state.createPageSceneLifecycle();state.clearScene();
