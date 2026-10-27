@@ -13,7 +13,7 @@ export const GRID_TUNING_GROUPS = [
 export const GRID_TUNING_FIELDS=GRID_TUNING_GROUPS.flatMap(g=>g.fields);
 const cells=d=>d.reduce((a,b)=>a*b,1);
 export function gridTuningPlan(c,limits={},context={}) {
- const width=Number(c.resolution??64),shape=resolveGridHeight(c,width);
+ const width=Number(c.resolution??64);if(!Number.isSafeInteger(width)||width<4)throw Error('Fine material width must be an integer of at least 4 cells');const shape=resolveGridHeight(c,width);
  const fine=fineGridPlan({materialDims:[width,shape.heightCells,width],velocity:Number(c.fineVelocity??0),pressure:Number(c.finePressure??0)});
  const iterations=Number(c.pressureSolverIterations??60);
  if(!Number.isInteger(iterations)||iterations<0)throw Error('Fine pressure iterations must be a nonnegative integer');
@@ -27,7 +27,7 @@ export function gridTuningPlan(c,limits={},context={}) {
  if(regions)rows.push({name:'World',...regions.world,iterations:regions.worldIterations});
  for(const r of rows) {
   const fine=r.name==='Fine';
-  if(fine&&Math.max(9*r.flowDims[0],r.flowDims[1])>(limits.maxTextureDimension3D??Infinity))throw Error('Fine velocity auxiliary textures exceed this GPU texture limit');
+  if(fine&&r.materialPerVelocity!==1&&Math.max(9*r.flowDims[0],r.flowDims[1])>(limits.maxTextureDimension3D??Infinity))throw Error('Fine velocity auxiliary textures exceed this GPU texture limit');
   for(const [kind,dims,bytesPerCell] of [['material',r.materialDims,fine?64:32],['velocity',r.flowDims,fine?64:16],['pressure',r.pressureDims,fine?64:8]]) {
    if(!dims)continue; // The legacy middle flow borrows world material.
    if(dims.some(n=>n>(limits.maxTextureDimension3D??Infinity)) || (fine&&3*width>(limits.maxTextureDimension3D??Infinity)))throw Error(`${r.name} ${kind} dimensions exceed this GPU's texture limit`);

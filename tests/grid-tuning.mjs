@@ -31,3 +31,13 @@ test('follow pressure shows the effective legacy plan and its fallback',()=>{
  assert.match(gridTuningSummary(fallback.rows[0],64),/requires-converged-pressure/);
  assert.throws(()=>gridTuningPlan({...d,finePressure:16,pressureSolver:'legacy'}),/requires-converged-pressure/);
 });
+
+test('material admission matches runtime minimum and rejects before fallback',()=>{
+ for(const resolution of [3,0,1,2,-1,37.5,NaN,Infinity])assert.throws(()=>gridTuningPlan({...c,resolution}));
+ assert.doesNotThrow(()=>gridTuningPlan({...c,resolution:37}));
+});
+test('shared velocity uses material auxiliaries, independent velocity uses its larger atlas',()=>{
+ const limits={maxTextureDimension3D:256};
+ assert.doesNotThrow(()=>gridTuningPlan({...c,resolution:64,fineVelocity:0,finePressure:0},limits));
+ assert.throws(()=>gridTuningPlan({...c,resolution:64,fineVelocity:32},limits),/auxiliary/);
+});
