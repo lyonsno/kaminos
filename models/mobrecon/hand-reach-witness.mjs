@@ -138,6 +138,22 @@ async function main() {
       assert.notDeepEqual(later.state.indexTip,first.state.indexTip);
       return {first,later,...image,laterImage:await capture('inference-later')};
     });
+    await step('inferred-hand-contact',async()=>{
+      await invoke('setPhysicsPaused',true);
+      const before=await read();assertLivePlacement(before);
+      const tip=before.state.proxies.find(p=>p.id==='index-3-4/4');assert.ok(tip,'actual inferred index collider required');
+      const cubePosition=tip.position.map((v,i)=>v+(i===0?.025:0));
+      await invoke('setCube',{position:cubePosition,size:.045});
+      const events=before.state.contactEvents;
+      for(let i=0;i<30;i++)await invoke('advancePhysics',1/120);
+      const after=await read();assertLivePlacement(after);
+      assert.ok(after.state.contactEvents>events,'actual inferred hand must generate solver contact');
+      assert.equal(after.state.grabbed,false,'actual contact must not use pinch attachment');
+      assert.ok(Math.hypot(...after.state.cubePosition.map((v,i)=>v-cubePosition[i]))>.001,'contact exercise moves the dynamic cube');
+      const image=await capture('inferred-hand-contact');
+      await invoke('setPhysicsPaused',false);
+      return {setup:'cube placed beside current inferred index collider; not an autonomous grasp',input:before.inputSource,before,after,...image};
+    });
     await step('miss-clears-contact',async()=>{await invoke('setThreshold',1);await wait('r.presentation === "no-hand"');const r=await read();assert.equal(r.visible,false);assert.equal(r.state.grabbed,false);assert.equal(r.state.contact,false);return r;});
     await step('reacquire-stop',async()=>{await invoke('setThreshold',.8);await wait('r.visible');const r=await read();assertLivePlacement(r);await invoke('stop');const stopped=await read();assert.equal(stopped.running,false);assert.equal(stopped.visible,false);assert.equal(stopped.camera,null);return {r,stopped};});
     await step('retained-trial',async()=>{

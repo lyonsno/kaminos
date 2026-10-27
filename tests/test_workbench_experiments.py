@@ -43,6 +43,15 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class CatalogueTests(unittest.TestCase):
+    def test_hand_reach_is_available_in_the_real_catalogue(self):
+        spec = importlib.util.spec_from_file_location('discovery', MODULE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        rows = module.experiment_catalogue(MODULE.parent, ['/experiments/hand-reach.experiment.mjs'])
+        self.assertNotIn('error', rows[0], 'the hand consumer must be admitted by actual Workbench discovery')
+        self.assertEqual(rows[0]['id'], 'hand-reach')
+        self.assertEqual(rows[0]['title'], 'Hand reach')
+
     def test_metadata_is_independent_of_broken_code_and_refreshes(self):
         spec = importlib.util.spec_from_file_location('discovery', MODULE)
         module = importlib.util.module_from_spec(spec)
