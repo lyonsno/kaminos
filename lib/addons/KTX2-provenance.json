@@ -35,5 +35,10 @@
       "bytes": 1388,
       "sha256": "a578df416c1e0852e9c36a1cf91b4d28d91a251294f87ce610a3bc7ca4df15e0"
     }
+  },
+  "basisLicense": {
+    "source": "https://raw.githubusercontent.com/BinomialLLC/basis_universal/master/LICENSE",
+    "sha256": "065fcf48d6af21c0b75e23be5ed5753aee75c892e1c2cf178fa6736305614a5c",
+    "local": "libs/basis/LICENSE"
   }
 }
