@@ -1,6 +1,7 @@
 import {Group, Mesh, BufferGeometry, BufferAttribute, MeshStandardMaterial, SphereGeometry, BoxGeometry} from '../lib/three.core.js';
 import {createHandMeshApp} from '../models/mobrecon/hand-mesh-app.js';
 import {disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
+import {HAND_CONTACT_TABLE} from '../models/mobrecon/hand-contact-state.js';
 
 const positive = (value, name) => {
   if (!Number.isFinite(value) || value <= 0) throw Error(`${name} must be positive`);
@@ -45,8 +46,10 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   });
   let retainTrial = inputs.retainTrial ?? true, trial = null, trialFinish = null;
   let retention = {status:'idle',id:null,frames:0,error:null};
+  let physicsOptions={...inputs.physics};
+  const capturePhysics=s=>{if(s.backend==='cannon-es-cpu')physicsOptions={motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius,tableHeight:s.tableHeight};};
   const makeState=dependencies.createState??(async mode=>mode==='physical-contact'
-    ? (await import('../models/mobrecon/hand-contact-state.js')).createHandContactState(inputs.physics)
+    ? (await import('../models/mobrecon/hand-contact-state.js')).createHandContactState(physicsOptions)
     : (await import('../models/mobrecon/hand-reach-state.js')).createHandReachState());
   let state=await makeState(interaction);
   if (inputs.target) state.setTarget({position: position(inputs.target.position), radius: positive(inputs.target.radius, 'Target radius')});
@@ -60,7 +63,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   target.name = 'Fingertip target';
   const cube = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({color: 0x40a6c8, roughness: .45}));
   cube.name = 'Contact cube'; cube.castShadow = true; cube.receiveShadow = true;
-  const table=new Mesh(new BoxGeometry(.65,.012,.5),new MeshStandardMaterial({color:0x89938f,roughness:.85}));
+  const table=new Mesh(new BoxGeometry(HAND_CONTACT_TABLE.width,HAND_CONTACT_TABLE.thickness,HAND_CONTACT_TABLE.depth),new MeshStandardMaterial({color:0x89938f,roughness:.85}));
   table.name='Contact table';table.receiveShadow=true;
   const proxies=new Group();proxies.name='Physical contact hand';
   const proxyGeometry=new SphereGeometry(1,10,8),proxyMeshes=new Map();
@@ -78,6 +81,9 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const video = document.createElement('video');
   video.muted = true; video.autoplay = true; video.playsInline = true;
   const abort = new AbortController(), destroyedApps = new WeakMap();
+  let physicsAt=now();
+  const rebasePhysicsClock=()=>{physicsAt=now();};
+  document.addEventListener?.('visibilitychange',rebasePhysicsClock);
   let app = null, registration = null, registrationLoading = null, loading = null, progress = null;
   let stream = null, running = false, starting = false, disposed = false, closing = null;
   let generation = 0, observationEpoch = 0, configRevision = 0, frameCallback, flight = null;
@@ -105,7 +111,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     authority: 'uncalibrated-hand-reach-experiment', interactionAuthority: 'local-target-and-cube-only',
     running, starting, disposed, loading: Boolean(loading), progress, error, presentation, visible: hand.visible,
     handedness, detectorThreshold, focalRatio, packages, registrationUrl,interaction,showProxies,fitPolicy,
-    physicsClock:{paused:physicsPaused,hidden:document.visibilityState==='hidden'},
+    physicsClock:{paused:physicsPaused,hidden:document.visibilityState==='hidden',source:'monotonic-presentation-time'},
     retainTrial, retention:{...retention},
     inputSource: inputSource ? structuredClone(inputSource) : null,
     identity: app?.identity ?? null, application: app?.snapshot() ?? null, registrationIdentity: registration?.identity ?? null,
@@ -144,7 +150,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if(s.cubeQuaternion)cube.quaternion.fromArray(s.cubeQuaternion);else cube.quaternion.set(0,0,0,1);
     const touching=new Set((s.contacts??[]).filter(c=>c.finger).map(c=>c.other));
     cube.material.color.setHex(touching.size||s.grabbed ? 0xf2ba57 : 0x40a6c8);
-    table.visible=interaction==='physical-contact';table.position.set(0,(s.tableHeight??.16)-.006,0);
+    table.visible=interaction==='physical-contact';table.position.set(0,(s.tableHeight??.16)-HAND_CONTACT_TABLE.thickness/2,0);
     const live=new Set();
     for(const p of s.proxies??[]) {
       live.add(p.id);let mesh=proxyMeshes.get(p.id);
@@ -165,8 +171,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     presentation = reason; hand.visible = false; state.lose(); drawState();
   };
   const applied = kind => {sync(); const effective = read(); record({kind: `hand-reach.${kind}`, phase: 'applied', target: asset.id, effective}); return effective;};
-  const remember = () => {const s = state.read(); updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,interaction,showProxies,fitPolicy,
-    physics:s.backend?{motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius,tableHeight:s.tableHeight}:inputs.physics,
+  const remember = () => {const s = state.read();capturePhysics(s);updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,interaction,showProxies,fitPolicy,
+    physics:{...physicsOptions},
     target: s.target, cube: {position: s.cubePosition, size: s.cubeSize}});};
   const finishTrial = () => {
     if (!trial) return trialFinish;
@@ -372,7 +378,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     finally {if (current(ticket)) {starting = false; sync();}}
   };
   const frame = () => {assertOpen(); session.setView({position: [0, .36, .7], target: [0, .23, 0], up: [0, 1, 0], near: .01}); return applied('frame');};
-  const unsubscribe = session.onFrame(({deltaSeconds=0}={}) => {
+  const unsubscribe = session.onFrame(() => {
     if (disposed) return;
     if (running) {
       if (!video.requestVideoFrameCallback && video.readyState >= 2) observeFrame(generation, video.currentTime);
@@ -380,8 +386,9 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       else if (hand.visible && lastCaptureAt !== null && now() - lastCaptureAt > predictionBudget()) lose('prediction-stale');
       infer(generation);
     }
+    const at=now(),elapsed=(at-physicsAt)/1000;physicsAt=at;
     if(state.advance&&!physicsPaused&&document.visibilityState!=='hidden') {
-      try{state.advance(deltaSeconds);drawState();}catch(cause){physicsPaused=true;error=message(cause);sync();}
+      try{state.advance(elapsed);drawState();}catch(cause){physicsPaused=true;error=message(cause);sync();}
     }else sync();
   });
   drawState(); frame();
@@ -390,12 +397,12 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     async setInteraction(value) {
       assertOpen();const mode=interactionValue(value);if(mode===interaction)return read();
       const stopping=stop(),ticket=generation;await stopping;if(!current(ticket))return read();
-      const previous=state.read(),next=await makeState(mode);
+      const previous=state.read();capturePhysics(previous);const next=await makeState(mode);
       if(!current(ticket)){next.dispose?.();return read();}
       next.setTarget(previous.target);next.setCube({position:previous.cubePosition,size:previous.cubeSize});
       state.dispose?.();state=next;interaction=mode;drawState();remember();return applied('interaction');
     },
-    setPhysicsPaused(value){assertOpen();physicsPaused=Boolean(value);return applied('physics-paused');},
+    setPhysicsPaused(value){assertOpen();physicsPaused=Boolean(value);rebasePhysicsClock();return applied('physics-paused');},
     setFitPolicy(value){assertOpen();fitPolicy=fitValue(value);configRevision++;lose('awaiting-frame');remember();return applied('placement-fit');},
     setShowProxies(value){assertOpen();showProxies=Boolean(value);drawState();remember();return applied('contact-hand');},
     configurePhysics(value){assertOpen();if(!state.configure)throw Error('Select contact physics first');state.configure(value);remember();return applied('physics');},
@@ -528,7 +535,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     },
     dispose() {
       if (closing) return closing;
-      disposed = true; unsubscribe(); abort.abort('Hand reach closed');
+      disposed = true; unsubscribe();document.removeEventListener?.('visibilitychange',rebasePhysicsClock);abort.abort('Hand reach closed');
       const stopped = stop();
       closing = (async () => {
         const results = await Promise.allSettled([stopped, destroyApp(app), loading, registrationLoading]);

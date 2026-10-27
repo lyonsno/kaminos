@@ -12,6 +12,8 @@ assert.ok(falling.read().cubePosition[1]<.23,'a released cube must fall under gr
 if(baseline)process.exit(0);
 step(falling,1);
 assert.ok(Math.abs(falling.read().cubePosition[1]-.0225)<.002,'table supports a resting cube');
+const offTable=create({cube:{position:[.4,.3,0],size:.045}});
+step(offTable,1);assert.ok(offTable.read().cubePosition[1]<0,'a cube beyond the visible table falls instead of finding invisible support');offTable.dispose();
 assert.equal(falling.read().backend,'cannon-es-cpu');
 assert.equal(falling.read().grabbed,false,'there is no hidden attachment');
 

@@ -33,6 +33,30 @@ test('a newer live start supersedes a contact-mode change waiting on an old infe
   assert.equal(f.instance.read().interaction,'physical-contact');
   assert.equal(f.instance.read().running,true);await f.instance.dispose();
 });
+
+test('hidden time is excluded even when no frame is delivered while hidden',async()=>{
+  const f=await fixture({createState:null,inputs:{physics:{tableHeight:0},cube:{position:[0,.3,0],size:.045}}});
+  f.tick(16);const before=f.instance.read().state;
+  f.hostDocument.visibilityState='hidden';f.hostDocument.dispatchEvent(new Event('visibilitychange'));
+  f.elapseWithoutHostFrame(1000);
+  f.hostDocument.visibilityState='visible';f.hostDocument.dispatchEvent(new Event('visibilitychange'));
+  f.deliverFrame(1);
+  assert.equal(f.instance.read().state.simulationSeconds,before.simulationSeconds,'resumption does not simulate hidden time');
+  assert.deepEqual(f.instance.read().state.cubePosition,before.cubePosition);
+  f.tick(16);assert.ok(Math.abs(f.instance.read().state.simulationSeconds-before.simulationSeconds-.016)<1e-9);
+  await f.instance.dispose();
+});
+
+test('comparison round trip retains edited physical settings and the shared recipe',async()=>{
+  const f=await fixture({createState:null,inputs:{physics:{tableHeight:.11,motorForce:.2}}});
+  f.instance.operations.configurePhysics({motorForce:.12,friction:.15,fingerRadius:.011});
+  await f.instance.operations.setInteraction('pinch-attachment');
+  await f.instance.operations.setInteraction('physical-contact');
+  const s=f.instance.read().state;
+  assert.deepEqual([s.motorForce,s.friction,s.fingerRadius,s.tableHeight],[.12,.15,.011,.11]);
+  assert.deepEqual(f.recipes.at(-1).physics,{motorForce:.12,friction:.15,fingerRadius:.011,tableHeight:.11});
+  await f.instance.dispose();
+});
 const prediction = (overrides = {}) => ({hasHand: true, handedness: 'right', width: 640, height: 480,
   nativeVertices: new Float32Array(9), nativeUV: new Float32Array(42),
   verticesMeters: new Float32Array([0, 0, 0, .02, 0, 0, 0, .02, 0]), cropBox: [10, 20, 200, 210],
@@ -60,6 +84,7 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
     muted: true, style: {}, play: play ?? (async () => {}), pause() {},
     requestVideoFrameCallback(fn) {const id = ++nextCallback; callbacks.set(id, fn); return id;},
     cancelVideoFrameCallback(id) {callbacks.delete(id);}});
+  const hostDocument=Object.assign(new EventTarget(),{visibilityState:'visible',createElement:()=>video});
   const device = {destroy() {throw Error('borrowed device destroyed');}};
   const scene = new THREE.Scene(), borrowed = new THREE.Group(), camera = new THREE.PerspectiveCamera(40, 1, .01, 100);
   scene.add(borrowed);
@@ -87,7 +112,7 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
     return {id: `stream-${tracks.length}`, getTracks: () => [track], getVideoTracks: () => [track]};
   };
   const instance = await createHandReachExperiment({host: {scene: {open: async () => hostScene.open()},
-    controls: {document: {createElement: () => video}, installNumberDrag(options) {
+    controls: {document:hostDocument, installNumberDrag(options) {
       const drag = {...options, disposed: false, dispose() {this.disposed = true;}}; drags.push(drag); return drag;
     }}}, inputs: {retainTrial:false,...inputs}, record: row => events.push(row), updateInputs: recipe => recipes.push(recipe)}, {
     now: () => time, createState, getGpu: async () => ({device}),
@@ -97,7 +122,7 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
     createRegistration: () => registration,
     createRetention, captureInput,
   });
-  return {instance, video, tracks, scene, borrowed, rows, placements, captures, events, callbacks, app, registration, acquireDefault, drags, recipes,
+  return {instance, video, tracks, scene, borrowed, rows, placements, captures, events, callbacks, app, registration, acquireDefault, drags, recipes,hostDocument,
     get appOptions() {return appOptions;}, counts: () => ({loads, destroyed, appCreates, registrationLoads}),
     async videoFrame(mediaTime = video.currentTime + .033) {
       video.currentTime = mediaTime;
@@ -107,6 +132,7 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
     },
     tick(ms) {time += ms; frame?.({timestampMs: time, deltaSeconds: ms / 1000});},
     elapseWithoutHostFrame(ms) {time += ms;},
+    deliverFrame(seconds){frame?.({timestampMs:time,deltaSeconds:seconds});},
   };
 }
 

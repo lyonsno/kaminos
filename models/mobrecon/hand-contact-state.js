@@ -3,6 +3,7 @@ import * as CANNON from '../../node_modules/cannon-es/dist/cannon-es.js';
 const finitePoint = p => p?.length === 3 && Array.from(p).every(Number.isFinite);
 const distance = (a,b) => Math.hypot(...a.map((v,i)=>v-b[i]));
 const fingers = ['thumb','index','middle','ring','little'];
+export const HAND_CONTACT_TABLE=Object.freeze({width:.65,thickness:.012,depth:.5});
 const positive = (v,name) => {if(!Number.isFinite(v)||v<=0)throw Error(`invalid ${name}`);return v;};
 const nonnegative=(v,name)=>{if(!Number.isFinite(v)||v<0)throw Error(`invalid ${name}`);return v;};
 
@@ -45,7 +46,8 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
   world.addContactMaterial(new CANNON.ContactMaterial(tableMaterial,cubeMaterial,{friction:.55,restitution:0}));
   world.addContactMaterial(new CANNON.ContactMaterial(tableMaterial,handMaterial,{friction:.15,restitution:0}));
   const table=new CANNON.Body({mass:0,material:tableMaterial,collisionFilterGroup:2,collisionFilterMask:1|4});
-  table.addShape(new CANNON.Plane());table.quaternion.setFromEuler(-Math.PI/2,0,0);table.position.y=tableHeight;world.addBody(table);
+  table.addShape(new CANNON.Box(new CANNON.Vec3(HAND_CONTACT_TABLE.width/2,HAND_CONTACT_TABLE.thickness/2,HAND_CONTACT_TABLE.depth/2)));
+  table.position.y=tableHeight-HAND_CONTACT_TABLE.thickness/2;world.addBody(table);
   const box=new CANNON.Body({mass:.04,material:cubeMaterial,collisionFilterGroup:1,collisionFilterMask:2|4,
     linearDamping:.05,angularDamping:.08,allowSleep:true});world.addBody(box);
   const bodies=new Map();
