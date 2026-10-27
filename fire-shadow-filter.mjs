@@ -48,15 +48,15 @@ export function cubeComparisonFootprint(ray,resolution){
 export function cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,resolution}){
   const {Fn,vec2,vec3,float}=THREE.TSL;
   return Fn(()=>{
-    const a=ray.abs(),isX=a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),isY=isX.not().and(a.y.greaterThanEqual(a.z));
-    const major=a.x.max(a.y).max(a.z).max(1e-8);
-    const uv=isX.select(ray.yz,isY.select(vec2(ray.x,ray.z),ray.xy)).div(major);
-    const p=uv.add(1).mul(resolution/2).sub(.5),base=p.floor(),f=p.sub(base);
+    const a=ray.abs().toVar(),isX=a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),isY=isX.not().and(a.y.greaterThanEqual(a.z));
+    const major=a.x.max(a.y).max(a.z).max(1e-8).toVar();
+    const uv=isX.select(ray.yz,isY.select(vec2(ray.x,ray.z),ray.xy)).div(major).toVar();
+    const p=uv.add(1).mul(resolution/2).sub(.5).toVar(),base=p.floor().toVar(),f=p.sub(base).toVar();
     const sign=isX.select(ray.x,isY.select(ray.y,ray.z)).greaterThanEqual(0).select(1,-1);
-    const plane=normal.dot(delta),lit=float(0).toVar(),weight=float(0).toVar();
+    const plane=normal.dot(delta).toVar(),lit=float(0).toVar(),weight=float(0).toVar();
     for(const y of [0,1])for(const x of [0,1]){
-      const q=base.add(vec2(x+.5,y+.5)).mul(2/resolution).sub(1);
-      const d=isX.select(vec3(sign,q.x,q.y),isY.select(vec3(q.x,sign,q.y),vec3(q.x,q.y,sign))).normalize();
+      const q=base.add(vec2(x+.5,y+.5)).mul(2/resolution).sub(1).toVar();
+      const d=isX.select(vec3(sign,q.x,q.y),isY.select(vec3(q.x,sign,q.y),vec3(q.x,q.y,sign))).normalize().toVar();
       const denominator=normal.dot(d),valid=plane.mul(denominator).greaterThan(0);
       const receiver=plane.abs().div(denominator.abs().max(1e-6));
       const w=(x?f.x:float(1).sub(f.x)).mul(y?f.y:float(1).sub(f.y));
@@ -105,6 +105,9 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       blockerSum.addAssign(blocked.select(p.depth,0));blockerCount.addAssign(blocked.select(1,0));
     }
     result.assign(1);
+    // No detected blocker is the lit side of the same texel edge. Filter it
+    // too, otherwise that side jumps from one to the first fractional tap.
+    if(edgeFilter)If(edgeFilter.and(blockerCount.equal(0)),()=>result.assign(compare(direction)));
     If(blockerCount.greaterThan(0),()=>{
     const blocker=blockerSum.div(blockerCount.max(1)).max(1e-5);
     const width=radius.mul(distance.sub(blocker).max(0)).div(blocker.mul(distance.max(1e-5)));
