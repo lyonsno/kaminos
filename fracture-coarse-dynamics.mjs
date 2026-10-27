@@ -109,6 +109,11 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
       residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:config.collisions??'disabled-for-supported-pull-comparison',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:jointCapacity,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
-    dispose};
+    readSolverDiagnostics:async()=>{
+      const words=Array.from(new Uint32Array(await renderer.getArrayBufferAsync(engine.bodyConstraintCountsAttr)));
+      const bodyConstraints=words.slice(0,cells.length).map((word,index)=>({index,word,count:word&65535,color:(word>>>16)&255}));
+      const conflicts=state.bonds.filter(b=>b.alive&&!cells[b.a].pinned&&!cells[b.b].pinned&&bodyConstraints[b.a].color===bodyConstraints[b.b].color).map(b=>b.id);
+      return {bodyConstraints,conflicts,jointCapacity,bodySolveMode:engine.getAvbdBodySolveMode(),solverIterations:engine.getSolverIterations(),substeps:engine.getSubsteps()};
+    },dispose};
   }catch(error){try{dispose();}catch(cleanupError){throw new AggregateError([error,cleanupError],'GPU arch construction and cleanup failed');}throw error;}
 }

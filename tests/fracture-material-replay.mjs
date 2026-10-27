@@ -8,3 +8,10 @@ fixture.config.strength=30;fixture.cells[0].position[0]=100;assert.equal(report.
 assert.throws(()=>materialFixture({...report,sourceDigest:null}),/source identity/);
 assert.throws(()=>materialFixture({...report,initial:{material:{...report.initial.material,backend:'fallback'}}}),/observed WebGPU/);
 assert.throws(()=>materialFixture({...report,initial:{material:{...report.initial.material,broken:1}}}),/intact ungrabbed/);
+
+const elastic=structuredClone(report);Object.assign(elastic.initial.material.config,{elasticModulus:1000,strength:20});Object.assign(elastic.initial.material.bonds[0],{linearStiffness:120,rotationalStiffness:8});
+const softer=materialFixture(elastic,{elasticModulus:100,gravity:0});
+assert.equal(softer.config.elasticModulus,100);assert.equal(softer.config.gravity,0);assert.equal(softer.config.strength,20);
+assert.equal(softer.bonds[0].linearStiffness,12,'A modulus experiment must change the effective bond stiffness');assert.equal(softer.bonds[0].rotationalStiffness,.8);
+assert.equal(elastic.initial.material.bonds[0].linearStiffness,120,'Replay must preserve its source');
+assert.throws(()=>materialFixture(elastic,{elasticModulus:0}),/positive finite modulus/);

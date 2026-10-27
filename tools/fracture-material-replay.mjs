@@ -7,13 +7,16 @@ import {assertWholeObjectAtRest} from './fracture-whole-response-contract.mjs';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const vector=value=>Array.isArray(value)?[...value]:['x','y','z'].map(k=>value[k]);
-export function materialFixture(report){
+export function materialFixture(report,config={}){
  const m=report.initial?.material;
  if(m?.backend!=='webgpu-avbd'||!report.sourceDigest||!report.commit)throw new Error('Replay needs an observed WebGPU material report with source identity');
  if(m.hand||m.broken||m.bonds.some(b=>!b.alive))throw new Error('Replay needs the intact ungrabbed material');
+ const effective={...m.config,...config};
+ if(config.elasticModulus!==undefined&&(!(config.elasticModulus>0)||!Number.isFinite(config.elasticModulus)||!(m.config.elasticModulus>0)))throw new Error('Replay needs a positive finite modulus and an elastic source');
+ const scale=config.elasticModulus===undefined?1:config.elasticModulus/m.config.elasticModulus;
  return {cells:m.bodies.map(b=>({...b,position:vector(b.rest),halfExtents:[...b.halfExtents]})),
-  bonds:m.bonds.map(b=>({...b,normal:vector(b.normal),anchorA:vector(b.anchorA),anchorB:vector(b.anchorB)})),
-  config:{...m.config},dimensions:{...m.dimensions},floorY:m.floorY};
+  config:effective,dimensions:{...m.dimensions},floorY:m.floorY,
+  bonds:m.bonds.map(b=>({...b,normal:vector(b.normal),anchorA:vector(b.anchorA),anchorB:vector(b.anchorB),linearStiffness:b.linearStiffness*scale,rotationalStiffness:b.rotationalStiffness===undefined?undefined:b.rotationalStiffness*scale}))};
 }
 
 export async function runReplay([url,sourcePath,out,optionsPath]){
@@ -21,7 +24,7 @@ export async function runReplay([url,sourcePath,out,optionsPath]){
  const result={status:'running',phase:'input',url,sourcePath,optionsPath,root:process.cwd(),cases:[],errors:[],console:[]};
  const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(result,null,2));save();let context;
  try{
-  const sourceBytes=fs.readFileSync(sourcePath),source=JSON.parse(sourceBytes),original=materialFixture(source),options=JSON.parse(fs.readFileSync(optionsPath));
+  const sourceBytes=fs.readFileSync(sourcePath),source=JSON.parse(sourceBytes),options=JSON.parse(fs.readFileSync(optionsPath));
   result.sourceReportSha256=hash(sourceBytes);result.sourceAssetSha256=source.sourceDigest;result.sourceCommit=source.commit;result.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();result.dirty=execFileSync('git',['status','--short'],{encoding:'utf8'});result.harnessSha256=hash(fs.readFileSync(fileURLToPath(import.meta.url)));result.options=options;
   if(!Array.isArray(options.cases)||!options.cases.length)throw new Error('Replay needs explicit cases');
   for(const c of options.cases)if(!c.name||!Number.isInteger(c.steps)||c.steps<1)throw new Error('Each case needs a name and positive integer physical-step count');
@@ -50,10 +53,10 @@ export async function runReplay([url,sourcePath,out,optionsPath]){
   if(result.device.isFallbackAdapter!==false||/swiftshader|llvmpipe|software/i.test(result.device.description??''))throw new Error('Replay requires an observed native GPU adapter');
   result.phase='physical-replay';save();
   for(const c of options.cases){
-   const fixture=structuredClone(original);Object.assign(fixture.config,c.config??{});const record={name:c.name,config:fixture.config,steps:c.steps,states:[]};result.cases.push(record);save();
+   const fixture=materialFixture(source,c.config??{});const record={name:c.name,config:fixture.config,steps:c.steps,states:[]};result.cases.push(record);save();
    await page.evaluate(async fixture=>{const {createCoarseFractureDynamics}=await import('/fracture-coarse-dynamics.mjs');window.replayMaterial=await createCoarseFractureDynamics(fixture,window.replayRenderer);},fixture);
-   record.initial=await page.evaluate(()=>window.replayMaterial.snapshot());save();
-   for(let step=0;step<c.steps;step++){await page.evaluate(()=>window.replayMaterial.step());record.states.push(await page.evaluate(()=>window.replayMaterial.snapshot()));save();}
+   record.initial=await page.evaluate(()=>window.replayMaterial.snapshot());if(c.diagnostics)record.initial.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());save();
+   for(let step=0;step<c.steps;step++){await page.evaluate(()=>window.replayMaterial.step());const state=await page.evaluate(()=>window.replayMaterial.snapshot());if(c.diagnostics)state.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());record.states.push(state);save();}
    const last=record.states.at(-1);try{record.unloaded={status:'passed',...assertWholeObjectAtRest({initial:{material:record.initial},unloaded:{material:last}})};}catch(error){record.unloaded={status:'failed',error:error.message};}
    await page.evaluate(()=>{window.replayMaterial.dispose();window.replayMaterial=null;});save();
   }
