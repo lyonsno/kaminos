@@ -71,7 +71,7 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  try{const saved=document.defaultView.localStorage.getItem(preference);if(saved!==null){const value=JSON.parse(saved);if(typeof value.keepLoaded==='boolean'){explicitPreference=true;chooseResidency(value.keepLoaded);}}}catch(error){residencyError=`Preference unavailable: ${error.message}`;}
  byId('asset-prompt-keep-loaded').onchange=async()=>{explicitPreference=true;const keepLoaded=byId('asset-prompt-keep-loaded').checked;await chooseResidency(keepLoaded);try{document.defaultView.localStorage.setItem(preference,JSON.stringify({keepLoaded}));}catch(error){residencyError=`Preference not saved: ${error.message}`;render();}};
  byId('asset-prompt-unload').onclick=()=>controller.unload().catch(error=>{residencyError=error.message;render();});
- let applied=null,timer=null,painted=null;
+ let applied=null,timer=null,painted=null,lastStatus=null;
  const current=()=>({model:byId('asset-image-model').value,reference:byId('asset-use-reference').checked?reference():null});
  const use=()=>{
   const state=controller.read();if(!promptExpansionMatches(state.request,current()))return false;
@@ -98,6 +98,8 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   if(state.elapsedMs!==null)message+=` · ${(state.elapsedMs/1000).toFixed(1)} s${busy?' elapsed':''}`;
   byId('asset-prompt-help-status').textContent=message;
   byId('asset-prompt-help-status').classList.toggle('error',state.status==='failed');
+  if(state.status==='waiting'&&lastStatus!=='waiting')admissionControls.scrollIntoView?.({block:'nearest'});
+  lastStatus=state.status;
   if(busy&&timer===null)timer=setTimeout(()=>{timer=null;render();},200);
   else if(!busy&&timer!==null){clearTimeout(timer);timer=null;}
  }
