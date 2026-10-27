@@ -1,7 +1,7 @@
 import { createBrowserHandMeshRoute } from '../models/mobrecon/hand-mesh-route.js';
 import { readLocalModels, readServedModels, createModelStore } from '../demos/hand-mesh/model-files.js';
 import { handObservation, createHoverController } from './iron-gland/interaction.mjs';
-import { createMechanism } from './iron-gland/mechanism.mjs';
+import { createMechanism, createCarryTask } from './iron-gland/mechanism.mjs';
 import { createVirtualHand } from './iron-gland/virtual-hand.mjs';
 import { createGestureCapture } from './iron-gland/capture.mjs';
 import { mountCaptureControls } from './iron-gland/capture-controls.mjs';
@@ -16,11 +16,14 @@ export default {
     const sampleContext = sample.getContext('2d');
     const handSurface = createVirtualHand();
     const machine = createMechanism();
+    const carry = createCarryTask();
     machine.root.visible = false;
     let handAsset, machineAsset;
     try {
       handAsset = await scene.attach(handSurface.root, { owned: true, metadata: { label: 'Virtual hand', source: 'mobrecon:iron-gland', type: 'experiment' } });
       machineAsset = await scene.attach(machine.root, { owned: true, metadata: { label: 'Iron Gland', source: 'experiment:iron-gland', type: 'experiment' } });
+      await scene.attach(carry.root, { owned: true, metadata: { label: 'Carry cube', source: 'instructional-reference:iron-gland', type: 'experiment' } });
+      await scene.attach(carry.targets, { owned: true, metadata: { label: 'Carry targets', source: 'instructional-targets:iron-gland', type: 'experiment' } });
     } catch (error) { await scene.dispose(); throw error; }
     window.kaminosSelection?.clear();
     const restoreStage = [];
@@ -60,6 +63,7 @@ export default {
     const read = () => ({ running, starting, loading, draining: !running && !!flight, error, modelSource, handedness, size, threshold, frameCount, missCount,
       identity: route?.identity ?? null, source: 'camera', geometryAuthority: 'inferred-hand-mesh-unregistered-stage', view: 'opposite-camera',
       interaction: structuredClone(state), cameraVisible: false, handVisible: handSurface.root.visible, handObjectId: handAsset.id, objectId: machineAsset.id,
+      carry:carry.read(),
       imageSize: [sample.width, sample.height], lastAcquisition: last?.acquisition ?? null,
       lastPrediction: last ? { hasHand: last.hasHand, handedness: last.handedness, cropBox: last.cropBox, cropUV: last.cropUV ? Array.from(last.cropUV) : null } : null,
       cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off',
@@ -78,15 +82,21 @@ export default {
       const tangent=Math.tan(35*Math.PI/360);
       let distance = Math.max(3.5, 4.4 / aspect) / (2*tangent) * 1.14, targetY=2.75;
       const cue=document.querySelector?.('[data-iron-capture-cue]');
+      const next=document.querySelector?.('[data-iron-capture-next]');
       if(capture.read().status==='recording'&&cue&&!cue.hidden&&bounds?.height){
-        const top=cue.offsetTop+cue.offsetHeight+12,bottom=bounds.height-70;
+        const top=cue.offsetTop+cue.offsetHeight+12,bottom=bounds.height-(next&&!next.hidden?next.offsetHeight+64:70);
         const available=Math.max(60,bottom-top);
         distance=Math.max(distance,3.5*bounds.height/(2*tangent*available));
         targetY+=(Math.min(bounds.height-35,(top+bottom)/2)/bounds.height-.5)*2*distance*tangent;
       }
       return scene.setView({ position: [0, targetY, distance], target: [0, targetY, 0], up: [0, 1, 0], fov: 35, zoom: 1 });
     };
-    const hide = () => { state = controller.update(null, 0); machine.root.visible = false; handSurface.root.visible = false; scene.redraw(); };
+    const updateDisplay = seconds => {
+      const c=capture.read();
+      carry.update({visible:running&&state.visible,position:machine.root.position.toArray(),scale:machine.root.scale.x,capture:running?c:{...c,status:'idle'}});
+      machine.update({...state,visible:state.visible&&c.mode==='turns'},seconds);
+    };
+    const hide = () => { state = controller.update(null, 0); machine.root.visible = false; carry.root.visible=false;carry.targets.visible=false;handSurface.root.visible = false; scene.redraw(); };
     const present = (result, now) => {
       const width = sample.width, height = sample.height;
       const palm = handSurface.update(result, route.faces);
@@ -103,7 +113,7 @@ export default {
         machine.root.quaternion.copy(palm.quaternion);
         machine.root.scale.setScalar(palm.width*10*.65*size);
       } else handSurface.root.visible = false;
-      machine.update(state, now / 1000); scene.redraw(); sync();
+      updateDisplay(now / 1000); scene.redraw(); sync();
     };
     const schedule = ticket => {
       if (!running || disposed || ticket !== generation) return;
@@ -240,11 +250,14 @@ export default {
     const finishCapture = async () => {const result=await capture.finish(capture.read().protocolComplete?'complete':'partial','operator-finished');frame();return result;};
     frame();
     const unsubscribe = scene.onFrame(({ timestampMs }) => {
-      if (!state.visible) return;
-      machine.update(state, timestampMs / 1000); scene.redraw();
+      if(running)capture.tick?.();
+      captureControls?.update();
+      updateDisplay(timestampMs / 1000);
+      if(state.visible||capture.read().status==='recording')scene.redraw();
     });
     const pagehide = () => { stop().catch(() => {}); };
     window.addEventListener('pagehide', pagehide);
+    window.addEventListener('resize',frame);
     return {
       read, operations: { start, stop, frame, loadModels, setOptions,beginCapture,finishCapture,
         pauseCapture:()=>capture.pause(),repeatCapture:()=>capture.repeat() },
@@ -271,11 +284,11 @@ export default {
           host.controls.installNumberDrag?.({input:field,grip,step});
         }
         status = document.createElement('div'); status.setAttribute('role', 'status'); status.dataset.ironGlandStatus = ''; status.style.overflowWrap = 'anywhere'; root.append(status); sync();
-        captureControls=mountCaptureControls({root,document,invoke,read,tick:()=>capture.tick()});
+        captureControls=mountCaptureControls({root,document,invoke,read});
         loadModels({ base: inputs.models }).catch(fail);
       },
       async dispose() {
-        disposed = true; window.removeEventListener('pagehide', pagehide); unsubscribe();
+        disposed = true; window.removeEventListener('pagehide', pagehide);window.removeEventListener('resize',frame);unsubscribe();
         await stop();
         captureControls?.dispose();captureControls=null;
         // A permission prompt may remain open: its generation guard stops a

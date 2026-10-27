@@ -39,13 +39,34 @@ test('protocol includes unlabeled exploration, re-entry, different pacing and pa
   assert.ok(new Set(cues.filter(c=>c.intent==='move').map(c=>c.seconds)).size>1);
   assert.ok(cues.every(c=>!('target' in c)&&!('velocity' in c)));
 });
-test('neutral is the default: settling, neutral carry, and two re-entries without directional commands',()=>{
+test('neutral carries through four spatial targets in two orders, without rotation commands',()=>{
   const cues=gestureProtocol();
-  assert.deepEqual(cues.map(c=>c.intent),['unlabeled','neutral','neutral-nuisance','release','reacquire','neutral','release','reacquire','neutral']);
+  const carries=cues.filter(c=>c.intent==='neutral-carry');
+  assert.equal(carries.length,8);
+  assert.equal(new Set(carries.map(c=>c.destination.id)).size,4);
+  assert.notDeepEqual(carries.slice(0,4).map(c=>c.destination.id),carries.slice(4).map(c=>c.destination.id));
+  assert.ok(carries.every(c=>c.destination.space==='presentation-xy'&&c.destination.position.every(Number.isFinite)));
+  assert.ok(cues.some(c=>c.intent==='release')&&cues.some(c=>c.intent==='reacquire'));
   assert.equal(cues.reduce((seconds,c)=>seconds+c.seconds,0),60);
   assert.deepEqual(cues.map(c=>c.index),cues.map((_,i)=>i));
   assert.ok(cues.every(c=>!('direction' in c)&&!('target' in c)&&!('velocity' in c)));
   assert.throws(()=>gestureProtocol('unknown'),/capture mode/i);
+});
+test('current and next cues share the clock across boundary, pause, repeat, completion and finish',async()=>{
+  const f=fixture();await f.begin();
+  const cues=gestureProtocol();
+  assert.equal(f.capture.read().nextCue.index,1);
+  f.advance(cues[0].seconds*1000);
+  let c=f.capture.read();assert.equal(c.cue.index,1);assert.equal(c.nextCue.index,2);
+  f.advance(1200);f.capture.pause();const frozen=f.capture.read().cue.elapsedSeconds;
+  f.advance(50000);assert.equal(f.capture.read().cue.elapsedSeconds,frozen);
+  f.capture.repeat();c=f.capture.read();assert.equal(c.cue.elapsedSeconds,0);assert.equal(c.nextCue.index,2);
+  f.capture.pause();
+  for(const cue of cues.slice(1))f.advance(cue.seconds*1000);
+  assert.equal(f.capture.read().protocolComplete,true);assert.equal(f.capture.read().nextCue,null);
+  await f.capture.finish('complete');assert.equal(f.capture.read().nextCue,null);
+  await f.begin();assert.equal(f.capture.read().cue.index,0);assert.equal(f.capture.read().nextCue.index,1);
+  await f.capture.finish('partial');assert.equal(f.capture.read().nextCue,null);
 });
 test('selected capture mode and exact protocol survive begin, completion and a new take',async()=>{
   const f=fixture();await f.begin();

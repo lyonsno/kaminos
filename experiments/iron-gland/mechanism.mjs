@@ -1,4 +1,39 @@
-import { Group, Mesh, BoxGeometry, TorusGeometry, IcosahedronGeometry, MeshBasicMaterial, PointLight, AdditiveBlending } from '../../lib/three.core.js';
+import { Group, Mesh, BoxGeometry, TorusGeometry, IcosahedronGeometry, MeshBasicMaterial, MeshStandardMaterial, EdgesGeometry, LineSegments, LineBasicMaterial, PointLight, AdditiveBlending } from '../../lib/three.core.js';
+import { CARRY_TARGETS } from './capture.mjs';
+
+export function createCarryTask() {
+  const root=new Group();root.name='Carry cube';root.visible=false;
+  root.rotation.set(.32,.5,0);
+  const box=new BoxGeometry(.82,.82,.82);
+  const face=new MeshStandardMaterial({color:0x2a899b,emissive:0x177487,emissiveIntensity:.65,metalness:.25,roughness:.3});
+  const marker=new MeshStandardMaterial({color:0xffc16e,emissive:0xff982e,emissiveIntensity:.55,metalness:.2,roughness:.35});
+  root.add(new Mesh(box,[face,face,face,face,marker,face]));
+  root.add(new LineSegments(new EdgesGeometry(box),new LineBasicMaterial({color:0xd1ffff,toneMapped:false})));
+  const spill=new PointLight(0x56dcea,.65,3,2);root.add(spill);
+  const targets=new Group();targets.name='Carry targets';targets.visible=false;
+  const rings=CARRY_TARGETS.map(target=>{
+    const ring=new Mesh(new TorusGeometry(target.radius,.012,8,64),new MeshBasicMaterial({color:0x41616a,toneMapped:false}));
+    ring.name=`Carry ${target.id}`;ring.position.fromArray(target.position);targets.add(ring);return ring;
+  });
+  let activeTarget=null,insideTarget=false;
+  return {root,targets,
+    read:()=>({orientationAuthority:'fixed-instructional-reference',targetSpace:'presentation-xy',
+      visible:root.visible,position:root.position.toArray(),quaternion:root.quaternion.toArray(),activeTarget,insideTarget}),
+    update({visible,position,scale,capture}){
+      const neutral=capture.mode==='neutral';
+      root.visible=neutral&&visible;
+      root.position.fromArray(position);root.scale.setScalar(scale);
+      const destination=neutral&&capture.status==='recording'&&!capture.protocolComplete&&!capture.error?capture.cue?.destination:null;
+      targets.visible=!!destination;activeTarget=destination?.id??null;
+      insideTarget=!!(root.visible&&destination&&Math.hypot(position[0]-destination.position[0],position[1]-destination.position[1])<=destination.radius);
+      rings.forEach((ring,i)=>{
+        const active=CARRY_TARGETS[i].id===activeTarget;
+        ring.material.color.setHex(active?(insideTarget?0x99f0b4:0xffbd73):0x41616a);
+        ring.scale.setScalar(active?1.1:1);
+      });
+    },
+  };
+}
 
 export function createMechanism() {
   const root = new Group(); root.name = 'Palm light';

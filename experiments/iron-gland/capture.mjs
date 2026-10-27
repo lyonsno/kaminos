@@ -1,17 +1,25 @@
 export const FEATURE = 'decoder3d.sampled';
+export const CARRY_TARGETS = [
+  {id:'left',position:[-.9,2.75,.8]}, {id:'up',position:[0,3.45,.8]},
+  {id:'right',position:[.9,2.75,.8]}, {id:'down',position:[0,2.05,.8]},
+].map(target=>({...target,radius:.24,space:'presentation-xy'}));
 
 export function gestureProtocol(mode='neutral') {
   if(!['neutral','turns'].includes(mode))throw Error(`Unknown capture mode: ${mode}`);
   const cues = [];
   const add = (title, detail, seconds, intent, extra = {}) => cues.push({title, detail, seconds, intent, ...extra});
   if(mode==='neutral'){
-    add('Find your resting shape', 'Palm up. Let your fingers and thumb cup an imaginary cube comfortably.', 8, 'unlabeled');
-    add('Rest at neutral', 'This is your no-turn position. Let the hand settle without stiffening.', 8, 'neutral');
-    add('Carry neutral', 'Keep that resting shape. Move your whole hand a little, without turning the cube.', 8, 'neutral-nuisance');
-    for(const block of [1,2]){
-      add('Let your hand rest', 'Lower your hand out of view.', 4, 'release', {block});
-      add('Find neutral again', 'Raise your hand and return to your comfortable no-turn position.', 6, 'reacquire', {block});
-      add('Rest at neutral', 'Let the fingers and thumb settle. No need to hold them rigid.', 8, 'neutral', {block});
+    add('Find a comfortable carry', 'Palm up. Imagine carrying the cube without turning it.', 6, 'unlabeled');
+    add('Settle into neutral', 'Let your hand settle naturally. No need to freeze your fingers.', 4, 'neutral');
+    for(const [block,order] of [[1,[0,1,2,3]],[2,[2,0,3,1]]]){
+      if(block===2){
+        add('Let your hand rest', 'Lower your hand out of view.', 4, 'release', {block});
+        add('Find your carry again', 'Raise your hand. Find the same intention: carry, without turning.', 6, 'reacquire', {block});
+      }
+      for(const index of order){
+        const destination=structuredClone(CARRY_TARGETS[index]);
+        add(`Carry ${destination.id}`, 'Move the cube into the lit ring without intending to turn it. Settle there comfortably.', 5, 'neutral-carry', {block,destination});
+      }
     }
     return cues.map((cue,index)=>({...cue,index}));
   }
@@ -64,7 +72,7 @@ export function createGestureCapture({fetch:request=globalThis.fetch,MediaRecord
   now=()=>performance.now(),epoch=()=>performance.timeOrigin,changed=()=>{}}={}) {
   let status='idle',session=null,error=null,recorder=null,videoStopped=null,finishTask=null;
   let tasks=[],frameCount=0,savedFrames=0,videoChunks=0,eventCount=0,pending=0;
-  let cues=gestureProtocol(),cueIndex=0,cueAt=0,startedAt=0,pausedAt=null,protocolComplete=false;
+  let mode='neutral',cues=gestureProtocol(),cueIndex=0,cueAt=0,startedAt=0,pausedAt=null,protocolComplete=false;
   const endpoint=(action,extra={})=>'/api/iron-gland-capture?'+new URLSearchParams({action,...(session?{id:session.id}:{}),...extra});
   const post=async(action,body,extra={},json=false)=>{
     const response=await request(endpoint(action,extra),{method:'POST',headers:{'Content-Type':json?'application/json':'application/octet-stream'},body:json?JSON.stringify(body):body});
@@ -72,9 +80,10 @@ export function createGestureCapture({fetch:request=globalThis.fetch,MediaRecord
     if (!response.ok) throw Error(value.error??value.validationErrors?.join('; ')??`capture ${action}: HTTP ${response.status}`);
     return value;
   };
-  const read=()=>({status,id:session?.id??null,path:session?.path??null,error,frameCount,savedFrames,pending,videoChunks,eventCount,
+  const read=()=>({status,mode,id:session?.id??null,path:session?.path??null,error,frameCount,savedFrames,pending,videoChunks,eventCount,
     protocolComplete,paused:pausedAt!==null,cue:session?{...cues[cueIndex],atMs:cueAt,
-      elapsedSeconds:Math.max(0,((pausedAt??now())-cueAt)/1000),total:cues.length}:null});
+      elapsedSeconds:Math.max(0,((pausedAt??now())-cueAt)/1000),total:cues.length}:null,
+    nextCue:session&&status==='recording'&&!protocolComplete?cues[cueIndex+1]??null:null});
   const update=()=>changed(read());
   const failure=cause=>{
     error??=message(cause);update();
@@ -99,15 +108,15 @@ export function createGestureCapture({fetch:request=globalThis.fetch,MediaRecord
     }
     update();
   }
-  async function begin({stream,identity,settings={},faces,source={kind:'live-camera'},runtime=null,mode='neutral'}={}) {
+  async function begin({stream,identity,settings={},faces,source={kind:'live-camera'},runtime=null,mode:selectedMode='neutral'}={}) {
     if(['starting','recording','saving'].includes(status))throw Error('A capture is already active');
-    const protocol=gestureProtocol(mode);
+    const protocol=gestureProtocol(selectedMode);
     if(!Recorder)throw Error('Camera recording is unavailable in this browser');
     const mimeType=['video/webm;codecs=vp8','video/webm','video/mp4'].find(type=>Recorder.isTypeSupported(type));
     if(!mimeType)throw Error('No supported camera recording format');
     if(!faces?.length||faces.length%3||!faces.every(i=>Number.isInteger(i)&&i>=0&&i<778))throw Error('Hand topology is unavailable');
     status='starting';session=null;error=null;recorder=null;videoStopped=null;finishTask=null;tasks=[];frameCount=savedFrames=videoChunks=eventCount=pending=0;
-    protocolComplete=false;pausedAt=null;cueIndex=0;cues=protocol;update();
+    protocolComplete=false;pausedAt=null;cueIndex=0;cues=protocol;mode=selectedMode;update();
     try {
       session=await post('start',{schema:'iron-gland-gesture-capture.v1',identity,settings:{...settings,captureMode:mode},source,runtime,
         camera:stream.getVideoTracks()[0]?.getSettings(),timeOriginMs:epoch(),protocol:cues,
@@ -126,6 +135,7 @@ export function createGestureCapture({fetch:request=globalThis.fetch,MediaRecord
   }
   async function observe({canvas,metadata={},infer}) {
     if(status!=='recording')return infer([]);
+    tick();
     const index=frameCount++,captureAtMs=now(),cue={...cues[cueIndex],atMs:cueAt,paused:pausedAt!==null,protocolComplete};
     const image=new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('Camera PNG capture failed')),'image/png'));
     // Attach rejection handling now while the independent GPU inference runs.

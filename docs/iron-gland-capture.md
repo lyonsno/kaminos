@@ -6,10 +6,21 @@ curl as a working control gesture. The reconstructed hand remains the visible
 feedback; camera pixels are retained privately as inference input, not displayed
 as a scene background.
 
-Start the camera, then **Record take**. **Neutral** is the default: a one-minute
-sequence to find a comfortable no-turn shape, carry it through small whole-hand
-movements, and lower/reacquire it twice. It collects neutral demonstrations;
-there is no trained neutral detector or neutral-confidence feedback yet.
+Start the camera, then **Record take**. **Carry** is the default: a one-minute
+sequence to find a comfortable carry, visit four targets, lower/reacquire the
+hand, then visit them in a different order. Neutral means carrying without
+intending to turn the object, not holding the fingers rigid. The floating cube
+holds a fixed orientation as an instructional reference; it is not learned
+neutral feedback. One amber face makes orientation readable. The targets are
+presentation-space XY destinations, not measured room positions. A green ring
+means the displayed cube center is within its XY radius, not a recognized gesture.
+
+The top overlay shows the current instruction. The bottom overlay simultaneously
+shows the next instruction and seconds until it starts. Both use the capture
+clock; Pause freezes both, Repeat restarts the current interval, and Finish,
+camera Stop or capture failure clear both. The final instruction has no next
+preview. The shared scene frame loop advances and renders this projection;
+inference acquisition also synchronizes its recorded cue with that clock.
 
 Select **Turns** to retain the longer sequence. Its instructions cover comfortable exploration,
 cupped neutral, whole-hand movement with fingers held neutral, slight opposite
@@ -65,11 +76,15 @@ The Workbench operations used by both UI and automation are `beginCapture({label
 in-flight inference and finalizes a partial capture. Changing handedness/model
 settings during a take is rejected. `read().capture` reports the destination,
 cue, state, saved/observed counts and pending writes.
-`mode` is `neutral` (default) or `turns`; unknown values fail before capture
+`mode` is `neutral` (the Carry UI, default) or `turns`; unknown values fail before capture
 persistence starts. The manifest preserves `settings.captureMode` and the exact
 instruction sequence. The mode is locked in the UI during a take. Existing
 captures without this field retain their original recorded protocol. The end of
 either instruction sequence does not stop recording; Finish remains explicit.
+Carry cues retain destination identity, coordinates, radius and presentation
+space in the protocol and per-observation cue. They are task annotations, not
+continuous rotation labels. `read().carry` identifies the fixed instructional
+orientation and current XY target proximity separately from inferred geometry.
 
 `POST /api/iron-gland-capture?action=start` accepts JSON capture metadata.
 `action=write&id=<uuid>&name=<file>` accepts raw bytes at the specified relative

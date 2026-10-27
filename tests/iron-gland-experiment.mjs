@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import * as THREE from '../lib/three.core.js';
 import { handObservation, createHoverController } from '../experiments/iron-gland/interaction.mjs';
-import { createMechanism } from '../experiments/iron-gland/mechanism.mjs';
+import { createMechanism, createCarryTask } from '../experiments/iron-gland/mechanism.mjs';
 import { createVirtualHand } from '../experiments/iron-gland/virtual-hand.mjs';
 import { installOwnerExperimentEntry } from '../owner-experiment-entry.mjs';
 import { createGestureCapture } from '../experiments/iron-gland/capture.mjs';
@@ -15,7 +15,7 @@ const source = (await fs.readFile(new URL('../experiments/iron-gland.experiment.
   .replace(/^import .*;$/gm, '').replace('export default', 'return');
 const compile = new Function('Mesh', 'PlaneGeometry', 'MeshBasicMaterial', 'CanvasTexture', 'SRGBColorSpace',
   'createBrowserHandMeshRoute', 'readLocalModels', 'readServedModels', 'createModelStore',
-  'handObservation', 'createHoverController', 'createMechanism', 'createVirtualHand', 'createGestureCapture', 'mountCaptureControls', source);
+  'handObservation', 'createHoverController', 'createMechanism', 'createCarryTask', 'createVirtualHand', 'createGestureCapture', 'mountCaptureControls', source);
 const flush = () => new Promise(resolve => setImmediate(resolve));
 test('Iron Gland is discoverable through the current host metadata catalogue',()=>{
   const entries=JSON.parse(execFileSync(process.env.KAMINOS_PYTHON??'python3',['-c',
@@ -57,7 +57,7 @@ async function fixture({captureFactory=createGestureCapture}={}) {
   let pending = result(.6), frameCallback, disposed=0;
   const route = {identity:{routeId:'unit-fixture'},faces:new Uint16Array([0,1,2]),infer:()=>Promise.resolve(pending),release(){releases++;}};
   const definition = compile(THREE.Mesh,THREE.PlaneGeometry,THREE.MeshBasicMaterial,THREE.CanvasTexture,THREE.SRGBColorSpace,
-    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createVirtualHand,captureFactory,()=>({update(){},dispose(){}}));
+    async()=>{routeCreations++;return route;},async()=>({}),async()=>({}),()=>({get:async()=>modelData}),handObservation,createHoverController,createMechanism,createCarryTask,createVirtualHand,captureFactory,()=>({update(){},dispose(){}}));
   const attached=[],events=[];
   const scene = {attach:async(root,options)=>{attached.push({root,options});return {id:root.uuid,root};},
     setView:()=>{},redraw(){},onFrame:fn=>{frameCallback=fn;return()=>{frameCallback=null;};},dispose:async()=>{disposed++;}};

@@ -1,19 +1,27 @@
-export function mountCaptureControls({root,document,invoke,read,tick}) {
+export function captureInstructions(c) {
+  if(c.status!=='recording'||c.error||!c.cue)return {current:null,next:null};
+  if(c.protocolComplete)return {current:{title:'Sequence complete',detail:'Rest your hand. Finish the take when you are comfortable.',complete:true},next:null};
+  const remaining=Math.max(0,c.cue.seconds-c.cue.elapsedSeconds);
+  return {current:{...c.cue,paused:c.paused,seconds:Math.ceil(remaining),progress:Math.min(1,c.cue.elapsedSeconds/c.cue.seconds)},
+    next:c.nextCue?{...c.nextCue,seconds:Math.ceil(remaining),paused:c.paused}:null};
+}
+
+export function mountCaptureControls({root,document,invoke,read}) {
   const section=document.createElement('section');section.dataset.ironCapture='';
   section.style.cssText='border-top:1px solid #465051;margin-top:14px;padding-top:14px;letter-spacing:0;min-width:0';
   const heading=document.createElement('h3');heading.textContent='Gesture capture';heading.style.cssText='font-size:16px;margin:0 0 10px';
   const modes=document.createElement('fieldset');modes.setAttribute('aria-label','Capture mode');
   modes.style.cssText='display:flex;gap:12px;flex-wrap:wrap;border:0;padding:0;margin:0 0 10px;min-width:0';
   const choices=[];let mode='neutral';
-  for(const [value,text] of [['neutral','Neutral · 1 min'],['turns','Turns · 3 min']]){
+  for(const [value,text] of [['neutral','Carry · 1 min'],['turns','Turns · 3 min']]){
     const option=document.createElement('label');option.style.cssText='display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer';
     const input=document.createElement('input');input.type='radio';input.name='iron-capture-mode';input.value=value;input.checked=value===mode;
     input.style.cssText='margin:0;accent-color:#64e0d6';input.setAttribute('aria-label',value==='neutral'?'Neutral':'Turns');
-    input.onchange=()=>{if(input.checked){mode=value;name.placeholder=value==='neutral'?'Comfortable neutral':'Comfortable turns';}};
+    input.onchange=()=>{if(input.checked){mode=value;name.placeholder=value==='neutral'?'Comfortable carry':'Comfortable turns';}};
     const caption=document.createElement('span');caption.textContent=text;option.append(input,caption);modes.append(option);choices.push(input);
   }
   const label=document.createElement('label');label.textContent='Take name';label.style.cssText='display:grid;gap:5px;margin:8px 0';
-  const name=document.createElement('input');name.type='text';name.placeholder='Comfortable neutral';name.setAttribute('aria-label','Take name');
+  const name=document.createElement('input');name.type='text';name.placeholder='Comfortable carry';name.setAttribute('aria-label','Take name');
   name.style.cssText='box-sizing:border-box;width:100%;min-width:0;height:32px;padding:5px 8px;background:#202629;color:#e4eeec;border:1px solid #465051;border-radius:3px';label.append(name);
   const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:10px 0';
   const status=document.createElement('div');status.setAttribute('role','status');status.style.cssText='font-size:12px;overflow-wrap:anywhere;line-height:1.5';
@@ -41,6 +49,11 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
   copy.append(title,detail);row.append(copy,count);
   const progress=document.createElement('progress');progress.max=1;progress.style.cssText='display:block;width:100%;height:5px;margin-top:12px;accent-color:#64e0d6';
   cue.append(top,row,progress);viewport?.append(cue);
+  const upcoming=document.createElement('section');upcoming.dataset.ironCaptureNext='';upcoming.setAttribute('aria-label','Upcoming gesture instruction');
+  upcoming.style.cssText='position:absolute;bottom:52px;left:14px;right:14px;margin:auto;max-width:650px;z-index:6;pointer-events:none;box-sizing:border-box;background:rgba(24,26,29,.94);border-top:2px solid #eebd7d;padding:12px 16px;color:#f1f7f6;letter-spacing:0';
+  const nextTag=document.createElement('div'),nextTitle=document.createElement('h2'),nextDetail=document.createElement('p');
+  nextTag.style.cssText='font-size:11px;color:#eebd7d';nextTitle.style.cssText=title.style.cssText;nextDetail.style.cssText=detail.style.cssText;
+  upcoming.append(nextTag,nextTitle,nextDetail);viewport?.append(upcoming);
   function update() {
     const state=read(),c=state.capture,active=['starting','recording','saving'].includes(c.status);
     start.disabled=!state.running||active;finish.disabled=c.status!=='recording';pause.disabled=repeat.disabled=c.status!=='recording';
@@ -49,7 +62,10 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
     const labels={idle:'No take recorded',starting:'Opening capture',recording:'Recording',saving:'Saving',complete:'Saved',partial:'Saved partial take',failed:'Capture failed'};
     status.textContent=failure??c.error??`${labels[c.status]}${c.frameCount?` · ${c.savedFrames}/${c.frameCount} observations saved`:''}${c.pending?` · ${c.pending} pending`:''}`;
     status.style.color=failure||c.error?'#ffb1a5':'#b7d9cf';path.textContent=c.path??'';
-    cue.hidden=c.status!=='recording';
+    const instructions=captureInstructions(state.running?c:{...c,status:'idle'}),item=instructions.current,next=instructions.next;
+    cue.hidden=!item;upcoming.hidden=!next;
+    // Clear hidden copy too: terminal states cannot leave stale instructions in the DOM.
+    for(const element of [step,tag,title,detail,count,nextTag,nextTitle,nextDetail])element.textContent='';
     if(!cue.hidden){
       const toolbar=document.getElementById('authoring-viewport-tools');
       cue.style.top=`${(toolbar?.offsetHeight??0)+10}px`;
@@ -57,17 +73,21 @@ export function mountCaptureControls({root,document,invoke,read,tick}) {
       title.style.fontSize=viewport?.clientWidth<500?'16px':'21px';
       detail.style.fontSize=viewport?.clientWidth<500?'11px':'13px';
       cue.style.padding=viewport?.clientWidth<500?'8px 10px':'12px 16px';
-      const item=c.cue;step.textContent=`${item.index+1} / ${item.total}`;tag.textContent=c.paused?'INSTRUCTIONS PAUSED':'RECORDING';
-      title.textContent=c.protocolComplete?'Sequence complete':item.title;
-      detail.textContent=c.protocolComplete?'Rest your hand. Finish the take when you are comfortable.':item.detail;
-      const remaining=Math.max(0,item.seconds-item.elapsedSeconds);
-      count.textContent=c.paused?'\u2016':c.protocolComplete?'':item.intent==='countdown'?String(Math.ceil(remaining)):String(Math.min(item.seconds,Math.floor(item.elapsedSeconds)+1));
-      progress.value=Math.min(1,item.elapsedSeconds/item.seconds);
+      step.textContent=item.complete?'DONE':`NOW · ${item.index+1} / ${item.total}`;tag.textContent=c.paused?'INSTRUCTIONS PAUSED':'RECORDING';
+      title.textContent=item.title;detail.textContent=item.detail;
+      count.textContent=item.complete?'':c.paused?'\u2016':`${item.seconds}`;
+      progress.value=item.complete?1:item.progress;
+    }
+    if(next){
+      nextTag.textContent=next.paused?'NEXT · PAUSED':`NEXT · IN ${next.seconds} S`;
+      nextTitle.textContent=next.title;nextDetail.textContent=next.detail;
+      nextTitle.style.fontSize=viewport?.clientWidth<500?'15px':'19px';nextTitle.style.textTransform='none';
+      nextDetail.style.fontSize=viewport?.clientWidth<500?'11px':'13px';
+      upcoming.style.padding=viewport?.clientWidth<500?'8px 10px':'12px 16px';
     }
   }
-  const interval=document.defaultView.setInterval(()=>{tick();update();},100);
   const visibility=()=>{if(document.hidden&&read().capture.status==='recording'&&!read().capture.paused)run('pauseCapture');};
   document.addEventListener('visibilitychange',visibility);
   update();
-  return {update,dispose(){document.defaultView.clearInterval(interval);document.removeEventListener('visibilitychange',visibility);cue.remove();section.remove();}};
+  return {update,dispose(){document.removeEventListener('visibilitychange',visibility);cue.remove();upcoming.remove();section.remove();}};
 }
