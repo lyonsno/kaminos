@@ -1,0 +1,127 @@
+name: npm publish
+
+# Dispatch only after approval of this package/version/source/archive hash.
+# No npm staging or second approval prompt is part of this workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        type: choice
+        options: [kit, klein, supermat, unimate, u2net]
+        required: true
+      version:
+        description: Exact approved package version
+        type: string
+        required: true
+      source:
+        description: Exact approved source commit (40 hexadecimal characters)
+        type: string
+        required: true
+      sha256:
+        description: SHA256 of the approved package archive
+        type: string
+        required: true
+      publish:
+        description: Publish the verified archive (false only prepares it)
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_PACKAGE: ${{ inputs.package }}
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_SOURCE: ${{ inputs.source }}
+  RELEASE_SHA256: ${{ inputs.sha256 }}
+
+jobs:
+  prepare:
+    if: github.repository == 'lyonsno/kaminos'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release machinery
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: release-tools
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.15.0'
+          package-manager-cache: false
+      - name: Validate exact release inputs
+        run: |
+          node --input-type=module -e '
+            import {validateInput} from "./release-tools/scripts/npm-release.mjs";
+            validateInput({package:process.env.RELEASE_PACKAGE,version:process.env.RELEASE_VERSION,
+              source:process.env.RELEASE_SOURCE,sha256:process.env.RELEASE_SHA256});
+          '
+      - name: Check out approved package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source }}
+          path: package-source
+          persist-credentials: false
+      - name: Set the packing toolchain
+        run: npm install -g npm@11.12.1 --ignore-scripts
+      - name: Install build dependencies without lifecycle scripts
+        working-directory: package-source
+        run: npm ci --ignore-scripts
+      - name: Pack and verify the approved archive
+        run: |
+          node release-tools/scripts/npm-release.mjs prepare \
+            --source-root "$GITHUB_WORKSPACE/package-source" \
+            --out "$GITHUB_WORKSPACE/release" \
+            --package "$RELEASE_PACKAGE" --version "$RELEASE_VERSION" \
+            --source "$RELEASE_SOURCE" --sha256 "$RELEASE_SHA256"
+      - name: Preserve package and preparation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-release
+          path: release/
+          if-no-files-found: warn
+
+  publish:
+    needs: prepare
+    if: inputs.publish && github.repository == 'lyonsno/kaminos' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out trusted release machinery, not package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: release-tools
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.15.0'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install the supported publishing CLI
+        run: npm install -g npm@12.2.1 --ignore-scripts
+      - name: Download only this run's prepared package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-release
+          path: release
+      - name: Verify source, package and approved bytes again
+        run: |
+          node release-tools/scripts/npm-release.mjs verify \
+            --out "$GITHUB_WORKSPACE/release" \
+            --package "$RELEASE_PACKAGE" --version "$RELEASE_VERSION" \
+            --source "$RELEASE_SOURCE" --sha256 "$RELEASE_SHA256"
+      - name: Publish through GitHub OIDC
+        run: npm publish "$GITHUB_WORKSPACE/release/package.tgz" --ignore-scripts --access public --registry=https://registry.npmjs.org/
+      - name: Preserve publication verification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-publication
+          path: release/verification.json
+          if-no-files-found: warn
