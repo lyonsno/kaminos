@@ -48,7 +48,7 @@ function addCaps(leaf,triangles,id,normal,material){
  leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);
 }
 
-export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81}={}){
+export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e8}={}){
  const faceCount=source.indices.length/3;
  if(!view?.labels||view.labels.length!==faceCount)throw Error('Every original triangle requires a detected part owner');
  const total=materialMeasure(source),extent=Math.max(...sub(total.max,total.min));cellExtent??=extent/4;
@@ -142,9 +142,10 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  }}
  const maxVolume=Math.max(...leaves.map(l=>l.volume)),substantial=leaves.filter(l=>l.volume>=maxVolume*.1),support=substantial.reduce((a,b)=>a.bounds.min[1]<b.bounds.min[1]?a:b);
  const cells=leaves.map(l=>({index:l.index,id:'cell:'+l.index,part:l.part,pinned:l===support,position:l.center,halfExtents:l.halfExtents,mass:l===support?0:l.volume,volume:l.volume,column:0,row:0,layer:0}));
+ for(const bond of bonds){const length=Math.max(Math.hypot(...sub(cells[bond.a].position,cells[bond.b].position)),extent*Number.EPSILON);bond.materialLength=length;bond.linearStiffness=elasticModulus*bond.area/length;bond.rotationalStiffness=elasticModulus*bond.area*bond.area/(4*Math.PI*length);}
  const exteriorAreaAfter=leaves.reduce((sum,l)=>sum+materialMeasure(l.arrays,f=>l.faceInterfaces[f]===0).area,0);
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');
  return {route:WHOLE_FRACTURE_ROUTE,pieces:leaves,bonds,cells,capMaterial,dimensions:{dx:cellExtent,dy:cellExtent,dz:cellExtent},floorY:total.min[1]-extent*.02,
-  config:{gravity,timeStep:1/60,substeps:2,solverIterations:20,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
+  config:{elasticModulus,gravity,timeStep:1/60,substeps:2,solverIterations:20,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
   receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
 }

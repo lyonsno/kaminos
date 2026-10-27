@@ -28,3 +28,4 @@ for(const a of [source,inverted]){
  assert.equal(second.cells.length,first.cells.length);
  for(let i=0;i<first.cells.length;i++)assert.ok(Math.abs(first.cells[i].volume-second.cells[i].volume)<1e-6,'Material mass cannot depend on source coordinate offset, including reversed source winding');
 }
+for(const b of whole.bonds){assert.ok(b.linearStiffness>0&&b.rotationalStiffness>0,'Each material interface needs area-scaled linear and bending stiffness');const a=whole.cells[b.a],c=whole.cells[b.b],length=Math.hypot(...a.position.map((v,k)=>v-c.position[k]));assert.ok(Math.abs(b.linearStiffness-whole.config.elasticModulus*b.area/length)<1e-4);}

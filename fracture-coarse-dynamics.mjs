@@ -30,11 +30,13 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
   for(const cell of cells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='floor-only'?2:0});
   engine.addBody({position:[0,floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
-  for(const bond of bonds)engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,config.stiffness,true);
+  for(const bond of bonds){const j=engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,bond.linearStiffness??config.stiffness,true),data=engine.jointRecordsData,arm=Math.max(data[j*44+7],1);
+    data[j*44+16]=bond.linearStiffness??config.stiffness;data[j*44+17]=bond.rotationalStiffness===undefined?config.stiffness:bond.rotationalStiffness/(arm*arm);
+  }
   for(const cell of cells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
-  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.initialJointPenalty;data[j*44+40+axis]=config.initialJointPenalty;}}
+  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=Math.min(config.initialJointPenalty,data[j*44+17]);}}
   const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
   engine.setGravity([0,0,0]);
   engine.step(config.timeStep,renderer);
