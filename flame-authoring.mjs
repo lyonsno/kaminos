@@ -70,6 +70,12 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
   let loading = false;
   return {
     read: () => structuredClone(read()), apply, edit,
+    preview(next) {
+      canApply();
+      if(edits.state().active?.id!==id || edits.state().replaying)throw Error('A flame edit gesture must own the live preview');
+      restore(next);
+      return structuredClone(read());
+    },
     async applyBasin(presetId, options = {}) {
       if (loading) throw Error('A basin is already loading');
       canApply();

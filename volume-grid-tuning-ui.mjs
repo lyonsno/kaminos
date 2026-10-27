@@ -18,13 +18,14 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const signature=c=>JSON.stringify(pick(c));
  function field(key,label){
   const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)?.[1];const input=element(['worldSmoke','worldSmokeIntermediate'].includes(key)?'select':'input','transform-input');input.id=`grid-draft-${key}`;input.setAttribute('aria-label',label);
-  if(input.tagName==='SELECT')for(const option of document.getElementById(id)?.options||[])input.append(option.cloneNode(true));
+  if(input.tagName==='SELECT')for(const option of document.getElementById(id)?.options||[]){const clone=option.cloneNode(true);clone.title=clone.textContent;clone.textContent=({off:'Off',on:key==='worldSmoke'?'On':'Flow bridge',fields:'Own fields'})[clone.value]??clone.textContent;input.append(clone);}
   else {input.type='number';input.step=['intermediateExtent','worldSmokeExtent','worldSmokeTransition','gridHeightRatio'].includes(key)?'any':'1';input.min=['fineVelocity','finePressure','worldSmokePressure','worldSmokeTransition'].includes(key)||key.endsWith('Iterations')?'0':key==='resolution'?'4':key==='gridHeightRatio'?'1':key.endsWith('Extent')?'1.000000001':'2';}
+  if(key.endsWith('Iterations')){const source=document.getElementById(id);if(source?.min!==undefined&&source.min!=='')input.min=source.min;if(source?.max!==undefined&&source.max!=='')input.max=source.max;}
   input.title=['fineVelocity','finePressure','worldSmokePressure'].includes(key)?'Cells across the region; 0 follows the parent grid. Ratios need not be integers.':key.endsWith('Iterations')?'Pressure correction sweeps per simulation step.':'Cells across the region; independent of the other resolutions.';
   input.addEventListener(input.tagName==='SELECT'?'change':'input',()=>{
    const value=Number(input.value);
-   if(key.endsWith('Iterations')&&live&&input.value!==''&&Number.isSafeInteger(value)&&value>=0){
-    applying=true;try{live(key,value);baseline[key]=value;draft[key]=value;dirty=signature(draft)!==signature(baseline);}catch(e){status.textContent=e.message;return;}finally{applying=false;}refresh();return;
+   if(key.endsWith('Iterations')&&live&&input.value!==''&&Number.isSafeInteger(value)&&value>=Number(input.min||0)&&(input.max===undefined||input.max===''||value<=Number(input.max))){
+    applying=true;try{live(key,value);baseline[key]=value;draft[key]=value;dirty=signature(draft)!==signature(baseline);}catch(e){input.value=String(read()[key]);status.textContent=e.message;return;}finally{applying=false;}refresh();return;
    }
    const previous={...read(),...draft};
    draft[key]=input.value===''?NaN:['worldSmoke','worldSmokeIntermediate'].includes(key)?input.value:Number(input.value);
@@ -71,7 +72,10 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  }
  function refresh(){
   const current=read(),candidate={...current,...draft};let plan,error;
-  try{plan=validate(candidate);}catch(e){error=e.message;}
+  try{
+   for(const [key,input] of fields)if(key.endsWith('Iterations')&&candidate[key]!==undefined&&(!key.startsWith('worldSmoke')||candidate.worldSmoke==='on')&&(!key.startsWith('intermediate')||candidate.worldSmoke==='on'&&candidate.worldSmokeIntermediate==='fields')){const v=Number(candidate[key]);if(v<Number(input.min||0)||(input.max!==undefined&&input.max!==''&&v>Number(input.max)))throw Error(`${key} must be between ${input.min||0} and ${input.max||'the supported maximum'}`);}
+   plan=validate(candidate);
+  }catch(e){error=e.message;}
   const stale=dirty&&signature(current)!==signature(baseline);
   for(const [key,input] of fields){
    const independent=candidate.worldSmoke==='on'&&candidate.worldSmokeIntermediate==='fields';input.disabled=key.startsWith('intermediate')&&!independent||key.startsWith('worldSmoke')&&key!=='worldSmoke'&&candidate.worldSmoke!=='on';
@@ -84,7 +88,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   status.textContent=stale?'Applied grids changed elsewhere. Discard this draft to load them.':error?`${error}. Applied simulation retained.`:dirty?'Draft compatible · Apply to rebuild changed dimensions':'Applied grids';
   status.dataset.state=error||stale?'invalid':dirty?'draft':'applied';applyButton.disabled=!dirty||!!error||stale||applying;reset.disabled=!dirty;draw(plan);
  }
- function sync(){if(applying)return;if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
+ function sync(){if(applying)return;if(dirty&&baseline){const current=pick(read());for(const [key] of GRID_TUNING_FIELDS)if(key.endsWith('Iterations')&&current[key]!==baseline[key]){if(draft[key]===baseline[key])draft[key]=current[key];baseline[key]=current[key];}}if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
  function open(){panel.hidden=false;sync();fields.get('resolution').focus?.();}
  function hide(){panel.hidden=true;openButton.focus?.();}
  reset.onclick=()=>{dirty=false;for(const input of fields.values())if(document.activeElement===input)input.blur?.();sync();};

@@ -22041,7 +22041,7 @@ function createFlameQuickFields() {
         const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
         const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
         descriptor.value=value;if('rawValue' in descriptor)descriptor.rawValue=String(value);
-        writeFlameSettingsState(checkFlameSettingsState(next));
+        window.kaminosFlameAuthoring.preview(next);
       },
       apply:patch=>{
         const next=window.kaminosFlameAuthoring.read();

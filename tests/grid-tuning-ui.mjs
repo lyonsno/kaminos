@@ -10,6 +10,7 @@ class Element {
  focus(){document.activeElement=this;} blur(){document.activeElement=null;}
 }
 const host=new Element('div'),body=new Element('body'),backing=Object.fromEntries(GRID_TUNING_FIELDS.map(([,id])=>[id,new Element('select')]));
+backing['volume-pressure-solver-iterations'].min='4';backing['volume-pressure-solver-iterations'].max='240';
 const document={body,activeElement:null,listeners:{},createElement:tag=>new Element(tag),getElementById:id=>backing[id],addEventListener(type,fn){this.listeners[type]=fn;}};
 let dragCount=0,liveCount=0;
 let current={pressureSolver:'converged-open-top',resolution:64,gridHeightRatio:2,fineVelocity:32,finePressure:16,pressureSolverIterations:12,worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:64,worldSmokePressure:8,worldSmokeExtent:4,worldSmokeTransition:2,worldSmokeIntermediate:'off',intermediateFlow:24,intermediateMaterial:48,intermediatePressure:12,intermediateExtent:1.5,intermediateIterations:12},applications=0;
@@ -33,3 +34,6 @@ find('grid-tuning-reset').onclick();edit('fineVelocity',33);edit('pressureSolver
 
 find('grid-tuning-reset').onclick();edit('worldSmokeFlow','');edit('worldSmokeFlow',24);assert.equal(Number(find('grid-draft-collarReach').value),.5,'clearing velocity retains intended physical reach');find('grid-tuning-apply').onclick();assert.equal(current.worldSmokeTransition,3);
 edit('worldSmokeExtent','');edit('worldSmokeExtent',6);assert.equal(Number(find('grid-draft-collarReach').value),.5,'clearing coverage retains intended reach');find('grid-tuning-apply').onclick();assert.equal(current.worldSmokeTransition,2);
+
+find('grid-tuning-reset').onclick();const acceptedIterations=current.pressureSolverIterations;edit('fineVelocity',29);edit('pressureSolverIterations',1);assert.equal(current.pressureSolverIterations,acceptedIterations);assert.equal(find('grid-tuning-apply').disabled,true,'out-of-range live value refuses before Apply');edit('pressureSolverIterations',241);assert.equal(current.pressureSolverIterations,acceptedIterations);edit('pressureSolverIterations',8);assert.equal(current.pressureSolverIterations,8);assert.equal(current.fineVelocity,24,'live preview retains independent dimension draft');assert.equal(find('grid-tuning-apply').disabled,false);
+current={...current,pressureSolverIterations:12};inspector.sync();assert.equal(find('grid-tuning-apply').disabled,false,'iteration Undo keeps the pending dimension draft usable');assert.equal(find('grid-draft-fineVelocity').value,'29');

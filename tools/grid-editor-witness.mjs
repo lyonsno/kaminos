@@ -82,8 +82,8 @@ try{
  await edit('finePressure',-1);assert.equal(await page.locator('#grid-tuning-apply').isEnabled(),false);assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).controls.finePressure,43);
  await page.locator('#grid-tuning-reset').click();await edit('fineVelocity',21);await edit('finePressure',13);await page.keyboard.press('Control+Enter');await verify('return-to-coarse',21,13);
  await page.keyboard.press('Escape');
- report.phase='developed-plume';await save();const developStart=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);await control('volume-look-freeze',0);
- await page.waitForFunction(start=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.simStepCount>=start+120;},developStart);await control('volume-look-freeze',1);report.developed=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());
+ report.phase='developed-plume';await save();const developStart=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);const developSteps=process.argv.includes('--ui-only')?0:120;report.scope=developSteps?'native authoring plus developed plume':'short native authoring interaction only';await control('volume-look-freeze',0);
+ if(developSteps)await page.waitForFunction(({start,steps})=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.simStepCount>=start+steps;},{start:developStart,steps:developSteps});await control('volume-look-freeze',1);report.developed=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());
  await page.screenshot({path:path.join(out,'developed.png')});
  await page.keyboard.press('Alt+g');await page.setViewportSize({width:1550,height:950});await page.screenshot({path:path.join(out,'editor-wide.png')});await page.keyboard.press('Escape');
  report.phase='save';await save();

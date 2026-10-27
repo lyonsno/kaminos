@@ -22,3 +22,7 @@
 .grid-editor-details { font-size: 12px; }
 .grid-editor-details summary { cursor: pointer; padding: 8px 0; }
 @media (max-width: 680px) { .grid-editor { right: 8px; top: 72px; width: calc(100vw - 16px); min-width: 0; box-sizing: border-box; padding: 0 8px 10px; } .grid-editor-table { min-width: 570px; } .grid-editor-toolbar { flex-wrap: wrap; } .grid-editor-shape { flex-wrap: wrap; } }
+.grid-editor [hidden] { display: none !important; }
+.grid-editor .transform-input { height: 30px; padding: 4px 7px; font-size: 12px; }
+.grid-editor .authoring-number-display { font-size: 12px; }
+.grid-editor-shape .authoring-number-wrap { flex: 0 0 85px; width: 85px; }
