@@ -23,3 +23,6 @@ for(const [key,value] of [['points','0'],['filter_samples','0'],['shadow_grain',
 console.log('PASS scene lighting settings preserve actual quality, quadrature, grain and softness');
 
 for(const pointCount of [6,8]){const restored=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,pointCount,pointSampling:'all',shadowEdgeFilter:true})));assert.equal(restored.pointCount,pointCount);assert.equal(restored.shadowEdgeFilter,true);}
+
+const lightQuality=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,volumeGrid:32,directions:96})));
+assert.equal(lightQuality.volumeGrid,32);assert.equal(lightQuality.directions,96);

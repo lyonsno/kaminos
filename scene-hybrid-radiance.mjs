@@ -2,6 +2,7 @@ import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-field-shadow.mjs';
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
+import {preparedSmokePlan} from './scene-prepared-smoke.mjs';
 import {createVolumeGather,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
@@ -205,6 +206,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
   }
   return {
+    setLightGrid(value){
+      if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
+      const height=value*sourceDomain.dimensions[1]/sourceDomain.dimensions[0];
+      if(!Number.isInteger(height))throw Error('light grid must represent the source aspect exactly');
+      preparedSmokePlan([value,height,value],smokeRefinement,device.limits);
+      if(value!==volumeGrid){volumeGrid=value;status.volumeGrid=value;builtDomain=null;valid=false;}
+    },
     setShadowEdgeFilter(value){if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');shadowEdgeFilter=value;for(const light of lights)light.shadow.setEdgeFilter(value);},
     setSmokeShadowQuality(value){
       const steps=value.steps??smokeShadowSteps,resolution=value.resolution??smokeShadowResolution;

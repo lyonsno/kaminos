@@ -20,7 +20,7 @@ try {
   const corners=Array.from({length:8},(_,i)=>[(i&1)?.3:-.3,(i&2)?1.3:.7,(i&4)?.3:-.3]);
   const faces=[[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]];
   const cage=faces.flatMap(([a,b,c,d])=>[{a:corners[a],b:corners[b],c:corners[c]},{a:corners[a],b:corners[c],c:corners[d]}]);
-  report.fixtures=Object.fromEntries(Object.entries({empty:[],plane,oblique,reversed:plane.map(t=>({...t,b:t.c,c:t.b})),cage,flatLow:plane}).map(([name,triangles])=>{
+  report.fixtures=Object.fromEntries(Object.entries({empty:[],plane,oblique,reversed:plane.map(t=>({...t,b:t.c,c:t.b})),cage,flatLow:plane,nearCenter:plane.map(t=>Object.fromEntries(Object.entries(t).map(([k,p])=>[k,[p[0]+.499,p[1],p[2]]]))),slab:[...plane,...plane.map(t=>Object.fromEntries(Object.entries(t).map(([k,p])=>[k,[p[0]+.02,p[1],p[2]]])))]}).map(([name,triangles])=>{
     const p=buildTriangleVisibility(triangles).packGpu();return [name,{...p,nodes:Array.from(p.nodes),triangles:Array.from(p.triangles),
       // Preserve u32 escape/leaf words independently of f32 JSON subnormals.
       nodeWords:Array.from(new Uint32Array(p.nodes.buffer))}];
@@ -37,8 +37,8 @@ try {
     device.lost.then(i=>{if(i.reason!=='destroyed')losses.push({reason:i.reason,message:i.message});});
     device.pushErrorScope('validation');
     const shader=DISTRIBUTED_SMOKE_WGSL.replaceAll('@group(2)','@group(0)')+`
-      @group(0) @binding(2) var<storage,read> query:array<vec4<f32>>;
-      @group(0) @binding(3) var<storage,read_write> result:array<vec4<f32>>;
+      @group(0) @binding(3) var<storage,read> query:array<vec4<f32>>;
+      @group(0) @binding(4) var<storage,read_write> result:array<vec4<f32>>;
       @compute @workgroup_size(1) fn test(@builtin(global_invocation_id) id:vec3<u32>){result[id.x]=vec4<f32>(distributedMeanIncident(query[id.x].xyz),1);}`;
     const module=device.createShaderModule({code:shader});
     const compilation=await module.getCompilationInfo();if(compilation.messages.some(m=>m.type==='error'))throw new Error(JSON.stringify(compilation.messages));
@@ -50,11 +50,11 @@ try {
       try{
         const nodes=buffer(new Uint32Array(g.nodeWords)),triangles=buffer(new Float32Array(g.triangles));
         const source=device.createTexture({dimension:'3d',size:[2,4,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(source);
-        prepared=createPreparedSmoke(device,{nodes,triangles,nodeCount:g.nodeCount,source,coarseDimensions:[2,4,2],factor:name==='flatLow'?1:8});
-        const positions=name==='flatLow'?[[-.5,1,0],[.5,1,0],[0,1,0]]:name==='cage'?[[0,1,0]]:name==='empty'?[[-.25,1.25,.1],[-1,-1,-1],[1,3,1],[0,3.01,0]]:name==='oblique'?[[-.35,0,0],[.45,0,0],[.1,0,0]]:[[-.2,1,0],[.2,1,0],[0,1,0],[-.125001,1,0],[-.124999,1,0]];
+        prepared=createPreparedSmoke(device,{nodes,triangles,nodeCount:g.nodeCount,source,coarseDimensions:[2,4,2],factor:['flatLow','nearCenter'].includes(name)?1:8});
+        const positions=name==='nearCenter'?[[.498,1,0],[.5,1,0],[.499,1,0]]:name==='slab'?[[-.2,1,0],[.2,1,0],[.01,1,0]]:name==='flatLow'?[[-.5,1,0],[.5,1,0],[0,1,0],[-.001,1,0],[.001,1,0]]:name==='cage'?[[0,1,0]]:name==='empty'?[[-.25,1.25,.1],[-1,-1,-1],[1,3,1],[0,3.01,0]]:name==='oblique'?[[-.35,0,0],[.45,0,0],[.1,0,0]]:[[-.2,1,0],[.2,1,0],[0,1,0],[-.125001,1,0],[-.124999,1,0]];
         const query=buffer(new Float32Array(positions.flatMap(p=>[...p,0]))),result=buffer(new Float32Array(positions.length*4),GPUBufferUsage.COPY_SRC);
         const read=device.createBuffer({size:positions.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(read);
-        const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:prepared.texture.createView()},...[prepared.metadata.masks,query,result].map((b,i)=>({binding:i+1,resource:{buffer:b}}))]});
+        const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:prepared.texture.createView()},...[prepared.metadata.masks,prepared.metadata.planes,query,result].map((b,i)=>({binding:i+1,resource:{buffer:b}}))]});
         const outputs=[];
         for(const scale of [1,2]){
           const data=new Float32Array(2*4*2*4);
@@ -69,19 +69,20 @@ try {
           encoder.copyBufferToBuffer(result,0,read,0,positions.length*16);device.queue.submit([encoder.finish()]);
           await read.mapAsync(GPUMapMode.READ);outputs.push(Array.from(new Float32Array(read.getMappedRange())));read.unmap();
         }
-        const {texture,masks,...metadata}=prepared.metadata;rows.push({name,positions,outputs,metadata});
+        const {texture,masks,planes,...metadata}=prepared.metadata;rows.push({name,positions,outputs,metadata});
       }finally{prepared?.destroy();for(const r of owned)r.destroy();}
     }
     const validation=await device.popErrorScope();device.destroy();return {adapter:info,rows,errors,losses,validation:validation?.message??null,shader};
   },report.fixtures);await save();
   assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.signal.losses,[]);
-  assert.equal(report.signal.rows.length,6);assert.ok(report.fixtures.cage.nodeCount>1,'cage must exercise internal BVH escape traversal');
+  assert.equal(report.signal.rows.length,8);assert.ok(report.fixtures.cage.nodeCount>1,'cage must exercise internal BVH escape traversal');
   for(const row of report.signal.rows){
     assert.equal(row.metadata.staticPreparations,1);assert.equal(row.metadata.updates,2);assert.equal(row.metadata.cameraTriangleTests,0);
     const expected=row.name==='cage'?[0,0,0,1]:row.name==='empty'?[1.75,4.25,4.1,1,1.5,2.5,3.5,1,2.5,5.5,4.5,1,0,0,0,1]:[2,2,2,1,100,100,100,1,0,0,0,1];
     for(let j=0;j<2;j++){
       assert.equal(row.outputs[j].length,row.positions.length*4);
-      if(row.positions.length===5)assert.ok(Math.abs(row.outputs[j][12]-row.outputs[j][16])<.001,`${row.name}: illumination jumps across clear-side grid boundary: ${row.outputs[j][12]} -> ${row.outputs[j][16]}`);
+      if(row.name==='flatLow')assert.ok(Math.abs(row.outputs[j][12]-2*(j+1))<.001&&Math.abs(row.outputs[j][16]-100*(j+1))<.001,`flatLow: premature wall cutoff ${row.outputs[j][12]}, ${row.outputs[j][16]}`);
+      if(row.positions.length===5&&row.name!=='flatLow')assert.ok(Math.abs(row.outputs[j][12]-row.outputs[j][16])<.001,`${row.name}: illumination jumps across clear-side grid boundary: ${row.outputs[j][12]} -> ${row.outputs[j][16]}`);
       row.outputs[j].slice(0,expected.length).forEach((v,i)=>assert.ok(Number.isFinite(v)&&Math.abs(v-expected[i]*(i%4===3?1:j+1))<.0001,`${row.name} update${j} component${i}: ${v}`));
     }
     report.checks.push(`${row.name}: numerical boundary lookup, two live updates, one static preparation`);

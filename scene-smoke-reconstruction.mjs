@@ -38,15 +38,16 @@ export function createDistributedSmokeBindings(device) {
   const layout=device.createBindGroupLayout({entries:[
     {binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
     {binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
+    {binding:2,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
   ]});
   let last=null,group=null;
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
-    if(!frame.texture || r?.identity!=='prepared-clear-box-support-v3' || !r.texture || !r.masks || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
-    const handles=[r.texture,r.masks];
+    if(!frame.texture || r?.identity!=='prepared-planar-support-v4' || !r.texture || !r.masks || !r.planes || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
+    const handles=[r.texture,r.masks,r.planes];
     if(!last || handles.some((h,i)=>h!==last[i])) {
       group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},
-        {binding:1,resource:{buffer:r.masks}}]});
+        {binding:1,resource:{buffer:r.masks}},{binding:2,resource:{buffer:r.planes}}]});
       last=handles;
     }
     return group;
@@ -56,6 +57,7 @@ export function createDistributedSmokeBindings(device) {
 export const DISTRIBUTED_SMOKE_WGSL=`
 @group(2) @binding(0) var distributedIncident:texture_3d<f32>;
 @group(2) @binding(1) var<storage,read> smokeBoundaryMasks:array<u32>;
+@group(2) @binding(2) var<storage,read> smokeSupportPlanes:array<vec4<f32>>;
 var<private> distributedLastMaskFlags:vec2<f32>;
 fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
   distributedLastMaskFlags=vec2<f32>(0);
@@ -66,24 +68,29 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
   let nearest=vec3<u32>(clamp(vec3<i32>(floor((p-lo)/pitch)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1)));
   let nearestId=nearest.x+dims.x*(nearest.y+dims.y*nearest.z);
   distributedLastMaskFlags.x=select(0.0,1.0,smokeBoundaryMasks[nearestId]==0u);
-  var total=0.0;
+  var total=0.0;var planeWeight=0.0;
   var sum=vec3<f32>(0.0);
   for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
     let c=clamp(base+vec3<i32>(i32(x),i32(y),i32(z)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1));
     let donor=textureLoad(distributedIncident,c,0);
     let id=u32(c.x)+dims.x*(u32(c.y)+dims.y*u32(c.z));let packed=smokeBoundaryMasks[id];
-    let radius=vec3<f32>(f32(packed&1023u),f32((packed>>10u)&1023u),f32((packed>>20u)&1023u))/1023.0;
+    let planar=(packed&(1u<<30u))!=0u;var sameSide=true;
+    if(planar){let plane=smokeSupportPlanes[id];sameSide=dot(plane.xyz,p)-plane.w>0.000002;}
+    let radius=select(vec3<f32>(f32(packed&1023u),f32((packed>>10u)&1023u),f32((packed>>20u)&1023u))/1023.0,vec3<f32>(1),planar);
     // Evaluate at the clamped domain position so edge replication preserves
     // the ordinary trilinear value instead of counting a donor eight times.
     let delta=abs(w-vec3<f32>(f32(x),f32(y),f32(z)));
     let tent=max(vec3<f32>(0),vec3<f32>(1)-delta/max(radius,vec3<f32>(1e-20)));
-    let weight=select(0.0,tent.x*tent.y*tent.z,all(radius>vec3<f32>(0)));
+    let weight=select(0.0,tent.x*tent.y*tent.z,all(radius>vec3<f32>(0))&&(!planar||sameSide));
+    planeWeight+=select(0.0,weight,planar);
     sum+=donor.rgb*weight;total+=weight;
   }}}
-  // Normalize supported samples without amplifying a vanishing tent into a
-  // discontinuous bright island. Below quarter coverage, fade continuously.
+  // Certified planar support may reach the actual solid boundary without
+  // fading early. Keep low-coverage fading for the remaining box support;
+  // blending by its weight avoids a boolean jump when one planar donor enters.
   distributedLastMaskFlags.y=1.0-min(total,1.0);
-  return sum/max(total,0.25);
+  let boxFraction=max(0.0,total-planeWeight)/max(total,1e-12);
+  return sum/max(max(total,0.25*boxFraction),1e-12);
 }`;
 
 // CPU scalar reference for the compact basis, used by numerical invariants.

@@ -2,6 +2,7 @@ import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {validateShadowComparison,validateShadowSampling} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateCasterLevel} from './fire-shadow-casters.mjs';
+import {lightingDirections} from './scene-volume-gather.mjs';
 import {smokeShadowPlan} from './fire-smoke-shadow.mjs';
 
 const prefix='volume_light_field_hybrid_';
@@ -14,6 +15,8 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  if(params.has(prefix+'light_grid')){const value=number('light_grid',16);if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');smoke.volumeGrid=value;}
+  if(params.has(prefix+'light_directions')){const value=number('light_directions',24);lightingDirections(value);smoke.directions=value;}
   const edge=params.get(prefix+'shadow_edge_filter');
   if(edge!==null){if(!['0','1'].includes(edge))throw Error('shadow edge filter must be 0 or 1');smoke.shadowEdgeFilter=edge==='1';}
   const smokeFilter=params.get(prefix+'smoke_shadow_filter');
@@ -39,6 +42,8 @@ export function fireShadowSceneRoute(state) {
     shadow_softness:state.shadowSoftness,shadow_implementation:state.shadowImplementation,
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
   if(state.shadowEdgeFilter!==undefined){if(typeof state.shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');values.shadow_edge_filter=state.shadowEdgeFilter?'1':'0';}
+  if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;
+  if(state.directions!==undefined)values.light_directions=state.directions;
   const route=Object.fromEntries(Object.entries(values).map(([key,value])=>[prefix+key,String(value)]));
   if(state.smokeShadowFilter!==undefined){
     if(typeof state.smokeShadowFilter!=='boolean')throw Error('smoke shadow filter must be boolean');

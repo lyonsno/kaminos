@@ -19782,6 +19782,7 @@ async function mountSceneRadianceRoute(params) {
         sceneRadianceDebugView=debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()});
       }
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
+      if(hybrid){const savedLight=readFireShadowSceneSettings(params);if(savedLight.directions!==undefined)selectAngularCount(savedLight.directions);}
       window.__kaminosSceneRadianceSetup.status='mounted';
       flameInspector?.sync();
       if(hybrid){
