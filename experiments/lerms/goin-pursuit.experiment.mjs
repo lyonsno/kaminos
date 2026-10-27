@@ -24,7 +24,9 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const goin=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,.16,32),new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}));
  goin.name='Goin';goin.rotation.x=Math.PI/2;goin.position.fromArray(position);goin.castShadow=true;
  if(physicsInput){const mark=new THREE.Mesh(new THREE.SphereGeometry(.055,12,8),new THREE.MeshStandardMaterial({color:0x553c14}));mark.position.set(.2,.09,0);goin.add(mark);}
- let asset,actor,seating,escapeAsset,stopCarry,stopPose,disposed=false,serial=0,revision=0,refresh=()=>{};
+ let asset,actor,seating,escapeAsset,stopCarry,stopPose,stopEdits,disposed=false,serial=0,revision=0,refresh=()=>{};
+ const edits=host.scene.edits;
+ let held=false,editHeld=false,presentedPose=null;
  let physics,supportAsset,physicsFailure=null;
  const support=physicsInput?new THREE.Mesh(new THREE.BoxGeometry(...physicsInput.support.size),new THREE.MeshStandardMaterial({color:0x547b72,roughness:.9})):null;
  if(support){support.name='Goin support';support.position.fromArray(physicsInput.support.position);support.receiveShadow=true;}
@@ -38,6 +40,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   return {id:asset.id,position:goin.getWorldPosition(new THREE.Vector3()).toArray(),claimable:!physical?.active||physical.contactCount>0||physical.phase==='settled'};
  }});
  const worldPose=()=>({position:goin.getWorldPosition(new THREE.Vector3()).toArray(),quaternion:goin.getWorldQuaternion(new THREE.Quaternion()).toArray(),scale:goin.getWorldScale(new THREE.Vector3()).toArray()});
+ const rememberPose=()=>{presentedPose=JSON.stringify(worldPose());};
  function physicalPose(){
   const pose=worldPose(),rebuilt=new THREE.Matrix4().compose(new THREE.Vector3(...pose.position),new THREE.Quaternion(...pose.quaternion),new THREE.Vector3(...pose.scale));
   if(goin.matrixWorld.elements.some((x,i)=>Math.abs(x-rebuilt.elements[i])>1e-6))throw Error('Sheared goin transform is unsupported');return pose;
@@ -58,7 +61,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     if(!goin.parent)throw Error('Dynamic goin was removed');
     goin.position.copy(goin.parent.worldToLocal(new THREE.Vector3(...state.position)));
     goin.quaternion.copy(goin.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(new THREE.Quaternion(...state.quaternion)));
-    goin.updateMatrixWorld(true);session.redraw();
+    goin.updateMatrixWorld(true);rememberPose();session.redraw();
    }
   });
  }
@@ -68,11 +71,32 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   if(!goin.parent)return;
   const snapshot=actor.pose({bones:[theft.socket.bone]});
   const world=new THREE.Vector3(...theft.socket.offset).applyMatrix4(new THREE.Matrix4().fromArray(snapshot.bones[0].matrix));
-  goin.position.copy(goin.parent.worldToLocal(world));goin.updateMatrixWorld(true);session.redraw();
+  goin.position.copy(goin.parent.worldToLocal(world));goin.updateMatrixWorld(true);rememberPose();session.redraw();
   physicsCall(()=>physics.carried({time:actor.read().action.time,...physicalPose()}));
  }
  const waterHealthy=()=>{if(waterFailure)throw Error('Water receiver failed; reopen before resuming');};
  const healthy=()=>{waterHealthy();if(physicsFailure)throw Error('Goin physics failed; reopen before resuming');};
+ function setHeld(value,source){
+  active();healthy();if(value===held)return;
+  const time=actor.read().action.time;
+  if(value)physicsCall(()=>physics.reset(time));
+  else physicsCall(()=>physics.release({time,...physicalPose()}));
+  task.setHeld({held:value,time});held=value;rememberPose();receipt();
+  record({kind:'lerms.goin.manipulation',phase:value?'grabbed':'released',source,time,goin:{id:asset.id,...worldPose()}});
+ }
+ function editsGoin(edit){
+  for(let node=goin;node;node=node.parent){const id=node===goin?asset.id:node.userData?.kaminosSceneObject?.id;
+   if(id&&(edit?.id===id||Object.hasOwn(edit?.before?.roots??{},id)))return true;}
+  return false;
+ }
+ function observeEdit(state){
+  if(disposed||!actor)return;
+  if(editsGoin(state.active)){setHeld(true,'shared-scene-edit');editHeld=true;return;}
+  if(editHeld){setHeld(false,'shared-scene-edit');editHeld=false;return;}
+  if(held)return;
+  // Undo/redo and ancestor transforms publish after writing, without begin.
+  if(presentedPose!==JSON.stringify(worldPose())){setHeld(true,'shared-scene-history');setHeld(false,'shared-scene-history');}
+ }
  const steering={read:task.read,update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
  const invokeActor=(name,input)=>{
   active();if(name!=='pause')healthy();
@@ -102,7 +126,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   return waterPending;
  }
  const active=()=>{if(disposed)throw Error('Goin pursuit is disposed');};
- async function dispose(){if(disposed)return;disposed=true;stopWater?.();stopCarry?.();stopPose?.();physics?.dispose();seating?.dispose();refresh=()=>{};
+ async function dispose(){if(disposed)return;disposed=true;stopEdits?.();if(editsGoin(edits?.state().active))edits.cancel();stopWater?.();stopCarry?.();stopPose?.();physics?.dispose();seating?.dispose();refresh=()=>{};
   try{try{await receiver?.dispose();}finally{await water?.dispose();}}finally{
    try{await actor?.dispose();}finally{try{await session.dispose();}finally{if(!asset){goin.geometry.dispose();goin.material.dispose();}if(escape&&!escapeAsset){escape.geometry.dispose();escape.material.dispose();}if(support&&!supportAsset){support.geometry.dispose();support.material.dispose();}}}
   }
@@ -110,6 +134,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const read=()=>({schema:'lerms.goin-pursuit.v1',route:'shared-owner-scene',task:task.read(),creature:actor.read(),
   goin:{id:asset.id,...worldPose(),mounted:Boolean(goin.parent),visible:goin.visible},
   physics:physics?{...physics.read(),failure:physicsFailure?.message??null}:null,
+  interaction:{held,nativePlacement:Boolean(edits),pickupWhileHeld:false},
   theft:theft?{socket:structuredClone(theft.socket),attachment:'provisional-source-bone-offset',escape:{id:escapeAsset.id,position:escape.getWorldPosition(new THREE.Vector3()).toArray()},release:physics?'rigid-body fall and contact on authored box support':'world-position detach; no fall or rolling solver'}:null,
   water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-liquid-volume-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
  try{
@@ -131,6 +156,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
    {...dependencies,publishInspector:false,steering});
   if(physics&&actor.read().referenceFloor)actor.operations.floor({visible:false});
   if(theft){actor.pose({bones:[theft.socket.bone]});stopPose=actor.observePose(presentCarry);stopCarry=session.onFrame(presentCarry);presentCarry();}
+  rememberPose();if(edits)stopEdits=edits.subscribe(observeEdit);
   if(waterInput){
    actor.pose({bones:[waterInput.receiver.bone]});
    const {lazarusFiniteSetup}=await import('../lazarus-fluid/contributions.mjs');
@@ -144,11 +170,13 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   const operations={
    moveGoin(input){active();if(!point(input?.position))throw Error('Goin position must be a finite world point');
     healthy();
-    if(task.read().custody?.carrierId)throw Error('A carried goin is placed by its carrier; interrupt before moving it');
-    physicsCall(()=>physics.reset(actor.read().action.time));
-    goin.position.fromArray(input.position);host.scene.refreshPresentation(asset);session.redraw();
+    const alreadyHeld=held;if(!alreadyHeld)setHeld(true,'agent-placement');
+    goin.position.copy(goin.parent.worldToLocal(new THREE.Vector3(...input.position)));goin.updateMatrixWorld(true);rememberPose();
+    if(!alreadyHeld)setHeld(false,'agent-placement');host.scene.refreshPresentation(asset);session.redraw();
     const result=read();record({kind:'lerms.goin.move',phase:'applied',effective:result.goin});return result;
    },
+   beginGoinGrab(){setHeld(true,'agent-grab');return read();},
+   endGoinGrab(){setHeld(false,'agent-grab');return read();},
    moveEscape(input){active();if(!escape||!point(input?.position))throw Error('Escape point must be a finite world point');escape.position.fromArray(input.position);host.scene.refreshPresentation(escapeAsset);session.redraw();return read();},
    async sampleWater(){active();if(!receiver)throw Error('Water is not mounted');await sampleWater();return read();},
    setWaterRunning(input){active();if(!water||typeof input?.running!=='boolean')throw Error('Mounted water and running boolean required');if(input.running)waterHealthy();water.setPaused(!input.running);return read();},
@@ -166,9 +194,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   return {read,operations,dispose,inspect:actor.inspect,
    mount({root,document,invoke}){
     const properties=document.createElement('div'),status=document.createElement('output');
-    const interrupt=document.createElement('button');interrupt.type='button';interrupt.textContent='Interrupt test';
-    interrupt.addEventListener('click',()=>Promise.resolve(invoke('interruptTest',{})).catch(e=>status.textContent=e.message));
-    properties.append(interrupt,status);
+    properties.append(status);
     if(water){
      const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=waterInput.running===true;
      const name=document.createElement('span');name.textContent='Water';label.append(toggle,name);

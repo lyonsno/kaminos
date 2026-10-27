@@ -12739,7 +12739,7 @@ async function installOwnerWorkbenchEntry() {
     },
   },scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
-    refreshPresentation:refreshWorkbenchAssetPresentation,
+    refreshPresentation:refreshWorkbenchAssetPresentation,edits:scenePlacementTools.edits,
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
