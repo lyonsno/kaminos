@@ -57,3 +57,8 @@ test('source diagnostics distinguish range and gaze rejection from perception',(
  assert.equal(a.read().candidates.find(x=>x.id==='far').gate,'out of range');
  assert.equal(a.read().perceived.length,0);a.dispose();
 });
+test('an unavailable probe cannot relabel old measurements as current',()=>{
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ a.sense({time:1,samples:[{point:[0,0,0],luminance:.2}]});a.sense({time:2,status:'unavailable',samples:null});
+ const light=a.read().light;assert.equal(light.status,'unavailable');assert.equal(light.sampleTime,1,'Raw measurements retain the last actual sampling time');assert.equal(light.time,2,'Probe status keeps its own report time');a.dispose();
+});
