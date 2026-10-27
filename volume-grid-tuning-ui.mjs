@@ -90,7 +90,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  }
  function sync(){if(applying)return;if(dirty&&baseline){const current=pick(read());for(const [key] of GRID_TUNING_FIELDS)if(key.endsWith('Iterations')&&current[key]!==baseline[key]){if(draft[key]===baseline[key])draft[key]=current[key];baseline[key]=current[key];}}if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
  function open(){panel.hidden=false;sync();fields.get('resolution').focus?.();}
- function hide(){panel.hidden=true;openButton.focus?.();}
+ function hide(){for(const binding of bindings)binding.commit?.();panel.hidden=true;openButton.focus?.();}
  reset.onclick=()=>{dirty=false;for(const input of fields.values())if(document.activeElement===input)input.blur?.();sync();};
  applyButton.onclick=()=>{if(applyButton.disabled)return;try{applying=true;apply({...draft});dirty=false;}catch(e){status.textContent=`${e.message}. Draft retained.`;return;}finally{applying=false;}sync();};
  openButton.onclick=open;close.onclick=hide;
