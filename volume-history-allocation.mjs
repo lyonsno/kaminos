@@ -11,8 +11,13 @@ export function allocateRayStrata(segments, count, phase=.5, freshPhase=undefine
   if(freshPhase!==undefined){
     if(!Number.isFinite(freshPhase)||freshPhase<=0||freshPhase>=1)throw Error('interior fresh phase required');
     const start=segments[0].start;
-    const points=count===1?[]:allocateRayStrata(segments,count-1,phase).map(b=>b.sample);
-    points.push(start+(end-start)*freshPhase);points.sort((a,b)=>a-b);
+    const fresh=start+(end-start)*freshPhase;
+    const guided=count===1?[]:allocateRayStrata(segments,count-1,phase);
+    // Keep fresh placement independent; move only a coincident guided quantile
+    // later within its original mass stratum, preserving order and count.
+    const shifted=guided.some(b=>b.sample===fresh)?allocateRayStrata(segments,count-1,phase+(1-phase)*.5):null;
+    const points=guided.map((b,i)=>b.sample===fresh?shifted[i].sample:b.sample);
+    points.push(fresh);points.sort((a,b)=>a-b);
     return points.map((sample,i)=>{
       const left=i===0?start:(points[i-1]+sample)*.5;
       const right=i===count-1?end:(sample+points[i+1])*.5;
@@ -190,13 +195,21 @@ fn guidedQuantile(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,quantileMa
     (*s).weight=guidanceWeight(ro+rd*(((*s).cursor+(*s).segmentEnd)*.5));
   }
 }
+fn guidedCandidate(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32{
+  let index=f32((*s).guidedIndex);let count=f32((*s).guidedCount);
+  var point=guidedQuantile(s,ro,rd,(*s).total*(index+phase)/count);
+  if(point==(*s).freshPoint){
+    point=guidedQuantile(s,ro,rd,(*s).total*(index+phase+(1.0-phase)*.5)/count);
+  }
+  return point;
+}
 fn guidedPop(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32{
   if((*s).freshPending==1u&&((*s).guidedIndex>=(*s).guidedCount||(*s).freshPoint<=(*s).candidate)){
     (*s).freshPending=0u;return (*s).freshPoint;
   }
   let point=(*s).candidate;(*s).guidedIndex++;
   if((*s).guidedIndex<(*s).guidedCount){
-    (*s).candidate=guidedQuantile(s,ro,rd,(*s).total*(f32((*s).guidedIndex)+phase)/f32((*s).guidedCount));
+    (*s).candidate=guidedCandidate(s,ro,rd,phase);
   }
   return point;
 }
@@ -212,7 +225,7 @@ fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,coun
   if(index==0u){
     (*s).guidedCount=count-1u;(*s).guidedIndex=0u;(*s).freshPending=1u;
     (*s).freshPoint=mix((*s).start,(*s).end,freshPhase);
-    if(count>1u){(*s).candidate=guidedQuantile(s,ro,rd,(*s).total*phase/f32(count-1u));}
+    if(count>1u){(*s).candidate=guidedCandidate(s,ro,rd,phase);}
     (*s).currentPoint=guidedPop(s,ro,rd,phase);
   }
   let sample=(*s).currentPoint;var next=(*s).end;var right=(*s).end;
