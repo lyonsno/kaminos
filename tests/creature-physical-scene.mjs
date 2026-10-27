@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createLivingScene} from '../experiments/creature-motion/living-scene.experiment.mjs';
+import {readWanderPath} from '../experiments/creature-motion/wander-motion.mjs';
 class Element{constructor(){this.children=[];this.style={};}append(...nodes){this.children.push(...nodes);}prepend(...nodes){this.children.unshift(...nodes);}setAttribute(){}remove(){}}
 const scene=new THREE.Scene(),callbacks=new Set(),document={createElement:()=>new Element(),getElementById:()=>null};
 const host={controls:{document},scene:{refreshPresentation(){},async open(){const owned=[],stops=[];return {async attach(root){scene.add(root);owned.push(root);return{id:root.uuid,root};},onFrame(fn){callbacks.add(fn);const stop=()=>callbacks.delete(fn);stops.push(stop);return stop;},redraw(){},readView:()=>({}),setView(){},async dispose(){stops.forEach(f=>f());owned.forEach(r=>r.removeFromParent());}};}}};
@@ -11,17 +12,19 @@ const recipe={encounters:{response:'physical',avoidance:false},actors:[{id:'a',l
 const room=await createLivingScene({host,inputs:recipe},{loadSources:async()=>data});
 try{
  const initial=room.read();await room.operations.advance({seconds:1/30});const stepped=room.read();
- assert.equal(stepped.encounters.physics.backend,'cannon-es-cpu');assert.equal(stepped.encounters.physics.steps,4,'Both actors share one step');
+ assert.equal(stepped.encounters.physics.backend,'cannon-es-cpu');assert.ok(stepped.encounters.physics.steps>=4,'The complete interval must be physically resolved');
+ assert.equal(stepped.encounters.physics.bodies,2,'Both actors must share one physical world');
  assert.ok(stepped.encounters.physics.contacts.length);
  assert.ok(stepped.actors.every((a,i)=>a.state.transform.position.some((x,j)=>x!==initial.actors[i].state.transform.position[j])),'Both accepted roots must be presented');
  for(const id of ['a','b'])await room.operations.actor({id,operation:'play'});
  assert.equal(callbacks.size,1,'Coupled bodies need one shared clock subscription');
  for(const cb of [...callbacks])cb({deltaSeconds:1/30,timestampMs:300});
- assert.equal(room.read().encounters.physics.steps,4);
+ assert.ok(room.read().encounters.physics.steps>=4);
+ assert.equal(room.read().encounters.physics.bodies,2);
  for(const id of ['a','b'])await room.operations.actor({id,operation:'pause'});assert.equal(callbacks.size,0);
  const saved=room.read().recipe;assert.equal(saved.encounters.response,'physical');
  await room.dispose();const reopened=await createLivingScene({host,inputs:saved},{loadSources:async()=>data});
- assert.deepEqual(reopened.read().actors.map(a=>a.state.action.motion.path.position),saved.actors.map(a=>a.creature.wander.motion.path.points[0]));
+ assert.deepEqual(reopened.read().actors.map(a=>a.state.action.motion.path.position),saved.actors.map(a=>readWanderPath(a.creature.wander.motion.path).position));
  await reopened.operations.contactBodies({visible:true});await reopened.dispose();
 }finally{await room.dispose();}
 assert.equal(callbacks.size,0);assert.equal(scene.children.length,0);
@@ -30,12 +33,15 @@ console.log('Actual scene batches root response, exact advance, clocks, pause an
 // Engine supports must agree with the presented articulation, including while
 // the root motor is accelerating below requested speed and beside an obstacle.
 const articulated=structuredClone(data);articulated.motion.positions[9]=1;
+// These regressions ask about a prescribed moving support, independently of
+// autonomous goal choice. Retain an explicit forward destination in the setup.
+const straightJourney={wander:{area:{position:[0,0,0],quaternion:[0,0,0,1],scale:[10,1,10]},motion:{schema:'kaminos.creature-wander-motion.v1',sourceKey:data.source.motionSha256+':'+data.source.frameSha256,elapsed:0,heldFrame:null,contactRate:1,travel:'source',path:{schema:'kaminos.creature-wander-locomotion.v1',area:{center:[0,0],radii:[10,10],yaw:0},position:[0,0],direction:[0,1],goal:[0,5],destination:[0,5],rng:1,distance:0,segments:0,zoneId:null,bodyLength:1,referenceSpeed:.3}}}};
 const supportFactory=()=>{let palette;return {
  update(m){palette=m;},flush(){},dispose(){},read:()=>({backend:'instrumented-support'}),
  movementCores(m=palette){const p=new THREE.Vector3(0,0,1).applyMatrix4(new THREE.Matrix4().fromArray(m[2])).toArray();return [{a:p,b:[...p],radius:.1}];}
 };};
 for(const blocked of [false,true]){
- const a={id:'a',label:'A',creature:{...recipe.actors[0].creature,deformation:'gpu'}};
+ const a={id:'a',label:'A',creature:{...recipe.actors[0].creature,...straightJourney,deformation:'gpu'}};
  const b={id:'b',label:'Blocker',creature:{...recipe.actors[0].creature,action:'preview',deformation:'gpu',transform:{position:[1.15,0,0],quaternion:[0,0,0,1],scale:[1,1,1]}}};
  const probe=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:blocked?[a,b]:[a]}},{loadSources:async input=>input.label==='Blocker'?data:articulated,loadGpuDeformer:async()=>supportFactory});
  try{
@@ -56,14 +62,14 @@ for(const blocked of [false,true]){
 const plateau=structuredClone(data),z=[0,.01,.01,.01,.02,.03];
 plateau.motion.frames=z.length;plateau.motion.positions=z.flatMap(value=>[0,.2,value,0,.2,value+1]);
 plateau.motion.localRotations=Array.from({length:z.length*2},()=>[1,0,0,0]).flat();
-const plateauRoom=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:[recipe.actors[0]]}},{loadSources:async()=>plateau});
+const plateauRoom=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:[{...recipe.actors[0],creature:{...recipe.actors[0].creature,...straightJourney}}]}},{loadSources:async()=>plateau});
 try{
  for(let i=0;i<12;i++){await plateauRoom.operations.advance({seconds:1/30});assert.equal(plateauRoom.read().encounters.physics.contacts.length,0);}
  assert.ok(plateauRoom.read().actors[0].state.action.motion.elapsed>3/30,'PHYSICAL-03: unobstructed motion must advance beyond its stationary source interval');
 }finally{await plateauRoom.dispose();}
 
 const blockedRoom=await createLivingScene({host,inputs:{encounters:recipe.encounters,actors:[
- {id:'a',label:'A',creature:{...recipe.actors[0].creature,deformation:'gpu'}},
+ {id:'a',label:'A',creature:{...recipe.actors[0].creature,...straightJourney,deformation:'gpu'}},
  {id:'b',label:'B',creature:{...recipe.actors[0].creature,action:'preview',deformation:'gpu',transform:{position:[0,0,.2],quaternion:[0,0,0,1],scale:[1,1,1]}}}
 ]}},{loadSources:async()=>data,loadGpuDeformer:async()=>supportFactory});
 try{

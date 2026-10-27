@@ -1,4 +1,3 @@
-import {createWanderPath} from './wander-path.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
 import {createEngagement} from './engagement.mjs';
@@ -15,7 +14,7 @@ import {createWorkbenchSceneHost} from '../../workbench-scene-host.mjs';
 import {createSkinCaseSelection,validateSkinCaseChoices} from './skin-case-selection.mjs';
 import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
-import {createWanderMotion,wanderAreaInPlacement} from './wander-motion.mjs';
+import {createWanderMotion,wanderAreaInPlacement,readWanderPath} from './wander-motion.mjs';
 import {createLiveActorRoot} from './live-actor-root.mjs';
 import {registerSceneObjectPoseHistory} from '../../scene-object-pose-history.mjs';
 import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests,lightSamplePoints} from './creature-attention.mjs';
@@ -89,7 +88,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
- const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ const makeWander=options=>createWanderMotion({THREE,adapter,walking,locomotion:true,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
  const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
@@ -117,12 +116,15 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
 
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,flesh:runtime.flesh.read(),
-  pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
+  pathGuide:pathGuide?{mode,kind:wander?(wander.read().path.navigation?'locomotion-destination':'wander-current-segment'):mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function refreshGuide(){
   const y=(floor?.position.y??runtime.mesh.geometry.boundingBox?.min.y??0)+.025;
   let points=walking.guidePoints(mode);
-  if(wander){const [a,b,c]=wander.snapshot().path.points;points=Array.from({length:65},(_,i)=>{const t=i/64,u=1-t;return [u*u*a[0]+2*u*t*b[0]+t*t*c[0],y,u*u*a[1]+2*u*t*b[1]+t*t*c[1]];});guideSegment=wander.read().path.segments;}
+  if(wander){const path=wander.read().path;
+   if(path.navigation)points=[path.position,path.target].map(p=>[p[0],y,p[1]]);
+   else{const [a,b,c]=wander.snapshot().path.points;points=Array.from({length:65},(_,i)=>{const t=i/64,u=1-t;return [u*u*a[0]+2*u*t*b[0]+t*t*c[0],y,u*u*a[1]+2*u*t*b[1]+t*t*c[1]];});}
+   guideSegment=path.segments;}
   const geometry=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(p[0],y,p[2])));
   geometry.computeBoundingBox();
   if(!pathGuide){pathGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x55cbd7,depthTest:true}));pathGuide.name='Creature motion path';Object.assign(pathGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.visible=false;placement.add(pathGuide);}
@@ -194,9 +196,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const before=wander.snapshot();let state;
   try{state=wander.advance(moving,constraint);}catch(error){resolvedOverlay=null;wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
   const present=()=>{try{cycle=state.cycle;source.presentation.cycle=cycle;player.seek(state.frame);attention?.positionReticle(placement);if(playing)player.play();}finally{resolvedOverlay=null;}};
-  const after=()=>{stepFlesh(physicalSeconds);if(guideSegment!==state.path.segments)refreshGuide();refresh();};
+  const after=()=>{stepFlesh(physicalSeconds);if(guideSegment!==state.path.segments||state.path.navigation)refreshGuide();refresh();};
   if(encounterContext?.response==='physical'&&physicalSeconds>0){
-   const frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone(),inverse=matrix.clone().invert(),from=createWanderPath({snapshot:before.path}).read(),to=state.path;
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone(),inverse=matrix.clone().invert(),from=readWanderPath(before.path),to=state.path;
    const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),pivot=point(from.position),end=point(to.position),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
    const a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
    encounterContext.stage({time:frameStamp,seconds:physicalSeconds,nextBody:contactState(wander.frame(state.frame)),motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis},accept:motion=>{
