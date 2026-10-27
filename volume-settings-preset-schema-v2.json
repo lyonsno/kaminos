@@ -2178,7 +2178,10 @@
       "allowedValues": [
         "current",
         "numerical",
-        "fixed"
+        "fixed",
+        "budgeted",
+        "joins",
+        "history"
       ],
       "additiveDefault": "numerical"
     },

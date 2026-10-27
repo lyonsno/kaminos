@@ -1,6 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import fs from 'node:fs';
+import vm from 'node:vm';
 import {opticalSteppingConfig, resolveOpticalStepping,validateOpticalPreviewArm} from '../volume-optical-native.mjs';
 import {allocateRayStrata,historyAllocationGeometry,createRayAllocationHistory} from '../volume-history-allocation.mjs';
 
@@ -72,4 +74,48 @@ test('history witness rejects missing guidance and a substituted exterior route'
   const state={backend:'WebGPU:apple',simStepCount:8,controls:{raySteps:3},
     opticalStepping:{effective:'history',tolerance:.001},raymarchShaderSpecialization:{effective:'lean-emissive-raymarch-v0'},physicalColor:{effective:'emissive-transport-v2'}};
   assert.throws(()=>validateOpticalPreviewArm(sample,state,{mode:'history',tolerance:.001,step:8,raySteps:3}),/guidance/);
+});
+
+test('an actual fresh observation survives a dominant join/history proposal at 1..5 samples',()=>{
+ const segments=[{start:0,end:.45,weight:1},{start:.45,end:.55,weight:50},{start:.55,end:1,weight:1}];
+ for(const count of [1,2,3,4,5])for(const fresh of [.01,.1,.5,.9,.99]){
+  const bins=allocateRayStrata(segments,count,.5,fresh);
+  assert.ok(bins.some(b=>Math.abs(b.sample-fresh)<1e-12),'reserved uniform observation at '+count+' samples');
+  assert.equal(bins.length,count);assert.equal(bins[0].start,0);assert.equal(bins.at(-1).end,1);
+  for(let i=0;i<count;i++){assert.ok(bins[i].width>0);assert.ok(bins[i].sample>=bins[i].start&&bins[i].sample<=bins[i].end);if(i)assert.equal(bins[i].start,bins[i-1].end);}
+  assert.ok(Math.abs(bins.reduce((v,b)=>v+b.width,0)-1)<1e-12);
+ }
+});
+
+// Replay the actual guided branch expressions; unrelated flag users cannot satisfy this.
+const core=fs.readFileSync(process.env.RAY_CORE_SOURCE??new URL('../volume-core.js',import.meta.url),'utf8');
+test('guided interior phase honors both independent jitter controls',()=>{
+ const expression=core.match(/let phase=select\(\.5,[^;]+;/)[0].replace('let phase=','').replaceAll('in.pos.xy','pixel').replaceAll('1u','1').slice(0,-1);
+ for(const blue of [0,1])for(const interior of [0,1]){
+  const actual=vm.runInNewContext(expression,{select:(a,b,c)=>c?b:a,rayNoiseSample:()=>.2,pixel:[0,0],rayMaterialSamples:0,u:{reserved_render_controls:{w:blue},occupancy_controls:{y:0,w:interior}}});
+  assert.equal(actual,blue&&interior?.05+.9*.2:.5);
+ }
+});
+test('guided execution preserves a bright rear stratum after an absorbing front',()=>{
+ const line=core.split('\n').find(s=>s.includes('raymarchEarlyTermination(trans)')&&s.includes('break;'));
+ assert.ok(line);const condition=line.slice(line.indexOf('if (')+4,line.indexOf(') { break;'));
+ const bins=allocateRayStrata([{start:0,end:1,weight:1}],2);let trans=1,radiance=0,visited=0;
+ for(let i=0;i<bins.length;i++){
+  if(vm.runInNewContext(condition,{opticalStepping:false,fullGridCapture:false,opticalTrace:false,guided:true,t:bins[i].sample,endT:1,trans,raymarchEarlyTermination:t=>t<.012}))break;
+  visited++;if(i===0)trans*=Math.exp(-10*bins[i].width);else radiance+=trans*1000*bins[i].width;
+ }
+ assert.equal(visited,2);assert.ok(Math.abs(radiance-3.3689734995427334)<1e-12);
+});
+
+test('allocation never destroys guidance already referenced by an unsubmitted encoder',()=>{
+ globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8};
+ const device={limits:{maxBufferSize:4096,maxStorageBufferBindingSize:4096},createBuffer:d=>({...d,destroy(){this.destroyed=true;}}),queue:{writeBuffer(){}}};
+ const h=createRayAllocationHistory(device),encoder={clearBuffer(){}};
+ const encodedBeforeDraw=h.buffer;
+ h.prepare(encoder,{min:[0,0,0],max:[2,2,2],dims:[2,2,2]},'initial',1);
+ assert.notEqual(h.buffer,encodedBeforeDraw);assert.notEqual(encodedBeforeDraw.destroyed,true);
+ const encodedFirstDraw=h.buffer;
+ h.prepare(encoder,{min:[0,0,0],max:[2,2,2],dims:[4,4,4]},'resize',1);
+ assert.notEqual(h.buffer,encodedFirstDraw);assert.notEqual(encodedFirstDraw.destroyed,true);
+ const current=h.buffer;h.dispose();assert.equal(current.destroyed,true);
 });
