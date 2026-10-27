@@ -94,3 +94,25 @@ test('manual release workflow keeps preparation and publication privileges separ
   assert.doesNotMatch(publication,/npm (ci|install)(?! -g npm@)/);
   assert.doesNotMatch(publication,/secrets\.NPM|npm stage|package-source/);
 });
+
+test('workflow preserves failure before the packer is reached',async t=>{
+  const workflow=await fs.readFile(new URL('../.github/workflows/npm-publish.yml',import.meta.url),'utf8');
+  const script=name=>{
+    const tail=workflow.slice(workflow.indexOf('      - name: '+name));
+    return tail.match(/        run: \|\n([\s\S]*?)(?=\n      -|$)/)?.[1]?.replace(/^          /gm,'');
+  };
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'npm-release-early-failure-'));
+  t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  await fs.symlink(new URL('..',import.meta.url).pathname,path.join(root,'release-tools'),'dir');
+  const env={...process.env,GITHUB_WORKSPACE:root,RELEASE_PACKAGE:'kit',RELEASE_VERSION:'0.1.60',
+    RELEASE_SOURCE:'main',RELEASE_SHA256:'a'.repeat(64),
+    PREPARATION_STEPS:JSON.stringify({validate:{outcome:'failure'},source:{outcome:'skipped'}})};
+  assert.throws(()=>execFileSync('bash',['-e','-c',script('Validate exact release inputs')],{cwd:root,env,stdio:'pipe'}),/exact source commit/);
+  const finalize=script('Record preparation failure');
+  assert.ok(finalize,'Early workflow failure has no structured report continuation');
+  execFileSync('bash',['-e','-c',finalize],{cwd:root,env,stdio:'pipe'});
+  const report=JSON.parse(await fs.readFile(path.join(root,'release/report.json')));
+  assert.equal(report.status,'failed');assert.equal(report.phase,'validate');
+  assert.equal(report.requested.source,'main');assert.equal(report.archive,undefined);
+  assert.equal(report.workflow.steps.validate.outcome,'failure');
+});

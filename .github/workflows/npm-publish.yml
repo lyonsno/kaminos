@@ -43,15 +43,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out release machinery
+        id: machinery
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: release-tools
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        id: node
         with:
           node-version: '24.15.0'
           package-manager-cache: false
       - name: Validate exact release inputs
+        id: validate
         run: |
           node --input-type=module -e '
             import {validateInput} from "./release-tools/scripts/npm-release.mjs";
@@ -59,23 +62,54 @@ jobs:
               source:process.env.RELEASE_SOURCE,sha256:process.env.RELEASE_SHA256});
           '
       - name: Check out approved package source
+        id: source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.source }}
           path: package-source
           persist-credentials: false
       - name: Set the packing toolchain
+        id: npm
         run: npm install -g npm@11.12.1 --ignore-scripts
       - name: Install build dependencies without lifecycle scripts
+        id: dependencies
         working-directory: package-source
         run: npm ci --ignore-scripts
       - name: Pack and verify the approved archive
+        id: pack
         run: |
           node release-tools/scripts/npm-release.mjs prepare \
             --source-root "$GITHUB_WORKSPACE/package-source" \
             --out "$GITHUB_WORKSPACE/release" \
             --package "$RELEASE_PACKAGE" --version "$RELEASE_VERSION" \
             --source "$RELEASE_SOURCE" --sha256 "$RELEASE_SHA256"
+      - name: Record preparation failure
+        if: failure()
+        env:
+          PREPARATION_STEPS: ${{ toJSON(steps) }}
+          CHECKED_OUT_SOURCE: ${{ steps.source.outputs.commit }}
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs/promises";
+            import path from "node:path";
+            const out=path.join(process.env.GITHUB_WORKSPACE,"release");
+            await fs.mkdir(out,{recursive:true});
+            const file=path.join(out,"report.json");
+            let report;
+            try{report=JSON.parse(await fs.readFile(file,"utf8"));}
+            catch{report={schema:"kaminos.npm-release.v1",requested:{
+              package:process.env.RELEASE_PACKAGE,version:process.env.RELEASE_VERSION,
+              source:process.env.RELEASE_SOURCE,sha256:process.env.RELEASE_SHA256}};}
+            const steps=JSON.parse(process.env.PREPARATION_STEPS);
+            const failed=Object.keys(steps).find(id=>steps[id].outcome==="failure");
+            report.status="failed";
+            report.phase=report.phase??failed??"workflow";
+            report.error=report.error??("Preparation failed at "+report.phase);
+            report.workflow={steps,failedStep:failed};
+            if(steps.source?.outcome==="success"&&process.env.CHECKED_OUT_SOURCE)
+              report.actualSource=process.env.CHECKED_OUT_SOURCE;
+            await fs.writeFile(file,JSON.stringify(report,null,2));
+          '
       - name: Preserve package and preparation evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
