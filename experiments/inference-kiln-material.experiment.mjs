@@ -22,7 +22,8 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   const savedScene=new URLSearchParams(doc.defaultView.location?.search??'').has('scene')||new URLSearchParams((doc.defaultView.location?.hash??'').slice(1)).has('scene');
   if(inputs.setup===true&&!savedScene&&!host.scene.objects().some(row=>row.object?.userData?.kaminosPromptRelief)){
    const fresh=host.scene.objects().every(row=>['flame-emitter','simulation-domain'].includes(row.type));
-   const flame=await host.flame.open();if(flame.read().active)await ensureKilnSceneDomain(host,flame);
+   await host.volume.ready;
+   const flame=await host.flame.open();if(!flame.read().active)throw Error('Kiln flame runtime did not initialize');await ensureKilnSceneDomain(host,flame);
    if(host.scene.objects().every(row=>['flame-emitter','simulation-domain'].includes(row.type))){
     for(const [label,parameters,position]of [['Kiln floor',{width:8,height:.02,depth:8},[0,-.85,0]],['Kiln backdrop',{width:8,height:6,depth:.05},[0,1,-2.5]]]){const id=app.addMesh('box',parameters);doc.defaultView.renameSceneObject(id,label);host.scene.setTransform(id,{position});app.setMaterial(id,{color:'#181a1e',roughness:.97,metalness:0});}
    }

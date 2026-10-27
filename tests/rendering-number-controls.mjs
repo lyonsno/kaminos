@@ -31,12 +31,16 @@ try {
    even.fire('change');assert.equal(even.value,last,'invalid commit restores the last valid value');
  }
  even.value='6';even.fire('input');even.fire('change');assert.equal(values.at(-1),6);
- const gi=new Control();gi.ownerDocument=doc;gi.type='number';gi.value='5';gi.step='.1';gi.closest=selector=>selector==='#scene-gi-controls'?{}:null;
+ const gi=new Control();gi.ownerDocument=doc;gi.type='number';gi.value='5';gi.step='.1';gi.closest=selector=>selector.split(',').some(part=>part.trim()==='#scene-gi-controls')?{}:null;
  installRenderingNumberControls({querySelectorAll:()=>[gi]});
  const historyScrub=installRelativeNumberDrag({input:gi,grip:gi,step:.1});
  let giEvents=0;gi.addEventListener('input',()=>giEvents++);
  gi.fire('pointerdown',{button:0,pointerId:4,clientX:0,clientY:0});gi.fire('pointermove',{pointerId:4,clientX:5,clientY:0});
  assert.equal(giEvents,1,'GI retains its existing history-owned scrub without a second Rendering scrub');
+ const bloom=new Control();bloom.ownerDocument=doc;bloom.type='number';bloom.value='.04';bloom.step='.001';bloom.closest=selector=>selector.split(',').some(part=>part.trim()==='#scene-bloom-controls')?{}:null;
+ let extraScrubs=0;installRenderingNumberControls({querySelectorAll:()=>[bloom]});
+ const bloomScrub=installRelativeNumberDrag({input:bloom,grip:bloom,step:.001});bloom.addEventListener('input',()=>extraScrubs++);
+ bloom.fire('pointerdown',{button:0,pointerId:5,clientX:0,clientY:0});bloom.fire('pointermove',{pointerId:5,clientX:5,clientY:0});assert.equal(extraScrubs,1,'Bloom retains one history-owned scrub');bloomScrub.dispose();
  historyScrub.stop();const released=gi.value;
  gi.fire('pointermove',{pointerId:4,clientX:10,clientY:0});
  assert.equal(gi.value,released,'history release stops all GI scrubbing');

@@ -15,7 +15,7 @@ export function createSceneFlameHDR({renderer,camera,device,bloom,decorate=x=>x}
  const base=new THREE.RenderPipeline(renderer);base.outputColorTransform=false;
  const copyMaterial=new THREE.NodeMaterial(),copyQuad=new THREE.QuadMesh(copyMaterial);
  const display=new THREE.RenderPipeline(renderer),colorNode=texture(color.texture),emissionNode=texture(aux.textures[0]);
- let raw=null,emission=null,depth=null,bloomEnabled=null,view=null,disposed=false,lastFrame=null;
+ let raw=null,emission=null,depth=null,bloomEffective=null,view=null,disposed=false,lastFrame=null;
  const native=target=>renderer.backend.get(target).texture;
  return {
   render({frame,input,emissionInput,depthInput,matched,physical}){
@@ -43,8 +43,9 @@ export function createSceneFlameHDR({renderer,camera,device,bloom,decorate=x=>x}
     const receipt=frame.encode({encoder,targetView:native(color.texture).createView(),emissionTargetView:native(aux.textures[0]).createView(),
       frontDepthView:zero.createView(),sceneDepthView:native(aux.textures[1]).createView(),foreground:false});
     device.queue.submit([encoder.finish()]);
-    if(bloomEnabled!==bloom.read().settings.enabled){
-     bloomEnabled=bloom.read().settings.enabled;
+    const bloomSettings=bloom.read().settings,effective=bloomSettings.enabled&&bloomSettings.radius>0&&bloomSettings.strength>0;
+    if(bloomEffective!==effective){
+     bloomEffective=effective;
      const illuminated=bloom.output(colorNode,emissionNode);
      view={raw:decorate(illuminated),camera:createSceneEmissiveCamera(illuminated,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE})};
      view.matched=decorate(view.camera.outputNode);

@@ -2833,7 +2833,7 @@ applyVolumeControlDescriptions(document);
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
-import {createSceneBloom} from './scene-bloom.mjs';
+import {createSceneBloom,checkedSceneBloom} from './scene-bloom.mjs';
 import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
 import {bloom} from './scene-bloom-node.mjs';
 import {installSceneBloomControls} from './scene-bloom-controls.mjs';
@@ -12134,6 +12134,7 @@ function clearSceneEditingState(){
   for(const id of colliderEditTargets)scenePlacementTools?.edits.unregister(id);colliderEditTargets.clear();sceneColliderCollection.clear();
   for(const id of giProxyEditTargets)scenePlacementTools?.edits.unregister(id);giProxyEditTargets.clear();
   for(const id of burnableEditTargets)scenePlacementTools?.edits.unregister(id);burnableEditTargets.clear();
+  for(const id of promptEditTargets)scenePlacementTools?.edits.unregister(id);promptEditTargets.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -24686,6 +24687,7 @@ function buildSceneData(capture = null) {
     volumePrimitives: getVolumePrimitiveState(),
     flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
     postprocessing: {
+      bloom: {...sceneBloom.read().settings},
       sceneGI: {...sceneGISettings},
       ao: sceneAO.document(),
       dof: {
@@ -25038,8 +25040,10 @@ function setPromptLettering(id,prompt){
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);if(!entry?.object.userData.kaminosPromptRelief)throw Error('Select prompt lettering');
   if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');if(entry.object.userData.kaminosPromptRelief.prompt===prompt)return;
   const target='@prompt-lettering:'+id;
-  if(!promptEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>promptReliefRecord(entry.object).promptRelief,check:checkedPromptRelief,write:value=>{
-    const replacement=restorePromptRelief({promptRelief:value});sceneBurning.forget(entry.object);entry.object.geometry.dispose();entry.object.geometry=replacement.geometry;replacement.material.dispose();const {geometry,...metadata}=value;entry.object.userData.kaminosPromptRelief=metadata;void sceneBurning.sync();window._kaminosDirty?.();
+  if(!promptEditTargets.has(target)){
+   const current=()=>{const row=workingScene.objects.find(row=>row.id===id)??workingScene.retained(id);if(!row?.object.userData.kaminosPromptRelief)throw Error('Prompt lettering is absent');return row.object;};
+   scenePlacementTools.edits.register(target,{read:()=>promptReliefRecord(current()).promptRelief,check:checkedPromptRelief,write:value=>{
+    const object=current(),replacement=restorePromptRelief({promptRelief:value});sceneBurning.forget(object);object.geometry.dispose();object.geometry=replacement.geometry;replacement.material.dispose();const {geometry,...metadata}=value;object.userData.kaminosPromptRelief=metadata;void sceneBurning.sync();window._kaminosDirty?.();
   }});promptEditTargets.add(target);}
   const object=createPromptLettering(document,prompt,entry.burnable?.appearance?.profile??'incineration');
   try{return scenePlacementTools.edits.apply(target,promptReliefRecord(object).promptRelief,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
@@ -26398,6 +26402,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
+  sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
   // Scenes without a saved GI record use defaults, independent of prior tuning.
   setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (data.postprocessing) {

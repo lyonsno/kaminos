@@ -1,3 +1,4 @@
+import {createSceneBloom,checkedSceneBloom} from '../../scene-bloom.mjs';
 import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
 import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
 import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
@@ -9,6 +10,8 @@ import {createSceneAOState} from '../../scene-ao-state.mjs';
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
   context.checkedBurnAppearance??=checkedBurnAppearance;
+  context.checkedSceneBloom??=checkedSceneBloom;context.bloomControls??=null;
+  context.sceneBloom??=createSceneBloom({rebuild(){},redraw(){}});
   context.sceneAO ??= createSceneAOState();
   context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
