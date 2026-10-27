@@ -119,7 +119,12 @@ def run(args, report, report_path):
     from diffusers import FluxTransformer2DModel
     require_mps()
     def phase(name):
-        report['phase']=name; save_json(report_path,report); print(name,flush=True)
+        report['phase']=name
+        report.setdefault('memorySnapshots',[]).append({'phase':name,
+            'mpsAllocatedBytes':torch.mps.current_allocated_memory(),
+            'mpsDriverAllocatedBytes':torch.mps.driver_allocated_memory(),
+            'hostRssBytes':__import__('psutil').Process().memory_info().rss})
+        save_json(report_path,report); print(name,flush=True)
     phase('source-and-asset-validation')
     report['assets']=validate_assets(args)
     report['adapterSha256']=digest(__file__)
@@ -149,15 +154,36 @@ def run(args, report, report_path):
     with torch.device('meta'):
         transformer=FluxTransformer2DModel.from_config(conditioned_config(
             json.loads((args.support/'transformer/config.json').read_text())))
-    checkpoint=torch.load(args.checkpoint,map_location='cpu',weights_only=True,mmap=True)
-    state=checkpoint['module']
-    report['checkpointTensorCount']=len(state)
-    report['checkpointDtypes']=sorted({str(value.dtype) for value in state.values()})
-    transformer.load_state_dict(state,strict=True,assign=True)
-    del checkpoint,state
+    if args.quantized_transformer:
+        from limo_quantization import load_package
+        transformer,record=load_package(transformer,args.quantized_transformer)
+        if record['source']['component']!='transformer' or record['source']['checkpointSha256']!=report['assets']['checkpoint']['sha256']:
+            raise ValueError('quantized transformer source mismatch')
+        report['quantizedTransformer']={'path':str(args.quantized_transformer),
+            'weights':record['weights'],'quantizedModuleCount':len(record['quantization']),
+            'bits':sorted({config['weights'] for config in record['quantization'].values()})}
+    else:
+        checkpoint=torch.load(args.checkpoint,map_location='cpu',weights_only=True,mmap=True)
+        state=checkpoint['module']
+        report['checkpointTensorCount']=len(state)
+        report['checkpointDtypes']=sorted({str(value.dtype) for value in state.values()})
+        transformer.load_state_dict(state,strict=True,assign=True)
+        del checkpoint,state
     phase('support-loading-and-prompts')
+    components={}
+    if args.quantized_t5:
+        from limo_quantization import load_package
+        from transformers import T5Config,T5EncoderModel
+        with torch.device('meta'):
+            t5=T5EncoderModel(T5Config.from_pretrained(str(args.support/'text_encoder_2'),local_files_only=True))
+        t5,record=load_package(t5,args.quantized_t5)
+        if record['source']['component']!='t5': raise ValueError('quantized T5 source mismatch')
+        for name,sha in record['source']['files'].items():
+            if digest(args.support/'text_encoder_2'/name)!=sha: raise ValueError('quantized T5 source mismatch')
+        components['text_encoder_2']=t5
+        report['quantizedT5']={'path':str(args.quantized_t5),'weights':record['weights']}
     pipe=pipelines.ConditionalFluxPipeline.from_pretrained(str(args.support),
-        transformer=transformer,torch_dtype=torch.float16,local_files_only=True)
+        transformer=transformer,torch_dtype=torch.float16,local_files_only=True,**components)
     encoders=[pipe.text_encoder.to('mps',dtype=torch.float16),pipe.text_encoder_2.to('mps',dtype=torch.float16)]
     tokenizers=[pipe.tokenizer,pipe.tokenizer_2]
     cfg=importlib.import_module('image.test_config').default_test_configs['balls'][1]
@@ -172,6 +198,8 @@ def run(args, report, report_path):
     report['encodedPrompts']=prompts
     pipe.text_encoder=None; pipe.text_encoder_2=None
     del encoders,tokenizers
+    components.clear()
+    if args.quantized_t5: del t5
     gc.collect(); torch.mps.empty_cache()
     phase('mps-model-and-condition-encoding')
     pipe.to('mps',dtype=torch.float16)
@@ -180,7 +208,7 @@ def run(args, report, report_path):
         'torch':torch.__version__,'diffusers':__import__('diffusers').__version__,
         'cpuFallback':False,'randomGeneratorDevice':'cpu','loading':'strict-complete-state-no-base-transformer'}
     conditions=[]
-    with torch.inference_mode():
+    with torch.no_grad():
         for key in CONDITIONS:
             condition=source_utils.encode_with_vae(pipe.vae,batch[key].unsqueeze(0).to('mps'),weight_dtype=pipe.vae.dtype)
             if not torch.isfinite(condition).all(): raise ValueError(f'nonfinite condition: {key}')
@@ -194,6 +222,8 @@ def run(args, report, report_path):
                 def callback(_pipe,index,_timestep,values):
                     nonlocal steps
                     steps+=1; report['currentPass']={'target':target,'ev':ev,'effectiveSteps':steps}
+                    report['sampledMpsAllocatedMaxBytes']=max(report.get('sampledMpsAllocatedMaxBytes',0),
+                        torch.mps.current_allocated_memory())
                     save_json(report_path,report)
                     return values
                 latents=packed_noise(pipe,width,height,generator,pipe.transformer.dtype,'mps')
@@ -222,13 +252,17 @@ def main(argv=None):
     parser.add_argument('--evs',nargs='+',type=int,choices=EVS,default=list(EVS))
     parser.add_argument('--steps',type=int,default=20)
     parser.add_argument('--seed',type=int,default=0)
+    parser.add_argument('--quantized-transformer',type=Path)
+    parser.add_argument('--quantized-t5',type=Path)
     args=parser.parse_args(argv)
     args.output_dir.mkdir(parents=True,exist_ok=True)
     path=args.output_dir/'probe.json'
     if path.exists(): raise FileExistsError('choose a fresh output directory; preserve prior probe evidence')
     report={'schema':'kaminos.limo-probe.v0','status':'failed','phase':'initialization',
         'receiver':'welcome-to-the-desert-of-the-real','estimator':'LiMo-image',
-        'requestedDevice':'mps','requested':{'targets':args.targets,'evs':args.evs,'steps':args.steps,'seed':args.seed},
+        'requestedDevice':'mps','requested':{'targets':args.targets,'evs':args.evs,'steps':args.steps,'seed':args.seed,
+            'quantizedTransformer':str(args.quantized_transformer) if args.quantized_transformer else None,
+            'quantizedT5':str(args.quantized_t5) if args.quantized_t5 else None},
         'scope':'selected sphere outputs only; no reconstructed HDR or environment quality claim'}
     save_json(path,report)
     try:

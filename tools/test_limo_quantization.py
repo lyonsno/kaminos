@@ -30,12 +30,14 @@ class LimoQuantizationTests(unittest.TestCase):
                 model = quant.tiny_model()
                 inputs = torch.randn(1, 4, 256).half()
                 quant.quantize_linears(model, bits)
-                expected = model(inputs)
+                with torch.no_grad():
+                    expected = model(inputs)
                 root = Path(temp) / 'packed'
                 record = quant.save_package(model, root, {'fixture': 'seed31'})
                 self.assertLess(record['weights']['bytes'], 263168 * ratio)
                 restored, _ = quant.load_package(quant.tiny_model('meta'), root)
-                torch.testing.assert_close(restored(inputs), expected, rtol=0, atol=0)
+                with torch.no_grad():
+                    torch.testing.assert_close(restored(inputs), expected, rtol=0, atol=0)
                 self.assertTrue(all(m.frozen for m in restored.modules() if isinstance(m, QModuleMixin)))
 
     def test_missing_quantized_tensor_cannot_be_accepted_as_reload(self):

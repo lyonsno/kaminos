@@ -112,10 +112,10 @@ def route_check(args, report, phase):
         torch.manual_seed(31)
         model = tiny_model()
         inputs = torch.randn(2, 16, 256).half()
-        with torch.inference_mode():
+        with torch.no_grad():
             reference = model(inputs)
         quantize_linears(model, bits)
-        with torch.inference_mode():
+        with torch.no_grad():
             packed_cpu = model(inputs)
         record = save_package(model, args.output_dir / f'int{bits}', {'scope': 'tiny route conformance'})
         del model
@@ -125,7 +125,7 @@ def route_check(args, report, phase):
         before = torch.mps.current_allocated_memory()
         loaded.to('mps')
         weight_bytes = torch.mps.current_allocated_memory() - before
-        with torch.inference_mode():
+        with torch.no_grad():
             actual = loaded(inputs.to('mps')).cpu()
         torch.mps.synchronize()
         if not torch.isfinite(actual).all():
