@@ -86,7 +86,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
    const duration=el('small',span?seconds(span.recordedEndMs-span.startMs):state.live?'Waiting':state.recording?'Not in recording':'No recording');
    const audition=button('▶',()=>{selectedStage=stage;selectedLayer=null;return run('response.previewStage',stage);},'Preview '+names[stage]);audition.setAttribute('aria-label','Preview '+names[stage]);audition.disabled=!span||state.live;
    const add=button('+',()=>run('response.addLayer',{stage,objectId:selectedObject}),'Add selected look to '+names[stage]);add.setAttribute('aria-label','Add selected to '+names[stage]);add.disabled=!selectedObject;
-   row.append(actions(choose,duration,audition,add));const layers=el('div',null,'if-layers');
+   const header=actions(choose,duration,audition,add);header.classList.add('if-phase-head');row.append(header);const layers=el('div',null,'if-layers');
    for(const layer of score.stacks?.[stage]??[]){const object=byId.get(layer.objectId);if(!object)continue;
     const chip=button('',()=>{selectedStage=stage;chooseObject(object.id,layer.id);});chip.classList.add('if-layer');chip.dataset.layerId=layer.id;chip.dataset.selected=String(selectedLayer===layer.id);chip.dataset.enabled=String(layer.enabled);chip.title=object.label+' · select to edit timing and stack order';chip.append(pictures(object,true),el('span',object.label,'if-object-name'));if(!layer.enabled)chip.append(el('small','off'));layers.append(chip);
    }
@@ -133,7 +133,7 @@ export async function mountInferenceFlameCockpit({root,document,host,flame,blend
   for(const [stage,{row,progress,span}] of rowNodes){row.dataset.active=String(state.stage===stage);progress.style.width=span?`${Math.max(0,Math.min(1,(state.position-span.startMs)/(span.endMs-span.startMs||1)))*100}%`:'0%';}
   const key=state.preview?`${recording.runId}:${state.preview.atMs}`:'';
   if(key&&key!==lastPreview){preview.width=state.preview.width;preview.height=state.preview.height;preview.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(state.preview.rgba),state.preview.width,state.preview.height),0,0);}lastPreview=key;
-  preview.hidden=!state.preview;caption.textContent=state.preview?(state.preview.kind==='illustrated-demo'?'Illustrated demo':'Approximate latent preview'):'';
+  preview.hidden=!state.preview;caption.hidden=!state.preview;caption.textContent=state.preview?(state.preview.kind==='illustrated-demo'?'Illustrated demo':'Approximate latent preview'):'';
  }
  let framed=false;
  const frameInitial=()=>{if(!framed&&flame.read().active){framed=true;flame.frame();}};
