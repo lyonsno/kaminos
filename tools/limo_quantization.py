@@ -192,8 +192,10 @@ def main(argv=None):
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--support', type=Path)
     args = parser.parse_args(argv)
-    args.output_dir.mkdir(parents=True, exist_ok=False)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     path = args.output_dir / 'conversion.json'
+    if path.exists():
+        raise FileExistsError('preserve prior conversion; choose a fresh output directory')
     report = {'schema': 'kaminos.limo-compression.v1', 'status': 'failed', 'phase': 'initialization',
               'receiver': 'welcome-to-the-desert-of-the-real', 'adapterSha256': digest(__file__),
               'requested': {'bits': args.bits, 'component': args.component, 'routeCheck': args.route_check}}

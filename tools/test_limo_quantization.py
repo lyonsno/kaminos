@@ -104,6 +104,16 @@ class LimoQuantizationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '4 or 8'):
             quant.quantize_linears(quant.tiny_model(), 2)
 
+    def test_queue_created_directory_accepts_run_but_existing_report_is_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(quant, 'require_mps', side_effect=RuntimeError('no MPS')):
+                with self.assertRaisesRegex(RuntimeError, 'no MPS'):
+                    quant.main(['--output-dir', temp, '--route-check'])
+            before = (Path(temp) / 'conversion.json').read_bytes()
+            with self.assertRaisesRegex(FileExistsError, 'prior conversion'):
+                quant.main(['--output-dir', temp, '--route-check'])
+            self.assertEqual((Path(temp) / 'conversion.json').read_bytes(), before)
+
 
 if __name__ == '__main__':
     unittest.main()
