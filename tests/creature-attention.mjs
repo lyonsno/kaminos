@@ -104,7 +104,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 
 {
  // Flame: an unlit flame draws nothing; lighting it is a reason to look;
- // turning it up is another; a burning flame keeps drawing glances.
+ // turning it up is another; uneventful burning preserves familiarity.
  const c=creature(),flame={id:'flame',label:'flame',point:[.9,.6,-2.5],interest:1,active:false,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame,point:[...flame.point]}]});
  let w=watch(attention,c,3,0),t=w.t;
@@ -114,9 +114,12 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  flame.version++;w=watch(attention,c,4,t);t=w.t;
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],'turning it up draws a look');
  const windowStart=t;w=watch(attention,c,60,t);t=w.t;const again=looks(w.rows).filter(l=>l.t>windowStart+.05);
- assert.ok(again.length>=2&&again.every(l=>l.cause==='flickering'),`a burning flame keeps drawing glances (${JSON.stringify(again)})`);
+ assert.equal(again.length,0,'unchanged burning cannot erase inspection and manufacture renewed glances');
  const busy=w.rows.filter(r=>r.focus).length/w.rows.length;
  assert.ok(busy<.6,`but not a fixed stare (${busy.toFixed(2)} of the time)`);
+ turnAway(c,Math.PI);({t}=watch(attention,c,.3,t));turnAway(c,0);w=watch(attention,c,4,t);t=w.t;
+ assert.equal(looks(w.rows).length,0,'a brief look-away/back retains inspection');
+ flame.version++;w=watch(attention,c,2,t);t=w.t;assert.equal(attention.read().why?.cause,'flared up','a fresh change still renews the familiar source');
  flame.active=false;w=watch(attention,c,20,t);
  const ended=w.rows.findIndex(r=>!r.focus);
  assert.ok(ended>=0&&w.rows[ended].t-t<1,'putting it out ends any look at it promptly');
@@ -130,6 +133,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  let {t}=watch(attention,c,8,0);turnAway(c,Math.PI);({t}=watch(attention,c,60,t));turnAway(c,0);
  const w=watch(attention,c,3,t);
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['noticed again'],'after forgetting, seeing it again draws a look');
+ assert.ok(attention.read().perceived.find(p=>p.id==='brazier').eventAt>=t,'Genuinely forgotten source supplies fresh observed novelty to investigation');
 }
 
 {
@@ -531,4 +535,14 @@ for(const delay of [.05,.4]){
  if(delay<.18){assert.equal(a.read().focus,null,'initial arrest is retained');assert.ok(a.read().interruption);continue;}
  assert.equal(a.read().focus?.id,'rear','fresh sensed flare redirects an eligible cessation scan');assert.equal(a.read().interruption,null);
  const bearing=[...a.read().focus.point];rear.point=[100,100,100];t=run(a,c,.1,t);assert.deepEqual(a.read().focus?.point,bearing,'redirected event retains its captured bearing');
+}
+
+// A witnessed cessation carries the place that was actually observed, so
+// engagement can investigate it after the attention arrest finishes.
+{
+ const c=creature(),source={id:'quiet-object',point:[.8,.5,-2.5],interest:1,active:true,restless:true};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[source]});
+ let t=run(a,c,2);source.active=false;t=run(a,c,1/30,t);
+ const loss=a.read().interruption;assert.deepEqual(loss?.point,source.point,'cessation carries a sensed position');
+ source.point=[100,100,100];t=run(a,c,.2,t);assert.deepEqual(a.read().interruption.point,loss.point,'later hidden movement cannot redirect cessation investigation');
 }
