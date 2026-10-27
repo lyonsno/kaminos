@@ -53,3 +53,18 @@ test('the actual living join follows fluid time rather than delayed host frames'
   await c.room.invoke('setRunning',{running:false});assert.equal(c.sourceRead().paused,true);const held=(await c.room.read()).time;for(const fn of [...callbacks])fn({deltaSeconds:20});assert.equal((await c.room.read()).time,held);await c.room.invoke('advance',{seconds:.1});assert.equal(c.sourceRead().steps,12);assert.ok(Math.abs((await c.room.read()).time-.2)<1e-10);
  }finally{await c.room.dispose();}
 });
+test('world-step failure holds the real joined clock as well as creatures',async()=>{
+ const c=await courtyard();try{
+  await c.room.invoke('setRunning',{running:true});scene.children.find(x=>x.name==='Crossing bronze lantern').removeFromParent();c.tickSource(120);
+  assert.throws(()=>{for(const fn of [...callbacks])fn({deltaSeconds:2});},/Source removed/);
+  assert.equal((await c.room.read()).creatures.running,false);assert.equal(c.sourceRead().paused,true,'The solver must stop when a scheduled world edit fails');assert.ok(((await c.room.read()).creatures.frameFailure?.message??'').includes('Source removed'),'The stopped scene must retain the failure reason');
+ }finally{await c.room.dispose();}
+});
+test('event repeat restores the analytic path phase and preserves authored placement',async()=>{
+ const c=await courtyard();try{
+  await c.room.invoke('advance',{seconds:2});const first=(await c.room.read()).sources.traveler.position;
+  await c.room.invoke('repeat');await c.room.invoke('advance',{seconds:2});assert.deepEqual((await c.room.read()).sources.traveler.position,first,'The same source program needs the same moving path phase');
+  await c.room.invoke('manual',{source:'traveler',patch:{moving:false}});scene.children.find(x=>x.name==='Crossing bronze lantern').position.x+=1;
+  await c.room.invoke('repeat');assert.equal((await c.room.read()).sources.traveler.position[0],1,'Repeating the scripted path must retain an ordinary placement edit');
+ }finally{await c.room.dispose();}
+});

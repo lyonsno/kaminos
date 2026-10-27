@@ -33,6 +33,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  // contact solver remains creature-owned; these are ordinary editable props.
  const architecture=new THREE.Group();architecture.name='Court colonnade';
  for(const x of [-5,5])for(const z of [-4,-1.3,1.3,4]){
+  if(x===-5&&z===-1.3)continue; // Leave the furnace bay open.
   box(architecture,[.72,.2,.72],[x,.1,z],1);box(architecture,[.55,.18,.55],[x,.29,z],0);
   mesh(architecture,new THREE.CylinderGeometry(.18,.25,2.3,12),materials[1],[x,1.52,z]);
   box(architecture,[.65,.26,.65],[x,2.8,z],1);box(architecture,[.8,.18,.8],[x,3.02,z],0);
@@ -55,21 +56,23 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  const consume=event=>record(event.phase&&event.target&&Object.hasOwn(event,'effective')?event:{kind:event.kind,phase:event.phase??'applied',target:event.actor??'creatures',...(event.actor?{actor:event.actor}:{}),clock:identity(),effective:clone(event)});
  const makeLiving=(inputs,sceneHost=host)=> (dependencies.createLivingScene??createLivingScene)({host:sceneHost,inputs,record:consume},{...dependencies,worldSteps,beforeStep,onRunning:value=>flameClock.setRunning(value)});
  const worldSteps=(seconds,{exact=false}={})=>{const delta=exact?seconds:flameClock.take(seconds);return (automatic?sequence.advance(delta):[{seconds:delta,time:sequence.read().time,events:[]}]).map(step=>({...step,exact}));};
+ function captureTravelerPlacement(){const row=props.get('traveler');if(row?.lastMotionPosition)row.origin.add(row.root.position.clone().sub(row.lastMotionPosition));}
+ function resetTraveler(){const row=props.get('traveler');if(!row)return;captureTravelerPlacement();row.motionTime=0;row.root.position.copy(row.origin);row.lastMotionPosition.copy(row.root.position);row.root.updateMatrixWorld(true);}
  function beforeStep(step){
   if(step.exact)flameClock.advance({seconds:step.seconds});worldTime+=step.seconds;programTime=step.time;
-  const traveler=props.get('traveler');if(traveler?.moving){traveler.motionTime=(traveler.motionTime??0)+step.seconds;const phase=traveler.motionTime;traveler.root.position.x=3*Math.sin(phase*.7);traveler.root.position.y=1.3+.5*Math.sin(phase*1.1);traveler.root.updateMatrixWorld(true);}
-  for(const event of step.events){patch(event.source,event.patch);emit('courtyard.event',{event,observationPhase:'after world edit, before creature step',observations:living?.read().actors.map(({id,state})=>({id,attention:state.attention,engagement:state.action.engagement}))??[]});}
+  const traveler=props.get('traveler');captureTravelerPlacement();if(traveler?.moving){traveler.motionTime+=step.seconds;const phase=traveler.motionTime;traveler.root.position.copy(traveler.origin).add(new THREE.Vector3(3*Math.sin(phase*.7),.5*Math.sin(phase*1.1),0));traveler.root.updateMatrixWorld(true);}if(traveler)traveler.lastMotionPosition.copy(traveler.root.position);
+  for(const event of step.events){if(event.at===0&&event.source==='traveler')resetTraveler();patch(event.source,event.patch);emit('courtyard.event',{event,observationPhase:'after world edit, before creature step',observations:living?.read().actors.map(({id,state})=>({id,attention:state.attention,engagement:state.action.engagement}))??[]});}
   sync();
  }
- function read(){return {schema:'kaminos.creature-courtyard.v1',...identity(),mounted:!disposed,sources:Object.fromEntries([...props].map(([id,row])=>[id,{hostId:row.asset.id,mounted:Boolean(row.root.parent),visible:row.root.visible,moving:row.moving??false,position:row.root.position.toArray(),scale:row.root.scale.toArray()}])),fire:flame?.read()??null,creatures:living?.read()??null,diagnostic,log:clone(log),continuation:{events:'repeat preserves creature experience',restart:'initial creature recipes and source controls; flame fluid field is not a checkpoint'}};}
+ function read(){return {schema:'kaminos.creature-courtyard.v1',...identity(),mounted:!disposed,sources:Object.fromEntries([...props].map(([id,row])=>[id,{hostId:row.asset.id,mounted:Boolean(row.root.parent),visible:row.root.visible,moving:row.moving??false,motionTime:row.motionTime??0,authoredPosition:row.origin.toArray(),position:row.root.position.toArray(),scale:row.root.scale.toArray()}])),fire:flame?.read()??null,creatures:living?.read()??null,diagnostic,log:clone(log),continuation:{events:'repeat preserves creature experience',restart:'initial creature recipes and source controls; flame fluid field is not a checkpoint'}};}
  function sync(){if(!ui)return;const s=programState();ui.status.textContent=`${automatic?'Scheduled':'Manual'} · ${s.time.toFixed(1)} / ${s.program.duration} simulation s · cycle ${s.cycle+1} · ${!flameClock?.read().running?'Scene held':flameClock.read().authority.startsWith('ordinary')?'Fluid step clock':'Scene clock · flame held'}`;ui.toggle.textContent=automatic?'Use manual sources':'Resume schedule';}
  function exportFile(value,name){const document=host.controls.document,url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)+'\n'],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);}
  const operations={
   setRunning:input=>living.operations.setRunning(input),advance:input=>living.operations.advance(input),actor:input=>living.operations.actor(input),
   automatic({enabled}={}){if(typeof enabled!=='boolean')throw Error('Automatic schedule requires boolean');automatic=enabled;sync();emit('courtyard.automatic',{enabled});return read();},
   manual({source,patch:values}={}){patch(source,values);automatic=false;sync();emit('courtyard.manual',{source,patch:values});return read();},
-  repeat(){automatic=true;for(const step of sequence.repeat())beforeStep(step);emit('courtyard.repeat',{preservesExperience:true});return read();},
-  program(value){const program=validateCourtyardProgram(value);sequence=createStimulusSequence(program);automatic=true;for(const step of sequence.advance(0))beforeStep(step);emit('courtyard.program',program);return read();},
+  repeat(){automatic=true;resetTraveler();for(const step of sequence.repeat())beforeStep(step);emit('courtyard.repeat',{preservesExperience:true});return read();},
+  program(value){const program=validateCourtyardProgram(value);sequence=createStimulusSequence(program);automatic=true;resetTraveler();for(const step of sequence.advance(0))beforeStep(step);emit('courtyard.program',program);return read();},
   async restart(){
    await living.operations.setRunning({running:false});
    // Construct the complete baseline while the held current cohort still
@@ -77,7 +80,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
    // replacing it. New roots become visible together after the swap.
    const staged=new Map(),stagingHost={...host,scene:{...host.scene,open:async()=>{const s=await host.scene.open();return {...s,attach:async(root,options)=>{staged.set(root,root.visible);root.visible=false;return s.attach(root,options);}};}}};
    let next;try{next=await makeLiving(clone(baselineInputs),stagingHost);}catch(error){emit('courtyard.restart-failed',{error:error.message,retained:'held prior cohort'});throw error;}
-   const previous=living;living=next;await previous.dispose();for(const [root,visible]of staged)root.visible=visible;if(mountRoot)living.mount({root:mountRoot});worldTime=0;automatic=true;for(const step of sequence.repeat())beforeStep(step);session.redraw();emit('courtyard.restart',{creatures:'complete original cohort and behavior flags',fluidCheckpoint:false});return read();
+   const previous=living;living=next;await previous.dispose();for(const [root,visible]of staged)root.visible=visible;if(mountRoot)living.mount({root:mountRoot});worldTime=0;automatic=true;resetTraveler();for(const step of sequence.repeat())beforeStep(step);session.redraw();emit('courtyard.restart',{creatures:'complete original cohort and behavior flags',fluidCheckpoint:false});return read();
   },
   field({visible}={}){if(typeof visible!=='boolean')throw Error('Sensory field requires boolean');diagnostic=visible;guide.visible=visible;return read();},
   export(){exportFile({recording:recording.snapshot(),context:read()},'courtyard-observation.json');return read();},
@@ -94,16 +97,16 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
   guideLine.geometry.dispose();guideLine.geometry=new THREE.BufferGeometry().setFromPoints(points);session.redraw();
  }
  try{
+  flame=await (dependencies.openFlame?.()??host.flame.open());if(!flame?.read().active)throw Error('Courtyard requires an active authored Fire & smoke field');flameClock=flame.borrowSceneClock();
   await session.attach(floor,{owned:true,metadata:{label:floor.name,source:'rubberneck:courtyard-stone-floor'}});
   await session.attach(architecture,{owned:true,metadata:{label:architecture.name,source:'rubberneck:courtyard-colonnade'}});
   for(const id of ['beacon','traveler']){
    const root=new THREE.Group();root.name=id==='beacon'?'Bronze iris beacon':'Crossing bronze lantern';
    mesh(root,new THREE.IcosahedronGeometry(.4,1),bronze,[0,0,0]);for(const rotation of [0,Math.PI*.5]){const ring=mesh(root,new THREE.TorusGeometry(.55,.035,6,28),inlay,[0,0,0]);ring.rotation.x=rotation;}
-   root.position.set(id==='beacon'?2.5:0,1.2,id==='beacon'?1:-2);const asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:`rubberneck:${id}`}});props.set(id,{root,asset,moving:false,motionTime:0});
+   root.position.set(id==='beacon'?2.5:0,1.2,id==='beacon'?1:-2);const asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:`rubberneck:${id}`}});props.set(id,{root,asset,moving:false,motionTime:0,origin:root.position.clone(),lastMotionPosition:root.position.clone()});
   }
   if(initial.arch){const asset=await session.loadAsset({url:initial.arch.url,normalize:false,metadata:{label:'Carved stone arch',source:initial.arch.url}});const b=new THREE.Box3().setFromObject(asset.root),size=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());asset.root.scale.setScalar(3.3/size.y);asset.root.position.set(-center.x*asset.root.scale.x,-b.min.y*asset.root.scale.y,-4.5-center.z*asset.root.scale.z);asset.root.updateMatrixWorld(true);}
   guideLine=new THREE.LineSegments(new THREE.BufferGeometry(),guideMaterial);guideLine.renderOrder=100;guide.add(guideLine);await session.attach(guide,{owned:true,presentation:true});
-  flame=await (dependencies.openFlame?.()??host.flame.open());if(!flame?.read().active)throw Error('Courtyard requires an active authored Fire & smoke field');flameClock=flame.borrowSceneClock();
   const livingInputs={...initial,running:false,attention:{...initial.attention,interests:[...props.values()].map(row=>({object:row.asset.id,label:row.root.name,anchor:'center',interest:1.2}))}};
   baselineInputs=clone(livingInputs);living=await makeLiving(livingInputs);
   for(const step of sequence.advance(0))beforeStep(step);
@@ -117,7 +120,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
    const status=document.createElement('output');node.append(status);const act=(label,op,input)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=async()=>{try{await invoke(op,typeof input==='function'?input():input);}catch(e){status.textContent=e.message;}};node.append(button);return button;};
    const toggle=act('Use manual sources','automatic',()=>({enabled:!automatic}));act('Repeat events · keep experience','repeat');act('Restart creatures and events','restart');act('Advance 1 simulation second','advance',{seconds:1});act('Frame courtyard','frame');
    const label=document.createElement('label'),field=document.createElement('input');field.type='checkbox';field.setAttribute('aria-label','Selected creature sensory field');field.onchange=()=>invoke('field',{visible:field.checked});label.append(field,document.createTextNode('Show selected creature’s sensory field'));node.append(label);
-   for(const [text,source,values]of [['Fire quiet','fire',{flow:0}],['Fire small','fire',{flow:1.2}],['Fire large','fire',{flow:6}],['Beacon show','beacon',{visible:true}],['Beacon hide','beacon',{visible:false}],['Lantern move','traveler',{moving:true}],['Lantern stop','traveler',{moving:false}]])act(text,'manual',{source,patch:values});
+   for(const [text,source,values]of [['Fire quiet','fire',{flow:0}],['Fire small','fire',{flow:.25}],['Fire large','fire',{flow:2.5}],['Beacon show','beacon',{visible:true}],['Beacon hide','beacon',{visible:false}],['Lantern move','traveler',{moving:true}],['Lantern stop','traveler',{moving:false}]])act(text,'manual',{source,patch:values});
    const details=document.createElement('details'),summary=document.createElement('summary'),editor=document.createElement('textarea');summary.textContent='Edit timed events';editor.setAttribute('aria-label','Courtyard event program');editor.rows=12;editor.style.width='100%';editor.value=JSON.stringify(sequence.read().program,null,2);details.append(summary,editor);const apply=document.createElement('button');apply.textContent='Apply event program';apply.onclick=()=>{try{invoke('program',JSON.parse(editor.value)).catch(e=>status.textContent=e.message);}catch(e){status.textContent=e.message;}};details.append(apply);node.append(details);act('Save observation and event history','export');
    const note=document.createElement('p');note.textContent='48 s repeating sequence. Manual source controls hold the schedule; creatures keep their experience. The field drawing shows gaze direction, not occlusion. Restart does not restore evolved fire fluid.';node.append(note);root.append(node);ui={status,toggle};sync();
    for(const row of props.values())if(host.controls.mountObject){const properties=document.createElement('p');properties.textContent='Timed courtyard source. Move it with ordinary scene controls; choose Manual to hold its event program.';seatings.push(host.controls.mountObject({asset:row.asset,properties}));}

@@ -391,6 +391,11 @@
       0,
       0.5,
       0
+    ],
+    "up": [
+      0,
+      1,
+      0
     ]
   },
   "attention": {
@@ -433,7 +438,7 @@
         "at": 4,
         "source": "fire",
         "patch": {
-          "flow": 1.2
+          "flow": 0.25
         },
         "label": "Small fire onset"
       },
@@ -466,7 +471,7 @@
         "at": 24,
         "source": "fire",
         "patch": {
-          "flow": 6
+          "flow": 2.5
         },
         "label": "Large fire onset"
       },

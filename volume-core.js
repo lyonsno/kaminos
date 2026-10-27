@@ -27740,7 +27740,7 @@ export function createKaminosVolumePrototype({
           for(let i=0;i<steps;i++){
             updateUniforms(startTimeMs+i*timeStepMs);
             const encoder=device.createCommandEncoder({label:'kaminos scene-owned ordinary fire step'});
-            encodeSim(encoder);encodeLiquidFireContactTransfer(encoder);encodeSelectiveHeadLiveFields(encoder);
+            encodeSim(encoder);encodeFireIrradianceLightField(encoder);encodeLiquidFireContactTransfer(encoder);encodeSelectiveHeadLiveFields(encoder);
             device.queue.submit([encoder.finish()]);
           }
         }});

@@ -14,8 +14,8 @@
       "transform": {
         "position": [
           -2.8,
-          0.9,
-          -2
+          1.214488006663009,
+          -2.0
         ],
         "rotation": [
           0,
@@ -314,9 +314,9 @@
       "createdAt": "2026-10-15T14:38:25.028Z",
       "transform": {
         "position": [
-          -2.8,
-          0.65,
-          -2
+          -5.177159246154302,
+          0.6516225407362,
+          -1.5295073241502748
         ],
         "rotation": [
           0,
@@ -324,9 +324,9 @@
           0
         ],
         "scale": [
-          1.5,
-          1.5,
-          1.5
+          1.513961995434817,
+          1.513961995434817,
+          1.513961995434817
         ]
       },
       "materials": {
@@ -348,9 +348,9 @@
       "fileName": "Fire simulation",
       "transform": {
         "position": [
-          -2.8,
-          2.5,
-          -2
+          -4.219988669450009,
+          3.9312351499019322,
+          -2.289829555890415
         ],
         "rotation": [
           0,
@@ -358,9 +358,9 @@
           0
         ],
         "scale": [
-          1.75,
-          1.75,
-          1.75
+          1.7334158180888875,
+          1.7334158180888875,
+          1.7334158180888875
         ]
       },
       "simulation": {
@@ -1964,7 +1964,8 @@
   "model": null,
   "provenance": {
     "derivedFrom": "rubberneck-visual-1022.kaminos.json on immutable020e181cb865",
-    "purpose": "Quiet furnace plus experiment-owned open court and timed sources"
+    "purpose": "Quiet furnace plus experiment-owned open court and timed sources",
+    "placement": "The complete admitted source, brazier and field share one rigid translation; source/domain coordinates and source-to-cup alignment are retained."
   },
   "composition": {
     "schema": "kaminos.stationary-flame-composition.v1",
