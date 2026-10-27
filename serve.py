@@ -3173,7 +3173,7 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
             raise RuntimeError("Greenroom returned an unverified admission identity")
         if result.get("status") == "held" and result.get("leaseId") != lease_id:
             raise RuntimeError("Greenroom returned a different page lease")
-        if result.get("status") == "waiting" and (type(result.get("position")) is not int or result["position"] < 1):
+        if result.get("status") == "waiting" and result.get("queueHeld") is not True and (type(result.get("position")) is not int or result["position"] < 1):
             raise RuntimeError("Greenroom did not report a verified queue position")
         return result
     if action == "claim":

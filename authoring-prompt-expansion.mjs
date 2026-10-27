@@ -35,7 +35,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
    set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
    try{
     helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:event.phase==='outside-queue'?{coordination:'Running outside Greenroom by your choice.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
-     onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
+     onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.queueHeld?' · held by operator':''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
     const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
      onText:text=>set({status:'running',draft:text,progress:'Expanding your request…'})});
     if(typeof result?.text!=='string'||!result.text.trim())throw Error('The prompt helper returned an empty expansion');
