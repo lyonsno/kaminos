@@ -17,7 +17,7 @@ export const INTERMEDIATE_GRID_MODE_DESCRIPTIONS = Object.freeze({
 });
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   "volume-world-smoke-intermediate": { kind: "quality", activeWhen: "World is on",
-    tooltip: Object.values(INTERMEDIATE_GRID_MODE_DESCRIPTIONS).join('\n') },
+    tooltip: 'Off: Fine feeds World directly. Flow bridge: automatic velocity/pressure only; borrows World material and ignores the Intermediate numeric fields. Own fields: independently tunable material, velocity, pressure, iterations and coverage; transports and reacts material between Fine and World.' },
   "volume-swirl-jostle": { kind: "artistic", activeWhen: "always (0 is off)",
     tooltip: "Authored force that shoves gas sideways across its own swirl wherever there is heat, smoke or fresh source, making the plume ragged at small scale. Stronger with Curl. 0 is off, 1 is the original force, 2 doubles it." },
   "emitter-assay-family": { kind: "conditional", activeWhen: "Shape matters under Filled volume, Shallow primary and Inflow boundary. Under Immersed source the shape is ignored (any non-Cluster family gives the same disc slab) and Cluster is refused.",
