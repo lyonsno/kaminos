@@ -34,6 +34,7 @@ export function promptReliefRecord(object){
  // Parametric geometry normally serializes a constructor recipe. Retain the
  // rendered buffers instead; reopening must not depend on fonts or shaping.
  const geometry=object.geometry.parameters?new BufferGeometry().copy(object.geometry):object.geometry;
+ geometry.uuid=object.geometry.uuid;
  return {source:PROMPT_RELIEF_SOURCE,type:'pbr',promptRelief:checkedPromptRelief({...value,geometry:geometry.toJSON()})};
 }
 export function restorePromptRelief(record){

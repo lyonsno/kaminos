@@ -73,6 +73,8 @@ test('the actual parametric lettering constructor retains rendered vertices befo
   const restored=restorePromptRelief(saved);
   assert.deepEqual([...restored.geometry.attributes.position.array],[...object.geometry.attributes.position.array]);
   assert.deepEqual(restored.geometry.groups,object.geometry.groups);
+  const next=createSceneRecordOperations({readers}).serialize(entry);
+  assert.deepEqual(next.promptRelief,saved.promptRelief,'unchanged rendered geometry must produce stable source data');
 });
 
 test('actual membership Undo reconstructs feature geometry through its domain contribution',async()=>{
