@@ -3143,10 +3143,12 @@ import {
 } from './motion-core.js';
 import {
   SCENE_SCHEMA,
+  assertSceneSourcesReloadable,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
+import {PROMPT_RELIEF_SOURCE,promptReliefRecord,restorePromptRelief} from './inference-kiln-record.mjs';
 import { COMPOSITION_SCHEMA, resolveFlameLightingRoute, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
@@ -12829,7 +12831,7 @@ async function installOwnerWorkbenchEntry() {
       writeAuthoredFlameEmitterPose(flameEmitterPose);refreshFlameDomainPreview();return volumePrimitivesInFlameDomain();
     }}),
   },
-  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
+  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries(fireLightFieldRouteParams())}),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
@@ -21973,7 +21975,7 @@ function writeFirstFlameFieldStateUnchecked(value) {
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
 }
-async function addFirstFlameField(presetId,{signal}={}) {
+async function addFirstFlameField(presetId,{signal,lightingRoute={}}={}) {
   signal?.throwIfAborted();
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
@@ -21990,7 +21992,7 @@ async function addFirstFlameField(presetId,{signal}={}) {
   if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
   if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
   if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
-  const route=Object.fromEntries(resolveFlameLightingRoute({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'}));
+  const route=Object.fromEntries(resolveFlameLightingRoute({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off',...lightingRoute}));
   const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
   await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
@@ -24667,6 +24669,7 @@ function serializeSceneObject(entry) {
     ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
 
+    ...(promptReliefRecord(object)??{}),
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
@@ -24684,6 +24687,7 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if(record.source===PROMPT_RELIEF_SOURCE){const object=restorePromptRelief(record);scene.add(object);registerSceneObject(object,record,{activate});return object;}
   if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
   if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
@@ -26231,6 +26235,7 @@ async function saveToServer(sceneData, filename, { result: detailed = false, sav
   if (saveAsName) { body._saveAsName = saveAsName; if (overwrite) body._overwrite = true; }
   const jsonStr = JSON.stringify(body, null, 2);
   try {
+    assertSceneSourcesReloadable(sceneData.objects);
     const resp = await fetch('/api/save-scene', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

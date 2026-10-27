@@ -70,6 +70,7 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
   assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'12');
   assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'screen-animated');
   assert.equal(applied.settings,settings,'do not replace or recolor the saved flame to light the scene');
+  context.activeSceneComposition=null;await context.addFirstFlameField('saved-basin',{lightingRoute:{volume_light_field_hybrid_shadow_grain:'ordered',volume_light_field_hybrid_shadow_resolution:'128'}});assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'ordered');assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'128');
   // The physical mode select is retired (2026-10-18): every basin renders on
   // the emissive route, so every Add Flame mounts the shared emissive export.
 });

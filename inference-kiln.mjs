@@ -1,3 +1,4 @@
+import {promptReliefMetadata} from './inference-kiln-record.mjs';
 import {createPromptRelief} from './inference-kiln-relief.mjs';
 import {Group,Mesh,PlaneGeometry,CanvasTexture,SRGBColorSpace,DoubleSide,MeshStandardMaterial,PointLight} from './lib/three.core.js';
 import {MeshStandardNodeMaterial} from './lib/three.webgpu.js';
@@ -32,7 +33,7 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
   let source='',elapsed=0,running=false,disposed=false;
   function setPrompt(value){
     if(typeof value!=='string'||!value.trim())throw Error('Enter a prompt to burn');
-    source=value;const words=value.trim().split(/\s+/);const lines=[];let line='';
+    source=value;if(solid)text.userData.kaminosPromptRelief=promptReliefMetadata(value,appearance);const words=value.trim().split(/\s+/);const lines=[];let line='';
     canvas.width=1024;ctx.font='500 76px Georgia';
     for(const word of words){const candidate=line?`${line} ${word}`:word;if(line&&ctx.measureText(candidate).width>880){lines.push(line);line=word;}else line=candidate;}if(line)lines.push(line);
     canvas.height=Math.max(180,lines.length*92+40);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.font='500 76px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';
@@ -55,5 +56,5 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
   }
   function read(){if(solid)return {prompt:source,representation:'shallow-glyph-mesh',burnAuthority:'scene-owned-thermal',appearance};return {prompt:source,elapsed,duration,running,consumed:elapsed>=duration,progress:Math.min(1,elapsed/duration),representation:'transparent-text-billboard',burnAuthority:'presentation-clock'};}
   setPrompt(prompt);
-  return {root,text,setPrompt,setAppearance(value){if(!solid||!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();text.geometry.dispose();paper.dispose();solid?.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
+  return {root,text,setPrompt,setAppearance(value){if(!solid||!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;text.userData.kaminosPromptRelief=promptReliefMetadata(source,value);return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();text.geometry.dispose();paper.dispose();solid?.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
 }

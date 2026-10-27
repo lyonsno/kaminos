@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {PROMPT_RELIEF_SOURCE} from '../inference-kiln-record.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function install(context,first,last){const a=html.indexOf(first),b=html.indexOf(last,a);assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),context);}
 function fixture(){
  const workingScene=createWorkingScene(),scene=new THREE.Scene(),calls={selection:0,exit:0,water:0};
- const context=vm.createContext({writeObjectBurnable(){},THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
+ const context=vm.createContext({writeObjectBurnable(){},PROMPT_RELIEF_SOURCE,THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
  checkedSelection,changeSelection,createLocalLiquidEmitterObject,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE,
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',FLAME_EMITTER_TYPE:'flame',localLiquidSetup:null,
  sceneNavigation:{prepare(){}},applyGiProxySetting(){},createSceneGroupForObjects(){},
@@ -60,7 +61,7 @@ for(const group of [false,true])test(`source reconstruction preserves ${group?'g
 });
 
 for(const type of ['image','pbr','glb','splat'])test(`${type} source loader preserves selection through its production registration path`,async()=>{
- const {context,workingScene,calls}=fixture(),current=context.currentMesh;
+ const {context,workingScene,calls}=fixture(),current=context.currentMesh;context.PROMPT_RELIEF_SOURCE=PROMPT_RELIEF_SOURCE;
  const documentEffects=[];
  Object.assign(context,{shouldClearSceneForImport:()=>false,greenroomPreviewIsActive:()=>false,
   sceneEnvironment:createSceneEnvironmentState({presets:{studio:{exposure:1.5,intensity:2.75}}}),

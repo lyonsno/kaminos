@@ -1,3 +1,4 @@
+import {PROMPT_RELIEF_SOURCE,checkedPromptRelief} from './inference-kiln-record.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedBurnable} from './scene-burning-settings.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
@@ -33,6 +34,7 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
+    ...(record.source===PROMPT_RELIEF_SOURCE?{promptRelief:checkedPromptRelief(record.promptRelief)}:{}),
     ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled!==false}:{}),
     ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
@@ -147,6 +149,7 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(record?.type==='pbr'&&record.source===PROMPT_RELIEF_SOURCE){try{checkedPromptRelief(record.promptRelief);return true;}catch{return false;}}
   if(record?.type===CAMERA_TYPE&&record.source===CAMERA_SOURCE){try{checkedCameraRecord(record);return true;}catch{return false;}}
   if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
   if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
@@ -161,6 +164,13 @@ export function isReloadableSceneObjectRecord(record) {
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
   if (type === 'image') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
+}
+
+export function assertSceneSourcesReloadable(records=[]) {
+  for(const record of records){
+    if(record.type===FIRE_DOMAIN_TYPE){checkedFireDomainRecord(record);continue;}
+    if(!isReloadableSceneObjectRecord(record))throw Error(`Scene object "${record.label||record.fileName||record.id}" has no reloadable source; retain or export it before saving`);
+  }
 }
 
 export function planSceneRestore(data, { allowEmpty = false } = {}) {
