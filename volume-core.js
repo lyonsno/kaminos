@@ -1,3 +1,4 @@
+import {createFlameSceneClock} from './flame-scene-clock.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
@@ -11937,6 +11938,7 @@ export function createKaminosVolumePrototype({
   let currentFront = 0;
   let currentQuench = 0;
   let simulationPaused = false;
+  let sceneClockLease=null;
   let gpuThermalConsumer = null;
   let thermalFluidGeneration = 0;
   let sceneSolidGpu = null;
@@ -27726,6 +27728,23 @@ export function createKaminosVolumePrototype({
         simStepCount: state.simStepCount,
         authority: 'witness-owned-presented-frame-pause-release-v0',
       };
+    },
+    borrowSceneClock() {
+      if(sceneClockLease)throw new Error('Another scene owns the flame simulation clock');
+      const pauseSimulation=value=>{simulationPaused=value;state.simulationPaused=value;};
+      const readRuntime=()=>({active:state.active,simStepCount:state.simStepCount,simulationPaused,lookFrozen:Boolean(normalizeLookFreeze(controlsSnapshot.lookFreeze)&&lookFreezeCanPin(state)),timeStep:resolveTimeStepConfig(controlsSnapshot)});
+      sceneClockLease=createFlameSceneClock({readRuntime,pauseSimulation,onRelease:()=>{sceneClockLease=null;},
+        stepSimulation({steps,startTimeMs,timeStepMs}){
+          if(!state.active||!device||!simulationPaused)throw new Error('Exact fire steps require an active held simulation');
+          if(normalizeLookFreeze(controlsSnapshot.lookFreeze)&&lookFreezeCanPin(state))throw new Error('Release Flame look freeze before exact scene advance');
+          for(let i=0;i<steps;i++){
+            updateUniforms(startTimeMs+i*timeStepMs);
+            const encoder=device.createCommandEncoder({label:'kaminos scene-owned ordinary fire step'});
+            encodeSim(encoder);encodeLiquidFireContactTransfer(encoder);encodeSelectiveHeadLiveFields(encoder);
+            device.queue.submit([encoder.finish()]);
+          }
+        }});
+      return sceneClockLease;
     },
     setSimulationPaused(paused) {
       simulationPaused = paused === true;

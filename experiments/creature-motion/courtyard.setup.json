@@ -503,5 +503,8 @@
         "label": "Movement stops"
       }
     ]
+  },
+  "arch": {
+    "url": "/api/read?root=generated-meshes&path=92bf2c1db3bbcb4d8e47d52c49eda6c01699b3fc67c3ae2f8d447100411c30f5.glb"
   }
 }

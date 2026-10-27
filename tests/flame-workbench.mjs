@@ -249,3 +249,7 @@ test('ordinary Enable/Disable publishes its settled state to flame subscribers i
   await click();assert.deepEqual(observed,[false],'off interrupts without waiting for the fallback poll');
   await click();assert.deepEqual(observed,[false,true],'on publishes only after activation has completed');
 });
+
+test('the shared flame capability delegates its scene-clock loan to the actual owner',()=>{
+ const f=fixture(),loan={read:()=>({owner:'fluid'})};f.options.borrowSceneClock=()=>loan;const api=createFlameWorkbench(f.options);assert.equal(api.borrowSceneClock(),loan);delete f.options.borrowSceneClock;assert.throws(()=>createFlameWorkbench(f.options).borrowSceneClock(),/unavailable/);
+});

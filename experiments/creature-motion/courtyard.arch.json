@@ -1,0 +1,9 @@
+{
+  "source": "/api/read?root=generated-meshes&path=92bf2c1db3bbcb4d8e47d52c49eda6c01699b3fc67c3ae2f8d447100411c30f5.glb",
+  "sha256": "92bf2c1db3bbcb4d8e47d52c49eda6c01699b3fc67c3ae2f8d447100411c30f5",
+  "bytes": 35663512,
+  "route": "trellis2.image-generation.webgpu.v0",
+  "checkpointManifestSha256": "f2dc64ea14973c9a83fcc8657d4da30101cae009868cf5d4aa54170483bdf9dc",
+  "frame": "finished TRELLIS GLB",
+  "provenance": "Managed generated-mesh origin record; isolated carved arch conditioned on the courtyard reference."
+}
