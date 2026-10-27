@@ -1,7 +1,7 @@
 // One independent WebGL2 preview context; scene/inference device is untouched.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {KTX2Loader} from './lib/addons/loaders/KTX2Loader.js';
+import {AssetKTX2Loader as KTX2Loader} from './asset-ktx2-loader.mjs';
 import {configureAssetTextures} from './asset-texture-support.mjs';
 import {thumbnailDistance} from './authoring-browse-layout.mjs';
 let renderer,initializing,tail=Promise.resolve();
