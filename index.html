@@ -26710,11 +26710,13 @@ function setupAuthoringAssets(){
     changed:()=>redraw(),
     blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
-  let promptPageLease=null,promptHandbackUnknown=false;
+  let promptPageLease=null,promptPageAdmission=null,promptHandbackUnknown=false;
   const promptLeasePost=async body=>{
+    if(body.action==='queued-claim')promptPageAdmission=body.runId;
     const response=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const value=await response.json();if(!response.ok)throw Error(value.error||`GPU coordination HTTP ${response.status}`);
     if(body.action==='release'&&promptPageLease===body.leaseId)promptPageLease=null;
+    if(body.action==='withdraw-queued'&&promptPageAdmission===body.runId)promptPageAdmission=null;
     return value;
   };
   authoringPromptExpansion=createAuthoringPromptExpansion({changed:()=>redraw(),
@@ -26727,15 +26729,16 @@ function setupAuthoringAssets(){
       if(!configResponse.ok)throw Error(`Prompt model configuration HTTP ${configResponse.status}`);
       const modelUrl=authoringPromptWeightRoot(await configResponse.json());
       const helper=createPagePromptHelper({modelUrl,post:promptLeasePost,...callbacks,onLease:held=>{
+        promptPageAdmission=null;
         promptPageLease=held.status==='held'?held.leaseId:null;
         if(held.status==='unconfigured')callbacks.onProgress({phase:'unconfigured'});
       }});
       return {get resident(){return helper.resident;},async expand(options){try{return await helper.expand(options);}catch(error){
-        if(error.greenroomHandback?.state==='kept-blocking'||error.result?.gpuLease?.state==='kept-blocking')promptHandbackUnknown=true;
+        if(['kept-blocking','withdrawal-failed'].includes(error.greenroomHandback?.state)||error.result?.gpuLease?.state==='kept-blocking')promptHandbackUnknown=true;
         throw error;
       }},dispose:()=>helper.dispose()};
     }});
-  addEventListener('pagehide',()=>{authoringPromptExpansion?.dispose().catch(()=>{});if(promptPageLease)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId:promptPageLease,reason:'Generate page closed'})],{type:'application/json'}));});
+  addEventListener('pagehide',()=>{authoringPromptExpansion?.dispose().catch(()=>{});const body=promptPageAdmission?{action:'withdraw-queued',runId:promptPageAdmission}:promptPageLease?{action:'release',leaseId:promptPageLease,reason:'Generate page closed'}:null;if(body)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify(body)],{type:'application/json'}));});
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),promptExpansion:authoringPromptExpansion,promptProvenance:()=>authoringPromptUI?.provenance(),meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   authoringPromptUI=installAuthoringPromptExpansion({document,controller:authoringPromptExpansion,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),imageController:authoringImageGenerator,changed:()=>redraw()});
