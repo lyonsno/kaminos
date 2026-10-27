@@ -65,3 +65,31 @@ test('creature shadow witness rejects missing, substituted and unapplied ordinar
  for(const rows of [[],[{...good,id:'fallback'}],[{...good,visible:false}],[{...good,power:30}],[{...good,position:[0,0,0]}],[{...good,target:[1,0,0]}]])assert.throws(()=>verify(rows),'missing or substituted shadow light cannot count as an exercised light');
  verify([good]);
 });
+
+test('complete parameter installation has no dependency on an obsolete rim synchronizer',()=>{
+ const c=sceneContext({scenePlacementTools:{edits:{register(){},subscribe(){}},addHistoryScope(){}},authoringControlSessions:[],sceneControlHistory:{},
+  firstFlameFieldState(){},writeFirstFlameFieldState(){},checkFirstFlameFieldState(){},installFlameAuthoring(){},
+  authoringParameterTargets:new Map(),installSceneControlHistory:()=>({}),readSceneGIControls:()=>({}),setSceneGIControls(){},resolveSceneGIControlState(){},
+  collectVolumeCockpitControlElements:()=>[],ENVIRONMENT_CONTROL_FIELDS:{},AO_CONTROL_FIELDS:{},readBurnerControlHistoryState:()=>({}),
+  document:{getElementById:()=>null,querySelectorAll:()=>[],addEventListener(){}},window:{}});
+ const a=html.indexOf('function installAuthoringParameterEditing('),b=html.indexOf('// --- Exposure / Intensity Controls ---',a);
+ vm.runInContext(html.slice(a,b),c);c.installAuthoringParameterEditing();
+ assert.deepEqual(Array.from(c.authoringParameterTargets.keys()),['@scene-gi','@burner-controls']);assert.equal(typeof c.window.kaminosAuthoringParameters.set,'function');
+});
+test('actual scene load reaches camera, postprocessing and file publication without rim adapters',async()=>{
+ const c=context(),info=[];let claimed=false;
+ const data=buildSceneDocument({objects:[record()],camera:{position:[7,8,9],target:[1,2,3],up:[0,1,0],near:.2,far:100,fov:45},postprocessing:{ao:{enabled:true,intensity:1.75}}});
+ Object.assign(c,{authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,
+  sceneLoadRequests:{begin:()=>1,isCurrent:()=>true,awaitStage:async(id,promise)=>({current:true,value:await promise})},currentSceneFile:'previous',sceneSaveBlockedByFailedRestore:false,
+  getVolumePrimitiveState:()=>({schema:'kaminos.volume-primitives.v0',primitives:[]}),flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,
+  planSceneRestore,assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>false,viewportDisplay:{},activeSceneComposition:null,
+  FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',PROCEDURAL_MESH_TYPE:'procedural-mesh',volumePrototype:null,
+  flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},setAnnularBurner(){},setInfo:text=>info.push(text),setFlameDomainTranslation(){},loadSceneObjects:async rows=>{for(const row of rows)c.mountSceneSpotLight(row);return true;},
+  applyFlameEmitterPose(){},setVolumePrimitivesState(){},location:{search:''},URLSearchParams,
+  camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3(),update(){}},setSceneGIControls(){},saveSettings(){},removeBackdrop(){},
+  document:{getElementById:()=>({style:{}})},claimLoadedSceneFile(){claimed=true;},sceneCameras:null,cameraViews:null,sceneNavigation:null,cameraAuthoring:null,localLiquidFailure:null});
+ c.window.kaminosViewportSettings={set(){}};
+ const a=html.indexOf('async function loadSceneFile('),b=html.indexOf('// File input handler for Load Scene',a);
+ vm.runInContext(html.slice(a,b),c);await c.loadSceneFile({text:async()=>JSON.stringify(data)},{sceneFile:'lights.json'});
+ assert.equal(claimed,true);assert.equal(c.sceneSaveBlockedByFailedRestore,false);assert.deepEqual(c.camera.position.toArray(),[7,8,9]);assert.equal(c.sceneAO.read().intensity,1.75);assert.match(info.at(-1),/Scene loaded: 1 object/);assert.equal(c.window.kaminosSceneLightState()[0].id,'@rim-light');
+});

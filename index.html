@@ -21994,7 +21994,6 @@ function installAuthoringParameterEditing() {
     flameInspector?.sync();
 
   });
-  syncRimAuthoringHandle();
 }
 
 // --- Exposure / Intensity Controls ---
@@ -26253,7 +26252,6 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   }
 
-  syncRimAuthoringHandle();
 
   // Apply camera
   if (data.camera) {

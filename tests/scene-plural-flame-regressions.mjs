@@ -96,7 +96,7 @@ for(const enabled of [true,false])test(`burner graph history restores only the s
 test('history notifications keep selected-source inspector values instead of projecting the primary cockpit',()=>{
  const start=html.indexOf('  edits.subscribe(()=>{\n    flameInspector?.sync();');
  assert.ok(start>=0,'production inspector history subscription exists');
- const code=html.slice(start,html.indexOf('  syncRimAuthoringHandle();',start));
+ const code=html.slice(start,html.indexOf('\n}',start));
  const selected={fuel:.8,enabled:false},primary={id:'volume-immersed-fuel',type:'range',value:'.2'};
  const alias={type:'number',value:'.8',dataset:{authoringAlias:primary.id}};
  let notify;const writes=[];
