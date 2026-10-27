@@ -64,12 +64,13 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
   const delta=goal.map((x,i)=>x-position[i]),error=Math.hypot(...delta)?angle(direction,heading(delta)):0;
   return {position:[...position],direction:[...direction],area:clone(area),...(areas?{zoneId}:{}),target:[...goal],distance:total,segments,status:destination&&arrived()?'arrived':inside(position,area)?'wandering':'returning-to-area',navigation:{kind:'goal-steering',bodyLength,referenceSpeed,maxYawRate,arrivalRadius:arrivalRadius(),phase:destination&&arrived()?'arrived':Math.cos(error)<=0?'turning':'walking'}};
  }
- function advance(distance,{seconds=distance/referenceSpeed}={}){
+ function advance(distance,{seconds=distance/referenceSpeed,drive=null,maxStepSeconds=stepSeconds}={}){
   if(!Number.isFinite(distance)||distance<0||!Number.isFinite(seconds)||seconds<0)throw Error('Locomotion needs finite nonnegative distance and time');
+  if(!(maxStepSeconds>0)||!Number.isFinite(maxStepSeconds)||drive!==null&&typeof drive!=='function')throw Error('Invalid locomotion integration drive');
   if(!seconds){if(distance)throw Error('Positive locomotion distance requires elapsed time');intent=null;return read();}
   const speed=distance/seconds;let remaining=seconds;
   while(remaining>0){
-   const h=Math.min(remaining,stepSeconds);remaining=Math.max(0,remaining-h);
+   const h=Math.min(remaining,stepSeconds,maxStepSeconds);remaining=Math.max(0,remaining-h);
    if(arrived()){
     if(destination)break;
     chooseGoal();segments++;
@@ -79,8 +80,13 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
    }
    const delta=goal.map((x,i)=>x-position[i]),desired=intent??heading(delta),error=angle(direction,desired);
    const omega=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength));
-   const forward=speed*Math.max(0,Math.cos(error))**2;
-   const travel=Math.min(forward*h,separation(position,goal)),turn=omega*h,c=Math.cos(turn),s=Math.sin(turn);
+   const walkingFraction=Math.max(0,Math.cos(error))**2;
+   // The motion owner integrates its nonuniform source phase here, in the
+   // SAME time step as steering. A source-distance plateau still consumes
+   // active phase, whereas reorientation without forward walking does not.
+   const source=drive?.({seconds:h,walkingFraction});
+   if(source&&(!Number.isFinite(source.distance)||source.distance<0||typeof source.accept!=='function'))throw Error('Invalid locomotion source drive');
+   const travel=Math.min(source?source.distance:speed*walkingFraction*h,separation(position,goal)),turn=omega*h,c=Math.cos(turn),s=Math.sin(turn);
    // Exact constant-twist integration keeps the root moving along its heading,
    // including during turns. No lateral seek vector is applied to the body.
    const along=Math.abs(turn)>1e-12?travel*Math.sin(turn)/turn:travel;
@@ -90,6 +96,7 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
    position=position.map((x,i)=>x+(next[i]-x)*fraction);
    direction=heading([c*direction[0]-s*direction[1],s*direction[0]+c*direction[1]]);
    total+=travel*fraction;
+   source?.accept(travel*fraction);
   }
   intent=null;return read();
  }

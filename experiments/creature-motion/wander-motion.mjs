@@ -64,19 +64,36 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   if(!Number.isFinite(gaitScale)||gaitScale<0||gaitScale>1)throw Error('Gait scale must be in [0,1]');
   const prior=admit?{path:path.snapshot(),elapsed,heldFrame}:null,from=admit?path.read():null;
   if(direction)path.redirect(direction);
-  const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;heldFrame=null;
-  const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
-  path.advance(Math.max(0,distance)*distanceScale,{seconds:delta});
-  const consumed=path.read().distance-pathBefore;
-  if(consumed<distance-1e-10){
-   // Stop the retained gait at the same travelled distance as the root.
-   let low=previousElapsed,high=elapsed;
-   for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
-   elapsed=consumed===0?previousElapsed:(low+high)/2;
+  heldFrame=null;
+  if(navigation){
+   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,drive:({seconds,walkingFraction})=>{
+    const from=elapsed,to=from+seconds*walkingFraction*distanceScale,before=timing(from).distance;
+    const distance=Math.max(0,timing(to).distance-before);
+    return {distance,accept(consumed){
+     let allowed=to;
+     if(consumed<distance-1e-10){
+      let low=from,high=to;
+      for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
+      allowed=consumed===0?from:(low+high)/2;
+     }
+     // Contact slows presentation causally, without removing the root motor's
+     // request to move out of an obstruction. Stationary source intervals
+     // advance when walkingFraction is positive, even with zero root distance.
+     elapsed=from+(allowed-from)*gaitScale;
+    }};
+   }});
+  }else{
+   const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;
+   const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
+   path.advance(Math.max(0,distance)*distanceScale);
+   const consumed=path.read().distance-pathBefore;
+   if(consumed<distance-1e-10){
+    let low=previousElapsed,high=elapsed;
+    for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
+    elapsed=consumed===0?previousElapsed:(low+high)/2;
+   }
+   elapsed=previousElapsed+(elapsed-previousElapsed)*gaitScale;
   }
-  // Physical feedback is causal: prior achieved travel sets this step's gait.
-  // The requested root drive stays active even when the gait is blocked.
-  elapsed=previousElapsed+(elapsed-previousElapsed)*gaitScale;
   if(admit){
    const to=path.read(),allowed=admit({from,to,turnOnly:false});
    if(!Number.isFinite(allowed)||allowed<0||allowed>1)throw Error('Motion admission must return a fraction in [0,1]');
