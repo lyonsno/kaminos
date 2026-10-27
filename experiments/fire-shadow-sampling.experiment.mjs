@@ -18,7 +18,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
-    const qualityControls=[],mediumControls=[],numberScrubs=[];
+    const qualityControls=[],lightControls=[],mediumControls=[],numberScrubs=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
@@ -30,6 +30,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
+      for(const {key,number} of lightControls)value(number,medium?.[key]??16);
       if(edgeSwitch)edgeSwitch.checked=medium?.shadowEdgeFilter===true;
       if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
       for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:16));
@@ -82,6 +83,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     return {
       read,sync,
       operations:{
+        setLightGrid(value){source().setLightGrid(value);sync();session.redraw();record({kind:'fire-shadow.light-grid',effective:value});return read();},
         setShadowEdgeFilter(value){source().setShadowEdgeFilter(value);sync();session.redraw();record({kind:'fire-shadow.edge-filter',effective:value});return read();},
         setSurfaceEnabled(value){source().setSurfaceEnabled(value);sync();session.redraw();record({kind:'fire-shadow.surface-enabled',effective:value});return read();},
         setSmokeShadowQuality(value){source().setSmokeShadowQuality(value);sync();session.redraw();record({kind:'fire-shadow.smoke-quality',requested:value,effective:source().debugState().frame?.smokeShadow??null});return source().debugState();},
@@ -135,6 +137,10 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         for(const [value,text]of [['original','Original geometry'],['10k','10k triangles — reduced caster'],['5k','5k triangles — reduced caster']]){const option=document.createElement('option');option.value=value;option.textContent=text;casterSelector.append(option);}
         casterSelector.addEventListener('change',()=>invoke('setCasterLevel',casterSelector.value).catch(failed));
         casterStatus=document.createElement('div');casterStatus.setAttribute('aria-live','polite');casterLabel.append(casterSelector);panel.append(casterLabel,casterStatus);
+        const gridRow=document.createElement('label');gridRow.textContent='Smoke light receiver resolution';
+        gridRow.title='Independent lighting samples across the domain width. Material and flow resolution stay independent. Height follows the domain aspect.';
+        const gridInput=document.createElement('input');gridInput.type='number';gridInput.min='1';gridInput.step='1';gridInput.setAttribute('aria-label','Smoke light receiver resolution');
+        gridInput.addEventListener('change',()=>invoke('setLightGrid',Number(gridInput.value)).catch(failed));gridRow.append(gridInput);panel.append(gridRow);lightControls.push({key:'volumeGrid',number:gridInput});numberScrubs.push(installRenderingNumberControl(gridInput,installNumberDrag));
         const edgeLabel=document.createElement('label');edgeLabel.textContent='Smooth solid shadow texels';
         edgeLabel.title='Compare neighboring cubemap texels for narrow edges and blocker-free visibility. Broad detected penumbras keep the ordinary filter taps.';
         edgeSwitch=document.createElement('input');edgeSwitch.type='checkbox';edgeSwitch.setAttribute('aria-label','Smooth solid shadow texels');

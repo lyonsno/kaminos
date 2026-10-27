@@ -21,8 +21,8 @@ assert.equal(select.value,'fixed','status-only refresh must not overwrite pendin
 assert.equal(select.assignments,before,'unchanged configuration must not touch the native menu');
 await select.listeners.change();assert.equal(settings.read().effective,'fixed');
 assert.equal(controls.filter(v=>v.type==='range').length,0,'quality uses a single drag/type field, not duplicate sliders');
-assert.equal(installed.length,6,'world-cell size, solid and medium cost controls use the shared widget');
-await settings.dispose();assert.equal(scrubDisposals,6,'lighting settings must retire all owned number scrubs');
+assert.equal(installed.length,7,'world-cell size, solid and medium cost controls use the shared widget');
+await settings.dispose();assert.equal(scrubDisposals,7,'lighting settings must retire all owned number scrubs');
 assert(controls.some(v=>v.value==='screen-animated'),'animated screen grain is exposed');
 const cell=controls.find(v=>v.attrs['aria-label']==='World grain cell size');
 await cell.listeners.focus();cell.value='0';await cell.listeners.change();
