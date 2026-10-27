@@ -1,11 +1,17 @@
 import * as THREE from '../../lib/three.core.js';
+import {validateConcavityDiagnostic} from './concavity-diagnostic-source.mjs';
 import {createPosedSkeleton} from './posed-skeleton.experiment.mjs';
 
 export async function createConcavityStudy({host,inputs,record}){
+ const descriptorResponse=await fetch(inputs.diagnostic_descriptor,{cache:'no-store'});if(!descriptorResponse.ok)throw Error('Concavity descriptor HTTP '+descriptorResponse.status);
+ const descriptorBytes=await descriptorResponse.arrayBuffer(),descriptorDigest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',descriptorBytes)),n=>n.toString(16).padStart(2,'0')).join('');
+ if(descriptorDigest!==inputs.diagnostic_descriptor_sha256)throw Error('Concavity descriptor digest mismatch');
+ const descriptor=JSON.parse(new TextDecoder().decode(descriptorBytes));
  const response=await fetch(inputs.diagnostic,{cache:'no-store'});if(!response.ok)throw Error('Concavity diagnostic HTTP '+response.status);
  const bytes=await response.arrayBuffer(),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
  if(digest!==inputs.diagnostic_sha256)throw Error('Concavity diagnostic digest mismatch');
- const values=new Float32Array(bytes);if(values.length%6||!values.every(Number.isFinite))throw Error('Invalid concavity diagnostic fields');
+ if(digest!==descriptor.sha256)throw Error('Concavity field differs from its binding descriptor');
+ const values=new Float32Array(bytes);validateConcavityDiagnostic({descriptor,caseSha256:inputs.case_sha256,values});
  let skin,mode='surface',refresh=()=>{},redraw=()=>{};
  const originalOpen=host.scene.open.bind(host.scene);
  const scene={...host.scene,async open(){const session=await originalOpen(),attach=session.attach.bind(session);redraw=()=>session.redraw();return {...session,async attach(root,options){root.traverse(o=>{if(o.isMesh&&o.userData.kaminosDynamicGeometry)skin=o;});return attach(root,options);}};}};

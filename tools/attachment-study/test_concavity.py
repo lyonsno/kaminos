@@ -1,4 +1,5 @@
 import unittest
+import subprocess,tempfile,json,pathlib
 import numpy as np
 from concavity import edge_penalty,redistribute
 
@@ -25,5 +26,20 @@ class ConcavityContract(unittest.TestCase):
         np.testing.assert_allclose(result.sum(axis=1),w.sum(axis=1));np.testing.assert_array_equal(result[:,[0,2]],w[:,[0,2]])
         self.assertAlmostEqual(result[0,1],.5);self.assertAlmostEqual(result[0,3],.3);np.testing.assert_array_equal(result[1],w[1])
         with self.assertRaises(ValueError):redistribute(w,channels,{'left':np.array([np.nan,1])})
+
+class BuildProvenance(unittest.TestCase):
+    def test_source_revision_is_independent_of_calling_directory(self):
+        script=pathlib.Path(__file__).with_name('build.py').resolve();repo=script.parents[2]
+        with tempfile.TemporaryDirectory() as t:
+            root=pathlib.Path(t);inp=root/'inputs.json';inp.write_text('[]')
+            p=subprocess.run([__import__('sys').executable,str(script),'--inputs',str(inp),'--out',str(root/'out')],cwd=root,capture_output=True,text=True)
+            self.assertEqual(p.returncode,0,p.stderr)
+            d=json.loads((root/'out/report.json').read_text());self.assertEqual(d['sourceRoot'],str(repo));self.assertEqual(d['sourceRevision'],subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip())
+    def test_missing_input_retains_failure_report(self):
+        script=pathlib.Path(__file__).with_name('build.py').resolve()
+        with tempfile.TemporaryDirectory() as t:
+            root=pathlib.Path(t);p=subprocess.run([__import__('sys').executable,str(script),'--inputs',str(root/'missing.json'),'--out',str(root/'out')],capture_output=True,text=True)
+            self.assertNotEqual(p.returncode,0);self.assertTrue((root/'out/report.json').exists(),'Missing initialization failure report')
+            d=json.loads((root/'out/report.json').read_text());self.assertEqual(d['status'],'failed');self.assertEqual(d['phase'],'input-provenance');self.assertIn('FileNotFoundError',d['error'])
 
 if __name__=='__main__': unittest.main()
