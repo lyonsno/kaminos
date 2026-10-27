@@ -21,6 +21,7 @@ import { createGenerationCommandRunner } from '../trellis2/generate-image.mjs';
 import { validateMetalFinishing } from '../trellis2/metal-remesh-finishing.mjs';
 import { startProcessMemory } from '../trellis2/process-memory.mjs';
 import { gitSourceIdentity } from '../trellis2/source-attestation.mjs';
+import { fluidBrowserLaunch } from '../../finger-fluid-browser-launch.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -75,8 +76,21 @@ export function validatePixal3dBinaryGlb(glbBytes) {
 
 export function resolvePixal3dGenerationFinishing(c = {}) {
   const cleanupMode = c.cleanupMode ?? 'reference-cleanup';
-  if (!['reference-cleanup', 'mlx-surface-preserving', 'source-metal-remesh'].includes(cleanupMode)) {
+  if (
+    ![
+      'reference-cleanup',
+      'mlx-surface-preserving',
+      'source-metal-remesh',
+      'browser-mlx-surface-preserving',
+    ].includes(cleanupMode)
+  ) {
     throw new Error('supported cleanup mode required');
+  }
+  if (
+    c.uvBackend !== undefined &&
+    !['sf3d', 'source-xatlas', 'browser-xatlas'].includes(c.uvBackend)
+  ) {
+    throw new Error('supported UV backend required');
   }
   const separate =
     c.finishingSourceRoot !== undefined || c.expectedFinishingSourceCommit !== undefined;
@@ -92,6 +106,7 @@ export function resolvePixal3dGenerationFinishing(c = {}) {
     sourceRoot: separate ? c.finishingSourceRoot : c.sourceRoot,
     expectedSourceCommit: separate ? c.expectedFinishingSourceCommit : c.expectedSourceCommit,
     cleanupMode,
+    ...(c.uvBackend !== undefined ? { uvBackend: c.uvBackend } : {}),
   };
   if (cleanupMode === 'source-metal-remesh') {
     selected.metalFinishing = validateMetalFinishing(c.metalFinishing);
@@ -294,7 +309,11 @@ export async function generatePixal3dImage(values, deps = {}) {
     work,
     commands: [],
     startedAt: new Date().toISOString(),
-    backend: { modelFamily: 'Pixal3D', runtime: 'browser-webgpu' },
+    mode: values['native-root'] ? 'retained-finishing' : 'image-generation',
+    backend: {
+      modelFamily: 'Pixal3D',
+      runtime: values['native-root'] ? 'cpu-retained-finishing' : 'browser-webgpu',
+    },
   };
   const persist = () => fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
   let monitor;
@@ -327,6 +346,18 @@ export async function generatePixal3dImage(values, deps = {}) {
       meshScale: effectiveMeshScale,
       sha256: sha(configRaw),
     };
+    const usesBrowserWitness =
+      !values['native-root'] && deps.executeGeneration === undefined && deps.route === undefined;
+    if (usesBrowserWitness) {
+      report.browser = (deps.fluidBrowserLaunch ?? fluidBrowserLaunch)({
+        executable: c.chrome,
+        debugPort: 0,
+        userDataDir: path.join(work, 'browser-admission'),
+        width: 1,
+        height: 1,
+        ...(deps.realpath ? { realpath: deps.realpath } : {}),
+      });
+    }
     const runner = (deps.createGenerationCommandRunner ?? createGenerationCommandRunner)({
       cwd: ownRoot,
       record: report,
@@ -339,98 +370,111 @@ export async function generatePixal3dImage(values, deps = {}) {
       maxFootprintBytes: c.processMemoryBudgetMiB * 1048576,
       onUnsafe: reason => runner.stop(reason),
     });
-    if (!values.input) throw new Error('selected input image required');
-    const input = path.resolve(values.input);
-    const bytes = await fs.readFile(input);
-    const inputSha = sha(bytes);
-    if (values['expected-input-sha256'] && inputSha !== values['expected-input-sha256']) {
-      throw new Error('selected input changed while queued');
-    }
-    report.input = { path: input, sha256: inputSha, byteLength: bytes.length };
-    const prepared = path.join(
-      c.preparedPackageRoot ?? path.join(path.dirname(c.checkpointBase), 'pixal3d-image-packages'),
-      runId,
-    );
-    report.preparedPackageRoot = prepared;
-    report.phase = 'image-preparation';
-    await persist();
-    await runner.run(
-      [
-        c.python,
-        '-B',
-        path.join(ownRoot, 'models/pixal3d/pack-generation.py'),
-        '--repo-root',
-        ownRoot,
-        '--expected-commit',
-        c.expectedCommit,
-        '--pixal-ckpts',
-        c.checkpointBase,
-        '--naf-weights',
-        c.nafWeights ?? path.join(c.sourceRoot, 'weights/naf_release.safetensors'),
-        '--dino-weights',
-        c.dinoWeights,
-        '--image',
-        input,
-        '--out',
-        prepared,
-        '--pipeline-type',
-        c.pipelineType,
-        '--conditioning-mode',
-        effectiveConditioningMode,
-        '--steps',
-        String(c.steps),
-        '--seed',
-        String(c.seed),
-        '--camera-angle-x',
-        String(effectiveCameraAngleX),
-        '--mesh-scale',
-        String(effectiveMeshScale),
-      ],
-      'Pixal3D package preparation',
-    );
 
-    const manifestPath = path.join(prepared, 'manifest.json');
-    const manifestRaw = await fs.readFile(manifestPath);
-    const manifest = JSON.parse(manifestRaw);
-    validatePixal3dGenerationInputs(manifest);
-    const pkgCameraAngleX = manifest.camera?.cameraAngleX;
-    const pkgMeshScale = manifest.camera?.meshScale;
-    const pkgDistance = manifest.camera?.distance;
-    const expectedDistance = computePixal3dDistanceFromFov({
-      cameraAngleX: effectiveCameraAngleX,
-      meshScale: effectiveMeshScale,
-      imageResolution: 512,
-    });
-    if (
-      manifest.pipelineType !== c.pipelineType ||
-      manifest.conditioningMode !== effectiveConditioningMode ||
-      manifest.samplingSteps !== c.steps ||
-      manifest.seed !== c.seed ||
-      typeof pkgCameraAngleX !== 'number' ||
-      !Number.isFinite(pkgCameraAngleX) ||
-      Math.abs(pkgCameraAngleX - effectiveCameraAngleX) > 1e-6 ||
-      typeof pkgMeshScale !== 'number' ||
-      !Number.isFinite(pkgMeshScale) ||
-      Math.abs(pkgMeshScale - effectiveMeshScale) > 1e-6 ||
-      typeof pkgDistance !== 'number' ||
-      !Number.isFinite(pkgDistance) ||
-      Math.abs(pkgDistance - expectedDistance) > 1e-5
-    ) {
-      throw new Error('packaged manifest configuration disagrees with requested config');
+    const native = values['native-root']
+      ? path.resolve(values['native-root'])
+      : path.join(work, 'native');
+    const nativeCommit = values['native-root'] ? values['native-commit'] : c.expectedCommit;
+    if (values['native-root'] && !/^[a-f0-9]{40}$/.test(nativeCommit ?? '')) {
+      throw new Error('exact retained native revision required');
     }
-    report.package = {
-      manifestPath,
-      manifestSha256: sha(manifestRaw),
-      pipelineType: manifest.pipelineType,
-      conditioningMode: manifest.conditioningMode,
-      samplingSteps: manifest.samplingSteps,
-      seed: manifest.seed,
-      camera: manifest.camera,
-    };
 
-    report.phase = 'webgpu-generation';
-    await persist();
+    let prepared = null;
+    let manifestPath = null;
+    let manifest = null;
+    if (!values['native-root']) {
+      if (!values.input) throw new Error('selected input image required');
+      const input = path.resolve(values.input);
+      const bytes = await fs.readFile(input);
+      const inputSha = sha(bytes);
+      if (values['expected-input-sha256'] && inputSha !== values['expected-input-sha256']) {
+        throw new Error('selected input changed while queued');
+      }
+      report.input = { path: input, sha256: inputSha, byteLength: bytes.length };
+      prepared = path.join(
+        c.preparedPackageRoot ?? path.join(path.dirname(c.checkpointBase), 'pixal3d-image-packages'),
+        runId,
+      );
+      report.preparedPackageRoot = prepared;
+      report.phase = 'image-preparation';
+      await persist();
+      await runner.run(
+        [
+          c.python,
+          '-B',
+          path.join(ownRoot, 'models/pixal3d/pack-generation.py'),
+          '--repo-root',
+          ownRoot,
+          '--expected-commit',
+          c.expectedCommit,
+          '--pixal-ckpts',
+          c.checkpointBase,
+          '--naf-weights',
+          c.nafWeights ?? path.join(c.sourceRoot, 'weights/naf_release.safetensors'),
+          '--dino-weights',
+          c.dinoWeights,
+          '--image',
+          input,
+          '--out',
+          prepared,
+          '--pipeline-type',
+          c.pipelineType,
+          '--conditioning-mode',
+          effectiveConditioningMode,
+          '--steps',
+          String(c.steps),
+          '--seed',
+          String(c.seed),
+          '--camera-angle-x',
+          String(effectiveCameraAngleX),
+          '--mesh-scale',
+          String(effectiveMeshScale),
+        ],
+        'Pixal3D package preparation',
+      );
+
+      manifestPath = path.join(prepared, 'manifest.json');
+      const manifestRaw = await fs.readFile(manifestPath);
+      manifest = JSON.parse(manifestRaw);
+      validatePixal3dGenerationInputs(manifest);
+      const pkgCameraAngleX = manifest.camera?.cameraAngleX;
+      const pkgMeshScale = manifest.camera?.meshScale;
+      const pkgDistance = manifest.camera?.distance;
+      const expectedDistance = computePixal3dDistanceFromFov({
+        cameraAngleX: effectiveCameraAngleX,
+        meshScale: effectiveMeshScale,
+        imageResolution: 512,
+      });
+      if (
+        manifest.pipelineType !== c.pipelineType ||
+        manifest.conditioningMode !== effectiveConditioningMode ||
+        manifest.samplingSteps !== c.steps ||
+        manifest.seed !== c.seed ||
+        typeof pkgCameraAngleX !== 'number' ||
+        !Number.isFinite(pkgCameraAngleX) ||
+        Math.abs(pkgCameraAngleX - effectiveCameraAngleX) > 1e-6 ||
+        typeof pkgMeshScale !== 'number' ||
+        !Number.isFinite(pkgMeshScale) ||
+        Math.abs(pkgMeshScale - effectiveMeshScale) > 1e-6 ||
+        typeof pkgDistance !== 'number' ||
+        !Number.isFinite(pkgDistance) ||
+        Math.abs(pkgDistance - expectedDistance) > 1e-5
+      ) {
+        throw new Error('packaged manifest configuration disagrees with requested config');
+      }
+      report.package = {
+        manifestPath,
+        manifestSha256: sha(manifestRaw),
+        pipelineType: manifest.pipelineType,
+        conditioningMode: manifest.conditioningMode,
+        samplingSteps: manifest.samplingSteps,
+        seed: manifest.seed,
+        camera: manifest.camera,
+      };
+    }
+
     const fetchDiskTensor = async name => {
+      if (!manifest || !prepared) throw new Error('packaged manifest unavailable');
       const row = manifest.tensors?.[name];
       if (!row) throw new Error('missing packaged tensor descriptor ' + name);
       const buf = await fs.readFile(path.join(prepared, row.file));
@@ -438,41 +482,163 @@ export async function generatePixal3dImage(values, deps = {}) {
     };
     const stagedOutput = path.join(work, 'generated-asset.glb');
     await fs.rm(stagedOutput, { force: true });
+
     const executeGeneration =
       deps.executeGeneration ??
-      (async ({ output: runOutput }) => {
-        if (!deps.route) {
-          throw new Error(
-            'registered WebGPU route required to execute Pixal3D generation after package preparation',
-          );
-        }
-        const nativeRes = await runPixal3dNativeGeneration({
-          route: deps.route,
-          manifest,
-          fetchTensor: fetchDiskTensor,
-          assetMode: 'raw-glb',
-          unwrapMesh: deps.unwrapMesh,
-          bakeMaterial: deps.bakeMaterial,
-          WorkerClass: deps.WorkerClass,
-          postprocessMesh: deps.postprocessMesh,
-          textureSize: c.textureSize ?? 1024,
-          onPhase: async e => {
-            if (e?.phase) {
-              report.phase = e.phase;
-              await persist();
+      (deps.route !== undefined
+        ? async ({ output: runOutput }) => {
+            if (!deps.route) {
+              throw new Error(
+                'registered WebGPU route required to execute Pixal3D generation after package preparation',
+              );
             }
-          },
-        });
-        try {
-          if (!(nativeRes.asset?.glb instanceof ArrayBuffer) || nativeRes.asset.glb.byteLength < 20) {
-            throw new Error('complete finished GLB buffer required from native generation');
+            report.phase = 'webgpu-generation';
+            await persist();
+            const nativeRes = await runPixal3dNativeGeneration({
+              route: deps.route,
+              manifest,
+              fetchTensor: fetchDiskTensor,
+              assetMode: 'raw-glb',
+              unwrapMesh: deps.unwrapMesh,
+              bakeMaterial: deps.bakeMaterial,
+              WorkerClass: deps.WorkerClass,
+              postprocessMesh: deps.postprocessMesh,
+              textureSize: c.textureSize ?? 1024,
+              onPhase: async e => {
+                if (e?.phase) {
+                  report.phase = e.phase;
+                  await persist();
+                }
+              },
+            });
+            try {
+              if (
+                !(nativeRes.asset?.glb instanceof ArrayBuffer) ||
+                nativeRes.asset.glb.byteLength < 20
+              ) {
+                throw new Error('complete finished GLB buffer required from native generation');
+              }
+              await fs.writeFile(runOutput, Buffer.from(nativeRes.asset.glb));
+              return { routeId: deps.route.routeId ?? 'injected-route' };
+            } finally {
+              nativeRes.dispose();
+            }
           }
-          await fs.writeFile(runOutput, Buffer.from(nativeRes.asset.glb));
-          return { routeId: deps.route.routeId ?? 'injected-route' };
-        } finally {
-          nativeRes.dispose();
-        }
-      });
+        : async ({ output: runOutput }) => {
+            if (!values['native-root']) {
+              report.phase = 'webgpu-generation';
+              await persist();
+              await runner.run(
+                [
+                  process.execPath,
+                  path.join(ownRoot, 'models/pixal3d/run-generation-witness.mjs'),
+                  '--repo-root',
+                  ownRoot,
+                  '--expected-commit',
+                  c.expectedCommit,
+                  '--fixture',
+                  prepared,
+                  '--chrome',
+                  c.chrome,
+                  '--report',
+                  path.join(native, 'report.json'),
+                  '--receiver',
+                  'kaminos-generate-pixal3d',
+                  '--fields-only',
+                  '--memory-python',
+                  c.memoryPython,
+                  '--gpu-buffer-budget-mib',
+                  String(c.gpuBufferBudgetMiB),
+                  '--process-memory-budget-mib',
+                  String(c.processMemoryBudgetMiB),
+                  '--decoder-activation-storage',
+                  c.decoderActivationStorage,
+                ],
+                'Pixal3D WebGPU generation',
+              );
+            }
+            report.phase = 'mesh-finishing';
+            await persist();
+            const finishedDir = path.join(work, 'finished');
+            const finishedGlb = path.join(finishedDir, 'asset.glb');
+            const finishing = resolvePixal3dGenerationFinishing(c);
+            report.requestedFinishing = finishing;
+            const uvBackend =
+              finishing.uvBackend ??
+              (finishing.cleanupMode === 'browser-mlx-surface-preserving'
+                ? 'browser-xatlas'
+                : 'source-xatlas');
+            const finishingCommand = [
+              process.execPath,
+              path.join(ownRoot, 'models/pixal3d/finalize-retained-generation.mjs'),
+              '--repo-root',
+              ownRoot,
+              '--expected-commit',
+              c.expectedCommit,
+              '--input-root',
+              native,
+              '--expected-native-commit',
+              nativeCommit,
+              '--python',
+              finishing.python ?? c.python,
+              '--source-root',
+              finishing.sourceRoot,
+              '--expected-source-commit',
+              finishing.expectedSourceCommit,
+              '--cleanup-mode',
+              finishing.cleanupMode,
+              '--target-faces',
+              String(c.targetFaces),
+              '--uv-backend',
+              uvBackend,
+              '--receiver',
+              'kaminos-generate-pixal3d',
+              '--output',
+              finishedGlb,
+            ];
+            if (finishing.metalFinishing) {
+              const m = finishing.metalFinishing;
+              finishingCommand.push(
+                '--metal-backend-manifest',
+                m.backendManifest,
+                '--metal-python-path',
+                JSON.stringify(m.pythonPath),
+                '--remesh-band',
+                String(m.band),
+                '--remesh-project-back',
+                String(m.projectBack),
+                '--texture-size',
+                String(finishing.textureSize),
+              );
+            }
+            await runner.run(finishingCommand, 'Pixal3D mesh finishing');
+            const f = JSON.parse(await fs.readFile(path.join(finishedDir, 'report.json'), 'utf8'));
+            const data = await fs.readFile(finishedGlb);
+            if (
+              f.status !== 'succeeded' ||
+              f.assetArtifact?.sha256 !== sha(data) ||
+              f.assetArtifact.byteLength !== data.length
+            ) {
+              throw new Error('complete identified finished Pixal3D GLB required');
+            }
+            await fs.writeFile(runOutput, data);
+            report.native = {
+              root: native,
+              commit: nativeCommit,
+              reportPath: path.join(native, 'report.json'),
+              sessionId: f.nativeSessionId,
+              inputManifestSha256: f.fixtureSha256,
+              backend: f.native?.backend,
+              reportSha256: f.native?.reportSha256,
+            };
+            report.finishing = {
+              reportPath: path.join(finishedDir, 'report.json'),
+              uv: f.uv,
+              cleanupMode: f.cleanupMode,
+              route: f.meshPostprocess?.effectiveRoute,
+            };
+            return { routeId: 'pixal3d.image-generation.webgpu.v0' };
+          });
 
     const execInfo = await executeGeneration({
       manifest,
@@ -548,6 +714,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         'run-id',
         'expected-config-sha256',
         'expected-input-sha256',
+        'native-root',
+        'native-commit',
       ].map(k => [k, { type: 'string' }]),
     ),
   });

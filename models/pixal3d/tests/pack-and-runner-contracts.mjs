@@ -701,7 +701,7 @@ with open(out_path, "wb") as f:
       report: failReportPath,
       'run-id': 'run-no-route',
     },
-    stubDeps,
+    { ...stubDeps, route: null },
   );
   assert.equal(failResult.ok, false, 'packaging alone must never report ok: true');
   assert.equal(failResult.status, 'failed');
