@@ -12831,7 +12831,7 @@ async function installOwnerWorkbenchEntry() {
       writeAuthoredFlameEmitterPose(flameEmitterPose);refreshFlameDomainPreview();return volumePrimitivesInFlameDomain();
     }}),
   },
-  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries(fireLightFieldRouteParams())}),
+  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries([...fireLightFieldRouteParams()].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))}),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
