@@ -49,7 +49,7 @@ function addCaps(leaf,triangles,id,normal,material){
  leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);
 }
 
-export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e11}={}){
+export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e10}={}){
  const faceCount=source.indices.length/3;
  if(!view?.labels||view.labels.length!==faceCount)throw Error('Every original triangle requires a detected part owner');
  const total=materialMeasure(source),extent=Math.max(...sub(total.max,total.min));cellExtent??=extent/4;
@@ -72,25 +72,33 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
   if(spans[axes[0]]<=cellExtent*(1+1e-6)){leaves.push(leaf);return;}
   for(const axis of axes){if(spans[axis]<=cellExtent*(1+1e-6))continue;
    const normal=[0,0,0];normal[axis]=1;const center=bounds.min.map((v,k)=>(v+bounds.max[k])/2),plane={point:center,normal},mask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),cut=bisectFaces(leaf.arrays,mask,plane),cutOwners=Int32Array.from(cut.sourceFace,i=>leaf.faceInterfaces[i]);
-   const children=[];let viable=true;
-   for(const side of [-1,1]){
-    const mask=Uint8Array.from(cut.side,x=>Number(side===-1?x<0:x>=0)),child=select(cut.arrays,cutOwners,mask);if(!child.arrays.indices.length){viable=false;break;}
-    let cap;try{cap=capPlanarOpenings(child.arrays,plane,{material:capMaterial});}catch{cap={arrays:child.arrays};}
-    const incomplete=Boolean(cap.anomalies)||!cap.capFaces;
-    let section=materialMeasure(cap.arrays,f=>f>=child.arrays.indices.length/3);
-    if(!(section.area>extent*extent*1e-14)){
-     const segments=sectionSegments(leaf.arrays,new Uint8Array(leaf.arrays.indices.length/3).fill(1),plane),linked=sectionLoops(segments.segments),edges=linked.loops.flatMap(loop=>loop.map((p,i)=>[segments.toWorld(new Vector2(...p)),segments.toWorld(new Vector2(...loop[(i+1)%loop.length]))])),recovered=attachmentCaps(edges,normal);
-     if(recovered.triangles.length){const recoveredLeaf={arrays:child.arrays,faceInterfaces:child.faceInterfaces};addCaps(recoveredLeaf,side===-1?recovered.triangles:recovered.triangles.map(t=>[t[0],t[2],t[1]]),side===-1?nextInterface:-nextInterface,normal.map(v=>-side*v),capMaterial);cap={arrays:recoveredLeaf.arrays};section=materialMeasure(cap.arrays,f=>f>=child.arrays.indices.length/3);diagnostics.stitchedSections.push({part:leaf.part,axis,bridged:linked.bridged,remainingOpenChains:linked.openChains});}
+   const raw=[-1,1].map(side=>select(cut.arrays,cutOwners,Uint8Array.from(cut.side,x=>Number(side===-1?x<0:x>=0))));
+   if(raw.some(child=>!child.arrays.indices.length))continue;
+   const caps=raw.map(child=>{try{return capPlanarOpenings(child.arrays,plane,{material:capMaterial});}catch{return null;}});
+   const areas=caps.map((cap,i)=>cap?materialMeasure(cap.arrays,f=>f>=raw[i].arrays.indices.length/3).area:0);
+   let shared=[];
+   if(caps.every(cap=>cap?.capFaces&&!cap.anomalies)&&Math.abs(areas[0]-areas[1])<=Math.max(...areas)*1e-6){
+    shared=Array.from({length:caps[0].capFaces},(_,i)=>triangle(caps[0].arrays,raw[0].arrays.indices.length/3+i));
+   }else{
+    // A cut has one material section, before the two child boundary repairs
+    // diverge. Reconstruct it once and give both sides the same opposed faces.
+    const sourceMask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),segments=sectionSegments(leaf.arrays,sourceMask,plane),linked=sectionLoops(segments.segments);
+    const edges=linked.loops.flatMap(loop=>loop.map((p,i)=>[segments.toWorld(new Vector2(...p)),segments.toWorld(new Vector2(...loop[(i+1)%loop.length]))]));
+    shared=attachmentCaps(edges,normal).triangles;
+    diagnostics.stitchedSections.push({part:leaf.part,axis,bridged:linked.bridged,remainingOpenChains:linked.openChains});
+    if(linked.openChains||!shared.length){
+     const empty={positions:new Float32Array(),normals:new Float32Array(),uvs:new Float32Array(),indices:new Uint32Array(),faceMaterial:new Uint8Array()};
+     const complete=sectionCap(empty,leaf.arrays,sourceMask,plane,{side:-1,material:capMaterial,absoluteWinding:true});
+     const recovered=Array.from({length:complete.arrays.indices.length/3},(_,f)=>triangle(complete.arrays,f));
+     if(recovered.reduce((sum,t)=>sum+areaOf(t),0)>shared.reduce((sum,t)=>sum+areaOf(t),0))shared=recovered;
+     diagnostics.windingSections.push({part:leaf.part,axis,grid:complete.grid});
     }
-    if(incomplete){
-     const complete=sectionCap(child.arrays,leaf.arrays,new Uint8Array(leaf.arrays.indices.length/3).fill(1),plane,{side,material:capMaterial,absoluteWinding:true}),measured=materialMeasure(complete.arrays,f=>f>=child.arrays.indices.length/3);
-     if(measured.area>section.area){cap=complete;section=measured;diagnostics.windingSections.push({part:leaf.part,axis,area:section.area,grid:complete.grid});}
-    }
-    if(!(section.area>extent*extent*1e-14)){viable=false;break;}
-    const owners=new Int32Array(cap.arrays.indices.length/3);owners.set(child.faceInterfaces);owners.fill(side===-1?nextInterface:-nextInterface,child.faceInterfaces.length);
-    children.push({...child,part:leaf.part,arrays:cap.arrays,faceInterfaces:owners,section});
    }
-   if(!viable)continue;
+   if(!shared.length)continue;
+   const children=raw.map((child,i)=>{const side=i===0?-1:1;
+    addCaps(child,side===-1?shared:shared.map(t=>[t[0],t[2],t[1]]),side===-1?nextInterface:-nextInterface,normal.map(v=>-side*v),capMaterial);
+    return {...child,part:leaf.part};
+   });
    interfaces.set(nextInterface,{id:nextInterface,normal,kind:'internal',parts:[leaf.part,leaf.part]});nextInterface++;
    children.forEach(subdivide);return;
   }
