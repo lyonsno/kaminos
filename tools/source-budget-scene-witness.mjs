@@ -36,14 +36,23 @@ try{
    await directions.evaluate(el=>{el.value='96';el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().directions===96&&window.__kaminosSceneRadiance.canRender());
    const saved=await retain({name:'light-grid-32-directions-96',capture:false});report.saved=saved;await open(saved.filename);
-   await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender());
+   await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().simStepCount>=120);
+   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
    report.reopened=await page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),objects:window.kaminosSceneObjectDebugState(),shownDirections:document.querySelector('#rendering-angular-samples').value}));
    assert.equal(report.reopened.lighting.volumeGrid,32);assert.equal(report.reopened.lighting.frame.volumeReceivers,32**3);
    assert.equal(report.reopened.lighting.directions,96);assert.equal(report.reopened.shownDirections,'96');
    assert.equal(report.reopened.volume.controls.resolution,48);assert.equal(report.reopened.lighting.pointCount,6);
    assert.equal(report.reopened.objects.filter(o=>o.type==='flame-emitter').length,2);
    assert.deepEqual(report.errors,[]);await page.screenshot({path:out+'/light-grid-reopened.png'});
-   return {url:saved.url,claim:'production room exercise of independent lighting grid, fixed material grid and coefficients, ordinary UI and cold restoration; no timing or visual-quality closure'};
+   await page.locator('[aria-label="Smoke light receiver resolution"]').evaluate(el=>{el.value='16';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForFunction(()=>window.__kaminosSceneRadiance.canRender()&&window.__kaminosSceneRadiance.debugState().frame?.volumeReceivers===16**3);
+   report.defaultSaved=await retain({name:'light-grid-16-directions-96',capture:false});await open(report.defaultSaved.filename);
+   await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().simStepCount>=120);
+   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+   report.defaultReopened=await page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()}));
+   assert.equal(report.defaultReopened.lighting.volumeGrid,16);assert.equal(report.defaultReopened.lighting.directions,96);assert.equal(report.defaultReopened.volume.controls.resolution,48);
+   assert.deepEqual(report.errors,[]);await page.screenshot({path:out+'/light-grid-default-reopened.png'});
+   return {url:report.defaultSaved.url,comparisonUrl:saved.url,claim:'production room exercise of independent lighting grid, fixed material grid and coefficients, ordinary UI and cold restoration; no timing or visual-quality closure'};
   }
   for(const [count,blockerSamples,filterSamples,edge] of (mode==='controls-only'?[]:[[4,3,3,false],[6,2,2,false],[6,2,2,true],[8,2,2,true]])){
    report.phase=`sources-${count}-edge-${edge}`;await write();
