@@ -211,12 +211,28 @@ def main():
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--count', type=int, required=True)
+    parser.add_argument('--sampling', choices=['area', 'spatial'], default='area')
+    parser.add_argument('--candidate-multiplier', type=int, default=4,
+                        help='Candidates per output point for spatial selection')
     args = parser.parse_args()
     # New output only; never overwrite a source or prior evidence directory.
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'ok': False, 'phase': 'sample', 'source': str(args.source.resolve()), 'requestedCount': args.count}
     try:
-        rows, parents, bary, meta = sample_glb(args.source, args.count)
+        if args.candidate_multiplier < 1:
+            raise ValueError('Positive candidate multiplier required')
+        pool_count = args.count*(args.candidate_multiplier if args.sampling == 'spatial' else 1)
+        rows, parents, bary, meta = sample_glb(args.source, pool_count)
+        spatial_footprints = None
+        if args.sampling == 'spatial':
+            from spatial_surface_samples import spatial_samples
+            ids, spatial_footprints, selection = spatial_samples(rows, args.count, meta['surfaceArea'])
+            rows, parents, bary = rows[ids], parents[ids], bary[ids]
+            meta.update(count=args.count, sourceCount=args.count,
+                        radius=float(np.sqrt(meta['surfaceArea']/args.count)*.8),
+                        candidateSampling=meta['sampling'], spatialSampling=selection,
+                        sampling='spatial/normal cells selected from area candidates')
+            meta['normalFallback']['scope'] = 'candidate pool before spatial selection'
         report.update(meta)
         report['phase'] = 'write'
         report['repoRoot'] = subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True).strip()
@@ -231,6 +247,9 @@ def main():
         footprints[:,:3] = tangent; footprints[:,4:7] = np.cross(normal,tangent)
         footprints[:,3] = footprints[:,7] = report['radius']/2
         report['footprintFit'] = 'isotropic area-spacing baseline; support radius 1.2*sqrt(area/count)'
+        if spatial_footprints is not None:
+            footprints = spatial_footprints
+            report['footprintFit'] = report['spatialSampling']['support']
         for key, name, array in [('data','surfels.f32',rows),('parentTriangles','parent-triangles.u32',parents),('barycentrics','barycentrics.f32',bary),('footprints','footprints.f32',footprints)]:
             value = array.tobytes(); (args.output/name).write_bytes(value)
             sha = hashlib.sha256(value).hexdigest()
