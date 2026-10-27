@@ -29,3 +29,16 @@ export function assertGrabbedMaterialFractures({before,after,hand=before.materia
  assert.ok(loaded.length,'No new stress-generated fracture on the grabbed material load path');
  return {grabbedCell:hand.index,loadedCells:[...members],loadedCracks:loaded.map(e=>e.id),otherCracks:fresh.filter(e=>!loaded.includes(e)).map(e=>e.id)};
 }
+
+export async function waitForWholeObjectIdle(read,nextTurn){
+ let state=await read();
+ while(state.busy){await nextTurn();state=await read();}
+ if(state.error)throw new Error(state.error);
+ return state;
+}
+export function assertReleasedMaterialAdvances(released,free){
+ assert.equal(released.material.hand,null,'Pointer release left a hand');
+ assert.equal(free.material.hand,null,'Free motion restored an artificial hand');
+ assert.ok(free.material.step>released.material.step&&free.material.time>released.material.time,'Release needs observed physical evolution');
+ for(const b of free.material.bodies)for(const key of ['position','velocity','angularVelocity','quaternion'])assert.ok(Object.values(b[key]).every(Number.isFinite),'Released material has non-finite physical state');
+}

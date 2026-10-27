@@ -28,11 +28,15 @@ function intersect(subject,clip){
  return result;
 }
 function sharedPolygon(a,b){
- const origin=a[0],u=unit(sub(a[1],origin)),n=unit(cross(sub(a[1],origin),sub(a[2],origin)));if(!u||!n)return null;
- // Positions come from Float32 mesh buffers. This bound admits representation
- // roundoff, not a gap-based inferred attachment.
- const magnitude=Math.max(...a.flat().map(Math.abs),...b.flat().map(Math.abs),Number.MIN_VALUE),tolerance=magnitude*2**-22;
- if(b.some(p=>Math.abs(dot(sub(p,origin),n))>tolerance))return null;
+ const origin=a[0],e0=sub(a[1],origin),e1=sub(a[2],origin),planeNormal=cross(e0,e1),u=unit(e0),n=unit(planeNormal);if(!u||!n)return null;
+ // Bound roundoff in the scalar triple product itself. Absolute world
+ // coordinates must not expand the admitted separation of two represented
+ // planes; Float32 rounding has already happened in the supplied vertices.
+ for(const p of b){
+  const d=sub(p,origin),det=dot(d,planeNormal);
+  const permanent=Math.abs(d[0])*(Math.abs(e0[1]*e1[2])+Math.abs(e0[2]*e1[1]))+Math.abs(d[1])*(Math.abs(e0[2]*e1[0])+Math.abs(e0[0]*e1[2]))+Math.abs(d[2])*(Math.abs(e0[0]*e1[1])+Math.abs(e0[1]*e1[0]));
+  if(Math.abs(det)>16*Number.EPSILON*permanent)return null;
+ }
  const v=cross(n,u),project=p=>{const d=sub(p,origin);return[dot(d,u),dot(d,v)];};
  const polygon=intersect(a.map(project),b.map(project));if(polygon.length<3)return null;
  let area=0,moment=[0,0];

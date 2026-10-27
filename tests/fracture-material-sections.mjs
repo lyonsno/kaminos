@@ -16,3 +16,11 @@ const transformed=[...matchMaterialSections([translated(a)],[translated(b)]).val
 assert.ok(Math.abs(transformed.area-.125)<1e-12);assert.ok(Math.abs(transformed.moment[0]/transformed.area-7)<1e-12);
 const thin=triangle(1,[[1-1e-5,0,0],[2,0,0],[1-1e-5,1,0]]);assert.ok([...matchMaterialSections([a],[thin]).values()][0].area>0,'A small real section must survive without a minimum-area cutoff');
 const away=triangle(1,a.points.map(p=>[p[0],p[1],p[2]+.01]));assert.equal(matchMaterialSections([a],[away]).size,0,'Parallel surfaces at different depths do not share material');
+
+// Observed review reproducer: Float32 retains this gap after translation.
+const oblique=[[0,0,0],[2,-2,0],[2,0,-2]],separated=oblique.map(p=>p.map(x=>x+.125));
+for(const offset of [0,1e6]){
+ const row=(index,points)=>({leaf:{index},points:points.map(p=>p.map(x=>Math.fround(x+offset)))});
+ assert.equal(matchMaterialSections([row(0,oblique)],[row(1,separated)]).size,0,'Translation cannot turn a resolvable gap into shared material');
+ const same=[...matchMaterialSections([row(0,oblique)],[row(1,oblique)]).values()][0];assert.ok(Math.abs(same.area-Math.sqrt(12))<1e-12);assert.ok(Math.abs(same.moment[0]/same.area-(offset+4/3))<1e-8);
+}
