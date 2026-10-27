@@ -3543,6 +3543,7 @@ let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let sceneGISettings = resolveSceneGIControlState();
+let sceneBloom=null,bloomControls=null;
 let updateSceneGI = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -11091,9 +11092,8 @@ async function initScene() {
   let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
   let sceneEmissionSource=null,sceneFlameHDR=null;
-  const sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
+  sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('scene-gi-mode').closest('.field').before(bloomHost);
-  let bloomControls;
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
