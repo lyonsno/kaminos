@@ -21,7 +21,7 @@ export function evaluateInferenceFlame(recording,time,score,baseline){
 }
 export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
  let recording=null,score={stages:{},transitionMs:400,flare:null},position=0,playing=false,live=false,transaction=null,baseline=null,disposed=false,error=null,startedAt=null,lastView=null;
- let unsubscribe=()=>{},plan=null,scoreRevision=0,lastApplied=null;
+ let unsubscribe=()=>{},plan=null,scoreRevision=0,lastApplied=null,previewPhase=null;
  const invalidate=()=>{plan=null;};
  const getPlan=()=>plan??(plan=compileScore(recording,score,baseline??flame.settings()));
  const signature=settings=>JSON.stringify(getPlan().fields.map(id=>descriptor(settings,id)?.value));
@@ -29,7 +29,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
  const newId=()=>crypto.randomUUID();
  const notify=()=>{if(!disposed)changed();};
  const now=()=>performance.now();
- function stop(cancel=false){unsubscribe();unsubscribe=()=>{};playing=false;live=false;startedAt=null;if(transaction){const tx=transaction;transaction=null;cancel?tx.cancel():tx.commit();}notify();}
+ function stop(cancel=false){unsubscribe();unsubscribe=()=>{};playing=false;live=false;startedAt=null;previewPhase=null;if(transaction){const tx=transaction;transaction=null;cancel?tx.cancel():tx.commit();}notify();}
  function begin(){
   if(disposed)throw Error('Inference flame is closed');
   if(!flame.read().active)throw Error('Add or enable a flame first');
@@ -43,16 +43,16 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
  function apply(){
   if(!recording||!transaction)return;
   if(!transaction.active()){stop();throw Error('Flame edit was interrupted; replay paused');}
-  try{lastView=getPlan().evaluate(position);const next=signature(lastView.settings);if(next!==lastApplied){transaction.update(lastView.settings);lastApplied=next;}error=null;}
+  try{lastView=getPlan().evaluate(position,previewPhase===null?{}:{phaseIndex:previewPhase});const next=signature(lastView.settings);if(next!==lastApplied){transaction.update(lastView.settings);lastApplied=next;}error=null;}
   catch(e){error=e.message;stop(true);throw e;}
  }
  const playbackEnd=()=>recording?getPlan().end:0;
  const unframe=onFrame(({deltaSeconds})=>{
   if((!playing&&!live)||(live&&startedAt===null))return;
   try{
-   position=live?Math.max(position,now()-startedAt):Math.min(playbackEnd(),position+deltaSeconds*1000);
+   position=live?Math.max(position,now()-startedAt):Math.min(previewPhase===null?playbackEnd():getPlan().phases[previewPhase].endMs,position+deltaSeconds*1000);
    apply();
-   if(playing&&position>=playbackEnd())stop();
+   if(playing&&position>=(previewPhase===null?playbackEnd():getPlan().phases[previewPhase].endMs))stop();
    notify();
   }catch(e){error=e.message;notify();}
  });
@@ -69,7 +69,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
    if(['complete','failed','stopped'].includes(event.type)){unsubscribe();unsubscribe=()=>{};live=false;startedAt=null;playing=event.type==='complete'&&position<playbackEnd();if(!playing)stop();notify();}
   }catch(e){error=e.message;stop(true);}
  };
- const read=({includeScore=true}={})=>({scoreRevision,recording:recording?{runId:recording.runId,source:clone(recording.source),status:recording.status,terminal:clone(recording.events.findLast(e=>['complete','failed','stopped'].includes(e.type))??null),durationMs:recording.durationMs}:null,...(includeScore?{score:clone(score)}:{}),position,playbackDurationMs:playbackEnd(),playing,live,previewing:!!transaction,error,stage:lastView?.stage??null,progress:lastView?.progress??null,preview:lastView?.preview??null,flareWeight:lastView?.flareWeight??0});
+ const read=({includeScore=true}={})=>({scoreRevision,recording:recording?{runId:recording.runId,source:clone(recording.source),status:recording.status,terminal:clone(recording.events.findLast(e=>['complete','failed','stopped'].includes(e.type))??null),durationMs:recording.durationMs}:null,...(includeScore?{score:clone(score)}:{}),position,playbackDurationMs:playbackEnd(),phases:recording?clone(getPlan().phases):[],playing,live,previewing:!!transaction,error,stage:lastView?.stage??null,progress:lastView?.progress??null,preview:lastView?.preview??null,flareWeight:lastView?.flareWeight??0});
  return {read,operations:{
   load(value){stop();recording=validateRecording(value);invalidate();baseline=null;position=0;lastView=null;notify();return read();},
   latest(){const value=source.read();if(!value)throw Error('No observed ImageGen run yet');return this.load(value);},
@@ -86,6 +86,7 @@ export function createInferenceFlame({flame,source,onFrame,changed=()=>{}}){
   timeScale(value){return editScore(s=>{s.timeScale=value;});},
   captureFlare({fields,attackMs=120,settleMs=900}){return editScore(s=>{s.flare={settings:flame.settings(),fields:[...fields],attackMs,settleMs};});},
   clearFlare(){return editScore(s=>{s.flare=null;});},
+  previewStage(stage){if(!recording)throw Error('Load a recording first');const index=getPlan().phases.findIndex(p=>p.stage===stage);if(index<0)throw Error('Phase is not in this recording');stop();begin();previewPhase=index;position=getPlan().phases[index].startMs;playing=true;apply();notify();return read();},
   play(){if(!recording)throw Error('Load a recording first');stop();if(position>=playbackEnd())position=0;begin();playing=true;apply();notify();return read();},
   seek(value){if(!recording)throw Error('Load a recording first');if(!Number.isFinite(value)||value<0||value>playbackEnd())throw Error('Choose a position inside the recording');if(live)stop();begin();playing=false;position=value;apply();notify();return read();},
   pause(){stop();return read();},cancel(){stop(true);return read();},
