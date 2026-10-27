@@ -32,9 +32,10 @@ async function startup(url,{matching=false}={}){
 function destination(recovery){const url=new URL(recovery),target='http://localhost/index.html?settings_preset='+preset;return new URL(vm.runInNewContext(forwardedExpression,{forwardCompositionHash,target,location:{hash:url.hash,search:url.search}}));}
 async function openActualEntry(url){
  let opened=null,onChange;
+ const edits={subscribe:()=>()=>{},state:()=>({active:null})};
  const location={href:url.href,search:url.search,hash:url.hash};
- const c={URL,URLSearchParams,JSON,...ownerAddress,createSceneOwnerControls,sceneOwnerControls:null,selectedPlacementEntry:()=>null,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
- setActiveSceneObject(){},async installOwnerExperimentEntry(options){onChange=options.onChange;return {async open(id,inputs){opened={id,inputs};}};}};
+ const c={URL,URLSearchParams,JSON,...ownerAddress,createSceneOwnerControls,sceneOwnerControls:null,scenePlacementTools:{edits},selectedPlacementEntry:()=>null,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
+ setActiveSceneObject(){},async installOwnerExperimentEntry(options){assert.equal(options.host.scene.edits,edits,'Recovered owners borrow the same native edit ledger');onChange=options.onChange;return {async open(id,inputs){opened={id,inputs};}};}};
  vm.createContext(c);vm.runInContext(entry,c);await c.installOwnerWorkbenchEntry();return {opened,close:()=>onChange({id:null,inputs:null}),location};
 }
 test('mismatched and absent presets retain full owner setup through actual wrapper and destination installer',async()=>{
