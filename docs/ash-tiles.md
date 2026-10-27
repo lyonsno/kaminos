@@ -48,7 +48,10 @@ changed pairs, visible face count, per-tile updates/revisions and dispatched
 transport groups. `{fields:true}` additionally returns density and the actual
 static support mask for offline conformance. These counters measure work shape;
 they are not milliseconds. `snapshot`/`restore` preserve density, pending wake,
-contact continuation, airborne parcels and pending source volume. Surface caches
+contact continuation, airborne parcels and pending source volume. Restore checks the
+introduced-material ledger against physical retained volume before uploading. The
+Contact affects ash checkbox can remove the sphere from the physical interaction;
+its former region wakes so held material can settle. Surface caches
 and airborne scheduling rebuild from that physical state. The outer patch is
 closed. Kiln support remains a fixed64³voxelization and moving the kiln or ground
 requires rebuilding the fixture. Ordinary scene Save still does not retain this
