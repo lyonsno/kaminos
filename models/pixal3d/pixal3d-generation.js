@@ -447,12 +447,20 @@ export function createPixal3dGenerationFromConditioningAdapter({
       )
     : lrNafPlan;
   const texCondTensor = textureConditioningTensor ?? hrCondTensor;
-  const texRawTensor =
-    textureRawImageTensor ?? (stageSpecificCascade ? highResolutionRawImageTensor : rawImageTensor);
-  const texRawValues =
-    textureRawImageValues ?? (stageSpecificCascade ? highResolutionRawImageValues : rawImageValues);
+  const hasExplicitTextureRaw =
+    textureRawImageTensor !== undefined || textureRawImageValues !== undefined;
+  const texRawTensor = hasExplicitTextureRaw
+    ? textureRawImageTensor
+    : stageSpecificCascade
+      ? highResolutionRawImageTensor
+      : rawImageTensor;
+  const texRawValues = hasExplicitTextureRaw
+    ? textureRawImageValues
+    : stageSpecificCascade
+      ? highResolutionRawImageValues
+      : rawImageValues;
   const hasExplicitTextureConditioning = Boolean(
-    textureConditioningTensor || textureRawImageTensor || textureRawImageValues,
+    textureConditioningTensor || hasExplicitTextureRaw,
   );
   const texNafPlan =
     models.naf.textureConfig && (stageSpecificCascade || hasExplicitTextureConditioning)
@@ -463,15 +471,85 @@ export function createPixal3dGenerationFromConditioningAdapter({
           )
         : hrNafPlan;
 
-  if (stageSpecificCascade) {
+  const validateStageConditioningInputs = (stageLabel, plan, condTensor, rawTensor, rawVals) => {
+    const validCondShapes = [
+      JSON.stringify([1, plan.conditioningTokens, plan.featureChannels]),
+      JSON.stringify([plan.conditioningTokens, plan.featureChannels]),
+    ];
     if (
-      hrNafPlan.imageHeight <= lrNafPlan.imageHeight &&
-      hrNafPlan.featureHeight <= lrNafPlan.featureHeight
+      !condTensor?.buffer ||
+      condTensor.dtype !== 'f32' ||
+      !validCondShapes.includes(JSON.stringify(condTensor.shape))
     ) {
       throw new TypeError(
-        'stage-specific 1024_cascade requires higher-resolution conditioning/NAF config than 512 LR stage',
+        `${stageLabel} conditioningTensor shape ${JSON.stringify(condTensor?.shape)} does not match expected conditioningTokens=${plan.conditioningTokens}, featureChannels=${plan.featureChannels}`,
       );
     }
+    if (
+      plan.imageHeight === 1024 &&
+      plan.imageWidth === 1024 &&
+      plan.featureChannels === 1024 &&
+      (plan.featureHeight !== 64 || plan.featureWidth !== 64 || plan.conditioningTokens !== 4101)
+    ) {
+      throw new TypeError(
+        `${stageLabel} production 1024-stage DINO conditioning requires 64x64 patch grid (4101 conditioningTokens)`,
+      );
+    }
+    if (rawTensor !== undefined) {
+      const validRawShapes = [
+        JSON.stringify([1, plan.imageHeight, plan.imageWidth, 3]),
+        JSON.stringify([plan.imageHeight, plan.imageWidth, 3]),
+      ];
+      if (
+        !rawTensor?.buffer ||
+        rawTensor.dtype !== 'f32' ||
+        !validRawShapes.includes(JSON.stringify(rawTensor.shape))
+      ) {
+        throw new TypeError(
+          `${stageLabel} rawImageTensor shape ${JSON.stringify(rawTensor?.shape)} does not match expected [1,${plan.imageHeight},${plan.imageWidth},3]`,
+        );
+      }
+    } else {
+      const expectedRawLength = plan.imageHeight * plan.imageWidth * 3;
+      if (!(rawVals instanceof Float32Array) || rawVals.length !== expectedRawLength) {
+        throw new TypeError(
+          `${stageLabel} rawImageValues length ${rawVals?.length} does not match expected ${expectedRawLength}`,
+        );
+      }
+    }
+  };
+
+  validateStageConditioningInputs('LR', lrNafPlan, conditioningTensor, rawImageTensor, rawImageValues);
+  if (stageSpecificCascade) {
+    validateStageConditioningInputs(
+      'HR',
+      hrNafPlan,
+      hrCondTensor,
+      highResolutionRawImageTensor,
+      highResolutionRawImageValues,
+    );
+    if (
+      hrNafPlan.imageHeight <= lrNafPlan.imageHeight ||
+      hrNafPlan.imageWidth <= lrNafPlan.imageWidth ||
+      hrNafPlan.featureHeight <= lrNafPlan.featureHeight ||
+      hrNafPlan.featureWidth <= lrNafPlan.featureWidth
+    ) {
+      throw new TypeError(
+        'stage-specific 1024_cascade requires higher-resolution conditioning feature grid and raw guidance image than 512 LR stage',
+      );
+    }
+  }
+  validateStageConditioningInputs('texture', texNafPlan, texCondTensor, texRawTensor, texRawValues);
+  if (
+    stageSpecificCascade &&
+    (texNafPlan.imageHeight <= lrNafPlan.imageHeight ||
+      texNafPlan.imageWidth <= lrNafPlan.imageWidth ||
+      texNafPlan.featureHeight <= lrNafPlan.featureHeight ||
+      texNafPlan.featureWidth <= lrNafPlan.featureWidth)
+  ) {
+    throw new TypeError(
+      'stage-specific 1024_cascade texture stage requires higher-resolution conditioning feature grid and raw guidance image than 512 LR stage',
+    );
   }
 
   const cameraConfig = {

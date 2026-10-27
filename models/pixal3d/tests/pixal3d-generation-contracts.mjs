@@ -261,6 +261,48 @@ assert.throws(
   /separate|highResolutionConditioningTensor/,
   'default 1024_cascade must reject reusing the 512 conditioningTensor as highResolutionConditioningTensor',
 );
+{
+  const duplicateLrShapedCond = runtime.createTensor({
+    name: 'dino-conditioning-duplicate-lr-shape',
+    shape: [1, 21, 6],
+    dtype: 'f32',
+  });
+  const modelsWithoutNafOverrides = {
+    ...models,
+    naf: {
+      config: nafConfig,
+      weights: models.naf.weights,
+    },
+  };
+  assert.throws(
+    () =>
+      createPixal3dGenerationFromConditioningAdapter({
+        route,
+        conditioningTensor: conditioning,
+        highResolutionConditioningTensor: duplicateLrShapedCond,
+        rawImageValues: rawImageValuesSmall,
+        highResolutionRawImageValues: rawImageValuesHr,
+        models: modelsWithoutNafOverrides,
+        meshResolution: 128,
+      }),
+    /higher-resolution|feature|conditioning/,
+    'default 1024_cascade must reject a separate LR-shaped conditioning tensor even when paired with higher-resolution raw guidance',
+  );
+  assert.throws(
+    () =>
+      createPixal3dGenerationFromConditioningAdapter({
+        route,
+        conditioningTensor: conditioning,
+        highResolutionConditioningTensor: duplicateLrShapedCond,
+        rawImageValues: rawImageValuesSmall,
+        highResolutionRawImageValues: rawImageValuesHr,
+        models,
+        meshResolution: 128,
+      }),
+    /conditioningTokens|shape|feature/,
+    'default 1024_cascade must reject highResolutionConditioningTensor whose shape mismatches highResolutionConfig',
+  );
+}
 
 const adapter = createPixal3dGenerationFromConditioningAdapter({
   route,
@@ -335,6 +377,97 @@ assert.equal(result.coordinateBytesToCPUDuringServing, 0);
 adapter.dispose();
 assert.ok(!conditioning.destroyed);
 assert.ok(!hrConditioning.destroyed);
+
+// 3b. Texture raw-image override is mutually exclusive with inherited HR raw-image tensor/array
+{
+  const providedHrRaw = runtime.createTensor({
+    name: 'provided-hr-raw',
+    shape: [1, 16, 16, 3],
+    dtype: 'f32',
+  });
+  const texRawOverrideValues = new Float32Array(16 * 16 * 3).fill(0.9);
+  uploads.length = 0;
+  runs.length = 0;
+  const overrideAdapter = createPixal3dGenerationFromConditioningAdapter({
+    route,
+    conditioningTensor: conditioning,
+    highResolutionConditioningTensor: hrConditioning,
+    rawImageValues: rawImageValuesSmall,
+    highResolutionRawImageTensor: providedHrRaw,
+    textureRawImageValues: texRawOverrideValues,
+    models,
+    meshResolution: 128,
+    seed: 11,
+    onPhase(e) {
+      phase = e.phase;
+      if (phase === 'learned-cascade-support') marked = false;
+    },
+  });
+  await overrideAdapter.run(invocation);
+  const nafConv1x1Runs = runs.filter(r => r.o.stage === 'naf-encoder-1x1-0');
+  assert.equal(nafConv1x1Runs.length, 3, 'LR, HR, and texture NAF stages executed');
+  assert.strictEqual(nafConv1x1Runs[1].k.bindings[0].resource, providedHrRaw, 'HR NAF must use providedHrRaw');
+  assert.notStrictEqual(
+    nafConv1x1Runs[2].k.bindings[0].resource,
+    providedHrRaw,
+    'texture NAF must consume uploaded textureRawImageValues rather than inherited providedHrRaw',
+  );
+  assert.equal(
+    nafConv1x1Runs[2].k.bindings[0].resource.name,
+    'pixal3d.generation.raw-image.naf-texture-feature-upsampling',
+  );
+  assert.ok(uploads.some(u => u.data === texRawOverrideValues), 'explicit textureRawImageValues must be uploaded');
+  overrideAdapter.dispose();
+  assert.ok(!providedHrRaw.destroyed, 'caller-owned providedHrRaw must not be destroyed');
+
+  const providedTexRaw = runtime.createTensor({
+    name: 'provided-tex-raw',
+    shape: [1, 16, 16, 3],
+    dtype: 'f32',
+  });
+  uploads.length = 0;
+  runs.length = 0;
+  const tensorOverrideAdapter = createPixal3dGenerationFromConditioningAdapter({
+    route,
+    conditioningTensor: conditioning,
+    highResolutionConditioningTensor: hrConditioning,
+    rawImageValues: rawImageValuesSmall,
+    highResolutionRawImageValues: rawImageValuesHr,
+    textureRawImageTensor: providedTexRaw,
+    models,
+    meshResolution: 128,
+    seed: 12,
+    onPhase(e) {
+      phase = e.phase;
+      if (phase === 'learned-cascade-support') marked = false;
+    },
+  });
+  await tensorOverrideAdapter.run(invocation);
+  const nafTexRuns = runs.filter(r => r.o.stage === 'naf-encoder-1x1-0');
+  assert.strictEqual(
+    nafTexRuns[2].k.bindings[0].resource,
+    providedTexRaw,
+    'texture NAF must use explicit textureRawImageTensor rather than inherited highResolutionRawImageValues',
+  );
+  tensorOverrideAdapter.dispose();
+  assert.ok(!providedTexRaw.destroyed, 'caller-owned providedTexRaw must not be destroyed');
+
+  assert.throws(
+    () =>
+      createPixal3dGenerationFromConditioningAdapter({
+        route,
+        conditioningTensor: conditioning,
+        highResolutionConditioningTensor: hrConditioning,
+        rawImageValues: rawImageValuesSmall,
+        highResolutionRawImageTensor: providedHrRaw,
+        highResolutionRawImageValues: rawImageValuesHr,
+        models,
+        meshResolution: 128,
+      }),
+    /mutually exclusive|both|highResolutionRawImage/,
+    'supplying both tensor and array raw guidance for the same stage must be rejected',
+  );
+}
 
 // 4. 512 pipelineType runs without highResolutionConditioningTensor and uses 512 conditioning across SS, LR shape, and texture
 {
