@@ -11,6 +11,7 @@ const {
   loadPixal3dGenerationCheckpoints,
   loadPixal3dGenerationInputs,
 } = await import(source);
+const { createPixal3dImageGenerationAdapter } = await import('../pixal3d-generation.js');
 
 assert.equal(PIXAL3D_INPUT_SCHEMA, 'pixal3d.generation-inputs.v0');
 
@@ -265,10 +266,14 @@ const ckptValidated = validatePixal3dGenerationCheckpoints(baseManifest);
 assert.equal(ckptValidated.tensorCount, validated.tensorCount - 4);
 
 const fetched = [];
-const loaded = await loadPixal3dGenerationCheckpoints(baseManifest, async key => {
+const fetchSizedTensor = async key => {
   fetched.push(key);
-  return new Float32Array(4);
-});
+  const shape = baseManifest.tensors[key]?.shape ?? [4];
+  return new Float32Array(shape.reduce((a, b) => a * b, 1));
+};
+const loaded = await loadPixal3dGenerationCheckpoints(baseManifest, fetchSizedTensor);
+assert.deepEqual(loaded.dinoIdentity, baseManifest.dino.identity);
+assert.equal(loaded.loadModels, undefined, 'staged checkpoint handoff must not expose conflicting loadModels');
 const nafModel = await loaded.loadModel('naf');
 assert.equal(Object.keys(nafModel.weights).length, 37);
 const streamedFlow = await loaded.loadModel('sparseFlow', { streamBlocks: true });
@@ -276,5 +281,49 @@ assert.equal(typeof streamedFlow.loadBlockWeights, 'function');
 const block0 = await streamedFlow.loadBlockWeights(0);
 assert.ok('cross.proj.weight' in block0);
 assert.ok('cross.proj.bias' in block0);
+
+// S2-F1 regression: loaded inputs compose directly with createPixal3dImageGenerationAdapter
+const loadedInputs = await loadPixal3dGenerationInputs(baseManifest, fetchSizedTensor);
+assert.equal(loadedInputs.pixelValues.length, 512 * 512 * 3);
+assert.equal(loadedInputs.highResolutionPixelValues.length, 1024 * 1024 * 3);
+assert.deepEqual(loadedInputs.dinoIdentity, baseManifest.dino.identity);
+const mockRoute = {
+  routeId: 'pixal3d.inputs.composition.test',
+  runtime: {
+    createTensor: d => ({ ...d, buffer: {} }),
+    createManagedBuffer: d => ({ ...d }),
+    createUniformBuffer: d => ({ ...d, buffer: {} }),
+    uploadTensor: () => {},
+    defineComputeKernel: d => d,
+    runKernel: async () => {},
+  },
+};
+const imageAdapter = createPixal3dImageGenerationAdapter({
+  route: mockRoute,
+  ...loadedInputs,
+});
+assert.equal(imageAdapter.state, 'new');
+
+// S2-F2 regression: package validation enforces schedule agreement and valid sampler settings
+const mismatchedSchedule = structuredClone(baseManifest);
+mismatchedSchedule.samplingSteps = 3;
+assert.throws(
+  () => validatePixal3dGenerationInputs(mismatchedSchedule),
+  /explicit matching sampler steps required/,
+);
+
+const invalidModelSteps = structuredClone(baseManifest);
+invalidModelSteps.models.sparseFlow.config.steps = 0;
+assert.throws(
+  () => validatePixal3dGenerationInputs(invalidModelSteps),
+  /steps|explicit matching sampler steps required/,
+);
+
+const invalidSamplerInterval = structuredClone(baseManifest);
+invalidSamplerInterval.models.lowResolutionShape.config.guidanceInterval = [1.0, 0.5];
+assert.throws(
+  () => validatePixal3dGenerationInputs(invalidSamplerInterval),
+  /finite ordered guidance interval required/,
+);
 
 console.log('generation-inputs-contracts.mjs: PASS');

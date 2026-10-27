@@ -14,6 +14,7 @@ import {
   buildSLatDecoderPlan,
   slatDecoderWeightShapes,
 } from '../trellis2/sparse-decoder.js';
+import { buildSparseSamplerPlan } from '../trellis2/sparse-sampler.js';
 import { generationTensorStorage } from '../trellis2/generation-storage.js';
 
 export const PIXAL3D_INPUT_SCHEMA = 'pixal3d.generation-inputs.v0';
@@ -212,6 +213,15 @@ function validatePixal3dGenerationPackage(m, includeImage) {
     ) {
       throw new TypeError('complete parameter coverage required ' + role);
     }
+    if ('gelu' in weightShapes) {
+      if (model.config?.steps !== steps) {
+        throw new TypeError('explicit matching sampler steps required ' + role + '.steps');
+      }
+      buildSparseSamplerPlan({
+        ...model.config,
+        ...(role === 'sparseFlow' ? {} : { tokenRows: 1 }),
+      });
+    }
     for (const [key, shape] of Object.entries(weightShapes)) {
       tensor(model.tensors[key], shape);
     }
@@ -267,8 +277,10 @@ export async function loadPixal3dGenerationInputs(manifest, fetchTensor) {
       : undefined;
   return {
     ...checkpoints,
+    pixelValues: dinoPixelValues,
     dinoPixelValues,
     rawImageValues,
+    highResolutionPixelValues: highResolutionDinoPixelValues,
     highResolutionDinoPixelValues,
     highResolutionRawImageValues,
   };
@@ -363,6 +375,7 @@ async function loadPixal3dCheckpointPlan(m, fetchTensor, plan) {
     samplingSteps: m.samplingSteps ?? 12,
     seed: m.seed,
     camera: m.camera,
+    dinoIdentity: m.dino.identity,
     prefixWeights: Object.fromEntries(
       await Promise.all(
         Object.entries(m.dino.prefix).map(async ([key, name]) => [key, await fetchTensor(name)]),
@@ -393,8 +406,5 @@ async function loadPixal3dCheckpointPlan(m, fetchTensor, plan) {
       ]),
     ),
     loadModel,
-    async loadModels() {
-      return Object.fromEntries(await Promise.all(roles.map(async role => [role, await loadModel(role)])));
-    },
   };
 }
