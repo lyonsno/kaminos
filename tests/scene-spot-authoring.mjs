@@ -20,4 +20,3 @@ test('selected flame shortcuts bind controls present in the Volume cockpit',()=>
  const body=html.slice(html.indexOf('function createFlameQuickFields()'),html.indexOf('function installAuthoringParameterEditing()'));
  for(const match of body.matchAll(/\['(volume-[^']+)'\s*,/g))assert.ok(html.includes(`id="${match[1]}"`),`missing source control ${match[1]}`);
 });
-

@@ -78,7 +78,7 @@ test('removing the field while its show is pending cannot revive the retired run
 
 test('saved field visibility governs restore even when the hidden set did not change',async()=>{
  const {createSceneSimulationActivity}=await import('../scene-simulation-activity.mjs');
- const start=html.indexOf("  if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1')",html.indexOf('async function loadSceneFile(')),end=html.indexOf('  syncRimAuthoringHandle();',start);assert.ok(start>0&&end>start);
+ const start=html.indexOf("  if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1')",html.indexOf('async function loadSceneFile(')),end=html.indexOf('  // Apply camera',start);assert.ok(start>0&&end>start);
  for(const initiallyActive of [true,false])for(const visible of [true,false]){
   let active=initiallyActive;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
   const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
