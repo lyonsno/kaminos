@@ -58,3 +58,10 @@ test('the page projects accepted AO values into the actual pass uniforms while w
  assert.equal(context.aoPass.radius.value,13.125);assert.equal(context.aoPass.distanceFallOff.value,.33);assert.equal(context.aoIntensity.value,2.2);
  context.viewportDisplay.shading='wireframe';context.applySceneAOParameters(state.read());assert.equal(context.aoIntensity.value,0);assert.equal(state.document().intensity,2.2);
 });
+
+test('the actual scene restore updates browser-local AO continuation as well as rendering state',()=>{
+ const state=createSceneAOState();state.patch({intensity:.1});let stored=state.legacySettings();
+ const a=page.indexOf('    const ao = data.postprocessing.ao;'),b=page.indexOf('    const dof =',a);assert.ok(a>=0&&b>a);
+ vm.runInNewContext(page.slice(a,b),{data:{postprocessing:{ao:{intensity:1.75,radius:7.125}}},sceneAO:state,saveSettings:()=>stored=state.legacySettings()});
+ assert.equal(state.read().intensity,1.75);assert.equal(Number(stored['ao-intensity']),1.75,'reopened accepted state must replace the prior browser-local tweak');
+});
