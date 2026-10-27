@@ -27,3 +27,12 @@ test('saved lettering rejects missing and non-finite geometry and invalid triang
  assert.equal(checkedPromptRelief(value).prompt,'A');
  for(const broken of [{...value,geometry:null},{...value,geometry:{data:{attributes:{position:{itemSize:3,type:'Float32Array',array:[0,NaN,0]}}}}},{...value,geometry:{...value.geometry,data:{...value.geometry.data,index:{type:'Uint16Array',array:[0,1,4]}}}}])assert.throws(()=>checkedPromptRelief(broken),/geometry|triangles/);
 });
+
+test('saved-source guard checks the effective float and index decoder before overwrite',async()=>{
+ const {checkedPromptRelief,PROMPT_RELIEF_SOURCE}=await import('../inference-kiln-record.mjs');const {assertSceneSourcesReloadable}=await import('../scene-persistence-core.js');
+ const base={schema:'kaminos.prompt-relief.v1',prompt:'A',appearance:'incineration',geometry:{data:{attributes:{position:{itemSize:3,type:'Float32Array',array:[0,0,0,1,0,0,0,1,0]}}}}};
+ const interleaved=structuredClone(base);Object.assign(interleaved.geometry.data.attributes.position,{isInterleavedBufferAttribute:true,data:'missing'});
+ const overflow=structuredClone(base);overflow.geometry.data.attributes.position.array[0]=1e40;
+ const wrappedIndex=structuredClone(base);wrappedIndex.geometry.data.attributes.position.array=Array(65537*3).fill(0);wrappedIndex.geometry.data.index={type:'Uint16Array',array:[0,1,65536]};
+ for(const value of [interleaved,overflow,wrappedIndex]){assert.throws(()=>checkedPromptRelief(value),/attribute|geometry|triangles|representation/);assert.throws(()=>assertSceneSourcesReloadable([{id:'bad',type:'pbr',source:PROMPT_RELIEF_SOURCE,promptRelief:value}]),/reloadable/);}
+});

@@ -6,11 +6,19 @@ export function checkedPromptRelief(value){
  if(!['crust','incineration'].includes(value.appearance))throw Error('Invalid saved prompt appearance');
  const attributes=value.geometry?.data?.attributes,p=attributes?.position;
  if(p?.itemSize!==3||!Array.isArray(p.array)||!p.array.length||p.array.length%3||!p.array.every(Number.isFinite))throw Error('Saved prompt requires finite complete geometry');
- const constructors={Float32Array,Float64Array,Uint16Array,Uint32Array,Uint8Array,Int16Array,Int32Array,Int8Array};
- for(const attribute of Object.values(attributes))if(!constructors[attribute.type]||!Number.isSafeInteger(attribute.itemSize)||attribute.itemSize<1||attribute.array?.length/attribute.itemSize!==p.array.length/3||!attribute.array.every(Number.isFinite))throw Error('Invalid saved prompt attribute');
- const index=value.geometry.data.index;
- if(index&&(!['Uint16Array','Uint32Array'].includes(index.type)||!Array.isArray(index.array)||index.array.length%3||!index.array.every(i=>Number.isSafeInteger(i)&&i>=0&&i<p.array.length/3)))throw Error('Invalid saved prompt triangles');
+ // Prompt reliefs use ordinary Float32 vertex attributes. Validate the
+ // decoder's effective representation, not just finite JSON numbers.
+ for(const attribute of Object.values(attributes)){
+  if(attribute.isInterleavedBufferAttribute||attribute.type!=='Float32Array'||!Number.isSafeInteger(attribute.itemSize)||attribute.itemSize<1||!Array.isArray(attribute.array)||attribute.array.length/attribute.itemSize!==p.array.length/3||!attribute.array.every(x=>Number.isFinite(x)&&Number.isFinite(Math.fround(x))))throw Error('Invalid saved prompt attribute representation');
+ }
+ if(value.geometry.data.morphAttributes&&Object.keys(value.geometry.data.morphAttributes).length)throw Error('Unsupported saved prompt attribute representation');
+ const index=value.geometry.data.index,maximum=index?.type==='Uint16Array'?65535:4294967295;
+ if(index&&(!['Uint16Array','Uint32Array'].includes(index.type)||!Array.isArray(index.array)||index.array.length%3||!index.array.every(i=>Number.isSafeInteger(i)&&i>=0&&i<p.array.length/3&&i<=maximum)))throw Error('Invalid saved prompt triangles');
  if(!index&&p.array.length%9)throw Error('Invalid saved prompt triangles');
+ const triangleVertices=index?.array.length??p.array.length/3;
+ if(value.geometry.data.groups?.some(g=>!Number.isSafeInteger(g.start)||!Number.isSafeInteger(g.count)||g.start<0||g.count<0||g.start%3||g.count%3||g.start+g.count>triangleVertices||!Number.isSafeInteger(g.materialIndex)||g.materialIndex<0))throw Error('Invalid saved prompt triangles');
+ const sphere=value.geometry.data.boundingSphere;
+ if(sphere&&(!Array.isArray(sphere.center)||sphere.center.length!==3||!sphere.center.every(Number.isFinite)||!Number.isFinite(sphere.radius)||sphere.radius<0))throw Error('Invalid saved prompt geometry bounds');
  return structuredClone(value);
 }
 export function promptReliefRecord(object){
