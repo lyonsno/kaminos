@@ -6169,7 +6169,9 @@ fn heatGradientAtCell(c: vec3<i32>) -> vec3<f32> {
 }
 
 fn thermalExpansionForce(c: vec3<i32>, heat: f32, amount: f32) -> vec3<f32> {
-  let grad = heatGradientAtCell(c);
+  // The stencil spans one velocity cell. Express its scalar derivative in
+  // material-cell coordinates before the force fold converts velocity units.
+  let grad = heatGradientAtCell(c) * VELOCITY_UNIT_SCALE;
   return -grad * smoothstep(0.08, 1.35, heat) * amount;
 }
 
@@ -7271,8 +7273,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
     let transportedLateralExcitation = clamp(
       transportedLateralDelta * transportedLateralGain,
-      vec2<f32>(-0.006),
-      vec2<f32>(0.006)
+      vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE),
+      vec2<f32>(0.006 * VELOCITY_UNIT_SCALE)
     );
     vel = vel + vec3<f32>(transportedLateralExcitation.x, 0.0, transportedLateralExcitation.y);
   }
@@ -17465,6 +17467,10 @@ export function createKaminosVolumePrototype({
     if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
     if(!materialOnlyPredictPipeline)materialOnlyPredictPipeline=device.createComputePipeline({label:'fine material turbulence predictor',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'csTransportPredict',constants:{MATERIAL_ONLY:true}}});
     const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];
+    // D / h² belongs to the lattice evaluating the scalar force inputs.
+    // Keep the raw coefficient so the existing dt-dependent stability cap
+    // applies after conversion, including velocity finer than material.
+    u[REACTANT_COMBUSTION_UNIFORM_OFFSET+3] *= (1/plan.materialPerVelocity)**2;
     u.set(immersedSourceUniformValues(state.immersedSource,plan),IMMERSED_SOURCE_UNIFORM_OFFSET);
     device.queue.writeBuffer(fineVelocity.uniform,0,u);
     state.fineGrid.residentBytes=fineVelocity.residentBytes;

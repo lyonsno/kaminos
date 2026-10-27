@@ -10,7 +10,14 @@
 // fire or the picture). Traced from the code 2026-10-20: when a control's
 // effect changes, change its entry here.
 export const VOLUME_CONTROL_KINDS = Object.freeze(['physical', 'proxy', 'artistic', 'quality', 'conditional', 'diagnostic', 'capture', 'playback', 'inert']);
+export const INTERMEDIATE_GRID_MODE_DESCRIPTIONS = Object.freeze({
+  off: 'Off: Fine feeds the World grid directly; no Intermediate grid is allocated.',
+  on: 'Flow bridge: adds an automatically sized velocity and pressure grid around Fine, using material from the World grid. The Intermediate coverage, material, velocity, pressure and iteration fields are unused in this mode.',
+  fields: 'Own fields: gives Intermediate its own material, velocity and pressure grids, pressure iterations and coverage. It transports and reacts material from Fine before feeding World.',
+});
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
+  "volume-world-smoke-intermediate": { kind: "quality", activeWhen: "World is on",
+    tooltip: Object.values(INTERMEDIATE_GRID_MODE_DESCRIPTIONS).join('\n') },
   "volume-swirl-jostle": { kind: "artistic", activeWhen: "always (0 is off)",
     tooltip: "Authored force that shoves gas sideways across its own swirl wherever there is heat, smoke or fresh source, making the plume ragged at small scale. Stronger with Curl. 0 is off, 1 is the original force, 2 doubles it." },
   "emitter-assay-family": { kind: "conditional", activeWhen: "Shape matters under Filled volume, Shallow primary and Inflow boundary. Under Immersed source the shape is ignored (any non-Cluster family gives the same disc slab) and Cluster is refused.",

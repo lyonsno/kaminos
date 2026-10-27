@@ -1,3 +1,4 @@
+import {volumeControlTooltip,INTERMEDIATE_GRID_MODE_DESCRIPTIONS} from './volume-control-descriptions.mjs';
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
 import {GRID_TUNING_GROUPS,GRID_TUNING_FIELDS,gridTuningSummary,intermediateCoverageChoices} from './volume-grid-tuning.mjs';
 
@@ -18,10 +19,10 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const signature=c=>JSON.stringify(pick(c));
  function field(key,label){
   const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)?.[1];const input=element(['worldSmoke','worldSmokeIntermediate'].includes(key)?'select':'input','transform-input');input.id=`grid-draft-${key}`;input.setAttribute('aria-label',label);
-  if(input.tagName==='SELECT')for(const option of document.getElementById(id)?.options||[]){const clone=option.cloneNode(true);clone.title=clone.textContent;clone.textContent=({off:'Off',on:key==='worldSmoke'?'On':'Flow bridge',fields:'Own fields'})[clone.value]??clone.textContent;input.append(clone);}
+  if(input.tagName==='SELECT')for(const option of document.getElementById(id)?.options||[]){const clone=option.cloneNode(true);clone.title=key==='worldSmokeIntermediate'?INTERMEDIATE_GRID_MODE_DESCRIPTIONS[clone.value]:clone.textContent;clone.textContent=({off:'Off',on:key==='worldSmoke'?'On':'Flow bridge',fields:'Own fields'})[clone.value]??clone.textContent;input.append(clone);}
   else {input.type='number';input.step=['intermediateExtent','worldSmokeExtent','worldSmokeTransition','gridHeightRatio'].includes(key)?'any':'1';input.min=['fineVelocity','finePressure','worldSmokePressure','worldSmokeTransition'].includes(key)||key.endsWith('Iterations')?'0':key==='resolution'?'4':key==='gridHeightRatio'?'1':key.endsWith('Extent')?'1.000000001':'2';}
   if(key.endsWith('Iterations')){const source=document.getElementById(id);if(source?.min!==undefined&&source.min!=='')input.min=source.min;if(source?.max!==undefined&&source.max!=='')input.max=source.max;}
-  input.title=['fineVelocity','finePressure','worldSmokePressure'].includes(key)?'Cells across the region; 0 follows the parent grid. Ratios need not be integers.':key.endsWith('Iterations')?'Pressure correction sweeps per simulation step.':'Cells across the region; independent of the other resolutions.';
+  input.title=key==='worldSmokeIntermediate'?volumeControlTooltip(id):['fineVelocity','finePressure','worldSmokePressure'].includes(key)?'Cells across the region; 0 follows the parent grid. Ratios need not be integers.':key.endsWith('Iterations')?'Pressure correction sweeps per simulation step.':'Cells across the region; independent of the other resolutions.';
   input.addEventListener(input.tagName==='SELECT'?'change':'input',()=>{
    const value=Number(input.value);
    if(key.endsWith('Iterations')&&live&&input.value!==''&&Number.isSafeInteger(value)&&value>=Number(input.min||0)&&(input.max===undefined||input.max===''||value<=Number(input.max))){
