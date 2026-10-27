@@ -97,7 +97,15 @@ async function main() {
     const step=async(name,fn)=>{report.phase=name;save();const value=await fn();report.steps.push({name,value});save();return value;};
     report.url=`${base}/index.html?experiment=hand-reach&workspace=workbench`;
     await page.goto(report.url,{waitUntil:'load'});
-    await step('open',async()=>{await wait('r.authority === "uncalibrated-hand-reach-experiment"');return read();});
+    await step('open',async()=>{
+      await page.waitForFunction(()=>window.kaminosWorkbenchExperiments);
+      await page.evaluate(async()=>{
+        const api=window.kaminosWorkbenchExperiments,entry=api.list().find(e=>e.id==='hand-reach');
+        if(!entry||entry.error)throw Error(entry?.error??'Hand reach is not in the experiment catalogue');
+        if(api.state().id!=='hand-reach')await api.open('hand-reach');
+      });
+      await wait('r.authority === "uncalibrated-hand-reach-experiment"');return read();
+    });
     const replay=JSON.parse(fs.readFileSync(a.replay)), original=replay.frames[1];
     const prediction={...original.prediction,source:{id:original.id,path:replay.source,label:'Retained native right-hand prediction',hashes:original.sourceHashes}};
     await step('retained-right-hand',async()=>{const r=await invoke('presentRetained',prediction);assert.equal(r.visible,true);assert.equal(r.presentation,'replay-hand');return {...r,...await capture('right-hand')};});
