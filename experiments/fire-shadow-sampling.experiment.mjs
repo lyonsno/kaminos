@@ -136,7 +136,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         casterSelector.addEventListener('change',()=>invoke('setCasterLevel',casterSelector.value).catch(failed));
         casterStatus=document.createElement('div');casterStatus.setAttribute('aria-live','polite');casterLabel.append(casterSelector);panel.append(casterLabel,casterStatus);
         const edgeLabel=document.createElement('label');edgeLabel.textContent='Smooth solid shadow texels';
-        edgeLabel.title='Compare four neighboring cubemap texels for narrow shadow edges. Broad penumbras keep the ordinary tap count.';
+        edgeLabel.title='Compare neighboring cubemap texels for narrow edges and blocker-free visibility. Broad detected penumbras keep the ordinary filter taps.';
         edgeSwitch=document.createElement('input');edgeSwitch.type='checkbox';edgeSwitch.setAttribute('aria-label','Smooth solid shadow texels');
         edgeSwitch.addEventListener('change',()=>invoke('setShadowEdgeFilter',edgeSwitch.checked).catch(failed));edgeLabel.append(edgeSwitch);panel.append(edgeLabel);
         const heading=document.createElement('h3');heading.textContent='Shadow quality';panel.append(heading);
