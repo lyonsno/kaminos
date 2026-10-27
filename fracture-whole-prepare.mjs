@@ -48,7 +48,7 @@ function addCaps(leaf,triangles,id,normal,material){
  leaf.arrays={positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(U),indices:Uint32Array.from(I),faceMaterial:Uint8Array.from(M)};leaf.faceInterfaces=Int32Array.from(O);
 }
 
-export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e8}={}){
+export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e11}={}){
  const faceCount=source.indices.length/3;
  if(!view?.labels||view.labels.length!==faceCount)throw Error('Every original triangle requires a detected part owner');
  const total=materialMeasure(source),extent=Math.max(...sub(total.max,total.min));cellExtent??=extent/4;

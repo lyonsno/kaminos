@@ -58,7 +58,7 @@ export default {
    asset=await session.loadAsset({url:inputs.source,normalize:false,metadata:{label:'Fracturable object',source:inputs.source}});surface=collectFractureSurface(asset.root);asset.root.add(owned);
    const result=await callWorker('../fracture-shape-partition.worker.mjs',{geometry:{positions:surface.arrays.positions,indices:surface.arrays.indices},settings:{method:'geodesic-neck',minReachFraction:inputs.minReachFraction??.001,minAreaFraction:inputs.minAreaFraction??.0001,cleanupAreaFraction:inputs.cleanupAreaFraction??.0001,maxCutRatio:4,fixedCuts:inputs.fixedCuts??[]}});
    view=shapeHierarchyView(result.result,inputs.detailLevel??1,inputs.localDetail??{});
-   prepared=(await callWorker('../fracture-whole.worker.mjs',{arrays:surface.arrays,view,options:{strength,cellExtent:inputs.cellExtent,gravity:inputs.gravity??9.81}})).prepared;
+   prepared=(await callWorker('../fracture-whole.worker.mjs',{arrays:surface.arrays,view,options:{strength,cellExtent:inputs.cellExtent,gravity:inputs.gravity??9.81,elasticModulus:inputs.elasticModulus}})).prepared;
    surface.meshes.forEach(m=>{m.visible=false;});const bounds=new Box3().setFromArray(surface.arrays.positions);objectCenter=bounds.getCenter(new Vector3());const size=bounds.getSize(new Vector3()).length();
    marker=new Mesh(new SphereGeometry(size*.006,12,8),new MeshBasicMaterial({color:0xe59b3a,depthTest:false}));marker.name='Hand contact';marker.renderOrder=10;marker.visible=false;owned.add(marker);
    asset.root.position.y+=(host.scene.ground?.().height??0)-prepared.floorY;await reset();
