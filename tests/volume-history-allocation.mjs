@@ -119,3 +119,14 @@ test('allocation never destroys guidance already referenced by an unsubmitted en
  assert.notEqual(h.buffer,encodedFirstDraw);assert.notEqual(encodedFirstDraw.destroyed,true);
  const current=h.buffer;h.dispose();assert.equal(current.destroyed,true);
 });
+
+test('a reserved fresh point does not duplicate a guided point with noise off',()=>{
+ const segments=[{start:0,end:.45,weight:1},{start:.45,end:.55,weight:50},{start:.55,end:1,weight:1}];
+ for(const count of [2,3,4,5]){
+  const bins=allocateRayStrata(segments,count,.5,.5);
+  assert.equal(bins.filter(b=>b.sample===.5).length,1,'one midpoint observation at count '+count);
+  assert.equal(new Set(bins.map(b=>b.sample)).size,count,'all requested observations distinct');
+  assert.equal(bins[0].start,0);assert.equal(bins.at(-1).end,1);
+  assert.ok(Math.abs(bins.reduce((v,b)=>v+b.width,0)-1)<1e-12);
+ }
+});
