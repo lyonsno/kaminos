@@ -13,6 +13,9 @@ export function organizeFireRenderingPanel(document) {
   moveRow('rendering-source-softness');
   heading('Smoke lighting');
   panel.append(document.querySelector('label[for="rendering-angular-samples"]'),document.getElementById('rendering-angular-samples'));
+  const patternLabel=document.querySelector('label[for="rendering-angular-pattern"]');
+  patternLabel.textContent='Smoke sampling pattern';
+  panel.append(patternLabel,document.getElementById('rendering-angular-pattern'));
   panel.append(document.getElementById('rendering-fire-shadows'));
   document.getElementById('rendering-light-study').hidden=true;
   panel.hidden=false;
