@@ -1,5 +1,5 @@
 import {Box3,Triangle,Vector3} from './lib/three.core.js';
-import {LOG_RESIDUE} from './log-consumption.mjs';
+import {LOG_RESIDUE,logMaterialPresent} from './log-consumption.mjs';
 
 export const BURN_STRUCTURE_IDENTITY='kaminos.burn-structure.sections.v1';
 
@@ -50,7 +50,7 @@ export function sectionReference(mapping,material){
   if(material.length!==mapping.dimensions[0]**3*8||!Array.from(material).every(Number.isFinite))throw Error('Complete finite original material state required');
   return mapping.connections.map((connection,b)=>{
     let remaining=0,area=0;const start=mapping.spans[b*2],end=start+mapping.spans[b*2+1];
-    for(let i=start;i<end;i++){const weight=mapping.areas[i],fuel=material[mapping.cells[i]*8+5];area+=weight;remaining+=weight*Math.max(0,Math.min(1,(fuel-LOG_RESIDUE)/(1-LOG_RESIDUE)));}
+    for(let i=start;i<end;i++){const weight=mapping.areas[i],fuel=material[mapping.cells[i]*8+5];area+=weight;remaining+=weight*(logMaterialPresent(fuel)?Math.max(0,Math.min(1,(fuel-LOG_RESIDUE)/(1-LOG_RESIDUE))):0);}
     return {...connection,fraction:area?remaining/area:null,remainingArea:remaining,sampledArea:area,mapped:area>0};
   });
 }

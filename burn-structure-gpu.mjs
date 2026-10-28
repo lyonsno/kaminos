@@ -1,5 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
-import {LOG_RESIDUE} from './log-consumption.mjs';
+import {LOG_RESIDUE,LOG_MATERIAL_EPSILON} from './log-consumption.mjs';
 import {BURN_STRUCTURE_IDENTITY} from './burn-structure-core.mjs';
 
 export const BURN_SECTION_WGSL=`
@@ -16,7 +16,7 @@ fn reduce(@builtin(global_invocation_id) id:vec3u){
  let span=spans[i];var area=0.0;var remaining=0.0;
  for(var s=span.x;s<span.x+span.y;s++){
   let sample=samples[s];let fuel=cells[sample.cell].burn.y;
-  area+=sample.area;remaining+=sample.area*clamp((fuel-${LOG_RESIDUE})/(1.0-${LOG_RESIDUE}),0.0,1.0);
+  area+=sample.area;remaining+=sample.area*select(0.0,clamp((fuel-${LOG_RESIDUE})/(1.0-${LOG_RESIDUE}),0.0,1.0),fuel>${LOG_RESIDUE}+${LOG_MATERIAL_EPSILON});
  }
  var value=vec4f(0.0);if(area>0.0){value=vec4f(remaining/area,remaining,area,1.0);}
  sections[i]=value;textureStore(image,vec2i(i32(i),0),value);

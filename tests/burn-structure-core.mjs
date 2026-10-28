@@ -17,6 +17,8 @@ const cell=mapping.cells[0];state[cell*8+5]=LOG_RESIDUE;
 const reduced=sectionReference(mapping,state);assert.ok(reduced.some(s=>s.fraction<1));assert.ok(reduced.some(s=>Math.abs(s.fraction-1)<1e-7),'Local consumption leaves unrelated sections intact');
 for(let i=0;i<64;i++)state[i*8+5]=0;
 assert.ok(sectionReference(mapping,state).every(s=>s.fraction===0));
+for(let i=0;i<64;i++)state[i*8+5]=LOG_RESIDUE+0.0000005;
+assert.ok(sectionReference(mapping,state).every(s=>s.fraction===0),'Material absent to the consumption law cannot retain a structural connection');
 const unmapped=mapBurnSections(prepared,{...material,initial:new Uint32Array(64)});
 assert.equal(unmapped.receipt.unmapped.length,prepared.bonds.length);
 assert.ok(sectionReference(unmapped,state).every(s=>s.fraction===null&&!s.mapped),'Unsupported section mapping must remain unknown, not a proved fracture');

@@ -17,7 +17,7 @@ try{
  const fail=e=>{report.errors.push(String(e));reject(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
  const asset=await fs.readFile(assetPath),sourceSha256=hash(asset),upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.ok(upload.ok());const receipt=await upload.json();assert.equal(receipt.sha256,sourceSha256);
  report.source={path:assetPath,sha256:sourceSha256,url:receipt.source};report.sources=[];
- for(const name of ['burn-fracture-core.mjs','burn-fracture-gpu.mjs','burn-fracture-replay.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','scene-burn-structure.mjs','burn-structure.worker.mjs','fracture-whole-prepare.mjs','fracture-material-sections.mjs','fracture-coarse-rest-frame.mjs','fracture-coarse-kernels.mjs','lib/fracture/rigid-engine.js','experiments/sinter/burn-fracture-replay.experiment.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
+ for(const name of ['burn-fracture-core.mjs','burn-fracture-gpu.mjs','burn-fracture-replay.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','scene-burn-structure.mjs','burn-structure.worker.mjs','fracture-whole-prepare.mjs','fracture-material-sections.mjs','fracture-coarse-rest-frame.mjs','fracture-coarse-kernels.mjs','lib/fracture/rigid-engine.js','log-consumption.mjs','experiments/sinter/burn-fracture-replay.experiment.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
  const invoke=(op,value)=>guard(page.evaluate(({op,value})=>window.kaminosWorkbenchExperiments.invoke(op,value),{op,value}));
  for(const [name,file]of [['cold',coldPath],['burned',hotPath]]){
   report.phase='load:'+name;await save();const bytes=await fs.readFile(file),sha256=hash(bytes),relative='scratch/burn-fracture-'+sha256+'.json';await fs.copyFile(file,path.join(report.repoRoot,relative));
@@ -32,6 +32,11 @@ try{
   const rotations=before.quaternions.map((v,i)=>Math.abs(v-observation.after.quaternions[i]));observation.maximumRotationDelta=Math.max(...rotations);
   if(name==='cold'){assert.equal(observation.verdict.broken,0,'Unloaded original material must not fracture');assert.ok(observation.maximumMovement<.01,'Original clamped object must remain stable');}
   else {assert.ok(observation.verdict.broken>0,'Observed material loss must remove connections');assert.ok(observation.maximumMovement>.01,'Regions must actually move after support loss');}
+  report.phase='playback:'+name;await save();
+  await page.getByRole('button',{name:'Run',exact:true}).click();
+  await guard(page.evaluate(async start=>{for(;;){const s=await window.kaminosWorkbenchExperiments.read();if(s.error)throw Error(s.error);if(s.mechanics.seconds>start+.05)return;await new Promise(requestAnimationFrame);}},observation.after.state.seconds));
+  await page.getByRole('button',{name:'Pause',exact:true}).click();
+  observation.playback=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));assert.equal(observation.playback.running,false);assert.ok(observation.playback.mechanics.seconds>observation.after.state.seconds);
   await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';

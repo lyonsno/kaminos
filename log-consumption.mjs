@@ -1,10 +1,12 @@
 export const LOG_RESIDUE=.15;
 export const LOG_DISINTEGRATION_RATE=.18;
+export const LOG_MATERIAL_EPSILON=1e-6;
+export const logMaterialPresent=(fuel,residue=LOG_RESIDUE)=>fuel>residue+LOG_MATERIAL_EPSILON;
 export function consumeLogReserve(fuel,reactivity,dt,{rate=LOG_DISINTEGRATION_RATE,residue=LOG_RESIDUE}={}){
  if(![fuel,reactivity,dt,rate,residue].every(Number.isFinite)||fuel<0||fuel>1||reactivity<0||reactivity>1||dt<=0||rate<=0||residue<0||residue>=1)throw Error('Invalid finite material consumption');
- if(fuel<=residue+1e-6)return {fuel,gas:0,detached:0,present:false};
+ if(!logMaterialPresent(fuel,residue))return {fuel,gas:0,detached:0,present:false};
  const next=Math.max(residue,fuel-fuel*(1-Math.exp(-rate*dt))*reactivity);
- const remaining=next<=residue+1e-6?residue:next;
+ const remaining=logMaterialPresent(next,residue)?next:residue;
  return {fuel:remaining,gas:fuel-remaining,detached:remaining===residue?residue:0,present:remaining>residue};
 }
 export const LOG_CONSUMPTION_WGSL=`
