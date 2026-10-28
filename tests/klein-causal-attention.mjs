@@ -1,5 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import { KleinPipeline } from '../models/flux2-klein/klein-pipeline.js';
+import { Flux3Pipeline } from '../models/flux3-klein/flux3-pipeline.js';
 import { KleinTextEncoder } from '../models/flux2-klein/klein-text-encoder.js';
 const manifest={layers:1,taps:[1],config:{hidden_size:2560,num_attention_heads:32,num_key_value_heads:8,intermediate_size:9728}};
 const full=new KleinTextEncoder({},manifest), tiled=new KleinTextEncoder({},manifest,{attentionMode:'causal-tiled'});
@@ -23,3 +25,22 @@ for(const L of [80,512,2048,257])for(const budget of [Infinity,1e8]){
  }
 }
 console.log('Causal tiled attention preserves full rows, allocation, GQA and cooperative group geometry');
+
+for(const Pipeline of [KleinPipeline,Flux3Pipeline])for(const mode of ['causal-tiled','materialized']){
+ const p=new Pipeline({}, {textEncoderUrl:'te',transformerUrl:'dit',vaeUrl:'vae',...(mode==='materialized'?{textAttentionMode:mode}:{})});
+ assert.equal(p.createTextEncoder(manifest).attentionMode,mode,'both pipeline routes use the selected text attention, with rollback available');
+}
+
+const {validateCausalAttentionReport}=await import('../models/flux2-klein/probes/causal-attention-report.mjs');
+const valid={route:'KleinTextEncoder.attention',rows:[{tokens:512,errors:[],nonFinite:0,relL2:0,oracleMaxAbs:0.0002,outputElements:[2097152,2097152],variants:[{mode:'materialized',pipelineKeys:['masked-softmax']},{mode:'causal-tiled',pipelineKeys:['gemm2-f32-g64-store-f16-causal-scores','gemm2-f32-g64-store-f16-causal-values']}]}]};
+validateCausalAttentionReport(valid,[512]);
+for(const [name,mutate]of [
+ ['blank output',r=>r.rows[0].outputElements=[]],
+ ['wrong requested tokens',r=>r.rows[0].tokens=256],
+ ['missing rows',r=>r.rows=[]],
+ ['fallback route',r=>r.route='fixture'],
+ ['missing candidate values kernel',r=>r.rows[0].variants[1].pipelineKeys.pop()],
+ ['nonfinite output',r=>r.rows[0].nonFinite=1],
+ ['wrong mode',r=>r.rows[0].variants[1].mode='materialized'],
+ ['oracle mismatch',r=>r.rows[0].oracleMaxAbs=.01],
+]){const r=structuredClone(valid);mutate(r);assert.throws(()=>validateCausalAttentionReport(r,[512]),undefined,name);}

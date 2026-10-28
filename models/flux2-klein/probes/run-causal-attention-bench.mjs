@@ -1,8 +1,9 @@
-// Run probes/attention-bench.html in an independent Chrome for Testing and write its report.
-// Usage: node run-attention-bench.mjs --chrome <exe> --out <report.json> [--kit <kit dir>] [--tokens 1128,4200] [--reps 5]
+// Run probes/causal-attention-bench.html in an independent Chrome for Testing and write its report.
+// Usage: node run-causal-attention-bench.mjs --chrome <exe> --out <report.json> [--kit <kit dir>] [--tokens 80,512,2048,257] [--reps 3]
 // Writes the report on success and failure (with the failing phase). Fails when the two paths disagree
-// (relative L2 above 1e-3), produce non-finite values, or raise WebGPU errors.
+// (relative L2 above 1e-4), produce non-finite values, or raise WebGPU errors.
 import fsp from 'node:fs/promises';
+import { validateCausalAttentionReport } from './causal-attention-report.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,10 +23,8 @@ try {
   const query = new URLSearchParams({ reps: opt('--reps', '3'), tokens: opt('--tokens', '80,512,2048,257') });
   await browser.navigate(`${report.origin}/probes/causal-attention-bench.html?${query}`, 'window.attentionBenchReady === true');
   Object.assign(report, await browser.evaluate('window.attentionBench'));
-  if (report.route !== 'KleinTextEncoder.attention' || report.rows?.length !== query.get('tokens').split(',').length) throw Error('missing or wrong attention route/rows');
-  const bad = report.rows.filter(r => r.errors.length || r.nonFinite || !(r.relL2 < 1e-4) || !(r.oracleMaxAbs < 0.002) || r.outputElements.some(n=>n !== r.tokens*32*128) || r.variants[1].mode !== 'causal-tiled' || !r.variants[1].pipelineKeys.some(k=>k.endsWith('-causal-scores'))); 
-  report.phase = bad.length ? 'mismatch' : 'done';
-  if (bad.length) report.error = bad.map(r => `${r.tokens}: relL2 ${r.relL2} nonFinite ${r.nonFinite} ${r.errors[0] ?? ''}`).join('; ');
+  validateCausalAttentionReport(report, query.get('tokens').split(',').map(Number));
+  report.phase = 'done';
 } catch (e) {
   report.error = String(e?.stack || e);
 }
