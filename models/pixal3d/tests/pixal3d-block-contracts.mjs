@@ -133,6 +133,15 @@ assert.ok(output.hidden.buffer);
 assert.deepEqual(output.hidden.shape, [8, 12]);
 assert.deepEqual(runs.map(row => row.options.stage), adapter.plan.stages);
 assert.ok(runs.every(row => row.options.schedulerInvocation === invocation));
+assert.ok(
+  runs.slice(0, -1).every(row => row.options.yieldAfter === false),
+  'Intermediate block kernels must not yield individually via setTimeout(0).',
+);
+assert.equal(
+  runs.at(-1).options.yieldAfter,
+  true,
+  'Final kernel in block must yield cooperatively after queueing block kernels.',
+);
 assert.ok(!runs.some(row => /var<[^>]+>\s+shared\b/.test(row.kernel.code)));
 
 // Check negative conditioning polarity preparation

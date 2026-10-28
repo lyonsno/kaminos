@@ -159,6 +159,11 @@ assert.equal(result.highResFeatures, adapter.outputs.highResFeatures);
 assert.deepEqual(result.highResFeatures.shape, [1, 4, 6, 6]);
 assert.deepEqual(dispatches.map(d => d.options.stage), adapter.plan.stages);
 assert.ok(dispatches.every(d => d.options.schedulerInvocation === invocation));
+assert.ok(
+  dispatches.slice(0, -1).every(d => d.options.yieldAfter === false),
+  'Intermediate NAF kernels must not yield individually.',
+);
+assert.equal(dispatches.at(-1).options.yieldAfter, true, 'Final NAF kernel must yield cooperatively.');
 adapter.dispose();
 assert.ok(allocated.filter(t => !producerSet.has(t)).every(t => t.destroyed));
 assert.ok([...producerSet].every(t => !t.destroyed));

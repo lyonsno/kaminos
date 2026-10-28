@@ -32,6 +32,8 @@ const {
 
 const {
   PIXAL3D_REQUIRED_STAGES,
+  PIXAL3D_KERNEL_EVENT_BATCH_SIZE,
+  createPixal3dKernelPhaseBuffer,
   runPixal3dGenerationWitness,
 } = await import(browserWitnessUrl);
 
@@ -504,6 +506,409 @@ try {
   });
   assert.equal(phaseReport.nativeSessionId, 'sess-123');
   assert.equal(phaseReport.kernelEvidence?.count, 1);
+
+  // 3b. Batched kernel persistence and createPixal3dKernelPhaseBuffer checks
+  assert.equal(PIXAL3D_KERNEL_EVENT_BATCH_SIZE, 2048);
+  assert.equal(typeof createPixal3dKernelPhaseBuffer, 'function');
+  let appendCalls = 0;
+  let persistCalls = 0;
+  const batchedLogPath = path.join(scratch, 'batched-kernels.jsonl');
+  const batchedServerReport = {};
+  const browserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 12,
+    verifiedInputBytes: 4096,
+  };
+  const phaseBuffer = createPixal3dKernelPhaseBuffer({
+    report: browserReport,
+    batchSize: 4,
+    postPhase: async extra => {
+      await persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: browserReport.phase,
+          effectiveRoute: browserReport.effectiveRoute,
+          sessionId: 'sess-batched-1',
+          modelRole: browserReport.loadingModelRole,
+          verifiedTensorCount: browserReport.verifiedTensorCount,
+          verifiedInputBytes: browserReport.verifiedInputBytes,
+          ...extra,
+        },
+        kernelLogPath: batchedLogPath,
+        append: async (p, data) => {
+          appendCalls++;
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {
+          persistCalls++;
+        },
+      });
+    },
+  });
+
+  // Record 6 kernel events with batchSize=4: first 4 flush in 1 append call, next 2 stay buffered until savePhase
+  for (let i = 0; i < 3; i++) {
+    await phaseBuffer.recordKernel({
+      stage: `stage-${i}`,
+      dispatch: [i + 1, 1, 1],
+      point: 'before-native-kernel',
+    });
+    await phaseBuffer.recordKernel({
+      stage: `stage-${i}`,
+      dispatch: [i + 1, 1, 1],
+      point: 'native-kernel-returned',
+    });
+  }
+  assert.equal(appendCalls, 1, 'First 4 kernel events must flush in a single batch append');
+  assert.equal(phaseBuffer.pendingCount, 2, 'Remaining 2 kernel events stay buffered before threshold/phase transition');
+  assert.equal(batchedServerReport.kernelEvidence?.count, 4);
+
+  // Transitioning phase via savePhase flushes the 2 pending kernel events before recording the new livePhase
+  browserReport.phase = 'occupancy-decoding';
+  browserReport.loadingModelRole = 'occupancyDecoder';
+  await phaseBuffer.savePhase({ backend: { vendor: 'apple' } });
+  assert.equal(phaseBuffer.pendingCount, 0);
+  assert.equal(appendCalls, 2, 'Pending kernel events must flush in 1 batch before non-kernel phase persistence');
+  assert.equal(persistCalls, 1);
+  assert.equal(batchedServerReport.kernelEvidence?.count, 6);
+  assert.deepEqual(batchedServerReport.lastKernel, {
+    stage: 'stage-2',
+    dispatch: [3, 1, 1],
+    point: 'native-kernel-returned',
+  });
+  assert.equal(batchedServerReport.lastBrowserPhase, 'occupancy-decoding');
+
+  // Simulate a kernel throwing after before-native-kernel and verify flush() preserves the failing kernel event
+  await phaseBuffer.recordKernel({
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+  assert.equal(phaseBuffer.pendingCount, 1);
+  await phaseBuffer.flush();
+  assert.equal(phaseBuffer.pendingCount, 0);
+  assert.equal(batchedServerReport.kernelEvidence?.count, 7);
+  assert.deepEqual(batchedServerReport.lastKernel, {
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+  const loggedLines = readFileSync(batchedLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(loggedLines.length, 7);
+  assert.equal(loggedLines[0].phase, 'sparse-structure-sampling');
+  assert.equal(loggedLines[5].phase, 'sparse-structure-sampling');
+  assert.equal(loggedLines[6].phase, 'occupancy-decoding');
+  assert.deepEqual(loggedLines[6].kernel, {
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+
+  // S5-F1 fail-first checks:
+  // (a) Threshold POST rejection and partial-batch flush rejection must retain buffered events for recovery
+  // (b) Retrying after an ambiguous post-append transport error must not duplicate journal entries
+  const retryLogPath = path.join(scratch, 'retry-kernels.jsonl');
+  const retryServerReport = {};
+  const retryBrowserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 4,
+    verifiedInputBytes: 1024,
+  };
+  let failBeforeServer = true;
+  let failAfterServer = false;
+  const retryBuffer = createPixal3dKernelPhaseBuffer({
+    report: retryBrowserReport,
+    batchSize: 2,
+    postPhase: async extra => {
+      if (failBeforeServer) {
+        throw new Error('simulated pre-append HTTP POST failure');
+      }
+      await persistPixal3dGenerationPhase({
+        report: retryServerReport,
+        row: {
+          phase: retryBrowserReport.phase,
+          effectiveRoute: retryBrowserReport.effectiveRoute,
+          sessionId: 'sess-retry-1',
+          modelRole: retryBrowserReport.loadingModelRole,
+          ...extra,
+        },
+        kernelLogPath: retryLogPath,
+        append: async (p, data) => {
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {},
+      });
+      if (failAfterServer) {
+        throw new Error('simulated post-append response drop');
+      }
+    },
+  });
+
+  await retryBuffer.recordKernel({
+    stage: 'threshold-k0',
+    dispatch: [1, 1, 1],
+    point: 'before-native-kernel',
+  });
+  await assert.rejects(
+    () =>
+      retryBuffer.recordKernel({
+        stage: 'threshold-k0',
+        dispatch: [1, 1, 1],
+        point: 'native-kernel-returned',
+      }),
+    /simulated pre-append HTTP POST failure/,
+  );
+  assert.equal(
+    retryBuffer.pendingCount,
+    2,
+    'Rejected threshold persistence must preserve both buffered kernel events for recovery',
+  );
+  assert.equal(retryBuffer.snapshot().length, 2);
+  assert.equal(retryBuffer.snapshot()[0].kernel.stage, 'threshold-k0');
+  assert.equal(retryBuffer.snapshot()[0].seq, 1);
+  assert.equal(retryBuffer.snapshot()[1].seq, 2);
+
+  // Recover threshold batch cleanly
+  failBeforeServer = false;
+  await retryBuffer.flush();
+  assert.equal(retryBuffer.pendingCount, 0);
+  assert.equal(retryServerReport.kernelEvidence?.count, 2);
+
+  // Partial-batch flush rejection after server already appended (ambiguous HTTP failure), followed by new event + recovery flush
+  await retryBuffer.recordKernel({
+    stage: 'partial-k1',
+    dispatch: [2, 1, 1],
+    point: 'before-native-kernel',
+  });
+  failAfterServer = true;
+  await assert.rejects(() => retryBuffer.flush(), /simulated post-append response drop/);
+  assert.equal(
+    retryBuffer.pendingCount,
+    1,
+    'Unacknowledged partial-batch flush must retain event in buffer',
+  );
+  failAfterServer = false;
+  await retryBuffer.recordKernel({
+    stage: 'partial-k1',
+    dispatch: [2, 1, 1],
+    point: 'native-kernel-returned',
+  });
+  assert.equal(retryBuffer.pendingCount, 0);
+  assert.equal(
+    retryServerReport.kernelEvidence?.count,
+    4,
+    'Retry after post-append response drop must deduplicate already-appended seq and not double-count',
+  );
+  const retryLines = readFileSync(retryLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(retryLines.length, 4, 'Retry must not write duplicate lines to kernel-events.jsonl');
+  assert.deepEqual(
+    retryLines.map(l => l.seq),
+    [1, 2, 3, 4],
+  );
+
+  // (c) Overlapping retry while original server append is still in-flight must serialize and not duplicate entries
+  const overlapLogPath = path.join(scratch, 'overlap-kernels.jsonl');
+  const overlapServerReport = {};
+  const overlapBrowserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 4,
+    verifiedInputBytes: 1024,
+  };
+  let releaseFirstAppend;
+  const firstAppendGate = new Promise(resolve => {
+    releaseFirstAppend = resolve;
+  });
+  let serverAppendCalls = 0;
+  let postAttempts = 0;
+  const inFlightServerTasks = [];
+  const overlapBuffer = createPixal3dKernelPhaseBuffer({
+    report: overlapBrowserReport,
+    batchSize: 2,
+    postPhase: async extra => {
+      const attempt = ++postAttempts;
+      const serverPromise = persistPixal3dGenerationPhase({
+        report: overlapServerReport,
+        row: {
+          phase: overlapBrowserReport.phase,
+          effectiveRoute: overlapBrowserReport.effectiveRoute,
+          sessionId: 'sess-overlap-1',
+          modelRole: overlapBrowserReport.loadingModelRole,
+          ...extra,
+        },
+        kernelLogPath: overlapLogPath,
+        append: async (p, data) => {
+          if (++serverAppendCalls === 1) {
+            await firstAppendGate;
+          }
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {},
+      });
+      inFlightServerTasks.push(serverPromise);
+      if (attempt === 1) {
+        // Simulate connection drop while the first server append is still pending on firstAppendGate
+        throw new Error('simulated connection loss while server append remains active');
+      }
+      await serverPromise;
+    },
+  });
+
+  await overlapBuffer.recordKernel({
+    stage: 'overlap-k0',
+    dispatch: [1, 1, 1],
+    point: 'before-native-kernel',
+  });
+  await assert.rejects(
+    () =>
+      overlapBuffer.recordKernel({
+        stage: 'overlap-k0',
+        dispatch: [1, 1, 1],
+        point: 'native-kernel-returned',
+      }),
+    /simulated connection loss while server append remains active/,
+  );
+  assert.equal(overlapBuffer.pendingCount, 2, 'Both events must remain buffered while first append is pending');
+  assert.deepEqual(
+    overlapBuffer.snapshot().map(e => ({ seq: e.seq, phase: e.phase, role: e.modelRole })),
+    [
+      { seq: 1, phase: 'sparse-structure-sampling', role: 'sparseFlow' },
+      { seq: 2, phase: 'sparse-structure-sampling', role: 'sparseFlow' },
+    ],
+  );
+
+  // Start recovery flush BEFORE releasing the original server append
+  const recoveryFlush = overlapBuffer.flush();
+  releaseFirstAppend();
+  await Promise.all([recoveryFlush, ...inFlightServerTasks]);
+  assert.equal(overlapBuffer.pendingCount, 0);
+  assert.equal(postAttempts, 2);
+  const overlapLines = readFileSync(overlapLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(
+    overlapServerReport.kernelEvidence?.count,
+    2,
+    'Recovery overlapping in-flight append must preserve accurate kernel count (2, not 4)',
+  );
+  assert.deepEqual(
+    overlapLines.map(l => l.seq),
+    [1, 2],
+    'Recovery overlapping in-flight append must preserve one journal row per sequence',
+  );
+
+  // (d) Overlapping retry when the first in-flight append rejects must still persist via the queued recovery request
+  const overlapRejectLogPath = path.join(scratch, 'overlap-reject-kernels.jsonl');
+  const overlapRejectReport = {};
+  let releaseFirstReject;
+  const firstRejectGate = new Promise(resolve => {
+    releaseFirstReject = resolve;
+  });
+  let rejectAppendCalls = 0;
+  const firstAttempt = persistPixal3dGenerationPhase({
+    report: overlapRejectReport,
+    row: {
+      phase: 'sparse-structure-sampling',
+      effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+      sessionId: 'sess-overlap-reject',
+      kernels: [
+        {
+          seq: 1,
+          kernel: { stage: 'k-reject-0', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+        },
+      ],
+    },
+    kernelLogPath: overlapRejectLogPath,
+    append: async (p, data) => {
+      if (++rejectAppendCalls === 1) {
+        await firstRejectGate;
+        throw new Error('simulated delayed first append failure');
+      }
+      writeFileSync(p, data, { flag: 'a' });
+    },
+    persist: async () => {},
+  });
+  const secondAttempt = persistPixal3dGenerationPhase({
+    report: overlapRejectReport,
+    row: {
+      phase: 'sparse-structure-sampling',
+      effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+      sessionId: 'sess-overlap-reject',
+      kernels: [
+        {
+          seq: 1,
+          kernel: { stage: 'k-reject-0', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+        },
+      ],
+    },
+    kernelLogPath: overlapRejectLogPath,
+    append: async (p, data) => {
+      writeFileSync(p, data, { flag: 'a' });
+    },
+    persist: async () => {},
+  });
+  releaseFirstReject();
+  await assert.rejects(() => firstAttempt, /simulated delayed first append failure/);
+  await secondAttempt;
+  assert.equal(overlapRejectReport.kernelEvidence?.count, 1);
+  assert.equal(
+    readFileSync(overlapRejectLogPath, 'utf8').trim().split('\n').length,
+    1,
+    'Queued retry after delayed first append failure must persist the batch without loss',
+  );
+
+  // Fail-first validation on malformed batched kernels
+  await assert.rejects(
+    () =>
+      persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: 'occupancy-decoding',
+          effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+          sessionId: 'sess-batched-1',
+          kernels: [],
+        },
+        kernelLogPath: batchedLogPath,
+        append: async () => {
+          assert.fail('Empty kernel batch must not append');
+        },
+        persist: async () => {},
+      }),
+    /complete native kernel event required/,
+  );
+  await assert.rejects(
+    () =>
+      persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: 'occupancy-decoding',
+          effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+          sessionId: 'sess-batched-1',
+          kernels: [
+            { stage: 'ok-stage', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+            { stage: 'bad-stage', dispatch: [0, -1], point: 'before-native-kernel' },
+          ],
+        },
+        kernelLogPath: batchedLogPath,
+        append: async () => {
+          assert.fail('Batch with malformed kernel event must fail before appending');
+        },
+        persist: async () => {},
+      }),
+    /complete native kernel event required/,
+  );
 
   // Build a real 2x2x2 dual-grid mesh & bake PBR GLB to test persistPixal3dGenerationAsset & finalize-retained-generation.mjs
   const activeCells = [

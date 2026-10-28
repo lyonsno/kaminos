@@ -726,12 +726,13 @@ fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) wid: 
         shared?.acquire();
         running = true;
         try {
-          for (const { name, kernel, dispatch } of kernels) {
+          for (let i = 0; i < kernels.length; i++) {
+            const { name, kernel, dispatch } = kernels[i];
             await runtime.runKernel(kernel, {
               stage: name,
               dispatch,
               schedulerInvocation: invocation,
-              yieldAfter: true,
+              yieldAfter: i === kernels.length - 1,
             });
           }
           return { hidden: output, arithmetic: plan.arithmetic };
