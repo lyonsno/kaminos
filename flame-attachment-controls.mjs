@@ -1,7 +1,7 @@
 import {defaultFlameAttachment} from './flame-attachment.mjs';
 export function installFlameAttachmentControls({document,host,selected,outputs,edits,history,numberDrag,target,set,mechanismTarget,readSupport,onError}){
  const panel=document.createElement('section');panel.id='selected-flame-attachment';
- panel.innerHTML='<h3>Flame attachment</h3><button type="button" class="btn" data-attach>Attach flame</button><div data-fields hidden><p class="flame-scope">Round-source approximation. +Y is the local outlet axis. Feed is exit speed; opening changes total supply. The shared simulation box stays in world space.</p></div>';
+ panel.innerHTML='<style>#selected-flame-attachment [hidden]{display:none!important}#selected-flame-attachment h3{font-size:13px;margin:14px 0 8px}#selected-flame-attachment .flame-scope{font-size:11px;line-height:1.4}#selected-flame-attachment select{max-width:180px}</style><h3>Flame attachment</h3><button type="button" class="btn" data-attach>Attach flame</button><div data-fields hidden><p class="flame-scope">Round-source approximation. +Y is the local outlet axis. Feed is exit speed; opening changes total supply. The shared simulation box stays in world space.</p></div>';
  const fields=panel.querySelector('[data-fields]'),inputs=new Map(),drags=[];
  const row=(label,input)=>{const line=document.createElement('label');line.className='slider-row';const caption=document.createElement('span');caption.className='slider-label';caption.textContent=label;line.append(caption,input);fields.append(line);return caption;};
  function get(){return selected()?.flameAttachment;}
@@ -38,7 +38,7 @@ export function installFlameAttachmentControls({document,host,selected,outputs,e
    const v=key==='radius'?r.radius.value:key==='factor'?r.radius.factor:key.startsWith('centre')?r.centre[Number(key.at(-1))]:key.startsWith('rotation')?r.rotation[Number(key.at(-1))]*180/Math.PI:r[key];
    if(input.type==='checkbox')input.checked=v;else if(document.activeElement!==input||!edits.state().active)input.value=v??'';
   }
-  try{const s=readSupport(entry);status.textContent=s===null?'No Fire & smoke field. Add one to receive this source.':`${s.inside?'Source centre inside field':'Source centre outside field — supply disabled'} · Ø ${s.diameterCells.toFixed(2)} cells${s.footprintFloor?' · solver enlarges this aperture to its 0.02 domain-radius floor':''}${!s.enabled?' · supply off':''}`;}catch(e){status.textContent=e.message;}
+  try{const s=readSupport(entry);status.textContent=s===null?'No Fire & smoke field. Add one to receive this source.':`${s.inside?'Source centre inside field':'Source centre outside field — supply disabled'} · Ø ${s.diameterCells.toFixed(2)} cells${s.footprintFloor?' · solver enlarges this aperture to its 0.02 domain-radius floor':''}${!s.enabled?' · supply off':''}${s.geometryInstances>1?' · '+s.geometryInstances+' geometry instances share this one source; Duplicate creates independent sources':''}`;}catch(e){status.textContent=e.message;}
  }
  return {panel,sync};
 }

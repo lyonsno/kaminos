@@ -20,3 +20,7 @@ export const crownRecordDomain={type:'pbr',source:CROWN_SOURCE,
  recognize:object=>Boolean(object?.userData?.kaminosCompoundCrown),
  capture:entry=>({compoundCrown:checkedCrownRecipe(entry.compoundCrown??entry.object.userData.kaminosCompoundCrown)}),
  reloadable:r=>{checkedCrownRecipe(r.compoundCrown);return true;},load:(r,loaders,options)=>loaders.constructed(createCrownObject(r),r,options)};
+export function writeCrownRecipe(entry,recipe,repetition){
+ recipe=checkedCrownRecipe(recipe);repetition?.clear(entry.object);
+ entry.compoundCrown=updateCrownObject(entry.object,recipe);entry.object.userData.kaminosSceneObject.compoundCrown=structuredClone(recipe);repetition?.sync();return entry.compoundCrown;
+}
