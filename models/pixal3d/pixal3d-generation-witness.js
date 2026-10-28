@@ -74,12 +74,18 @@ export function createPixal3dKernelPhaseBuffer({
         dispatch: Array.isArray(entry.kernel?.dispatch) ? [...entry.kernel.dispatch] : entry.kernel?.dispatch,
       },
     }));
-  const flush = async () => {
+  let flushQueue = Promise.resolve();
+  const runFlush = async () => {
     if (!pending.length) return;
     const count = pending.length;
     const kernels = pending.slice(0, count);
     await postPhase({ kernels });
     pending.splice(0, count);
+  };
+  const flush = () => {
+    const next = flushQueue.catch(() => {}).then(runFlush);
+    flushQueue = next.catch(() => {});
+    return next;
   };
   const recordKernel = async kernel => {
     report.lastKernel = kernel;

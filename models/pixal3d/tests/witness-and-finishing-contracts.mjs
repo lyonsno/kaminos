@@ -716,6 +716,159 @@ try {
     [1, 2, 3, 4],
   );
 
+  // (c) Overlapping retry while original server append is still in-flight must serialize and not duplicate entries
+  const overlapLogPath = path.join(scratch, 'overlap-kernels.jsonl');
+  const overlapServerReport = {};
+  const overlapBrowserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 4,
+    verifiedInputBytes: 1024,
+  };
+  let releaseFirstAppend;
+  const firstAppendGate = new Promise(resolve => {
+    releaseFirstAppend = resolve;
+  });
+  let serverAppendCalls = 0;
+  let postAttempts = 0;
+  const inFlightServerTasks = [];
+  const overlapBuffer = createPixal3dKernelPhaseBuffer({
+    report: overlapBrowserReport,
+    batchSize: 2,
+    postPhase: async extra => {
+      const attempt = ++postAttempts;
+      const serverPromise = persistPixal3dGenerationPhase({
+        report: overlapServerReport,
+        row: {
+          phase: overlapBrowserReport.phase,
+          effectiveRoute: overlapBrowserReport.effectiveRoute,
+          sessionId: 'sess-overlap-1',
+          modelRole: overlapBrowserReport.loadingModelRole,
+          ...extra,
+        },
+        kernelLogPath: overlapLogPath,
+        append: async (p, data) => {
+          if (++serverAppendCalls === 1) {
+            await firstAppendGate;
+          }
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {},
+      });
+      inFlightServerTasks.push(serverPromise);
+      if (attempt === 1) {
+        // Simulate connection drop while the first server append is still pending on firstAppendGate
+        throw new Error('simulated connection loss while server append remains active');
+      }
+      await serverPromise;
+    },
+  });
+
+  await overlapBuffer.recordKernel({
+    stage: 'overlap-k0',
+    dispatch: [1, 1, 1],
+    point: 'before-native-kernel',
+  });
+  await assert.rejects(
+    () =>
+      overlapBuffer.recordKernel({
+        stage: 'overlap-k0',
+        dispatch: [1, 1, 1],
+        point: 'native-kernel-returned',
+      }),
+    /simulated connection loss while server append remains active/,
+  );
+  assert.equal(overlapBuffer.pendingCount, 2, 'Both events must remain buffered while first append is pending');
+  assert.deepEqual(
+    overlapBuffer.snapshot().map(e => ({ seq: e.seq, phase: e.phase, role: e.modelRole })),
+    [
+      { seq: 1, phase: 'sparse-structure-sampling', role: 'sparseFlow' },
+      { seq: 2, phase: 'sparse-structure-sampling', role: 'sparseFlow' },
+    ],
+  );
+
+  // Start recovery flush BEFORE releasing the original server append
+  const recoveryFlush = overlapBuffer.flush();
+  releaseFirstAppend();
+  await Promise.all([recoveryFlush, ...inFlightServerTasks]);
+  assert.equal(overlapBuffer.pendingCount, 0);
+  assert.equal(postAttempts, 2);
+  const overlapLines = readFileSync(overlapLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(
+    overlapServerReport.kernelEvidence?.count,
+    2,
+    'Recovery overlapping in-flight append must preserve accurate kernel count (2, not 4)',
+  );
+  assert.deepEqual(
+    overlapLines.map(l => l.seq),
+    [1, 2],
+    'Recovery overlapping in-flight append must preserve one journal row per sequence',
+  );
+
+  // (d) Overlapping retry when the first in-flight append rejects must still persist via the queued recovery request
+  const overlapRejectLogPath = path.join(scratch, 'overlap-reject-kernels.jsonl');
+  const overlapRejectReport = {};
+  let releaseFirstReject;
+  const firstRejectGate = new Promise(resolve => {
+    releaseFirstReject = resolve;
+  });
+  let rejectAppendCalls = 0;
+  const firstAttempt = persistPixal3dGenerationPhase({
+    report: overlapRejectReport,
+    row: {
+      phase: 'sparse-structure-sampling',
+      effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+      sessionId: 'sess-overlap-reject',
+      kernels: [
+        {
+          seq: 1,
+          kernel: { stage: 'k-reject-0', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+        },
+      ],
+    },
+    kernelLogPath: overlapRejectLogPath,
+    append: async (p, data) => {
+      if (++rejectAppendCalls === 1) {
+        await firstRejectGate;
+        throw new Error('simulated delayed first append failure');
+      }
+      writeFileSync(p, data, { flag: 'a' });
+    },
+    persist: async () => {},
+  });
+  const secondAttempt = persistPixal3dGenerationPhase({
+    report: overlapRejectReport,
+    row: {
+      phase: 'sparse-structure-sampling',
+      effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+      sessionId: 'sess-overlap-reject',
+      kernels: [
+        {
+          seq: 1,
+          kernel: { stage: 'k-reject-0', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+        },
+      ],
+    },
+    kernelLogPath: overlapRejectLogPath,
+    append: async (p, data) => {
+      writeFileSync(p, data, { flag: 'a' });
+    },
+    persist: async () => {},
+  });
+  releaseFirstReject();
+  await assert.rejects(() => firstAttempt, /simulated delayed first append failure/);
+  await secondAttempt;
+  assert.equal(overlapRejectReport.kernelEvidence?.count, 1);
+  assert.equal(
+    readFileSync(overlapRejectLogPath, 'utf8').trim().split('\n').length,
+    1,
+    'Queued retry after delayed first append failure must persist the batch without loss',
+  );
+
   // Fail-first validation on malformed batched kernels
   await assert.rejects(
     () =>

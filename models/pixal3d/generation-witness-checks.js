@@ -349,7 +349,9 @@ export function admitPixal3dRetainedGenerationCompletion(
   });
 }
 
-export async function persistPixal3dGenerationPhase({
+const phasePersistenceQueues = new WeakMap();
+
+async function persistPixal3dGenerationPhaseInternal({
   report,
   row,
   kernelLogPath,
@@ -479,6 +481,22 @@ export async function persistPixal3dGenerationPhase({
   report.livePhases.push({ ...row, observedAt: new Date().toISOString() });
   report.lastBrowserPhase = row.phase;
   await persist();
+}
+
+export function persistPixal3dGenerationPhase(options = {}) {
+  const report = options?.report;
+  if (!report || typeof report !== 'object') {
+    return persistPixal3dGenerationPhaseInternal(options);
+  }
+  const previous = phasePersistenceQueues.get(report) ?? Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(() => persistPixal3dGenerationPhaseInternal(options));
+  phasePersistenceQueues.set(
+    report,
+    current.catch(() => {}),
+  );
+  return current;
 }
 
 export async function persistPixal3dGenerationAsset({
