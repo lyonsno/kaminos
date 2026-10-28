@@ -13,7 +13,25 @@ export function patchLayout({cellSize,bounds,tileSize}){
  }
  return p;
 }
-export function seedPatch(p,solid,{volume,radius,center},previous=new Float32Array(p.count)){
+export function seedPatch(p,solid,{volume,radius,center,blanketDepth,groundOnly=false},previous=new Float32Array(p.count)){
+ if(blanketDepth!==undefined){
+  if(!Number.isFinite(blanketDepth)||blanketDepth<=0)throw Error('Invalid blanket depth');
+  if(solid.length!==p.count||previous.length!==p.count)throw Error('Patch shape mismatch');
+  const out=previous.slice(),[nx,ny,nz]=p.dims,depth=blanketDepth/p.cellSize;
+  // Explicit setup: add a layer to every upward support, including cavity floors.
+  // No transport is inferred; subsequent movement uses the ordinary GPU solver.
+  for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){
+   let y=0;while(y<ny){
+    while(y<ny&&solid[x+nx*(y+ny*z)])y++;
+    const start=y;while(y<ny&&!solid[x+nx*(y+ny*z)])y++;
+    const end=y;if(start===end||(groundOnly&&start!==0))continue;
+    let top=start;for(let k=start;k<end;k++){const a=previous[x+nx*(k+ny*z)];if(a>0)top=Math.max(top,k+a);}
+    const high=Math.min(end,top+depth);
+    for(let k=Math.floor(top);k<high;k++){const i=x+nx*(k+ny*z);out[i]=Math.max(out[i],Math.min(1,high-k));}
+   }
+  }
+  return out;
+ }
  if(!Number.isFinite(volume)||volume<=0||!Number.isFinite(radius)||radius<=0||!Array.isArray(center)||center.length!==3||!center.every(Number.isFinite))throw Error('Invalid deposit');
  if(solid.length!==p.count||previous.length!==p.count)throw Error('Patch shape mismatch');
  const [nx,ny,nz]=p.dims,indices=[];let capacity=0;

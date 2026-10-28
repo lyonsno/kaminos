@@ -21,7 +21,7 @@ try{
  page=browser.pages()[0];page.setDefaultTimeout(0);page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const invoke=async(name,input)=>{report.interventions.push({name,input});save();return page.evaluate(([n,v])=>window.kaminosWorkbenchExperiments.invoke(n,v),[name,input]);};
  const snapshot=async()=>{const state=await invoke('snapshot');tiledCheckpointLocal(state);return state;};
- const inputs={cellSize:.03,width:1.92,height:.48,centerZ:1,tileSize:8,initialVolume:0};
+ const inputs={cellSize:.03,width:1.92,height:.48,centerZ:1,tileSize:8,initialVolume:0,landscapeObstacles:false};
  const url=new URL('/?workspace=workbench&experiment=ash-tiled-landscape',origin);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));report.requested.inputs=inputs;
  report.phase='mount';save();await page.goto(url.href);await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='ash-tiled-landscape'||document.body.innerText.includes('Experiments unavailable:'));assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id),'ash-tiled-landscape');
  await invoke('play',false);await invoke('cloudTime',10);report.initial=await invoke('read');assert.equal(report.initial.backend,'webgpu-connected-ash-tiles');assert.equal(report.initial.surface,'gpu-cached-exposed-faces');
