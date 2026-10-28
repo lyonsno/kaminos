@@ -3,11 +3,25 @@
 Open the **Ash — retained landscape** Workbench experiment (`ash-tiled-landscape`).
 It uses the same kiln, editable source and ordinary draggable contact as the
 prior GPU ash experiment, with a connected tiled density field and cached faces.
-The default fixture is 3.84 × .96 × 3.84 world units, .03 cells and 16³-cell
-bricks. An explicit .35 world-volume settled deposit seeds the bed; pass
-`initialVolume:0` in experiment inputs to start empty. It is controlled fixture
-material, not combustion yield. The broad visual flakes and haze remain the
-separate atmospheric approximation described in [ash-atmosphere.md](ash-atmosphere.md).
+The default scene covers a 7.68 × 7.68 floor with a .16-deep blanket, plus a
+kiln, stone plinth, drum, fallen timber and a bridge with an open underside.
+The retained volume is 1.6 high, with .04 cells and 16³-cell bricks: a
+192 × 40 × 192 field across 12 × 3 × 12 tiles. The starting blanket rests on the floor around the obstacles, including the
+floor under the bridge. It leaves the obstacle tops exposed; the falling source
+can deposit there through the same voxel mask.
+These are explicitly loaded deposits; live redistribution uses the GPU solver.
+The airborne atmospheric layer is disabled and its controls are omitted here.
+
+Select the amber sphere and use the native move tool to drag it through the
+bed. The teal ring remains the editable falling source. **Add ash** loads a
+local deposit beneath the contact; **Add ash across area** adds the chosen
+blanket depth throughout the field. **Frame landscape** returns to the whole
+area. Save ash/Load ash retain its evolved state.
+
+`landscapeObstacles:false` selects the earlier kiln-only support fixture;
+`initialVolume:0` starts empty. Width, height, cell size, tile size and initial
+blanket depth remain experiment inputs. The broad scene has four times the
+floor area of the prior default and fills that entire area.
 
 Material occupies one bounded 3D field. Brick edges impose no physical wall.
 The six checkerboard exchange phases use global cell parity and one owner per
@@ -53,8 +67,10 @@ introduced-material ledger against physical retained volume before uploading. Th
 Contact affects ash checkbox can remove the sphere from the physical interaction;
 its former region wakes so held material can settle. Surface caches
 and airborne scheduling rebuild from that physical state. The outer patch is
-closed. Kiln support remains a fixed64³voxelization and moving the kiln or ground
-requires rebuilding the fixture. Ordinary scene Save still does not retain this
+closed. The broad scene voxelizes the actual kiln and obstacle triangles once
+at .06 support-cell width; the kiln-only fixture retains its 64³ support grid.
+Moving static support geometry or the ground requires reopening the fixture;
+ordinary added scene objects are not admitted into that frozen mask. Ordinary scene Save still does not retain this
 experiment; use Save ash/Load ash.
 
 This slice does not introduce pile momentum, reactive rigid bodies, arbitrary
