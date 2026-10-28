@@ -26839,6 +26839,8 @@ function setupAuthoringAssets(){
     async choose(){
       const choice=await chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request:fetch,browseFile:()=>pickSceneFile(document)});
       if(!choice)return false;
+      const missing=choice.dependencies.filter(dependency=>dependency.status==='missing');
+      if(missing.length)throw Error('Could not retain required kiln assets: '+missing.map(dependency=>new URLSearchParams(dependency.source.split('?')[1]||'').get('path')||dependency.source).join(', '));
       await kilnRecipes.chooseScene(choice.name);return true;
     },
   },createFlame:async (viewport,{signal,prompt,request})=>{

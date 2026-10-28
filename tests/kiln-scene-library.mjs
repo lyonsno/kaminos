@@ -2,6 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createKilnRecipeStore,KILN_SELECTION_SCHEMA} from '../inference-kiln-selection.mjs';
+import {PREFERENCES_SCHEMA} from '../user-preferences.mjs';
+import {BoxGeometry,BufferGeometry,Mesh,MeshStandardMaterial} from '../lib/three.core.js';
+import {promptReliefRecord,promptReliefMetadata} from '../inference-kiln-record.mjs';
+import {COMPOSITION_SCHEMA} from '../scene-authoring.mjs';
 // Execute the actual Generate chooser, before and after the shared library
 // adapter. The baseline fails on the missing catalog, not a missing import.
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -31,4 +36,15 @@ test('Browse files retains a fresh ordinary scene without accepting overwrite hi
  const result=await chooseSavedSceneFromLibrary({grFetchApi:async()=>({entries:[]}),pickSavedScene:async()=> 'browse',browseFile:async()=>({name:'uploaded.kaminos.json',text:async()=>JSON.stringify(document)}),request:async(url,options)=>{
   if(url==='/api/scene-library')return {ok:true,json:async()=>({stores:[]})};assert.equal(url,'/api/save-scene');body=JSON.parse(options.body);return {ok:true,json:async()=>({saved:'new-copy.kaminos.json'})};
  }});assert.equal(result.name,'new-copy.kaminos.json');assert.equal(body._filename,null);assert.equal(body._saveAsName,null);assert.equal(body._overwrite,false);
+});
+for(const status of ['missing','present','imported'])test('Generate preserves import dependency status '+status+' before acknowledging its kiln',async()=>{
+ const mesh=new Mesh(new BufferGeometry().copy(new BoxGeometry()),new MeshStandardMaterial());mesh.userData.kaminosPromptRelief=promptReliefMetadata('SAMPLE','composed');const lettering={...promptReliefRecord(mesh),id:'prompt'};mesh.geometry.dispose();mesh.material.dispose();
+ const transform={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},asset='/api/read?root=generated-meshes&path='+ 'a'.repeat(64)+'.glb';
+ const document={version:8,objects:[lettering,{id:'source',type:'flame-emitter',source:'kaminos:analytic-flame',transform},{id:'model',type:'glb',source:asset,transform}],composition:{schema:COMPOSITION_SCHEMA,flame:{presetId:'vsp-'+ 'b'.repeat(64),stationary:true},lightGainStops:0,route:{volume_light_field:'1'}}};
+ let prefs={schema:PREFERENCES_SCHEMA},writes=0;const store=createKilnRecipeStore({preferences:{load:async()=>prefs,save:async value=>{prefs=structuredClone(value);writes++;}},request:async()=>({ok:true,json:async()=>document})});
+ await store.choose({schema:KILN_SELECTION_SCHEMA,sceneFile:'working.kaminos.json',promptObjectId:'prompt'});const before=store.read();
+ const request=async url=>({ok:true,json:async()=>url==='/api/scene-library'?{stores:[]}:{saved:'retained-copy.kaminos.json',document,dependencies:[{source:asset,status}]}});
+ const choose=Function('grFetchApi','pickSavedScene','kilnRecipes','chooseSavedSceneFromLibrary','fetch','return({'+source.slice(start,end)+'}).choose;')(async()=>({entries:[]}),async()=>({name:'source.kaminos.json',store:{id:'other',label:'Other'}}),store,chooseSavedSceneFromLibrary,request);
+ if(status==='missing'){await assert.rejects(choose(),/could not retain|missing|required/i);assert.equal(writes,1);assert.deepEqual(store.read(),before);assert.equal(prefs.inferenceKiln.sceneFile,'working.kaminos.json');}
+ else{assert.equal(await choose(),true);assert.equal(writes,2);assert.equal(store.read().selection.sceneFile,'retained-copy.kaminos.json');}
 });
