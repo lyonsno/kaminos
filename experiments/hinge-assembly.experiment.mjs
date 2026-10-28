@@ -33,12 +33,17 @@ export default {
       recipe:{manifest:inputs.manifest,variant,angle,separation,amplitude,period,play:false,view:session.readView()}});
     const sync=()=>{if(status)status.textContent=`${playing?'Playing':'Held'} · ${angle.toFixed(1)}° · ${separation===0?'assembled':'separated'} · ${variant} generation`;
       if(playButton)playButton.textContent=playing?'Pause':'Play';for(const f of fields)if(host.controls.document.activeElement!==f.input||f.input.readOnly)f.input.value=String(f.value());};
+    const refreshSelection=()=>{
+      const selected=globalThis.window?.kaminosSelection?.read();
+      const ids=new Set(selected?.memberIds??selected?.ids??[]);if(selected?.activeId)ids.add(selected.activeId);
+      for(const p of parts)if(ids.has(p.asset.id))host.scene.refreshPresentation(p.asset);
+    };
     const present=()=>{
       if(disposed)throw Error('Hinge experiment is disposed');
       for(const p of parts){const pose=hingePartPose({...p,origin:manifest.joint.origin,axis:manifest.joint.axis,angleDegrees:angle,separation});p.asset.root.position.fromArray(pose.position);p.asset.root.quaternion.fromArray(pose.quaternion);p.asset.root.updateMatrixWorld(true);}
-      session.redraw();sync();
+      refreshSelection();session.redraw();sync();
     };
-    const pause=()=>{playing=false;stop();stop=()=>{};for(const p of parts)host.scene.refreshPresentation(p.asset);sync();return read();};
+    const pause=()=>{playing=false;stop();stop=()=>{};refreshSelection();sync();return read();};
     const applied=(kind,requested)=>{present();const effective=read();record({kind:`hinge.${kind}`,phase:'applied',requested,effective});return effective;};
     const operations={
       play(){if(playing)return read();playing=true;let origin=angle;time=0;stop=session.onFrame(({deltaSeconds})=>{time+=deltaSeconds;angle=origin+amplitude*Math.sin(time*2*Math.PI/period);present();});sync();return read();},
@@ -67,11 +72,11 @@ export default {
         ]){const [label,value,operation,key,step]=spec,wrap=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
           wrap.style.cssText='display:flex;justify-content:space-between;gap:12px;margin:10px 0';grip.textContent=label;input.type='number';input.step='any';input.className='transform-input';input.style.width='85px';input.setAttribute('aria-label',label);
           input.oninput=()=>{if(input.value.trim()&&Number.isFinite(Number(input.value)))call(operation,{[key]:Number(input.value)});};
-          input.onblur=sync;host.controls.installNumberDrag({input,grip,step});wrap.append(grip,input);panel.append(wrap);fields.push({input,value});
+          input.onblur=sync;const control=host.controls.installNumberDrag({input,grip,step});wrap.append(grip,input);panel.append(wrap);fields.push({input,value,control});
         }
         const note=document.createElement('p');note.textContent='This is a kinematic assembly check. Generated surface irregularities are retained; mating-face clearance and contact physics are still being evaluated.';panel.append(note);root.append(panel);sync();
       },
-      async dispose(){disposed=true;stop();panel?.remove();await session.dispose();},
+      async dispose(){if(disposed)return;disposed=true;stop();for(const f of fields)f.control.dispose();fields=[];panel?.remove();await session.dispose();},
     };
   },
 };
