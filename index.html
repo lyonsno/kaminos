@@ -1940,6 +1940,28 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-quadrature-jitter" checked data-volume-settings-role="renderer">
     </div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-display-reconstruction">Display reconstruction</label>
+      <select id="volume-display-reconstruction" data-volume-settings-role="renderer">
+        <option value="off">Native</option>
+        <option value="material">Material first</option>
+        <option value="optical">Optics first</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-display-grid-scale">Display grid scale</label>
+      <select id="volume-display-grid-scale" data-volume-settings-role="renderer">
+        <option value="1">1x</option><option value="2" selected>2x</option><option value="4">4x</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-emission-smoothing">Emission smoothing</label>
+      <input type="range" id="volume-emission-smoothing" min="0" max="1" step="any" value="0.5" data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-smoke-smoothing">Smoke smoothing</label>
+      <input type="range" id="volume-smoke-smoothing" min="0" max="1" step="any" value="0.5" data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
       <label class="slider-label" for="volume-flame-priority">Flame priority</label>
       <input type="range" id="volume-flame-priority" min="0" max="1" step="any" value="0" data-volume-settings-role="renderer">
       <span class="slider-val" id="volume-flame-priority-val">0.00</span>
@@ -18544,6 +18566,10 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
     quadratureJitter: document.getElementById('volume-quadrature-jitter').checked,
+    displayReconstruction: document.getElementById('volume-display-reconstruction').value,
+    displayGridScale: Number(document.getElementById('volume-display-grid-scale').value),
+    emissionSmoothing: Number(document.getElementById('volume-emission-smoothing').value),
+    smokeSmoothing: Number(document.getElementById('volume-smoke-smoothing').value),
     flamePriority: Number(document.getElementById('volume-flame-priority').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
@@ -18840,6 +18866,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
+  for(const id of ['volume-display-grid-scale','volume-emission-smoothing','volume-smoke-smoothing'])
+    document.getElementById(id).disabled=c.displayReconstruction==='off';
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
   document.getElementById('volume-scene-val').textContent = 'Flame';
@@ -20000,6 +20028,10 @@ async function initKaminosVolumeRoute() {
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
     ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
+    ['volume-display-reconstruction', 'volume_display_reconstruction'],
+    ['volume-display-grid-scale', 'volume_display_grid_scale'],
+    ['volume-emission-smoothing', 'volume_emission_smoothing'],
+    ['volume-smoke-smoothing', 'volume_smoke_smoothing'],
     ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-swirl-jostle', 'volume_swirl_jostle'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
@@ -20359,6 +20391,10 @@ async function initKaminosVolumeRoute() {
     'volume-ray-start-noise',
     'volume-ray-noise-animated',
     'volume-quadrature-jitter',
+    'volume-display-reconstruction',
+    'volume-display-grid-scale',
+    'volume-emission-smoothing',
+    'volume-smoke-smoothing',
     'volume-flame-priority',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',

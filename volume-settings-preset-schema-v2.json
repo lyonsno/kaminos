@@ -1986,6 +1986,36 @@
       "additiveDefault": 0
     },
     {
+      "key": "volume-display-reconstruction",
+      "param": "volume_display_reconstruction",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["off", "material", "optical"],
+      "additiveDefault": "off"
+    },
+    {
+      "key": "volume-display-grid-scale",
+      "param": "volume_display_grid_scale",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["1", "2", "4"],
+      "additiveDefault": "2"
+    },
+    {
+      "key": "volume-emission-smoothing",
+      "param": "volume_emission_smoothing",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.5
+    },
+    {
+      "key": "volume-smoke-smoothing",
+      "param": "volume_smoke_smoothing",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.5
+    },
+    {
       "key": "volume-flow-kernel-strength",
       "param": "volume_flow_kernel_strength",
       "tagName": "INPUT",
