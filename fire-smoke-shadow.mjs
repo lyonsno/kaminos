@@ -47,7 +47,7 @@ export function smokeAngularFilterFootprint({direction,angleDegrees,tapsPerAxis=
   return result;
 }
 export function smokeShadowWork({resolution=16,steps=16,count=4,filter=false,angleDegrees=null,tapsPerAxis=3}={}){
-  const plan=smokeShadowPlan({resolution,steps:Math.max(1,steps),count});
+  const plan=smokeShadowPlan({resolution,steps:Math.max(1,steps),count},{maxTextureDimension2D:Infinity});
   if(angleDegrees!==null)smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees,tapsPerAxis});
   const integrationRays=steps?6*count*resolution*resolution:0,filterOutputs=filter?integrationRays*plan.groups:0;
   const filterDirectionsPerPrefix=angleDegrees===null?9:tapsPerAxis*tapsPerAxis,prefixReadsPerOutput=angleDegrees===null?9:4*filterDirectionsPerPrefix;

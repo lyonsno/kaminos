@@ -1,6 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {radialSoftVisibility,createShadowFilterPattern} from './fire-shadow-filter.mjs';
-import {validateShadowQuality,shadowStrata} from './fire-shadow-quality.mjs';
+import {validateShadowQuality,validateRuntimeShadowQuality,shadowStrata} from './fire-shadow-quality.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 import {residentLightCoverage,validateResidentLightCoverage} from './scene-resident-coverage.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
@@ -109,9 +109,10 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits),runtimeQuality=false}) {
-  validateShadowQuality({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false}) {
+  (runtimeQuality?validateRuntimeShadowQuality:validateShadowQuality)({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
+  filterPattern??=runtimeQuality?{count:filterSamples,route:'runtime-arithmetic',reason:null,bytes:0,node:null}:createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits);
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
   if(typeof shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');
   const strata=shadowStrata(filterSamples),qualityNodes=runtimeQuality?{blockerSamples:uniform(blockerSamples,'int'),filterSamples:uniform(filterSamples,'int'),bands:uniform(strata.bands,'int'),sectors:uniform(strata.sectors,'int')}:null;
@@ -208,7 +209,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     },
     setQuality(value){
       if(!runtimeQuality)throw Error('runtime shadow quality unavailable');
-      const next=validateShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
+      const next=validateRuntimeShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
       if(next.resolution!==resolution){target.setSize(next.resolution,next.resolution);resolutionNode.value=next.resolution;}
       resolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
       qualityNodes.blockerSamples.value=blockerSamples;qualityNodes.filterSamples.value=filterSamples;qualityNodes.bands.value=strata.bands;qualityNodes.sectors.value=strata.sectors;
@@ -217,7 +218,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
     setEdgeFilter(value) {if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');edgeFilter.value=value;status.shadowEdgeFilter=value;},
     setSoftness(value) {validateSoftness(value);if(sourceSizeNode===null&&value>0)throw Error('soft shadows require a source size node');softness.value=value;status.shadowSoftness=value;status.filter=value===0?'hard':'radial-pcss';return {...status};},
-    debugState:()=>({...status,filterPattern:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
+    debugState:()=>({...status,filterPattern:runtimeQuality?{route:'runtime-arithmetic',reason:null,bytes:0,retainedUnusedBytes:filterPattern.bytes}:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
     dispose() {target.dispose();material.dispose();for(const row of coverageMaterials.values())row.material.dispose();coverageMaterials.clear();},
   };
 }

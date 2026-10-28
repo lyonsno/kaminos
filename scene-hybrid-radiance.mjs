@@ -10,8 +10,7 @@ import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
-import {validateShadowQuality} from './fire-shadow-quality.mjs';
-import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
+import {validateRuntimeShadowQuality as validateShadowQuality} from './fire-shadow-quality.mjs';
 import {createFireShadowCasters} from './fire-shadow-casters.mjs';
 import {createFireSmokeShadow,smokeShadowPlan,smokeAngularFilterFootprint,smokeShadowWork} from './fire-smoke-shadow.mjs';
 import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
@@ -49,7 +48,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let sourceDomain=sceneSourceDomain(),builtDomain=null,sourceRadius=Math.sqrt(11);
   function buildPoints(count){
   const sharedPreparation=comparison.implementation==='shared';
-  const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
+  const filterPattern=sharedPreparation?{count:filterSamples,bytes:0,route:'runtime-arithmetic',reason:null,node:null}:{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
   const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?receiverPosition.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
   points=createPointRegions(device,{count,partition:'spatial'});
   smokeShadow=(smokeShadowSteps||typeof renderer.initTexture==='function')?createFireSmokeShadow(device,{points:points.texture,count,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,renderer}):null;
