@@ -2,6 +2,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
+import * as optical from '../volume-optical-native.mjs';
 import * as flame from '../flame-authoring.mjs';
 
 test('the contextual inspector includes current appearance, structure, motion and raymarch controls once',()=>{
@@ -64,4 +66,26 @@ test('physics material status cannot promote a requested or stale mode into effe
   const refused=flame.flameAppearanceStatus({requested:true,effective:{render:false},reason:'physics-appearance-requires-the-reactant-law'});
   assert.equal(refused.state,'inactive');assert.match(refused.text,/requires the reactant law/);
   assert.equal(flame.flameAppearanceStatus({requested:true,effective:{render:true}}).state,'active');
+});
+
+
+test('actual inspector synchronization follows effective fallback and marks unmatched receipts pending',()=>{
+  const sourceText=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+  const body=sourceText.slice(sourceText.indexOf('function syncField(force=false)'),sourceText.indexOf('const eventName=',sourceText.indexOf('function syncField(force=false)')));
+  const fallback=optical.resolveOpticalStepping(optical.opticalSteppingConfig({mode:'numerical'}),{emissive:true,exterior:true});
+  for(const [requested,receipt,expected] of [
+    ['numerical',fallback,{value:'0.35',disabled:false,label:'Adaptive rays'}],
+    ['history',fallback,{value:'',disabled:true,label:'Adaptivity'}],
+    ['history',{requested:'history',effective:'history'},{value:'1',disabled:true,label:'Adaptive placement'}],
+  ]) {
+    const field={type:'number',value:'',setAttribute(){}};const grip={};
+    vm.runInNewContext(body+';syncField(true);',{
+      id:'volume-adaptive-rays',source:{value:'0.35',disabled:true,min:'0',max:'1',type:'range'},field,grip,
+      byId:()=>({value:requested}),document:{activeElement:null},readControlBounds:()=>null,
+      readSourceControl:()=>null,readRaymarchRuntime:()=>receipt,
+      flameControlDisplayValue:flame.flameControlDisplayValue,volumeControlTooltip:()=>'',
+      raymarchAdaptivity:optical.raymarchAdaptivity,resolveRaymarchAdaptivity:optical.resolveRaymarchAdaptivity,
+    });
+    assert.deepEqual({value:field.value,disabled:field.disabled,label:grip.textContent},expected);
+  }
 });

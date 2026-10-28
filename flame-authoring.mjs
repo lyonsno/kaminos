@@ -1,4 +1,4 @@
-import {raymarchAdaptivity} from './volume-optical-native.mjs';
+import {resolveRaymarchAdaptivity} from './volume-optical-native.mjs';
 import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
@@ -265,7 +265,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, gridTuning, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
+export function createFlameInspector({ document, host, gridTuning, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readRaymarchRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -376,18 +376,18 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
           field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
         const adaptivity=id==='volume-adaptive-rays'
-          ?raymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value)):null;
+          ?resolveRaymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value),readRaymarchRuntime()):null;
         field.disabled=adaptivity?adaptivity.automatic:source.disabled;
         if(adaptivity){
           grip.textContent=adaptivity.label;
           field.setAttribute('aria-label',`Flame ${adaptivity.label}`);
-          grip.title=field.title=adaptivity.automatic
+          grip.title=field.title=adaptivity.pending?'Awaiting the effective ray marcher.':adaptivity.automatic
             ?`${adaptivity.value?'On':'Off'} automatically for this marcher. The old adaptive amount is retained for Old adaptive.`
             :volumeControlTooltip(id);
         }
         if(force!==true&&document.activeElement===field)return;
         const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
-        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(adaptivity?adaptivity.value:flameControlDisplayValue(id,value));
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(adaptivity?(adaptivity.value??''):flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
