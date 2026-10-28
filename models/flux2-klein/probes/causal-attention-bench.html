@@ -8,7 +8,7 @@ window.attentionBench=(async()=>{
  const device=await adapter.requestDevice({requiredFeatures:['shader-f16'],requiredLimits:{maxBufferSize:adapter.limits.maxBufferSize,maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxStorageBuffersPerShaderStage:adapter.limits.maxStorageBuffersPerShaderStage}});
  const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  const manifest={layers:1,taps:[1],config:{hidden_size:2560,num_attention_heads:32,num_key_value_heads:8,intermediate_size:9728}},H=32,KV=8,D=128;
- const modes=['materialized','causal-blocked'];
+ const modes=['materialized','causal-tiled'];
  const models=modes.map(attentionMode=>{const t=new KleinTextEncoder(device,manifest,{attentionMode});Object.assign(t,{gemmVersion:2,sharedType:'f16'});return t;});
  let seed=7;const rand=n=>Float32Array.from({length:n},()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296-.5)*2);
  const read=async b=>{const rb=device.createBuffer({size:b.size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST}),enc=device.createCommandEncoder();enc.copyBufferToBuffer(b,0,rb,0,b.size);device.queue.submit([enc.finish()]);await rb.mapAsync(GPUMapMode.READ);const out=new Float32Array(rb.getMappedRange().slice(0));rb.unmap();rb.destroy();return out;};

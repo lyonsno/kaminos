@@ -8,7 +8,6 @@ import { scoreHeads, gemmShader, gemmShaderV2, gemmShaderV3, gemmVersionFor, rms
   headsToRowsShader } from './klein-kernels.js';
 
 const HEAD = 128;
-const CAUSAL_QUERY_ROWS = 64;
 
 // Rotate-half RoPE table [row][128][cos, sin] following transformers' default rope in f32.
 // Row r rotates by positions[r] (default r); FLUX.3 gives its padding rows position 1.
@@ -28,7 +27,7 @@ export function qwenRopeTable(L, theta, positions = null) {
 
 export class KleinTextEncoder {
   constructor(device, manifest, { attentionMode = 'materialized' } = {}) {
-    if (!['materialized', 'causal-blocked'].includes(attentionMode)) throw Error(`unsupported attentionMode: ${attentionMode}`);
+    if (!['materialized', 'causal-tiled'].includes(attentionMode)) throw Error(`unsupported attentionMode: ${attentionMode}`);
     this.attentionMode = attentionMode;
     this.device = device; this.manifest = manifest; this.cfg = manifest.config;
     this.D = this.cfg.hidden_size; this.QH = this.cfg.num_attention_heads; this.KVH = this.cfg.num_key_value_heads;
@@ -85,11 +84,11 @@ export class KleinTextEncoder {
   }
 
   // Same splitting contract as KleinTransformer.gemm: column ranges under a cooperative budget.
-  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm' }) {
+  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm', causal = null }) {
     const st = this.sharedType ?? 'f32';
     const version = gemmVersionFor(this.gemmVersion, bType, st, K), tile = version === 3 ? 128 : 64;
     const pipe = version === 3 ? this.pipeline(`gemm3-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV3({ bType, epilogue, sType: st, group, tm: 8, tn: 8 }))
-      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
+      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}${causal ? `-causal-${causal}` : ''}`, gemmShaderV2({ bType, epilogue, sType: st, group, causal }))
       : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
@@ -118,7 +117,7 @@ export class KleinTextEncoder {
   }
 
   scoreBufferBytes(L) {
-    return Math.max(16, Math.ceil(Math.min(this.QH, scoreHeads(L, this.QH / this.KVH)) * (this.attentionMode === 'causal-blocked' ? Math.min(CAUSAL_QUERY_ROWS, L) : L) * L * 4 / 16) * 16);
+    return Math.max(16, Math.ceil(Math.min(this.QH, scoreHeads(L, this.QH / this.KVH)) * L * L * 4 / 16) * 16);
   }
 
   // One allocation plan serves both device admission and actual allocation.
@@ -155,39 +154,26 @@ export class KleinTextEncoder {
     this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta, positions));
   }
 
-  // Query blocks retain the existing GEMM and softmax arithmetic, but omit
-  // wholly future key blocks. Full physical row strides preserve grouped KV
-  // addressing and permit the same score allocation plan at admission time.
+  // Whole causal tiles are skipped within the GEMM dispatch. Keep physical
+  // score strides and head groups unchanged so this adds no query dispatches.
   async attention(enc) {
     const { act: a, L, QH, KVH } = this;
-    const blocked = this.attentionMode === 'causal-blocked';
-    const queryBlock = blocked ? CAUSAL_QUERY_ROWS : L;
-    const rep = QH / KVH, cap = Math.min(QH, scoreHeads(L, rep));
-    for (let queryBase = 0; queryBase < L; queryBase += queryBlock) {
-      const queryRows = Math.min(queryBlock, L - queryBase);
-      // With an odd physical V row stride, retaining K=L also retains the
-      // scalar GEMM fallback; vector loads require every row stride aligned.
-      const keyEnd = blocked && L % 4 === 0 ? queryBase + queryRows : L;
-      const budget = this.sched.budget();
-      const g = Math.floor(budget / (4 * queryRows * keyEnd * HEAD));
-      const group = Number.isFinite(budget) ? Math.max(rep, Math.min(cap, g - (g % rep))) : cap;
-      for (let h0 = 0; h0 < QH; h0 += group) {
-        const hn = Math.min(group, QH - h0);
-        await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD + queryBase * HEAD, aRs: HEAD, aBs: L * HEAD,
-          b: a.k, bOff: (h0 / rep) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD, bDiv: rep,
-          c: a.scores, cOff: 0, cRs: L, cBs: queryRows * L, M: queryRows, N: keyEnd, K: HEAD,
-          batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores' });
-        const rows = hn * queryRows;
-        const pipe = blocked ? this.pipeline('masked-softmax-causal-block', maskedSoftmaxShader({ queryBlock: true }))
-          : this.pipeline('masked-softmax', maskedSoftmaxShader());
-        this.dispatch(enc, pipe, [a.scores, a.mask, this.uniform([rows, L, queryBase, blocked ? queryRows : 0])],
-          Math.min(rows, 65535), Math.ceil(rows / 65535));
-        await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: queryRows * L,
-          b: a.vt, bOff: (h0 / rep) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L, bDiv: rep,
-          c: a.o, cOff: h0 * L * HEAD + queryBase * HEAD, cRs: HEAD, cBs: L * HEAD,
-          M: queryRows, N: HEAD, K: keyEnd, batch: hn, label: 'te.values' });
-        if (hn < QH || blocked) await this.sched.boundary(`te.attention[${queryBase},${h0}]`);
-      }
+    const group = (() => {
+      const budget = this.sched.budget(), rep = QH / KVH;
+      const cap = Math.min(QH, scoreHeads(L, rep));
+      if (!Number.isFinite(budget)) return cap;
+      const g = Math.floor(budget / (4 * L * L * HEAD));
+      return Math.max(rep, Math.min(cap, g - (g % rep)));
+    })();
+    for (let h0 = 0; h0 < QH; h0 += group) {
+      const hn = Math.min(group, QH - h0);
+      await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: (h0 / (QH / KVH)) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
+        bDiv: QH / KVH, c: a.scores, cOff: 0, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores', causal: this.attentionMode === 'causal-tiled' ? 'scores' : null });
+      const rows = hn * L;
+      this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
+      await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
+        bDiv: QH / KVH, c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'te.values', causal: this.attentionMode === 'causal-tiled' ? 'values' : null });
+      if (hn < QH) await this.sched.boundary(`te.attention[${h0}]`);
     }
   }
 

@@ -313,7 +313,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 
 // Row softmax with a causal mask and a key padding mask over `rows` rows starting at row z0;
 // row r of head-major scores is query i = r % L; key j counts iff j <= i and mask[j] != 0.
-export function maskedSoftmaxShader({ queryBlock = false } = {}) {
+export function maskedSoftmaxShader() {
   return `struct P { rows: u32, L: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read_write> s: array<f32>;
 @group(0) @binding(1) var<storage, read> mask: array<i32>;
@@ -322,8 +322,8 @@ var<workgroup> red: array<f32, 256>;
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let rr = wid.x + wid.y * 65535u; if (rr >= p.rows) { return; }
-  let r = ${queryBlock ? 'rr' : 'p.z0 + rr'};
-  let t = lid.x; let base = r * p.L; let qi = ${queryBlock ? 'p.z0 + rr % p.z1' : 'r % p.L'};
+  let r = p.z0 + rr;
+  let t = lid.x; let base = r * p.L; let qi = r % p.L;
   var m = -3.4e38;
   for (var j = t; j < p.L; j += 256u) { if (j <= qi && mask[j] != 0) { m = max(m, s[base + j]); } }
   red[t] = m; workgroupBarrier();
@@ -360,7 +360,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 // vec4 loads along K for both operands, a K tile of 32, and a selectable shared-memory
 // type (f32 keeps activations exact; f16 halves shared traffic). Requires K, row strides
 // and offsets to be multiples of 4.
-export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32', group = 64 } = {}) {
+export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32', group = 64, causal = null } = {}) {
+  if (causal !== null && (!['scores', 'values'].includes(causal) || bType !== 'f32' || epilogue !== 'store')) throw Error('causal GEMM requires f32 scores or values with store epilogue');
   const quant = /^i\d$/.test(bType);
   const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<vec4<f16>>' : 'array<vec4<f32>>';
   const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
@@ -442,8 +443,9 @@ var<workgroup> tb: array<${sType}, 2048>;
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let tid = lid.y * 16u + lid.x;
   let m0 = p.m_base + wid.y * 64u; let n0 = p.n_base + wid.x * 64u; let bat = wid.z; let bbat = bat / max(p.z0, 1u);
+  ${causal === 'scores' ? 'if (n0 > m0 + 63u) { return; }' : ''}
   var acc: array<array<f32, 4>, 4>;
-  for (var k0 = 0u; k0 < p.K; k0 += 32u) {
+  for (var k0 = 0u; k0 < ${causal === 'values' ? 'min(p.K, m0 + 64u)' : 'p.K'}; k0 += 32u) {
     for (var q = 0u; q < 2u; q++) {
       let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let m = m0 + row; let k = k0 + c4 * 4u;
       var v = vec4<f32>(0.0);

@@ -23,7 +23,7 @@ try {
   await browser.navigate(`${report.origin}/probes/causal-attention-bench.html?${query}`, 'window.attentionBenchReady === true');
   Object.assign(report, await browser.evaluate('window.attentionBench'));
   if (report.route !== 'KleinTextEncoder.attention' || report.rows?.length !== query.get('tokens').split(',').length) throw Error('missing or wrong attention route/rows');
-  const bad = report.rows.filter(r => r.errors.length || r.nonFinite || !(r.relL2 < 1e-4) || !(r.oracleMaxAbs < 0.002) || r.outputElements.some(n=>n !== r.tokens*32*128) || r.variants[1].mode !== 'causal-blocked' || !r.variants[1].pipelineKeys.includes('masked-softmax-causal-block')); 
+  const bad = report.rows.filter(r => r.errors.length || r.nonFinite || !(r.relL2 < 1e-4) || !(r.oracleMaxAbs < 0.002) || r.outputElements.some(n=>n !== r.tokens*32*128) || r.variants[1].mode !== 'causal-tiled' || !r.variants[1].pipelineKeys.some(k=>k.endsWith('-causal-scores'))); 
   report.phase = bad.length ? 'mismatch' : 'done';
   if (bad.length) report.error = bad.map(r => `${r.tokens}: relL2 ${r.relL2} nonFinite ${r.nonFinite} ${r.errors[0] ?? ''}`).join('; ');
 } catch (e) {
