@@ -9,13 +9,22 @@ export async function compileSceneLighting(renderer, passes) {
     const prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
       transparent:renderer.transparent,opaque:renderer.opaque,autoClear:renderer.autoClear,
       material:scene.overrideMaterial,mask:camera.layers.mask,name:scene.name};
+    let receivingContext, receivingValue;
     try {
       renderer.setRenderTarget(pass.renderTarget);renderer.setMRT(pass._mrt);
       renderer.transparent=pass.transparent;renderer.opaque=pass.opaque;renderer.autoClear=true;
       if(pass._layers)camera.layers.mask=pass._layers.mask;
       if(pass.overrideMaterial!==null)scene.overrideMaterial=pass.overrideMaterial;
       if(pass.contextNode!==null){
-        const data={...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()};
+        // Match PassNode's cache identity as well as its inputs. A temporary
+        // context compiles a different RenderObject key from the next draw.
+        if(!pass._contextNodeCache || pass._contextNodeCache.version!==pass.version){
+          pass._contextNodeCache={version:pass.version,context:TSL.context({
+            ...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
+        }
+        receivingContext=pass._contextNodeCache.context;
+        receivingValue=receivingContext.value;
+        const data={...receivingContext.getFlowContextData()};
         const receiveOutput=data.getOutput;
         const receiveAO=data.getAO;
         // compileAsync also builds dependent fullscreen producers under this
@@ -26,13 +35,13 @@ export async function compileSceneLighting(renderer, passes) {
         // producer compiled beneath the beauty context must not bind the very
         // visibility attachment it is about to write (WebGPU read/write alias).
         if(receiveAO)data.getAO=function(node,builder,...args){return builder.object?.isQuadMesh?node:receiveAO.call(this,node,builder,...args);};
-        // Use a compilation-local context; the native pass owns its cache,
-        // which may already exist from the initial successful scene draw.
-        renderer.contextNode=TSL.context(data);
+        receivingContext.value=data;
+        renderer.contextNode=receivingContext;
       }
       scene.name=pass.name||scene.name;
       await renderer.compileAsync(scene,camera);
     } finally {
+      if(receivingContext)receivingContext.value=receivingValue;
       renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;
       renderer.transparent=prior.transparent;renderer.opaque=prior.opaque;renderer.autoClear=prior.autoClear;
       scene.overrideMaterial=prior.material;camera.layers.mask=prior.mask;scene.name=prior.name;

@@ -21,6 +21,7 @@ release();await compilation;
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
 // Live rebuild of combined GI can compile the filter under the receiving AO
 // context. A fullscreen producer must not sample the visibility it is writing.
+pass.version++; // A new pass context invalidates the native cached context.
 pass.contextNode=TSL.context({getAO:()=>TSL.float(.5)});
 renderer.compileAsync=async()=>{
   const hook=renderer.contextNode.getFlowContextData().getAO,input=TSL.float(1);
@@ -42,6 +43,7 @@ pass.contextNode=TSL.context({getOutput(node){receivingCalls++;return {received:
 const nativeCache={version:pass.version,context:TSL.context({...initial.contextNode.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
 pass._contextNodeCache=nativeCache;
 renderer.compileAsync=async()=>{
+  assert.equal(renderer.contextNode,nativeCache.context,'prepare the same context identity the next native draw will use');
   const hook=renderer.contextNode.getFlowContextData().getOutput;
   const producer=TSL.outputStruct(TSL.vec4(1),TSL.vec4(2));
   assert.equal(hook(producer,{}),producer,'preserve producer output attachments during lighting compilation');
@@ -50,3 +52,10 @@ renderer.compileAsync=async()=>{
 await compileSceneLighting(renderer,[pass]);assert.equal(receivingCalls,1);
 assert.equal(pass._contextNodeCache,nativeCache,'compilation must not take custody of the native pass context cache');
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
+
+const originalValue=nativeCache.context.value;
+renderer.compileAsync=async()=>{assert.equal(renderer.contextNode,nativeCache.context);throw Error('native compile failed');};
+await assert.rejects(compileSceneLighting(renderer,[pass]),/native compile failed/);
+assert.equal(nativeCache.context.value,originalValue,'failure restores exact native receiving hooks');
+assert.equal(renderer.contextNode,initial.contextNode);
+console.log('PASS preparation preserves native context identity and restores hooks after failure');
