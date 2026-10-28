@@ -50,7 +50,10 @@ export default {
     }catch(e){captures.close();await scene.dispose();throw e;}
     document.defaultView.kaminosSelection?.clear();
     const video=document.createElement('video');video.muted=true;video.autoplay=true;video.playsInline=true;
-    video.style.cssText='width:100%;display:block';
+    video.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+    const sample=document.createElement('img');sample.dataset.handPairSample='';
+    sample.alt='Exact camera sample used by both displayed hands';
+    sample.style.cssText='width:100%;display:block;min-height:120px';
     const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
     let stream, sessions=[],running=false,starting=false,disposed=false,generation=0,callback,flight;
     let error=null,received=0,last=null,status,button,select,overlay;
@@ -61,14 +64,15 @@ export default {
       models:configs.map((c,i)=>({label:i?'Trained':'Original',endpoint:c.endpoint,identity:identities[i],sessionId:sessions[i],visible:meshes[i].visible})),
       source:'one_camera_same_jpeg_and_crop',presentation:'atomic_pair_wrist_aligned_equal_scale',
       backend:'native_cpu_serial_shared_mlx_detector',fingerJuice:{enabled:false,runtime:null},
-      lastPair:last,camera:stream?.getVideoTracks()[0]?.getSettings()??null});
+      lastPair:last,sourceImage:{captureId:sample.dataset.captureId??null,available:!!sample.getAttribute('src')},
+      camera:stream?.getVideoTracks()[0]?.getSettings()??null});
     const sync=()=>{
       if(button){button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if(select)select.disabled=running||starting;
       if(status)status.textContent=error?`Stopped: ${error}${last?' · last complete pair retained':''}`:
         `${running?'LIVE':'STOPPED'} · ${received} matched pairs · native CPU${last?` · sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''}${last?.fallback?' · no detection: shared manual fallback':''}`;
-      if(overlay&&video.videoWidth&&last){const [x0,y0,x1,y1]=last.cropBox;
-        Object.assign(overlay.style,{left:`${100*x0/video.videoWidth}%`,top:`${100*y0/video.videoHeight}%`,width:`${100*(x1-x0)/video.videoWidth}%`,height:`${100*(y1-y0)/video.videoHeight}%`,borderColor:last.fallback?'#ff725e':'#60e1a1'});}
+      if(overlay&&last){const [x0,y0,x1,y1]=last.cropBox,[width,height]=last.imageSize;
+        Object.assign(overlay.style,{left:`${100*x0/width}%`,top:`${100*y0/height}%`,width:`${100*(x1-x0)/width}%`,height:`${100*(y1-y0)/height}%`,borderColor:last.fallback?'#ff725e':'#60e1a1'});}
     };
     const events=event=>Promise.all(apis.map((api,i)=>sessions[i]?api('/event',{sessionId:sessions[i],...event}):null));
     const haltCamera=()=>{
@@ -89,6 +93,8 @@ export default {
       try{
         results=await sharedInference(apis,sessions,request);
         const positions=pairedPrediction(results,request,identities);
+        const imageSource='data:image/jpeg;base64,'+request.image;
+        const decoded=document.createElement('img');decoded.src=imageSource;await decoded.decode();
         await captures.put({...retained,outcome:{state:'computed',results}});
         if(ticket!==generation||disposed){await events({kind:'pair_not_presented_after_stop',captureId:request.captureId,epochMs:Date.now()});return;}
         // Both results validated first; a render can never observe a half-updated pair.
@@ -98,7 +104,8 @@ export default {
           geometry.setIndex(health[i].faces.flatMap(f=>request.handedness==='left'?[f[0],f[2],f[1]]:f));
           geometry.computeVertexNormals();geometry.computeBoundingSphere();meshes[i].visible=true;
         });
-        received++;last={captureId:request.captureId,captureEpochMs:request.captureEpochMs,cropBox:results[0].cropBox,
+        sample.src=imageSource;sample.dataset.captureId=request.captureId;
+        received++;last={captureId:request.captureId,captureEpochMs:request.captureEpochMs,cropBox:results[0].cropBox,imageSize:[canvas.width,canvas.height],
           fallback:results[0].acquisitionDetails.fallback,outputs:results.map(r=>r.output),
           identities:results.map(r=>r.identity),view:scene.readView()};
         scene.redraw();sync();
@@ -134,7 +141,8 @@ export default {
         if(disposed||ticket!==generation){acquired.getTracks().forEach(t=>t.stop());return read();}
         stream=acquired;video.srcObject=stream;await video.play();
         if(disposed||ticket!==generation){stream?.getTracks().forEach(t=>t.stop());return read();}
-        running=true;received=0;last=null;meshes.forEach(m=>m.visible=false);scene.redraw();schedule(ticket);
+        running=true;received=0;last=null;sample.removeAttribute('src');delete sample.dataset.captureId;
+        meshes.forEach(m=>m.visible=false);scene.redraw();schedule(ticket);
         record({kind:'hand-pair.start',phase:'applied',effective:read()});return read();
       }catch(cause){error=String(cause);haltCamera();throw cause;}
       finally{starting=false;sync();}
@@ -144,7 +152,8 @@ export default {
       mount({root,document,invoke}){
         const intro=document.createElement('p');intro.textContent='Original left · Trained right. Same camera frame and crop. Wrist aligned, equal scale.';
         const preview=document.createElement('div');preview.style.cssText='position:relative;overflow:hidden';
-        overlay=document.createElement('div');overlay.style.cssText='position:absolute;border:2px solid #60e1a1;pointer-events:none;box-sizing:border-box';preview.append(video,overlay);
+        overlay=document.createElement('div');overlay.style.cssText='position:absolute;border:2px solid #60e1a1;pointer-events:none;box-sizing:border-box';preview.append(video,sample,overlay);
+        const sourceLabel=document.createElement('div');sourceLabel.textContent='Matched camera sample';
         select=document.createElement('select');select.setAttribute('aria-label','Hand');
         for(const side of ['right','left']){const o=document.createElement('option');o.value=side;o.textContent=side==='right'?'Right hand':'Left hand';select.append(o);}
         select.value=handedness;select.onchange=()=>{handedness=select.value;};
@@ -152,7 +161,7 @@ export default {
         button=document.createElement('button');button.onclick=()=>invoke(running?'stop':'start').catch(failed);
         const frameButton=document.createElement('button');frameButton.textContent='Frame both hands';frameButton.onclick=()=>invoke('frame').catch(failed);
         status=document.createElement('div');status.setAttribute('role','status');status.dataset.handPairStatus='';status.style.overflowWrap='anywhere';
-        root.append(intro,preview,select,button,frameButton,status);sync();
+        root.append(intro,sourceLabel,preview,select,button,frameButton,status);sync();
       },
       async dispose(){disposed=true;unsubscribe();try{await stop();}finally{captures.close();await scene.dispose();}},
     };

@@ -35,6 +35,11 @@ try{
  report.live=await read();assert.equal(report.live.error,null);assert(report.live.models.every(m=>m.visible));assert(report.live.received>=3);
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('stop'));
  report.stopped=await read();assert.equal(report.stopped.running,false);assert.equal(report.stopped.camera,null);
+ const sample=page.locator('[data-hand-pair-sample]');
+ assert.equal(await sample.count(),1,'matched camera sample must remain visible');
+ assert.equal(await sample.getAttribute('data-capture-id'),report.stopped.captureId);
+ const displayedSample=await sample.getAttribute('src');assert.match(displayedSample,/^data:image\/jpeg;base64,/);
+ assert.equal(report.stopped.sourceImage.captureId,report.stopped.captureId);
  await page.screenshot({path:output+'/paired-hands.png'});report.lastTrustworthyEvidence='paired-hands.png';report.stages.push('live_matched_pair_and_stop');await save();
  report.phase='source_replay';
  const rows=await page.evaluate(async()=>{
@@ -42,6 +47,7 @@ try{
   try{return await new Promise((res,rej)=>{const q=db.transaction('captures').objectStore('captures').getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}finally{db.close();}
  });
  assert(rows.some(r=>r.outcome.state==='computed'&&r.outcome.results?.length===2));
+ assert.equal(displayedSample,'data:image/jpeg;base64,'+rows.find(r=>r.captureId===report.stopped.captureId).request.image,'visible sample differs from paired source JPEG');
  await writeFile(output+'/retained-captures.json',JSON.stringify(rows,null,2)+'\n');
  for(const row of rows.filter(r=>r.outcome.state==='computed')){
   const [a,b]=row.outcome.results;assert.equal(a.captureId,b.captureId);assert.equal(a.captureId,row.captureId);assert.deepEqual(a.cropBox,b.cropBox);
