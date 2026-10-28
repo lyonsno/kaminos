@@ -25,7 +25,7 @@ let compileRelease,compileCalls=0,held=false;
 const rebuild={hold(value){held=value;},compile(){compileCalls++;return new Promise(resolve=>compileRelease=resolve);}};
 const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
 assert.equal(typeof mount.setSmokeShadowQuality,'function','live surface lighting must expose independent smoke transport quality');
-assert.equal(patterns[0].route,'uniform');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
+assert.equal(patterns[0].route,'runtime-arithmetic');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
 assert.equal(typeof mount.setSurfaceEnabled,'function');
 mount.setSurfaceEnabled(false);const offBatches=batches.length;
 consume(field);assert.equal(mount.canRender(),true);assert.equal(batches.length,offBatches,'off skips all surface shadow captures');
@@ -94,7 +94,7 @@ assert.throws(()=>mount.setShadowComparison({implementation:'fake'}),/implementa
 assert.throws(()=>mount.setShadowComparison({worldCellSize:0}),/cell size/);
 assert.equal(mesh.material.customProgramCacheKey(),grainKey);
 mount.setShadowComparison({implementation:'shared',grain:'world',worldCellSize:.025});consume(field);
-assert.equal(patterns.at(-1).route,'uniform');assert(batches.at(-1));
+assert.equal(patterns.at(-1).route,'runtime-arithmetic');assert(batches.at(-1));
 assert.equal(mount.debugState().shadowWorldCellSize,.025);
 mount.setShadowComparison({grain:'ordered'});consume(field);
 assert.deepEqual(first.frame.smokeReconstruction.dimensions,[2,4,2],'explicit cheap smoke reconstruction must be effective');

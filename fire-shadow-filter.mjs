@@ -72,7 +72,7 @@ export function cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,reso
 // at every tap would treat a tilted floor as a sphere and cause grazing acne.
 export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null,edgeFilter=null,resolution=256,runtimeQuality=null}) {
   if(!runtimeQuality&&filterPattern&&filterPattern.count!==filterSamples)throw Error('shadow filter pattern count mismatch');
-  const blockers=shadowDisk(blockerSamples,true),samples=shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
+  const blockers=runtimeQuality?null:shadowDisk(blockerSamples,true),samples=runtimeQuality?null:shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
   const {Fn,If,Loop,int,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
   return Fn(()=>{
     const direction=delta.div(distance.max(1e-5));
