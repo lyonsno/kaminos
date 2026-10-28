@@ -14,7 +14,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
   const generation=epoch;
   lifecycle=lifecycle.catch(()=>{}).then(async()=>{
    if(generation!==epoch)return;
-   if(disposed||!visible){if(renderer){await renderer.setActive(false);await renderer.dispose();renderer=null;}renderedKey=null;return;}
+   if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed||!running){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
    if(renderer&&renderedKey!==key){await renderer.setActive(false);await renderer.dispose();renderer=null;}
    if(!renderer&&!running&&!allowCold)return;
    if(!renderer){

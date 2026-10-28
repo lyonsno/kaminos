@@ -37,7 +37,13 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const kilnDesign=document.createElement('a');kilnDesign.textContent='Design in Workbench';kilnDesign.target='_blank';kilnDesign.rel='noopener';
   const kilnStatus=document.createElement('p');kilnStatus.className='asset-help';kilnStatus.setAttribute('role','status');
   const syncKiln=()=>{kilnLabel.textContent=kiln?.read()?.document?.label??'Inference Kiln';kilnDesign.href=kiln?.designURL?.()??'./inference-kiln-study.html?material=1';};
-  kilnTools.append(kilnLabel,kilnChoose,kilnDesign);kilnPanel.append(kilnTools,kilnView,kilnStatus);image.querySelector('#asset-prompt')?.after(kilnPanel);
+  kilnTools.append(kilnLabel,kilnChoose,kilnDesign);kilnPanel.append(kilnTools,kilnView,kilnStatus);
+  const imageOptions=image.querySelector('.asset-text-image-actions'),imageActions=document.createElement('div');imageActions.className='asset-text-image-actions';
+  // Keep Generate/Stop and output size above the preview as it grows. All
+  // existing controls retain their identities and controller handlers.
+  for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=byId(id);if(control)imageActions.append(control);}
+  const imageSize=byId('asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
+  if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
