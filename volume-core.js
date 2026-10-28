@@ -16,7 +16,7 @@ import { createOpenBoundary } from './volume-open-boundary.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
-import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
@@ -20989,6 +20989,7 @@ export function createKaminosVolumePrototype({
     state.rayStepTelemetry=rayStepTelemetry.read();
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
+      adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
       flamePriorityRequested:controlsSnapshot.flamePriority??0,
       flamePriority:optical.mode==='numerical'?uniforms[42]:0,

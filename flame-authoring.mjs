@@ -1,3 +1,4 @@
+import {raymarchAdaptivity} from './volume-optical-native.mjs';
 import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
@@ -374,10 +375,19 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
           const bound=bounds&&Object.hasOwn(bounds,key)?bounds[key]:source[key];
           field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
-        field.disabled=source.disabled;
+        const adaptivity=id==='volume-adaptive-rays'
+          ?raymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value)):null;
+        field.disabled=adaptivity?adaptivity.automatic:source.disabled;
+        if(adaptivity){
+          grip.textContent=adaptivity.label;
+          field.setAttribute('aria-label',`Flame ${adaptivity.label}`);
+          grip.title=field.title=adaptivity.automatic
+            ?`${adaptivity.value?'On':'Off'} automatically for this marcher. Ray count sets the sample budget; the old adaptive amount is retained for Old adaptive.`
+            :volumeControlTooltip(id);
+        }
         if(force!==true&&document.activeElement===field)return;
         const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
-        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(flameControlDisplayValue(id,value));
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(adaptivity?adaptivity.value:flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{

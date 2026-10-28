@@ -39,8 +39,8 @@ test('instrumentation allocates the actual pixel population and releases counter
   assert.equal(meter.active,true);assert.equal(meter.read().readback,false);
   assert.equal(canvas.style.visibility,'visible');assert.equal(meter.ensure(16,16,true),false);
   const counter=meter.counterBuffer;assert.equal(meter.ensure(16,16,false),true);
-  assert.equal(counter.destroyed,true);assert.equal(meter.counterBuffer.size,4);assert.equal(canvas.style.visibility,'hidden');
-  meter.dispose();assert.ok(buffers.every(buffer=>buffer.destroyed));assert.ok(calls.includes('destroy-atlas'));
+  assert.equal(counter.destroyed,undefined);assert.equal(meter.counterBuffer.size,4);assert.equal(canvas.style.visibility,'hidden');
+  const current=meter.counterBuffer;meter.dispose();assert.equal(current.destroyed,true);assert.ok(calls.includes('destroy-atlas'));
 });
 test('GPU work is encoded only on demand, with enough dispatch groups for every pixel',()=>{
   const {meter,canvas}=fixture();meter.setCanvas(canvas);meter.ensure(500,1,true);
@@ -72,7 +72,17 @@ test('a draw cannot replace counters already referenced by an earlier pass',()=>
   meter.ensure(16,16,true,{allowResize:false});
   assert.equal(recorded.destroyed,undefined,'a resize cannot retire an encoded dependency');
   assert.equal(meter.active,false);assert.equal(meter.read().reason,'counter-buffer-not-prepared');
-  meter.ensure(16,16,true);assert.equal(recorded.destroyed,true);
+  meter.ensure(16,16,true);assert.equal(recorded.destroyed,undefined);
   assert.equal(meter.ensure(16,16,true,{allowResize:false}),false);assert.equal(meter.active,true);
   meter.dispose();
+});
+
+test('live telemetry changes preserve counters referenced by an unsubmitted fluid frame',()=>{
+  const {meter,canvas}=fixture();meter.setCanvas(canvas);
+  const encoded=[meter.counterBuffer]; // Simulation encoded before controls update.
+  meter.ensure(8,8,true);encoded.push(meter.counterBuffer);
+  meter.ensure(16,16,true);encoded.push(meter.counterBuffer);
+  meter.ensure(16,16,false);
+  for(const counter of encoded)assert.notEqual(counter.destroyed,true,'queue submission must retain every encoded counter');
+  const current=meter.counterBuffer;meter.dispose();assert.equal(current.destroyed,true);
 });
