@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
 import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';import {visualWork} from '../visual-work.mjs';
-const [origin,out,registration]=process.argv.slice(2);assert(origin&&out&&registration);await fs.mkdir(out,{recursive:true});
-const input=JSON.parse(await fs.readFile(registration,'utf8'));const report={status:'running',phase:'launch',origin,repoRoot:process.cwd(),executable:process.env.KAMINOS_TEST_BROWSER,source:input.source,errors:[],requests:[]};const write=()=>fs.writeFile(out+'/launch.json',JSON.stringify(report,null,2));await write();let browser,page;
+const [origin,out,registration]=process.argv.slice(2);assert(out,'output directory required');await fs.mkdir(out,{recursive:true});
+let input;const report={status:'running',phase:'registration',origin,repoRoot:process.cwd(),executable:process.env.KAMINOS_TEST_BROWSER,source:null,errors:[],requests:[]};const write=()=>fs.writeFile(out+'/launch.json',JSON.stringify(report,null,2));await write();let browser,page;
 try{
+ assert(origin&&registration,'origin and registration required');input=JSON.parse(await fs.readFile(registration,'utf8'));report.source=input.source;report.phase='launch';await write();
  report.serving=await verifyAuthoringServer({origin,repoRoot:process.cwd()});await write();
  const {chromium}=await import(process.env.KAMINOS_TEST_PLAYWRIGHT);browser=await chromium.launchPersistentContext(out+'/profile',{headless:true,executablePath:report.executable,viewport:{width:1600,height:1000},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});page=browser.pages()[0];page.setDefaultTimeout(0);
  page.on('pageerror',e=>report.errors.push(e.message));page.on('response',r=>{if(r.url().includes('/api/read?'))report.requests.push({url:r.url(),status:r.status()});});await page.exposeFunction('__assetGpuError',e=>report.errors.push(e));await page.addInitScript(()=>{if(!globalThis.GPUAdapter)return;const old=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...a){const d=await old.apply(this,a);d.addEventListener('uncapturederror',e=>window.__assetGpuError(e.error.message));return d;};});
