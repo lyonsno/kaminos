@@ -3,6 +3,19 @@
  * No CPU bounds reduction, reallocation, or per-cell population cap is needed. */
 export const WORLD_NEIGHBOR_CONTRACT='wgsl-world-space-linked-hash-neighbors-v1';
 export const WORLD_NEIGHBOR_QUERY_CONTRACT='wgsl-uniform-radius-aware-world-neighbors-v1';
+export const WORLD_UNIFORM_KERNEL_CONTRACT='wgsl-uniform-world-neighbor-kernels-v1';
+
+function uniformPairKernels(shader,volume){
+ volume=Math.fround(volume);
+ if(!Number.isFinite(volume)||volume<=0)throw new RangeError('Uniform particle volume must be positive finite f32');
+ const radius=Math.fround(Math.pow(Math.max(volume,0.000001),1/3));
+ for(const [name,value] of [['adaptive_volume_scale','worldUniformParticleVolume'],['adaptive_radius_scale','worldUniformParticleRadius']]){
+  const pattern=new RegExp(`fn ${name}\\(index: u32\\) -> f32 \\{[^]*?\\n}`);
+  if(!pattern.test(shader))throw Error('Uniform kernel contract missing '+name);
+  shader=shader.replace(pattern,`fn ${name}(index: u32) -> f32 {\n  return ${value};\n}`);
+ }
+ return `const worldUniformParticleVolume: f32 = ${volume};\nconst worldUniformParticleRadius: f32 = ${radius};\n`+shader;
+}
 
 // Physical radii belong to the consumers. Grid resolution must not silently
 // shorten cohesion/topology when uniform pressure support becomes smaller.
@@ -101,12 +114,13 @@ fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec
 `;
 }
 
-export function applyWorldSpaceNeighbors(shader,{cellWidth,uniformSupportRadius=null,nominalCellWidth=cellWidth}){
+export function applyWorldSpaceNeighbors(shader,{cellWidth,uniformSupportRadius=null,nominalCellWidth=cellWidth,uniformVolumeScale=null}){
  const functions=worldNeighborFunctions(cellWidth);
  worldNeighborFunctions(nominalCellWidth);
  const start=shader.indexOf('fn gridCoord('),end=shader.indexOf('fn kernelWeight(',start);
  if(start<0||end<start)throw Error('World neighbor shader requires grid helpers before kernelWeight');
  let result=shader.slice(0,start)+functions+'\n'+shader.slice(end);
+ if(uniformVolumeScale!==null)result=uniformPairKernels(result,uniformVolumeScale);
  if(uniformSupportRadius!==null)result=radiusAwareQueries(result,uniformSupportRadius,nominalCellWidth);
  const boundary='        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }';
  const visit='          let neighborIndex = u32(current);';
