@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {burnJointState} from '../burn-fracture-core.mjs';
+import * as core from '../burn-fracture-core.mjs';
+const {burnJointState}=core;
 const bond={id:'cut:0',area:2,linearStiffness:120,rotationalStiffness:80};
 const half=burnJointState(bond,{mapped:true,fraction:.5});
 assert.equal(half.area,1,'Consumed material must reduce the material area carrying a joint');
@@ -10,3 +11,20 @@ assert.equal(burnJointState(bond,{mapped:true,fraction:0}).active,false,'Exhaust
 assert.equal(burnJointState(bond,{mapped:false,fraction:null}).active,true,'Unknown material is not evidence of a break');
 assert.equal(burnJointState(bond,{mapped:false,fraction:null}).fraction,null);
 for(const fraction of [-1,2,NaN,Infinity,null])assert.throws(()=>burnJointState(bond,{mapped:true,fraction}),/fraction/);
+assert.equal(typeof core.createBurnFracturePlayback,'function','Interactive playback needs GPU backpressure instead of an unbounded catch-up burst');
+const submitted=[],failures=[];let release;
+const playback=core.createBurnFracturePlayback({stepSeconds:1/60,advance:dt=>submitted.push(dt),completed:()=>new Promise(resolve=>{release=resolve;}),onError:e=>failures.push(e)});
+playback.tick(1);
+assert.deepEqual(submitted,[1/60],'A delayed host frame submits one fixed step');
+playback.tick(1);
+assert.equal(submitted.length,1,'An outstanding GPU batch must apply backpressure');
+assert.ok(Math.abs(playback.read().pendingSeconds-(2-1/60))<1e-12,'All elapsed time is retained');
+await Promise.resolve();
+release();await playback.settled();
+playback.tick(0);assert.equal(submitted.length,2,'Retained work drains after completion without new elapsed time');
+await Promise.resolve();
+release();await playback.settled();
+for(const dt of [-1,NaN,Infinity])assert.throws(()=>playback.tick(dt));
+assert.deepEqual(failures,[]);
+const failed=core.createBurnFracturePlayback({stepSeconds:1/60,advance(){},completed:()=>Promise.reject(Error('device lost')),onError:e=>failures.push(e.message)});
+failed.tick(1/60);await failed.settled();assert.deepEqual(failures,['device lost']);assert.throws(()=>failed.tick(0),/device lost/);

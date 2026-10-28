@@ -34,9 +34,12 @@ try{
   else {assert.ok(observation.verdict.broken>0,'Observed material loss must remove connections');assert.ok(observation.maximumMovement>.01,'Regions must actually move after support loss');}
   report.phase='playback:'+name;await save();
   await page.getByRole('button',{name:'Run',exact:true}).click();
+  observation.playbackStarted=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));await save();
   await guard(page.evaluate(async start=>{for(;;){const s=await window.kaminosWorkbenchExperiments.read();if(s.error)throw Error(s.error);if(s.mechanics.seconds>start+.05)return;await new Promise(requestAnimationFrame);}},observation.after.state.seconds));
+  report.phase='pause:'+name;await save();
   await page.getByRole('button',{name:'Pause',exact:true}).click();
   observation.playback=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));assert.equal(observation.playback.running,false);assert.ok(observation.playback.mechanics.seconds>observation.after.state.seconds);
+  observation.playbackSnapshot=await invoke('snapshot');checkBurnFractureObservation(observation.playback,observation.playbackSnapshot);
   await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
