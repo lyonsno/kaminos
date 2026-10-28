@@ -145,7 +145,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         const edgeLabel=document.createElement('label');edgeLabel.textContent='Smooth solid shadow texels';
         edgeLabel.title='Compare neighboring cubemap texels for narrow edges and blocker-free visibility. Broad detected penumbras keep the ordinary filter taps.';
         edgeSwitch=document.createElement('input');edgeSwitch.type='checkbox';edgeSwitch.setAttribute('aria-label','Smooth solid shadow texels');
-        edgeSwitch.addEventListener('change',()=>invoke('setShadowEdgeFilter',edgeSwitch.checked).catch(failed));edgeLabel.append(edgeSwitch);panel.append(edgeLabel);
+        edgeSwitch.addEventListener('change',()=>invoke('setShadowEdgeFilter',edgeSwitch.checked).catch(failed));edgeLabel.title='Compare four neighboring cube texels at every shadow filter tap, including broad PCSS penumbrae. Off uses one comparison per tap.';edgeLabel.append(edgeSwitch);panel.append(edgeLabel);
         const heading=document.createElement('h3');heading.textContent='Shadow quality';panel.append(heading);
         for(const [key,text,help] of [
           ['resolution','Shadow cube resolution','Pixels per cube face. Lower values reduce capture size and shadow detail.'],

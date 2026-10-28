@@ -1,3 +1,4 @@
+import {SMOKE_LIGHT_NOISE_WGSL} from './scene-light-noise.mjs';
 // Direct distributed emission. Surface irradiance and isotropic smoke mean
 // use the same rays; only their angular weighting differs.
 import {createPreparedSmoke,preparedSmokePlan} from './scene-prepared-smoke.mjs';
@@ -24,11 +25,11 @@ export function lightingDirections(count=24,rotation=0) {
   }
   return result;
 }
-export function integrateVolumeRay(sample,length,step) {
+export function integrateVolumeRay(sample,length,step,phase=.5) {
   const result=[0,0,0];let transmission=1;
   const count=Math.ceil(length/step), ds=count ? length/count : 0;
   for(let i=0;i<count;i++) {
-    const m=sample((i+.5)*ds), sigma=Math.max(0,m[3]);
+    const m=sample((i+phase)*ds), sigma=Math.max(0,m[3]);
     const weight=sigma ? -Math.expm1(-sigma*ds)/sigma : ds;
     for(let c=0;c<3;c++) result[c]+=transmission*m[c]*weight;
     transmission*=Math.exp(-sigma*ds);
@@ -60,7 +61,7 @@ export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,vol
   return {volumeDimensions,volumeCount,total};
 }
 
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null}) {
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   lightingDirections(directions); // Validate before allocating shared resources.
   const domain=sceneSourceDomain(sourceDimensions);
@@ -96,6 +97,8 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let sourceGuide=normalizeSourceGuide({lo:domain.lo,hi:domain.hi},domain),guideBuffer=null;
   let sourceRegions=normalizeSourceRegions([],domain),regionsBuffer=null;
   const guideData=()=>new Float32Array([...sourceGuide.lo,0,...sourceGuide.hi,0]);
+  const noiseParams=buffer('smoke light temporal phase',new Float32Array(4),GPUBufferUsage.UNIFORM);
+  const noiseEntries=()=>angularPattern==='blue'?[{binding:18,resource:samplingNoise.createView()},{binding:19,resource:{buffer:noiseParams}}]:[];
   const sourcePattern=()=>['source','guided','regions'].includes(angularPattern);
   const guideEntries=()=>angularPattern==='guided'?[{binding:10,resource:{buffer:guideBuffer}}]:angularPattern==='regions'?[{binding:10,resource:{buffer:regionsBuffer}}]:[];
   const surfaceWidth=receivers.length?Math.min(1024,device.limits.maxTextureDimension2D):1;
@@ -114,6 +117,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let lastField=null,lastLightingTexture=null,lastOptions=null,lastMetadata=null;
   const family=()=>angularPattern+':'+angularRotation+':'+(angularPattern==='guided'?JSON.stringify([sourceGuide.lo,sourceGuide.hi]):angularPattern==='regions'?JSON.stringify(sourceRegions):'');
   function angularState() {
+    if(angularPattern==='blue'&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
     const key=family()+directions;
     if(sourcePattern()){
       const existing=[...angularStates.values()].find(s=>s.family===family()&&s.capacity>=directions);
@@ -134,12 +138,12 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const environmentDirections=sourcePattern()?buffer('uniform environment directions',new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned):null;
       const environmentHits=sourcePattern()?buffer('cached environment solid distances',new Float32Array(volumeCount*directions),GPUBufferUsage.STORAGE,owned):null;
       const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;override CACHE_START:u32=0u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const VOLUME_HEIGHT:u32=${volumeHeight}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};`+constants+GATHER_WGSL_BODY+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL)});
+      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};const BLUE_PATTERN:bool=${angularPattern==='blue'};`+constants+(angularPattern==='blue'?SMOKE_LIGHT_NOISE_WGSL:'fn blueReceiverRotation(p:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}fn blueRayPhase(p:vec3<f32>,a:u32)->f32{return 0.5;}')+GATHER_WGSL_BODY+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL)});
       if(!sceneLightPipeline)sceneLightPipeline=device.createComputePipeline({label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}});
       const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:prefix?.capacity||0}}});
-      const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[])]});
+      const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(angularPattern==='blue'?[{binding:18,resource:samplingNoise.createView()}]:[])]});
       const fullCache=prefix?device.createComputePipeline({label:'refresh moving solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}}):cache;
-      const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[])]}):cacheGroup;
+      const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(angularPattern==='blue'?[{binding:18,resource:samplingNoise.createView()}]:[])]}):cacheGroup;
       const gather=device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}});
       const gatherVolume=device.createComputePipeline({label:'direct flame incident on smoke',layout:'auto',compute:{module,entryPoint:'gatherVolume'}});
       const environmentCache=sourcePattern()?device.createComputePipeline({label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}}):null;
@@ -159,8 +163,9 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     setGeometryTransforms(value){geometryTransforms=value;},
     setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,surfaceCount:receivers.length,directions:value,smokeRefinement},device.limits);directions=value;},
     setAngularPattern(pattern,rotation=0){
-      if(!['fixed','spatial','source','guided','regions'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
+      if(!['fixed','spatial','blue','source','guided','regions'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
       if(pattern===angularPattern&&rotation===angularRotation)return;
+      if(pattern==='blue'&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
       angularPattern=pattern;angularRotation=rotation;
       if(!retainComparisons)pruneComparisons();
     },
@@ -177,7 +182,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       if(changed){if(guideBuffer)device.queue.writeBuffer(guideBuffer,0,guideData());if(!retainComparisons&&angularPattern==='guided')pruneComparisons();}
     },
     setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
-    encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0,surfaceScattering=false,environment=null,sceneLights}={}) {
+    encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0,surfaceScattering=false,environment=null,sceneLights,samplingFrame=field.frame}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
       if(environment&&!environment.texture?.createView)throw Error('smoke environment requires a native GPU texture');
       const environmentTexture=environment?.texture??darkEnvironment;
@@ -208,6 +213,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         sceneLightKey=null;
       }
       const state=angularState();
+      device.queue.writeBuffer(noiseParams,0,new Float32Array([samplingFrame%32,0,0,0]));
       if(sourcePattern()&&environment&&state.environmentCount!==directions){
         // Progressive flame samples may reuse a larger cache, but a uniform
         // sphere is not a progressive prefix. Its current constellation and
@@ -228,7 +234,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
           {binding:4,resource:{buffer:state.distances}},{binding:5,resource:lightingTexture.createView()},
           {binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
-          {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries()];
+          {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries(),...noiseEntries()];
         const gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries});
         const volumeGroup=device.createBindGroup({layout:state.gatherVolume.getBindGroupLayout(0),entries});
         Object.assign(state,{sourceTexture:lightingTexture,environmentTexture,sceneLightBuffer,gatherGroup,volumeGroup});
@@ -264,7 +270,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         const group=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries:[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},{binding:4,resource:{buffer:state.distances}},
           {binding:5,resource:scatteredSource.texture.createView()},{binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
-          {binding:8,resource:{buffer:surfaceParams}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries()]});
+          {binding:8,resource:{buffer:surfaceParams}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries(),...noiseEntries()]});
         const surfacePass=encoder.beginComputePass({label:'primary plus smoke scattered light to surfaces'});
         surfacePass.setPipeline(state.gather);surfacePass.setBindGroup(0,group);surfacePass.dispatchWorkgroups(...receiverDispatch(receivers.length,dispatchLimit));surfacePass.end();
         }
@@ -284,7 +290,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       lastMetadata={generation:field.generation,frame:field.frame,sourceDomain:{lo:domain.lo.slice(),hi:domain.hi.slice()},surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,transportVolumeReceivers:smokeEnabled||surfaceScattering?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,surfaceScattering:{enabled:surfaceScattering,orders:surfaceScattering?1:0,sourceGeneration:surfaceScattering?field.scatteringGeneration:null},sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
         environment:environment?{...environment.metadata,enabled:true}:{enabled:false},
         sceneLights:{...punctual.metadata,visibilityPreparations:sceneLightPreparations},
-        angularPattern,angularRotation,sourceGuide:angularPattern==='regions'?{regions:sourceRegions.map(g=>({...g})),counts:regionPlan(sourceRegions,directions,domain).counts,receiverPhases:'complementary-2x2x2-stable-block-shift',effective:sourceRegions.length===1&&sourceRegions[0].id==='@volume'?'full-volume-fallback':'multi-emitter-envelopes'}:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':'midpoint',samplingLaw:angularPattern==='regions'?'multi-region-complementary-solid-angle-v1':angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
+        angularPattern,angularRotation,sampling:angularPattern==='blue'?{atlas:'FAST-scalar-128x128x32',directionPhase:0,quadraturePhase:samplingFrame%32,visibility:'stable-angular-cache',temporalAngularResampling:false}:null,sourceGuide:angularPattern==='regions'?{regions:sourceRegions.map(g=>({...g})),counts:regionPlan(sourceRegions,directions,domain).counts,receiverPhases:'complementary-2x2x2-stable-block-shift',effective:sourceRegions.length===1&&sourceRegions[0].id==='@volume'?'full-volume-fallback':'multi-emitter-envelopes'}:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':angularPattern==='blue'?'blue-noise-stratified':'midpoint',samplingLaw:angularPattern==='regions'?'multi-region-complementary-solid-angle-v1':angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
         angularCache:{retained:retainComparisons,counts:[...angularStates.values()].filter(s=>s.family===family()).map(s=>s.capacity),variants:[...angularStates.keys()],visibilityPreparations,preparedRayDirections,lastPreparedDirections,bytes:[...angularStates.values()].reduce((sum,s)=>sum+s.capacity*(total*4+16),0)}};
       return lastMetadata;
       }catch(error){
@@ -416,6 +422,7 @@ fn environmentAt(d:vec3<f32>)->vec3<f32>{
 fn receiverRotation(p:vec3<f32>)->vec4<f32> {
   // Same position, same rotation even at duplicated mesh vertices. No frame or
   // receiver-index seed: cache and live rays retain exactly the same geometry.
+  if(BLUE_PATTERN){return blueReceiverRotation(p);}
   if(!SPATIAL_PATTERN){return vec4<f32>(0.0,0.0,0.0,1.0);}
   var h=bitcast<vec3<u32>>(p);
   h=(h^(h>>vec3<u32>(16u)))*vec3<u32>(2246822519u);
@@ -478,14 +485,15 @@ fn firstSolid(p:vec3<f32>,d:vec3<f32>)->f32 {
   }
   return closest;
 }
-fn integrateRay(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec4<f32> {
+fn integrateRay(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec4<f32> {return integrateRayPhased(p,d,limit,0.5);}
+fn integrateRayPhased(p:vec3<f32>,d:vec3<f32>,limit:f32,phase:f32)->vec4<f32> {
   let span=interval(p,d,vec3<f32>(-1.0),sourceDomainHi(),limit);
   if(span.y<=span.x){return vec4<f32>(0.0,0.0,0.0,1.0);}
   let count=u32(ceil((span.y-span.x)/settings.y));let ds=(span.y-span.x)/f32(count);
   let dims=textureDimensions(coefficients);let pitch=2.0/f32(dims.x);
   var radiance=vec3<f32>(0.0);var transmission=1.0;
   for(var i=0u;i<count;i++) {
-    let samplePosition=p+d*(span.x+(f32(i)+0.5)*ds);
+    let samplePosition=p+d*(span.x+(f32(i)+phase)*ds);
     let c=clamp(vec3<i32>(floor((samplePosition+vec3<f32>(1.0))/pitch)),vec3<i32>(0),vec3<i32>(dims)-1);
     let m=textureLoad(coefficients,c,0);let sigma=max(0.0,m.a);let tau=sigma*ds;
     var weight=ds*(1.0-tau*0.5+tau*tau/6.0);
@@ -517,7 +525,7 @@ fn gatherReceiver(receiver:u32) {
       var incident=vec3<f32>(0.0);
       if(SOURCE_PATTERN){incident=integrateCells(receiverOrigin(r,d),d,firstHits[address]);}
       else {
-        let integrated=integrateRay(receiverOrigin(r,d),d,firstHits[address]);incident=integrated.rgb;
+        let integrated=integrateRayPhased(receiverOrigin(r,d),d,firstHits[address],blueRayPhase(r.position.xyz,a));incident=integrated.rgb;
         // A solid beyond the volume still blocks the sky. Reuse this ray's
         // existing medium transmission; environment is not multiplied by fire gain.
         if(id.x>=SURFACE_COUNT&&environmentSettings.x>0.0&&firstHits[address]>=1e19){sky+=environmentAt(d)*integrated.a/settings.w;}

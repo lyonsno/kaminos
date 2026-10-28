@@ -28322,6 +28322,7 @@ export function createKaminosVolumePrototype({
         frontStaging.destroy();
       }
     },
+    sceneLightSamplingTexture(){return rayStartNoiseTexture;},
     fireIrradianceLightField,
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {

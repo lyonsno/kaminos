@@ -126,7 +126,7 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       const sample=complementary.select(complementaryOffset,Array.isArray(xy)?vec2(...xy):xy);
       const p=tap(sample,width,filterTangent);
       const visibility=float(0).toVar(),nearest=()=>visibility.assign(p.depth.greaterThanEqual(p.receiver.sub(bias)).select(1,0));
-      if(edgeFilter)If(edgeFilter.and(width.lessThan(float(2).div(resolution))),()=>visibility.assign(compare(p.ray))).Else(nearest);else nearest();
+      if(edgeFilter)If(edgeFilter,()=>visibility.assign(compare(p.ray))).Else(nearest);else nearest();
       lit.addAssign(p.valid.select(visibility,0));weight.addAssign(p.valid.select(1,0));
     };
     if(runtimeQuality)Loop({start:int(0),end:runtimeQuality.filterSamples,type:'int',condition:'<'},({i})=>{
