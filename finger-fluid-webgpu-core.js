@@ -1,4 +1,4 @@
-import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT} from './finger-fluid-world-neighbors.mjs';
+import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT,WORLD_NEIGHBOR_QUERY_CONTRACT} from './finger-fluid-world-neighbors.mjs';
 import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
@@ -13664,6 +13664,15 @@ export async function createWebGPUFingerFluidSolver({
   const safeUniformParticleRadiusScale = Math.fround(
     Math.pow(Math.max(safeUniformParticleVolumeScale, 0.000001), 1 / 3),
   );
+  // Sheet displacement changes prediction after the final grid build. Keep
+  // its existing broad query until that optional path refreshes its index.
+  const radiusAwareNeighbors=finitePBF&&!useAkinci&&safeUnsupportedSheetStrength===0;
+  const nominalNeighborCellWidth=finitePBF?Math.fround(safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)):null;
+  // Pair weights already floor their denominator at 1e-5. Retain that range
+  // for very small authored drops as well as ordinary uniform populations.
+  const uniformNeighborSupportRadius=Math.max(0.00001,Math.fround(safeKernelRadius*safeUniformParticleRadiusScale));
+  const worldNeighborCellWidth=radiusAwareNeighbors?uniformNeighborSupportRadius:nominalNeighborCellWidth;
+  const separateNominalNeighborGrid=radiusAwareNeighbors&&worldNeighborCellWidth!==nominalNeighborCellWidth;
   const safeUniformVolumeKernelNormalization = Math.fround(
     1 / Math.max(
       Math.fround(Math.fround(safeUniformParticleRadiusScale * safeUniformParticleRadiusScale) * safeUniformParticleRadiusScale),
@@ -13722,6 +13731,14 @@ export async function createWebGPUFingerFluidSolver({
     size: safeParticleCount * (finitePBF?16:4),
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
+  const nominalCellHeadsBuffer=separateNominalNeighborGrid?device.createBuffer({
+    label:'kaminos-finger-fluid-nominal-cellHeads',size:GRID_CELL_COUNT*4,
+    usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,
+  }):null;
+  const nominalParticleNextBuffer=separateNominalNeighborGrid?device.createBuffer({
+    label:'kaminos-finger-fluid-nominal-particleNext',size:safeParticleCount*16,
+    usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,
+  }):null;
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
     size: 224,
@@ -13913,7 +13930,7 @@ export async function createWebGPUFingerFluidSolver({
   if(finitePBF)computeShader=computeShader.replace('let particleRadius = kernelRadius * 0.22;',`let particleRadius = ${safeDiagnosticBox.collisionRadius};`).replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/,boxBoundaryDensitySource(safeDiagnosticBox)+'\n');
   if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
-  if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)});
+  if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:worldNeighborCellWidth,uniformSupportRadius:radiusAwareNeighbors?uniformNeighborSupportRadius:null,nominalCellWidth:nominalNeighborCellWidth});
   if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
   const createSceneShaderModule = descriptor => device.createShaderModule({
     ...descriptor,
@@ -13984,6 +14001,7 @@ export async function createWebGPUFingerFluidSolver({
       clear: await pipelineFor('clear_grid'),
       predict: await pipelineFor('predict_positions'),
       build: await pipelineFor('build_linked_cell_grid'),
+      ...(separateNominalNeighborGrid?{buildNominal:await pipelineFor('build_nominal_cell_grid')}:{}),
       ...(useIPBF ? {ipbfPrepare:await pipelineFor('ipbf_prepare'),ipbfVelocity:await pipelineFor('ipbf_velocity')} : {}),
       lambda: await pipelineFor(useIPBF ? 'ipbf_density' : 'compute_density_lambda'),
       delta: await pipelineFor(useIPBF ? 'ipbf_delta' : 'solve_position_delta'),
@@ -14014,9 +14032,9 @@ export async function createWebGPUFingerFluidSolver({
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
-  let computeBindGroup;
+  let computeBindGroup,nominalComputeBindGroup;
   function refreshComputeBindGroup(){
-    computeBindGroup = device.createBindGroup({
+    const descriptor={
       label: 'kaminos-finger-fluid-compute-bind-group',
       layout: computeLayout,
       entries: [
@@ -14037,7 +14055,12 @@ export async function createWebGPUFingerFluidSolver({
           { binding: 13, resource: { buffer: (movingHillSupportProvider||sceneSupport).paramsBuffer } },
         ] : []),
       ],
-    });
+    };
+    computeBindGroup=device.createBindGroup(descriptor);
+    nominalComputeBindGroup=separateNominalNeighborGrid?device.createBindGroup({...descriptor,
+      label:'kaminos-finger-fluid-nominal-compute-bind-group',
+      entries:descriptor.entries.map(entry=>entry.binding===1?{...entry,resource:{buffer:nominalCellHeadsBuffer}}:entry.binding===2?{...entry,resource:{buffer:nominalParticleNextBuffer}}:entry),
+    }):computeBindGroup;
   }
   try {refreshComputeBindGroup();} catch (error) {
     return failFingerFluidInitialization(`WebGPU compute bind group validation failed: ${error.message || String(error)}`);
@@ -14444,6 +14467,7 @@ export async function createWebGPUFingerFluidSolver({
   let liveInletGeneration = initialLiveInletPublicationState.generation;
   let liveInletReleaseEpochFrame = initialLiveInletPublicationState.releaseEpochFrame;
   let linkedCellGridBuildCount = 0;
+  let nominalNeighborGridBuildCount = 0;
   let densityIterationCount = 0;
   let energyDiagnosticsPassCount = 0;
   let vorticityPassCount = 0;
@@ -15003,13 +15027,15 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
-  function dispatch(pass, pipeline, count) {
+  function dispatch(pass, pipeline, count, nominalGrid=false) {
     if(useIPBF){
       const surfaceStage=useAkinci&&(pipeline===pipelines.surfaceBuild||pipeline===pipelines.surfaceDensity||pipeline===pipelines.surfaceNormals||pipeline===pipelines.surfaceForce);
       const pressureStage=surfaceStage||pipeline===pipelines.ipbfPrepare||pipeline===pipelines.lambda||pipeline===pipelines.delta||pipeline===pipelines.ipbfVelocity;
       if(surfaceStage)pass.setBindGroup(2,surfaceBindGroup);
       pass.setBindGroup(0,pressureStage?ipbfGridBindGroup:computeBindGroup);
       if(pressureStage)pass.setBindGroup(1,ipbfBindGroup);
+    }else if(separateNominalNeighborGrid){
+      pass.setBindGroup(0,nominalGrid||pipeline===pipelines.buildNominal||pipeline===pipelines.measureTopology||pipeline===pipelines.cohesion?nominalComputeBindGroup:computeBindGroup);
     }
     pass.setPipeline(pipeline);
     pass.dispatchWorkgroups(Math.ceil(count / WORKGROUP_SIZE));
@@ -15258,6 +15284,12 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.build, safeParticleCount);
       linkedCellGridBuildCount += 1;
       postProjectionGridRefreshCount += 1;
+      if(separateNominalNeighborGrid){
+        dispatch(pass,pipelines.clear,GRID_CELL_COUNT,true);
+        dispatch(pass,pipelines.buildNominal,safeParticleCount,true);
+        linkedCellGridBuildCount+=1;
+        nominalNeighborGridBuildCount+=1;
+      }
       advanceStage(3 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
@@ -16840,7 +16872,10 @@ export async function createWebGPUFingerFluidSolver({
       particleAllocationPreflight,
       gridDimensions: finitePBF?null:[...simulationGrid],
       neighborSearchBounds: finitePBF?null:(safeDiagnosticBox?.bounds??null),
-      neighborCellWidth: finitePBF?safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale):null,
+      neighborCellWidth: worldNeighborCellWidth,
+      neighborQueryContract: radiusAwareNeighbors?WORLD_NEIGHBOR_QUERY_CONTRACT:null,
+      nominalNeighborCellWidth,
+      nominalNeighborGridBuildCount,
       containerCollisionEnabled: safeDiagnosticBox?.collisions!==false,
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: effectivePressureControls?.densityIterations??safeDensityIterations,
@@ -17327,6 +17362,8 @@ export async function createWebGPUFingerFluidSolver({
     particleBuffer.destroy();
     cellHeadsBuffer.destroy();
     particleNextBuffer.destroy();
+    nominalCellHeadsBuffer?.destroy();
+    nominalParticleNextBuffer?.destroy();
     paramsBuffer.destroy();
     liveInletBuffer.destroy();
     diagnosticsBuffer.destroy();
