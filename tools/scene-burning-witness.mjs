@@ -50,7 +50,7 @@ try{
   await guard(page.waitForFunction(ids=>ids.every(id=>window.kaminosSceneAuthoring.burningState(id).status==='resident'),report.ids));
   report.effective=await page.evaluate(()=>{const r=window.__kaminosVolumePrototype.debugState();return {backend:r.backend,grid:r.simGrid,rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value),gi:{steps:Number(document.getElementById('scene-gi-steps').value),slices:Number(document.getElementById('scene-gi-slices').value)},consumer:window.__kaminosVolumePrototype.thermalConsumerState()?.identity};});
   assert.deepEqual(report.effective.gi,{steps:4,slices:3});
-  assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.consumer,'kaminos.scene-burning.v1');
+  assert.equal(report.effective.backend,'WebGPU:apple','Native Apple WebGPU is required');assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.consumer,'kaminos.scene-burning.v1');
   report.burnLabelDraws=await page.evaluate(()=>window.__burnLabelDraws);await save();
   assert.equal(report.burnLabelDraws,0,'Ordinary burning must not create floating burn-state labels');
   report.sources=[];
@@ -129,6 +129,7 @@ try{
   const sources=report.reopened.scene.objects.filter(row=>row.type==='flame-emitter');assert.ok(sources.length);assert.ok(sources.every(row=>row.emissionEnabled===false));
   if(process.env.KAMINOS_BURN_STRUCTURE_ASSET){
     report.phase='imported-structure';await save();
+    report.structurePaused=await page.evaluate(()=>{const r=window.__kaminosVolumePrototype;r.setSimulationPaused(true);return r.debugState().simulationPaused;});assert.equal(report.structurePaused,true);
     const asset=await fs.readFile(process.env.KAMINOS_BURN_STRUCTURE_ASSET),sha256=createHash('sha256').update(asset).digest('hex');
     report.structureAsset={path:path.resolve(process.env.KAMINOS_BURN_STRUCTURE_ASSET),sha256,bytes:asset.length};await save();
     const upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.equal(upload.ok(),true);const receipt=await upload.json();assert.equal(receipt.sha256,sha256);
