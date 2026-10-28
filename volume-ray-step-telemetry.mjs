@@ -170,9 +170,12 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
     let changed=false;
     if(!refusal){
       initialize();
-      if(count!==pixels){counterBuffer.destroy();counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=count;changed=true;computeGroup=null;}
+      // A control update can arrive after a fluid pass was encoded but before
+      // submission. Drop our reference on replacement; encoded bind groups keep
+      // the old buffer alive. Explicit destroy would invalidate that pending frame.
+      if(count!==pixels){counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=count;changed=true;computeGroup=null;}
       active=activate;
-    }else if(!requested&&pixels!==1&&allowResize){counterBuffer.destroy();counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=1;changed=true;computeGroup=null;}
+    }else if(!requested&&pixels!==1&&allowResize){counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=1;changed=true;computeGroup=null;}
     if(canvas)canvas.style.visibility=active?'visible':'hidden';
     status={requested,active,reason:refusal||(!activate?'awaiting-instrumented-draw':null),readback:false,scope:'material-evaluations-per-intersecting-ray',width,height};
     return changed;
