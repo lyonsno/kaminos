@@ -69,3 +69,7 @@ test('waiting operation exposes queue position and skip choice to the retained p
  assert.match(c.read().coordination,/outside Greenroom/);assert.equal(c.runOutsideQueue(),false);
  await c.dispose();
 });
+
+test('prompt availability reports the selected package diagnosis',()=>{
+ assert.throws(()=>prompt.authoringPromptWeightRoot({modelAvailability:{pup:{status:'unavailable',reason:'Missing decoder payload on this installation'}}}),/Missing decoder payload/);
+});

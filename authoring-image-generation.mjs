@@ -18,7 +18,7 @@ export function authoringImageWeightRoot(config,model='flux2'){
   imageModel(model);
   const mounted=model==='flux3'?config?.flux3:config?.klein;
   if(mounted?.mounted&&typeof mounted.weightsUrl==='string'&&mounted.weightsUrl.trim())return mounted.weightsUrl;
-  if(model==='flux3')throw Error('Mount local FLUX.3 weights with KAMINOS_FLUX3_WEIGHTS_ROOT before generating.');
+  if(model==='flux3')throw Error(`Local FLUX.3 weights are unavailable: ${config?.modelAvailability?.flux3?.reason || 'No local package is installed on this server.'}`);
   return KLEIN_PUBLISHED_WEIGHTS;
 }
 export async function createAuthoringImagePipeline(device,urls,model='flux2'){

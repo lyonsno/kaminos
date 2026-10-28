@@ -2,7 +2,7 @@ import {assetSource,assetWithheld} from './authoring-assets.mjs';
 
 export function authoringPromptWeightRoot(config){
  if(config?.pup?.mounted===true&&typeof config.pup.modelUrl==='string'&&config.pup.modelUrl)return config.pup.modelUrl;
- throw Error('Prompt expansion is unavailable on this server.');
+ throw Error(`Prompt expansion is unavailable on this server: ${config?.modelAvailability?.pup?.reason || 'No local PUP package is installed.'}`);
 }
 
 const referenceSource=reference=>reference?.kind==='image'?(reference.source||assetSource(reference.root,reference.path)):null;

@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
-assert hasattr(serve, 'PUP_WEIGHTS_ROOT'), 'Prompt expansion needs an explicit model mount on ordinary Kaminos servers'
+from model_installations import ModelInstallations
 with TemporaryDirectory() as directory:
     root = (Path(directory) / 'pup').resolve()
     root.mkdir()
@@ -27,8 +27,8 @@ with TemporaryDirectory() as directory:
             files.append({'path': name, 'bytes': 128})
     provenance = {'status':'complete','source':'fixture/3f3edb52b2c55de0d49feab28598b68f7f8e4830','external_data':external,'files':files,'future_field':True}
     (root/'provenance.json').write_text(json.dumps(provenance))
-    prior = serve.PUP_WEIGHTS_ROOT
-    serve.PUP_WEIGHTS_ROOT = root
+    prior = serve.MODEL_INSTALLATIONS
+    serve.MODEL_INSTALLATIONS = ModelInstallations(environ={'KAMINOS_PUP_WEIGHTS_ROOT':str(root)}, config_path=root.parent/'no-installations.json')
     server = http.server.ThreadingHTTPServer(('127.0.0.1',0),serve.KaminosHandler)
     threading.Thread(target=server.serve_forever,daemon=True).start()
     def get(path,headers=None):
@@ -55,8 +55,8 @@ with TemporaryDirectory() as directory:
         (Path(directory)/'outside').write_text('secret')
         for path in ['/pup-weights/../outside','/pup-weights/%2e%2e/outside']:
             response,body=get(path);assert response.status==404 and b'secret' not in body
-        serve.PUP_WEIGHTS_ROOT=None;assert serve.runtime_config()['pup'] is None
+        serve.MODEL_INSTALLATIONS=ModelInstallations(environ={}, config_path=root.parent/'no-installations.json');assert serve.runtime_config()['pup'] is None
         response,_=get('/pup-weights/config.json');assert response.status==404
     finally:
-        server.shutdown();server.server_close();serve.PUP_WEIGHTS_ROOT=prior
+        server.shutdown();server.server_close();serve.MODEL_INSTALLATIONS=prior
 print('BFL PUP explicit mount, missing-package admission and HTTP contracts pass')

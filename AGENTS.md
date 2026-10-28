@@ -57,6 +57,16 @@ checkpoint. Recheck before adding another dependent slice. This catches a
 branch that is becoming a second product line while its dependency remains
 unintegrated.
 
+## Installed model packages
+
+Ordinary `python3 serve.py` resolves shared installations from
+`~/.config/kaminos/models.json`; do not copy weight-path environment lists into
+new worktree launchers. Register existing local packages with
+`python3 model_installations.py register <model> --root <package>`. Inspect
+`model_installations.py status` or `/api/runtime-config` for actual resolution
+and availability. Explicit per-run model environment overrides still apply.
+See [local model installations](docs/local-model-installations.md).
+
 ## Tests
 
 Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, the full suite must report no new failures for the commit you land; the landing paragraph below says how to get that result. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Agent browser runs stay within the live fire budget (at most 40 ray steps; live viewing uses 6 to 8 adaptive) unless the question needs the authored look; the scene witness enforces it. Details: `docs/testing.md`.
