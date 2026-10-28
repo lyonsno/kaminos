@@ -9,6 +9,8 @@ export default {
   async create({host, inputs, record}) {
     const document = host.controls.document;
     const fingerJuice=inputs.fingerJuice===true;
+    const fluidBackend=inputs.fluidBackend??'legacy';
+    if(!['legacy','mls-mpm'].includes(fluidBackend))throw Error('Unsupported fluid backend');
     const browser=inputs.backend==='webgpu';
     const idlePacket=reason=>idleFingerPacket(reason,browser?'mobrecon-browser-mesh-finger-juice-v1':undefined);
     if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
@@ -78,7 +80,7 @@ export default {
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime,error:fluidError,rebuilding,
+      fingerJuice:{enabled:fingerJuice,backend:fluidBackend,packet:fluidPacket,runtime,error:fluidError,rebuilding,
         load:fingerFluidLoad(runtime,{particleCount,sourceFlux})}};
     };
     const updateFluid=()=>{
@@ -212,7 +214,7 @@ export default {
       try{
         await previous?.dispose();
         if(disposed)throw Error('experiment closed');
-        const candidate=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idlePacket()});
+        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idlePacket()});
         if(disposed){await candidate.dispose();throw Error('experiment closed');}
         fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
         fluidState=useFluid(live=>live.read());

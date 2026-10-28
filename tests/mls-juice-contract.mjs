@@ -1,0 +1,19 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {mlsConfig,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from '../mls-juice-contract.mjs';
+const cfg=mlsConfig({particleCount:2});
+const clock=createMlsClock(cfg.dt);clock.advance(0);assert.equal(clock.advance(1000),240);
+assert.equal(clock.read().simulatedSeconds,1);clock.advance(2000,true);assert.equal(clock.read().elapsedSeconds,1);
+assert.equal(clock.advance(2500),120);assert.throws(()=>clock.advance(2400),/backwards/);
+const p=validateMlsPacket({timestamp_ms:100,authority:{simulation_safe:true},emitters:[{id:'index',active:true,origin_world:[0,1,0],aim_world:[0,0,-1],radius:.07,strength:1.955,lifetime_seconds:6,source_flux_particles_per_second:240}]});
+const plan=createMlsEmissionPlan(cfg);assert.equal(plan.step(p,0,100).length,1);
+assert.equal(plan.step(p,cfg.dt,101).length,1);assert.equal(plan.step(p,2*cfg.dt,102).length,0);
+assert.equal(plan.read(.01).totalRejected,1);assert.equal(plan.read(.01).inlets[0].effective.releaseSaturated,true);
+assert.equal(plan.step(p,7,851).length,0,'stale packet must not emit even when slots expire');
+const fresh={...p,timestamp_ms:900};assert.equal(plan.step(fresh,7,900).length,1);
+assert.equal(plan.step({...fresh,emitters:[{...p.emitters[0],origin_world:[100,1,0]}]},8,901).length,0);
+assert.equal(plan.read(8).inlets[0].outside,1);
+assert.throws(()=>validateMlsPacket({...p,authority:{}}),/authority/);
+assert.throws(()=>validateMlsPacket({...p,emitters:[p.emitters[0],p.emitters[0]]}),/duplicate/);
+assert.throws(()=>mlsConfig({particleCount:0}),/capacity/);
+console.log('MLS wall clock, admission, lifetime, stale authority and bounds OK');

@@ -13049,7 +13049,9 @@ async function installOwnerWorkbenchEntry() {
       if(localLiquidSetup)throw Error('Close authored water before opening live inlets');
       const {openLiveFluidSession}=await import('./owner-live-fluid-session.mjs');
       const {createLocalLiquidHost}=await import('./local-liquid-host.mjs');
+      const {createMlsJuiceHost}=await import('./mls-juice-host.mjs');
       return openLiveFluidSession({getHost:()=>localLiquidHost,setHost:value=>{localLiquidHost=value;window._kaminosDirty?.();},
+        createMlsHost:options=>createMlsJuiceHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,...options}),
         getGeneration:()=>localLiquidGeneration,createHost:options=>createLocalLiquidHost({renderer,scene,camera,
           pipeline:renderPipeline,device:sharedGpu?.device,readColliders:()=>sceneObjects,...options})},options);
     },
