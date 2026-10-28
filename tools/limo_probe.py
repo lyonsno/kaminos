@@ -17,6 +17,7 @@ from emlight_probe import digest
 SOURCE_REVISION='cf6a1fa84c808dfa810ca4acffabcec4c1de187d'
 SUPPORT_REVISION='741f7c3ce8b383c54771c7003378a50191e9efe9'
 CHECKPOINT_BYTES=23784654093
+CHECKPOINT_SHA256='29e6f6e98e81c0ac187d95927641d4ef61c3d1b9e18f278c06369d98cbc1a6be'
 CONDITIONS=('image','position','normals','dist_to_sphere','dir_to_sphere')
 TARGETS=('sphere_0','sphere_1')
 EVS=(0,-3,-6,-9)
@@ -82,11 +83,34 @@ def validate_assets(args):
     dirty=subprocess.check_output(['git','-C',str(args.source_root),'status','--porcelain',
         '--untracked-files=no'],text=True)
     if dirty.strip(): raise ValueError('LiMo tracked source differs from pinned revision')
-    if args.checkpoint.stat().st_size!=CHECKPOINT_BYTES:
-        raise ValueError('incomplete LiMo checkpoint')
+    packed={}
+    for component,root in (('transformer',args.quantized_transformer),('t5',args.quantized_t5)):
+        if root is None: continue
+        record=json.loads((root/'package.json').read_text())
+        if record.get('schema')!='kaminos.limo-quanto.v1' or not record.get('quantization') or record['source']['component']!=component:
+            raise ValueError('quantized package source mismatch')
+        packed[component]=record
+    if 'transformer' in packed:
+        if packed['transformer']['source']['checkpointSha256']!=CHECKPOINT_SHA256:
+            raise ValueError('quantized transformer source mismatch')
+        checkpoint={'path':str(args.checkpoint),'bytes':CHECKPOINT_BYTES,'sha256':CHECKPOINT_SHA256,
+                    'authority':'packed-source-provenance; full weights not required'}
+    else:
+        if args.checkpoint.stat().st_size!=CHECKPOINT_BYTES:
+            raise ValueError('incomplete LiMo checkpoint')
+        sha=digest(args.checkpoint)
+        if sha!=CHECKPOINT_SHA256: raise ValueError('LiMo checkpoint digest mismatch')
+        checkpoint={'path':str(args.checkpoint),'bytes':CHECKPOINT_BYTES,'sha256':sha,'authority':'observed-source-file'}
     files={}
     for entry in support_files(json.loads(args.metadata.read_text())):
         relative=entry['rfilename']; path=args.support/relative
+        if 't5' in packed and relative.startswith('text_encoder_2/') and relative.endswith('.safetensors'):
+            sha=entry.get('lfs',{}).get('sha256')
+            if not sha or packed['t5']['source']['files'].get(path.name)!=sha:
+                raise ValueError('quantized T5 source mismatch')
+            files[relative]={'bytes':entry['size'],'sha256':sha,
+                             'authority':'packed-source-provenance; full weights not required'}
+            continue
         if path.stat().st_size!=entry['size']:
             raise ValueError(f'incomplete support file: {relative}')
         sha=digest(path)
@@ -100,7 +124,7 @@ def validate_assets(args):
                 raise ValueError(f'support Git blob mismatch: {relative}')
         files[relative]={'bytes':entry['size'],'sha256':sha}
     return {'sourceRevision':revision,'supportRevision':SUPPORT_REVISION,
-        'checkpoint':{'path':str(args.checkpoint),'bytes':CHECKPOINT_BYTES,'sha256':digest(args.checkpoint)},
+        'checkpoint':checkpoint,
         'support':{'path':str(args.support),'files':files}}
 
 
@@ -179,6 +203,7 @@ def run(args, report, report_path):
         t5,record=load_package(t5,args.quantized_t5)
         if record['source']['component']!='t5': raise ValueError('quantized T5 source mismatch')
         for name,sha in record['source']['files'].items():
+            if name.endswith('.safetensors'): continue
             if digest(args.support/'text_encoder_2'/name)!=sha: raise ValueError('quantized T5 source mismatch')
         components['text_encoder_2']=t5
         report['quantizedT5']={'path':str(args.quantized_t5),'weights':record['weights']}

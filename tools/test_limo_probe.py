@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -14,6 +15,55 @@ import limo_probe as probe
 
 
 class LimoProbeTests(unittest.TestCase):
+    def packed_asset_fixture(self, root):
+        checkpoint_sha='29e6f6e98e81c0ac187d95927641d4ef61c3d1b9e18f278c06369d98cbc1a6be'
+        transformer=root/'transformer'; transformer.mkdir()
+        t5=root/'t5'; t5.mkdir()
+        (transformer/'package.json').write_text(json.dumps({
+            'schema':'kaminos.limo-quanto.v1','quantization':{'layer':{'weights':'qint4','activations':'none'}},
+            'source':{'component':'transformer','checkpointSha256':checkpoint_sha}}))
+        shard='text_encoder_2/model-00001-of-00002.safetensors'
+        shard_sha='a'*64
+        (t5/'package.json').write_text(json.dumps({
+            'schema':'kaminos.limo-quanto.v1','quantization':{'layer':{'weights':'qint4','activations':'none'}},
+            'source':{'component':'t5','files':{Path(shard).name:shard_sha}}}))
+        metadata=root/'metadata.json'; metadata.write_text('{}')
+        args=SimpleNamespace(source_root=root,checkpoint=root/'retired.pt',metadata=metadata,support=root,
+                             quantized_transformer=transformer,quantized_t5=t5)
+        return args,[{'rfilename':shard,'size':100,'lfs':{'sha256':shard_sha}}]
+
+    def test_packed_replacements_do_not_require_retired_full_weight_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args,entries=self.packed_asset_fixture(Path(temp))
+            with patch.object(probe.subprocess,'check_output',side_effect=[probe.SOURCE_REVISION,'']), \
+                 patch.object(probe,'support_files',return_value=entries):
+                result=probe.validate_assets(args)
+            self.assertEqual(result['checkpoint']['sha256'],
+                '29e6f6e98e81c0ac187d95927641d4ef61c3d1b9e18f278c06369d98cbc1a6be')
+            self.assertEqual(result['checkpoint']['authority'],'packed-source-provenance; full weights not required')
+            self.assertEqual(result['support']['files'][entries[0]['rfilename']]['authority'],
+                             'packed-source-provenance; full weights not required')
+
+    def test_wrong_source_package_cannot_bypass_original_weight_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args,entries=self.packed_asset_fixture(Path(temp))
+            path=args.quantized_transformer/'package.json'; record=json.loads(path.read_text())
+            record['source']['checkpointSha256']='b'*64; path.write_text(json.dumps(record))
+            with patch.object(probe.subprocess,'check_output',side_effect=[probe.SOURCE_REVISION,'']), \
+                 patch.object(probe,'support_files',return_value=entries):
+                with self.assertRaisesRegex(ValueError,'source mismatch'):
+                    probe.validate_assets(args)
+
+    def test_missing_t5_source_digest_cannot_bypass_original_shard_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args,entries=self.packed_asset_fixture(Path(temp))
+            path=args.quantized_t5/'package.json'; record=json.loads(path.read_text())
+            record['source']['files']={}; path.write_text(json.dumps(record))
+            with patch.object(probe.subprocess,'check_output',side_effect=[probe.SOURCE_REVISION,'']), \
+                 patch.object(probe,'support_files',return_value=entries):
+                with self.assertRaisesRegex(ValueError,'T5 source mismatch'):
+                    probe.validate_assets(args)
+
     def test_missing_support_manifest_cannot_validate(self):
         with self.assertRaisesRegex(ValueError,'incomplete support manifest'):
             probe.support_files({'sha':probe.SUPPORT_REVISION,'siblings':[]})
