@@ -21,8 +21,8 @@ assert.equal(select.value,'fixed','status-only refresh must not overwrite pendin
 assert.equal(select.assignments,before,'unchanged configuration must not touch the native menu');
 await select.listeners.change();assert.equal(settings.read().effective,'fixed');
 assert.equal(controls.filter(v=>v.type==='range').length,0,'quality uses a single drag/type field, not duplicate sliders');
-assert.equal(installed.length,7,'world-cell size, solid and medium cost controls use the shared widget');
-await settings.dispose();assert.equal(scrubDisposals,7,'lighting settings must retire all owned number scrubs');
+assert.equal(installed.length,9,'world-cell size, solid and medium cost controls use the shared widget');
+await settings.dispose();assert.equal(scrubDisposals,9,'lighting settings must retire all owned number scrubs');
 assert(controls.some(v=>v.value==='screen-animated'),'animated screen grain is exposed');
 const cell=controls.find(v=>v.attrs['aria-label']==='World grain cell size');
 await cell.listeners.focus();cell.value='0';await cell.listeners.change();
@@ -56,3 +56,7 @@ assert(casterMenu,'the ordinary Rendering panel exposes explicit caster choices'
 assert.deepEqual(casterMenu.children.map(v=>v.value),['original','10k','5k']);
 document.defaultView.__kaminosSceneRadiance.setShadowCasterLevel=async value=>{state={...state,shadowCasterLevel:value,casters:{level:value,targets:1,originalTriangles:287407,captureTriangles:10000}};};
 const applied=await nativeSettings.operations.setCasterLevel('10k');assert.equal(applied.level,'10k');nativeSettings.sync();assert.equal(casterMenu.value,'10k');
+
+const widthControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow blur half-width (degrees)'),tapsControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke filter taps per axis');
+assert(widthControl&&tapsControl,'ordinary inspector exposes independent angular width and filter work');
+assert.equal(tapsControl.step,'2');assert.equal(widthControl.step,'.25');

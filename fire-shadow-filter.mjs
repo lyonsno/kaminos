@@ -51,11 +51,11 @@ export function cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,reso
     const a=ray.abs().toVar(),isX=a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),isY=isX.not().and(a.y.greaterThanEqual(a.z));
     const major=a.x.max(a.y).max(a.z).max(1e-8).toVar();
     const uv=isX.select(ray.yz,isY.select(vec2(ray.x,ray.z),ray.xy)).div(major).toVar();
-    const p=uv.add(1).mul(resolution/2).sub(.5).toVar(),base=p.floor().toVar(),f=p.sub(base).toVar();
+    const p=uv.add(1).mul(float(resolution).div(2)).sub(.5).toVar(),base=p.floor().toVar(),f=p.sub(base).toVar();
     const sign=isX.select(ray.x,isY.select(ray.y,ray.z)).greaterThanEqual(0).select(1,-1);
     const plane=normal.dot(delta).toVar(),lit=float(0).toVar(),weight=float(0).toVar();
     for(const y of [0,1])for(const x of [0,1]){
-      const q=base.add(vec2(x+.5,y+.5)).mul(2/resolution).sub(1).toVar();
+      const q=base.add(vec2(x+.5,y+.5)).mul(float(2).div(resolution)).sub(1).toVar();
       const d=isX.select(vec3(sign,q.x,q.y),isY.select(vec3(q.x,sign,q.y),vec3(q.x,q.y,sign))).normalize().toVar();
       const denominator=normal.dot(d),valid=plane.mul(denominator).greaterThan(0);
       const receiver=plane.abs().div(denominator.abs().max(1e-6));
@@ -70,10 +70,10 @@ export function cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,reso
 // Fixed sample pattern, no temporal history or additional cube rendering.
 // Compare taps against the receiver plane: using the center's radial distance
 // at every tap would treat a tilted floor as a sphere and cause grazing acne.
-export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null,edgeFilter=null,resolution=256}) {
-  if(filterPattern&&filterPattern.count!==filterSamples)throw Error('shadow filter pattern count mismatch');
+export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null,edgeFilter=null,resolution=256,runtimeQuality=null}) {
+  if(!runtimeQuality&&filterPattern&&filterPattern.count!==filterSamples)throw Error('shadow filter pattern count mismatch');
   const blockers=shadowDisk(blockerSamples,true),samples=shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
-  const {Fn,If,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
+  const {Fn,If,Loop,int,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
   return Fn(()=>{
     const direction=delta.div(distance.max(1e-5));
     const compare=ray=>cubeComparisonVisibility({sampleDepth,ray,delta,normal,bias,resolution});
@@ -100,10 +100,11 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       return {depth:sampleDepth(ray),receiver,valid,ray};
     };
     const blockerSum=float(0).toVar(),blockerCount=float(0).toVar(),searchRadius=radius.div(distance.max(1e-5));
-    for(const xy of blockers){
-      const p=tap(xy,searchRadius),blocked=p.valid.and(p.depth.lessThan(p.receiver.sub(bias)));
-      blockerSum.addAssign(blocked.select(p.depth,0));blockerCount.addAssign(blocked.select(1,0));
-    }
+    const visitBlocker=xy=>{const p=tap(xy,searchRadius),blocked=p.valid.and(p.depth.lessThan(p.receiver.sub(bias)));blockerSum.addAssign(blocked.select(p.depth,0));blockerCount.addAssign(blocked.select(1,0));};
+    if(runtimeQuality)Loop({start:int(0),end:runtimeQuality.blockerSamples,type:'int',condition:'<'},({i})=>{
+      const n=float(runtimeQuality.blockerSamples).sub(1).max(1),j=float(i).sub(1),r=j.add(.5).div(n).max(0).sqrt(),a=j.mul(2.399963229728653);
+      visitBlocker(i.equal(0).select(vec2(0),vec2(r.mul(a.cos()),r.mul(a.sin()))));
+    });else for(const xy of blockers)visitBlocker(xy);
     result.assign(1);
     // No detected blocker is the lit side of the same texel edge. Filter it
     // too, otherwise that side jumps from one to the first fractional tap.
@@ -112,23 +113,25 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
     const blocker=blockerSum.div(blockerCount.max(1)).max(1e-5);
     const width=radius.mul(distance.sub(blocker).max(0)).div(blocker.mul(distance.max(1e-5)));
     const lit=float(0).toVar(),weight=float(0).toVar();
-    for(const [index,xy] of samples.entries()){
+    const visitFilter=(index,xy)=>{
       let complementaryOffset;
-      if(filterPattern?.node)complementaryOffset=filterPattern.node.element(phaseY.mul(4).add(phaseX).mul(filterSamples).add(index).toUint()).xy;
+      if(!runtimeQuality&&filterPattern?.node)complementaryOffset=filterPattern.node.element(phaseY.mul(4).add(phaseX).mul(filterSamples).add(index).toUint()).xy;
       else {
-      const band=Math.floor(index/sectors),sector=index%sectors;
-      const area=phaseY.add(sector*3+band).mod(4).add(.5).div(4).add(band).div(bands);
-      const angle=phaseX.add(band*3+sector).mod(4).add(.5).div(4).add(sector).mul(2*Math.PI/sectors);
-      const radius=area.sqrt();
-      complementaryOffset=vec2(radius.mul(angle.cos()),radius.mul(angle.sin()));
+        const sectorsNode=runtimeQuality?float(runtimeQuality.sectors):float(sectors),bandsNode=runtimeQuality?float(runtimeQuality.bands):float(bands);
+        const band=runtimeQuality?float(index).div(sectorsNode).floor():float(Math.floor(index/sectors)),sector=runtimeQuality?float(index).mod(sectorsNode):float(index%sectors);
+        const area=phaseY.add(sector.mul(3)).add(band).mod(4).add(.5).div(4).add(band).div(bandsNode);
+        const angle=phaseX.add(band.mul(3)).add(sector).mod(4).add(.5).div(4).add(sector).mul(float(2*Math.PI).div(sectorsNode));
+        const radius=area.sqrt();complementaryOffset=vec2(radius.mul(angle.cos()),radius.mul(angle.sin()));
       }
-      const sample=complementary.select(complementaryOffset,vec2(...xy));
+      const sample=complementary.select(complementaryOffset,Array.isArray(xy)?vec2(...xy):xy);
       const p=tap(sample,width,filterTangent);
       const visibility=float(0).toVar(),nearest=()=>visibility.assign(p.depth.greaterThanEqual(p.receiver.sub(bias)).select(1,0));
-      if(edgeFilter)If(edgeFilter.and(width.lessThan(2/resolution)),()=>visibility.assign(compare(p.ray))).Else(nearest);else nearest();
-      lit.addAssign(p.valid.select(visibility,0));
-      weight.addAssign(p.valid.select(1,0));
-    }
+      if(edgeFilter)If(edgeFilter.and(width.lessThan(float(2).div(resolution))),()=>visibility.assign(compare(p.ray))).Else(nearest);else nearest();
+      lit.addAssign(p.valid.select(visibility,0));weight.addAssign(p.valid.select(1,0));
+    };
+    if(runtimeQuality)Loop({start:int(0),end:runtimeQuality.filterSamples,type:'int',condition:'<'},({i})=>{
+      const r=float(i).add(.5).div(float(runtimeQuality.filterSamples)).sqrt(),a=float(i).mul(2.399963229728653);visitFilter(i,vec2(r.mul(a.cos()),r.mul(a.sin())));
+    });else for(const [index,xy]of samples.entries())visitFilter(index,xy);
     result.assign(weight.greaterThan(0).select(lit.div(weight.max(1)),hardVisibility));
     });
     });

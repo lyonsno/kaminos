@@ -149,8 +149,10 @@ assert.equal(mount.debugState().frame.smokeShadow.generation,field.source.genera
 assert(passes.includes('live smoke shadow prefix integration'));
 mount.setSmokeShadowQuality({filter:true});consume(field);
 assert.equal(mount.debugState().smokeShadowFilter,true);
-assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'binomial-3x3-transmission');
+assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'angular-tent-transmission');
 assert(passes.includes('current smoke directional filter'));
+const heldAngle=mount.debugState().smokeShadowFilterAngle;mount.setSmokeShadowQuality({resolution:8});consume(field);assert.equal(mount.debugState().smokeShadowFilterAngle,heldAngle,'map resolution must not change angular blur');
+mount.setSmokeShadowQuality({angleDegrees:8.5,tapsPerAxis:5});consume(field);assert.equal(mount.debugState().frame.smokeShadow.angleDegrees,8.5);assert.equal(mount.debugState().frame.smokeShadow.work.filterDirectionsPerPrefix,25);
 assert.throws(()=>mount.setSmokeShadowQuality({filter:1}),/boolean/);
 mount.setSmokeShadowQuality({filter:false});const unfilteredPasses=passes.length;consume(field);
 assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'off');
