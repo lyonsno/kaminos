@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {validateBurnStructureSnapshot} from './burn-structure-contract.mjs';
 const [origin,out]=process.argv.slice(2);
 if(!origin||!out)throw Error('Usage: scene-burning-witness.mjs <origin> <output directory>');
 await fs.mkdir(out,{recursive:true});
@@ -53,7 +54,7 @@ try{
   report.burnLabelDraws=await page.evaluate(()=>window.__burnLabelDraws);await save();
   assert.equal(report.burnLabelDraws,0,'Ordinary burning must not create floating burn-state labels');
   report.sources=[];
-  for(const name of ['index.html','authoring-workspace.mjs','scene-burning.mjs','scene-burn-body.mjs','scene-burning-settings.mjs','scene-repetition.mjs','scene-repetition-controller.mjs','scene-radiance.mjs','burn-table-material.mjs','scene-persistence-core.js','live-log-indicator.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','live-log-heat-gpu.mjs','live-log-gas-source.mjs']){
+  for(const name of ['index.html','authoring-workspace.mjs','scene-burning.mjs','scene-burn-body.mjs','scene-burning-settings.mjs','scene-record-operations.mjs','scene-object-record.mjs','scene-repetition.mjs','scene-repetition-controller.mjs','scene-radiance.mjs','burn-table-material.mjs','scene-persistence-core.js','live-log-indicator.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','live-log-heat-gpu.mjs','live-log-gas-source.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','burn-structure.worker.mjs','scene-burn-structure.mjs','fracture-whole-prepare.mjs','fracture-coarse-surface.mjs','poly-mesh-edit.mjs']){
     const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.equal(response.ok(),true);
     const served=await response.body(),hash=bytes=>createHash('sha256').update(bytes).digest('hex');assert.equal(hash(local),hash(served));report.sources.push({name,sha256:hash(local)});
   }
@@ -126,6 +127,27 @@ try{
   report.reopened=await page.evaluate(ids=>({objects:ids.map(id=>window.kaminosSceneAuthoring.burningState(id)),scene:window.kaminosSceneAuthoring.read()}),report.ids);await save();
   assert.ok(report.reopened.objects.every(row=>row.enabled));
   const sources=report.reopened.scene.objects.filter(row=>row.type==='flame-emitter');assert.ok(sources.length);assert.ok(sources.every(row=>row.emissionEnabled===false));
+  if(process.env.KAMINOS_BURN_STRUCTURE_ASSET){
+    report.phase='imported-structure';await save();
+    const asset=await fs.readFile(process.env.KAMINOS_BURN_STRUCTURE_ASSET),sha256=createHash('sha256').update(asset).digest('hex');
+    report.structureAsset={path:path.resolve(process.env.KAMINOS_BURN_STRUCTURE_ASSET),sha256,bytes:asset.length};await save();
+    const upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.equal(upload.ok(),true);const receipt=await upload.json();assert.equal(receipt.sha256,sha256);
+    report.structureId=await guard(page.evaluate(async source=>{const response=await fetch(source),file=new File([await response.arrayBuffer()],'Imported burn structure.glb',{type:'model/gltf-binary'}),api=window.kaminosSceneAuthoring;
+      const id=await api.importMesh(file);window.kaminosSetSceneObjectTransform(id,{position:[0,-.2,0],scale:[.25,.25,.25]});api.setBurnable(id,true);api.setBurnStructure(id,true);window.selectSceneObject(id);window.kaminosFrameSelected();return id;},receipt.source));
+    await guard(page.waitForFunction(id=>{const s=window.kaminosSceneAuthoring.burningState(id).state?.structure;if(s?.status==='failed')throw Error(s.error);return s?.status==='resident';},report.structureId));
+    const structureSample=async name=>{const row=await guard(page.evaluate(async id=>({state:window.kaminosSceneAuthoring.burningState(id),snapshot:await window.kaminosSceneAuthoring.burningSnapshot(id)}),report.structureId));
+      await fs.writeFile(path.join(out,name+'.json'),JSON.stringify(row));const verdict=validateBurnStructureSnapshot(row.snapshot);report.observations.push({name,structure:verdict,state:row.state});await save();return verdict;};
+    await structureSample('structure-cold');await page.screenshot({path:path.join(out,'structure-cold.png')});
+    await page.evaluate(()=>window.kaminosSceneEdits.apply('@flame-source-enabled',{enabled:true},'Heat imported material'));
+    assert.equal((await advance(600)).ok,true);const hotStructure=await structureSample('structure-hot');assert.ok(hotStructure.minFraction<.999,'Actual consumption must weaken a section of the imported object');
+    await page.screenshot({path:path.join(out,'structure-hot.png')});
+    const steps=await page.evaluate(id=>window.kaminosSceneAuthoring.burningState(id).state.fields[0].steps,report.structureId);
+    await page.locator('#object-burn-structure').uncheck();await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.structure.status==='off',report.structureId));
+    assert.equal(await page.evaluate(id=>window.kaminosSceneAuthoring.burningState(id).state.fields[0].steps,report.structureId),steps,'Disabling analysis must retain the burn field');
+    await page.locator('#object-burn-structure').check();await guard(page.waitForFunction(id=>window.kaminosSceneAuthoring.burningState(id).state.structure.status==='resident',report.structureId));
+    const resumed=await structureSample('structure-reenabled');assert.ok(Math.abs(resumed.minFraction-hotStructure.minFraction)<1e-5,'Re-enabling analysis samples retained material rather than resetting cold');
+    const structuralSaved=await guard(page.evaluate(name=>window.saveSceneAs({name,result:true}),'burn-structure-'+path.basename(out)));assert.equal(structuralSaved.ok,true);assert.equal(structuralSaved.document.objects.find(o=>o.id===report.structureId).burnable.structure,true);report.structuralSaved=structuralSaved;
+  }
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'mobile.png')});
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}

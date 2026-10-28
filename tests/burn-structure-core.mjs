@@ -1,0 +1,26 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {BoxGeometry} from '../lib/three.core.js';
+import {prepareWholeFracture} from '../fracture-whole-prepare.mjs';
+import {mapBurnSections,sectionReference} from '../burn-structure-core.mjs';
+import {LOG_RESIDUE} from '../log-consumption.mjs';
+const g=new BoxGeometry(2,2,2),source={positions:g.attributes.position.array,indices:Uint32Array.from(g.index.array),normals:g.attributes.normal.array,uvs:g.attributes.uv.array,faceMaterial:new Uint8Array(12)};
+const prepared=prepareWholeFracture(source,{labels:new Uint32Array(12),boundaries:[]},{cellExtent:1});
+assert.equal(prepared.cells.length,8);assert.ok(prepared.bonds.length>=12);assert.equal(prepared.receipt.exteriorAreaAfter,prepared.receipt.exteriorAreaBefore);
+const material={bounds:{min:[-1,-1,-1],max:[1,1,1]},dimensions:[4,4,4],initial:new Uint32Array(64).fill(1)},mapping=mapBurnSections(prepared,material);
+assert.equal(mapping.receipt.unmapped.length,0);assert.ok(mapping.cells.length>0);
+const state=new Float32Array(64*8);for(let i=0;i<64;i++)state[i*8+5]=1;
+assert.ok(sectionReference(mapping,state).every(s=>s.mapped&&Math.abs(s.fraction-1)<1e-7));
+for(let i=0;i<64;i++){state[i*8]=10;state[i*8+1]=1;state[i*8+2]=1;}
+assert.ok(sectionReference(mapping,state).every(s=>Math.abs(s.fraction-1)<1e-7),'Heat, visible char and flame do not counterfeit material loss');
+const cell=mapping.cells[0];state[cell*8+5]=LOG_RESIDUE;
+const reduced=sectionReference(mapping,state);assert.ok(reduced.some(s=>s.fraction<1));assert.ok(reduced.some(s=>Math.abs(s.fraction-1)<1e-7),'Local consumption leaves unrelated sections intact');
+for(let i=0;i<64;i++)state[i*8+5]=0;
+assert.ok(sectionReference(mapping,state).every(s=>s.fraction===0));
+const unmapped=mapBurnSections(prepared,{...material,initial:new Uint32Array(64)});
+assert.equal(unmapped.receipt.unmapped.length,prepared.bonds.length);
+assert.ok(sectionReference(unmapped,state).every(s=>s.fraction===null&&!s.mapped),'Unsupported section mapping must remain unknown, not a proved fracture');
+assert.throws(()=>sectionReference(mapping,state.subarray(8)),/Complete finite/);
+state[0]=NaN;assert.throws(()=>sectionReference(mapping,state),/Complete finite/);
+assert.throws(()=>mapBurnSections(prepared,{...material,dimensions:[4,5,4]}),/original finite cubic/);
+for(const piece of prepared.pieces)for(let face=0;face<piece.faceInterfaces.length;face++)if(piece.faceInterfaces[face])assert.ok(piece.faceBonds[face]>=0);

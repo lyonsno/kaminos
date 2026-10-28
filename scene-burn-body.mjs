@@ -5,6 +5,7 @@ import {createLogDebrisGpu} from './log-debris-gpu.mjs';
 import {resolveBurnableTarget} from './burnable-target.mjs';
 import {bindResidentLightCoverage} from './scene-resident-coverage.mjs';
 import {sceneRadianceSourceMaterial} from './scene-radiance.mjs';
+import {createSceneBurnStructure} from './scene-burn-structure.mjs';
 
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
@@ -13,11 +14,11 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame})
   resolveBurnableTarget([entry],entry.id);
   let mesh;entry.object.traverse(node=>{if(node.isMesh)mesh=node;});
   const original=Array.isArray(mesh.material)?mesh.material.map(originalBurnMaterial):originalBurnMaterial(mesh.material),bindings=[],releases=[];
-  let field,debris,elapsed=0,disposed=false;
+  let field,debris,structure,elapsed=0,disposed=false;
   function dispose(){
     if(disposed)return;disposed=true;
     for(const release of releases)release();
-    mesh.material=original;debris?.dispose();
+    structure?.dispose();mesh.material=original;debris?.dispose();
     for(const binding of bindings)binding.dispose();field?.dispose();
   }
   try{
@@ -34,21 +35,25 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame})
     releases.push(bindResidentLightCoverage(debris.caps,coverage));debris.caps.castShadow=true;
     // Detached fragments remain world-space presentation, never a separately editable object.
     debris.root.userData.kaminosEditorHelper=true;scene.add(debris.root);
+    structure=createSceneBurnStructure({renderer,field,parent:debris.root});
+    void structure.configure(entry.burnable.structure===true);
     // Authored surface edits also apply while the fluid is paused; lighting may
     // have installed an outer clone, whose scalar inputs need the same update.
     releases.push(onFrame(()=>{
+      structure.present();
       const displayed=Array.isArray(mesh.material)?mesh.material:[mesh.material];
       bindings.forEach((binding,i)=>binding.update(elapsed,displayed[i]));
     }));
     return {
       object:entry.object,
+      setSettings:settings=>{void structure.configure(settings?.structure===true);},
       setMounted(value){debris.root.visible=value;},
       materialMask:()=>field.materialMask(entry.id),
       encodeGasSource:(encoder,frame,gas)=>field.encodeGasSource(encoder,frame,gas),
-      encode(encoder,frame){field.encode(encoder,frame);debris.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);},
-      read:()=>({objectId:entry.id,fields:[field.read()],debris:debris.read(),elapsed,physicalWoodCalibration:false,
+      encode(encoder,frame){field.encode(encoder,frame);structure.encode(encoder);debris.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);},
+      read:()=>({objectId:entry.id,fields:[field.read()],structure:structure.read(),debris:debris.read(),elapsed,physicalWoodCalibration:false,
         materials:(Array.isArray(mesh.material)?mesh.material:[mesh.material]).map(m=>({color:m.color.getHexString(),roughness:m.roughness,metalness:m.metalness}))}),
-      snapshot:()=>debris.snapshot(),
+      snapshot:async()=>({...await debris.snapshot(),structure:await structure.snapshot()}),
       dispose,
     };
   }catch(error){dispose();throw error;}

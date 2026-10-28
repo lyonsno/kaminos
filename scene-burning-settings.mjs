@@ -4,5 +4,6 @@ export function checkedBurnable(record,value=record?.burnable){
   if(typeof value.enabled!=='boolean')throw Error('Burnable enabled must be Boolean');
   if(value.material!=='wood')throw Error('Burnable material must be wood');
   if(value.enabled&&record.repetition)throw Error('Burnable wood requires independent objects; make repeated copies editable first');
-  return {enabled:value.enabled,material:'wood'};
+  if(value.structure!==undefined&&typeof value.structure!=='boolean')throw Error('Burnable structure must be Boolean');
+  return {enabled:value.enabled,material:'wood',...(value.structure!==undefined?{structure:value.structure}:{})};
 }

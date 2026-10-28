@@ -388,7 +388,7 @@ export function sectionLoops(segments) {
   return {loops:[...loops,...stitched.loops],openChains:stitched.open.length,bridged:stitched.bridged};
 }
 
-export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding'}={}) {
+export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding',absoluteWinding=false}={}) {
   if(side!==1&&side!==-1)throw Error('Section cap needs the side the part lies on, 1 or -1');
   if(fill!=='winding'&&fill!=='outline')throw Error("Section cap fill is 'winding' or 'outline'");
   const section=sectionSegments(sourceArrays,mask,plane),{segments}=section;
@@ -409,7 +409,7 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
   for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){
     const x=ox+i*h,y=oy+j*h;let sum=0;
     for(const [a,b] of segments){const ax=a[0]-x,ay=a[1]-y,bx=b[0]-x,by=b[1]-y;sum+=Math.atan2(ax*by-ay*bx,ax*bx+ay*by);}
-    w[j*(nx+1)+i]=sum/(2*Math.PI);
+    w[j*(nx+1)+i]=absoluteWinding?Math.abs(sum/(2*Math.PI)):sum/(2*Math.PI);
   }
   // Marching squares at w = 1/2 over grid nodes, linking edge crossings into closed outlines.
   const at=(i,j)=>w[j*(nx+1)+i],iso=.5,cross=new Map(),links=new Map();

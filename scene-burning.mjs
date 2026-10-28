@@ -14,7 +14,7 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     const wanted=new Map([...entries].filter(([,entry])=>entry.burnable?.enabled));
     for(const [object,row]of bodies){
       if(!wanted.has(object)){row.body.dispose();bodies.delete(object);}
-      else row.body.setMounted(mounted(row.entry));
+      else {row.entry=entries.get(object);row.body.setMounted(mounted(row.entry));row.body.setSettings?.(row.entry.burnable);}
     }
     for(const object of failures.keys())if(!wanted.has(object))failures.delete(object);
     const host=runtime(),contextState=host?.debugState();

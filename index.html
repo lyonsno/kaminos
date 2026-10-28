@@ -25000,7 +25000,7 @@ const colliderEditTargets=new Set();
 const burnableEditTargets=new Set();
 function syncBurnableStatus(){
   const output=document.getElementById('object-burnable-status');if(!output)return;
-  const state=sceneBurning?.read(workingScene.activeObjectId),text=state?.error??(state?.status==='waiting-for-fire'?'Waiting for fire':'');
+  const state=sceneBurning?.read(workingScene.activeObjectId),structure=state?.state?.structure,text=state?.error??(state?.status==='waiting-for-fire'?'Waiting for fire':structure?.enabled?(structure.error??(structure.status==='resident'?`${structure.regions} regions · ${structure.connections} sections${structure.receipt.unmapped.length?` · ${structure.receipt.unmapped.length} unmapped`:''}`:structure.status==='preparing'?'Preparing structural sections':structure.status==='compiling'?'Compiling structural sections':'')):'');
   if(output.textContent!==text)output.textContent=text;
 }
 function writeObjectBurnable(id,value){
@@ -25089,6 +25089,8 @@ function syncSceneDataInspector() {
     let supported=false;try{resolveBurnableTarget(workingScene.objects,entry?.id);supported=true;}catch{}
     burnPanel.hidden=!supported;
     document.getElementById('object-burnable').checked=entry?.burnable?.enabled===true;
+    document.getElementById('object-burn-structure').checked=entry?.burnable?.structure===true;
+    document.getElementById('object-burn-structure').disabled=entry?.burnable?.enabled!==true;
     syncBurnableStatus();
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
@@ -25209,11 +25211,11 @@ function installSceneConstruction() {
   collisionInput.addEventListener('change',()=>{try{const target=ensureObjectCollisionTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({domainId:'flame-field',enabled:collisionInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[collisionInput],edits,id:()=>ensureObjectCollisionTarget(workingScene.activeObjectId),label:'Set Fire & smoke obstacle',onError:error=>setInfo(error.message)}));
   const burnPanel=document.createElement('section');burnPanel.id='selected-burnable-properties';burnPanel.hidden=true;
-  burnPanel.innerHTML='<h3>Combustion</h3><label class="slider-row"><span class="slider-label">Burnable wood</span><input id="object-burnable" type="checkbox"></label><p id="object-burnable-status" role="status"></p>';
+  burnPanel.innerHTML='<h3>Combustion</h3><label class="slider-row"><span class="slider-label">Burnable wood</span><input id="object-burnable" type="checkbox"></label><label class="slider-row"><span class="slider-label">Inspect structural sections</span><input id="object-burn-structure" type="checkbox"></label><p id="object-burnable-status" role="status"></p>';
   collisionPanel.after(burnPanel);scenePlacementTools.addHistoryScope(burnPanel);
-  const burnInput=document.getElementById('object-burnable');
-  burnInput.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({enabled:burnInput.checked,material:'wood'});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
-  authoringControlSessions.push(installSceneControlHistory({controls:[burnInput],edits,id:()=>ensureObjectBurnableTarget(workingScene.activeObjectId),label:'Set burnable wood',onError:error=>setInfo(error.message)}));
+  const burnInput=document.getElementById('object-burnable'),structureInput=document.getElementById('object-burn-structure');
+  for(const input of [burnInput,structureInput])input.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({enabled:burnInput.checked,material:'wood',structure:structureInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  authoringControlSessions.push(installSceneControlHistory({controls:[burnInput,structureInput],edits,id:()=>ensureObjectBurnableTarget(workingScene.activeObjectId),label:'Set wood combustion',onError:error=>setInfo(error.message)}));
   sceneBurning=createSceneBurning({objects:()=>workingScene.objects,retained:()=>workingScene.retainedObjects(),runtime:()=>activeSceneComposition?volumePrototype:null,
     createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame}),
     onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
@@ -25241,7 +25243,8 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
-    setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled,material:'wood'},'Set burnable wood');},
+    setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{...workingScene.find(id)?.burnable,enabled,material:'wood'},'Set burnable wood');},
+    setBurnStructure:(id,structure)=>{assertSceneConstructionAvailable();return edits.apply(ensureObjectBurnableTarget(id),{enabled:false,...workingScene.find(id)?.burnable,material:'wood',structure},'Inspect structural sections');},
     burningState:id=>sceneBurning.read(id),
     burningSnapshot:id=>sceneBurning.snapshot(id),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
