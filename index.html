@@ -3307,6 +3307,7 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
 import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
+import {readFireRendering,restoreFireRendering,checkedFireRendering} from './scene-fire-render-settings.mjs';
 import {createKilnRecipeStore} from './inference-kiln-selection.mjs';
 import {defaultKilnRecipe} from './inference-kiln-default.mjs';
 import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
@@ -18394,11 +18395,11 @@ function linkedVolumeEmitterInletVelocity() {
   }).linkedInletVelocity;
 }
 
-function readVolumeControls({quality=viewportDisplay.quality,document=globalThis.document}={}) {
+function readVolumeControls({quality=viewportDisplay.quality,document=globalThis.document,routeParams=null}={}) {
   const volumeScene = document.getElementById('volume-scene').value;
   const volumeSceneRequested = document.getElementById('volume-scene').dataset.volumeSceneRequest || volumeScene;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
-  const params = new URLSearchParams(window.location.search);
+  const params = routeParams??new URLSearchParams(window.location.search);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
@@ -18608,7 +18609,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     shellSoftClip: 1.6,
     shellSmoke: 0.25,
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
-    gridHeightRatio: parseFloat(volumeRebuildControlValue('volume-grid-height-ratio')) || 2,
+    gridHeightRatio: parseFloat(document===globalThis.document?volumeRebuildControlValue('volume-grid-height-ratio'):document.getElementById('volume-grid-height-ratio').value) || 2,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -18621,9 +18622,9 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     oracleActivityVorticity: parseFloat(document.getElementById('volume-oracle-activity-vorticity').value),
     oracleActivityMaterial: parseFloat(document.getElementById('volume-oracle-activity-material').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
-    fireLightField: fireLightFieldRouteParams().get('volume_light_field') === '1',
-    fireProbe: parseInt(new URLSearchParams(window.location.search).get('volume_fire_probe') || '', 10) || 0,
-    fireLightFieldGrid: parseInt(fireLightFieldRouteParams().get('volume_light_field_grid') || '', 10) || undefined,
+    fireLightField: (routeParams??fireLightFieldRouteParams()).get('volume_light_field') === '1',
+    fireProbe: parseInt(params.get('volume_fire_probe') || '', 10) || 0,
+    fireLightFieldGrid: parseInt((routeParams??fireLightFieldRouteParams()).get('volume_light_field_grid') || '', 10) || undefined,
     reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
     reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),
     reactionFuelMin: parseFloat(document.getElementById('volume-reaction-fuel-min').value),
@@ -24639,6 +24640,7 @@ function buildSceneData(capture = null) {
     volumePrimitives: getVolumePrimitiveState(),
     flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
     postprocessing: {
+      fireLighting:readFireRendering(document),
       bloom: {...sceneBloom.read().settings},
       sceneGI: {...sceneGISettings},
       ao: sceneAO.document(),
@@ -26269,6 +26271,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
+  restoreFireRendering(document,data.postprocessing?.fireLighting);
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
   // Scenes without a saved GI record use defaults, independent of prior tuning.
   setSceneGIControls(data.postprocessing?.sceneGI ?? {});
@@ -26875,20 +26878,22 @@ function setupAuthoringAssets(){
   },createFlame:async (viewport,{signal,prompt,request})=>{
     const schemaResponse=await fetch('./volume-settings-preset-schema-v2.json');if(!schemaResponse.ok)throw Error('Fire settings schema unavailable');const schema=await schemaResponse.json();
     let recipe=await kilnRecipes.load();signal.throwIfAborted();
-    if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);recipe=defaultKilnRecipe(document,artifact,receipt.preset);}
+    if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);const starter=structuredClone(receipt.preset),studyResponse=await fetch('./artifacts/inference-kiln/study.json');if(!studyResponse.ok)throw Error('Kiln study settings unavailable');const study=await studyResponse.json();
+      for(const axis of ['domControls','rendererControls','presentationControls'])for(const descriptor of Object.values(starter[axis]))if(Object.hasOwn(study.query,descriptor.param)){const raw=study.query[descriptor.param];delete descriptor.rawValue;descriptor.value=descriptor.type==='checkbox'?['1','true'].includes(raw):['range','number'].includes(descriptor.type)?Number(raw):raw;}
+      recipe=defaultKilnRecipe(document,artifact,starter);}
     let sourceSettings=recipe.plan.fireSettings;
     if(!sourceSettings){const response=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(recipe.plan.composition.flame.presetId)}`,{cache:'no-store'});if(!response.ok)throw Error('Saved kiln basin unavailable');const artifact=await response.json();sourceSettings=validateVolumeSettingsPresetDocument(artifact,recipe.plan.composition.flame.presetId,schema).preset;}
     const authored=projectFireSettingsToSchema(sourceSettings,schema),copy=document.implementation.createHTMLDocument('Kiln controls');
     // Detached current-schema controls provide the ordinary normalization. Every
     // saved value is applied; missing source/settings are errors, never defaults.
     for(const original of document.querySelectorAll('input[id],select[id]')){const node=original.cloneNode(true);node.value=original.value;node.checked=original.checked;copy.body.append(node);}
-    for(const group of ['domControls','rendererControls','presentationControls'])for(const setting of Object.values(authored[group]||{})){
+    for(const group of ['domControls','rendererControls'])for(const setting of Object.values(authored[group]||{})){
       const node=copy.getElementById(setting.id);if(!node)throw Error('Unsupported kiln control '+setting.id);
       if(node.type==='checkbox')node.checked=setting.value;else{const value=setting.rawValue??setting.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);if(node.type==='select-one'&&node.value!==String(value))throw Error('Unsupported kiln value '+setting.id);}
     }
-    const settings={...readVolumeControls({quality:'full',document:copy}),resolution:32,raySteps:6,adaptiveRays:1,renderScale:1,rayStepTelemetry:false,runtimeQualityRequested:'kiln-preview',runtimeQualityReason:'operator-small-generation-kiln',
-      sceneMatchFlameCamera:copy.getElementById('rendering-match-flame-camera').checked};
-    const rendering=Object.fromEntries(Object.entries(authored.rendererControls).map(([key,value])=>[key,value.value]));
+    const settings={...readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(recipe.plan.composition.route)}),resolution:32,raySteps:6,adaptiveRays:1,renderScale:1,lookFreeze:0,rayStepTelemetry:false,runtimeQualityRequested:'kiln-preview',runtimeQualityReason:'operator-small-generation-kiln',
+      raymarchSmokePresentation:authored.presentationControls['raymarch-smoke-presentation'].value,sceneMatchFlameCamera:checkedFireRendering(recipe.document.postprocessing?.fireLighting)['rendering-match-flame-camera']};
+    const rendering=checkedFireRendering(recipe.document.postprocessing?.fireLighting);
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
     return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();

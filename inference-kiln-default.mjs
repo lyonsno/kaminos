@@ -22,7 +22,7 @@ export function defaultKilnRecipe(document,artifact,settings){
   fireSettings:settings,flameDomainTranslation:flameDomainTranslationForPose(emitter,shape),
   camera:{position:[0,.45,3.4],target:[0,.3,0],up:[0,1,0],fov:40,near:.01,far:100},
   sceneCamera:{schema:'kaminos.scene-camera.v1',activeId:null,aspect:[16,9]},environment:null,
-  postprocessing:{sceneGI:{mode:'combined'},ao:{enabled:true,intensity:1},bloom:{enabled:true,strength:.08,radius:.12,threshold:0,composeFlame:true}},
+  postprocessing:{fireLighting:{'rendering-match-flame-camera':true},sceneGI:{mode:'combined'},ao:{enabled:true,intensity:1},bloom:{enabled:true,strength:.08,radius:.12,threshold:0,composeFlame:true}},
  });
  scene.label='Inference Kiln';return {selection:null,document:scene,plan:kilnScenePlan(scene,{promptObjectId:id})};
 }

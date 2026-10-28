@@ -23,3 +23,8 @@ test('an unsupported scene cannot become an acknowledged kiln selection',async()
  const store=createKilnRecipeStore({preferences:{load:async()=>({schema:PREFERENCES_SCHEMA}),save:async()=>{writes++;}},request:async()=>({ok:true,json:async()=>document})});
  await assert.rejects(store.choose({schema:KILN_SELECTION_SCHEMA,sceneFile:'unsupported.kaminos.json',promptObjectId:'prompt'}),/cannot reconstruct/);assert.equal(writes,0);assert.equal(store.read(),null);
 });
+test('a delayed earlier refresh cannot replace the scene chosen afterwards',async()=>{
+ let prefs={schema:PREFERENCES_SCHEMA,inferenceKiln:{schema:KILN_SELECTION_SCHEMA,sceneFile:'first.kaminos.json',promptObjectId:'prompt'}},release;const gate=new Promise(resolve=>{release=resolve;});
+ const store=createKilnRecipeStore({preferences:{load:async()=>structuredClone(prefs),save:async value=>{prefs=value;}},request:async url=>{if(url.includes('first.kaminos.json'))await gate;return {ok:true,json:async()=>scene()};}});
+ const loading=store.load();await new Promise(resolve=>setImmediate(resolve));const choosing=store.choose({...prefs.inferenceKiln,sceneFile:'chosen.kaminos.json'});await new Promise(resolve=>setImmediate(resolve));release();await Promise.all([loading,choosing]);assert.equal(store.read().selection.sceneFile,'chosen.kaminos.json');
+});

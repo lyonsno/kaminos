@@ -24,12 +24,12 @@ const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
  const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],owned=[],frames=new Set();
  let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0;
+ const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
  if(!view||view.projection==='orthographic')throw Error('Choose a perspective kiln camera');
  const camera=new THREE.PerspectiveCamera(view.fov,aspect,view.near,view.far);camera.position.fromArray(view.position);camera.up.fromArray(view.up??[0,1,0]);camera.lookAt(...view.target);camera.updateMatrixWorld();
  const renderer=new THREE.WebGPURenderer({antialias:true,device:sharedGpu.device});
  const canvas=renderer.domElement;canvas.id='generation-flame-canvas';canvas.setAttribute('aria-label','Physical kiln preview');viewport.append(canvas);
- const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  renderer.setPixelRatio(1);renderer.setSize(width,height);renderer.shadowMap.enabled=true;renderer.toneMapping=THREE.AgXToneMapping;
  const hidden=new Set(plan.editorDisplay?.hiddenIds??[]),colliders=createSceneColliderCollection(THREE);
  const add=(object,record)=>{
@@ -93,17 +93,18 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
    getSceneCollision:()=>colliders.update(entries),onStatus:state=>{if(state.error)failure(Error(state.error));},
   });fire.canvasElement().style.display=post.bloom?.composeFlame?'none':'';
   fire.setForegroundOpportunityRequester(request=>app.foreground.request({...request,requestId:`kiln-${request.requestId}`}));
+  fire.setRaymarchSmokePresentationMode(settings.raymarchSmokePresentation);
   fire.setImmersedSources(flameSourceInputs(plan.flameSources,{controls:settings,translation:plan.flameDomainTranslation,scale:plan.flameDomainScale,visible:id=>!hidden.has(id)}));
   if(post.bloom?.composeFlame)fire.setSceneTransportConsumer(frame=>{transport=frame;try{return frame.renderHost();}finally{transport=null;}});
   burning=createSceneBurning({objects:()=>entries,runtime:()=>fire,createGas:createLogGasSourceGpu,
    createBody:entry=>createSceneBurnBody({entry,renderer,scene,kelvinPerHeat:()=>settings.physicalKelvinPerHeat,ground:()=>({center:[0,ground?.height??-.85,0],height:ground?.height??-.85,radius:5,visible:ground?.visible??true}),onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}}),onError:failure});
-  await renderer.compileAsync(scene,camera);signal?.throwIfAborted();
+  signal?.throwIfAborted();
   // One cold frame, no idle simulation or private RAF loop.
   const cold=app.foreground.request({requestId:`kiln-cold-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-cold'},run(){draw();return {status:'submitted'};}});await cold.completion;
   return {
    async setActive(value){if(disposed)return;if(active===!!value)return;active=!!value;
     if(active){await fire.setActive(true);signal?.throwIfAborted();await burning.sync();if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
-     lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
+     lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,getSourceGuide:()=>({position:[...plan.flameSources[0].transform.position],radius:settings.inputRadius,height:settings.plumeHeight,depth:settings.emitterSourceDepth}),...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
      const value=(id,fallback)=>rendering[id]??fallback;
      lighting.setSurfaceGain(2**Number(value('rendering-surface-gain',0)));lighting.setSurfaceScattering(!!value('rendering-surface-scattering',true));lighting.setSourceSoftness(Number(value('rendering-source-softness',0)));lighting.setSmokeMode(value('rendering-smoke-solver','distributed'));lighting.setDirections(Number(value('rendering-angular-samples',24)));lighting.setAngularPattern(value('rendering-angular-pattern','fixed'));await lighting.whenRebuilt();
     }else await fire.setActive(false);
