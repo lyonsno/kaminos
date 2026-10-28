@@ -7,3 +7,7 @@ assert.equal(isReloadableSceneObjectRecord(room),true,'the existing saved corrid
 assert.equal(isReloadableSceneObjectRecord({...room,source:'http://127.0.0.1:18706/scratch/unknown/'}),false,'unrelated experiments remain unsupported');
 assert.equal(isReloadableSceneObjectRecord({...room,source:'javascript:alert(1)'}),false);
 console.log('saved brazier room reconstruction admission passed');
+
+const library={...room,source:'/api/read?root=generated-meshes&path=room%2Froom.surface.json'};
+assert.equal(isReloadableSceneObjectRecord(library),true,'stored surface asset must reopen without the assay scratch mount');
+assert.equal(isReloadableSceneObjectRecord({...library,source:'/api/read?root=scratch&path=room.surface.json'}),false);
