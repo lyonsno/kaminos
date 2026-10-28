@@ -3,6 +3,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {MLS_ROUTE} from '../mls-juice-contract.mjs';
+
+export function validateMlsHandWindow(start,end){
+  for(const state of [start,end]){
+    assert.equal(state?.running,true,'hand stopped during populated window');
+    assert.equal(state.starting,false);assert.equal(state.error,null,'hand failure during populated window');
+    assert.equal(state.identity?.backend,'webgpu-local','hand backend changed');
+    assert.equal(state.fingerJuice?.enabled,true);assert.equal(state.fingerJuice.backend,'mls-mpm');
+    assert.equal(state.fingerJuice.error,null,'fluid failure during populated window');
+    assert.equal(state.fingerJuice.runtime?.failure,null,'runtime failure during populated window');
+    assert.equal(state.fingerJuice.runtime.effectiveRoute,MLS_ROUTE,'fluid route changed');
+  }
+  const progress={presentedFrames:end.fingerJuice.runtime.frameCount-start.fingerJuice.runtime.frameCount,
+    simulatedSeconds:end.fingerJuice.runtime.solver.clock.simulatedSeconds-start.fingerJuice.runtime.solver.clock.simulatedSeconds,
+    handResults:end.received-start.received};
+  assert(progress.presentedFrames>0,'no presentation progress during populated window');
+  assert(progress.simulatedSeconds>0,'no simulation progress during populated window');
+  assert(progress.handResults>0,'no hand progress during populated window');
+  return progress;
+}
 
 export function validateServedMlsSource(report){
   const source=report.servedSource?.source;

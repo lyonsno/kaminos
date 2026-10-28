@@ -5,7 +5,7 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {MLS_ROUTE,analyzeMlsParticles} from '../mls-juice-contract.mjs';
-import {bindMlsWitnessSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
+import {bindMlsWitnessSource,validateMlsHandWindow,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
 
 const {values:a}=parseArgs({options:Object.fromEntries(['url','output','browser','playwright','capture','seconds','min-active','observe-seconds','width','height','scale','canvas-width','canvas-height'].map(k=>[k,{type:'string'}]))});
 const out=path.resolve(a.output);fs.mkdirSync(out,{recursive:true});
@@ -14,6 +14,8 @@ const report={status:'failed',phase:'input',at:new Date().toISOString(),argv:pro
   scope:'retained real camera frame replayed into full browser hand/MLS/recording route; callback spacing is not GPU time or live pose/latency acceptance'};
 const save=()=>fs.writeFileSync(out+'/report.json',JSON.stringify(report,null,2));save();let context,page;
 try{
+  fs.copyFileSync(new URL(import.meta.url),out+'/witness.mjs');
+  fs.copyFileSync(new URL('./mls-witness-source.mjs',import.meta.url),out+'/witness-source.mjs');
   const capture=JSON.parse(fs.readFileSync(a.capture)),image=Buffer.from(capture.request.image,'base64');
   report.cameraSource={file:a.capture,captureId:capture.captureId,sha256:createHash('sha256').update(image).digest('hex')};fs.writeFileSync(out+'/source.png',image);
   report.requested=JSON.parse(new URL(a.url).searchParams.get('experiment_inputs')??'{}');
@@ -74,7 +76,7 @@ try{
     const intervals=report.windowEnd.times.slice(1).map((t,i)=>t-report.windowEnd.times[i]).sort((a,b)=>a-b);
     assert(intervals.length>0,'missing populated-window callbacks');
     report.callbackSpacingMs=Object.fromEntries([['p50',.5],['p95',.95],['p99',.99]].map(([k,q])=>[k,intervals[Math.min(intervals.length-1,Math.floor(q*intervals.length))]]));
-    report.presentedFrames=report.windowEnd.state.fingerJuice.runtime.frameCount-report.windowStart.state.fingerJuice.runtime.frameCount;
+    report.progress=validateMlsHandWindow(report.windowStart.state,report.windowEnd.state);
   }
   report.stopped=await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('stop'));
   assert.equal(report.stopped.running,false);assert.equal(report.stopped.retention.pending,0);assert.equal(report.stopped.retention.error,null);
@@ -86,6 +88,6 @@ try{
   assert.deepEqual(report.pageErrors,[]);assert.deepEqual(report.consoleErrors,[]);
   report.video=await page.video().path();report.status='complete';report.phase='complete';
 }catch(error){report.error=String(error);report.stack=error.stack;process.exitCode=1;
-  if(page){try{report.failure=await page.evaluate(()=>({entry:window.kaminosWorkbenchExperiments?.state(),text:document.body.innerText}));await page.screenshot({path:out+'/failure.png'});await page.evaluate(()=>window.kaminosWorkbenchExperiments?.invoke('stop')).catch(()=>{});}catch(cause){report.failureCaptureError=String(cause);}}
-}finally{if(context){await context.close();report.browserClosed=true;}save();}
+  if(page){try{report.failure=await page.evaluate(()=>({entry:window.kaminosWorkbenchExperiments?.state(),text:document.body.innerText}));await page.screenshot({path:out+'/failure.png'});report.failureStop=await page.evaluate(()=>window.kaminosWorkbenchExperiments?.invoke('stop'));}catch(cause){report.failureCaptureError=String(cause);}}
+}finally{if(context){try{report.video=await page?.video()?.path();}catch{}await context.close();report.browserClosed=true;}save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:out+'/report.json'}));

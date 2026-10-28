@@ -9,6 +9,12 @@ const boundary=`
           particles[id.x].position=obstacle.xyz+normal*(obstacle.w+.3);
           particles[id.x].v-=normal*min(0.,dot(normal,particles[id.x].v));
         }
+        // Sphere padding overlaps the floor; preserve the domain contact after projection.
+        particles[id.x].position=clamp(particles[id.x].position,vec3f(2.),realBoxSize-vec3f(3.));
+        for(var axis=0;axis<3;axis++){
+          if(particles[id.x].position[axis]<=2.){particles[id.x].v[axis]=max(0.,particles[id.x].v[axis]);}
+          if(particles[id.x].position[axis]>=realBoxSize[axis]-3.){particles[id.x].v[axis]=min(0.,particles[id.x].v[axis]);}
+        }
         particles[id.x].life=max(0.,particles[id.x].life-physicalDt);
     }
 }`;
