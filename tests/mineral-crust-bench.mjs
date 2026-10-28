@@ -12,5 +12,6 @@ test('timing rejects missing, stale or malformed scene frames',()=>{
  assert.throws(()=>validateCrustFrames([{frame:1,drawn:false,cpuMs:1,gpuMs:.2}]));
  assert.throws(()=>validateCrustFrames([{frame:1,drawn:true,cpuMs:1,gpuMs:.2},{frame:1,drawn:true,cpuMs:1,gpuMs:.2}]));
  assert.throws(()=>validateCrustFrames([{frame:1,drawn:true,cpuMs:1,gpuMs:NaN}]));
+ assert.throws(()=>validateCrustFrames([{frame:1,drawn:true,cpuMs:1,gpuMs:0}]),'zero GPU timestamps cannot close the cost question');
  assert.equal(validateCrustFrames([{frame:1,drawn:true,cpuMs:1,gpuMs:.2}]).length,1);
 });
