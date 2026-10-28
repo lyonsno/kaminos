@@ -146,15 +146,18 @@ export function createDisplayReconstruction(device, module, uniformBuffer, getIn
   return {
     get view(){return (textures[3]??fallback).createView({dimension:'3d'});},
     ensure(grid,next) {
+      const nextShapes=next.value?displayReconstructionShapes(grid,next.scale):[];
+      if(nextShapes.some(s=>s.some(n=>n>device.limits.maxTextureDimension3D))) {
+        return {changed:false,admitted:false,reason:'display-grid-exceeds-device-3d-texture-dimensions'};
+      }
       config=next;
       const nextSignature=JSON.stringify([grid,next.value?next.scale:0]);
-      if(signature===nextSignature)return false;
+      if(signature===nextSignature)return {changed:false,admitted:true,reason:null};
       signature=nextSignature;key=null;groups=null;
       for(const t of textures)t.destroy();
       textures=[];shapes=[];
       if(next.value) {
-        shapes=displayReconstructionShapes(grid,next.scale);
-        if(shapes.some(s=>s.some(n=>n>device.limits.maxTextureDimension3D)))throw Error('Display grid exceeds device 3D texture dimensions');
+        shapes=nextShapes;
         textures=shapes.map(texture);
         initialize();
         groups={seed:group(pipelines.seed,3,[{binding:12,resource:textures[0].createView()}]),
@@ -163,7 +166,7 @@ export function createDisplayReconstruction(device, module, uniformBuffer, getIn
           axes:pipelines.axes.map((p,i)=>group(p,0,[{binding:0,resource:textures[i].createView()},
             {binding:1,resource:textures[i+1].createView()},{binding:2,resource:{buffer:amounts}}]))};
       }
-      return true;
+      return {changed:true,admitted:true,reason:null};
     },
     encode(encoder,sourceIndex,sourceKey,timing=null) {
       if(!config.value)return false;

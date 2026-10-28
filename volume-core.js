@@ -16740,15 +16740,22 @@ export function createKaminosVolumePrototype({
     const displayRequest = resolveDisplayReconstruction(controlsSnapshot);
     const displaySupported = emissiveRaymarchAdmission().eligible && debugRaymarchShaderSpecialization !== 'force-full' && physicsAppearance.effective.render
       && !sceneTransportConsumer && !state.joinedRendering?.enabled && productFrameOwner === 'prototype';
-    const displayConfig = displaySupported ? displayRequest : {...displayRequest,value:0};
+    let displayConfig = displaySupported ? displayRequest : {...displayRequest,value:0};
+    let displayReason = displayRequest.value&&!displaySupported?'requires-native-physics-beauty-without-joined-transport':null;
+    let displayAdmission = displayReconstruction?.ensure([gridSize,gridHeight,gridSize],displayConfig);
+    if (displayAdmission?.admitted === false) {
+      displayReason = displayAdmission.reason;
+      displayConfig = {...displayRequest,value:0};
+      displayAdmission = displayReconstruction.ensure([gridSize,gridHeight,gridSize],displayConfig);
+    }
     uniforms.set([displayConfig.value,displayConfig.emission,displayConfig.smoke,displayConfig.scale], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET);
-    if (displayReconstruction?.ensure([gridSize,gridHeight,gridSize],displayConfig)) {
+    if (displayAdmission?.changed) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();
     }
     state.displayReconstruction = {...displayReconstruction?.read(),requested:displayRequest.mode,
-      effective:displayConfig.value>0,reason:displayRequest.value&&!displaySupported?'requires-native-physics-beauty-without-joined-transport':null};
+      effective:displayConfig.value>0,reason:displayReason};
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
