@@ -18,6 +18,13 @@ export function raymarchAdaptivity(mode, legacyAmount = 0.65) {
     label:mode==='numerical'?'Adaptive steps':'Adaptive placement'};
 }
 
+export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
+  if (!receipt || receipt.requested !== requested || !receipt.effective) {
+    return {value:null,automatic:true,label:'Adaptivity',pending:true};
+  }
+  return {...raymarchAdaptivity(receipt.effective,legacyAmount),pending:false};
+}
+
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
   const wrongExterior=config.value>=4 ? !exterior : exterior;
   if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {
