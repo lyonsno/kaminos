@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import {NaiveBroadphase} from '../node_modules/cannon-es/dist/cannon-es.js';
 const baseline = process.argv.includes('--baseline');
 const create = baseline
   ? (await import('../models/mobrecon/hand-reach-state.js')).createHandReachState
@@ -10,6 +11,20 @@ const step=(s,t)=>{if(s.advance)s.advance(t);};
 step(falling,.1);
 assert.ok(falling.read().cubePosition[1]<.23,'a released cube must fall under gravity, not hover at its last pinch position');
 if(baseline)process.exit(0);
+// A thin table's enclosing sphere covers empty space well above its surface.
+// Reject those separated pairs before sphere-box contact generation.
+const collisionPairs=NaiveBroadphase.prototype.collisionPairs;
+let separatedTablePairs=0;
+NaiveBroadphase.prototype.collisionPairs=function(w,a,b){
+  collisionPairs.call(this,w,a,b);
+  for(let i=0;i<a.length;i++)if((a[i].handProxy&&b[i].material?.name==='table')||(b[i].handProxy&&a[i].material?.name==='table'))separatedTablePairs++;
+};
+try{
+  const separate=create({cube:{position:[.2,.1825,0],size:.045}});
+  separate.setProxies(Array.from({length:20},(_,i)=>({id:`index-${i}`,finger:'index',position:[i*.001,.4,0],radius:.007})));
+  separate.advance(1/120);separate.dispose();
+  assert.equal(separatedTablePairs,0,'separated finger/table AABBs must not enter narrowphase');
+}finally{NaiveBroadphase.prototype.collisionPairs=collisionPairs;}
 step(falling,1);
 assert.ok(Math.abs(falling.read().cubePosition[1]-.0225)<.002,'table supports a resting cube');
 const offTable=create({cube:{position:[.4,.3,0],size:.045}});

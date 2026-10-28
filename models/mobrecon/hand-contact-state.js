@@ -39,6 +39,8 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
   positive(motorForce,'motor force');nonnegative(friction,'friction');positive(fingerRadius,'finger radius');
   const initial=structuredClone({target,cube});
   const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0),allowSleep:true});
+  // The thin table's enclosing sphere otherwise admits distant hand segments.
+  world.broadphase.useBoundingBoxes=true;
   world.solver.iterations=30;world.solver.tolerance=1e-8;
   const handMaterial=new CANNON.Material('hand'),cubeMaterial=new CANNON.Material('cube'),tableMaterial=new CANNON.Material('table');
   const handContact=new CANNON.ContactMaterial(handMaterial,cubeMaterial,{friction,restitution:0});
