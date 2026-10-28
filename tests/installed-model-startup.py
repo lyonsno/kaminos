@@ -25,7 +25,8 @@ class ModelFixture(unittest.TestCase):
 
     def runtime(self, cwd=None, extra=None):
         result = subprocess.run([sys.executable, '-c', 'import json,serve; print(json.dumps(serve.runtime_config()))'],
-                                cwd=cwd or ROOT, env={**self.env, **(extra or {})}, check=True, capture_output=True, text=True)
+                                cwd=cwd or ROOT, env={**self.env, **(extra or {})}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
 
@@ -109,6 +110,27 @@ class InstallationOperations(ModelFixture):
         for child in children:
             out,error=child.communicate();self.assertEqual(child.returncode,0,error)
         saved=json.loads(self.config.read_text());self.assertEqual(saved['note'],'keep');self.assertEqual(set(saved['models']),{'flux3','trellisPage'})
+
+    def test_unresolvable_registry_does_not_disable_a_valid_explicit_override(self):
+        for explicit in [False,True]:
+            selected=self.home/('loop-explicit.json' if explicit else '.config/kaminos/models.json')
+            if selected.exists():selected.unlink()
+            selected.symlink_to(selected.name)
+            checkpoint=self.home/('checkpoint-explicit' if explicit else 'checkpoint-default');checkpoint.mkdir();(checkpoint/'manifest.json').write_text(json.dumps({'schema':'trellis2.generation-inputs.v0'}))
+            extra={'KAMINOS_TRELLIS_CHECKPOINT_ROOT':str(checkpoint)}
+            if explicit:extra['KAMINOS_MODEL_INSTALLATIONS']=str(selected)
+            result=self.runtime(extra=extra)
+            self.assertTrue(result['trellisPage']['mounted'])
+            self.assertEqual(result['modelAvailability']['flux3']['status'],'invalid-configuration')
+            self.assertIn(str(selected),result['modelAvailability']['flux3']['reason'])
+            self.assertEqual(result['modelAvailability']['flux3']['installationFile'],str(selected))
+
+    def test_unresolvable_payload_is_isolated_from_another_model(self):
+        from installed_model_fixture import image_package
+        package=image_package(self.home/'klein','flux2');tokenizer=package/'te/tokenizer.json';tokenizer.unlink();tokenizer.symlink_to(tokenizer.name)
+        checkpoint=self.home/'checkpoint';checkpoint.mkdir();(checkpoint/'manifest.json').write_text(json.dumps({'schema':'trellis2.generation-inputs.v0'}))
+        result=self.runtime(extra={'KAMINOS_KLEIN_WEIGHTS_ROOT':str(package),'KAMINOS_TRELLIS_CHECKPOINT_ROOT':str(checkpoint)})
+        report=result['modelAvailability']['klein'];self.assertEqual(report['status'],'unavailable');self.assertEqual(report['source'],'environment');self.assertEqual(report['root'],str(package));self.assertIn('tokenizer',report['reason']);self.assertFalse(result['klein']['mounted']);self.assertTrue(result['trellisPage']['mounted'])
 
 if __name__ == '__main__':
     unittest.main()

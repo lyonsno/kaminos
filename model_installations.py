@@ -21,12 +21,16 @@ MODELS = {
 }
 
 
-def installation_path(environ=None):
+def _installation_location(environ=None):
     env = os.environ if environ is None else environ
     if env.get('KAMINOS_MODEL_INSTALLATIONS'):
-        return Path(env['KAMINOS_MODEL_INSTALLATIONS']).expanduser().resolve()
+        return Path(env['KAMINOS_MODEL_INSTALLATIONS'])
     config = Path(env.get('XDG_CONFIG_HOME') or Path(env.get('HOME') or Path.home()) / '.config')
-    return (config / 'kaminos' / 'models.json').expanduser().resolve()
+    return config / 'kaminos' / 'models.json'
+
+
+def installation_path(environ=None):
+    return _installation_location(environ).expanduser().resolve()
 
 
 def read_installations(path):
@@ -146,11 +150,12 @@ def check_package(name, root):
 class ModelInstallations:
     def __init__(self, environ=None, config_path=None):
         self.environ = dict(os.environ if environ is None else environ)
-        self.path = Path(config_path).expanduser().resolve() if config_path is not None else installation_path(self.environ)
+        self.path = Path(config_path) if config_path is not None else _installation_location(self.environ)
         self.configuration_error = None
         try:
+            self.path = self.path.expanduser().resolve()
             catalog = read_installations(self.path)
-        except (OSError, ValueError, UnicodeError) as error:
+        except (OSError, ValueError, UnicodeError, RuntimeError) as error:
             catalog = {'models': {}}
             self.configuration_error = str(error)
         self._choices = {}
@@ -193,7 +198,7 @@ class ModelInstallations:
         else:
             try:
                 check_package(name, root)
-            except (OSError, ValueError, TypeError, AttributeError, KeyError, UnicodeError) as error:
+            except (OSError, ValueError, TypeError, AttributeError, KeyError, UnicodeError, RuntimeError) as error:
                 status, reason = 'unavailable', str(error)
         return {'root': str(root) if root else None, 'source': source, 'status': status, 'reason': reason,
                 'installationFile': str(self.path), 'requestedRoot': choice['requested'], 'validation': 'manifest' if name in ('sam3', 'trellisPage') else 'loader-layout'}
