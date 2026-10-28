@@ -4,6 +4,8 @@ import {mlsConfig,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from '
 const cfg=mlsConfig({particleCount:2});
 const clock=createMlsClock(cfg.dt);clock.advance(0);assert.equal(clock.advance(1000),240);
 assert.equal(clock.read().simulatedSeconds,1);clock.advance(2000,true);assert.equal(clock.read().elapsedSeconds,1);
+assert.equal(clock.read().timeSeconds,1,'host playback requires timeSeconds');
+assert.equal(clock.read().step,240,'host playback requires step');
 assert.equal(clock.advance(2500),120);assert.throws(()=>clock.advance(2400),/backwards/);
 const p=validateMlsPacket({timestamp_ms:100,authority:{simulation_safe:true},emitters:[{id:'index',active:true,origin_world:[0,1,0],aim_world:[0,0,-1],radius:.07,strength:1.955,lifetime_seconds:6,source_flux_particles_per_second:240}]});
 const plan=createMlsEmissionPlan(cfg);assert.equal(plan.step(p,0,100).length,1);

@@ -21,7 +21,7 @@ export function createMlsClock(dt) {
     const count=paused?0:Math.floor((accumulator+1e-10)/dt);
     accumulator-=count*dt;steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
-    simulatedSeconds:steps*dt,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};
+    simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};
 }
 
 export function validateMlsPacket(packet) {
