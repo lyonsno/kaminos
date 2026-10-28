@@ -24,7 +24,7 @@ const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 // Same records, material fields, gas solver, transported light and HDR camera as
 // Workbench. This surface owns only its scene and borrowed-device resources.
 export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
- const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],owned=[],frames=new Set();
+ const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],lightEntries=[],owned=[],frames=new Set();
  let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0;
  const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
@@ -43,7 +43,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   constructed:(object,record)=>add(object,record),
   procedural:record=>{const resource=createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);owned.push(resource);return add(resource.group,record);},
   glb:async record=>{const object=await loadGlb(record.source);signal?.throwIfAborted();return add(object,record);},
-  light:record=>{const light=new THREE.SpotLight(record.light.color,record.light.intensity);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;light.position.fromArray(record.transform.position);light.target.position.copy(light.position).addScaledVector(new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation)),record.light.aimDistance*record.transform.scale[2]);light.visible=record.light.enabled;scene.add(light,light.target);owned.push({dispose:()=>light.dispose()});},
+  light:record=>{const light=new THREE.SpotLight(record.light.color,record.light.intensity);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;light.position.fromArray(record.transform.position);light.target.position.copy(light.position).addScaledVector(new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation)),record.light.aimDistance*record.transform.scale[2]);light.visible=record.light.enabled;scene.add(light,light.target);lightEntries.push({id:record.id,object:light});owned.push({dispose:()=>light.dispose()});},
   camera:()=>{},flame:()=>{},
  }});
  function failure(error){lastError=error.message;viewport.dataset.error=lastError;}
@@ -86,7 +86,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   function draw(){
    if(disposed||lighting&&!lighting.canRender())return false;
    runFrames();
-   return withViewportVisibility(entries,visible,()=>{
+   return withViewportVisibility([...entries,...lightEntries],visible,()=>{
    if(transport)hdr.render({frame:transport,input,emissionInput,depthInput,matched:settings.sceneMatchFlameCamera!==false,physical:fire.emissiveCameraState()});
    else pipeline.render();frameCount++;return true;});
   }
