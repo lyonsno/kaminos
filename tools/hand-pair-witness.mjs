@@ -62,10 +62,17 @@ try{
  report.failure=await read();assert.match(report.failure.error,/witness_candidate_failure/);assert.equal(report.failure.received,0);
  assert(report.failure.models.every(m=>!m.visible));assert.equal(report.failure.running,false);assert.equal(report.failure.camera,null);
  await page.unroute(endpoint+'/frame');report.stages.push('partial_pair_never_presented');await save();
- report.phase='stop_in_flight';
- let release,entered;const arrived=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
- await page.route(endpoint+'/frame',async route=>{const response=await route.fetch();entered();await gate;await route.fulfill({response});});
- await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));await arrived;
+ report.phase='stop_in_flight';await save();
+ let release,entered,rejectArrival;const arrived=new Promise((resolve,reject)=>{entered=resolve;rejectArrival=reject;}),gate=new Promise(r=>release=r);
+ await page.route(endpoint+'/frame',async route=>{
+  try{const response=await route.fetch();entered();await gate;await route.fulfill({response});}
+  catch(error){rejectArrival(error);await route.abort().catch(()=>{});}
+ });
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
+ const failed=page.waitForFunction(()=>document.querySelector('[data-hand-pair-status]')?.textContent.startsWith('Stopped:')).then(async()=>{
+  const state=await read();throw Error(state.error??'inference stopped before candidate interception');
+ });
+ await Promise.race([arrived,failed]);
  await page.evaluate(()=>{window.__pairStop=window.kaminosWorkbenchExperiments.invoke('stop');});
  const pending=await read();assert.equal(pending.running,false);release();await page.evaluate(()=>window.__pairStop);
  report.stopRace=await read();assert.equal(report.stopRace.received,0);assert(report.stopRace.models.every(m=>!m.visible));
