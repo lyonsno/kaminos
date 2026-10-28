@@ -30,3 +30,13 @@ export function attachmentSupport(source,{translation,scale,controls}){
  const requestedRadius=source.emission.settings['volume-immersed-radius'].value*source.transform.scale[0],domainRadius=requestedRadius/scale;
  return {inside:flamePoseInDomain(source.transform,translation,scale,controls),requestedRadius,effectiveRadius:Math.max(.02,domainRadius)*scale,footprintFloor:domainRadius>0&&domainRadius<.02,diameterCells:domainRadius*Number(controls.resolution??64),enabled:source.emissionEnabled};
 }
+export function createFlameAttachmentEditor({edits,read,check,write}){
+ const targets=new Set();
+ function target(id){const key='@flame-attachment:'+id;if(!targets.has(key)){
+  edits.register(key,{allowMissing:true,read:()=>({attachment:checkedFlameAttachment(read(id))}),
+   check:value=>{const attachment=checkedFlameAttachment(value.attachment);check(id,attachment);return {attachment};},
+   write:value=>{const before=checkedFlameAttachment(read(id));check(id,value.attachment);try{write(id,value.attachment);}catch(error){write(id,before);throw error;}}});targets.add(key);
+ }return key;}
+ function set(id,value){const attachment=checkedFlameAttachment(value);check(id,attachment);const key=target(id);try{return edits.apply(key,{attachment},'Set flame attachment');}catch(error){if(edits.state().active?.id===key)edits.cancel();throw error;}}
+ return {target,set};
+}
