@@ -32,7 +32,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
   return lifecycle;
  }
  function render(state){
-  const active=['loading','running','stopping','saving'].includes(state?.status),next=state?.request??null;
+  const active=['loading','running','stopping'].includes(state?.status),next=state?.request??null;
   const changed=active!==running||(active&&next?.id!==request?.id);request=next;running=active;
   // An active request is visible in simple consumers without an observer. The
   // actual Generate pane explicitly supplies visibility, including when hidden.

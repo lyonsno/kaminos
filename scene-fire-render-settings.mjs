@@ -1,9 +1,11 @@
+import {validateSourceSoftness} from './scene-source-softening.mjs';
 // Display and transported-light settings belong to the ordinary scene document.
 export const FIRE_RENDER_DEFAULTS=Object.freeze({'rendering-match-flame-camera':false,'rendering-surface-gain':0,'rendering-surface-scattering':true,'rendering-source-softness':0,'rendering-smoke-solver':'distributed','rendering-angular-samples':24,'rendering-angular-pattern':'fixed'});
 export function checkedFireRendering(value={}){
  const next={...FIRE_RENDER_DEFAULTS,...value};
  for(const id of ['rendering-match-flame-camera','rendering-surface-scattering'])if(typeof next[id]!=='boolean')throw Error('Invalid flame rendering '+id);
  for(const id of ['rendering-surface-gain','rendering-source-softness','rendering-angular-samples'])if(!Number.isFinite(next[id]))throw Error('Invalid flame rendering '+id);
+ validateSourceSoftness(next['rendering-source-softness']);
  if(next['rendering-source-softness']<0||!Number.isInteger(next['rendering-angular-samples'])||next['rendering-angular-samples']<=0)throw Error('Invalid flame light sampling');
  if(!['distributed','legacy'].includes(next['rendering-smoke-solver'])||!['fixed','spatial','source','guided'].includes(next['rendering-angular-pattern']))throw Error('Invalid flame rendering mode');
  return next;

@@ -28,3 +28,9 @@ test('the physical kiln receives the admitted prompt rather than a changing edit
  let received;const flame=fixture(async(_slot,options)=>{received=options.prompt;return {setActive:async()=>{},setPrompt:async()=>{},dispose(){},debugState:()=>({})};});
  flame.render({status:'loading',request:{id:'actual-run',prompt:'THE ADMITTED PROMPT'}});await tick();await tick();assert.equal(received,'THE ADMITTED PROMPT');await flame.dispose();
 });
+test('persistence-only retry does not restart the completed physical burn',async()=>{
+ let starts=0,active=false;
+ const flame=fixture(async(_slot,{signal})=>({async setActive(value){if(value){starts++;signal.throwIfAborted();}active=value;},dispose(){},debugState:()=>({active})}));
+ const request={id:'pending-pixels',prompt:'THE SAME PIXELS'};flame.render({status:'running',request});await tick();await tick();flame.render({status:'failed',request});await tick();await tick();flame.render({status:'saving',request});await tick();await tick();
+ assert.equal(flame.read().error,null);assert.equal(starts,1);assert.equal(active,false);assert.equal(flame.read().running,false);await flame.dispose();
+});

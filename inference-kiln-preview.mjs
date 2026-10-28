@@ -2,6 +2,8 @@ import * as THREE from './lib/three.webgpu.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {createKaminosVolumePrototype} from './volume-core.js';
+import {sceneItemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import {applySceneEnvironmentBackground} from './scene-environment-background.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createProceduralMesh} from './scene-geometry.mjs';
 import {createPromptLettering} from './prompt-lettering.mjs';
@@ -31,9 +33,9 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
  const renderer=new THREE.WebGPURenderer({antialias:true,device:sharedGpu.device});
  const canvas=renderer.domElement;canvas.id='generation-flame-canvas';canvas.setAttribute('aria-label','Physical kiln preview');viewport.append(canvas);
  renderer.setPixelRatio(1);renderer.setSize(width,height);renderer.shadowMap.enabled=true;renderer.toneMapping=THREE.AgXToneMapping;
- const hidden=new Set(plan.editorDisplay?.hiddenIds??[]),colliders=createSceneColliderCollection(THREE);
+ const hidden=plan.editorDisplay?.hiddenIds??[],visible=id=>sceneItemVisible(id,hidden,plan),colliders=createSceneColliderCollection(THREE);
  const add=(object,record)=>{
-  object.position.fromArray(record.transform.position);object.rotation.set(...record.transform.rotation);object.scale.fromArray(record.transform.scale);object.visible=!hidden.has(record.id);object.name=record.label;
+  object.position.fromArray(record.transform.position);object.rotation.set(...record.transform.rotation);object.scale.fromArray(record.transform.scale);object.visible=true;object.name=record.label;
   const state=record.materials;if(state)object.traverse(child=>{for(const mat of [].concat(child.material??[])){for(const key of ['side','transparent','opacity'])if(state[key]!==undefined)mat[key]=state[key];if(!state.transparent){mat.depthWrite=true;mat.blending=THREE.NormalBlending;}mat.needsUpdate=true;}});
   object.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}});scene.add(object);entries.push({...record,object});return object;
  };
@@ -41,7 +43,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   constructed:(object,record)=>add(object,record),
   procedural:record=>{const resource=createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);owned.push(resource);return add(resource.group,record);},
   glb:async record=>{const object=await loadGlb(record.source);signal?.throwIfAborted();return add(object,record);},
-  light:record=>{const light=new THREE.SpotLight(record.light.color,record.light.intensity);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;light.position.fromArray(record.transform.position);light.target.position.copy(light.position).addScaledVector(new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation)),record.light.aimDistance*record.transform.scale[2]);light.visible=record.light.enabled&&!hidden.has(record.id);scene.add(light,light.target);owned.push({dispose:()=>light.dispose()});},
+  light:record=>{const light=new THREE.SpotLight(record.light.color,record.light.intensity);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;light.position.fromArray(record.transform.position);light.target.position.copy(light.position).addScaledVector(new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation)),record.light.aimDistance*record.transform.scale[2]);light.visible=record.light.enabled;scene.add(light,light.target);owned.push({dispose:()=>light.dispose()});},
   camera:()=>{},flame:()=>{},
  }});
  function failure(error){lastError=error.message;viewport.dataset.error=lastError;}
@@ -67,9 +69,9 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   const env=saved.environment;
   if(env?.name){if(!environment?.url)throw Error('This kiln environment needs an HDR source');
    const image=await new RGBELoader().loadAsync(environment.url);signal?.throwIfAborted();const pmrem=new THREE.PMREMGenerator(renderer);const map=pmrem.fromEquirectangular(image);pmrem.dispose();image.dispose();owned.push(map);scene.environment=map.texture;scene.environmentIntensity=env.intensity??1;scene.environmentRotation.y=env.rotation??0;renderer.toneMappingExposure=env.exposure??1;
-   if(env.background){scene.background=map.texture;scene.backgroundBlurriness=env.backgroundBlur??0;scene.backgroundIntensity=env.backgroundBrightness??1;}
+   applySceneEnvironmentBackground(scene,env,map.texture);scene.traverse(node=>{for(const material of [].concat(node.material??[]))material.envMapIntensity=env.intensity??1;});
   }
-  scene.background??=new THREE.Color('#030405');
+  if(!scene.background)applySceneEnvironmentBackground(scene,env,null);
   const post=saved.postprocessing??{},giSettings=resolveSceneGIControlState(post.sceneGI),ao=post.ao??{};
   // The native combined route owns opaque source sampling and receiving.
   if(giSettings.mode!=='combined')throw Error('Choose combined scene lighting for the kiln preview');
@@ -84,33 +86,34 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   function draw(){
    if(disposed||lighting&&!lighting.canRender())return false;
    runFrames();
+   return withViewportVisibility(entries,visible,()=>{
    if(transport)hdr.render({frame:transport,input,emissionInput,depthInput,matched:settings.sceneMatchFlameCamera!==false,physical:fire.emissiveCameraState()});
-   else pipeline.render();frameCount++;return true;
+   else pipeline.render();frameCount++;return true;});
   }
-  fire=createKaminosVolumePrototype({THREE,viewport,camera,controls:{target:new THREE.Vector3(...view.target)},getControls:()=>settings,sharedGpuContext:sharedGpu,
+  fire=createKaminosVolumePrototype({THREE,viewport,camera,controls:{target:new THREE.Vector3(...view.target)},getControls:()=>settings,sharedGpuContext:sharedGpu,transparentCanvas:true,
    externalProductTransform:{translate:plan.flameDomainTranslation,scale:plan.flameDomainScale},getPresentationSize:()=>({width,height}),
    getSceneDepth:()=>{if(!draw())return null;return {device:sharedGpu.device,camera,texture:renderer.backend.get(depthInput.value).texture};},
    getSceneCollision:()=>colliders.update(entries),onStatus:state=>{if(state.error)failure(Error(state.error));},
-  });fire.canvasElement().style.display=post.bloom?.composeFlame?'none':'';
+  });fire.canvasElement().id='generation-kiln-volume-canvas';fire.canvasElement().style.display=post.bloom?.composeFlame||!visible('flame-field')?'none':'';fire.canvasElement().hidden=true;
   fire.setForegroundOpportunityRequester(request=>app.foreground.request({...request,requestId:`kiln-${request.requestId}`}));
   fire.setRaymarchSmokePresentationMode(settings.raymarchSmokePresentation);
-  fire.setImmersedSources(flameSourceInputs(plan.flameSources,{controls:settings,translation:plan.flameDomainTranslation,scale:plan.flameDomainScale,visible:id=>!hidden.has(id)}));
-  if(post.bloom?.composeFlame)fire.setSceneTransportConsumer(frame=>{transport=frame;try{return frame.renderHost();}finally{transport=null;}});
+  fire.setImmersedSources(flameSourceInputs(plan.flameSources,{controls:settings,translation:plan.flameDomainTranslation,scale:plan.flameDomainScale,visible}));
+  if(post.bloom?.composeFlame&&visible('flame-field'))fire.setSceneTransportConsumer(frame=>{transport=frame;try{return frame.renderHost();}finally{transport=null;}});
   burning=createSceneBurning({objects:()=>entries,runtime:()=>fire,createGas:createLogGasSourceGpu,
    createBody:entry=>createSceneBurnBody({entry,renderer,scene,kelvinPerHeat:()=>settings.physicalKelvinPerHeat,ground:()=>({center:[0,ground?.height??-.85,0],height:ground?.height??-.85,radius:5,visible:ground?.visible??true}),onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}}),onError:failure});
   signal?.throwIfAborted();
   // One cold frame, no idle simulation or private RAF loop.
   const cold=app.foreground.request({requestId:`kiln-cold-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-cold'},run(){draw();return {status:'submitted'};}});await cold.completion;
   return {
-   async setActive(value){if(disposed)return;if(active===!!value)return;active=!!value;
-    if(active){await fire.setActive(true);signal?.throwIfAborted();await burning.sync();if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
-     lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,getSourceGuide:()=>({position:[...plan.flameSources[0].transform.position],radius:settings.inputRadius,height:settings.plumeHeight,depth:settings.emitterSourceDepth}),...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
+   async setActive(value){if(disposed)return;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;fire.canvasElement().hidden=!active;
+    if(active){await fire.setActive(true);await burning.sync();if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
+     if(!lighting){lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,getSourceGuide:()=>({position:[...plan.flameSources[0].transform.position],radius:settings.inputRadius,height:settings.plumeHeight,depth:settings.emitterSourceDepth}),...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
      const value=(id,fallback)=>rendering[id]??fallback;
-     lighting.setSurfaceGain(2**Number(value('rendering-surface-gain',0)));lighting.setSurfaceScattering(!!value('rendering-surface-scattering',true));lighting.setSourceSoftness(Number(value('rendering-source-softness',0)));lighting.setSmokeMode(value('rendering-smoke-solver','distributed'));lighting.setDirections(Number(value('rendering-angular-samples',24)));lighting.setAngularPattern(value('rendering-angular-pattern','fixed'));await lighting.whenRebuilt();
-    }else await fire.setActive(false);
+     lighting.setSurfaceGain(2**Number(value('rendering-surface-gain',0)));lighting.setSurfaceScattering(!!value('rendering-surface-scattering',true));lighting.setSourceSoftness(Number(value('rendering-source-softness',0)));lighting.setSmokeMode(value('rendering-smoke-solver','distributed'));lighting.setDirections(Number(value('rendering-angular-samples',24)));lighting.setAngularPattern(value('rendering-angular-pattern','fixed'));await lighting.whenRebuilt();}
+    }else{await fire.setActive(false);const still=app.foreground.request({requestId:`kiln-stopped-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-stopped'},run(){draw();return {status:'submitted'};}});await still.completion;}
    },
    debugState:()=>({identity:'kaminos.inference-kiln-preview.v1',sceneFile:recipe.selection?.sceneFile??null,sceneLabel:saved.label,promptObjectId:plan.promptObjectId,prompt,requestSource:request?'admitted-generation-prompt':'editor-draft',active,error:lastError,frameCount,
-    effective:{device:'app-shared-device',width,height,settings,objects:entries.map(row=>({id:row.id,transform:row.transform,burnable:row.burnable})),camera:view,bloom:sceneBloom.read()},
+    effective:{device:'app-shared-device',width,height,settings,objects:entries.map(row=>({id:row.id,visible:visible(row.id),transform:row.transform,burnable:row.burnable})),camera:view,bloom:sceneBloom.read()},
     runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
    dispose,
   };

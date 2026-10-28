@@ -3307,6 +3307,7 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
 import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
+import {applySceneEnvironmentBackground} from './scene-environment-background.mjs';
 import {readFireRendering,restoreFireRendering,checkedFireRendering} from './scene-fire-render-settings.mjs';
 import {createKilnRecipeStore} from './inference-kiln-selection.mjs';
 import {defaultKilnRecipe} from './inference-kiln-default.mjs';
@@ -22101,23 +22102,7 @@ installRenderingNumberControls(document.getElementById('authoring-source-environ
 const envBackdropContrast = uniform(1);
 
 function updateBackground() {
-  const environment=sceneEnvironment.read();
-  if (environment.showBackground && currentEnvMap) {
-    if (scene.background !== currentEnvMap || !scene.backgroundNode) {
-      // Grade only the background; the environment used by mesh materials is unchanged.
-      const graded = pmremTexture(currentEnvMap).rgb.max(0).div(0.18).pow(envBackdropContrast.max(1)).mul(0.18);
-      scene.backgroundNode = mix(vec3(0.18), graded, envBackdropContrast.min(1));
-    }
-    scene.background = currentEnvMap;
-    scene.backgroundBlurriness = environment.backgroundBlur;
-    scene.backgroundIntensity = environment.backgroundBrightness;
-    envBackdropContrast.value = environment.backgroundContrast;
-    scene.backgroundRotation = scene.environmentRotation;
-  } else {
-    scene.backgroundNode = null;
-    scene.background = new THREE.Color(0x0a0a0a);
-    scene.backgroundBlurriness = 0;
-  }
+  applySceneEnvironmentBackground(scene,sceneEnvironment.read(),currentEnvMap);
 }
 
 // --- AO Controls ---
@@ -26880,6 +26865,7 @@ function setupAuthoringAssets(){
     let recipe=await kilnRecipes.load();signal.throwIfAborted();
     if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);const starter=structuredClone(receipt.preset),studyResponse=await fetch('./artifacts/inference-kiln/study.json');if(!studyResponse.ok)throw Error('Kiln study settings unavailable');const study=await studyResponse.json();
       for(const axis of ['domControls','rendererControls','presentationControls'])for(const descriptor of Object.values(starter[axis]))if(Object.hasOwn(study.query,descriptor.param)){const raw=study.query[descriptor.param];delete descriptor.rawValue;descriptor.value=descriptor.type==='checkbox'?['1','true'].includes(raw):['range','number'].includes(descriptor.type)?Number(raw):raw;}
+      for(const [id,value]of [['volume-resolution',32],['volume-steps',6],['volume-adaptive-rays',1],['volume-render-scale',1]]){starter.domControls[id].value=value;delete starter.domControls[id].rawValue;}
       recipe=defaultKilnRecipe(document,artifact,starter);}
     let sourceSettings=recipe.plan.fireSettings;
     if(!sourceSettings){const response=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(recipe.plan.composition.flame.presetId)}`,{cache:'no-store'});if(!response.ok)throw Error('Saved kiln basin unavailable');const artifact=await response.json();sourceSettings=validateVolumeSettingsPresetDocument(artifact,recipe.plan.composition.flame.presetId,schema).preset;}
@@ -26891,7 +26877,7 @@ function setupAuthoringAssets(){
       const node=copy.getElementById(setting.id);if(!node)throw Error('Unsupported kiln control '+setting.id);
       if(node.type==='checkbox')node.checked=setting.value;else{const value=setting.rawValue??setting.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);if(node.type==='select-one'&&node.value!==String(value))throw Error('Unsupported kiln value '+setting.id);}
     }
-    const settings={...readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(recipe.plan.composition.route)}),resolution:32,raySteps:6,adaptiveRays:1,renderScale:1,lookFreeze:0,rayStepTelemetry:false,runtimeQualityRequested:'kiln-preview',runtimeQualityReason:'operator-small-generation-kiln',
+    const settings={...readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(recipe.plan.composition.route)}),lookFreeze:0,rayStepTelemetry:false,runtimeQualityRequested:'kiln-preview',runtimeQualityReason:'operator-small-generation-kiln',
       raymarchSmokePresentation:authored.presentationControls['raymarch-smoke-presentation'].value,sceneMatchFlameCamera:checkedFireRendering(recipe.document.postprocessing?.fireLighting)['rendering-match-flame-camera']};
     const rendering=checkedFireRendering(recipe.document.postprocessing?.fireLighting);
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();

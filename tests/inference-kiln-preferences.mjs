@@ -28,3 +28,9 @@ test('a delayed earlier refresh cannot replace the scene chosen afterwards',asyn
  const store=createKilnRecipeStore({preferences:{load:async()=>structuredClone(prefs),save:async value=>{prefs=value;}},request:async url=>{if(url.includes('first.kaminos.json'))await gate;return {ok:true,json:async()=>scene()};}});
  const loading=store.load();await new Promise(resolve=>setImmediate(resolve));const choosing=store.choose({...prefs.inferenceKiln,sceneFile:'chosen.kaminos.json'});await new Promise(resolve=>setImmediate(resolve));release();await Promise.all([loading,choosing]);assert.equal(store.read().selection.sceneFile,'chosen.kaminos.json');
 });
+test('a repeated group is refused before replacing the acknowledged kiln',async()=>{
+ let prefs={schema:PREFERENCES_SCHEMA},document=scene(),writes=0;const store=createKilnRecipeStore({preferences:{load:async()=>prefs,save:async value=>{prefs=value;writes++;}},request:async()=>({ok:true,json:async()=>document})});
+ const selected={schema:KILN_SELECTION_SCHEMA,sceneFile:'first.kaminos.json',promptObjectId:'prompt'};await store.choose(selected);const before=store.read();
+ document={...scene(),groups:[{id:'supports',label:'Repeated supports',objectIds:['prompt'],repetition:{schema:'kaminos.repetition.v1',mode:'line',count:4}}]};
+ await assert.rejects(store.choose({...selected,sceneFile:'repeated.kaminos.json'}),/repeat/i);assert.deepEqual(store.read(),before);assert.equal(writes,1);
+});

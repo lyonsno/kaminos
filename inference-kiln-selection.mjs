@@ -12,6 +12,7 @@ export function kilnScenePlan(document,selection={}){
  const id=selection.promptObjectId??(prompts.length===1?prompts[0].id:null),prompt=prompts.find(r=>r.id===id);
  if(!prompt)throw Error(prompts.length>1?'Select which lettering is the Generate prompt in Workbench':'This scene has no retained prompt lettering');
  if(!plan.composition||!plan.objects.some(r=>r.type==='flame-emitter'))throw Error('Save a kiln scene with a flame source');
+ if(plan.groups.some(group=>group.repetition))throw Error('Make repeated kiln groups editable before using this scene');
  const supported=['pbr','glb','procedural-mesh','flame-emitter','camera','light'];
  for(const r of plan.objects){if(!supported.includes(r.type)||(r.type==='pbr'&&r.source!==PROMPT_RELIEF_SOURCE))throw Error(`The kiln preview cannot reconstruct ${r.label||r.type}; use an ordinary mesh or GLB`);if(r.repetition)throw Error('Make repeated kiln objects editable before using this scene');}
  return {...plan,promptObjectId:id};
