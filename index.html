@@ -26833,7 +26833,7 @@ function setupAuthoringAssets(){
   authoringPromptUI=installAuthoringPromptExpansion({document,controller:authoringPromptExpansion,assets:authoringAssets,imageController:authoringImageGenerator,changed:()=>redraw()});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(workingScene.objects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
-  const kilnDesignURL=()=>{const selected=kilnRecipes.read()?.selection;return selected?`./?${new URLSearchParams({workspace:'workbench',scene:selected.sceneFile,experiment:'inference-kiln-material'})}`:'./inference-kiln-study.html?material=1';};
+  const kilnDesignURL=()=>{const selected=kilnRecipes.read()?.selection;return selected?`./?${new URLSearchParams({workspace:'workbench',experiment:'inference-kiln-material'})}#${new URLSearchParams({scene:selected.sceneFile})}`:'./inference-kiln-study.html?material=1';};
   authoringGenerateLayout=installGenerateLayout({document,openMasks,kiln:{
     read:()=>kilnRecipes.read(),load:()=>kilnRecipes.load(),designURL:kilnDesignURL,
     async choose(){

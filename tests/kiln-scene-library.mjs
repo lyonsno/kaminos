@@ -14,6 +14,11 @@ const start=source.indexOf('    async choose(){',source.indexOf('authoringGenera
 const end=source.indexOf('\n  },createFlame:',start);assert.ok(start>0&&end>start);
 let chooseSavedSceneFromLibrary;
 if(source.includes("from './scene-library-client.mjs'"))({chooseSavedSceneFromLibrary}=await import('../scene-library-client.mjs'));
+test('Design in Workbench addresses its saved scene through the native startup hash',()=>{
+ const line=source.split('\n').find(line=>line.trim().startsWith('const kilnDesignURL='));assert.ok(line);
+ const name='kiln (2) # 🔥.kaminos.json',href=Function('kilnRecipes',line+';return kilnDesignURL();')({read:()=>({selection:{sceneFile:name}})}),url=new URL(href,'http://127.0.0.1:8601/');
+ assert.equal(new URLSearchParams(url.hash.slice(1)).get('scene'),name,'the native startup loader reads #scene, not the query');assert.equal(url.searchParams.get('workspace'),'workbench');assert.equal(url.searchParams.get('experiment'),'inference-kiln-material');
+});
 test('Choose kiln finds and imports the same other-store saves as ordinary Load',async()=>{
  const name='inference-kiln-eats-yourmom-rises-again.kaminos.json',chosen=[],imports=[];
  const grFetchApi=async route=>route==='browse'?{entries:[]}:assert.fail('unexpected local read');
