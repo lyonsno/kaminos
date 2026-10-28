@@ -53,7 +53,7 @@ export default {
     return {read,operations,
       mount({root,document,invoke}){
         panel=document.createElement('section');const title=document.createElement('h3');title.textContent='One joint · three generated bodies';
-        const legend=document.createElement('p');legend.textContent='LEFT: analytical reference. RIGHT: corrected generated metal. Both follow the same hinge angle. Select a part in the Outliner and press F to frame it.';
+        const legend=document.createElement('p');legend.textContent='WHITE: analytical reference. METAL: corrected generated parts. Both follow the same hinge angle. Select a part in the Outliner and press F to frame it.';
         status=document.createElement('p');status.setAttribute('role','status');
         const error=document.createElement('p');error.setAttribute('role','alert');
         const call=(name,arg)=>invoke(name,arg).catch(e=>{error.textContent=e.message;sync();});
