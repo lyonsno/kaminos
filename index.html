@@ -27474,6 +27474,13 @@ function setupAuthoringAssets(){
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
     },
     addMesh:async entry=>{
+      if(entry.kind==='surface'){
+        assertSceneConstructionAvailable();const token=sceneMutationToken,id=makeSceneObjectId('surface'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+        const room=await loadBrazierRoom(new URL(entry.source,location.href).href);
+        if(token!==sceneMutationToken||scenePlacementTools.edits.state().active||scenePlacementTools.edits.state().replaying||authoringBusy){room.dispose();throw Error('Scene changed while importing surface asset');}
+        try{scene.add(room.root);registerSceneObject(room.root,{id,type:'experiment',source:entry.source,fileName:entry.name,label:entry.label});await recordImportedSceneObject(room.root);setActiveSceneObject(id);return id;}
+        catch(error){if(sceneObjects.some(e=>e.id===id))removeSceneObjectInternal(id,{recordHistory:false});else{room.root.removeFromParent();room.dispose();}throw error;}
+      }
       if(entry.file)return importSceneMesh(entry.file);
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});

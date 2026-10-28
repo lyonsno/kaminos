@@ -8,7 +8,7 @@ IMAGE_SUFFIXES = {'.png','.jpg','.jpeg','.webp'}
 
 def asset_kind(path):
     suffix=Path(path).suffix.lower()
-    return 'mesh' if suffix=='.glb' else 'image' if suffix in IMAGE_SUFFIXES else None
+    return 'surface' if str(path).lower().endswith('.surface.json') else 'mesh' if suffix=='.glb' else 'image' if suffix in IMAGE_SUFFIXES else None
 
 def generator_receipt(receipt):
     # Registry jobs name their producer; structured commands record a model route.
@@ -24,14 +24,15 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
     if root is None or not Path(root).is_dir():raise FileNotFoundError('Asset collection is not mounted')
     root=Path(root).resolve();entries=[];warnings=[];unavailable=0
     def warn(identity,error):warnings.append({'source':str(identity),'reason':str(error)})
-    def append(path,source,*,name=None,title=None,job=None,generation=None):
+    def append(path,source,*,name=None,title=None,job=None,generation=None,preview=None):
         kind=asset_kind(path)
         if not kind:return
+        if kind=='surface' and collection!='generated-meshes':return
         stat=path.stat()
         entries.append({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
             'name':name or path.name,'label':title or label(name or path.name), 'source':source,'size':stat.st_size,'mtime':stat.st_mtime,
             **({'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route'),'assetOrigin':{'source':source,'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route')}} if job else {}),
-            **({'generation':generation} if generation else {})})
+            **({'generation':generation} if generation else {}),**({'preview':preview} if preview else {})})
     if collection=='image-inbox':
         for entry in image_entries():
             if entry['root_id']!='image-inbox':continue
@@ -80,7 +81,15 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             resolved=path.resolve()
             if not resolved.is_relative_to(root):warn(path,'Asset symlink leaves its mounted collection');continue
             rel=path.relative_to(root).as_posix();source='/api/read?'+urlencode({'root':collection,'path':rel})
-            generation=None;title=None
+            generation=None;title=None;preview=None
+            if asset_kind(path)=='surface':
+                try:
+                    manifest=json.loads(path.read_text())
+                    if not isinstance(manifest,dict) or manifest.get('schema')!='kaminos.surface-fields-asset.v1' or not isinstance(manifest.get('name'),str) or not manifest['name'].strip():raise ValueError('Invalid surface asset manifest')
+                    title=manifest['name']
+                    image=(path.parent/manifest.get('preview','')).resolve()
+                    if image.is_relative_to(path.parent.resolve()) and image.is_file() and image.suffix.lower() in IMAGE_SUFFIXES:preview='/api/read?'+urlencode({'root':collection,'path':image.relative_to(root).as_posix()})
+                except (ValueError,OSError,TypeError) as error:warn(path,error);continue
             if collection=='generated-meshes' and re.fullmatch(r'[a-f0-9]{64}\.glb',path.name):
                 try:
                     record=origins(path.stem)
@@ -88,7 +97,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                         current=record['origins'][record['latestRunId']];generation=current['generation'];title=current['name']
                 except (ValueError,OSError,KeyError) as error:warn(path,error)
                 if not title:title=f'Saved mesh · {path.stem[:8]}'
-            append(path,source,title=title,generation=generation)
+            append(path,source,title=title,generation=generation,preview=preview)
     # Stable newest-first view; all records flow through, with no hidden result cap.
     entries.sort(key=lambda entry:(-entry['mtime'],entry['id']))
     return {'schema':'kaminos.authoring-assets.v1','collection':collection,'entries':entries,'warnings':warnings,'unavailableCount':unavailable}

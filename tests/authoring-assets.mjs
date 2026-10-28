@@ -45,3 +45,9 @@ test('an imported generator asset retains its original source beside retained sc
  const assetOrigin={source:'/api/job-output?job_id=observed&file=asset.glb',jobId:'observed',route:'trellis2.image-generation.webgpu.v0',sha256:'mesh'};
  const object={id:'imported',type:'glb',source:'/api/read?root=generated-meshes&path=mesh.glb',assetOrigin};assert.deepEqual(planSceneRestore(buildSceneDocument({objects:[object]})).objects[0].assetOrigin,assetOrigin);
 });
+
+test('stored fitted surface fields appear and add through their exact native source',async()=>{
+ let added;const entry={kind:'surface',root:'generated-meshes',path:'room/room.surface.json',name:'room.surface.json',label:'Two-brazier corridor',source:'/api/read?root=generated-meshes&path=room%2Froom.surface.json'};
+ const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]}),addMesh:async e=>{added=e;return 'actual-room';}});
+ assert.equal(await c.browse('generated-meshes'),true,'native surface asset must be admitted by the ordinary asset catalog');c.select(c.read().entries[0]);assert.equal(await c.add(),'actual-room');assert.equal(added.source,entry.source);assert.equal(added.kind,'surface');
+});

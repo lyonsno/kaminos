@@ -38,4 +38,15 @@ class MalformedRecords(unittest.TestCase):
       result=serve.authoring_asset_catalog('greenroom');self.assertEqual(len(result['entries']),1);self.assertEqual(result['entries'][0]['jobId'],'healthy');self.assertEqual(len(result['warnings']),1)
   finally:serve.BROWSE_ROOTS['greenroom']=old
 
+class SurfaceAssets(unittest.TestCase):
+ def test_native_bundle_is_visible_with_name_and_preview(self):
+  from authoring_asset_catalog import read_catalog
+  with tempfile.TemporaryDirectory() as temporary:
+   root=Path(temporary);bundle=root/'room';bundle.mkdir()
+   (bundle/'room.surface.json').write_text(json.dumps({'schema':'kaminos.surface-fields-asset.v1','name':'Two-brazier corridor','base':'factor-2/','preview':'preview.png'}))
+   (bundle/'preview.png').write_bytes(b'preview')
+   result=read_catalog('generated-meshes',roots={'generated-meshes':root},image_entries=lambda:[],origins=lambda _:None,output_resolver=lambda _:None,label=lambda x:x)
+   entries=[e for e in result['entries'] if e['kind']=='surface']
+   self.assertEqual(len(entries),1,'native surface bundle must appear as a reusable asset');self.assertEqual(entries[0]['label'],'Two-brazier corridor');self.assertIn('preview.png',entries[0]['preview'])
+
 if __name__=='__main__':unittest.main()

@@ -1,8 +1,9 @@
+import {surfaceFieldURL} from '../surface-asset-source.mjs';
 import {Vector3} from '../lib/three.core.js';
 import {createDeferredSurfaceSplats} from '../deferred-surface-splats.mjs';
 
 export async function loadSurfaceFields(base, fetcher=fetch) {
- const get=async name=>{const r=await fetcher(new URL(name,base));if(!r.ok)throw Error(`Surface field unavailable: ${name} (${r.status})`);return r;};
+ const get=async name=>{const r=await fetcher(new URL(surfaceFieldURL(base,name)));if(!r.ok)throw Error(`Surface field unavailable: ${name} (${r.status})`);return r;};
  const meta=await (await get('report.json')).json();
  if(!meta.ok||meta.stride!==12||!Number.isSafeInteger(meta.count)||meta.count<1||meta.footprints?.stride!==8)throw Error('Incomplete surface field metadata');
  const bytes=await (await get('surfels.f32')).arrayBuffer(), footprintBytes=await (await get(meta.footprints.file)).arrayBuffer();

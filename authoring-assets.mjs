@@ -1,4 +1,4 @@
-export const assetKind = name => /\.glb$/i.test(name) ? 'mesh' : /\.(png|jpe?g|webp)$/i.test(name) ? 'image' : null;
+export const assetKind = name => /\.surface\.json$/i.test(name) ? 'surface' : /\.glb$/i.test(name) ? 'mesh' : /\.(png|jpe?g|webp)$/i.test(name) ? 'image' : null;
 const copy = value => structuredClone(value);
 const collections=new Set(['generated-meshes','image-inbox','greenroom','trellis2mlx','pixal3d']);
 export function assetSource(root, path) {
@@ -33,7 +33,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       if(ticket !== navigation)return false;
       if(collections.has(root)){
         if(result.schema!=='kaminos.authoring-assets.v1'||result.collection!==root||!Array.isArray(result.entries))throw Error('Asset catalog does not match the requested collection');
-        if(result.entries.some(entry=>!['image','mesh'].includes(entry.kind)||typeof entry.source!=='string'||!/^\/api\/(read|job-output)\?/.test(entry.source)))throw Error('Asset catalog contains an invalid asset source');
+        if(result.entries.some(entry=>!['image','mesh','surface'].includes(entry.kind)||typeof entry.source!=='string'||!/^\/api\/(read|job-output)\?/.test(entry.source)))throw Error('Asset catalog contains an invalid asset source');
         state.entries=result.entries.map(entry=>({...entry,label:nameForSource(entry.source)||entry.label||entry.name}));state.warnings=result.warnings||[];state.unavailableCount=result.unavailableCount||0;
       }else{
       if(result.type !== 'dir' || result.root !== root || result.path !== path || !Array.isArray(result.entries))throw Error('Asset folder response does not match the requested folder');
@@ -57,10 +57,10 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
         return browse(state.root,state.path);
       }catch(error){state.error=error.message;publish();return false;}
     },
-    select(entry) {if(!entry || !['mesh','image'].includes(entry.kind))throw Error('Choose a mesh or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
+    select(entry) {if(!entry || !['mesh','image','surface'].includes(entry.kind))throw Error('Choose a 3D asset or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
     async add(entry = state.selected) {
       if(state.adding)throw Error('An asset is already being added');
-      if(entry?.kind !== 'mesh')throw Error('Choose a GLB mesh to add');
+      if(!['mesh','surface'].includes(entry?.kind))throw Error('Choose a 3D asset to add');
       state.adding=true;state.error=null;publish();
       try {return await addMesh({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}
       catch(error){state.error=error.message;throw error;}
@@ -113,7 +113,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   const runHeader=document.createElement('div');runHeader.id='authoring-generation-header';runHeader.hidden=true;runHeader.innerHTML='<button type="button" id="generation-header-show" title="Show generation"><span id="generation-header-status"></span></button><button type="button" id="generation-header-stop">Stop</button>';byId('authoring-header')?.append(runHeader);const runById=id=>runHeader.querySelector('#'+id);
   const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&document.body.dataset.workspace!=='workbench')).then(source=>{if(!row.target.isConnected)return;if(!source){row.target.dataset.previewState='skipped';armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{if(row.target.isConnected){row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';}});}}, {root:panel});
   function armPreviews(){if(panel.hidden||mode!=='browse'||document.body.dataset.workspace==='workbench')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
-  const labels={'generated-meshes':'Saved meshes',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs',assets:'Assets',scratch:'Scratch'};
+  const labels={'generated-meshes':'Saved assets',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
   function close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');render(controller.read());}
   function setMode(next){mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());}
@@ -127,8 +127,8 @@ export function installAuthoringAssets({document,controller,edits}) {
     if(nextList!==listKey){listKey=nextList;observer.disconnect();previews.clear();
     byId('asset-entries').replaceChildren(...entries.map(entry=>{
       const button=document.createElement('button');button.type='button';button.className='asset-entry';button.dataset.assetPath=entry.path;button.title=entry.path;
-      if(entry.kind==='image'){const img=document.createElement('img');img.loading='lazy';img.src=entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
-      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='image'?'Image':'';button.append(subtitle);
+      if(entry.kind==='image'||entry.preview){const img=document.createElement('img');img.loading='lazy';img.src=entry.preview || entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
+      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':entry.kind==='image'?'Image':'';button.append(subtitle);
       button.setAttribute('aria-pressed',String(state.selected?.root===entry.root&&state.selected?.path===entry.path));
       button.onclick=()=>action(()=>entry.kind==='folder'?controller.browse(entry.root,entry.path):controller.select(entry));return button;
     }));
@@ -138,7 +138,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     for(const [index,button] of [...byId('asset-entries').children].entries())button.setAttribute('aria-pressed',String(state.selected?.source?state.selected.source===entries[index]?.source:state.selected?.root===entries[index]?.root&&state.selected?.path===entries[index]?.path));
     byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
-    const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
+    const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=!['mesh','surface'].includes(selected?.kind);byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
     const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
