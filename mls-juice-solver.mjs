@@ -13,7 +13,7 @@ const boundary=`
     }
 }`;
 
-export async function createMlsJuiceSolver({device,setup,packet}) {
+export async function createMlsJuiceSolver({device,setup,packet,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
@@ -77,10 +77,11 @@ export async function createMlsJuiceSolver({device,setup,packet}) {
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     return {config,particles,
       setPacket(packet){live=validateMlsPacket(packet);},
-      setPaused(value){paused=Boolean(value);},
-      advance(nowMs=performance.now(),epochMs=Date.now()){
+      setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
+      advance(nowMs=now(),epochMs=Date.now()){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
-        if(pending)return false;
+        clock.observe(nowMs,paused);
+        if(pending||paused)return false;
         const startTime=time,steps=clock.advance(nowMs,paused);if(!steps)return false;
         const injections=[];
         for(let i=0;i<steps;i++){

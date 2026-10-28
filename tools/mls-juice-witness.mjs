@@ -5,31 +5,41 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {MLS_ROUTE} from '../mls-juice-contract.mjs';
+import {bindMlsWitnessSource,validateServedMlsSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
 
 export function validateMlsWitness(report){
+  validateServedMlsSource(report);
   assert.equal(report.route,MLS_ROUTE,'wrong effective fluid route');
   assert.equal(report.state?.runtime?.failure,null,'fluid failure');
   assert(report.state.runtime.frameCount>0,'no presented frames');
   assert(report.active>0,'no live native particles');
   assert.equal(report.nonfinite,0,'nonfinite particle state');
   assert.equal(report.outside,0,'particles escaped supported domain');
-  assert(report.state.runtime.solver.clock.simulatedSeconds>=4,'simulation did not advance');
+  assert(report.state.runtime.solver.clock.simulatedSeconds>=(report.seconds??4),'simulation did not advance');
   assert(report.video,'missing rendered motion recording');
   assert.deepEqual(report.pageErrors,[],'browser errors');
   assert.deepEqual(report.consoleErrors,[],'console or GPU validation errors');
 }
 if(process.argv.includes('--self-test')){
-  const good={route:MLS_ROUTE,state:{runtime:{failure:null,frameCount:2,solver:{clock:{simulatedSeconds:4}}}},active:1,nonfinite:0,outside:0,video:'observed.webm',pageErrors:[],consoleErrors:[]};
+  const good={route:MLS_ROUTE,state:{runtime:{failure:null,frameCount:2,solver:{clock:{simulatedSeconds:4}}}},active:1,nonfinite:0,outside:0,video:'observed.webm',pageErrors:[],consoleErrors:[],
+    source:{root:'/expected',head:'observed'},servedSource:{schema:'kaminos.runtime-config.v0',source:{repoRoot:'/expected',commit:'observed',dirty:false}},
+    expectedFiles:{'/mls-juice-host.mjs':'sha'},servedFiles:{'/mls-juice-host.mjs':{status:200,sha256:'sha'}}};
   validateMlsWitness(good);
+  assert.throws(()=>validateMlsWitness({...good,source:{root:'/expected',head:'observed'},servedSource:{source:{repoRoot:'/wrong',commit:'observed'}}}),/served source/);
+  assert.throws(()=>validateMlsWitness({...good,servedSource:{...good.servedSource,source:{...good.servedSource.source,repoRoot:'/wrong'}}}),/root mismatch/);
+  assert.throws(()=>validateMlsWitness({...good,servedSource:{...good.servedSource,source:{...good.servedSource.source,commit:'old'}}}),/revision mismatch/);
+  assert.throws(()=>validateMlsWitness({...good,servedFiles:{'/mls-juice-host.mjs':{status:200,sha256:'stale'}}}),/bytes mismatch/);
+  assert.throws(()=>validateMlsWitness({...good,servedFiles:{}}),/missing served source response/);
   for(const [key,value,message]of [['route','legacy',/route/],['active',0,/particles/],['nonfinite',1,/nonfinite/],['video',null,/recording/]])assert.throws(()=>validateMlsWitness({...good,[key]:value}),message);
   console.log('MLS witness false-route, empty-state, invalid-numerics and missing-video guards OK');process.exit(0);
 }
-const {values:a}=parseArgs({options:Object.fromEntries(['url','output','browser','playwright'].map(k=>[k,{type:'string'}]))});
+const {values:a}=parseArgs({options:Object.fromEntries(['url','output','browser','playwright','seconds'].map(k=>[k,{type:'string'}]))});
 const out=path.resolve(a.output);fs.mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'input',argv:process.argv,at:new Date().toISOString(),pageErrors:[],consoleErrors:[],states:[],browserClosed:false,
-  evidenceScope:'synthetic moving nozzle in actual shared host; not live-hand feel or comparative performance'};
+  seconds:Number(a.seconds??4),evidenceScope:'synthetic moving nozzle in actual shared host; not live-hand feel or comparative performance'};
 const save=()=>fs.writeFileSync(out+'/report.json',JSON.stringify(report,null,2));save();let context,page;
 try{
+  assert(Number.isFinite(report.seconds)&&report.seconds>0,'invalid observation duration');
   report.source={root:process.cwd(),head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),diff:execFileSync('git',['diff','--stat'],{encoding:'utf8'})};
   for(const file of ['mls-juice-contract.mjs','mls-juice-solver.mjs','mls-juice-renderer.mjs','mls-juice-host.mjs','owner-live-fluid-session.mjs','experiments/mls-juice.experiment.mjs','vendor/splash-mls-mpm']){
     fs.mkdirSync(path.dirname(out+'/source/'+file),{recursive:true});fs.cpSync(file,out+'/source/'+file,{recursive:true});
@@ -40,9 +50,11 @@ try{
   context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport:{width:1280,height:900},
     recordVideo:{dir:out+'/video',size:{width:1280,height:900}},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
+  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/mls-juice.experiment.mjs'],out,report});
   report.phase='load';save();await page.goto(a.url);
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='mls-juice');
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+  await verifySource();save();
   assert.equal(report.initial.runtime.requestedRoute,MLS_ROUTE);
   report.phase='run';save();
   await page.getByRole('checkbox',{name:'Run',exact:true}).check();
@@ -50,7 +62,7 @@ try{
   do{
     state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());report.states.push({epochMs:Date.now(),state});
     assert.equal(state.runtime.failure,null,'runtime failure');
-    if(state.runtime.solver.clock.simulatedSeconds>=4)break;
+    if(state.runtime.solver.clock.simulatedSeconds>=report.seconds)break;
     await page.waitForTimeout(100);
   }while(true);
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setRunning',false));

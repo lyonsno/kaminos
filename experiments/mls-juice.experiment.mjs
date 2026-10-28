@@ -3,11 +3,12 @@ import {idleFingerPacket} from './hand-live-fluid.mjs';
 export default {
   id:'mls-juice',title:'MLS Finger Juice',
   async create({host,inputs,record}){
-    const scene=await host.scene.open();let fluid;
-    try{fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000},packet:idleFingerPacket()});}
-    catch(error){await scene.dispose();throw error;}
+    const validFlux=value=>{if(!Number.isFinite(value)||value<0)throw Error('Invalid emission rate');return value;};
+    validFlux(inputs.sourceFlux??1800);
+    const scene=await host.scene.open();let fluid,unsubscribe;
+    try{
+    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000},packet:idleFingerPacket()});
     let running=false,moving=inputs.moving??true,flux=inputs.sourceFlux??1800,time=0,origin=[0,1.35,0],direction=[.1,-.6,-.8],status;
-    const validFlux=value=>{if(!Number.isFinite(value)||value<0)throw Error('Invalid emission rate');return value;};validFlux(flux);
     const read=()=>({source:'explicit_synthetic_moving_nozzle_not_camera',running,moving,flux,origin,direction,runtime:fluid.read()});
     const publish=()=>{
       fluid.setPacket({packet_id:'synthetic-nozzle-'+time,route_identity:'mls-juice-synthetic-nozzle',timestamp_ms:Date.now(),
@@ -16,7 +17,7 @@ export default {
       fluid.setPaused(!running);
     };
     const frame=()=>scene.setView({position:[3,2.7,4],target:[0,.65,0]});frame();publish();
-    const unsubscribe=scene.onFrame(({deltaSeconds})=>{
+    unsubscribe=scene.onFrame(({deltaSeconds})=>{
       if(running){time+=deltaSeconds;if(moving){origin=[Math.sin(time*1.7)*.6,1.35,Math.cos(time*1.1)*.25];direction=[Math.sin(time)*.35,-.6,-.8];}publish();}
       if(status){const s=fluid.read();status.textContent=`${s.effectiveRoute??s.requestedRoute} | ${s.solver.liveInlets.activePlanned} particles | ${s.solver.clock.simulatedSeconds.toFixed(2)} s simulated${s.failure?' | '+s.failure:''}`;}
     });
@@ -41,5 +42,6 @@ export default {
       },
       async dispose(){unsubscribe();try{fluid.dispose();}finally{await scene.dispose();}}
     };
+    }catch(error){unsubscribe?.();try{fluid?.dispose();}finally{await scene.dispose();}throw error;}
   }
 };

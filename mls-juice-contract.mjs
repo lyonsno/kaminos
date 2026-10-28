@@ -13,11 +13,14 @@ export function mlsConfig(setup={}) {
 // Backlog is retained, not clamped away to make presentation FPS look healthy.
 export function createMlsClock(dt) {
   let previous=null,accumulator=0,steps=0,elapsed=0;
-  return {advance(now,paused=false){
+  function observe(now,paused=false){
     if(!Number.isFinite(now))throw Error('Invalid MLS clock');
     if(previous!==null&&now<previous)throw Error('MLS clock moved backwards');
     const delta=previous===null?0:(now-previous)/1000;previous=now;
     if(!paused){accumulator+=delta;elapsed+=delta;}
+  }
+  return {observe,advance(now,paused=false){
+    observe(now,paused);
     const count=paused?0:Math.floor((accumulator+1e-10)/dt);
     accumulator-=count*dt;steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
