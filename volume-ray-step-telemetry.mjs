@@ -1,6 +1,8 @@
 const HISTOGRAM = 12, GLYPHS = HISTOGRAM + 3 * 256;
+// Label + gap + all 26 characters of a comma-grouped unsigned 64-bit total.
+const COLUMNS = 34, ROWS = 6;
 export const RAY_STEP_MISS = 0xffffffff;
-export const RAY_STEP_SUMMARY_BYTES = (GLYPHS + 28 * 6) * 4;
+export const RAY_STEP_SUMMARY_BYTES = (GLYPHS + COLUMNS * ROWS) * 4;
 
 export const RAY_STEP_TELEMETRY_WGSL = /* wgsl */`
 override BYTE_SHIFT: u32 = 24u;
@@ -53,9 +55,9 @@ fn histogram(@builtin(local_invocation_index) lane: u32,
 }
 
 fn text(row:u32,offset:u32,letters:ptr<function,array<u32,20>>,length:u32){
-  for(var i=0u;i<length;i++){atomicStore(&summary[${GLYPHS}u+row*28u+offset+i],(*letters)[i]);}
+  for(var i=0u;i<length;i++){atomicStore(&summary[${GLYPHS}u+row*${COLUMNS}u+offset+i],(*letters)[i]);}
 }
-fn number(row:u32,column:u32,lo:u32,hi:u32){
+fn number(row:u32,lo:u32,hi:u32){
   // Four base-65536 limbs keep decimal conversion exact without GPU u64 support.
   var limbs=vec4<u32>(hi>>16u,hi&65535u,lo>>16u,lo&65535u);
   var digits:array<u32,20>;var length=0u;
@@ -67,7 +69,14 @@ fn number(row:u32,column:u32,lo:u32,hi:u32){
     digits[length]=48u+remainder;length++;
     if(all(limbs==vec4<u32>(0u))){break;}
   }
-  for(var i=0u;i<length;i++){atomicStore(&summary[${GLYPHS}u+row*28u+column+i],digits[length-1u-i]);}
+  // Emit from the common units column, including group separators to its left.
+  var column=${COLUMNS - 1}u;
+  for(var i=0u;i<length;i++){
+    atomicStore(&summary[${GLYPHS}u+row*${COLUMNS}u+column],digits[i]);column--;
+    if((i+1u)%3u==0u && i+1u<length){
+      atomicStore(&summary[${GLYPHS}u+row*${COLUMNS}u+column],44u);column--;
+    }
+  }
 }
 @compute @workgroup_size(1)
 fn selectQuantiles(){
@@ -91,21 +100,21 @@ fn selectQuantiles(){
     }
   }
   if(BYTE_SHIFT==0u){
-    for(var i=0u;i<168u;i++){atomicStore(&summary[${GLYPHS}u+i],32u);}
+    for(var i=0u;i<${COLUMNS * ROWS}u;i++){atomicStore(&summary[${GLYPHS}u+i],32u);}
     var header=array<u32,20>(82u,65u,89u,32u,83u,65u,77u,80u,76u,69u,83u,32u,47u,32u,71u,80u,85u,32u,32u,32u);
     text(0u,0u,&header,17u);
     for(var q=0u;q<3u;q++){
-      atomicStore(&summary[${GLYPHS}u+(q+1u)*28u],112u);
-      atomicStore(&summary[${GLYPHS}u+(q+1u)*28u+1u],select(53u,57u,q>0u));
-      atomicStore(&summary[${GLYPHS}u+(q+1u)*28u+2u],select(select(48u,53u,q==1u),57u,q==2u));
-      atomicStore(&summary[${GLYPHS}u+(q+1u)*28u+3u],58u);
-      if(population>0u){number(q+1u,5u,atomicLoad(&summary[3u+q]),0u);}
-      else{atomicStore(&summary[${GLYPHS}u+(q+1u)*28u+5u],45u);}
+      atomicStore(&summary[${GLYPHS}u+(q+1u)*${COLUMNS}u],112u);
+      atomicStore(&summary[${GLYPHS}u+(q+1u)*${COLUMNS}u+1u],select(53u,57u,q>0u));
+      atomicStore(&summary[${GLYPHS}u+(q+1u)*${COLUMNS}u+2u],select(select(48u,53u,q==1u),57u,q==2u));
+      atomicStore(&summary[${GLYPHS}u+(q+1u)*${COLUMNS}u+3u],58u);
+      if(population>0u){number(q+1u,atomicLoad(&summary[3u+q]),0u);}
+      else{atomicStore(&summary[${GLYPHS}u+(q+1u)*${COLUMNS}u+${COLUMNS - 1}u],45u);}
     }
     var total=array<u32,20>(84u,79u,84u,65u,76u,58u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u);
-    text(4u,0u,&total,6u);number(4u,7u,atomicLoad(&summary[1]),atomicLoad(&summary[2]));
+    text(4u,0u,&total,6u);number(4u,atomicLoad(&summary[1]),atomicLoad(&summary[2]));
     var rays=array<u32,20>(82u,65u,89u,83u,58u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u,32u);
-    text(5u,0u,&rays,5u);number(5u,7u,population,0u);
+    text(5u,0u,&rays,5u);number(5u,population,0u);
   }
 }
 `;
@@ -118,7 +127,7 @@ const DISPLAY_WGSL = /* wgsl */`
 }
 @fragment fn fs(@builtin(position) position:vec4<f32>)->@location(0) vec4<f32>{
   let cell=vec2<u32>(position.xy)/vec2<u32>(8u,16u);
-  let code=summary[${GLYPHS}u+cell.y*28u+cell.x]-32u;
+  let code=summary[${GLYPHS}u+cell.y*${COLUMNS}u+cell.x]-32u;
   let local=vec2<u32>(position.xy)%vec2<u32>(8u,16u);
   let uv=vec2<i32>(vec2<u32>((code%16u)*8u,(code/16u)*16u)+local);
   let alpha=textureLoad(glyphs,uv,0).a;
@@ -158,7 +167,7 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
   function setCanvas(next){
     if(canvas===next)return;
     context?.unconfigure();canvas=next;context=null;
-    if(canvas){canvas.width=224;canvas.height=96;context=canvas.getContext('webgpu');
+    if(canvas){canvas.width=COLUMNS*8;canvas.height=ROWS*16;context=canvas.getContext('webgpu');
       context?.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});}
   }
   function ensure(width,height,requested,{supported=true,reason='unsupported-renderer',allowResize=true,activate=true}={}){
