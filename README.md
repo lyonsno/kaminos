@@ -44,7 +44,7 @@ The generation demos run inference locally on your GPU.
 | --- | --- | --- |
 | Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Explore in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/) or [use your photograph locally](demos/material-photo/README.md) |
 | Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
-| WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
+| WebGPU inference kit | Reusable browser model applications, with shared-device lifecycle and cooperative scheduling | [Generate your first image](models/flux2-klein/README.md#using-it-in-an-application), [read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
 | Generative and vision model ports | Image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
@@ -80,17 +80,16 @@ substantial models execute.
 
 ## WebGPU Inference Kit
 
-The inference kit gives browser model ports a shared session and device
-lifecycle, persistent routes, queued invocations, cooperative scheduling,
-foreground opportunities, resource residency, and terminal state. Model ports
-retain ownership of their weights, kernels, tensor semantics, execution order,
-and outputs.
+Generate images and run vision models locally in the browser. Start with a
+model application; share its GPU device with your renderer when you need one.
+
+**[Generate and display your first image](models/flux2-klein/README.md#using-it-in-an-application)** with a complete Klein browser page: setup, progress, repeated runs and cleanup.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
 ```
 
-Start with a [model application](webgpu-inference-kit/docs/model-applications.md) to generate images with Klein, estimate materials with SuperMat, animate a skeleton with UniMate, or remove a background with U2Net. The applications handle loading, queued inference, controls and cleanup while preserving each model's options, complete output and lower-level pipeline. Connect your renderer once through the foreground service to share the GPU across runs.
+Choose a [model application](webgpu-inference-kit/docs/model-applications.md) to generate images with Klein, estimate materials with SuperMat, animate a skeleton with UniMate, or remove a background with U2Net. The applications handle loading, queued inference, controls and cleanup while preserving each model's options, complete output and lower-level pipeline. For a live renderer, the shared foreground service coordinates its GPU work with inference across runs.
 
 The same runtime supports several kinds of model:
 
