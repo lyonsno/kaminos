@@ -17,3 +17,8 @@ for(const mutate of [r=>r.adapter.fallback=true,r=>r.rows=[],r=>r.rows[0].config
  const bad=structuredClone(good);mutate(bad);assert.throws(()=>validateSignal(bad,[config]));
 }
 console.log('invalid, blank, fallback, partial and mismatched evidence rejected');
+import {appendSignal} from '../experiments/allocation/model.mjs';
+const combined={rows:[]};
+appendSignal(combined,{...structuredClone(good),validation:'first-case validation failure'});
+appendSignal(combined,structuredClone(good));
+assert.throws(()=>validateSignal(combined,[config,config]),/validation/);

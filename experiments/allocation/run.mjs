@@ -4,7 +4,7 @@ import http from 'node:http';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {fixtures,validateSignal} from './model.mjs';
+import {fixtures,validateSignal,appendSignal} from './model.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url)),out=path.resolve(process.argv[2]);
 await fs.mkdir(out,{recursive:true});
 const report={status:'failed',phase:'setup',root,head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:{},scope:'Controlled moving material allocation only; prescribed activity and velocity; no rendering, velocity/pressure solve, production fire detector or whole-frame claim.'};
@@ -12,7 +12,8 @@ let browser,server;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 try {
  for(const f of ['model.mjs','kernels.mjs','gpu.mjs','run.mjs'])report.sourceHashes[f]=createHash('sha256').update(await fs.readFile(new URL(f,import.meta.url))).digest('hex');
- const configs=fixtures().flatMap(c=>[4,8,16].map(brick=>({...c,brick})));
+ const configs=process.argv[3]?JSON.parse(await fs.readFile(process.argv[3],'utf8')):fixtures().flatMap(c=>[4,8,16].map(brick=>({...c,brick})));
+ if(!Array.isArray(configs)||!configs.length)throw Error('Nonempty config array required');
  report.configs=configs;
  server=http.createServer(async(req,res)=>{try{const f=path.join(root,decodeURIComponent(req.url.split('?')[0]));if(!f.startsWith(root))throw Error('path');if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end('<title>Allocation computation</title>');return;}res.setHeader('Content-Type','text/javascript');res.end(await fs.readFile(f));}catch{res.statusCode=404;res.end();}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -30,7 +31,7 @@ try {
   const row=r.rows[0];const raw=row.raw;delete row.raw;
   const name=`${c.name}-${c.brick}`;
   for(const [field,values] of Object.entries(raw)){const array=field==='map'?new Uint32Array(values):new Float32Array(values);await fs.writeFile(path.join(out,`${name}-${field}.bin`),Buffer.from(array.buffer));}
-  signal.adapter=r.adapter;signal.errors=[...(signal.errors??[]),...r.errors];signal.validation=r.validation;signal.rows.push(row);
+  appendSignal(signal,r);
   await fs.writeFile(path.join(out,'signal.json'),JSON.stringify(signal,null,2));
   console.log(JSON.stringify({case:name,parity:row.samples[0].parity,completed:signal.rows.length}));
  }

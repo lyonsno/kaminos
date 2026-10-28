@@ -29,7 +29,7 @@ export function fixtures(size=96) {
  ];
 }
 export function validateSignal(r, configs) {
- if(r.adapter?.vendor!=='apple'||r.adapter.fallback||r.errors?.length||r.validation)throw Error('GPU route or validation failure');
+ if(r.adapter?.vendor!=='apple'||r.adapter.fallback||r.errors?.length||(Array.isArray(r.validation)?r.validation.length:r.validation))throw Error('GPU route or validation failure');
  if(r.rows?.length!==configs.length)throw Error('partial configurations');
  r.rows.forEach((row,i)=>{
   if(JSON.stringify(row.config)!==JSON.stringify(configs[i]))throw Error('effective configuration mismatch');
@@ -41,4 +41,11 @@ export function validateSignal(r, configs) {
   }
  });
  return true;
+}
+export function appendSignal(signal,result) {
+ if(signal.adapter && JSON.stringify(signal.adapter)!==JSON.stringify(result.adapter)) signal.errors=[...(signal.errors??[]),"adapter changed across configurations"];
+ signal.adapter=result.adapter;
+ signal.errors=[...(signal.errors??[]),...result.errors];
+ signal.validation=[...(signal.validation??[]),...(result.validation?[{configurations:result.rows.map(r=>r.config),error:result.validation}]:[])];
+ signal.rows.push(...result.rows);
 }
