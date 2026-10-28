@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inference Kiln · Kaminos</title>
+<style>body{background:#15171a;color:#e9dfcb;font:16px system-ui;display:grid;place-items:center;min-height:90vh}</style>
+<p id="status" role="status">Opening Inference Kiln…</p>
+<script type="module">
+try{
+ const response=await fetch('./artifacts/inference-kiln/study.json');if(!response.ok)throw Error('The kiln study could not be loaded');
+ const study=await response.json();if(study.schema!=='kaminos.inference-kiln-study.v1')throw Error('Unrecognized kiln study');
+ const target=new URL('./',location.href);for(const [key,value] of Object.entries(study.query))target.searchParams.set(key,value);
+ if(new URL(location.href).searchParams.get('material')==='1'){target.searchParams.set('experiment','inference-kiln-material');target.searchParams.set('scene_bloom','1');target.searchParams.set('experiment_inputs',JSON.stringify({setup:true}));}
+ const prompt=new URL(location.href).searchParams.get('prompt');if(prompt)target.searchParams.set('experiment_inputs',JSON.stringify({...JSON.parse(target.searchParams.get('experiment_inputs')||'{}'),prompt}));
+ location.replace(target.href);
+}catch(error){document.getElementById('status').textContent=error.message;}
+</script></html>

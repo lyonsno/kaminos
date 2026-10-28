@@ -99,6 +99,10 @@ export function isReloadableSceneObjectRecord(record) {
   return defaultSceneRecordOperations.reloadable(record);
 }
 
+export function assertSceneSourcesReloadable(records=[]) {
+  return defaultSceneRecordOperations.assertReloadable(records);
+}
+
 export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
   if (!sceneDocumentIsLoadable(data) && !(allowEmpty && Number.isInteger(data?.version) && data.version > 0)) throw new Error('Invalid scene format');

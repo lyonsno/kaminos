@@ -70,6 +70,7 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
   assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'12');
   assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'screen-animated');
   assert.equal(applied.settings,settings,'do not replace or recolor the saved flame to light the scene');
+  context.activeSceneComposition=null;await context.addFirstFlameField('saved-basin',{lightingRoute:{volume_light_field_hybrid_shadow_grain:'ordered',volume_light_field_hybrid_shadow_resolution:'128'}});assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'ordered');assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'128');
   // The physical mode select is retired (2026-10-18): every basin renders on
   // the emissive route, so every Add Flame mounts the shared emissive export.
 });
@@ -136,16 +137,17 @@ test('the actual domain helper retires when its field is absent and survives tog
   activeSceneComposition={};refresh();assert.equal(flameDomainGuide.visible,true);assert.equal(scene.children.length,1);
 });
 
-test('both actual GI graph arms preserve ordinary final display while shared water captures raw input',()=>{
-  for(const cached of [false,true]) {
+test('both actual GI graph arms preserve raw input and optional display bloom',()=>{
+  for(const enabled of [false,true])for(const cached of [false,true]) {
     const sceneGISettings={mode:'gtao',view:'scene',denoise:1,temporal:false},document={body:{dataset:{}}},localLiquidHost={};
-    const scenePass={},prePassDepth={},prePassNormal={},sceneGI={debugState:()=>({filterImplementation:'shared'})};let activeSceneDepth,fireLightFieldPass;
-    let rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera=null;
-    const renderPipeline={outputColorTransform:false},selectionFeedback={output:x=>x};
+    const emission={source:'physical-emission'},scenePass={getMRT:()=>({outputNodes:{emissive:emission}}),getTextureNode:()=>emission},prePassDepth={},prePassNormal={},sceneGI={debugState:()=>({filterImplementation:'shared'})};let activeSceneDepth,fireLightFieldPass;
+    let sceneEmissionSource=null,rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera=null;
+    const raw={},bloomed={};const renderPipeline={outputColorTransform:false},selectionFeedback={output:x=>x};
+    const sceneBloom={read:()=>({settings:{enabled}}),output:(value,source)=>{assert.equal(value,raw);if(enabled)assert.equal(source,emission,'bloom must receive emission, not reflected scene brightness');return enabled?bloomed:value;}};
     const sharedGpu={device:{}},isFireLightFieldRoute=()=>true,fireLightFieldRouteParams=()=>new URLSearchParams();
-    const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:{}});
-    const giOutputGraphs=new Map(cached?[['shared:gtao:true:false:true:false',{rawSceneOutput:{},outlinedSceneOutput:{},outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
+    const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:raw});
+    const cachedOutput=enabled?bloomed:raw;const giOutputGraphs=new Map(cached?[[`shared:gtao:true:false:true:false:${enabled}`,{rawSceneOutput:raw,outlinedSceneOutput:cachedOutput,outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
     const a=source.indexOf('  function rebuildSceneGIOutput()'),b=source.indexOf('  updateSceneGI =',a);
-    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.ok(rawSceneOutput);
+    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.equal(rawSceneOutput,raw,'raw lighting must not include display bloom');assert.equal(renderPipeline.outputNode,cachedOutput,'both cache arms must use the requested display stage');
   }
 });

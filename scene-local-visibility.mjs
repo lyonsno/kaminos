@@ -13,7 +13,6 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
     staticSceneGeometryRevision(scene,{exclude:m=>!!readCoverage(m)});
     const meshes=[],coverageByMesh=new Map();
     scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow){const binding=readCoverage(m);if(binding){const value=validateResidentLightCoverage(m,binding);if(binding.owner!==m)return;coverageByMesh.set(m,value);}meshes.push(m);}});
-    if(coverageByMesh.size>1)throw Error('The current resident-light consumer supports the single active burn target only');
     const coverage=[...coverageByMesh.values()][0]??null;
     const keys=meshes.map(m=>{const c=coverageByMesh.get(m);if(c)return JSON.stringify(['resident',id(c.texture),id(c.initial),c.dimensions,c.bounds.min.toArray(),c.bounds.max.toArray()]);const g=m.geometry,p=g.attributes.position,i=g.index;return JSON.stringify([id(g),g.version,id(p),p.version,p.count,id(i),i?.version,i?.count]);});
     const revision=JSON.stringify(meshes.map((m,i)=>[m.uuid,keys[i]]));
@@ -42,14 +41,17 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
       });
       const nodeCount=parts.reduce((s,p)=>s+p.nodeCount,0),triangleCount=parts.reduce((s,p)=>s+p.triangleCount,0);
       const nodes=new Float32Array(Math.max(1,nodeCount)*12),triangles=new Float32Array(Math.max(1,triangleCount)*12),owners=new Uint32Array(Math.max(1,nodeCount+triangleCount)),words=new Uint32Array(nodes.buffer);
+      const coverageRanges=[];
       let n=0,t=0;parts.forEach((p,owner)=>{
+        if(coverageByMesh.has(meshes[owner]))coverageRanges.push({owner,triangleStart:t,triangleCount:p.triangleCount});
         nodes.set(p.nodes.subarray(0,p.nodeCount*12),n*12);triangles.set(p.triangles.subarray(0,p.triangleCount*12),t*12);
         for(let j=0;j<p.nodeCount;j++){words[(n+j)*12+8]+=n;words[(n+j)*12+9]+=t;owners[n+j]=owner;}
         owners.fill(owner,nodeCount+t,nodeCount+t+p.triangleCount);n+=p.nodeCount;t+=p.triangleCount;
       });
-      packed={nodes,triangles,nodeCount,triangleCount,owners,matrices,coverage};previous=revision;
+      packed={nodes,triangles,nodeCount,triangleCount,owners,matrices,coverage,coverageRanges};previous=revision;
     }else packed.matrices=matrices;
     packed.coverage=coverage;
+    packed.coverages=packed.coverageRanges.map(({owner,...range})=>({...coverageByMesh.get(meshes[owner]),...range}));
     return {geometry:packed,revision,localBuilds:builds,meshCount:meshes.length};
   }};
 }

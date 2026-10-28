@@ -1,3 +1,4 @@
+import {checkedBurnable} from './scene-burning-settings.mjs';
 import {sceneRecordDomains} from './scene-record-domains.mjs';
 import {checkedObjectCollision,canCollideWithFire} from './scene-collider.mjs';
 import {checkedGiProxySetting} from './scene-gi-proxy-settings.mjs';
@@ -40,6 +41,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
       ...(record.emission?{emission:copy(record.emission)}:{}),
       ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
       ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
+      ...(record.burnable!=null?{burnable:checkedBurnable(record)}:{}),
       ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
       ...(record.arrivalLeveling&&typeof record.arrivalLeveling==='object'?{arrivalLeveling:copy(record.arrivalLeveling)}:{}),
       ...properties(record),
@@ -60,6 +62,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
       ...(object?.userData?.kaminosLeveling?{arrivalLeveling:structuredClone(object.userData.kaminosLeveling)}:{}),
       ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
       ...(entry.giProxy?{giProxy:structuredClone(entry.giProxy)}:{}),
+      ...(entry.burnable?{burnable:structuredClone(entry.burnable)}:{}),
       ...(entry.repetition?{repetition:checkedRepetition(entry.repetition)}:{}),
       ...properties({...metadata,...entry}),
     };
