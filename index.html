@@ -3341,6 +3341,7 @@ import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmen
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
+import {measureSceneGpu} from './scene-light-timing.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -11676,6 +11677,11 @@ async function initScene() {
       adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
     };
   };
+  window.kaminosWorkbenchMeasureSceneGpu=({samples=20}={})=>measureSceneGpu(renderer,{
+    samples,
+    getSignature:()=>JSON.stringify({camera:readAuthoredCameraView(),objects:readAuthoredFireObjects(),viewport:viewportDisplay}),
+    drawFrame:()=>{const start=performance.now(),draw=window.__kaminosRenderSceneForInspection();return {...draw,cpuMs:performance.now()-start};},
+  });
   installSharedWorkbench();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'

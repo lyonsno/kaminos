@@ -3,5 +3,5 @@ export function validateCrustRoute(value,root){
 }
 export function validateCrustFrames(records){
  if(!Array.isArray(records)||!records.length)throw Error('No scene frames measured');let previous=-1;
- for(const r of records){if(r.drawn!==true||!Number.isSafeInteger(r.frame)||r.frame<=previous||!Number.isFinite(r.cpuMs)||r.cpuMs<0||!(r.gpuMs===null||Number.isFinite(r.gpuMs)&&r.gpuMs>=0))throw Error('Missing, stale or malformed scene timing');previous=r.frame;}return records;
+ for(const r of records){if(r.drawn!==true||!Number.isSafeInteger(r.frame)||r.frame<=previous||!Number.isFinite(r.cpuMs)||r.cpuMs<0||!(r.gpuMs===null||Number.isFinite(r.gpuMs)&&r.gpuMs>0))throw Error('Missing, stale or malformed scene timing');previous=r.frame;}return records;
 }
