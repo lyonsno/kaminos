@@ -368,29 +368,67 @@ export async function persistPixal3dGenerationPhase({
   if (report.nativeSessionId && report.nativeSessionId !== row.sessionId) {
     throw new Error('Pixal3D generation session identity changed');
   }
-  if (row.kernel) {
-    const k = row.kernel;
-    if (
-      typeof k.stage !== 'string' ||
-      !k.stage ||
-      !Array.isArray(k.dispatch) ||
-      k.dispatch.length < 1 ||
-      k.dispatch.length > 3 ||
-      !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
-      !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
-    ) {
+  if (row.kernel !== undefined && row.kernels !== undefined) {
+    throw new Error('complete native kernel event required');
+  }
+  const kernelBatch =
+    row.kernels !== undefined ? row.kernels : row.kernel !== undefined ? [row.kernel] : null;
+  if (kernelBatch !== null) {
+    if (!Array.isArray(kernelBatch) || kernelBatch.length < 1) {
       throw new Error('complete native kernel event required');
     }
     if (typeof kernelLogPath !== 'string' || !kernelLogPath || typeof append !== 'function') {
       throw new Error('caller-owned kernel journal required');
     }
-    await append(kernelLogPath, JSON.stringify({ ...row, observedAt: new Date().toISOString() }) + '\n');
+    const now = new Date().toISOString();
+    const baseRow = { ...row };
+    delete baseRow.kernel;
+    delete baseRow.kernels;
+    let lastKernel;
+    let lastPhase = row.phase;
+    const lines =
+      kernelBatch
+        .map(item => {
+          const hasWrapper = item && typeof item === 'object' && 'kernel' in item;
+          const k = hasWrapper ? item.kernel : item;
+          if (
+            !k ||
+            typeof k.stage !== 'string' ||
+            !k.stage ||
+            !Array.isArray(k.dispatch) ||
+            k.dispatch.length < 1 ||
+            k.dispatch.length > 3 ||
+            !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
+            !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
+          ) {
+            throw new Error('complete native kernel event required');
+          }
+          const itemPhase =
+            hasWrapper && typeof item.phase === 'string' && item.phase ? item.phase : row.phase;
+          const itemModelRole =
+            hasWrapper && 'modelRole' in item ? item.modelRole : baseRow.modelRole;
+          const itemObservedAt =
+            hasWrapper && typeof item.observedAt === 'string' && item.observedAt
+              ? item.observedAt
+              : now;
+          lastKernel = k;
+          lastPhase = itemPhase;
+          return JSON.stringify({
+            ...baseRow,
+            phase: itemPhase,
+            ...(itemModelRole !== undefined ? { modelRole: itemModelRole } : {}),
+            kernel: k,
+            observedAt: itemObservedAt,
+          });
+        })
+        .join('\n') + '\n';
+    await append(kernelLogPath, lines);
     report.nativeSessionId = row.sessionId;
-    report.lastKernel = k;
-    report.lastBrowserPhase = row.phase;
+    report.lastKernel = lastKernel;
+    report.lastBrowserPhase = lastPhase;
     report.kernelEvidence = {
       path: kernelLogPath,
-      count: (report.kernelEvidence?.count ?? 0) + 1,
+      count: (report.kernelEvidence?.count ?? 0) + kernelBatch.length,
       retention: 'complete append-only events; no cap',
     };
     return;

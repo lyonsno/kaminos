@@ -32,6 +32,8 @@ const {
 
 const {
   PIXAL3D_REQUIRED_STAGES,
+  PIXAL3D_KERNEL_EVENT_BATCH_SIZE,
+  createPixal3dKernelPhaseBuffer,
   runPixal3dGenerationWitness,
 } = await import(browserWitnessUrl);
 
@@ -504,6 +506,149 @@ try {
   });
   assert.equal(phaseReport.nativeSessionId, 'sess-123');
   assert.equal(phaseReport.kernelEvidence?.count, 1);
+
+  // 3b. Batched kernel persistence and createPixal3dKernelPhaseBuffer checks
+  assert.equal(PIXAL3D_KERNEL_EVENT_BATCH_SIZE, 2048);
+  assert.equal(typeof createPixal3dKernelPhaseBuffer, 'function');
+  let appendCalls = 0;
+  let persistCalls = 0;
+  const batchedLogPath = path.join(scratch, 'batched-kernels.jsonl');
+  const batchedServerReport = {};
+  const browserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 12,
+    verifiedInputBytes: 4096,
+  };
+  const phaseBuffer = createPixal3dKernelPhaseBuffer({
+    report: browserReport,
+    batchSize: 4,
+    postPhase: async extra => {
+      await persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: browserReport.phase,
+          effectiveRoute: browserReport.effectiveRoute,
+          sessionId: 'sess-batched-1',
+          modelRole: browserReport.loadingModelRole,
+          verifiedTensorCount: browserReport.verifiedTensorCount,
+          verifiedInputBytes: browserReport.verifiedInputBytes,
+          ...extra,
+        },
+        kernelLogPath: batchedLogPath,
+        append: async (p, data) => {
+          appendCalls++;
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {
+          persistCalls++;
+        },
+      });
+    },
+  });
+
+  // Record 6 kernel events with batchSize=4: first 4 flush in 1 append call, next 2 stay buffered until savePhase
+  for (let i = 0; i < 3; i++) {
+    await phaseBuffer.recordKernel({
+      stage: `stage-${i}`,
+      dispatch: [i + 1, 1, 1],
+      point: 'before-native-kernel',
+    });
+    await phaseBuffer.recordKernel({
+      stage: `stage-${i}`,
+      dispatch: [i + 1, 1, 1],
+      point: 'native-kernel-returned',
+    });
+  }
+  assert.equal(appendCalls, 1, 'First 4 kernel events must flush in a single batch append');
+  assert.equal(phaseBuffer.pendingCount, 2, 'Remaining 2 kernel events stay buffered before threshold/phase transition');
+  assert.equal(batchedServerReport.kernelEvidence?.count, 4);
+
+  // Transitioning phase via savePhase flushes the 2 pending kernel events before recording the new livePhase
+  browserReport.phase = 'occupancy-decoding';
+  browserReport.loadingModelRole = 'occupancyDecoder';
+  await phaseBuffer.savePhase({ backend: { vendor: 'apple' } });
+  assert.equal(phaseBuffer.pendingCount, 0);
+  assert.equal(appendCalls, 2, 'Pending kernel events must flush in 1 batch before non-kernel phase persistence');
+  assert.equal(persistCalls, 1);
+  assert.equal(batchedServerReport.kernelEvidence?.count, 6);
+  assert.deepEqual(batchedServerReport.lastKernel, {
+    stage: 'stage-2',
+    dispatch: [3, 1, 1],
+    point: 'native-kernel-returned',
+  });
+  assert.equal(batchedServerReport.lastBrowserPhase, 'occupancy-decoding');
+
+  // Simulate a kernel throwing after before-native-kernel and verify flush() preserves the failing kernel event
+  await phaseBuffer.recordKernel({
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+  assert.equal(phaseBuffer.pendingCount, 1);
+  await phaseBuffer.flush();
+  assert.equal(phaseBuffer.pendingCount, 0);
+  assert.equal(batchedServerReport.kernelEvidence?.count, 7);
+  assert.deepEqual(batchedServerReport.lastKernel, {
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+  const loggedLines = readFileSync(batchedLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(loggedLines.length, 7);
+  assert.equal(loggedLines[0].phase, 'sparse-structure-sampling');
+  assert.equal(loggedLines[5].phase, 'sparse-structure-sampling');
+  assert.equal(loggedLines[6].phase, 'occupancy-decoding');
+  assert.deepEqual(loggedLines[6].kernel, {
+    stage: 'failing-stage',
+    dispatch: [16, 1, 1],
+    point: 'before-native-kernel',
+  });
+
+  // Fail-first validation on malformed batched kernels
+  await assert.rejects(
+    () =>
+      persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: 'occupancy-decoding',
+          effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+          sessionId: 'sess-batched-1',
+          kernels: [],
+        },
+        kernelLogPath: batchedLogPath,
+        append: async () => {
+          assert.fail('Empty kernel batch must not append');
+        },
+        persist: async () => {},
+      }),
+    /complete native kernel event required/,
+  );
+  await assert.rejects(
+    () =>
+      persistPixal3dGenerationPhase({
+        report: batchedServerReport,
+        row: {
+          phase: 'occupancy-decoding',
+          effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+          sessionId: 'sess-batched-1',
+          kernels: [
+            { stage: 'ok-stage', dispatch: [1, 1, 1], point: 'before-native-kernel' },
+            { stage: 'bad-stage', dispatch: [0, -1], point: 'before-native-kernel' },
+          ],
+        },
+        kernelLogPath: batchedLogPath,
+        append: async () => {
+          assert.fail('Batch with malformed kernel event must fail before appending');
+        },
+        persist: async () => {},
+      }),
+    /complete native kernel event required/,
+  );
 
   // Build a real 2x2x2 dual-grid mesh & bake PBR GLB to test persistPixal3dGenerationAsset & finalize-retained-generation.mjs
   const activeCells = [
