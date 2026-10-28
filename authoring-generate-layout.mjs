@@ -41,14 +41,14 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const imageOptions=image.querySelector('.asset-text-image-actions'),imageActions=document.createElement('div');imageActions.className='asset-text-image-actions';
   // Keep Generate/Stop and output size above the preview as it grows. All
   // existing controls retain their identities and controller handlers.
-  for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=byId(id);if(control)imageActions.append(control);}
-  const imageSize=byId('asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
+  for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
+  const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
   if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
-  byId('asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
+  image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
   document.defaultView.addEventListener('focus',()=>{kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});});
   const tools=document.createElement('div');tools.className='asset-image-view-tools';
   const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='asset-show-segmented';toggle.checked=showSegmented;
