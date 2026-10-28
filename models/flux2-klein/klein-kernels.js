@@ -313,7 +313,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 
 // Row softmax with a causal mask and a key padding mask over `rows` rows starting at row z0;
 // row r of head-major scores is query i = r % L; key j counts iff j <= i and mask[j] != 0.
-export function maskedSoftmaxShader() {
+export function maskedSoftmaxShader({ queryBlock = false } = {}) {
   return `struct P { rows: u32, L: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read_write> s: array<f32>;
 @group(0) @binding(1) var<storage, read> mask: array<i32>;
@@ -322,8 +322,8 @@ var<workgroup> red: array<f32, 256>;
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let rr = wid.x + wid.y * 65535u; if (rr >= p.rows) { return; }
-  let r = p.z0 + rr;
-  let t = lid.x; let base = r * p.L; let qi = r % p.L;
+  let r = ${queryBlock ? 'rr' : 'p.z0 + rr'};
+  let t = lid.x; let base = r * p.L; let qi = ${queryBlock ? 'p.z0 + rr % p.z1' : 'r % p.L'};
   var m = -3.4e38;
   for (var j = t; j < p.L; j += 256u) { if (j <= qi && mask[j] != 0) { m = max(m, s[base + j]); } }
   red[t] = m; workgroupBarrier();
