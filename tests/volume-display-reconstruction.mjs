@@ -44,10 +44,21 @@ const encoder={beginComputePass(descriptor){passes.push(descriptor);return {setP
 const input={fluid:[{},{}],reactant:[device.createTexture({}),device.createTexture({})]};
 const field=createDisplayReconstruction(device,{}, {},()=>input);
 const config=resolve({displayReconstruction:'material'});
-assert.equal(field.ensure([4,8,4],config),true);
+field.ensure([4,8,4],config);
+const admittedView=field.view.texture;
+const admittedState=field.read();
+const allocationCount=allocations.length;
+for(let repeat=0;repeat<2;repeat++) {
+  assert.deepEqual(field.ensure([160,640,160],{...config,scale:4}),
+    {changed:false,admitted:false,reason:'display-grid-exceeds-device-3d-texture-dimensions'});
+  assert.deepEqual(field.read(),admittedState,'refusal preserves accepted configuration');
+  assert.equal(field.view.texture,admittedView);
+  assert.ok(!admittedView.destroyed,'refusal does not destroy accepted resources');
+  assert.equal(allocations.length,allocationCount,'rejected shapes allocate nothing');
+}
 assert.equal(field.encode(encoder,0,[0,1]),true);
 assert.deepEqual(dispatches,[[1,2,1],[2,2,1],[2,4,1],[2,4,2]]);
-assert.equal(field.ensure([4,8,4],config),false);
+assert.deepEqual(field.ensure([4,8,4],config),{changed:false,admitted:true,reason:null});
 assert.equal(field.encode(encoder,0,[0,1]),false,'held source does not rebuild');
 assert.equal(field.encode(encoder,0,[0,2]),true,'new source step rebuilds');
 field.ensure([4,8,4],{...config,smoke:0.25});
@@ -61,6 +72,9 @@ assert.deepEqual(passes[3].timestampWrites,{querySet:timing.querySet,endOfPassWr
 field.ensure([4,8,4],resolve({}));
 assert.equal(field.encode(encoder,0,[0,2]),false);
 assert.equal(field.read().grid,null);
+assert.equal(field.ensure([8,8,8],config).admitted,true,'valid request recovers after refusal and native fallback');
+assert.equal(field.encode(encoder,0,[0,3]),true);
+assert.deepEqual(field.read().grid,[16,16,16]);
 field.destroy();
 assert.ok(allocations.filter(t=>t.label).every(t=>t.destroyed));
 console.log('display reconstruction configuration: pass');
