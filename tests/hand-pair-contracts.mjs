@@ -1,0 +1,27 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {pairedPrediction, validateModels, sharedInference} from '../experiments/hand-pair-contract.mjs';
+const identity={model:'mobrecon_densestack_spiralconv',backend:'pytorch',device:'cpu',sourceRevision:'source',checkpointSha256:'original'};
+const candidate={...identity,checkpointSha256:'trained'};
+const health=id=>({status:'loaded',identity:id,interactionAuthority:false,faces:Array.from({length:1538},()=>[0,1,2])});
+const capture={captureId:'same-camera-frame',captureEpochMs:42,handedness:'right',acquisitionMode:'manual',cropBox:[0,1,128,129],image:'identical-jpeg'};
+const result=id=>({...capture,identity:id,available:true,interactionAuthority:false,authority:'live_native_diagnostic_not_interaction',verticesMeters:Array.from({length:778},()=>[.1,.2,.3]),meshJointsMeters:Array.from({length:21},()=>[.01,.02,.03])});
+validateModels([health(identity),health(candidate)],['original','trained']);
+assert.throws(()=>validateModels([health(identity),health(identity)],['original','trained']),/checkpoint/);
+assert.throws(()=>validateModels([health(identity),{...health(candidate),status:'loading'}],['original','trained']),/native route/);
+const pair=pairedPrediction([result(identity),result(candidate)],capture,[identity,candidate]);
+assert.equal(pair.length,2);assert.equal(pair[0].length,2334);
+assert.throws(()=>pairedPrediction([result(identity),{...result(candidate),captureId:'stale'}],capture,[identity,candidate]),/capture mismatch/);
+assert.throws(()=>pairedPrediction([result(identity),{...result(candidate),cropBox:[0,0,64,64]}],capture,[identity,candidate]),/crop mismatch/);
+assert.throws(()=>pairedPrediction([result(identity),{...result(candidate),handedness:'left'}],capture,[identity,candidate]),/handedness/);
+assert.throws(()=>pairedPrediction([result(identity),{...result(candidate),verticesMeters:[]}],capture,[identity,candidate]),/invalid mesh/);
+const calls=[];
+const apis=[async(path,req)=>{calls.push({model:0,path,req});return {...result(identity),cropBox:[2,3,130,131]};},async(path,req)=>{calls.push({model:1,path,req});return {...result(candidate),cropBox:req.cropBox};}];
+const replies=await sharedInference(apis,['s0','s1'],{...capture,acquisitionMode:'detector'});
+assert.equal(calls.length,2);assert.equal(calls[0].req.image,calls[1].req.image);
+assert.equal(calls[0].req.captureId,calls[1].req.captureId);
+assert.equal(calls[1].req.acquisitionMode,'manual');assert.deepEqual(calls[1].req.cropBox,replies[0].cropBox);
+let candidateRan=false;
+await assert.rejects(sharedInference([async()=>{throw Error('source failure');},async()=>{candidateRan=true;}],['a','b'],capture),/source failure/);
+assert.equal(candidateRan,false);
+console.log('hand pair: identical sample/crop, checkpoint identity, stale and partial rejection passed');
