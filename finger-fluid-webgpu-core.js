@@ -1,5 +1,5 @@
 import {validateFluidTimeStep} from './fluid-time-step.mjs';
-import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT,WORLD_NEIGHBOR_QUERY_CONTRACT} from './finger-fluid-world-neighbors.mjs';
+import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT,WORLD_NEIGHBOR_QUERY_CONTRACT,WORLD_UNIFORM_KERNEL_CONTRACT} from './finger-fluid-world-neighbors.mjs';
 import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
@@ -13942,7 +13942,7 @@ export async function createWebGPUFingerFluidSolver({
   }
   if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
-  if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:worldNeighborCellWidth,uniformSupportRadius:radiusAwareNeighbors?uniformNeighborSupportRadius:null,nominalCellWidth:nominalNeighborCellWidth});
+  if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:worldNeighborCellWidth,uniformSupportRadius:radiusAwareNeighbors?uniformNeighborSupportRadius:null,nominalCellWidth:nominalNeighborCellWidth,uniformVolumeScale:safeUniformParticleVolumeScale});
   if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
   const createSceneShaderModule = descriptor => device.createShaderModule({
     ...descriptor,
@@ -16903,6 +16903,7 @@ export async function createWebGPUFingerFluidSolver({
       neighborSearchBounds: finitePBF?null:(safeDiagnosticBox?.bounds??null),
       neighborCellWidth: worldNeighborCellWidth,
       neighborQueryContract: radiusAwareNeighbors?WORLD_NEIGHBOR_QUERY_CONTRACT:null,
+      uniformNeighborKernelContract: finitePBF?WORLD_UNIFORM_KERNEL_CONTRACT:null,
       nominalNeighborCellWidth,
       nominalNeighborGridBuildCount,
       containerCollisionEnabled: safeDiagnosticBox?.collisions!==false,
