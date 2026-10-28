@@ -29,11 +29,15 @@ class PreferencesServing(unittest.TestCase):
                         except urllib.error.URLError:time.sleep(.05)
                     self.assertEqual(status,200,'the effective server must expose Preferences, not a missing static route')
                     self.assertIsNone(initial['revision']);self.assertIsNone(initial['preferences']['sceneDefaults'])
-                    pref={**initial['preferences'],'navigationInput':'mouse','futureTool':{'enabled':True}}
+                    pref={**initial['preferences'],'navigationInput':'mouse','futureTool':{'enabled':True},'inferenceKiln':{'schema':'kaminos.inference-kiln-selection.v1','sceneFile':'authored.kaminos.json','promptObjectId':'prompt'}}
                     status,saved=request({'revision':None,'preferences':pref})
                     self.assertEqual(status,200);self.assertTrue(store.exists());self.assertEqual(saved['preferences'],pref)
                     status,reloaded=request();self.assertEqual(reloaded['revision'],saved['revision']);self.assertEqual(reloaded['preferences'],pref)
                     before=store.read_bytes()
+                    for patch in ({'sceneFile':'../escape.kaminos.json'},{'promptObjectId':''},{'schema':'wrong'}):
+                        bad={**pref,'inferenceKiln':{**pref['inferenceKiln'],**patch}}
+                        self.assertEqual(request({'revision':saved['revision'],'preferences':bad})[0],400)
+                        self.assertEqual(store.read_bytes(),before)
                     self.assertEqual(request({'revision':None,'preferences':pref})[0],409)
                     self.assertEqual(request({'revision':saved['revision'],'preferences':{'schema':'wrong'}})[0],400)
                     self.assertEqual(store.read_bytes(),before,'refused saves preserve the existing document')

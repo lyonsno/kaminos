@@ -8,6 +8,10 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
  const active=()=>{if(closed)throw Error('Material tool is closed');};
  const read=()=>{const row=target();return {objectId:row?.id??null,prompt:row?.object?.userData?.kaminosPromptRelief?.prompt??null,burnAuthority:'scene-owned-thermal',combustion:row?app.burningState(row.id):null,bloom:doc.defaultView.kaminosSceneBloom?.read(),scope:'authored-scene-material-tool'};};
  const operations={read,
+  async saveForGenerate(){active();const selected=target(),prompts=host.scene.objects().filter(row=>row.object?.userData?.kaminosPromptRelief),row=selected?.object?.userData?.kaminosPromptRelief?selected:prompts.length===1?prompts[0]:null;
+   if(!row)throw Error('Select the prompt lettering to use in Generate');
+   const result=await doc.defaultView.saveScene({result:true});const recipe=await doc.defaultView.kaminosInferenceKiln.useSaved(result,row.id);record({kind:'kiln.generate.select',sceneFile:recipe.selection.sceneFile,promptObjectId:row.id});return recipe.selection;
+  },
   async addPrompt(value=inputs.prompt??'INFERENCE KILN EATS YOUR MOM'){active();const id=await app.addPrompt(value);record({kind:'kiln.prompt.add',target:id});sync();return read();},
   setPrompt(value){active();const row=lettering();app.setPrompt(row.id,value);record({kind:'kiln.prompt.edit',target:row.id,effective:read()});sync();return read();},
   setAppearance(profile){active();const row=target();if(!row)throw Error('Select a burnable mesh');app.setBurnAppearance(row.id,{profile});sync();return read();},
@@ -38,7 +42,9 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    const add=document.createElement('button');add.className='btn';add.textContent='Add lettering';add.onclick=()=>invoke('addPrompt',field.value||inputs.prompt).catch(fail);
    const help=document.createElement('p');help.textContent='Select a mesh to tune its Combustion properties in the inspector. Position and enable the flame source using its native controls. Shared playback runs the simulation. Bloom is in Rendering.';
    sync=(force=false)=>{const row=target(),value=row?.object?.userData?.kaminosPromptRelief?.prompt,changed=field.dataset.target!==(row?.id??'');field.disabled=!value;if(force||changed||document.activeElement!==field){field.value=value??inputs.prompt??'';field.dataset.target=row?.id??'';}};
-   root.append(field,add,help,status);sync();
+   const save=document.createElement('button');save.className='btn';save.textContent='Save kiln for Generate';save.onclick=()=>invoke('saveForGenerate').then(result=>{status.textContent=`Generate now uses ${result.sceneFile}`;}).catch(fail);
+   help.textContent='Edit the scene, camera, flame and material using the ordinary controls. Bloom is under Rendering → Flame. Save kiln for Generate uses this scene and the selected lettering for future image generations.';
+   root.append(field,add,save,help,status);sync();
   },async dispose(){if(closed)return;closed=true;stop();await session.dispose();}};
  }catch(error){await session.dispose();throw error;}
 }};

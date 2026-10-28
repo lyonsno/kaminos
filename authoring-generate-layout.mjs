@@ -13,7 +13,7 @@ export function generationImageView({selected,preparedSource=null,showSegmented=
   return {source,preview:null,label:source===original?'Original image':'Segmented image'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,kiln=null}){
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -29,7 +29,21 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
   const canvas=document.createElement('canvas');canvas.id='asset-step-preview';canvas.hidden=true;canvas.setAttribute('role','img');
   const frame=document.createElement('div');frame.className='asset-image-view';frame.append(preview,canvas);
-  const ceremony=createFlame?installGenerationFlame({document,slot:frame,createRenderer:createFlame}):null;
+  const kilnPanel=document.createElement('section');kilnPanel.className='generation-kiln';
+  const kilnView=document.createElement('div');kilnView.className='generation-kiln-view';
+  const kilnTools=document.createElement('div');kilnTools.className='generation-kiln-tools';
+  const kilnLabel=document.createElement('span');kilnLabel.textContent='Inference Kiln';
+  const kilnChoose=document.createElement('button');kilnChoose.type='button';kilnChoose.textContent='Choose kiln…';
+  const kilnDesign=document.createElement('a');kilnDesign.textContent='Design in Workbench';kilnDesign.target='_blank';kilnDesign.rel='noopener';
+  const kilnStatus=document.createElement('p');kilnStatus.className='asset-help';kilnStatus.setAttribute('role','status');
+  const syncKiln=()=>{kilnLabel.textContent=kiln?.read()?.document?.label??'Inference Kiln';kilnDesign.href=kiln?.designURL?.()??'./inference-kiln-study.html?material=1';};
+  kilnTools.append(kilnLabel,kilnChoose,kilnDesign);kilnPanel.append(kilnTools,kilnView,kilnStatus);image.querySelector('#asset-prompt')?.after(kilnPanel);
+  const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
+  kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
+  kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
+  const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
+  byId('asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
+  document.defaultView.addEventListener('focus',()=>{kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});});
   const tools=document.createElement('div');tools.className='asset-image-view-tools';
   const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='asset-show-segmented';toggle.checked=showSegmented;
   toggleLabel.append(toggle,document.createTextNode('Show segmented'));toggleLabel.title='Changes the displayed image; mesh generation still uses its prepared input.';
@@ -64,7 +78,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     const view=generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
     const identity=view.preview?.runId||selected()?.source||selected()?.path||null;
     if(identity!==viewIdentity){zoom.reset();viewIdentity=identity;}
-    const showing=!!(view.source||view.preview);frame.hidden=!showing&&!ceremony?.read().running;preview.hidden=!view.source;canvas.hidden=!view.preview;
+    const showing=!!(view.source||view.preview);frame.hidden=!showing;preview.hidden=!view.source;canvas.hidden=!view.preview;
     if(view.source&&preview.getAttribute('src')!==view.source)preview.src=view.source;
     if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=view.label;caption.hidden=!showing;
     if(view.preview){

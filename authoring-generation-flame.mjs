@@ -1,36 +1,47 @@
-// The Generate ceremony borrows the ordinary volume renderer. The paper effect
-// is presentation; the source prompt stays editable and is retained in provenance.
+// A view of the admitted prompt in an independently reconstructed authored kiln.
+// The source text and the progressive image stay with their existing owners.
 export function installGenerationFlame({document,slot,createRenderer}){
-  const tile=document.createElement('div');tile.className='generation-flame';tile.hidden=true;
-  const volume=document.createElement('div');volume.className='generation-flame-volume';
-  const paper=document.createElement('div');paper.className='generation-flame-paper';paper.setAttribute('aria-hidden','true');
-  const card=document.createElement('canvas');card.className='generation-flame-card';card.hidden=true;card.setAttribute('aria-hidden','true');
-  tile.append(volume,paper,card);slot.append(tile);
-  let renderer=null,loading=null,startup=null,running=false,disposed=false,painted=null,lastError=null,paperPending=false,lifecycle=Promise.resolve();
-  function sync(){
-    lifecycle=lifecycle.catch(()=>{}).then(async()=>{
-    if(disposed){renderer?.dispose();return;}
-    if(running&&!renderer){
-      if(!loading){startup=new AbortController();loading=createRenderer(volume,{signal:startup.signal}).then(value=>{renderer=value;return value;});}
-      try{await loading;}catch(error){loading=null;if(error.name!=='AbortError'){lastError=error.message;tile.title=`Flame unavailable: ${lastError}`;tile.dataset.state='unavailable';}return;}
-    }
-    if(renderer){await renderer.setActive(running&&!disposed);if(!running)await renderer.setActive(false);else if(paperPending&&!disposed){paperPending=false;burnPaper();}if(disposed)renderer.dispose();}
-    });return lifecycle;
-  }
-  function burnPaper(){paper.animate([
-        {transform:'translateY(-22px) rotate(-5deg)',opacity:1,clipPath:'inset(0 0 0 0)',color:'#e8dcc5'},
-        {offset:.5,transform:'translateY(8px) rotate(3deg)',opacity:1,clipPath:'inset(0 0 18% 0)',color:'#ffb04b'},
-        {transform:'translateY(34px) rotate(7deg)',opacity:0,clipPath:'inset(0 0 100% 0)',color:'#402014'}
-      ],{duration:2800,fill:'forwards',easing:'ease-in'});}
-  function render(state){
-    const active=['loading','running','stopping','saving'].includes(state?.status);
-    if(active!==running){
-      running=active;if(!active){startup?.abort();paperPending=false;}tile.hidden=!active;tile.dataset.state=active?'burning':'idle';
-      if(active){paper.textContent=document.getElementById('asset-prompt')?.value||'';paper.getAnimations().forEach(a=>a.cancel());paperPending=true;card.hidden=true;painted=null;}
-      sync().catch(error=>{lastError=error.message;tile.title=`Flame unavailable: ${lastError}`;});
-    }
-    const p=state?.preview;
-    if(p&&p!==painted){card.width=p.width;card.height=p.height;card.getContext('2d').putImageData(new document.defaultView.ImageData(p.rgba,p.width,p.height),0,0);card.hidden=false;painted=p;}
-  }
-  return {render,read:()=>({running,error:lastError,renderer:renderer?.debugState?.()??null}),async dispose(){disposed=true;running=false;startup?.abort();await sync();tile.remove();}};
+ const tile=document.createElement('div');tile.className='generation-flame';tile.hidden=true;
+ const volume=document.createElement('div');volume.className='generation-flame-volume';
+ const status=document.createElement('span');status.className='generation-flame-status';status.setAttribute('role','status');
+ tile.append(volume,status);slot.append(tile);
+ let renderer=null,startup=null,running=false,visible=false,disposed=false,lastError=null,request=null,epoch=0,lifecycle=Promise.resolve(),renderedKey=null,allowCold=true;
+ const draft=()=>document.getElementById('asset-prompt')?.value?.trim()||'Your next image';
+ const abort=()=>startup?.abort(new DOMException('Kiln view superseded','AbortError'));
+ function sync({refresh=false}={}){
+  const key=request?.id??draft();
+  if(refresh||key!==renderedKey||!visible){epoch++;abort();}
+  const generation=epoch;
+  lifecycle=lifecycle.catch(()=>{}).then(async()=>{
+   if(generation!==epoch)return;
+   if(disposed||!visible){if(renderer){await renderer.setActive(false);await renderer.dispose();renderer=null;}renderedKey=null;return;}
+   if(renderer&&renderedKey!==key){await renderer.setActive(false);await renderer.dispose();renderer=null;}
+   if(!renderer&&!running&&!allowCold)return;
+   if(!renderer){
+    startup=new AbortController();status.textContent='Loading kiln…';
+    try{
+     const value=await createRenderer(volume,{signal:startup.signal,prompt:running?(request?.prompt??draft()):draft(),request:running?request:null});
+     if(disposed||generation!==epoch||!visible){await value.dispose();return;}
+     renderer=value;renderedKey=key;lastError=null;
+    }catch(error){if(error.name!=='AbortError'){lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';}return;}
+   }
+   if(generation!==epoch)return;
+   await renderer.setActive(running);
+   status.textContent='';tile.dataset.state=running?'burning':'idle';
+  }).catch(error=>{lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';});
+  return lifecycle;
+ }
+ function render(state){
+  const active=['loading','running','stopping','saving'].includes(state?.status),next=state?.request??null;
+  const changed=active!==running||(active&&next?.id!==request?.id);request=next;running=active;
+  // An active request is visible in simple consumers without an observer. The
+  // actual Generate pane explicitly supplies visibility, including when hidden.
+  if(changed){if(!active){allowCold=false;epoch++;abort();}sync();}
+ }
+ return {render,
+  setVisible(value){if(visible===!!value)return lifecycle;visible=!!value;if(visible)allowCold=true;tile.hidden=!visible;return sync();},
+  refresh(){allowCold=true;renderedKey=null;return sync({refresh:true});},
+  read:()=>({running,error:lastError,visible,renderer:renderer?.debugState?.()??null}),
+  async dispose(){disposed=true;visible=false;epoch++;abort();await sync();tile.remove();},
+ };
 }

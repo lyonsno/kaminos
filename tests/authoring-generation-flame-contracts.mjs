@@ -6,7 +6,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(createRenderer){
  const element=()=>({hidden:false,dataset:{},append(){},setAttribute(){},remove(){},getAnimations:()=>[],animate(){}});
  const document={createElement:element,getElementById:()=>({value:'keep my prompt'})};
- return installGenerationFlame({document,slot:element(),createRenderer});
+ const view=installGenerationFlame({document,slot:element(),createRenderer});view.setVisible(true);return view;
 }
 test('ending a generation cancels flame startup while the app GPU is still unavailable',async()=>{
  let signal;
@@ -23,4 +23,8 @@ test('a renderer that resolves after stop never starts and is disposed with its 
  flame.render({status:'loading'});await tick();flame.render({status:'complete'});
  finish({setActive:async active=>{if(active)started++;},dispose(){destroyed++;},debugState:()=>({})});
  await tick();assert.equal(started,0);await flame.dispose();assert.equal(destroyed,1);
+});
+test('the physical kiln receives the admitted prompt rather than a changing editor draft',async()=>{
+ let received;const flame=fixture(async(_slot,options)=>{received=options.prompt;return {setActive:async()=>{},setPrompt:async()=>{},dispose(){},debugState:()=>({})};});
+ flame.render({status:'loading',request:{id:'actual-run',prompt:'THE ADMITTED PROMPT'}});await tick();await tick();assert.equal(received,'THE ADMITTED PROMPT');await flame.dispose();
 });

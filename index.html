@@ -3307,6 +3307,9 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
 import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
+import {createKilnRecipeStore} from './inference-kiln-selection.mjs';
+import {defaultKilnRecipe} from './inference-kiln-default.mjs';
+import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
@@ -10267,6 +10270,8 @@ window.addEventListener('keydown', e => {
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
 let startupPreferences=null,factorySceneDocument=null,preferencesUI=null,preferencesStartupSettled=false,sceneDefaultsApplied=false;
 const userPreferences=createUserPreferences();
+const kilnRecipes=createKilnRecipeStore({preferences:createUserPreferences()});
+window.kaminosInferenceKiln=kilnRecipes;
 const startupPreferencesLoaded=userPreferences.load().then(value=>{startupPreferences=value;}).catch(error=>console.warn('User preferences unavailable:',error.message));
 let restoringSettings = false;
 const PERSISTED_SLIDERS = [
@@ -26857,25 +26862,35 @@ function setupAuthoringAssets(){
   authoringPromptUI=installAuthoringPromptExpansion({document,controller:authoringPromptExpansion,assets:authoringAssets,imageController:authoringImageGenerator,changed:()=>redraw()});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(workingScene.objects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
-  authoringGenerateLayout=installGenerateLayout({document,openMasks,createFlame:async (viewport,{signal})=>{
-    const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error(`Flame preset HTTP ${response.status}`);
-    const artifact=await response.json(),copy=document.implementation.createHTMLDocument('Generate flame controls');
-    // Read the saved settings through the same normalization as the cockpit,
-    // in a detached document: no edits to the operator's scene or controls.
+  const kilnDesignURL=()=>{const selected=kilnRecipes.read()?.selection;return selected?`./?${new URLSearchParams({workspace:'workbench',scene:selected.sceneFile,experiment:'inference-kiln-material'})}`:'./inference-kiln-study.html?material=1';};
+  authoringGenerateLayout=installGenerateLayout({document,openMasks,kiln:{
+    read:()=>kilnRecipes.read(),load:()=>kilnRecipes.load(),designURL:kilnDesignURL,
+    async choose(){
+      const listing=await grFetchApi('browse',{root:'scenes',path:''});
+      const scenes=(listing.entries||[]).filter(entry=>entry.name.endsWith('.kaminos.json')).map(entry=>({name:entry.name}));
+      const choice=await pickSavedScene({scenes});if(!choice)return false;
+      if(choice==='browse')throw Error('Save the scene in Workbench, then choose it here');
+      await kilnRecipes.chooseScene(choice.name);return true;
+    },
+  },createFlame:async (viewport,{signal,prompt,request})=>{
+    const schemaResponse=await fetch('./volume-settings-preset-schema-v2.json');if(!schemaResponse.ok)throw Error('Fire settings schema unavailable');const schema=await schemaResponse.json();
+    let recipe=await kilnRecipes.load();signal.throwIfAborted();
+    if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);recipe=defaultKilnRecipe(document,artifact,receipt.preset);}
+    let sourceSettings=recipe.plan.fireSettings;
+    if(!sourceSettings){const response=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(recipe.plan.composition.flame.presetId)}`,{cache:'no-store'});if(!response.ok)throw Error('Saved kiln basin unavailable');const artifact=await response.json();sourceSettings=validateVolumeSettingsPresetDocument(artifact,recipe.plan.composition.flame.presetId,schema).preset;}
+    const authored=projectFireSettingsToSchema(sourceSettings,schema),copy=document.implementation.createHTMLDocument('Kiln controls');
+    // Detached current-schema controls provide the ordinary normalization. Every
+    // saved value is applied; missing source/settings are errors, never defaults.
     for(const original of document.querySelectorAll('input[id],select[id]')){const node=original.cloneNode(true);node.value=original.value;node.checked=original.checked;copy.body.append(node);}
-    const unrepresented=[];
-    for(const group of ['domControls','rendererControls','presentationControls'])for(const setting of Object.values(artifact.preset[group]||{})){
-      const node=copy.getElementById(setting.id);if(!node){unrepresented.push(setting.id);continue;}
-      if(node.type==='checkbox')node.checked=setting.value;else node.value=String(setting.value);
+    for(const group of ['domControls','rendererControls','presentationControls'])for(const setting of Object.values(authored[group]||{})){
+      const node=copy.getElementById(setting.id);if(!node)throw Error('Unsupported kiln control '+setting.id);
+      if(node.type==='checkbox')node.checked=setting.value;else{const value=setting.rawValue??setting.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);if(node.type==='select-one'&&node.value!==String(value))throw Error('Unsupported kiln value '+setting.id);}
     }
-    const settings={...readVolumeControls({quality:'full',document:copy}),resolution:32,gridHeightRatio:1,raySteps:4,adaptiveRays:1,renderScale:1,fireLightField:false,rayStepTelemetry:false,runtimeQualityRequested:'authored',runtimeQualityReason:'operator-small-generation-flame'};
+    const settings={...readVolumeControls({quality:'full',document:copy}),resolution:32,raySteps:6,adaptiveRays:1,renderScale:1,rayStepTelemetry:false,runtimeQualityRequested:'kiln-preview',runtimeQualityReason:'operator-small-generation-kiln',
+      sceneMatchFlameCamera:copy.getElementById('rendering-match-flame-camera').checked};
+    const rendering=Object.fromEntries(Object.entries(authored.rendererControls).map(([key,value])=>[key,value.value]));
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
-    const view=new THREE.OrthographicCamera(-1.02,1.02,1.02,-1.02,.01,20);view.position.set(0,0,3);view.lookAt(0,0,0);view.updateMatrixWorld();
-    const fire=createKaminosVolumePrototype({THREE,viewport,camera:view,controls:{target:new THREE.Vector3()},getControls:()=>settings,sharedGpuContext:sharedGpu,transparentCanvas:true,getPresentationSize:()=>({width:100,height:100})});
-    fire.canvasElement().id='generation-flame-canvas';
-    fire.setForegroundOpportunityRequester(request=>app.foreground.request({...request,requestId:`generation-${request.requestId}`}));
-    const debug=fire.debugState.bind(fire);fire.debugState=()=>({...debug(),generationBasin:{presetId:artifact.presetId,unrepresented,variant:{resolution:32,gridHeightRatio:1,raySteps:4,adaptiveRays:1,width:100,height:100}}});
-    return fire;
+    return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
 }

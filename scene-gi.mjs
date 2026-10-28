@@ -118,6 +118,14 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
     depth, source, surfaceLighting, sourceComparison:comparison,
+    dispose(){
+      for(const route of routes.values())route.beauty.dispose();
+      for(const pair of filters.values()){
+        if(pair.shared)pair.shared.dispose();
+        else for(const item of [pair.ao,pair.gi])item.filter.dispose();
+      }
+      routes.clear();filters.clear();history.dispose();effect.dispose();source.dispose();
+    },
     setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
     output() { return route().output; },

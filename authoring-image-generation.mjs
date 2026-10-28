@@ -276,7 +276,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;decodeRequested=false;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
       startedAt=clock();generationStartedAt=null;generationFinished=false;
-      set({status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
+      const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
+      set({request:{id:runId,prompt:text,model,seed,width,height},status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
         if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
@@ -302,7 +303,6 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         }
         generationStartedAt=clock();state.timing={loadMs:generationStartedAt-startedAt,generationMs:0};
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
-        const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
         frameRun=app?await app.beginRun(runId,{routeId}):await foreground.beginRun(runId);
         route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});

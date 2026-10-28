@@ -452,12 +452,15 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-image-view>img,.asset-image-view>canvas{transform-origin:center;user-select:none;}
 
 #asset-step-image{position:relative;}
-.generation-flame{position:absolute;right:8px;bottom:8px;z-index:5;width:100px;height:100px;flex:none;align-self:center;isolation:isolate;border-radius:14px;overflow:hidden;background:#120e0a;box-shadow:0 0 22px #b65c1820;}
-.generation-flame-volume{position:absolute;inset:0;}
-#generation-flame-canvas{position:absolute;inset:0;width:100px!important;height:100px!important;pointer-events:none;}
-.generation-flame-paper{position:absolute;inset:12px 14px 22px;padding:7px;background:#30241b;font-size:9px;line-height:1.4;overflow:hidden;box-shadow:0 1px 7px #0008;z-index:1;}
-.generation-flame-card{position:absolute;left:20px;top:16px;width:60px;height:60px;object-fit:contain;transform:rotate(-4deg);border:1px solid #f5d5a565;box-shadow:0 2px 10px #0009;z-index:2;}
-.generation-flame-volume{z-index:3;pointer-events:none;}
+.generation-kiln{margin:10px 0;border:1px solid #ffffff16;border-radius:8px;overflow:hidden;background:#08090b;}
+.generation-kiln-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;font-size:11px;}
+.generation-kiln-tools span{flex:1;color:#c4bba9;}.generation-kiln-tools button,.generation-kiln-tools a{font-size:11px;}
+.generation-kiln-view{position:relative;min-height:140px;}.generation-flame{position:relative;width:100%;isolation:isolate;overflow:hidden;}
+.generation-flame-volume{position:relative;width:100%;aspect-ratio:16/9;background:#030405;}
+.generation-flame-volume canvas{position:absolute;inset:0;width:100%!important;height:100%!important;object-fit:contain;pointer-events:none;}
+.generation-flame-status{position:absolute;bottom:6px;left:8px;right:8px;font-size:11px;color:#dfc5a5;}
+.generation-kiln .asset-help:empty{display:none;}
+
 
 .asset-prompt-help{margin:8px 0 12px}.asset-prompt-help-actions{display:flex;gap:6px;flex-wrap:wrap}.asset-prompt-help textarea{width:100%;margin:7px 0;min-height:130px}#asset-prompt-help-status{font-size:11px;color:#c7b18b;margin:5px 0;line-height:1.5}#asset-prompt-help-status.error{color:#f2a4a0}.asset-prompt-help [hidden]{display:none!important}
 /* Agent work retains the ordinary selectable asset tiles. */
