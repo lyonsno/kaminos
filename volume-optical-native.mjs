@@ -9,6 +9,15 @@ export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = 
     jitter: modes.indexOf(mode)>=4 ? 'interior mass-stratum sampling; full ray interval retained' : 'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
 }
 
+// The legacy amount changes step length. Fixed-count guidance adapts placement
+// automatically; its adaptation is on regardless of that retained legacy value.
+export function raymarchAdaptivity(mode, legacyAmount = 0.65) {
+  opticalSteppingConfig({mode});
+  if (mode === 'current') return {value:legacyAmount,automatic:false,label:'Adaptive rays'};
+  return {value:['numerical','joins','history'].includes(mode)?1:0,automatic:true,
+    label:mode==='numerical'?'Adaptive steps':'Adaptive placement'};
+}
+
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
   const wrongExterior=config.value>=4 ? !exterior : exterior;
   if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {

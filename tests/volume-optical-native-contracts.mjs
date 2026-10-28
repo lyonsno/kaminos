@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import * as opticalNative from '../volume-optical-native.mjs';
 import {opticalSteppingConfig,resolveOpticalStepping,validateOpticalPreviewArm,installOpticalSteppingPreview} from '../volume-optical-native.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -91,4 +92,17 @@ test('numerical default preserves stock and diagnostic paths with an explicit ef
   assert.equal(resolveOpticalStepping(opticalSteppingConfig({mode:'current'}),{emissive:false,explicit:true}).value,0);
   assert.match(core,/resolveOpticalStepping\(debugOpticalStepping/);
   assert.match(core,/OPTICAL_STEP_MODE:optical.value/);
+});
+
+
+test('adaptivity describes the selected algorithm without overwriting legacy tuning',()=>{
+  assert.equal(typeof opticalNative.raymarchAdaptivity,'function');
+  const policy=opticalNative.raymarchAdaptivity;
+  for(const value of [0,.35,1]) {
+    assert.deepEqual(policy('current',value),{value,automatic:false,label:'Adaptive rays'});
+    for(const mode of ['joins','history'])assert.deepEqual(policy(mode,value),{value:1,automatic:true,label:'Adaptive placement'});
+    assert.deepEqual(policy('numerical',value),{value:1,automatic:true,label:'Adaptive steps'});
+    for(const mode of ['fixed','fixed-dense','budgeted'])assert.deepEqual(policy(mode,value),{value:0,automatic:true,label:'Adaptive placement'});
+  }
+  assert.throws(()=>policy('missing',.5),/unknown optical stepping mode/);
 });
