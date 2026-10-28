@@ -2856,6 +2856,10 @@ import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-l
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
+import {checkedFlameAttachment,compileFlameAttachment,attachmentSupport} from './flame-attachment.mjs';
+import {CROWN_SOURCE,createCrownObject,updateCrownObject,crownOutputs} from './compound-crown-record.mjs';
+import {crownRecipe} from './experiments/compound-crown/mechanism.mjs';
+import {installFlameAttachmentControls} from './flame-attachment-controls.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
@@ -5263,12 +5267,15 @@ function projectAuthoredFlameSourceControls(entry=primaryAuthoredFlameSource()) 
   for(const [key,descriptor] of Object.entries(entry?.emission?.settings??{}))setVolumeControlValue(key,descriptor.rawValue??descriptor.value);
 }
 
+const flameOutputProviders=new Map([[CROWN_SOURCE,crownOutputs]]);
+function flameAttachmentOutputs(entry){return flameOutputProviders.get(entry.source)?.(entry.compoundCrown)??{};}
+function attachedFlameSources(){return workingScene.objects.filter(entry=>entry.flameAttachment).map(entry=>compileFlameAttachment({...entry,transform:sceneObjectTransformState(entry.object)},flameAttachmentOutputs(entry)));}
 function authoredFlameSourceRecords(){
-  return workingScene.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).map(record=>{
+  return [...workingScene.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).map(record=>{
     const raw=serializeSceneObject(record);
     if(!raw.emission)raw.emission={domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))};
     return checkedFireSourceRecord(raw);
-  });
+  }),...attachedFlameSources()];
 }
 function requirePluralFlameSourceRuntime(){
   if(typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');
@@ -7306,6 +7313,7 @@ function applyAuthoredScenePose(id, transform = {}) {
     applySceneObjectTransformState(entry.object, transform);
   }
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
+  if(entry.flameAttachment)syncAuthoredFlameSources();
   updateTransformInspector();
   window._kaminosDirty?.();
   updateSelectionFeedback();
@@ -10181,7 +10189,7 @@ function createPageSceneMembershipOperations() {
     },
     finishInteraction:()=>scenePlacementTools?.finish(false),
     captureContext:()=>({activeCameraId:sceneCameras?.read().settings.activeId??null}),
-    changed({operation}){if(operation!=='admit'){renderSceneObjectList();updateTransformInspector();}window._kaminosDirty?.();},
+    changed({operation,entry}){if(operation!=='admit'){if(entry?.flameAttachment)syncAuthoredFlameSources();renderSceneObjectList();updateTransformInspector();}window._kaminosDirty?.();},
     status:setInfo,
   });
 }
@@ -24938,14 +24946,15 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','pbr','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE&&record.localLiquidEmitter.mode!=='finite_drop'&&localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode!=='finite_drop').length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error('Water inlet capacity '+LOCAL_LIQUID_EMITTER_CAPACITY+' would be exceeded');
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
-  if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
+  if(entry.source===CROWN_SOURCE){scene.add(createCrownObject(record));const root=scene.children.at(-1);applySceneObjectTransformState(root,record.transform);registerSceneObject(root,record);}
+  else if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
@@ -24955,7 +24964,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
     scene.add(copy);registerSceneObject(copy,record);
   }
   if(entry.groupId){const group=workingScene.groups.find(g=>g.id===entry.groupId);if(group)workingScene.updateGroup(group.id,{objectIds:[...group.objectIds,copyId]});}
-  setActiveSceneObject(copyId);renderSceneObjectList();
+  setActiveSceneObject(copyId);renderSceneObjectList();if(entry.flameAttachment)syncAuthoredFlameSources();
   const complete=({commit})=>{
     scenePlacementTools.edits.discard(change=>change.id===copyId);
     if(commit)recordSceneObjectInsertion(copyId);
@@ -25038,7 +25047,9 @@ function setObjectWaterCollision(id,enabled){
   const record=serializeSceneObject(entry);record.waterCollision=enabled;
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
+let flameAttachmentInspector=null;
 function syncSceneDataInspector() {
+  flameAttachmentInspector?.sync();
   sceneRepetitionInspector?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -25192,6 +25203,15 @@ function installSceneConstruction() {
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
     setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
+  const attachmentTargets=new Set(),mechanismTargets=new Set();
+  const attachmentTarget=id=>{const target='@flame-attachment:'+id;if(!attachmentTargets.has(target)){edits.register(target,{allowMissing:true,read:()=>({attachment:checkedFlameAttachment((workingScene.find(id)??workingScene.retained(id))?.flameAttachment)}),check:v=>({attachment:checkedFlameAttachment(v.attachment)}),write:v=>{const entry=workingScene.find(id)??workingScene.retained(id);entry.flameAttachment=v.attachment;entry.object.userData.kaminosSceneObject.flameAttachment=v.attachment;syncAuthoredFlameSources();flameAttachmentInspector?.sync();window._kaminosDirty?.();}});attachmentTargets.add(target);}return target;};
+  const mechanismTarget=id=>{const target='@compound-crown:'+id;if(!mechanismTargets.has(target)){edits.register(target,{allowMissing:true,read:()=>({recipe:structuredClone((workingScene.find(id)??workingScene.retained(id)).compoundCrown)}),check:v=>({recipe:crownRecipe(v.recipe)}),write:v=>{const entry=workingScene.find(id)??workingScene.retained(id);entry.compoundCrown=updateCrownObject(entry.object,v.recipe);entry.object.userData.kaminosSceneObject.compoundCrown=entry.compoundCrown;syncAuthoredFlameSources();updateSelectionFeedback();flameAttachmentInspector?.sync();window._kaminosDirty?.();}});mechanismTargets.add(target);}return target;};
+  const setAttachment=(id,value)=>{assertSceneConstructionAvailable();const entry=workingScene.find(id);if(!entry)throw Error('Choose an object');if(value)compileFlameAttachment({...entry,transform:sceneObjectTransformState(entry.object),flameAttachment:value},flameAttachmentOutputs(entry));return edits.apply(attachmentTarget(id),{attachment:checkedFlameAttachment(value)},'Set flame attachment');};
+  flameAttachmentInspector=installFlameAttachmentControls({document,host:groupPanel.parentElement,selected:selectedSceneObjectEntry,outputs:flameAttachmentOutputs,edits,history:installSceneControlHistory,numberDrag:installRelativeNumberDrag,target:attachmentTarget,set:setAttachment,mechanismTarget,
+    readSupport:entry=>activeSceneComposition?attachmentSupport(compileFlameAttachment({...entry,transform:sceneObjectTransformState(entry.object)},flameAttachmentOutputs(entry)),{translation:flameDomainTranslation,scale:flameDomainScale,controls:effectiveFlameDomainControls(readVolumeControls(),volumePrototype)}):null,onError:e=>setInfo(e.message)});
+  scenePlacementTools.addHistoryScope(flameAttachmentInspector.panel);
+  window.kaminosFlameAttachments={set:setAttachment,outputs:id=>flameAttachmentOutputs(workingScene.find(id)),read:id=>structuredClone(workingScene.find(id)?.flameAttachment??null),setMechanism:(id,patch)=>edits.apply(mechanismTarget(id),{recipe:{...workingScene.find(id).compoundCrown,...patch}},'Set Compound Crown'),
+    addCrown(){assertSceneConstructionAvailable();const id=makeSceneObjectId('crown'),record={id,type:'pbr',source:CROWN_SOURCE,label:'Compound Crown',fileName:'Compound Crown',compoundCrown:crownRecipe(),transform:{...identityGroupPose(),position:controls.target.toArray()}};const target=ensureSceneObjectMembershipTarget(id);edits.assertCanRecordApplied(target);const root=createCrownObject(record);applySceneObjectTransformState(root,record.transform);scene.add(root);registerSceneObject(root,record);recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}};
   sceneRepetitionInspector=installRepetitionInspector({document,host:groupPanel,target:repetitionInspectorTarget,edits,editId:()=>ensureRepetitionTarget(repetitionInspectorTarget()?.id),set:value=>setSceneRepetition(repetitionInspectorTarget()?.id,value),makeReal:()=>makeSceneRepetitionReal(repetitionInspectorTarget()?.id),selectGroup:id=>window.selectSceneGroup(id),usePivot:()=>controls.target.toArray(),history:installSceneControlHistory,numberDrag:installRelativeNumberDrag,onError:error=>setInfo(error.message)});
   scenePlacementTools.addHistoryScope(sceneRepetitionInspector.panel);
   document.getElementById('object-parent').onchange=e=>{try{attachSceneObject(workingScene.activeObjectId,e.target.value||null);}catch(error){setInfo(error.message);}};
@@ -25240,6 +25260,7 @@ function checkSelectionRoot(id,state){
   checkedGroupPose(state);
   if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:state});
   if(entry.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(state);
+  if(entry.flameAttachment)compileFlameAttachment({...entry,transform:state},flameAttachmentOutputs(entry));
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE)normalizeLocalLiquidEmitter(entry.localLiquidEmitter,state);
 }
 function selectionTransformProxy(){
@@ -25360,6 +25381,8 @@ function createPageSceneMembershipBatch(){
 }
 function applyCompoundSceneRecord(entry,record){
   const existing=serializeSceneObject(entry);
+  entry.flameAttachment=checkedFlameAttachment(record.flameAttachment);entry.object.userData.kaminosSceneObject.flameAttachment=entry.flameAttachment;
+  if(record.compoundCrown){entry.compoundCrown=updateCrownObject(entry.object,record.compoundCrown);entry.object.userData.kaminosSceneObject.compoundCrown=entry.compoundCrown;}
   entry.repetition=checkedRepetition(record.repetition);
   if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
   if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
@@ -25574,6 +25597,7 @@ function writeGroupPose(id,value) {
     const entry=workingScene.objects.find(entry=>entry.id===id);
     if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:pose});
     if(entry.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(pose);
+    if(entry.flameAttachment)compileFlameAttachment({...entry,transform:pose},flameAttachmentOutputs(entry));
 
   }
   try {for(const [id,pose] of Object.entries(members))applyAuthoredScenePose(id,pose);}
