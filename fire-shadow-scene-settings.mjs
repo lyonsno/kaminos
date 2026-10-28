@@ -1,3 +1,4 @@
+import {validateSmokeEnvironmentBlur} from './scene-smoke-environment.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {validateShadowComparison,validateShadowSampling} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
@@ -15,6 +16,7 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  if(params.has(prefix+'smoke_environment_blur'))smoke.smokeEnvironmentBlur=validateSmokeEnvironmentBlur(number('smoke_environment_blur',0));
   if(params.has(prefix+'light_grid')){const value=number('light_grid',16);if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');smoke.volumeGrid=value;}
   if(params.has(prefix+'light_pattern')){const value=params.get(prefix+'light_pattern');if(!['fixed','spatial','blue','source','guided','regions'].includes(value))throw Error('valid light angular pattern required');smoke.angularPattern=value;}
   if(params.has(prefix+'light_directions')){const value=number('light_directions',24);lightingDirections(value);smoke.directions=value;}
@@ -49,6 +51,7 @@ export function fireShadowSceneRoute(state) {
   if(state.smokeShadowFilterTaps!==undefined)values.smoke_shadow_filter_taps=state.smokeShadowFilterTaps;
   if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;
   if(state.directions!==undefined)values.light_directions=state.directions;
+  if(state.smokeEnvironmentBlur!==undefined)values.smoke_environment_blur=validateSmokeEnvironmentBlur(state.smokeEnvironmentBlur);
   if(state.angularPattern!==undefined)values.light_pattern=state.angularPattern;
   const route=Object.fromEntries(Object.entries(values).map(([key,value])=>[prefix+key,String(value)]));
   if(state.smokeShadowFilter!==undefined){
