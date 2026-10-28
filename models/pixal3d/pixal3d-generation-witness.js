@@ -48,6 +48,73 @@ export const PIXAL3D_REQUIRED_STAGES = Object.freeze([
   'slat-texture-concat',
 ]);
 
+export const PIXAL3D_KERNEL_EVENT_BATCH_SIZE = 2048;
+
+export function createPixal3dKernelPhaseBuffer({
+  report,
+  postPhase,
+  batchSize = PIXAL3D_KERNEL_EVENT_BATCH_SIZE,
+}) {
+  if (!report || typeof report !== 'object') {
+    throw new TypeError('generation witness report object required');
+  }
+  if (typeof postPhase !== 'function') {
+    throw new TypeError('generation phase persistence callback required');
+  }
+  if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
+    throw new RangeError('positive integer kernel event batch size required');
+  }
+  const pending = [];
+  let nextSeq = 0;
+  const snapshot = () =>
+    pending.map(entry => ({
+      ...entry,
+      kernel: {
+        ...entry.kernel,
+        dispatch: Array.isArray(entry.kernel?.dispatch) ? [...entry.kernel.dispatch] : entry.kernel?.dispatch,
+      },
+    }));
+  let flushQueue = Promise.resolve();
+  const runFlush = async () => {
+    if (!pending.length) return;
+    const count = pending.length;
+    const kernels = pending.slice(0, count);
+    await postPhase({ kernels });
+    pending.splice(0, count);
+  };
+  const flush = () => {
+    const next = flushQueue.catch(() => {}).then(runFlush);
+    flushQueue = next.catch(() => {});
+    return next;
+  };
+  const recordKernel = async kernel => {
+    report.lastKernel = kernel;
+    pending.push({
+      seq: ++nextSeq,
+      phase: report.phase,
+      modelRole: report.loadingModelRole ?? null,
+      kernel,
+      observedAt: new Date().toISOString(),
+    });
+    if (pending.length >= batchSize) {
+      await flush();
+    }
+  };
+  const savePhase = async extra => {
+    await flush();
+    await postPhase(extra);
+  };
+  return Object.freeze({
+    get pendingCount() {
+      return pending.length;
+    },
+    snapshot,
+    flush,
+    recordKernel,
+    savePhase,
+  });
+}
+
 export async function runPixal3dGenerationWitness(
   expectedSha,
   {
@@ -104,7 +171,7 @@ export async function runPixal3dGenerationWitness(
       finite: values.every(Number.isFinite),
     };
   };
-  const savePhase = async extra => {
+  const postPhase = async extra => {
     const saved = await fetch('/phase', {
       method: 'POST',
       body: JSON.stringify({
@@ -123,6 +190,8 @@ export async function runPixal3dGenerationWitness(
     }
     await saved.text();
   };
+  const phaseBuffer = createPixal3dKernelPhaseBuffer({ report, postPhase });
+  const { flush: flushKernels, recordKernel, savePhase } = phaseBuffer;
 
   try {
     if (typeof memoryMonitor !== 'boolean') {
@@ -295,13 +364,11 @@ export async function runPixal3dGenerationWitness(
         if (o.schedulerInvocation !== invocationOwner) {
           throw new Error('same generation invocation required');
         }
-        report.lastKernel = { stage: o.stage, dispatch: o.dispatch, point: 'before-native-kernel' };
-        await savePhase({ kernel: report.lastKernel });
+        await recordKernel({ stage: o.stage, dispatch: o.dispatch, point: 'before-native-kernel' });
         await actual.runtime.runKernel(k, o);
         const counts = (stageCounts[currentPhase] ??= {});
         counts[o.stage] = (counts[o.stage] ?? 0) + 1;
-        report.lastKernel = { stage: o.stage, dispatch: o.dispatch, point: 'native-kernel-returned' };
-        await savePhase({ kernel: report.lastKernel });
+        await recordKernel({ stage: o.stage, dispatch: o.dispatch, point: 'native-kernel-returned' });
       },
       async readTensor(t, options) {
         if (serving && (t.dtype !== 'u32' || t.byteLength !== 4)) {
@@ -352,6 +419,7 @@ export async function runPixal3dGenerationWitness(
     });
     const completed = await job.completion;
     serving = false;
+    await flushKernels();
     report.hostElapsedMs = performance.now() - started;
     report.jobCompletion = {
       schema: completed.schema,
@@ -487,6 +555,17 @@ export async function runPixal3dGenerationWitness(
     report.lastGenerationPhase = implementation?.phase;
     if (error.memoryBudget) report.memory.refusal = error.memoryBudget;
     memory?.setPhase('failure-retention-readback');
+    if (phaseBuffer.pendingCount > 0 && session && report.effectiveRoute) {
+      try {
+        await flushKernels();
+      } catch (e) {
+        report.retentionErrors ??= [];
+        report.retentionErrors.push(e.message);
+      }
+    }
+    if (phaseBuffer.pendingCount > 0) {
+      report.unflushedKernelEvents = phaseBuffer.snapshot();
+    }
     if (implementation) {
       serving = false;
       for (const [name, n] of Object.entries(implementation.noiseInputs)) {

@@ -252,6 +252,11 @@ assert.deepEqual(outputs.globalConditioning.shape, [2, 3]);
 assert.deepEqual(outputs.projectedConditioning.shape, [3, 5]);
 assert.deepEqual(dispatches.map(d => d.options.stage), adapter.plan.stages);
 assert.ok(dispatches.every(d => d.options.schedulerInvocation === invocation));
+assert.ok(
+  dispatches.slice(0, -1).every(d => d.options.yieldAfter === false),
+  'Intermediate ProjGrid kernels must not yield individually.',
+);
+assert.equal(dispatches.at(-1).options.yieldAfter, true, 'Final ProjGrid kernel must yield cooperatively.');
 
 adapter.dispose();
 assert.ok(allocated.filter(t => !producerSet.has(t)).every(t => t.destroyed));

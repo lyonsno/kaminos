@@ -349,7 +349,9 @@ export function admitPixal3dRetainedGenerationCompletion(
   });
 }
 
-export async function persistPixal3dGenerationPhase({
+const phasePersistenceQueues = new WeakMap();
+
+async function persistPixal3dGenerationPhaseInternal({
   report,
   row,
   kernelLogPath,
@@ -368,29 +370,92 @@ export async function persistPixal3dGenerationPhase({
   if (report.nativeSessionId && report.nativeSessionId !== row.sessionId) {
     throw new Error('Pixal3D generation session identity changed');
   }
-  if (row.kernel) {
-    const k = row.kernel;
-    if (
-      typeof k.stage !== 'string' ||
-      !k.stage ||
-      !Array.isArray(k.dispatch) ||
-      k.dispatch.length < 1 ||
-      k.dispatch.length > 3 ||
-      !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
-      !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
-    ) {
+  if (row.kernel !== undefined && row.kernels !== undefined) {
+    throw new Error('complete native kernel event required');
+  }
+  const kernelBatch =
+    row.kernels !== undefined ? row.kernels : row.kernel !== undefined ? [row.kernel] : null;
+  if (kernelBatch !== null) {
+    if (!Array.isArray(kernelBatch) || kernelBatch.length < 1) {
       throw new Error('complete native kernel event required');
     }
     if (typeof kernelLogPath !== 'string' || !kernelLogPath || typeof append !== 'function') {
       throw new Error('caller-owned kernel journal required');
     }
-    await append(kernelLogPath, JSON.stringify({ ...row, observedAt: new Date().toISOString() }) + '\n');
+    const now = new Date().toISOString();
+    const baseRow = { ...row };
+    delete baseRow.kernel;
+    delete baseRow.kernels;
+    let lastKernel;
+    let lastPhase = row.phase;
+    const hasAnySeq = kernelBatch.some(
+      item => item && typeof item === 'object' && 'kernel' in item && item.seq !== undefined,
+    );
+    let prevSeq = 0;
+    const validatedEntries = kernelBatch.map(item => {
+      const hasWrapper = item && typeof item === 'object' && 'kernel' in item;
+      const k = hasWrapper ? item.kernel : item;
+      if (
+        !k ||
+        typeof k.stage !== 'string' ||
+        !k.stage ||
+        !Array.isArray(k.dispatch) ||
+        k.dispatch.length < 1 ||
+        k.dispatch.length > 3 ||
+        !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
+        !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
+      ) {
+        throw new Error('complete native kernel event required');
+      }
+      let seq;
+      if (hasAnySeq) {
+        seq = hasWrapper ? item.seq : undefined;
+        if (!Number.isSafeInteger(seq) || seq <= prevSeq) {
+          throw new Error('complete native kernel event required');
+        }
+        prevSeq = seq;
+      }
+      const itemPhase =
+        hasWrapper && typeof item.phase === 'string' && item.phase ? item.phase : row.phase;
+      const itemModelRole =
+        hasWrapper && 'modelRole' in item ? item.modelRole : baseRow.modelRole;
+      const itemObservedAt =
+        hasWrapper && typeof item.observedAt === 'string' && item.observedAt
+          ? item.observedAt
+          : now;
+      lastKernel = k;
+      lastPhase = itemPhase;
+      return {
+        seq,
+        serialized: JSON.stringify({
+          ...baseRow,
+          ...(seq !== undefined ? { seq } : {}),
+          phase: itemPhase,
+          ...(itemModelRole !== undefined ? { modelRole: itemModelRole } : {}),
+          kernel: k,
+          observedAt: itemObservedAt,
+        }),
+      };
+    });
+    const lastPersistedSeq = report.lastKernelSeq ?? 0;
+    const unseenEntries = hasAnySeq
+      ? validatedEntries.filter(entry => entry.seq > lastPersistedSeq)
+      : validatedEntries;
+    if (unseenEntries.length > 0) {
+      const lines = unseenEntries.map(entry => entry.serialized).join('\n') + '\n';
+      await append(kernelLogPath, lines);
+    }
+    if (hasAnySeq && prevSeq > lastPersistedSeq) {
+      report.lastKernelSeq = prevSeq;
+    }
     report.nativeSessionId = row.sessionId;
-    report.lastKernel = k;
-    report.lastBrowserPhase = row.phase;
+    if (!hasAnySeq || prevSeq >= lastPersistedSeq) {
+      report.lastKernel = lastKernel;
+      report.lastBrowserPhase = lastPhase;
+    }
     report.kernelEvidence = {
       path: kernelLogPath,
-      count: (report.kernelEvidence?.count ?? 0) + 1,
+      count: (report.kernelEvidence?.count ?? 0) + unseenEntries.length,
       retention: 'complete append-only events; no cap',
     };
     return;
@@ -416,6 +481,22 @@ export async function persistPixal3dGenerationPhase({
   report.livePhases.push({ ...row, observedAt: new Date().toISOString() });
   report.lastBrowserPhase = row.phase;
   await persist();
+}
+
+export function persistPixal3dGenerationPhase(options = {}) {
+  const report = options?.report;
+  if (!report || typeof report !== 'object') {
+    return persistPixal3dGenerationPhaseInternal(options);
+  }
+  const previous = phasePersistenceQueues.get(report) ?? Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(() => persistPixal3dGenerationPhaseInternal(options));
+  phasePersistenceQueues.set(
+    report,
+    current.catch(() => {}),
+  );
+  return current;
 }
 
 export async function persistPixal3dGenerationAsset({
