@@ -63,13 +63,13 @@ try{
     const warm=await page.evaluate(async()=>Array.from(await window.kaminosWorkbenchExperiments.invoke('snapshotWater')));
     fs.writeFileSync(out+'/particles-before-window.json',JSON.stringify(warm));
     report.populationBefore=analyzeMlsParticles(warm,{capacity:solver.particleCount,minActive:report.minActive});
-    report.windowStart=await page.evaluate(()=>{
+    report.windowStart=await page.evaluate(async()=>{
       window.__mlsFrames={times:[],running:true};
       const tick=t=>{if(!window.__mlsFrames.running)return;window.__mlsFrames.times.push(t);requestAnimationFrame(tick);};requestAnimationFrame(tick);
-      return {epochMs:Date.now(),state:window.kaminosWorkbenchExperiments.read()};
+      return {epochMs:Date.now(),state:await window.kaminosWorkbenchExperiments.read()};
     });
     await page.waitForTimeout(report.observeSeconds*1000);
-    report.windowEnd=await page.evaluate(()=>{window.__mlsFrames.running=false;return {epochMs:Date.now(),times:window.__mlsFrames.times,state:window.kaminosWorkbenchExperiments.read()};});
+    report.windowEnd=await page.evaluate(async()=>{window.__mlsFrames.running=false;return {epochMs:Date.now(),times:window.__mlsFrames.times,state:await window.kaminosWorkbenchExperiments.read()};});
     fs.writeFileSync(out+'/callback-times.json',JSON.stringify(report.windowEnd.times));
     const intervals=report.windowEnd.times.slice(1).map((t,i)=>t-report.windowEnd.times[i]).sort((a,b)=>a-b);
     assert(intervals.length>0,'missing populated-window callbacks');
