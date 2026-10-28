@@ -28323,6 +28323,7 @@ export function createKaminosVolumePrototype({
       }
     },
     sceneLightSamplingTexture(){return rayStartNoiseTexture;},
+    sceneLightSamplingFrame(){return state.simStepCount;},
     fireIrradianceLightField,
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
