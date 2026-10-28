@@ -1,0 +1,34 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+// Execute the actual Generate chooser, before and after the shared library
+// adapter. The baseline fails on the missing catalog, not a missing import.
+const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const start=source.indexOf('    async choose(){',source.indexOf('authoringGenerateLayout=installGenerateLayout'));
+const end=source.indexOf('\n  },createFlame:',start);assert.ok(start>0&&end>start);
+let chooseSavedSceneFromLibrary;
+if(source.includes("from './scene-library-client.mjs'"))({chooseSavedSceneFromLibrary}=await import('../scene-library-client.mjs'));
+test('Choose kiln finds and imports the same other-store saves as ordinary Load',async()=>{
+ const name='inference-kiln-eats-yourmom-rises-again.kaminos.json',chosen=[],imports=[];
+ const grFetchApi=async route=>route==='browse'?{entries:[]}:assert.fail('unexpected local read');
+ const request=async(url,options)=>{
+  if(url==='/api/scene-library')return {ok:true,json:async()=>({stores:[{id:'editor-store',label:'kaminos-dark-side-kiln-editor-1027',scenes:[{name,label:'Kiln study',timestamp:'2026-10-27T10:00:00Z'}]}]})};
+  assert.equal(url,'/api/scene-library-import');imports.push(JSON.parse(options.body));return {ok:true,json:async()=>({saved:'retained-copy.kaminos.json',document:{label:'Kiln study'},dependencies:[]})};
+ };
+ const pickSavedScene=async options=>{const extra=await options.more;assert.ok(extra?.some(scene=>scene.name===name),'other-store saved kiln must reach the Generate chooser');return extra.find(scene=>scene.name===name);};
+ const choose=Function('grFetchApi','pickSavedScene','kilnRecipes','chooseSavedSceneFromLibrary','fetch','return({'+source.slice(start,end)+'}).choose;')(grFetchApi,pickSavedScene,{chooseScene:async name=>chosen.push(name)},chooseSavedSceneFromLibrary,request);
+ assert.equal(await choose(),true);assert.deepEqual(imports,[{store:'editor-store',name}]);assert.deepEqual(chosen,['retained-copy.kaminos.json']);
+});
+test('a failed other-store import cannot acknowledge a scene selection',async()=>{
+ const {chooseSavedSceneFromLibrary}=await import('../scene-library-client.mjs');
+ const request=async url=>({ok:true,json:async()=>url==='/api/scene-library'?{stores:[]}:{document:{label:'unretained'}}});
+ await assert.rejects(chooseSavedSceneFromLibrary({grFetchApi:async()=>({entries:[]}),request,pickSavedScene:async()=>({name:'saved.kaminos.json',store:{id:'worktree',label:'Worktree'}})}),/did not retain/);
+});
+test('Browse files retains a fresh ordinary scene without accepting overwrite hints',async()=>{
+ const {chooseSavedSceneFromLibrary}=await import('../scene-library-client.mjs');let body;
+ const document={schema:'kaminos.scene.v1',version:8,objects:[{id:'cube',type:'procedural-mesh',source:'kaminos:geometry',transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},geometry:{kind:'box',parameters:{width:1,height:1,depth:1}}}],_filename:'existing.kaminos.json',_saveAsName:'existing',_overwrite:true};
+ const result=await chooseSavedSceneFromLibrary({grFetchApi:async()=>({entries:[]}),pickSavedScene:async()=> 'browse',browseFile:async()=>({name:'uploaded.kaminos.json',text:async()=>JSON.stringify(document)}),request:async(url,options)=>{
+  if(url==='/api/scene-library')return {ok:true,json:async()=>({stores:[]})};assert.equal(url,'/api/save-scene');body=JSON.parse(options.body);return {ok:true,json:async()=>({saved:'new-copy.kaminos.json'})};
+ }});assert.equal(result.name,'new-copy.kaminos.json');assert.equal(body._filename,null);assert.equal(body._saveAsName,null);assert.equal(body._overwrite,false);
+});

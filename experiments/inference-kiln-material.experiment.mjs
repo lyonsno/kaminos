@@ -35,7 +35,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
   }
   const stop=session.onFrame(()=>sync());
   return {read,operations,mount({root,document,invoke}){
-   const field=document.createElement('textarea');field.rows=3;field.setAttribute('aria-label','Prompt lettering');field.style.cssText='width:100%;box-sizing:border-box;background:#202327;color:#eee;padding:10px;border:1px solid #42464c;border-radius:6px;';
+   const field=document.createElement('textarea');field.rows=3;field.setAttribute('aria-label','Sample prompt');field.style.cssText='width:100%;box-sizing:border-box;background:#202327;color:#eee;padding:10px;border:1px solid #42464c;border-radius:6px;';
    const status=document.createElement('p');status.setAttribute('role','status');
    const fail=error=>{status.textContent=error.message;sync(true);};
    field.addEventListener('change',()=>{if(field.dataset.target!==target()?.id){sync(true);return;}invoke('setPrompt',field.value).catch(fail);});
@@ -43,7 +43,7 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    const help=document.createElement('p');help.textContent='Select a mesh to tune its Combustion properties in the inspector. Position and enable the flame source using its native controls. Shared playback runs the simulation. Bloom is in Rendering.';
    sync=(force=false)=>{const row=target(),value=row?.object?.userData?.kaminosPromptRelief?.prompt,changed=field.dataset.target!==(row?.id??'');field.disabled=!value;if(force||changed||document.activeElement!==field){field.value=value??inputs.prompt??'';field.dataset.target=row?.id??'';}};
    const save=document.createElement('button');save.className='btn';save.textContent='Save kiln for Generate';save.onclick=()=>invoke('saveForGenerate').then(result=>{status.textContent=`Generate now uses ${result.sceneFile}`;}).catch(fail);
-   help.textContent='Edit the scene, camera, flame and material using the ordinary controls. Bloom is under Rendering → Flame. Save kiln for Generate uses this scene and the selected lettering for future image generations.';
+   help.textContent='Edit the kiln scene, camera, flame and material here. This is sample text for designing the burn; Generate burns your actual image prompt. Bloom is under Rendering → Flame. Save kiln for Generate keeps this scene and its settings.';
    root.append(field,add,save,help,status);sync();
   },async dispose(){if(closed)return;closed=true;stop();await session.dispose();}};
  }catch(error){await session.dispose();throw error;}

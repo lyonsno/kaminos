@@ -2443,7 +2443,15 @@ def scene_library_import_basin(document, scene_store):
 
 def scene_library_stores():
     configured = os.environ.get("KAMINOS_SCENE_LIBRARY_GLOBS")
-    patterns = configured.split(os.pathsep) if configured else SCENE_LIBRARY_DEFAULT_GLOBS
+    patterns = configured.split(os.pathsep) if configured else list(SCENE_LIBRARY_DEFAULT_GLOBS)
+    if not configured:
+        # One glob per line, with optional # comments. A persistent root list
+        # survives revisions served from a different checkout or worktree.
+        config_setting = os.environ.get("KAMINOS_SCENE_LIBRARY_CONFIG")
+        config = Path(config_setting or "~/.config/kaminos/scene-library-globs").expanduser()
+        if config_setting or config.exists():
+            patterns.extend(line.strip() for line in config.read_text().splitlines()
+                            if line.strip() and not line.lstrip().startswith("#"))
     own = Path(SCENES_DIR).resolve()
     stores = {}
     for pattern in patterns:
@@ -5301,7 +5309,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         return False
 
     def _scene_library_scene_path(self, store_id, name):
-        store = scene_library_stores().get(store_id)
+        try:
+            store = scene_library_stores().get(store_id)
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene library configuration unavailable: {error}"}, 400)
+            return None, None
         if store is None:
             self.send_json({"error": "Unknown scene store"}, 404)
             return None, None
@@ -5347,8 +5359,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         """List scenes saved by other Kaminos servers on this machine (read-only)."""
         if not self._scene_library_local_client():
             return
+        try:
+            library_stores = scene_library_stores()
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene library configuration unavailable: {error}"}, 400)
+            return
         stores = []
-        for store_id, path in scene_library_stores().items():
+        for store_id, path in library_stores.items():
             scenes = []
             for scene_path in sorted(path.glob("*.kaminos.json")):
                 entry = {"name": scene_path.name, "label": "", "timestamp": ""}

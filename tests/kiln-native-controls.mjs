@@ -10,3 +10,9 @@ test('opening and closing the material tool leaves authored scene and fire choic
  const host={controls:{document:{defaultView:{kaminosSceneAuthoring:app,kaminosSelection:{read:()=>({activeId:'text'})}},getElementById:()=>({checked:true,value:1600,onchange(){mutations.push('ground');}})}},scene:{open:async()=>session,objects:()=>objects,select(){mutations.push('select');},setTransform(){mutations.push('pose');}},volume:{ready:Promise.resolve(),get:()=>runtime},flame:{open:async()=>({read:()=>({active:true,scene:{objects:[{id:'flame-field'}]},settings:{domControls:{}}}),setControls(){mutations.push('feed');}})}};
  const tool=await experiment.create({host,inputs:{},record(){}});await tool.dispose();assert.deepEqual(mutations,[]);assert.equal(objects.length,1);assert.ok(!Object.hasOwn(tool.operations,'ignite'));assert.ok(!Object.hasOwn(tool.operations,'reset'));
 });
+test('saving the normal kiln uses its prompt automatically while another object is selected',async()=>{
+ const objects=[{id:'prompt',object:{userData:{kaminosPromptRelief:{prompt:'DESIGN SAMPLE'}}}},{id:'cube',object:{userData:{}}}],saved={ok:true,filename:'kiln.kaminos.json'},calls=[];
+ const document={defaultView:{kaminosSelection:{read:()=>({activeId:'cube'})},kaminosSceneAuthoring:{burningState:()=>({})},saveScene:async()=>saved,kaminosInferenceKiln:{useSaved:async(result,id)=>{calls.push({result,id});return {selection:{sceneFile:result.filename,promptObjectId:id}};}}}};
+ const tool=await experiment.create({host:{controls:{document},scene:{open:async()=>({onFrame:()=>()=>{},dispose(){}}),objects:()=>objects,select(){assert.fail('saving must not require selection changes');}}},record(){}});
+ assert.deepEqual(await tool.operations.saveForGenerate(),{sceneFile:'kiln.kaminos.json',promptObjectId:'prompt'});assert.deepEqual(calls,[{result:saved,id:'prompt'}]);await tool.dispose();
+});

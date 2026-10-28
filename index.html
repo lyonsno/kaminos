@@ -3265,6 +3265,7 @@ import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, ch
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
+import {chooseSavedSceneFromLibrary,pickSceneFile} from './scene-library-client.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
@@ -26324,39 +26325,21 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 // system file picker; "Browse files…" in the list still reaches it.
 window.openSavedScene = async function() {
   if (document.querySelector('.scene-load-picker')) return;
-  const listing = await grFetchApi('browse', { root: 'scenes', path: '' });
-  const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
-  const scenes = await Promise.all(names.map(async name => {
-    const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
-    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
-  }));
-  const more = fetch('/api/scene-library').then(async response => {const library=await response.json();if(!response.ok||!Array.isArray(library.stores))throw Error(library.error||`HTTP ${response.status}`);return library;}).then(library =>
-    (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label } }))));
-  const choice = await pickSavedScene({ scenes, more });
-  if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
-  if (!choice?.name) return;
-  if (choice.store) {
-    // A scene from another server is imported as a new local copy (its own
-    // fresh name, so Save never touches a local scene of the same name) along
-    // with any generated meshes only that server had; then the copy opens.
-    const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store: choice.store.id, name: choice.name }) });
-    const imported = await response.json().catch(() => null);
-    if (!response.ok || !imported?.saved) { setInfo(`Could not import ${choice.name} from ${choice.store.label}: ${imported?.error || response.status}`); return; }
-    const missing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
-    await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
-    if (!missing.length) return;
-    // A failed restore clears the document and blocks Save; keep its error and
-    // add which assets were unavailable rather than claiming the scene opened.
-    const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
-    const opened = !sceneDocument.state().blocked && sceneDocument.state().filename === imported.saved;
-    setInfo(opened
-      ? `Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
-      : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.store.label}: ${names})`);
-    return;
-  }
-  const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });
-  if (!sceneData || sceneData.error) { setInfo(`Could not read ${choice.name}: ${sceneData?.error || 'unavailable'}`); return; }
-  await loadSceneFile(new File([JSON.stringify(sceneData)], choice.name, { type: 'application/json' }), { sceneFile: choice.name });
+  try {
+    const choice=await chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request:fetch});
+    if(choice==='browse'){document.getElementById('scene-file-input').click();return;}
+    if(!choice)return;
+    await loadSceneFile(new File([JSON.stringify(choice.document)],choice.name,{type:'application/json'}),{sceneFile:choice.name});
+    const missing=choice.dependencies.filter(dependency=>dependency.status==='missing');
+    if(missing.length){
+      const names=missing.map(dependency=>new URLSearchParams(dependency.source.split('?')[1]||'').get('path')).join(', ');
+      const opened=!sceneDocument.state().blocked&&sceneDocument.state().filename===choice.name;
+      setInfo(opened
+        ? `Opened ${choice.document.label||choice.name} from ${choice.from}; ${missing.length} asset${missing.length===1?'':'s'} only that server can read: ${names}`
+        : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.from}: ${names})`);
+    }
+  }catch(error){setInfo(error.message);}
+
 };
 
 document.getElementById('scene-file-input').addEventListener('change', e => {
@@ -26854,10 +26837,8 @@ function setupAuthoringAssets(){
   authoringGenerateLayout=installGenerateLayout({document,openMasks,kiln:{
     read:()=>kilnRecipes.read(),load:()=>kilnRecipes.load(),designURL:kilnDesignURL,
     async choose(){
-      const listing=await grFetchApi('browse',{root:'scenes',path:''});
-      const scenes=(listing.entries||[]).filter(entry=>entry.name.endsWith('.kaminos.json')).map(entry=>({name:entry.name}));
-      const choice=await pickSavedScene({scenes});if(!choice)return false;
-      if(choice==='browse')throw Error('Save the scene in Workbench, then choose it here');
+      const choice=await chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request:fetch,browseFile:()=>pickSceneFile(document)});
+      if(!choice)return false;
       await kilnRecipes.chooseScene(choice.name);return true;
     },
   },createFlame:async (viewport,{signal,prompt,request})=>{
