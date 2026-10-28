@@ -22,3 +22,15 @@ const combined={rows:[]};
 appendSignal(combined,{...structuredClone(good),validation:'first-case validation failure'});
 appendSignal(combined,structuredClone(good));
 assert.throws(()=>validateSignal(combined,[config,config]),/validation/);
+
+import {exportRaw} from '../experiments/allocation/export.mjs';
+const bytes=new Uint8Array(2*1024*1024+13);bytes.forEach((_,i)=>bytes[i]=i%251);
+let received=0;
+await exportRaw('test.bin',bytes,async(url,options)=>{
+ assert.ok(options.body.byteLength<=1024*1024,'automation transport message must remain below observed protocol limit');
+ assert.equal(Number(options.headers['X-Byte-Offset']),received);
+ assert.deepEqual(options.body,bytes.subarray(received,received+options.body.byteLength));
+ received+=options.body.byteLength;return {ok:true};
+});
+assert.equal(received,bytes.byteLength);
+await assert.rejects(exportRaw('test.bin',bytes,async()=>({ok:false})),/Raw export failed/);
