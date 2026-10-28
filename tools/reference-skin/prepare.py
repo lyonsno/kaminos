@@ -41,6 +41,13 @@ def aliases(names):
     for side,letter in [('left','L'),('right','R')]:
         for original,role in [('Clavicle','scapula'),('UpperArm','shoulder'),('Forearm','elbow'),('Hand','wrist'),('Finger0','toe'),('Finger01','toe-mid'),('Finger0Nub','toe-end')]:basic[f'Bip01_{letter}_{original}']=f'forelimb-{side}-{role}'
         for original,role in [('Thigh','hip'),('Calf','stifle'),('HorseLink','hock'),('Foot','foot'),('Toe0','toe'),('Toe0Nub','toe-end')]:basic[f'Bip01_{letter}_{original}']=f'hindlimb-{side}-{role}'
+        if f'Bip01_{letter}_HorseLink' not in names:
+            basic[f'Bip01_{letter}_Foot']=f'hindlimb-{side}-hock'
+            basic[f'Bip01_{letter}_Toe01']=f'hindlimb-{side}-toe-mid'
+            basic[f'Bip01_{letter}_Toe02']=f'hindlimb-{side}-toe-end'
+    if 'Bip01_Spine3' in names:
+        basic['Bip01_Spine2']='spine-upper';basic['Bip01_Spine3']='spine-chest'
+    basic.update({'Bip01_Neck2':'neck-top','Bip01_Head_Muzzle':'head-end'})
     result={n:basic.get(n,'tail-'+str(int(n.rsplit('_',1)[1])) if n.startswith('BN_Tail_') else 'helper:'+n) for n in names}
     if len(set(result.values()))!=len(names):raise ValueError('Role mapping merged controls')
     return result
