@@ -202,3 +202,14 @@ for(const count of [2,1]){
   transitioning.dispose();
 }
 console.log('hybrid lifecycle and honest rebuild boundaries passed');
+
+// The shared host must own graph replacement as well as asynchronous compile.
+let queuedChange;
+const queued=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,
+ rebuild:{hold(){},prepare(change){queuedChange=change;return new Promise(r=>compileRelease=r);}},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+consume(field);const beforeQueuedKey=mesh.material.customProgramCacheKey();
+queued.setPointCount(1);await Promise.resolve();await Promise.resolve();
+assert.equal(mesh.material.customProgramCacheKey(),beforeQueuedKey,'pending shared compilation retains current flame bindings');
+queuedChange();assert.notEqual(mesh.material.customProgramCacheKey(),beforeQueuedKey);
+compileRelease();await queued.whenRebuilt();queued.dispose();
