@@ -11677,11 +11677,14 @@ async function initScene() {
       adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
     };
   };
-  window.kaminosWorkbenchMeasureSceneGpu=({samples=20}={})=>measureSceneGpu(renderer,{
-    samples,
-    getSignature:()=>JSON.stringify({camera:readAuthoredCameraView(),objects:readAuthoredFireObjects(),viewport:viewportDisplay}),
-    drawFrame:()=>{const start=performance.now(),draw=window.__kaminosRenderSceneForInspection();return {...draw,cpuMs:performance.now()-start};},
-  });
+  window.kaminosWorkbenchMeasureSceneGpu=async({samples=20}={})=>{
+    const release=window.__kaminosBeginSceneInspection();
+    try{return await measureSceneGpu(renderer,{
+      samples,
+      getSignature:()=>JSON.stringify({camera:readAuthoredCameraView(),objects:readAuthoredFireObjects(),viewport:viewportDisplay}),
+      drawFrame:()=>{const start=performance.now(),draw=window.__kaminosRenderSceneForInspection();return {...draw,cpuMs:performance.now()-start};},
+    });}finally{release();}
+  };
   installSharedWorkbench();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
