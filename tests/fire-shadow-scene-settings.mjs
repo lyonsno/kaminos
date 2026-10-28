@@ -29,3 +29,8 @@ assert.equal(lightQuality.volumeGrid,32);assert.equal(lightQuality.directions,96
 
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:'regions'}))).angularPattern,'regions');
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_light_pattern=typo')),/angular pattern/);
+
+const angularRoute=fireShadowSceneRoute({...state,smokeShadowFilter:true,smokeShadowFilterAngle:8.5,smokeShadowFilterTaps:5});
+const angularReload=readFireShadowSceneSettings(new URLSearchParams(angularRoute));
+assert.equal(angularReload.smokeShadowFilterAngle,8.5,'angular blur width must survive scene roundtrip');
+assert.equal(angularReload.smokeShadowFilterTaps,5,'filter work must survive scene roundtrip');

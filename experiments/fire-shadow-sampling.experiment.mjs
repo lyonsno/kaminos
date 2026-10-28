@@ -15,7 +15,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch,smokeWork;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[],lightControls=[],mediumControls=[],numberScrubs=[];
@@ -33,7 +33,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       for(const {key,number} of lightControls)value(number,medium?.[key]??16);
       if(edgeSwitch)edgeSwitch.checked=medium?.shadowEdgeFilter===true;
       if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
-      for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:16));
+      for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:key==='smokeShadowFilterTaps'?3:key==='smokeShadowFilterAngle'?7.125:16));
+      if(smokeWork&&medium?.smokeShadowWork){const w=medium.smokeShadowWork,n=v=>v.toLocaleString();smokeWork.textContent=`${n(w.integrationRays)} smoke-shadow rays · up to ${n(w.maximumMediumReads)} medium samples/frame. Filter: ${w.filterDirectionsPerPrefix} directions × ${w.prefixReadsPerOutput?4:0} interpolation reads × ${n(w.filterOutputs)} prefix texels = ${n(w.prefixReads)} texture reads/frame.`;}
       if(surfaceSwitch)surfaceSwitch.checked=win.__kaminosSceneRadiance?.debugState().surfaceEnabled!==false;
       const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
       value(implementationSelector,comparison.implementation);
@@ -159,19 +160,19 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           number.addEventListener('change',()=>change(number.value));
           qualityControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
-        for(const [key,param,text,min] of [['smokeShadowSteps','steps','Smoke shadow steps',0],['smokeShadowResolution','resolution','Smoke shadow angular resolution',1]]){
+        for(const [key,param,text,min] of [['smokeShadowSteps','steps','Smoke shadow steps',0],['smokeShadowResolution','resolution','Smoke shadow angular resolution',1],['smokeShadowFilterAngle','angleDegrees','Smoke shadow blur half-width (degrees)',0],['smokeShadowFilterTaps','tapsPerAxis','Smoke filter taps per axis',1]]){
           const row=document.createElement('label');row.textContent=text;
-          row.title=key==='smokeShadowSteps'?'Zero disables smoke attenuation. Positive values integrate the existing medium into light-space optical-depth prefixes.':'Pixels per face in the smoke optical-depth atlas; independent of solid shadow resolution.';
-          const number=document.createElement('input');number.type='number';number.min=String(min);number.step='1';number.setAttribute('aria-label',text);
+          row.title=key==='smokeShadowSteps'?'Radial integration samples per direction. Zero disables smoke attenuation.':key==='smokeShadowResolution'?'Pixels per cube face. Doubling this value quadruples smoke-shadow rays and filter texels; blur angle stays fixed.':key==='smokeShadowFilterAngle'?'Half-width along each tangent axis, in degrees. Independent of map resolution and filter tap count.':'Odd positive count along each filter axis. 3 gives 9 directions; 5 gives 25. Each direction uses 4 transmission-interpolation reads.';
+          const number=document.createElement('input');number.type='number';number.min=String(min);number.step=key==='smokeShadowFilterAngle'?'.25':key==='smokeShadowFilterTaps'?'2':'1';number.setAttribute('aria-label',text);
           number.addEventListener('change',()=>invoke('setSmokeShadowQuality',{[param]:Number(number.value)}).catch(failed));
           mediumControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
         const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
         const smokeFilterLabel=document.createElement('label');smokeFilterLabel.textContent='Smooth smoke shadow directions';
-        smokeFilterLabel.title='Experimental 3×3 neighboring-direction transmission filter. Softens angular smoke-shadow detail without extra raymarch steps or temporal history. Off restores the unfiltered map.';
+        smokeFilterLabel.title='Angular transmission filter. Width is in degrees; taps per axis control filter work independently. Off restores the unfiltered map.';
         smokeFilterSwitch=document.createElement('input');smokeFilterSwitch.type='checkbox';smokeFilterSwitch.setAttribute('aria-label','Smooth smoke shadow directions');
         smokeFilterSwitch.addEventListener('change',()=>invoke('setSmokeShadowQuality',{filter:smokeFilterSwitch.checked}).catch(failed));
-        smokeFilterLabel.append(smokeFilterSwitch);panel.append(smokeFilterLabel);
+        smokeFilterLabel.append(smokeFilterSwitch);panel.append(smokeFilterLabel);smokeWork=document.createElement('p');smokeWork.setAttribute('aria-label','Smoke shadow workload');panel.append(smokeWork);
         restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(failed));
         const help=document.createElement('p');help.textContent='Applies on release. GPU pipelines compile asynchronously while the last image is held; JavaScript shader graph preparation still runs cooperatively on the main thread. All source cubes update each rendered frame. The viewport and flame resolution are unchanged.';
         retry=document.createElement('button');retry.type='button';retry.textContent='Retry lighting compilation';
