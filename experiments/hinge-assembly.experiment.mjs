@@ -32,7 +32,7 @@ export default {
       parts:parts.map(p=>({role:p.role,kind:p.kind,id:p.asset.id,url:p.url,sha256:p.sha256,position:p.asset.root.position.toArray(),quaternion:p.asset.root.quaternion.toArray()})),
       recipe:{manifest:inputs.manifest,variant,angle,separation,amplitude,period,play:false,view:session.readView()}});
     const sync=()=>{if(status)status.textContent=`${playing?'Playing':'Held'} · ${angle.toFixed(1)}° · ${separation===0?'assembled':'separated'} · ${variant} generation`;
-      if(playButton)playButton.textContent=playing?'Pause':'Play';for(const f of fields)if(host.controls.document.activeElement!==f.input)f.input.value=String(f.value());};
+      if(playButton)playButton.textContent=playing?'Pause':'Play';for(const f of fields)if(host.controls.document.activeElement!==f.input||f.input.readOnly)f.input.value=String(f.value());};
     const present=()=>{
       if(disposed)throw Error('Hinge experiment is disposed');
       for(const p of parts){const pose=hingePartPose({...p,origin:manifest.joint.origin,axis:manifest.joint.axis,angleDegrees:angle,separation});p.asset.root.position.fromArray(pose.position);p.asset.root.quaternion.fromArray(pose.quaternion);p.asset.root.updateMatrixWorld(true);}
