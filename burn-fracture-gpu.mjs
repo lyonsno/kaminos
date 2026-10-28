@@ -20,12 +20,12 @@ fn rotate(q:vec4f,v:vec3f)->vec3f{return v+2.0*cross(q.xyz,cross(q.xyz,v)+q.w*v)
 @compute @workgroup_size(64)
 fn weaken(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=p.counts.y){return;}let base=i*11u;
- var meta=bitcast<vec4u>(joints[base]);if(meta.w==0u){return;}
+ var jointMeta=bitcast<vec4u>(joints[base]);if(jointMeta.w==0u){return;}
  let sample=sections[i];if(sample.w==0.0){return;}
  let previous=geometry[i*3u+1u].w;
  let fraction=min(previous,clamp(sample.x,0.0,1.0));
  geometry[i*3u].x=coefficients[i].x*fraction;geometry[i*3u+1u].w=fraction;
- if(fraction==0.0){meta.w=0u;joints[base]=bitcast<vec4f>(meta);for(var j=5u;j<11u;j++){joints[base+j]=vec4f(0.0);}return;}
+ if(fraction==0.0){jointMeta.w=0u;joints[base]=bitcast<vec4f>(jointMeta);for(var j=5u;j<11u;j++){joints[base+j]=vec4f(0.0);}return;}
  let arm=max(joints[base+1u].w,1.0);
  joints[base+4u].x=coefficients[i].y*fraction;
  joints[base+4u].y=coefficients[i].z*fraction*fraction/(arm*arm);
@@ -55,6 +55,11 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
  const own=x=>{owned.push(x);return x;};
  function dispose(){if(disposed)return;disposed=true;if(wrapper){delete renderer.backend.get(wrapper).texture;wrapper.dispose();}engine?.dispose(renderer);for(const x of owned)x.destroy();}
  try{
+  device.pushErrorScope('validation');
+  const shader=device.createShaderModule({label:'Resident consumed-section mechanics',code:BURN_FRACTURE_WGSL});
+  const info=await shader.getCompilationInfo(),validation=await device.popErrorScope();
+  if(info.messages.some(x=>x.type==='error')||validation)throw Error(info.messages.filter(x=>x.type==='error').map(x=>x.message).join('; ')||validation.message);
+  const pipelines={};for(const entryPoint of ['weaken','present'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:'auto',compute:{module:shader,entryPoint}});
   const degree=new Uint32Array(n);for(const b of prepared.bonds){degree[b.a]++;degree[b.b]++;}
   engine=new ArchGpuEngine(device,{maxBodies:n,gravity:[0,0,0],deltaTime:h,substeps:prepared.config.substeps,solverIterations:prepared.config.solverIterations,
    maxFixedStepsPerFrame:1,enableBvhBuild:false,maxJointsPerBodySolver:Math.max(1,...degree),maxPairsPerBodyBroadphase:Math.max(1,n-1),maxContactsPerBodySolver:Math.max(1,(n-1)*4),pairManifoldSlots:4,avbdPenaltyDecayGamma:1});
@@ -76,9 +81,6 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
   wrapper=new THREE.ExternalTexture(texture);wrapper.type=THREE.FloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=wrapper.magFilter=THREE.NearestFilter;
   const parameters=buffer('Burn fracture counts and origin',new Uint32Array(8),GPUBufferUsage.UNIFORM);
   const data=new ArrayBuffer(32);new Uint32Array(data).set([n,m,0,0]);new Float32Array(data).set([...restFrame.origin,0],4);device.queue.writeBuffer(parameters,0,data);
-  const shader=device.createShaderModule({label:'Resident consumed-section mechanics',code:BURN_FRACTURE_WGSL});
-  const info=await shader.getCompilationInfo();if(info.messages.some(x=>x.type==='error'))throw Error(info.messages.map(x=>x.message).join('; '));
-  const pipelines={};for(const entryPoint of ['weaken','present'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:'auto',compute:{module:shader,entryPoint}});
   const groups={weaken:device.createBindGroup({layout:pipelines.weaken.getBindGroupLayout(0),entries:[resident('joints'),sections.buffer,coefficients,geometry].map((b,binding)=>({binding,resource:{buffer:b}})).concat([{binding:9,resource:{buffer:parameters}}])}),
    present:device.createBindGroup({layout:pipelines.present.getBindGroupLayout(0),entries:[{binding:4,resource:{buffer:resident('positions')}},{binding:5,resource:{buffer:resident('quaternions')}},{binding:6,resource:{buffer:rest}},{binding:7,resource:{buffer:matrices}},{binding:8,resource:texture.createView()},{binding:9,resource:{buffer:parameters}}]})};
   const damage=buffer('Material fracture reaction and events',new Float32Array(m*12)),grip=buffer('Inactive replay grips',new Float32Array(n*12)),output=buffer('Unused reaction pack output',new Float32Array(4));
