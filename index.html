@@ -3264,7 +3264,7 @@ import { installSceneControlHistory, installRelativeNumberDrag } from './scene-c
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
-import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility,withViewportVisibilityAsync} from './scene-visibility.mjs';
 import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies} from './scene-repetition.mjs';
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
 import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
@@ -11108,7 +11108,8 @@ async function initScene() {
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneLightingPreparation=createLightingPreparation({
-    compile:()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass]),
+    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass])),
+    recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:value=>volumePrototype?.setSceneLightingRebuildPending(value),
     onStatus:state=>{
       const node=document.getElementById('scene-lighting-preparation-status');
@@ -11119,8 +11120,8 @@ async function initScene() {
     },
   });
   window.kaminosCompileSceneLighting=change=>sceneLightingPreparation.request(change);
-  window.kaminosSceneLightingPreparation={state:sceneLightingPreparation.state,whenIdle:sceneLightingPreparation.whenIdle,retry:()=>sceneLightingPreparation.request()};
-  document.querySelector('#scene-lighting-preparation-status button').onclick=()=>{sceneLightingPreparation.request();};
+  window.kaminosSceneLightingPreparation={state:sceneLightingPreparation.state,whenIdle:sceneLightingPreparation.whenIdle,retry:sceneLightingPreparation.retry};
+  document.querySelector('#scene-lighting-preparation-status button').onclick=()=>{sceneLightingPreparation.retry()?.catch(()=>{});};
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();

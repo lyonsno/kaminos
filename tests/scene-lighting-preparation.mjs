@@ -34,3 +34,20 @@ const duringDrain=draining.request();
 await new Promise(r=>setImmediate(r));
 assert.equal(drainCompiled,false,'an existing flame hold must retain its foreground drain for ordinary preparation');
 drainRelease();await drain;await duringDrain;draining.setExternalHold(false);
+
+// Preparation must mask the same actual lights as viewport drawing, across awaits.
+const visibility=await import('../scene-visibility.mjs');
+for(const hidden of [['hidden'],['@group:lights']]){
+ const objects=[{id:'hidden',object:{visible:true}},{id:'new',object:{visible:true}}];
+ const scene={objects,groups:[{id:'lights',objectIds:['hidden']}]};
+ const visible=id=>visibility.sceneItemVisible(id,hidden,scene);
+ let prepared,drawn;
+ await (visibility.withViewportVisibilityAsync??visibility.withViewportVisibility)(objects,visible,async()=>{
+  await Promise.resolve();prepared=objects.filter(x=>x.object.visible).map(x=>x.id);
+ });
+ visibility.withViewportVisibility(objects,visible,()=>{drawn=objects.filter(x=>x.object.visible).map(x=>x.id);});
+ assert.deepEqual(prepared,drawn,'async preparation must retain effective viewport topology');
+ assert(objects.every(x=>x.object.visible),'authored visibility restored');
+ if(visibility.withViewportVisibilityAsync)await assert.rejects(visibility.withViewportVisibilityAsync(objects,visible,async()=>{await Promise.resolve();throw Error('compile rejection');}),/compile rejection/);
+ assert(objects.every(x=>x.object.visible));
+}

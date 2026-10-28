@@ -51,7 +51,7 @@ export async function compileSceneLighting(renderer, passes) {
 
 // One owner for renderer state across asynchronous lighting preparation. A
 // flame graph replacement queues with ordinary light edits, before compiling.
-export function createLightingPreparation({compile,hold,onStatus=()=>{}}) {
+export function createLightingPreparation({compile,hold,recover,onStatus=()=>{}}) {
   let task=null,revision=0,completed=0,compiling=false,external=false,held=false,error=null;
   const changes=[];
   let drain;
@@ -81,6 +81,6 @@ export function createLightingPreparation({compile,hold,onStatus=()=>{}}) {
     task.catch(()=>{}); // UI callers surface failure through onStatus.
     return task;
   }
-  return {request,state,whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
+  return {request,state,retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
     setExternalHold(value){external=Boolean(value);const result=syncHold();publish();return result;}};
 }
