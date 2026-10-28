@@ -382,7 +382,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
           grip.textContent=adaptivity.label;
           field.setAttribute('aria-label',`Flame ${adaptivity.label}`);
           grip.title=field.title=adaptivity.automatic
-            ?`${adaptivity.value?'On':'Off'} automatically for this marcher. Ray count sets the sample budget; the old adaptive amount is retained for Old adaptive.`
+            ?`${adaptivity.value?'On':'Off'} automatically for this marcher. The old adaptive amount is retained for Old adaptive.`
             :volumeControlTooltip(id);
         }
         if(force!==true&&document.activeElement===field)return;
