@@ -22,7 +22,7 @@ fn reduce(@builtin(global_invocation_id) id:vec3u){
  sections[i]=value;textureStore(image,vec2i(i32(i),0),value);
 }`;
 
-export async function createBurnStructureGpu({renderer,field,prepared,mapping}){
+export async function createBurnStructureGpu({renderer,field,prepared,mapping,sourceMaterials}){
  const device=field.device,count=mapping.connections.length,owned=[];let disposed=false,steps=0,cache=new WeakMap();
  const own=x=>{owned.push(x);return x;};
  let overlay,wrapper;
@@ -54,6 +54,7 @@ export async function createBurnStructureGpu({renderer,field,prepared,mapping}){
   }
   const initialEncoder=device.createCommandEncoder({label:'Current material structural sections'});encode(initialEncoder);device.queue.submit([initialEncoder.finish()]);
   return {overlay,encode,
+   resident:()=>({device,buffer:output,count,mapping,prepared,sourceMaterials}),
    read:()=>({identity:BURN_STRUCTURE_IDENTITY,status:disposed?'disposed':'resident',steps,regions:prepared.cells.length,connections:count,source:'original-resident-fuel',runtimeReadbacks:0,receipt:mapping.receipt}),
    async snapshot(){if(disposed)throw Error('Burn structure is disposed');if(!count)return {identity:BURN_STRUCTURE_IDENTITY,sections:[]};
     const staging=device.createBuffer({size:output.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);const values=new Float32Array(staging.getMappedRange()).slice();return {identity:BURN_STRUCTURE_IDENTITY,steps,sections:mapping.connections.map((c,i)=>({...c,fraction:values[i*4+3]?values[i*4]:null,remainingArea:values[i*4+1],sampledArea:values[i*4+2],mapped:values[i*4+3]===1})),mapping:{...mapping,cells:Array.from(mapping.cells),areas:Array.from(mapping.areas),spans:Array.from(mapping.spans)}};}finally{staging.unmap();staging.destroy();}

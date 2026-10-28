@@ -10,7 +10,7 @@ export function createSceneBurnStructure({renderer,field,parent,workerFactory=ur
   if(disposed||enabled===value)return;
   enabled=value;const token=++generation;release();error=null;status=value?'preparing':'off';if(!value)return;
   try{
-   const {arrays:source}=collectFractureSurface(mesh),material={bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},dimensions,initial};
+   const {arrays:source,materials:sourceMaterials}=collectFractureSurface(mesh),material={bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},dimensions,initial};
    const result=await new Promise((resolve,reject)=>{
     rejectPending=reject;const current=workerFactory(new URL('./burn-structure.worker.mjs',import.meta.url));worker=current;
     current.onmessage=({data})=>{current.terminate();if(worker===current)worker=null;rejectPending=null;data.error?reject(Error(data.error)):resolve(data);};
@@ -18,7 +18,7 @@ export function createSceneBurnStructure({renderer,field,parent,workerFactory=ur
     current.postMessage({source,material});
    });
    if(disposed||token!==generation)return;
-   status='compiling';const candidate=await createBurnStructureGpu({renderer,field,...result});
+   status='compiling';const candidate=await createBurnStructureGpu({renderer,field,...result,sourceMaterials});
    if(disposed||token!==generation){candidate.dispose();return;}
    gpu=candidate;gpu.overlay.matrixAutoUpdate=false;parent.add(gpu.overlay);present();status='resident';
   }catch(cause){if(disposed||token!==generation)return;error=cause.message;status='failed';release();}
@@ -26,6 +26,7 @@ export function createSceneBurnStructure({renderer,field,parent,workerFactory=ur
  return {configure,present,encode:encoder=>gpu?.encode(encoder),
   read:()=>({enabled,status,error,...(gpu?.read()??{})}),
   snapshot:()=>gpu?.snapshot()??null,
+  resident:()=>gpu?.resident()??null,
   dispose(){if(disposed)return;disposed=true;generation++;release();status='disposed';},
  };
 }
