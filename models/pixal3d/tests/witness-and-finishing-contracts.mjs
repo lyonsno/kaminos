@@ -609,6 +609,113 @@ try {
     point: 'before-native-kernel',
   });
 
+  // S5-F1 fail-first checks:
+  // (a) Threshold POST rejection and partial-batch flush rejection must retain buffered events for recovery
+  // (b) Retrying after an ambiguous post-append transport error must not duplicate journal entries
+  const retryLogPath = path.join(scratch, 'retry-kernels.jsonl');
+  const retryServerReport = {};
+  const retryBrowserReport = {
+    phase: 'sparse-structure-sampling',
+    effectiveRoute: PIXAL3D_GENERATION_ROUTE,
+    loadingModelRole: 'sparseFlow',
+    verifiedTensorCount: 4,
+    verifiedInputBytes: 1024,
+  };
+  let failBeforeServer = true;
+  let failAfterServer = false;
+  const retryBuffer = createPixal3dKernelPhaseBuffer({
+    report: retryBrowserReport,
+    batchSize: 2,
+    postPhase: async extra => {
+      if (failBeforeServer) {
+        throw new Error('simulated pre-append HTTP POST failure');
+      }
+      await persistPixal3dGenerationPhase({
+        report: retryServerReport,
+        row: {
+          phase: retryBrowserReport.phase,
+          effectiveRoute: retryBrowserReport.effectiveRoute,
+          sessionId: 'sess-retry-1',
+          modelRole: retryBrowserReport.loadingModelRole,
+          ...extra,
+        },
+        kernelLogPath: retryLogPath,
+        append: async (p, data) => {
+          writeFileSync(p, data, { flag: 'a' });
+        },
+        persist: async () => {},
+      });
+      if (failAfterServer) {
+        throw new Error('simulated post-append response drop');
+      }
+    },
+  });
+
+  await retryBuffer.recordKernel({
+    stage: 'threshold-k0',
+    dispatch: [1, 1, 1],
+    point: 'before-native-kernel',
+  });
+  await assert.rejects(
+    () =>
+      retryBuffer.recordKernel({
+        stage: 'threshold-k0',
+        dispatch: [1, 1, 1],
+        point: 'native-kernel-returned',
+      }),
+    /simulated pre-append HTTP POST failure/,
+  );
+  assert.equal(
+    retryBuffer.pendingCount,
+    2,
+    'Rejected threshold persistence must preserve both buffered kernel events for recovery',
+  );
+  assert.equal(retryBuffer.snapshot().length, 2);
+  assert.equal(retryBuffer.snapshot()[0].kernel.stage, 'threshold-k0');
+  assert.equal(retryBuffer.snapshot()[0].seq, 1);
+  assert.equal(retryBuffer.snapshot()[1].seq, 2);
+
+  // Recover threshold batch cleanly
+  failBeforeServer = false;
+  await retryBuffer.flush();
+  assert.equal(retryBuffer.pendingCount, 0);
+  assert.equal(retryServerReport.kernelEvidence?.count, 2);
+
+  // Partial-batch flush rejection after server already appended (ambiguous HTTP failure), followed by new event + recovery flush
+  await retryBuffer.recordKernel({
+    stage: 'partial-k1',
+    dispatch: [2, 1, 1],
+    point: 'before-native-kernel',
+  });
+  failAfterServer = true;
+  await assert.rejects(() => retryBuffer.flush(), /simulated post-append response drop/);
+  assert.equal(
+    retryBuffer.pendingCount,
+    1,
+    'Unacknowledged partial-batch flush must retain event in buffer',
+  );
+  failAfterServer = false;
+  await retryBuffer.recordKernel({
+    stage: 'partial-k1',
+    dispatch: [2, 1, 1],
+    point: 'native-kernel-returned',
+  });
+  assert.equal(retryBuffer.pendingCount, 0);
+  assert.equal(
+    retryServerReport.kernelEvidence?.count,
+    4,
+    'Retry after post-append response drop must deduplicate already-appended seq and not double-count',
+  );
+  const retryLines = readFileSync(retryLogPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(retryLines.length, 4, 'Retry must not write duplicate lines to kernel-events.jsonl');
+  assert.deepEqual(
+    retryLines.map(l => l.seq),
+    [1, 2, 3, 4],
+  );
+
   // Fail-first validation on malformed batched kernels
   await assert.rejects(
     () =>

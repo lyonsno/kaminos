@@ -386,49 +386,74 @@ export async function persistPixal3dGenerationPhase({
     delete baseRow.kernels;
     let lastKernel;
     let lastPhase = row.phase;
-    const lines =
-      kernelBatch
-        .map(item => {
-          const hasWrapper = item && typeof item === 'object' && 'kernel' in item;
-          const k = hasWrapper ? item.kernel : item;
-          if (
-            !k ||
-            typeof k.stage !== 'string' ||
-            !k.stage ||
-            !Array.isArray(k.dispatch) ||
-            k.dispatch.length < 1 ||
-            k.dispatch.length > 3 ||
-            !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
-            !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
-          ) {
-            throw new Error('complete native kernel event required');
-          }
-          const itemPhase =
-            hasWrapper && typeof item.phase === 'string' && item.phase ? item.phase : row.phase;
-          const itemModelRole =
-            hasWrapper && 'modelRole' in item ? item.modelRole : baseRow.modelRole;
-          const itemObservedAt =
-            hasWrapper && typeof item.observedAt === 'string' && item.observedAt
-              ? item.observedAt
-              : now;
-          lastKernel = k;
-          lastPhase = itemPhase;
-          return JSON.stringify({
-            ...baseRow,
-            phase: itemPhase,
-            ...(itemModelRole !== undefined ? { modelRole: itemModelRole } : {}),
-            kernel: k,
-            observedAt: itemObservedAt,
-          });
-        })
-        .join('\n') + '\n';
-    await append(kernelLogPath, lines);
+    const hasAnySeq = kernelBatch.some(
+      item => item && typeof item === 'object' && 'kernel' in item && item.seq !== undefined,
+    );
+    let prevSeq = 0;
+    const validatedEntries = kernelBatch.map(item => {
+      const hasWrapper = item && typeof item === 'object' && 'kernel' in item;
+      const k = hasWrapper ? item.kernel : item;
+      if (
+        !k ||
+        typeof k.stage !== 'string' ||
+        !k.stage ||
+        !Array.isArray(k.dispatch) ||
+        k.dispatch.length < 1 ||
+        k.dispatch.length > 3 ||
+        !k.dispatch.every(v => Number.isSafeInteger(v) && v >= 0) ||
+        !['before-native-kernel', 'native-kernel-returned'].includes(k.point)
+      ) {
+        throw new Error('complete native kernel event required');
+      }
+      let seq;
+      if (hasAnySeq) {
+        seq = hasWrapper ? item.seq : undefined;
+        if (!Number.isSafeInteger(seq) || seq <= prevSeq) {
+          throw new Error('complete native kernel event required');
+        }
+        prevSeq = seq;
+      }
+      const itemPhase =
+        hasWrapper && typeof item.phase === 'string' && item.phase ? item.phase : row.phase;
+      const itemModelRole =
+        hasWrapper && 'modelRole' in item ? item.modelRole : baseRow.modelRole;
+      const itemObservedAt =
+        hasWrapper && typeof item.observedAt === 'string' && item.observedAt
+          ? item.observedAt
+          : now;
+      lastKernel = k;
+      lastPhase = itemPhase;
+      return {
+        seq,
+        serialized: JSON.stringify({
+          ...baseRow,
+          ...(seq !== undefined ? { seq } : {}),
+          phase: itemPhase,
+          ...(itemModelRole !== undefined ? { modelRole: itemModelRole } : {}),
+          kernel: k,
+          observedAt: itemObservedAt,
+        }),
+      };
+    });
+    const lastPersistedSeq = report.lastKernelSeq ?? 0;
+    const unseenEntries = hasAnySeq
+      ? validatedEntries.filter(entry => entry.seq > lastPersistedSeq)
+      : validatedEntries;
+    if (unseenEntries.length > 0) {
+      const lines = unseenEntries.map(entry => entry.serialized).join('\n') + '\n';
+      await append(kernelLogPath, lines);
+    }
+    if (hasAnySeq && prevSeq > lastPersistedSeq) {
+      report.lastKernelSeq = prevSeq;
+    }
     report.nativeSessionId = row.sessionId;
-    report.lastKernel = lastKernel;
-    report.lastBrowserPhase = lastPhase;
+    if (!hasAnySeq || prevSeq >= lastPersistedSeq) {
+      report.lastKernel = lastKernel;
+      report.lastBrowserPhase = lastPhase;
+    }
     report.kernelEvidence = {
       path: kernelLogPath,
-      count: (report.kernelEvidence?.count ?? 0) + kernelBatch.length,
+      count: (report.kernelEvidence?.count ?? 0) + unseenEntries.length,
       retention: 'complete append-only events; no cap',
     };
     return;

@@ -65,14 +65,26 @@ export function createPixal3dKernelPhaseBuffer({
     throw new RangeError('positive integer kernel event batch size required');
   }
   const pending = [];
+  let nextSeq = 0;
+  const snapshot = () =>
+    pending.map(entry => ({
+      ...entry,
+      kernel: {
+        ...entry.kernel,
+        dispatch: Array.isArray(entry.kernel?.dispatch) ? [...entry.kernel.dispatch] : entry.kernel?.dispatch,
+      },
+    }));
   const flush = async () => {
     if (!pending.length) return;
-    const kernels = pending.splice(0, pending.length);
+    const count = pending.length;
+    const kernels = pending.slice(0, count);
     await postPhase({ kernels });
+    pending.splice(0, count);
   };
   const recordKernel = async kernel => {
     report.lastKernel = kernel;
     pending.push({
+      seq: ++nextSeq,
       phase: report.phase,
       modelRole: report.loadingModelRole ?? null,
       kernel,
@@ -90,6 +102,7 @@ export function createPixal3dKernelPhaseBuffer({
     get pendingCount() {
       return pending.length;
     },
+    snapshot,
     flush,
     recordKernel,
     savePhase,
@@ -543,6 +556,9 @@ export async function runPixal3dGenerationWitness(
         report.retentionErrors ??= [];
         report.retentionErrors.push(e.message);
       }
+    }
+    if (phaseBuffer.pendingCount > 0) {
+      report.unflushedKernelEvents = phaseBuffer.snapshot();
     }
     if (implementation) {
       serving = false;
