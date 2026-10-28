@@ -44,6 +44,12 @@ function cloneBorrowed(node){
  for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData.kaminosEditorHelper&&!child.userData.kaminosEditorOnly)copy.add(cloneBorrowed(child));
  return copy;
 }
+function refreshBorrowedPose(source,copy){
+ copy.position.copy(source.position);copy.quaternion.copy(source.quaternion);copy.scale.copy(source.scale);copy.matrix.copy(source.matrix);copy.matrixAutoUpdate=source.matrixAutoUpdate;
+ copy.visible=source.visible;copy.layers.mask=source.layers.mask;copy.castShadow=source.castShadow;copy.receiveShadow=source.receiveShadow;copy.renderOrder=source.renderOrder;copy.frustumCulled=source.frustumCulled;
+ const children=source.children.filter(n=>!isRepetitionCopy(n)&&!n.userData.kaminosEditorHelper&&!n.userData.kaminosEditorOnly);
+ for(let i=0;i<children.length;i++)refreshBorrowedPose(children[i],copy.children[i]);
+}
 export function createRepetitionView(){
  const states=new WeakMap();
  function clear(root){for(const copy of root.children.filter(isRepetitionCopy))root.remove(copy);states.delete(root);}
@@ -56,7 +62,7 @@ export function createRepetitionView(){
   while(state.copies.length>count)state.copies.pop().removeFromParent();
   while(state.copies.length<count){const copy=cloneBorrowed(root);copy.userData.kaminosRepetitionCopy=true;copy.matrixAutoUpdate=false;copy.name=`${root.name||'Object'} repetition ${state.copies.length+1}`;state.copies.push(copy);root.add(copy);}
   root.updateWorldMatrix(true,false);const world=root.matrixWorld.clone(),inverse=world.clone().invert();
-  for(let i=0;i<count;i++){const copy=state.copies[i];copy.matrix.copy(inverse).multiply(matrices[i+1]).multiply(world);copy.matrixWorldNeedsUpdate=true;}
+  for(let i=0;i<count;i++){const copy=state.copies[i];refreshBorrowedPose(root,copy);copy.matrixAutoUpdate=false;copy.matrix.copy(inverse).multiply(matrices[i+1]).multiply(world);copy.matrixWorldNeedsUpdate=true;}
   return count;
  }
  return {sync,clear};

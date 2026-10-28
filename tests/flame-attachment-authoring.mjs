@@ -17,4 +17,27 @@ repetition.sync();const copies=()=>root.children.filter(n=>n.userData.kaminosRep
 writeCrownRecipe(entry,{...recipe,opening:.8},repetition);repetition.sync();assert.equal(copies().length,2);assert.equal(entry.compoundCrown.opening,.8);
 const ledger=createSceneEdits({read:()=>null,write(){}});ledger.register('@mechanism',{check:v=>({recipe:crownRecipe(v.recipe)}),read:()=>({recipe:entry.compoundCrown}),write:({recipe})=>writeCrownRecipe(entry,recipe,repetition)});ledger.apply('@mechanism',{recipe:{...recipe,opening:.2}},'Open iris');assert.equal(copies().length,2);await ledger.undo();assert.equal(entry.compoundCrown.opening,.8);assert.equal(copies().length,2);await ledger.redo();assert.equal(copies().length,2);
 ledger.begin('@mechanism','Preview iris');ledger.preview({recipe:{...recipe,opening:.9}});assert.equal(copies().length,2);await ledger.cancel();assert.equal(entry.compoundCrown.opening,.2);assert.equal(copies().length,2);
+// A drag changes rigid part poses, not the mesh/resource population. Repeated
+// geometry must follow those poses without being reconstructed at each input.
+const originalCopies=copies(),part=root.getObjectByName('iris-leaf-0'),oldAngle=part.rotation.y;
+const meshes=[];root.traverse(n=>{if(n.isMesh)meshes.push(n);});
+const resources=new Set(meshes.flatMap(n=>[n.geometry,...[n.material].flat()]));let disposals=0;
+for(const resource of resources)resource.addEventListener('dispose',()=>disposals++);
+ledger.begin('@mechanism','Drag iris');
+for(let i=0;i<32;i++){
+ ledger.preview({recipe:{...recipe,opening:.3+i*.02,swirl:i*.02}});
+ assert.ok(root.getObjectByName('iris-leaf-0')===part,'pose edits retain the mechanism parts');
+}
+ledger.commit();
+assert.ok(root.getObjectByName('iris-leaf-0')===part,'pose edits retain the mechanism parts');
+assert.notEqual(part.rotation.y,oldAngle);
+assert.equal(disposals,0,'dragging must not dispose geometry or materials');
+assert.deepEqual(copies().map(n=>n.uuid),originalCopies.map(n=>n.uuid),'linked instances survive the drag');
+const after=[];root.traverse(n=>{if(n.isMesh)after.push(n);});assert.deepEqual(after.map(n=>n.uuid),meshes.map(n=>n.uuid));
+for(const copy of copies())assert.equal(copy.getObjectByName('iris-leaf-0').rotation.y,part.rotation.y,'linked leaf follows the source');
+await ledger.undo();assert.equal(entry.compoundCrown.opening,.2);await ledger.redo();assert.equal(entry.compoundCrown.opening,.3+31*.02);
+// Changing part counts is structural and still rebuilds the producer geometry.
+writeCrownRecipe(entry,{...entry.compoundCrown,irisCount:12},repetition);
+assert.notEqual(root.getObjectByName('iris-leaf-0'),part);assert.ok(disposals>0);
+assert.equal(copies().length,2);for(const copy of copies())assert.ok(copy.getObjectByName('iris-leaf-11'));
 console.log('attachment refusal/recovery and repeated Crown history pass');

@@ -20,5 +20,5 @@ export function createSceneRepetitionController({objects,groups,readPose}){
   }
  }
  function clear(root){view.clear(root);mounted.delete(root);}
- return {sync,clear,matrices,groupFor,clearAll(){for(const root of mounted.keys())view.clear(root);mounted.clear();}};
+ return {sync,clear,matrices,groupFor,refresh(root){mounted.delete(root);sync();},clearAll(){for(const root of mounted.keys())view.clear(root);mounted.clear();}};
 }
