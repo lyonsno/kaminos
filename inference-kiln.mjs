@@ -7,7 +7,7 @@ import {uniform,texture,uv,float,vec3,sin,smoothstep,mix} from './lib/three.tsl.
 // A prompt ceremony: erosion is presentation, not a physical combustion claim.
 // The original text survives every burn and is never edited by the animation.
 export function createInferenceKiln({document,prompt='A weathered bronze lantern',duration=6,representation='billboard',appearance='crust',promptMesh=null,stage=true}){
-  if(!['crust','incineration'].includes(appearance))throw Error('Unknown kiln appearance');
+  if(!['composed','crust','incineration'].includes(appearance))throw Error('Unknown kiln appearance');
   if(!['billboard','relief'].includes(representation))throw Error('Unknown prompt representation');
   if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');
   if(!Number.isFinite(duration)||duration<=0)throw Error('Duration must be positive finite seconds');
@@ -57,5 +57,5 @@ export function createInferenceKiln({document,prompt='A weathered bronze lantern
   }
   function read(){if(solid)return {prompt:source,representation:'shallow-glyph-mesh',burnAuthority:'scene-owned-thermal',appearance};return {prompt:source,elapsed,duration,running,consumed:elapsed>=duration,progress:Math.min(1,elapsed/duration),representation:'transparent-text-billboard',burnAuthority:'presentation-clock'};}
   if(promptMesh){source=prompt;text.userData.kaminosPromptRelief=promptReliefMetadata(prompt,appearance);reset();}else setPrompt(prompt);
-  return {root,text,detachText(){text.removeFromParent();textOwned=false;return text;},setPrompt,setAppearance(value){if(!solid||!['crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;text.userData.kaminosPromptRelief=promptReliefMetadata(source,value);return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();if(textOwned)text.geometry.dispose();paper.dispose();if(solid&&(textOwned||text.material!==solid))solid.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
+  return {root,text,detachText(){text.removeFromParent();textOwned=false;return text;},setPrompt,setAppearance(value){if(!solid||!['composed','crust','incineration'].includes(value))throw Error('Unknown kiln appearance');appearance=value;solid.userData.kaminosBurnAppearance=value;text.userData.kaminosPromptRelief=promptReliefMetadata(source,value);return read();},reset,ignite,advance,read,dispose(){if(disposed)return;disposed=true;running=false;map.dispose();if(textOwned)text.geometry.dispose();paper.dispose();if(solid&&(textOwned||text.material!==solid))solid.dispose();floor.geometry.dispose();backdrop.geometry.dispose();floorMaterial.dispose();root.removeFromParent();}};
 }

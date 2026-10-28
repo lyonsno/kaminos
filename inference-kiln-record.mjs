@@ -9,7 +9,7 @@ export const promptReliefRecordDomain={type:'pbr',source:PROMPT_RELIEF_SOURCE,
 const schema='kaminos.prompt-relief.v1';
 export function checkedPromptRelief(value){
  if(value?.schema!==schema||typeof value.prompt!=='string'||!value.prompt.trim())throw Error('Invalid saved prompt relief');
- if(!['crust','incineration'].includes(value.appearance))throw Error('Invalid saved prompt appearance');
+ if(!['composed','crust','incineration'].includes(value.appearance))throw Error('Invalid saved prompt appearance');
  const attributes=value.geometry?.data?.attributes,p=attributes?.position;
  if(p?.itemSize!==3||!Array.isArray(p.array)||!p.array.length||p.array.length%3||!p.array.every(Number.isFinite))throw Error('Saved prompt requires finite complete geometry');
  // Prompt reliefs use ordinary Float32 vertex attributes. Validate the

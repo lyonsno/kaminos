@@ -1,8 +1,8 @@
 export function checkedBurnAppearance(value={}){
- const next={profile:'crust',glow:1,...value};
- if(!['crust','incineration'].includes(next.profile))throw Error('Unknown burn surface response');
+ const next={profile:'composed',glow:1,...value};
+ if(!['composed','crust','incineration'].includes(next.profile))throw Error('Unknown burn surface response');
  if(!Number.isFinite(next.glow)||next.glow<0||next.glow>10)throw Error('Emission gain must be between zero and ten');
- return {profile:next.profile,glow:next.glow};
+ return {profile:'composed',glow:next.glow};
 }
 export function checkedBurnable(record,value=record?.burnable){
   if(value==null)return null;

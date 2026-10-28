@@ -2715,7 +2715,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-gi-status" role="status"></div>
       <div id="scene-gi-refinement-status" role="status"></div>
       </div>
-      <section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section>
+      <details id="rendering-flame-settings" open><summary>Flame</summary><section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section></details>
       <div id="rendering-light-study">
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
@@ -11131,7 +11131,7 @@ async function initScene() {
   const giOutputGraphs = new Map();
   let sceneEmissionSource=null,sceneFlameHDR=null;
   sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
-  const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('scene-gi-mode').closest('.field').before(bloomHost);
+  const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
@@ -25146,7 +25146,7 @@ function syncSceneDataInspector() {
     burnPanel.hidden=!canCollideWithFire(entry);
     const burnInput=document.getElementById('object-burnable');burnInput.disabled=!supported;burnInput.checked=entry?.burnable?.enabled===true;
     const burnAppearance=checkedBurnAppearance(entry?.burnable?.appearance??{profile:entry?.object?.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
-    for(const [key,id]of [['profile','object-burn-profile'],['glow','object-burn-glow']]){const input=document.getElementById(id);if(input){input.disabled=!supported||(key==='glow'&&burnAppearance.profile==='crust');if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=String(burnAppearance[key]);}}
+    for(const [key,id]of [['profile','object-burn-profile'],['glow','object-burn-glow']]){const input=document.getElementById(id);if(input){input.disabled=!supported||(key==='glow'&&false);if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=String(burnAppearance[key]);}}
     if(supported)syncBurnableStatus();else document.getElementById('object-burnable-status').textContent=reason;
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
@@ -25272,7 +25272,7 @@ function installSceneConstruction() {
   const burnInput=document.getElementById('object-burnable');
   burnInput.addEventListener('change',()=>{try{const target=ensureObjectBurnableTarget(workingScene.activeObjectId);if(edits.state().active?.id===target)edits.preview({...workingScene.objects.find(row=>row.id===workingScene.activeObjectId)?.burnable,enabled:burnInput.checked,material:'wood'});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[burnInput],edits,id:()=>ensureObjectBurnableTarget(workingScene.activeObjectId),label:'Set burnable wood',onError:error=>setInfo(error.message)}));
-  for(const [key,label,type,max,step]of [['profile','Surface response','select',null,0],['glow','Emission gain','number',10,.01]]){
+  for(const [key,label,type,max,step]of [['glow','Emission gain','number',10,.01]]){
     const row=document.createElement('label');row.className='slider-row';const grip=document.createElement('span');grip.className='slider-label';grip.textContent=label;const input=document.createElement(type==='select'?'select':'input');input.id=key==='profile'?'object-burn-profile':'object-burn-glow';input.className='transform-input';
     if(type==='select'){for(const [value,text]of [['crust','Original crust'],['incineration','Thermal incandescence']]){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}}
     else{input.type='number';input.min='0';input.max=String(max);input.step='any';}
