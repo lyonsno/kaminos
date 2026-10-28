@@ -1,7 +1,17 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {mlsConfig,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from '../mls-juice-contract.mjs';
+import * as module from '../mls-juice-contract.mjs';
+const {mlsConfig,createMlsClock,createMlsEmissionPlan,validateMlsPacket}=module;
+assert.equal(typeof module.analyzeMlsParticles,'function','native population validation is absent');
+const words=new Float32Array(40);words.set([32,32,32,6,1,0,0]);
+assert.equal(module.analyzeMlsParticles(words,{capacity:2}).active,1);
+assert.throws(()=>module.analyzeMlsParticles(words,{capacity:2,minActive:2}),/Underpopulated/);
+assert.throws(()=>module.analyzeMlsParticles(words.slice(0,20),{capacity:2}),/Incomplete/);
+words[8]=NaN;assert.throws(()=>module.analyzeMlsParticles(words,{capacity:2}),/Nonfinite/);words[8]=0;
+words[0]=80;assert.throws(()=>module.analyzeMlsParticles(words,{capacity:2}),/escaped/);
 const cfg=mlsConfig({particleCount:2});
+assert.equal(mlsConfig({viscosity:.6}).viscosity,.6,'requested viscosity must reach the solver');
+assert.throws(()=>mlsConfig({viscosity:-1}),/viscosity/);
 const clock=createMlsClock(cfg.dt);clock.advance(0);assert.equal(clock.advance(1000),240);
 assert.equal(clock.read().simulatedSeconds,1);clock.advance(2000,true);assert.equal(clock.read().elapsedSeconds,1);
 assert.equal(clock.read().timeSeconds,1,'host playback requires timeSeconds');

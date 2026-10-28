@@ -105,7 +105,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
       },
       read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.grid**3,
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
-        emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; six_second_lifetime',
+        emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
         collision:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
       async snapshot(){

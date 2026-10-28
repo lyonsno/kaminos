@@ -11,6 +11,8 @@ export default {
     const fingerJuice=inputs.fingerJuice===true;
     const fluidBackend=inputs.fluidBackend??'legacy';
     if(!['legacy','mls-mpm'].includes(fluidBackend))throw Error('Unsupported fluid backend');
+    const fluidViscosity=Number(inputs.fluidViscosity??.1);
+    if(!Number.isFinite(fluidViscosity)||fluidViscosity<0)throw Error('Invalid fluid viscosity');
     const browser=inputs.backend==='webgpu';
     const idlePacket=reason=>idleFingerPacket(reason,browser?'mobrecon-browser-mesh-finger-juice-v1':undefined);
     if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
@@ -53,11 +55,13 @@ export default {
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight, stopping;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
     let particleCount=Number(inputs.particleCount??2400),sourceFlux=Number(inputs.sourceFlux??360);
+    let particleLifetime=Number(inputs.particleLifetimeSeconds??6);
+    if(!Number.isFinite(particleLifetime)||particleLifetime<=0)throw Error('Invalid particle lifetime');
     if(!Number.isSafeInteger(particleCount)||particleCount<1)throw Error('Invalid particle capacity');
     if(!Number.isFinite(sourceFlux)||sourceFlux<0)throw Error('Invalid source flux');
     let fluid=null,fluidError=null,fluidState=null,fluidPacket=idlePacket(),fluidKey=null,displayCenter=[0,0,0];
     let waterChanges=Promise.resolve(),rebuilding=false,waterInitialized=false;
-    let capacityInput,fluxInput,waterStatus;
+    let capacityInput,fluxInput,lifetimeInput,waterStatus;
     const useFluid=operation=>{
       if(!fluid)return null;
       const owned=fluid;
@@ -80,13 +84,13 @@ export default {
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      fingerJuice:{enabled:fingerJuice,backend:fluidBackend,packet:fluidPacket,runtime,error:fluidError,rebuilding,
+      fingerJuice:{enabled:fingerJuice,backend:fluidBackend,particleLifetimeSeconds:particleLifetime,packet:fluidPacket,runtime,error:fluidError,rebuilding,
         load:fingerFluidLoad(runtime,{particleCount,sourceFlux})}};
     };
     const updateFluid=()=>{
       if(!fluid)return;
       mesh.updateWorldMatrix(true,false);
-      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount}):idlePacket();
+      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount,lifetimeSeconds:particleLifetime}):idlePacket();
       const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters,packet.economics]);
       if(key===fluidKey)return;
       if(!useFluid(live=>{live.setPacket(packet);return true;}))return;
@@ -97,10 +101,11 @@ export default {
     const sync = () => {
       if(capacityInput&&document.activeElement!==capacityInput)capacityInput.value=particleCount;
       if(fluxInput&&document.activeElement!==fluxInput)fluxInput.value=sourceFlux;
+      if(lifetimeInput&&document.activeElement!==lifetimeInput)lifetimeInput.value=particleLifetime;
       if(waterStatus){
         const load=fingerFluidLoad(fluidState,{particleCount,sourceFlux});
         waterStatus.textContent=rebuilding?`Allocating ${particleCount.toLocaleString()} particles...`:fluidError?`Water: ${fluidError}`:
-          `${load.mountedParticleCount?.toLocaleString()??'No'} allocated | ${load.admittedRate===null?'unverified':Math.round(load.admittedRate).toLocaleString()+'/s admitted'}${load.poolLimited?' | pool limited':''}`;
+          `${load.plannedLiveCount===null?'':load.plannedLiveCount.toLocaleString()+' live (planned) | '}${load.mountedParticleCount?.toLocaleString()??'No'} capacity | ${load.admittedRate===null?'unverified':Math.round(load.admittedRate).toLocaleString()+'/s admitted'}${load.poolLimited?' | pool limited':''}`;
       }
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
@@ -214,7 +219,7 @@ export default {
       try{
         await previous?.dispose();
         if(disposed)throw Error('experiment closed');
-        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true},packet:idlePacket()});
+        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true,...(fluidBackend==='mls-mpm'?{viscosity:fluidViscosity}:{})},packet:idlePacket()});
         if(disposed){await candidate.dispose();throw Error('experiment closed');}
         fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
         fluidState=useFluid(live=>live.read());
@@ -271,7 +276,13 @@ export default {
       finally {starting=false;sync();}
     };
     return {
-      read,operations:{start,stop,frame,setAcquisition,setParticleCount,setSourceFlux(value){
+      read,operations:{start,stop,frame,setAcquisition,setParticleCount,
+      snapshotWater(){if(!fluid)throw Error('Water is not mounted');return fluid.snapshot();},
+      setParticleLifetime(value){
+        if(!Number.isFinite(value)||value<=0)throw Error('Invalid particle lifetime');particleLifetime=value;updateFluid();sync();
+        lifetimeInput?.setCustomValidity('');
+        record({kind:'hand-live.lifetime',phase:'applied',effective:read()});return read();
+      },setSourceFlux(value){
         if(!Number.isFinite(value)||value<0)throw Error('Invalid source flux');sourceFlux=value;updateFluid();
         sync();record({kind:'hand-live.flux',phase:'applied',effective:read()});return read();
       }},
@@ -296,6 +307,11 @@ export default {
             label.append(input);root.append(label);
           }
           waterStatus=document.createElement('output');waterStatus.dataset.handWaterLoad='';waterStatus.style.cssText='display:block;overflow-wrap:anywhere';root.append(waterStatus);
+          const label=document.createElement('label'),grip=document.createElement('span');grip.textContent='Particle lifetime (s)';
+          lifetimeInput=document.createElement('input');lifetimeInput.type='number';lifetimeInput.min='0';lifetimeInput.step='any';lifetimeInput.className='transform-input';
+          lifetimeInput.setAttribute('aria-label','Particle lifetime (s)');lifetimeInput.title='Applies to new particles; existing water keeps its lifetime';
+          lifetimeInput.oninput=()=>{if(lifetimeInput.value.trim())invoke('setParticleLifetime',Number(lifetimeInput.value)).catch(cause=>{lifetimeInput.setCustomValidity(cause.message);lifetimeInput.reportValidity();});};
+          label.append(grip,lifetimeInput);root.append(label);host.controls.installNumberDrag({input:lifetimeInput,grip,step:1});
         }
         const modeSelect=document.createElement('select');modeSelect.setAttribute('aria-label','Crop mode');
         for(const [value,label] of [['detector','Automatic crop'],['manual','Manual crop']]) {

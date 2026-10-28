@@ -7,7 +7,7 @@ export default {
     validFlux(inputs.sourceFlux??1800);
     const scene=await host.scene.open();let fluid,unsubscribe;
     try{
-    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000},packet:idleFingerPacket()});
+    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000,viscosity:inputs.viscosity??.1},packet:idleFingerPacket()});
     let running=false,moving=inputs.moving??true,flux=inputs.sourceFlux??1800,time=0,origin=[0,1.35,0],direction=[.1,-.6,-.8],status;
     const read=()=>({source:'explicit_synthetic_moving_nozzle_not_camera',running,moving,flux,origin,direction,runtime:fluid.read()});
     const publish=()=>{

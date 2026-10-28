@@ -1,12 +1,28 @@
 export const MLS_ROUTE='kaminos/mls-mpm-finger-juice-v1';
 export const MLS_SOURCE='matsuoka-601/Splash@3df5d621e6f153d7269037cbd8606bd83796f3fd';
+export function analyzeMlsParticles(words,{capacity,grid=64,cell=.05,modelSecondsPerSecond=Math.sqrt(9.81/(.4*cell)),minActive=1}){
+  if(!Number.isSafeInteger(capacity)||capacity<1||words?.length!==capacity*20)throw Error('Incomplete native MLS particle layout');
+  if(!Number.isSafeInteger(minActive)||minActive<0||minActive>capacity)throw Error('Invalid native population target');
+  const speeds=[];
+  for(let i=0;i<words.length;i++)if(!Number.isFinite(words[i]))throw Error('Nonfinite native MLS particle state');
+  for(let i=0;i<words.length;i+=20)if(words[i+3]>0){
+    if([words[i],words[i+1],words[i+2]].some(v=>v<1.999||v>grid-2.999))throw Error('Native MLS particle escaped supported domain');
+    speeds.push(Math.hypot(words[i+4],words[i+5],words[i+6])*cell*modelSecondsPerSecond);
+  }
+  if(speeds.length<minActive)throw Error(`Underpopulated native MLS state: ${speeds.length} < ${minActive}`);
+  speeds.sort((a,b)=>a-b);
+  const percentile=q=>speeds.length?speeds[Math.min(speeds.length-1,Math.floor(q*speeds.length))]:null;
+  return {capacity,active:speeds.length,nonfinite:0,outside:0,minActive,
+    worldSpeed:{p50:percentile(.5),p95:percentile(.95),p99:percentile(.99),max:speeds.at(-1)??null},authority:'complete_native_gpu_snapshot'};
+}
 export function mlsConfig(setup={}) {
-  const capacity=setup.particleCount??12000,grid=setup.gridSize??64,cell=setup.cellSize??.05;
+  const capacity=setup.particleCount??12000,grid=setup.gridSize??64,cell=setup.cellSize??.05,viscosity=setup.viscosity??.1;
   if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Invalid MLS particle capacity');
   if(!Number.isSafeInteger(grid)||grid<8)throw Error('Invalid MLS grid size');
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
+  if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
   return {capacity,grid,cell,min:[-grid*cell/2,-2*cell,-grid*cell/2],dt:1/240,
-    modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity:.1,
+    modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
     particleRadius:cell*.65,obstacle:{center:[-.35,.24,0],radius:.24}};
 }
 

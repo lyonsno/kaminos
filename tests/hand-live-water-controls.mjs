@@ -33,9 +33,14 @@ test('capacity changes remount water while the camera remains live and reads act
   }}};
   instance=await experiment.create({host,inputs:{fingerJuice:true},record:r=>records.push(r)});
   assert.equal(typeof instance.operations.setParticleCount,'function','capacity control is absent');
+  assert.equal(typeof instance.operations.setParticleLifetime,'function','particle lifetime control is absent');
   await instance.operations.setParticleCount(4800);
   assert.equal(mounted.length,0,'editing idle capacity must not allocate a solver');
   await instance.operations.start();
+  instance.operations.setParticleLifetime(20);
+  assert.equal(instance.read().fingerJuice.particleLifetimeSeconds,20);
+  assert.equal(mounted.length,1,'lifetime edit must preserve the current water');
+  assert.throws(()=>instance.operations.setParticleLifetime(0),/lifetime/);
   assert.equal(mounted[0].count,4800);assert.equal(typeof callback,'function');
   await instance.operations.setParticleCount(9600);
   assert.equal(mounted[0].disposed,true);assert.equal(mounted[1].count,9600);

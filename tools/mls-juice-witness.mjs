@@ -4,7 +4,7 @@ import path from 'node:path';
 import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {MLS_ROUTE} from '../mls-juice-contract.mjs';
+import {MLS_ROUTE,analyzeMlsParticles} from '../mls-juice-contract.mjs';
 import {bindMlsWitnessSource,validateServedMlsSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
 
 export function validateMlsWitness(report){
@@ -68,8 +68,9 @@ try{
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setRunning',false));
   report.phase='native-state';save();
   const words=await page.evaluate(async()=>Array.from(await window.kaminosWorkbenchExperiments.invoke('snapshot')));
-  fs.writeFileSync(out+'/particles.json',JSON.stringify(words));report.active=0;report.nonfinite=words.filter(x=>!Number.isFinite(x)).length;report.outside=0;
-  for(let i=0;i<words.length;i+=20)if(words[i+3]>0){report.active++;if(words.slice(i,i+3).some(v=>v<1.999||v>61.001))report.outside++;}
+  fs.writeFileSync(out+'/particles.json',JSON.stringify(words));
+  const runtime=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+  Object.assign(report,analyzeMlsParticles(words,{capacity:runtime.runtime.solver.particleCount}));
   report.state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());report.route=report.state.runtime.effectiveRoute;
   await page.screenshot({path:out+'/surface.png'});
   report.video=await page.video().path();

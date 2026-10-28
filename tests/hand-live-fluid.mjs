@@ -64,3 +64,13 @@ test('water load reports the mounted solver allocation and admitted rate',()=>{
   runtime.solver.liveInlets.poolCapacity=9600;
   assert.equal(module.fingerFluidLoad(runtime,config).admittedRate,null,'conflicting allocations must be unverified');
 });
+test('explicit particle lifetime changes future births and economics only',()=>{
+  const original=module.nativeFingerPacket(frame(),options());
+  const longer=module.nativeFingerPacket(frame(),{...options(),lifetimeSeconds:20});
+  assert.equal(longer.emitters[0].lifetime_seconds,20,'load recipe lifetime ignored');
+  assert.equal(longer.economics.lifetimeSeconds,20);
+  assert.deepEqual(longer.emitters.map(e=>[e.extension,e.active,e.origin_world,e.aim_world,e.source_flux_particles_per_second]),
+    original.emitters.map(e=>[e.extension,e.active,e.origin_world,e.aim_world,e.source_flux_particles_per_second]));
+  assert.equal(original.emitters[0].lifetime_seconds,6);
+  assert.throws(()=>module.nativeFingerPacket(frame(),{...options(),lifetimeSeconds:0}),/lifetime/);
+});
