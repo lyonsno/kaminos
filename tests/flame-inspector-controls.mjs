@@ -72,7 +72,8 @@ test('physics material status cannot promote a requested or stale mode into effe
 test('actual inspector synchronization follows effective fallback and marks unmatched receipts pending',()=>{
   const sourceText=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
   const body=sourceText.slice(sourceText.indexOf('function syncField(force=false)'),sourceText.indexOf('const eventName=',sourceText.indexOf('function syncField(force=false)')));
-  const fallback=optical.resolveOpticalStepping(optical.opticalSteppingConfig({mode:'numerical'}),{emissive:true,exterior:true});
+  const resolved=optical.resolveOpticalStepping(optical.opticalSteppingConfig({mode:'numerical'}),{emissive:true,exterior:true});
+  const fallback={...resolved,effective:resolved.mode}; // encodeDraw runtime receipt.
   for(const [requested,receipt,expected] of [
     ['numerical',fallback,{value:'0.35',disabled:false,label:'Adaptive rays'}],
     ['history',fallback,{value:'',disabled:true,label:'Adaptivity'}],
