@@ -1,6 +1,6 @@
 import {kernel} from './kernels.mjs';
 import {activeBricks,compareFields} from './model.mjs';
-export async function run(configs) {
+export async function run(configs, persist) {
  const adapter=await navigator.gpu.requestAdapter();
  if(!adapter||adapter.info.vendor!=='apple'||adapter.isFallbackAdapter||!adapter.features.has('timestamp-query'))throw Error('Native Apple GPU with timestamp-query required');
  const device=await adapter.requestDevice({requiredFeatures:['timestamp-query']});
@@ -81,7 +81,11 @@ export async function run(configs) {
     for(let s=1;s<=c.steps;s++)for(const [key,offset]of [['allocationMs',0],['sparseUpdateMs',2],['denseMs',4]])sample[key].push(Number(times[s*6+offset+1]-times[s*6+offset])/1e6);
     // Warmup executes the identical full sequence and is retained separately.
     if(rep<0)row.warmup=sample;else row.samples.push(sample);
-    if(rep===c.repeats-1){row.raw={dense:Array.from(dense),packed:Array.from(packed),map:Array.from(map)};}
+    if(rep===c.repeats-1){
+     if(!persist)throw Error('Raw binary sink required');
+     row.rawBytes={dense:dense.byteLength,packed:packed.byteLength,map:map.byteLength};
+     for(const [field,values] of Object.entries({dense,packed,map}))await persist(`${c.name}-${c.brick}-${field}.bin`,values);
+    }
    }
    result.rows.push(row);
   }finally{query.destroy();for(const b of owned)b.destroy();}
