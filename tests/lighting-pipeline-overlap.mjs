@@ -4,11 +4,11 @@ import {WebGPURenderer,Scene,PerspectiveCamera} from '../lib/three.webgpu.js';
 // Exercise the shipped compiler itself: shader graph construction remains
 // ordered, but independent native pipeline promises must overlap.
 globalThis.requestAnimationFrame=callback=>setImmediate(callback);
-const events=[],releases=[],rejects=[];
+const events=[],releases=[],rejects=[],renderUpdates=[];
 const objects=[0,1].map(id=>({id,geometry:{drawRange:{}}}));
 const renderList={opaque:objects,transparent:[],transparentDoublePass:[],lightsNode:{},begin(){},finish(){}};
 const renderer={_initialized:true,_renderTarget:null,_outputRenderTarget:null,_activeMipmapLevel:0,
- _nodes:{nodeFrame:{renderId:0,update(){}},async getForRenderAsync(o){events.push(['build',o.object.id]);},updateBefore(){},updateForRender(){},updateAfter(){}},
+ _nodes:{nodeFrame:{renderId:0,update(){}},async getForRenderAsync(o){events.push(['build',o.object.id]);},updateBefore(){renderUpdates.push("before");},updateForRender(){},updateAfter(){renderUpdates.push("after");}},
  _renderContexts:{get:()=>({})},_renderLists:{get:()=>renderList},_background:{update(){}},
  _updateCamera:c=>c,_projectObject(){},opaque:true,transparent:false,
  _renderObjects(items,camera,scene,lightsNode){for(const object of items)this._compilationPromises.push({object,camera,scene,lightsNode});},
@@ -23,6 +23,7 @@ assert.deepEqual(events,[['build',0],['pipeline',0],['build',1],['pipeline',1]],
 let finished=false;task.then(()=>finished=true);
 releases[0]();await Promise.resolve();assert.equal(finished,false,'the compiler must wait for every native pipeline');
 releases[1]();await task;assert.equal(finished,true);
+assert.deepEqual(renderUpdates,[],'preparation must not execute dependency render/history updates under a receiving pass context');
 console.log('PASS cooperative graph order, overlapping native pipelines, complete settlement');
 
 releases.length=rejects.length=0;
