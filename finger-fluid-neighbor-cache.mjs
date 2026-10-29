@@ -29,7 +29,14 @@ export function applyNeighborCache(shader,slots){
   } else {
     ${loop}
   }`;
-  edits.push({start:open+1+start,end:open+1+loopEnd,text:cached});
+  const producer=['compute_density_lambda','measure_neighbor_topology','classify_free_surface'].includes(match[1]);
+  const built=producer?`var cachedBuildCount=0u;
+  ${loop.slice(0,payloadStart)}
+  if(cachedBuildCount < ${slots}u){world_cache_store_neighbor(index,cachedBuildCount,neighborIndex);}
+  cachedBuildCount++;
+  ${loop.slice(payloadStart)}
+  world_cache_store_count(index,select(i32(cachedBuildCount),-1,cachedBuildCount>${slots}u));`:cached;
+  edits.push({start:open+1+start,end:open+1+loopEnd,text:built});
   if(match[1]==='compute_velocity_viscosity'){
    const setupStart=body.indexOf('  let neighborSearchRadius');
    const setupEnd=body.indexOf(';',body.indexOf('  let neighborCellMax'))+1;
@@ -43,6 +50,14 @@ export function applyNeighborCache(shader,slots){
  }
  if(edits.length!==13||!builderLoop)throw Error('Neighbor cache requires all thirteen consumers');
  for(const e of edits.reverse())shader=shader.slice(0,e.start)+e.text+shader.slice(e.end);
+ // Grid rebuild invalidates every row before any consumer can return early.
+ for(const name of ['build_linked_cell_grid','build_nominal_cell_grid']){
+  const start=shader.indexOf('fn '+name+'(');if(start<0)continue;
+  const open=shader.indexOf('{',start),end=endBrace(shader,open),body=shader.slice(open,end);
+  const guard='if (index >= params.particleCount) { return; }';
+  if(!body.includes(guard))throw Error('Cache invalidation requires grid particle guard');
+  shader=shader.slice(0,open)+body.replace(guard,guard+'\n  world_cache_store_count(index,-1);')+shader.slice(end);
+ }
  const helpers=`
 // Scalar atomic entries after the hash heads avoid component-write aliasing.
 // Columns are contiguous across particles, so adjacent lanes read adjacent IDs.

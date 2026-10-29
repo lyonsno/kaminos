@@ -15299,7 +15299,6 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
         advanceStage(2 + (iteration * 5));
         dispatch(pass, pipelines.build, safeParticleCount);
-        if(neighborCacheSlots)dispatch(pass,pipelines.cacheFine,safeParticleCount);
         advanceStage(3 + (iteration * 5));
         dispatch(pass, pipelines.lambda, safeParticleCount);
         advanceStage(4 + (iteration * 5));
@@ -15313,13 +15312,11 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
       advanceStage(2 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.build, safeParticleCount);
-      if(neighborCacheSlots)dispatch(pass,pipelines.cacheFine,safeParticleCount);
       linkedCellGridBuildCount += 1;
       postProjectionGridRefreshCount += 1;
       if(separateNominalNeighborGrid){
         dispatch(pass,pipelines.clear,GRID_CELL_COUNT,true);
         dispatch(pass,pipelines.buildNominal,safeParticleCount,true);
-        if(neighborCacheSlots)dispatch(pass,pipelines.cacheNominal,safeParticleCount,true);
         linkedCellGridBuildCount+=1;
         nominalNeighborGridBuildCount+=1;
       }
