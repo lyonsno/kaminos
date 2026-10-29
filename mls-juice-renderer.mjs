@@ -70,12 +70,18 @@ fn point(pixel:vec2i,center:f32)->vec3f{
   return vec4f(mix(transmitted,sky,fresnel)+vec3f(2.)*spec+vec3f(.015,.07,.085)*(1.-exp(-amount*3.)),1);
 }`;
 
-export async function createMlsJuiceRenderer({device,solver}) {
+export async function createMlsJuiceRenderer({device,solver,hostEnvironment=false}) {
   const camera=device.createBuffer({size:288,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST,label:'MLS real host camera'});
   const resources=[];let width=0,height=0;
   async function module(code){const m=device.createShaderModule({code});const errors=(await m.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>m.message).join('; '));return m;}
   try{
-    const particles=await module(particleCode),smooth=await module(smoothCode),composite=await module(compositeCode);
+    let composedCode=compositeCode;
+    if(hostEnvironment)composedCode=composedCode.replace('fn eye(', '@group(0) @binding(5) var environment:texture_2d<f32>;\n@group(0) @binding(6) var environmentSampler:sampler;\nfn eye(')
+      .replace('let sky=mix(vec3f(.12,.19,.22),vec3f(.7,.82,.88),clamp(worldNormal.y*.5+.5,0.,1.));',
+      'let direction=normalize((camera.inverseView*vec4f(reflect(-view,normal),0)).xyz);let envUV=vec2f(atan2(direction.z,direction.x)/6.28318530718+.5,acos(clamp(direction.y,-1.,1.))/3.14159265359);let sky=textureSampleLevel(environment,environmentSampler,envUV,0.).rgb;')
+      .replace('vec3f(2.)*spec','vec3f(0.)');
+    const environmentSampler=hostEnvironment?device.createSampler({magFilter:'linear',minFilter:'linear',addressModeU:'repeat',addressModeV:'clamp-to-edge'}):null;
+    const particles=await module(particleCode),smooth=await module(smoothCode),composite=await module(composedCode);
     const front=await device.createRenderPipelineAsync({label:'MLS particle front surface',layout:'auto',
       vertex:{module:particles,entryPoint:'particle'},fragment:{module:particles,entryPoint:'front',targets:[{format:'r32float'}]},
       depthStencil:{format:'depth32float',depthWriteEnabled:true,depthCompare:'less'}});
@@ -89,7 +95,7 @@ export async function createMlsJuiceRenderer({device,solver}) {
     const texture=format=>{const t=device.createTexture({size:[width,height],format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});resources.push(t);return t;};
     let depth,depthTest,thick,ping,filtered;
     return {
-      encode({encoder,hostCamera,sceneColor,sceneDepth,target,width:fullWidth,height:fullHeight,beforeComposite=null,afterComposite=null}){
+      encode({encoder,hostCamera,environment=null,sceneColor,sceneDepth,target,width:fullWidth,height:fullHeight,beforeComposite=null,afterComposite=null}){
         const w=Math.ceil(fullWidth*.7),h=Math.ceil(fullHeight*.7);
         if(w!==width||h!==height){for(const t of resources)t.destroy();resources.length=0;width=w;height=h;
           depth=texture('r32float');depthTest=texture('depth32float');thick=texture('r16float');ping=texture('r32float');filtered=texture('r32float');}
@@ -111,11 +117,11 @@ export async function createMlsJuiceRenderer({device,solver}) {
         draw(smoothing[1],group(smoothing[1],[ping.createView()]),filtered.createView(),{r:hostCamera.far,g:0,b:0,a:0});
         const frontDepthView=filtered.createView();
         beforeComposite?.({frontDepthView});
-        draw(compose,group(compose,[frontDepthView,thick.createView(),sceneColor,sceneDepth]),target,{r:0,g:0,b:0,a:1});
+        draw(compose,group(compose,[frontDepthView,thick.createView(),sceneColor,sceneDepth,...(hostEnvironment?[environment,environmentSampler]:[])]),target,{r:0,g:0,b:0,a:1});
         afterComposite?.({frontDepthView});
       },
       read:()=>({method:'sphere_front_depth_two_pass_bilateral_scene_refraction',renderScale:.7,width,height,
-        environment:'analytic_sky_not_host_environment',surfaceTension:false}),
+        environment:hostEnvironment?'host_environment_world_radiance':'analytic_sky_not_host_environment',surfaceTension:false}),
       dispose(){camera.destroy();for(const t of resources)t.destroy();}
     };
   }catch(error){camera.destroy();for(const t of resources)t.destroy();throw error;}
