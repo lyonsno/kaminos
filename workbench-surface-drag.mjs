@@ -33,13 +33,14 @@ export function bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,sceneRoot
   Promise.resolve(task).then(hit=>{
    if(disposed||pending!==p)return;pending=null;
    if(!hit||!owns(hit.object)||!visible(hit.object)||foreign&&foreign.distance<=hit.distance){restorePending(p);replay(p.events);return;}
-   if(p.ended){restorePending(p);skipClick=!p.events.some(e=>e.type==='click');return;}
+   if(p.ended==='cancel'){restorePending(p);skipClick=!p.events.some(e=>e.type==='click');return;}
    const value={...hit,phase:'start',pointerId:p.pointerId};if(callback(value)!==true){restorePending(p);replay(p.events);return;}
    const point=new Vector3(...hit.point);grab={object:hit.object,pointerId:p.pointerId,point,plane:new Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new Vector3()),point),controlsEnabled:p.controlsEnabled};skipClick=true;
-   for(const e of p.events.slice(1))if(e.type==='pointermove')move(e);
+   for(const e of p.events.slice(1)){if(e.type==='pointermove')move(e);else if(e.type==='pointerup')end(e);}
+   if(p.events.some(e=>e.type==='click'))skipClick=false;
   }).catch(error=>{if(pending===p)pending=null;if(!disposed)restorePending(p);onError(error);});
  }
- const end=e=>{if(pending&&e.pointerId===pending.pointerId){pending.ended=true;pending.events.push(e);consume(e);return;}if(grab&&e.pointerId===grab.pointerId){finish(e.type==='pointerup'?'end':'cancel',e);consume(e);}};
+ const end=e=>{if(pending&&e.pointerId===pending.pointerId){if(!pending.ended){pending.ended=e.type==='pointerup'?'end':'cancel';pending.events.push(e);}consume(e);return;}if(grab&&e.pointerId===grab.pointerId){try{if(e.type==='pointerup')move(e);finish(e.type==='pointerup'?'end':'cancel',e);}catch(error){finish('cancel',e);onError(error);}consume(e);}};
  const click=e=>{if(pending){pending.events.push(e);consume(e);return;}if(skipClick){skipClick=false;consume(e);}};
  for(const [type,listener]of [['pointerdown',start],['pointermove',move],['pointerup',end],['pointercancel',end],['lostpointercapture',end],['click',click]])canvas.addEventListener(type,listener,true);
  return()=>{if(disposed)return;disposed=true;try{if(pending){const p=pending;pending=null;restorePending(p);}finish('cancel');}finally{for(const [type,listener]of [['pointerdown',start],['pointermove',move],['pointerup',end],['pointercancel',end],['lostpointercapture',end],['click',click]])canvas.removeEventListener(type,listener,true);}};

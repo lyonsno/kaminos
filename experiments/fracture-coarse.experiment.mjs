@@ -2,6 +2,7 @@ import {Group,MeshStandardMaterial,MeshBasicMaterial,Mesh,SphereGeometry,Vector3
 import {shapeHierarchyView} from '../fracture-shape-partition.mjs';
 import {collectFractureSurface} from '../fracture-coarse-surface.mjs';
 import {createResidentFractureSurface} from '../fracture-resident-surface.mjs';
+import {createFractureHandCommands} from '../fracture-hand-commands.mjs';
 import {createCoarseFractureDynamics} from '../fracture-coarse-dynamics.mjs';
 
 export default {
@@ -10,7 +11,7 @@ export default {
   if(typeof inputs.source!=='string'||!inputs.source)throw Error('Choose a source mesh');
   const session=await host.scene.open(),workers=new Set(),workerCalls=new Map(),drags=[],owned=new Group();
   owned.name='Fracturable material';
-  let disposed=false,model,residentSurface,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,colorParts=inputs.colorParts??true,inspectionWasRunning=false,separation=0,strength=Number(inputs.strength??3000000);
+  let disposed=false,model,handCommands,residentSurface,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,colorParts=inputs.colorParts??true,inspectionWasRunning=false,separation=0,strength=Number(inputs.strength??3000000);
   const capMaterial=new MeshStandardMaterial({color:0xa57850,roughness:1});
   function callWorker(file,data){return new Promise((resolve,reject)=>{const worker=new Worker(new URL(file,import.meta.url),{type:'module'}),id=++workerId;workers.add(worker);workerCalls.set(worker,reject);const finish=()=>{workers.delete(worker);workerCalls.delete(worker);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(Error(data.error)):resolve(data);};worker.onerror=e=>{finish();reject(Error(e.message));};worker.postMessage({id,...data});});}
   const event=(kind,value)=>record({kind:`fracture-coarse:${kind}`,value});
@@ -28,21 +29,21 @@ export default {
    marker.visible=Boolean(grip);if(grip)marker.position.fromArray(grip.target);
    session.redraw();sync();
   }
-  function release(){model?.release();grip=null;draw();event('release',null);}
-  async function advance(count=1){if(!Number.isSafeInteger(count)||count<1)throw Error('Positive physical step count required');if(busy||stepping||!model)throw Error('Material is busy');stepping=true;let finish;stepFinished=new Promise(r=>{finish=r;});try{for(let i=0;i<count;i++){if(disposed)break;model.step();}draw();return read();}catch(e){running=false;error=e.message;sync();throw e;}finally{stepping=false;finish();}}
+  function release(cancel=false){try{cancel?handCommands?.cancel():handCommands?.release();}finally{grip=null;draw();event('release',null);}}
+  async function advance(count=1){if(!Number.isSafeInteger(count)||count<1)throw Error('Positive physical step count required');if(busy||stepping||!model)throw Error('Material is busy');stepping=true;let finish;stepFinished=new Promise(r=>{finish=r;});try{for(let i=0;i<count;i++){if(disposed)break;handCommands.step();}draw();return read();}catch(e){running=false;error=e.message;sync();throw e;}finally{stepping=false;finish();}}
   function grab({index,point,localPoint,normal=[0,1,0]}){
    if(busy||!model||inspectParts)return false;if(!Number.isInteger(index)||!meshes[index])throw Error('Grab requires a current material cell');
    if(prepared.cells[index].pinned)return false;
-   if(!localPoint)throw Error('Grab requires a current GPU surface contact');const target=new Vector3(...point),local=new Vector3(...localPoint);model.setSurfaceHand(index,target,local,new Vector3(...normal),'embedded-visual');
+   if(!localPoint)throw Error('Grab requires a current GPU surface contact');const target=new Vector3(...point),local=new Vector3(...localPoint);handCommands.set(index,target,local,new Vector3(...normal),'embedded-visual');
    grip={index,local:local.toArray(),target:[...point]};selectedCell=index;running=true;draw();event('grab',{index,point,normal});return true;
   }
-  function move(point){model.moveHand(new Vector3(...point));if(grip)grip.target=[...point];draw();event('drag',point);return read();}
-  async function reset(){const token=++generation;busy=true;running=false;release();sync();try{await stepFinished;const candidate=await createCoarseFractureDynamics({...prepared,config:{...prepared.config,strength}},host.scene.renderer());if(disposed||token!==generation){candidate.dispose();return read();}
+  function move(point){handCommands.move(new Vector3(...point));if(grip)grip.target=[...point];draw();event('drag',point);return read();}
+  async function reset(){const token=++generation;busy=true;running=false;release(true);sync();try{await stepFinished;const candidate=await createCoarseFractureDynamics({...prepared,config:{...prepared.config,strength}},host.scene.renderer());if(disposed||token!==generation){candidate.dispose();return read();}
     const materials=[...surface.materials];materials[prepared.capMaterial]=capMaterial;
     const offsets=prepared.pieces.map(piece=>{const part=view.parts.find(p=>p.id===piece.part),offset=new Vector3(...part.center).sub(objectCenter);if(offset.lengthSq()<1e-12)offset.set(0,1,0);return offset.toArray();});
     let presentation;try{presentation=await createResidentFractureSurface({renderer:host.scene.renderer(),prepared,materials,model:candidate,partOffsets:offsets});}catch(error){candidate.dispose();throw error;}
     if(disposed||token!==generation){await presentation.dispose();candidate.dispose();return read();}
-    await residentSurface?.dispose();model?.dispose();model=candidate;residentSurface=presentation;meshes=presentation.meshes;for(const mesh of meshes)owned.add(mesh);
+    await residentSurface?.dispose();model?.dispose();model=candidate;handCommands=createFractureHandCommands(model);residentSurface=presentation;meshes=presentation.meshes;for(const mesh of meshes)owned.add(mesh);
     grip=null;selectedCell=null;busy=false;running=false;error='';draw();event('reset',{cells:prepared.cells.length,bonds:prepared.bonds.length});return read();
    }catch(e){busy=false;error=e.message;sync();throw e;}}
   let objectCenter;
@@ -59,7 +60,7 @@ export default {
     if(disposed||busy)return false;const index=hit.cell??hit.object.userData.materialCell;if(!Number.isInteger(index))return false;
     if(hit.phase==='start'){const p=asset.root.worldToLocal(new Vector3(...hit.point));return grab({index,point:p.toArray(),localPoint:hit.localPoint,normal:hit.normal});}
     if(hit.phase==='move'&&grip){move(asset.root.worldToLocal(new Vector3(...hit.point)).toArray());return true;}
-    if(hit.phase==='end'||hit.phase==='cancel'){release();return true;}return false;
+    if(hit.phase==='end'||hit.phase==='cancel'){release(hit.phase==='cancel');return true;}return false;
    },{pick:async ray=>{
     if(disposed||busy||inspectParts)return null;const current=residentSurface;asset.root.updateWorldMatrix(true,false);const inverse=asset.root.matrixWorld.clone().invert(),start=new Vector3(...ray.origin).applyMatrix4(inverse),direction=new Vector3(...ray.direction).transformDirection(inverse);
     const result=await current.pick(start.toArray(),direction.toArray());if(!result||disposed||current!==residentSurface)return null;const world=asset.root.localToWorld(new Vector3(...result.point));return{...result,object:meshes[result.cell],point:world.toArray(),distance:world.distanceTo(new Vector3(...ray.origin))};
@@ -67,7 +68,7 @@ export default {
    unframe=session.onFrame(()=>{if(running&&!inspectParts&&!busy&&!stepping&&!disposed)void advance().catch(()=>{});});
    const operations={reset,advance,acquire:async()=>{await stepFinished;await model.acquire();return{...read(),material:model.snapshot()};},pause:async()=>{running=false;await stepFinished;sync();return read();},play:()=>{inspectParts=false;separation=0;running=true;draw();return read();},grab,move,release:()=>{release();return read();},
     strength:value=>{if(!(value>0&&Number.isFinite(value)))throw Error('Positive finite cohesion required');model.setStrength(value);strength=value;updateInputs({...inputs,strength});sync();return read();},
-    inspect:value=>{colorParts=Boolean(value);draw();return read();},separation:value=>{if(!Number.isFinite(value)||value<0)throw Error('Nonnegative separation required');if(value>0&&!inspectParts)inspectionWasRunning=running;separation=value;inspectParts=value>0;running=inspectParts?false:inspectionWasRunning;release();draw();return read();},frame,
+    inspect:value=>{colorParts=Boolean(value);draw();return read();},separation:value=>{if(!Number.isFinite(value)||value<0)throw Error('Nonnegative separation required');if(value>0&&!inspectParts)inspectionWasRunning=running;separation=value;inspectParts=value>0;running=inspectParts?false:inspectionWasRunning;release(true);draw();return read();},frame,
     view:()=>session.readView(),contacts:async()=>{await model.acquire();const state=model.snapshot();return meshes.flatMap((mesh,index)=>{const a=prepared.pieces[index].arrays,candidates=[],body=state.bodies[index],rotation=new Quaternion(body.quaternion.x,body.quaternion.y,body.quaternion.z,body.quaternion.w);for(let f=0;f<a.indices.length/3;f++){if(prepared.pieces[index].faceInterfaces[f])continue;const ids=Array.from(a.indices.subarray(f*3,f*3+3)),points=ids.map(i=>new Vector3(...a.positions.subarray(i*3,i*3+3))),normal=points[1].clone().sub(points[0]).cross(points[2].clone().sub(points[0])),area=normal.length()/2;const local=points[0].clone().add(points[1]).add(points[2]).multiplyScalar(1/3).sub(new Vector3(...prepared.pieces[index].center));const point=local.clone().applyQuaternion(rotation).add(new Vector3(body.position.x,body.position.y,body.position.z));candidates.push({index,area,point:asset.root.localToWorld(point).toArray(),localPoint:local.toArray(),normal:normal.normalize().toArray(),source:'explicit-diagnostic-contacts'});}return candidates.sort((a,b)=>b.area-a.area);});},
     export:()=>({...read(),preparation:prepared})};
    return {read,operations,mount({root,document,invoke}){

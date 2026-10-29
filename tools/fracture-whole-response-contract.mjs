@@ -51,3 +51,17 @@ export function assertResidentFrameTransfers(before,after){
  assert.equal(after.maps.length,before.maps.length,'Ordinary frames acquired GPU state');
  assert.equal(after.fences,before.fences,'Ordinary frames waited for GPU completion');
 }
+
+export function assertShortPullResponse(row){
+ assert.ok(row.accepted,'Short pull never acquired material');
+ const before=row.before.material,after=row.state.material;
+ assert.ok(after.step>before.step,'Short pull submitted no physical step');
+ assert.equal(after.hand,null,'Short pull left a hand after release');
+ const loaded=after.samples.filter(s=>s.step>before.step&&s.handActive);
+ assert.ok(loaded.length,'Short pull has no loaded physical step');
+ const indices=[...new Set(row.commands.flatMap(c=>c.active))];
+ let displacement=0;
+ for(const i of indices){const a=before.bodies[i]?.position,b=after.bodies[i]?.position;assert.ok(a&&b&&['x','y','z'].every(k=>Number.isFinite(a[k])&&Number.isFinite(b[k])),'Short pull needs finite body positions');displacement=Math.max(displacement,Math.hypot(...['x','y','z'].map(k=>b[k]-a[k])));}
+ assert.ok(displacement>1e-8,'Short pull did not move grabbed material');
+ return {loadedSteps:loaded.map(s=>s.step),grabbedCells:indices,maxGrabbedDisplacement:displacement};
+}

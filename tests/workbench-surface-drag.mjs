@@ -4,7 +4,7 @@ import {PerspectiveCamera,Mesh,BoxGeometry,MeshBasicMaterial} from '../lib/three
 import {bindWorkbenchSurfaceDrag} from '../workbench-surface-drag.mjs';
 class Canvas extends EventTarget{captured=new Set();getBoundingClientRect(){return{left:0,top:0,width:500,height:500};}setPointerCapture(id){this.captured.add(id);}hasPointerCapture(id){return this.captured.has(id);}releasePointerCapture(id){this.captured.delete(id);}}
 function setup(accept=true){const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);root.updateMatrixWorld(true);const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],callback:e=>{seen.push(e);return accept;}});const send=(type,x=250,y=250,id=1)=>{const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:x,clientY:y,button:0,pointerId:id});canvas.dispatchEvent(e);return e;};return{canvas,controls,seen,send,stop};}
-test('drag starts at actual surface, follows camera plane and releases on pointer-up',()=>{const h=setup();assert.equal(h.send('pointerdown').defaultPrevented,true);assert.equal(h.controls.enabled,false);assert.deepEqual(h.seen[0].point,[0,0,.5]);h.send('pointermove',300);assert.ok(h.seen[1].point[0]>.3);assert.equal(h.seen[1].point[2],.5);h.send('pointerup',300);assert.equal(h.seen[2].phase,'end');assert.equal(h.controls.enabled,true);assert.equal(h.canvas.captured.size,0);h.stop();});
+test('drag starts at actual surface, follows camera plane and releases on pointer-up',()=>{const h=setup();assert.equal(h.send('pointerdown').defaultPrevented,true);assert.equal(h.controls.enabled,false);assert.deepEqual(h.seen[0].point,[0,0,.5]);h.send('pointermove',300);assert.ok(h.seen[1].point[0]>.3);assert.equal(h.seen[1].point[2],.5);h.send('pointerup',300);assert.equal(h.seen.at(-1).phase,'end');assert.equal(h.controls.enabled,true);assert.equal(h.canvas.captured.size,0);h.stop();});
 test('declined contact leaves navigation untouched, and disposal cancels a held hand',()=>{const a=setup(false);assert.equal(a.send('pointerdown').defaultPrevented,false);assert.equal(a.controls.enabled,true);a.stop();const b=setup();b.send('pointerdown');b.stop();assert.equal(b.seen.at(-1).phase,'cancel');assert.equal(b.controls.enabled,true);const count=b.seen.length;b.send('pointermove',300);assert.equal(b.seen.length,count);});
 test('foreign foreground material occludes the owned surface and retains editor gestures',()=>{
  const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},owned=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),foreground=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);foreground.position.z=2;owned.updateMatrixWorld(true);foreground.updateMatrixWorld(true);
@@ -17,13 +17,21 @@ test('resident pick uses moved GPU surface and cancels a pending hit on disposal
  event();assert.equal(requests,1,'Resident surface must be queried even when CPU geometry is elsewhere');resolve({object:root,point:[0,0,1],distance:4,localPoint:[0,0,.5],cell:7});await new Promise(r=>setImmediate(r));assert.equal(seen[0].cell,7);assert.equal(controls.enabled,false);stop();assert.equal(seen.at(-1).phase,'cancel');assert.equal(controls.enabled,true);
  const seen2=[];const stop2=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],pick:()=>new Promise(r=>{resolve=r;}),callback:e=>{seen2.push(e);return true;}});event();stop2();resolve({object:root,point:[0,0,1],distance:4});await new Promise(r=>setImmediate(r));assert.equal(seen2.length,0);assert.equal(controls.enabled,true);
 });
-test('resident misses and foreground hits replay navigation; an early release never creates a hand',async()=>{
+test('resident misses replay navigation; a completed early pull delivers start, move and end without a held hand',async()=>{
  for(const mode of ['miss','occluded','released']){
   const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),front=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[],navigation=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);root.updateMatrixWorld(true);front.position.z=2;front.updateMatrixWorld(true);let resolve;
   const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],sceneRoots:()=>mode==='occluded'?[root,front]:[root],pick:()=>new Promise(r=>resolve=r),callback:e=>{seen.push(e);return true;}});
   const send=type=>{const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:250,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);};
   for(const type of ['pointerdown','pointermove','pointerup'])canvas.addEventListener(type,e=>navigation.push(e.type));
   send('pointerdown');send('pointermove');send('pointerup');resolve(mode==='miss'?null:{object:root,point:[0,0,.5],distance:4.5});await new Promise(r=>setImmediate(r));
-  assert.equal(seen.length,0);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);assert.deepEqual(navigation,mode==='released'?[]:['pointerdown','pointermove','pointerup']);stop();
+  assert.deepEqual(seen.map(e=>e.phase),mode==='released'?['start','move','move','end']:[]);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);assert.deepEqual(navigation,mode==='released'?[]:['pointerdown','pointermove','pointerup']);stop();
+ }
+});
+test('cancelled pending contacts never replay a physical hand',async()=>{
+ for(const terminal of ['pointercancel','lostpointercapture']){
+ const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),controls={enabled:true},seen=[];camera.position.z=5;camera.lookAt(0,0,0);root.updateMatrixWorld(true);let resolve;
+ const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],pick:()=>new Promise(r=>resolve=r),callback:e=>{seen.push(e);return true;}});
+ for(const type of ['pointerdown','pointermove',terminal]){const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:270,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);}
+ resolve({object:root,point:[0,0,.5],distance:4.5});await new Promise(r=>setImmediate(r));assert.deepEqual(seen,[]);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);stop();
  }
 });
