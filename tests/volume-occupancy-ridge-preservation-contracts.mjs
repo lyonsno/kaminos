@@ -32,11 +32,14 @@ function assertOccupancyRidgeContract(source) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }
-  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '');
+  const outerArm = balancedWgslBlock(allRaymarch, 'if(worldActive && !fineRayInterval){');
+  assert.match(outerArm,/color\+=trans\*\(medium.emission\+scatteredSource\)\*emissionIntegral\(sigma,ds\);\s*trans\*=exp\(-sigma\*ds\);t\+=ds;continue;/,'outer grid continuation consumes the material');
+  assert.equal((outerArm.match(/\bcontinue\s*;/g)||[]).length,1,'one outer continuation after composition');
+  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(outerArm,'');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;

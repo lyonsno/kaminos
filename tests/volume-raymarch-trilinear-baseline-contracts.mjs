@@ -74,11 +74,11 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
-const displayAdmission = /if \(displayReconstructionActive\(\) && opticalStepping\) \{\s*directSupport = 1\.0;\s*\} else if/;
+const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
 assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
 const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
-  .replace('!displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
-assert.match(supportAdmission, /if \(!displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
+  .replace('!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
+assert.match(supportAdmission, /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
   'only explicit comparison/capture modes bypass production support admission');
 assert.match(
   baselineAdmission,
@@ -88,7 +88,7 @@ assert.match(
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
-const displaySample = /if \(displayReconstructionActive\(\) && opticalStepping\) \{\s*\} else if/;
+const displaySample = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*\} else if/;
 assert.match(sampleBranch, displaySample, 'only the explicit prepared-field arm omits raw reconstruction');
 assert.match(
   sampleBranch.replace(displaySample, 'if'),
@@ -102,7 +102,7 @@ assertRaymarchTrilinearAuthority(core);
 const falseClosureMutations = [
   [
     'display support enabled outside its explicit mode',
-    source => source.replace('if (displayReconstructionActive() && opticalStepping)', 'if (true)'),
+    source => source.replace('if (displayReconstructionActive() && (opticalStepping || guided))', 'if (true)'),
     /display support bypass requires both/,
   ],
   [
@@ -149,7 +149,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
+      .replace('    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],

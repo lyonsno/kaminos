@@ -146,7 +146,7 @@ fn prefilterDisplayLine(@builtin(global_invocation_id) id: vec3<u32>, @builtin(n
 // Raw mode stores soot, heat, fresh burn, and independent smoke soot. Optical
 // mode stores emission RGB and extinction. No FP16 clipping or normalization.
 export const DISPLAY_RECONSTRUCTION_WGSL = /* wgsl */`
-@group(0) @binding(34) var displayField: texture_3d<f32>;
+@group(0) @binding(38) var displayField: texture_3d<f32>;
 @group(3) @binding(12) var displayFilterOutput: texture_storage_3d<rgba32float,write>;
 @group(3) @binding(13) var displayFilterInput: texture_3d<f32>;
 @group(3) @binding(14) var<storage,read> displayCoefficients: array<vec4<f32>>;
