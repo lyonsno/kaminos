@@ -33,7 +33,7 @@ console.log('Three distinct Water actions preserve Reset, Replay, and Play/Pause
 const {authoredDropSetup}=await import('../authored-water-host.mjs');
 {
  const sources=['A','B'].map((id,i)=>({id,transform:{position:[i*.8,1,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:16}}}));
- const setup=authoredDropSetup(sources,{densityIterations:3});assert.equal(setup.solver.particleCount,1024);assert.deepEqual(setup.sourceIds,['A','B']);assert.equal(setup.solver.densityIterations,3,'The interacting allocation has one shared pass count for both sources');
+ const setup=authoredDropSetup(sources,{densityIterations:3});assert.equal(setup.solver.particleCount,1024);assert.deepEqual(setup.sourceIds,['A','B']);assert.equal(setup.route,'kaminos/mls-mpm-finger-juice-v1','Both sources share the rebuilt engine');
 }
 
 {
