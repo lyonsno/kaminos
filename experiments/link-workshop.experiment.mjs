@@ -14,19 +14,25 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
  let pistonStart=null,snap=true,status,fields=[],stop=()=>{},unsubscribe=()=>{};
  const ensure=()=>{if(disposed||!root.parent)throw Error('Workshop removed; Undo or reopen it');};
  const read=()=>({objectId:asset.id,recipe:structuredClone(model),mode,tool,selected,editing,playing,fraction:t,points:evaluate(model,t),pistonStart,view:session.readView(),motion:'authored joint kinematics; pistons follow attachment distance'});
- function putProxy(){if(selected<0||!model.nodes[selected])return;root.updateWorldMatrix(true,false);const f=frames(model,t)[selected],p=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld);proxy.position.copy(p);proxy.quaternion.copy(root.getWorldQuaternion(new T.Quaternion())).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle));proxy.scale.set(1,1,1);proxy.updateMatrixWorld(true);}
+ function putProxy(){if(selected<0||!model.nodes[selected])return;root.updateWorldMatrix(true,false);const f=frames(model,t)[selected],p=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld);proxy.position.copy(p);proxy.quaternion.copy(root.getWorldQuaternion(new T.Quaternion())).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle));proxy.scale.set(model.nodes[selected].length??1,1,1);proxy.updateMatrixWorld(true);}
  function update(){view.update(model,t,selected,!playing&&mode!=='build');grid.visible=editing&&mode==='build';origin.visible=!model.nodes.length;if(!edits.state().active)putProxy();session.redraw();refresh();}
  function pause(){playing=false;stop();stop=()=>{};t=mode==='B'?1:0;update();}
  function apply(next,label){ensure();pause();edits.apply(whole,{recipe:checkedMechanism(next)},label);record({kind:'links.edit',phase:'applied',effective:read()});return read();}
  const snapshot=()=>({recipe:structuredClone(model)});
- edits.register(whole,{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe)}),write:v=>{model=checkedMechanism(v.recipe);selected=Math.min(selected,model.nodes.length-1);pistonStart=null;update();}});
- function handleRead(){putProxy();return {recipe:structuredClone(model),joint:selected,mode,position:proxy.position.toArray(),rotation:[proxy.rotation.x,proxy.rotation.y,proxy.rotation.z],scale:[1,1,1]};}
- edits.register(target,{read:handleRead,check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
+ edits.register(whole,{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe)}),write:v=>{model=checkedMechanism(v.recipe);selected=model.nodes.length?Math.max(0,Math.min(selected,model.nodes.length-1)):-1;pistonStart=null;update();}});
+ function handleRead(joint=selected,requestedMode=mode){
+  const f=frames(model,requestedMode==='B'?1:0)[joint];if(!f)throw Error('Choose an existing joint');
+  root.updateWorldMatrix(true,false);const position=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),q=root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle)),e=new T.Euler().setFromQuaternion(q);
+  return {recipe:structuredClone(model),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
+ }
+ edits.register(target,{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
   pause();selected=v.joint;const base=v.recipe,n=base.nodes[selected],f=frames(base,v.mode==='B'?1:0)[selected];root.updateWorldMatrix(true,false);const p=new T.Vector3(...v.position).applyMatrix4(root.matrixWorld.clone().invert());
   model=checkedMechanism(base);
+  if(!edits.state().active){update();return;}
   const oldWorld=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),moved=oldWorld.distanceTo(new T.Vector3(...v.position))>1e-7;
-  if(moved)model=moveJoint(base,selected,[p.x,p.y],v.mode);
-  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=n.length*(v.mode==='build'?Math.abs(v.scale[0]):1);model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
+  const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
+  if(moved&&!resized)model=moveJoint(base,selected,[p.x,p.y],v.mode);
+  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
   update();
  }});
  seat=host.controls.components.register(asset.id,{enter(){editing=true;pause();update();},exit(){editing=false;update();},target(){if(selected<0)return null;if(!edits.state().active)putProxy();return {id:target,type:'link-joint',label:`Joint ${selected+1}`,object:proxy,read:handleRead,frameObjects:[view.markers()[selected]]};},pick(event,{camera,canvas}){
@@ -47,7 +53,7 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
   tool({value}){if(!['draw','select','piston'].includes(value))throw Error('Unknown tool');tool=value;pistonStart=null;refresh();return read();},
   play(){ensure();if(playing)return read();if(!model.nodes.some(n=>n.parent!==null))throw Error('Draw a link first');playing=true;time=0;stop=session.onFrame(({deltaSeconds})=>{time+=deltaSeconds;t=(1-Math.cos(time*2*Math.PI/model.period))/2;update();});refresh();return read();},
   pause(){pause();return read();},period({seconds}){return apply({...model,period:seconds},'Change cycle');},
-  restore(recipe){const result=apply(recipe,'Open mechanism');selected=model.nodes.length-1;update();return read();},snapshot(){return structuredClone(model);},
+  restore(recipe){apply(recipe,'Open mechanism');seat.changed(()=>{selected=model.nodes.length-1;update();});return read();},snapshot(){return structuredClone(model);},
   frame(){const points=[...evaluate(model,0),...evaluate(model,1)],box=new T.Box3();for(const p of points)box.expandByPoint(new T.Vector3(...p,0).applyMatrix4(root.matrixWorld));if(box.isEmpty())box.setFromCenterAndSize(new T.Vector3(0,2,0),new T.Vector3(6,4,1));const c=box.getCenter(new T.Vector3()),d=Math.max(box.getSize(new T.Vector3()).length(),4);session.setView({position:[c.x,c.y,c.z+d*1.6],target:c.toArray(),fov:38});return read();},
  };
  update();operations.frame();win.kaminosSelection.set([asset.id],asset.id);
