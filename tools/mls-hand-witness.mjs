@@ -85,8 +85,8 @@ try{
       const before=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
       const input=page.getByRole('spinbutton',{name:'Jet speed',exact:true});
       await input.click();await input.fill(String(requestedSpeed));await input.press('Tab');
-      await page.waitForFunction(({speed,received,frames,seconds})=>{
-        const s=window.kaminosWorkbenchExperiments.read(),f=s.fingerJuice;
+      await page.waitForFunction(async({speed,received,frames,seconds})=>{
+        const s=await window.kaminosWorkbenchExperiments.read(),f=s.fingerJuice;
         if(s.error||f.error||f.runtime?.failure)throw Error(s.error??f.error??f.runtime.failure);
         return s.received>received&&f.runtime.frameCount>frames&&f.runtime.solver.clock.simulatedSeconds>seconds&&
           f.packet.economics?.jetSpeedWorldPerSecond===speed;
