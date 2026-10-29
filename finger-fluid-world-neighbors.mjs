@@ -1,3 +1,4 @@
+import {applyNeighborCache} from './finger-fluid-neighbor-cache.mjs';
 /** Finite PBF's linked buckets index world-space cells. Bucket collisions cost
  * scans, never neighbors: every lookup checks the exact integer cell first.
  * No CPU bounds reduction, reallocation, or per-cell population cap is needed. */
@@ -114,7 +115,7 @@ fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec
 `;
 }
 
-export function applyWorldSpaceNeighbors(shader,{cellWidth,uniformSupportRadius=null,nominalCellWidth=cellWidth,uniformVolumeScale=null}){
+export function applyWorldSpaceNeighbors(shader,{cellWidth,uniformSupportRadius=null,nominalCellWidth=cellWidth,uniformVolumeScale=null,cacheSlots=0}){
  const functions=worldNeighborFunctions(cellWidth);
  worldNeighborFunctions(nominalCellWidth);
  const start=shader.indexOf('fn gridCoord('),end=shader.indexOf('fn kernelWeight(',start);
@@ -144,5 +145,5 @@ export function applyWorldSpaceNeighbors(shader,{cellWidth,uniformSupportRadius=
   if(!builder)throw Error('World neighbor radius contract requires the production grid builder');
   result+='\n'+builder.replace('fn build_linked_cell_grid(','fn build_nominal_cell_grid(').replace('gridCoord(particles[index].predicted.xyz)','world_neighbor_coord(particles[index].predicted.xyz, worldNominalCellWidth)');
  }
- return result;
+ return applyNeighborCache(result,cacheSlots);
 }
