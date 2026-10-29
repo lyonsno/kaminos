@@ -20,6 +20,7 @@ const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneR
 export function sceneContext(context, options) {
   context.sceneAO ??= createSceneAOState();
   context.sceneComponents ??= null;
+  context.sceneLightingPreparation ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {
     context.sceneObjects ??= [];

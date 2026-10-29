@@ -13,7 +13,7 @@ function loader(){
  const loadStarted=new Promise(resolve=>{announceLoad=resolve;});
  const root={userData:{},traverse(fn){fn({isMesh:false});}};
  const clip={name:'Accepted motion'}, clips=[clip];
- const context={URL,console,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
+ const context={sceneLightingPreparation:null,URL,console,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
   shouldClearSceneForImport:options=>options.clear!==false,
   clearScene(){throw Error('Workbench append must preserve the existing scene');},
   resolveAssetArrivalMode:()=> 'append',applyAssetArrival:()=>({}),
@@ -29,13 +29,13 @@ function loader(){
 
 test('ordinary GLB callers retain the actual root result',async()=>{
  const f=loader(),pending=f.context.showGLB('/retained/body.glb',{clear:false});
- f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  assert.equal(await pending,f.root);assert.equal(f.registered.length,1);
 });
 
 test('Workbench asset receipt preserves real root, clips and registered source identity',async()=>{
  const f=loader(),pending=f.context.showGLB('/retained/body.glb',{clear:false,returnAsset:true,metadata:{source:'/retained/body.glb',fileName:'body.glb'}});
- f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  const asset=await pending;
  assert.equal(asset.root,f.root,'owner playback needs the actual loaded root');
  assert.equal(asset.clips,f.clips,'do not lose or reconstruct the loaded animation clips');
@@ -46,14 +46,14 @@ test('Workbench asset receipt preserves real root, clips and registered source i
 test('late asset from closed owner is disposed before scene registration',async()=>{
  const f=loader();let current=true;
  const pending=f.context.showGLB('/retained/body.glb',{clear:false,returnAsset:true,isCurrent:()=>current});
- current=false;f.loads[0].success({scene:f.root,animations:f.clips});
+ current=false;await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  await assert.rejects(pending,/stale async GLB/);
  assert.equal(f.added.length,0);assert.equal(f.registered.length,0);assert.deepEqual(f.disposed,[f.root]);
 });
 
 test('asset without animations returns the real empty clip set',async()=>{
  const f=loader(),pending=f.context.showGLB('/retained/static.glb',{clear:false,returnAsset:true});
- f.loads[0].success({scene:f.root,animations:[]});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:[]});
  assert.equal((await pending).clips.length,0);
 });
 
@@ -63,7 +63,7 @@ test('shared load hook waits for viewer and preserves membership despite clear o
  const pending=f.context.window.kaminosWorkbenchLoadAsset('/retained/body.glb',{clear:true,register:false,normalize:false});
  assert.equal(f.loads.length,0);
  initialize();await f.loadStarted;
- f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  assert.equal((await pending).id,'registered-asset');assert.equal(f.registered.length,1);
 });
 
@@ -71,8 +71,8 @@ test('out-of-order appends couple each receipt to its registered and retained so
  const f=loader(),second={userData:{},traverse: f.root.traverse};
  const a=f.context.showGLB('/retained/A.glb',{clear:false,returnAsset:true});
  const b=f.context.showGLB('/retained/B.glb',{clear:false,returnAsset:true});
- f.loads[1].success({scene:second,animations:[]});
- f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;f.loads[1].success({scene:second,animations:[]});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  for(const [asset,source,fileName]of [[await a,'/retained/A.glb','A.glb'],[await b,'/retained/B.glb','B.glb']]){
   const row=f.registered.find(row=>row.object===asset.root);
   assert.equal(row.source,source,'saved scene must reopen the loaded asset');
@@ -84,7 +84,20 @@ test('out-of-order appends couple each receipt to its registered and retained so
 
 test('metadata overrides stay consistent between receipt and scene registration',async()=>{
  const f=loader(),pending=f.context.showGLB('/retained/body.glb',{clear:false,returnAsset:true,metadata:{source:'canonical-body',fileName:'Chosen body'}});
- f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
  const asset=await pending;assert.equal(asset.source,'canonical-body');assert.equal(asset.fileName,'Chosen body');
  assert.equal(asset.source,f.registered[0].source);assert.equal(asset.fileName,f.registered[0].fileName);
+});
+
+
+test('GLB loading waits for lighting preparation and preserves a failed preparation',async()=>{
+ const f=loader();let release;
+ f.context.sceneLightingPreparation={whenIdle:()=>new Promise(resolve=>{release=resolve;})};
+ const pending=f.context.showGLB('/retained/body.glb',{clear:false});
+ assert.equal(f.loads.length,0,'scene mutation waits while compilation owns renderer state');
+ release();await f.loadStarted;f.loads[0].success({scene:f.root,animations:[]});
+ assert.equal(await pending,f.root);
+ const blocked=loader();blocked.context.sceneLightingPreparation={whenIdle:()=>Promise.reject(Error('lighting failed'))};
+ await assert.rejects(blocked.context.showGLB('/retained/body.glb',{clear:false}),/lighting failed/);
+ assert.equal(blocked.loads.length,0);assert.equal(blocked.registered.length,0);
 });
