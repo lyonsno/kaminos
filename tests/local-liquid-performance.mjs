@@ -44,12 +44,22 @@ test('changing the fluid budget retires the old solver and mounts the requested 
 });
 
 test('invalid and device-impossible budgets leave the live water untouched',async()=>{
-  for (const values of [{particleCount:512,densityIterations:1},{particleCount:49152,densityIterations:0},{particleCount:1e9,densityIterations:1}]) {
+  for (const values of [{particleCount:0,densityIterations:1},{particleCount:49152,densityIterations:0},{particleCount:1e9,densityIterations:1}]) {
     const {context,calls}=await harness();
     await assert.rejects(context.apply(values));
     assert.equal(context.localLiquidGeneration,0);
     assert.ok(context.localLiquidHost);
     assert.deepEqual(calls,[]);
+  }
+});
+
+test('MLS accepts small populations and checks the native 80-byte layout against actual device limits',async()=>{
+  const small=await harness();await small.context.apply({particleCount:512,densityIterations:1});
+  assert.deepEqual(small.calls.slice(0,2),['dispose',['mount',512,1]]);
+  for(const limiting of ['maxStorageBufferBindingSize','maxBufferSize']){
+    const {context,calls}=await harness();context.sharedGpu.device.limits[limiting]=512*80-1;
+    await assert.rejects(context.apply({particleCount:512,densityIterations:1}),/device buffer limits/);
+    assert.equal(context.localLiquidGeneration,0);assert.ok(context.localLiquidHost);assert.deepEqual(calls,[]);
   }
 });
 
