@@ -56,11 +56,10 @@ await history.undo();guide(.6);await history.redo();guide(.75);
 q.activeSceneObjectId=null;q.updateWaterSourceGuides();assert.equal(row.object.children.find(n=>n.userData.kaminosWaterSourceGuide).visible,false);
 q.activeSceneObjectId=row.id;q.updateWaterSourceGuides();guide(.75);
 
-// The newly enabled ordinary Duplicate must reject continuous inlet overflow
-// before registering a sixth source or disturbing existing authoring state.
+// MLS accepts another ordinary continuous source beyond the retired five-inlet limit.
 const flows=Array.from({length:5},(_,i)=>createLocalLiquidEmitterSceneRecord({id:'flow'+i,transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}}));
 c.sceneObjects=flows;c.localLiquidEmitterRecords=()=>flows;c.LOCAL_LIQUID_EMITTER_CAPACITY=5;
-const beforeDuplicates=created.length;assert.throws(()=>c.duplicateSceneObject('flow0'),/capacity/);assert.equal(created.length,beforeDuplicates);
+const beforeDuplicates=created.length;c.duplicateSceneObject('flow0');assert.equal(created.length,beforeDuplicates+1);
 
 // Initial particle/guide materials are preview state, never saved water
 // settings. Restoring an older scene can apply its legacy opacity to both.

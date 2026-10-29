@@ -1,3 +1,4 @@
+import {authoredMlsInlets} from './authored-mls-water.mjs';
 import {describeAuthoredWaterDrop} from './authored-water-drop.mjs';
 import {createFingerFluidBoxReference} from './finger-fluid-box-fixtures.mjs';
 import {
@@ -5,7 +6,6 @@ import {
   LOCAL_LIQUID_EMITTER_SOURCE,
   LOCAL_LIQUID_EMITTER_TYPE,
   defaultLocalLiquidSetup,
-  localLiquidInletPacket,
   normalizeLocalLiquidEmitter,
   normalizeLocalLiquidEmitterPose,
   normalizeLocalLiquidSetup,
@@ -181,7 +181,7 @@ export function normalizeLocalLiquidSceneDocument(document) {
   const authoredDomain = setup?.legacySource
     ? (({ legacySource, ...domain }) => domain)(setup)
     : setup;
-  if (authoredDomain && emitters.length) localLiquidInletPacket(authoredDomain, emitters, 1);
+  if (authoredDomain && emitters.length) authoredMlsInlets(emitters);
   return { setup: authoredDomain, emitters };
 }
 
@@ -192,7 +192,7 @@ export function localLiquidRuntimeSourceState(document, generation = 1) {
     emitters: clone(emitters),
     // Empty authored membership is an explicit stop-injection update. Keeping
     // a null packet here would let the mounted host retain a deleted inlet.
-    inletPacket: setup ? localLiquidInletPacket(setup, emitters, generation) : null,
+    inletPacket: setup ? authoredMlsInlets(emitters,Date.now(),generation) : null,
     participation: setup ? 'authored-domain-present' : 'no-authored-domain',
   };
 }

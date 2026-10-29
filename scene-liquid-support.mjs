@@ -54,7 +54,7 @@ export const SCENE_LIQUID_SUPPORT_BINDINGS_WGSL=`
 @group(0) @binding(12) var sceneSupportSamples: texture_2d_array<f32>;
 @group(0) @binding(13) var<uniform> sceneSupportParams: vec4<u32>;
 `;
-export const SCENE_LIQUID_SUPPORT_WGSL=`
+export const SCENE_LIQUID_COLLIDER_WGSL=`
 const analyticObstacleSupportEnabled: bool = false;
 fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let kind=textureLoad(sceneSupportSamples,vec2<i32>(0,i32(i)),0,0);
@@ -70,6 +70,8 @@ fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  return vec4<f32>(ax.xyz*n.x+ay*n.y+az*n.z,d*pose.w);
 }
 fn sceneSupportFrame(p:vec3<f32>)->vec4<f32>{var result=vec4<f32>(0,1,0,1e6);for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);if(f.w<result.w){result=f;}}return result;}
+`;
+export const SCENE_LIQUID_SUPPORT_WGSL=SCENE_LIQUID_COLLIDER_WGSL+`
 fn floorHeight(p:vec3<f32>)->f32{_ = p;return params.boundsMin.y;}
 fn floorNormal(p:vec3<f32>)->vec3<f32>{return sceneSupportFrame(p).xyz;}
 fn supportVelocityAt(p:vec3<f32>)->vec3<f32>{_ = p;return vec3<f32>(0);}

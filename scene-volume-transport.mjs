@@ -20,7 +20,9 @@ fn fsSceneTransport(in: VSOut) -> @location(0) vec4<f32> {
   let dims = vec2<i32>(textureDimensions(waterEntryDepth));
   let pixel = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), dims - vec2<i32>(1));
   let entry = max(0.0, textureLoad(waterEntryDepth, pixel, 0).r) / depthToLocalT;
-  let opaque = max(0.0, textureLoad(opaqueViewDepth, pixel, 0).r) / depthToLocalT;
+  let opaqueDims = vec2<i32>(textureDimensions(opaqueViewDepth));
+  let opaquePixel = clamp(vec2<i32>(uv * vec2<f32>(opaqueDims)), vec2<i32>(0), opaqueDims - vec2<i32>(1));
+  let opaque = max(0.0, textureLoad(opaqueViewDepth, opaquePixel, 0).r) / depthToLocalT;
   let start = select(min(entry, opaque), 0.0, TRANSPORT_FOREGROUND);
   let end = select(opaque, min(entry, opaque), TRANSPORT_FOREGROUND);
   let result = raymarchVolume(in, end, true, start);
