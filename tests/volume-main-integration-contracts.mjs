@@ -46,6 +46,7 @@ const resources = {
   waveletTextures: [{ createView: () => ({ label: 'wavelet A view' }) }, { createView: () => ({ label: 'wavelet B view' }) }],
   // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceTexture: {createView: () => ({ label: 'joined lower planes view' })},
+  rayAllocationHistory:{buffer:buffer('history'),uniform:buffer('history uniform')},
   worldSmoke: null, intermediateFlow: null, worldRenderUniform: buffer('world frame'),
   worldOpticalFallback: {createView: () => ({label:'inactive world optics'})},
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
@@ -70,7 +71,7 @@ for (let q = 0; q < 2; q++) {
   assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
     'all fluid render resources have distinct bindings');
   assert.equal(group.entries.find(e=>e.binding===26)?.resource.buffer,resources.rayStepTelemetry.counterBuffer);
-  assert.equal(group.entries.find(e=>e.binding===34)?.resource,resources.displayReconstruction.view);
+  assert.equal(group.entries.find(e=>e.binding===38)?.resource,resources.displayReconstruction.view);
   assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
   for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
 }
