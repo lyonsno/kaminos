@@ -171,6 +171,7 @@ fn seedDisplayField(@builtin(global_invocation_id) c: vec3<u32>) {
 }
 @compute @workgroup_size(4,4,4)
 fn finishDisplayField(@builtin(global_invocation_id) c: vec3<u32>) {
+  seatGridShape();
   let dst=textureDimensions(displayFilterOutput);
   if(any(c>=dst)){return;}
   var value=displayAxisSample(c,dst,2u,u.display_reconstruction.yz,u.display_interpolation.x>0.5,u.display_reconstruction.w,u.display_interpolation.yz);
