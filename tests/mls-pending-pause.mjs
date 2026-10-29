@@ -24,3 +24,24 @@ try{
   assert.equal(solver.read().clock.elapsedSeconds,.2);
 }finally{solver?.dispose();globalThis.fetch=saved;}
 console.log('Pending GPU pause excludes held time');
+
+// A queued authored step must validate the inlet current when GPU work starts.
+// Rendering can publish a newer inlet while advanceTo awaits the prior work.
+const epochNow=Date.now;
+let epoch=100;
+Date.now=()=>epoch;
+globalThis.fetch=async url=>({ok:true,text:()=>fs.readFile(url,'utf8')});
+const inlet=()=>({authority:{simulation_safe:true},timestamp_ms:epoch,emitters:[{id:'live',active:true,origin_world:[0,1,0],aim_world:[0,-1,0],radius:.04,strength:1,source_flux_particles_per_second:240,lifetime_seconds:6}]});
+try{
+  completion=Promise.resolve();
+  solver=await createMlsJuiceSolver({device,setup:{particleCount:4},packet:inlet(),now:()=>now});
+  completion=pending();
+  const stepping=solver.advanceTo(1);
+  epoch=101;solver.setPacket(inlet());complete();await stepping;
+  assert.equal(solver.read().liveInlets.totalAdmitted,1,'newer authored inlet was rejected using the pre-wait timestamp');
+  epoch=2000;await solver.advanceTo(2);
+  assert.equal(solver.read().liveInlets.totalAdmitted,1,'stale inlet freshness must still reject emission');
+  epoch=2001;solver.setPacket(inlet());await solver.advanceTo(3,2000);
+  assert.equal(solver.read().liveInlets.totalAdmitted,1,'explicit earlier assay epoch must remain authoritative');
+}finally{solver?.dispose();Date.now=epochNow;globalThis.fetch=saved;}
+console.log('Queued authored stepping uses execution-time inlet freshness');

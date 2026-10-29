@@ -32,7 +32,9 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   for(const size of [config.capacity*80,config.gridCells*16]){
     if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
   }
-  if(Math.ceil(config.gridCells/64)>(device.limits?.maxComputeWorkgroupsPerDimension??Infinity))throw Error('MLS grid exceeds effective one-dimensional dispatch limit');
+  const dispatchLimit=device.limits?.maxComputeWorkgroupsPerDimension??65535;
+  const gridGroups=Math.ceil(config.gridCells/64),gridX=Math.min(gridGroups,dispatchLimit),gridY=Math.ceil(gridGroups/gridX);
+  if(gridY>dispatchLimit)throw Error('MLS grid exceeds effective two-dimensional dispatch capacity');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
   let support=null;
@@ -87,7 +89,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       @group(0) @binding(1) var<uniform> box:vec3f;
       @group(0) @binding(2) var<uniform> dt:f32;
       @group(0) @binding(3) var<uniform> obstacle:vec4f;
-      @compute @workgroup_size(64) fn grid(@builtin(global_invocation_id) id:vec3u){
+      @compute @workgroup_size(64) fn grid(@builtin(workgroup_id) group:vec3u,@builtin(num_workgroups) groups:vec3u,@builtin(local_invocation_index) local:u32){
+        let id=vec3u((group.y*groups.x+group.x)*64u+local,0u,0u);
         if(id.x>=arrayLength(&cells)||cells[id.x].mass<=0){return;}
         let ny=u32(box.y);let nz=u32(box.z);
         let p=vec3f(f32(id.x/(ny*nz)),f32((id.x/nz)%ny),f32(id.x%nz));
@@ -103,7 +106,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(world,i);let inward=dot(v,f.xyz);if(f.w<domain.w&&inward<0.){v-=f.xyz*inward;}}`:''}
         cells[id.x].vx=i32(v.x*65536.);cells[id.x].vy=i32(v.y*65536.);cells[id.x].vz=i32(v.z*65536.);
       }`,'grid',[[0,1],[1,2],[2,5],[3,6],...(support?[[7,7]]:[])]);
-    const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
+    const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const execute=(steps,epochMs)=>{
         const startTime=time,injections=[];
         for(let i=0;i<steps;i++){
@@ -134,16 +137,17 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         clock.observe(nowMs,paused);if(pending||paused)return false;
         const steps=clock.advance(nowMs,paused);return steps?execute(steps,epochMs):false;
       },
-      async advanceTo(target,epochMs=Date.now()){
+      async advanceTo(target,epochMs){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         if(!Number.isSafeInteger(target)||target<clock.read().step)throw Error('MLS target step must not precede current step');
         clock.observe(now(),paused);paused=true;
         await device.queue.onSubmittedWorkDone();
-        const steps=target-clock.read().step;if(steps)execute(clock.advanceSteps(steps),epochMs);
+        const steps=target-clock.read().step;if(steps)execute(clock.advanceSteps(steps),epochMs??Date.now());
         await device.queue.onSubmittedWorkDone();if(failure)throw Error(failure);
         return clock.read();
       },
       read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.gridCells,
+        gridDispatch:{x:gridX,y:gridY},deviceLimits:{maxStorageBufferBindingSize:device.limits?.maxStorageBufferBindingSize??null,maxBufferSize:device.limits?.maxBufferSize??null,maxComputeWorkgroupsPerDimension:dispatchLimit},
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
