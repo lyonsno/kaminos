@@ -1,3 +1,4 @@
+import {batchCoarseCompute} from './fracture-compute-batch.mjs';
 import * as THREE from './lib/three.core.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
@@ -42,7 +43,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.elasticModulus?data[j*44+16]:Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=config.elasticModulus?data[j*44+17]:Math.min(config.initialJointPenalty,data[j*44+17]);}}
   const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
   engine.setGravity([0,0,0]);
-  engine.step(config.timeStep,renderer);
+  batchCoarseCompute(renderer,()=>engine.step(config.timeStep,renderer));
   const attrs=engine.getResidentAttributes();
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
   const allocate=(label,data,usage)=>{const buffer=acquire({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);return buffer;};
@@ -99,7 +100,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   }
   function moveHand(target){if(!hand||!finitePoint(target))throw new Error('Move requires active hand and finite x, y and z');hand.target={...target};}
   function bind(index,radius=Math.max(dx,dy)*2){if(!cells[index]||!Number.isFinite(radius)||radius<=0)throw new Error('Bind requires known cell and positive finite radius');bindRequest={index,radius};}
-  function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.setGravity([0,-config.gravity*gravityScale(stepIndex),0]);engine.step(config.timeStep,renderer);dispatch('fracture');if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),gravityScale:gravityScale(stepIndex),observation:'submitted',completedPhysicalState:false});}
+  function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.setGravity([0,-config.gravity*gravityScale(stepIndex),0]);batchCoarseCompute(renderer,()=>engine.step(config.timeStep,renderer));dispatch('fracture');if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),gravityScale:gravityScale(stepIndex),observation:'submitted',completedPhysicalState:false});}
   parameters();dispatch('fracture');
   while(gravityScale(stepIndex)<1)step();
   return {resident:{device,positions:resident('positions'),quaternions:resident('quaternions'),joints:resident('joints'),origin},
