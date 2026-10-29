@@ -13,6 +13,7 @@ import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
 import { createAgentLiveBudget } from './agent-live-budget.mjs';
 import { ambientGpuLabel, createGpuUtilizationSampler, windowUtilization } from './gpu-utilization.mjs';
 import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
+import {persistSamEvidenceArtifact} from './sam-image-witness-report.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -174,6 +175,18 @@ async function evaluate(ws, expression, options = {}) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
+}
+
+// Dense native particle arrays exceed the ordinary CDP response path in the
+// observed Chrome155/Node25 route. Transfer every byte through the existing
+// identity-checked artifact transport; chunking is not a population limit.
+async function evaluateParticleEvidence(ws, expression, label) {
+ const key='__mlsEvidence'+Date.now();
+ const descriptor=await evaluate(ws,`(async()=>{const value=await (${expression}),text=JSON.stringify(value);window[${JSON.stringify(key)}]=text;return {transferId:${JSON.stringify(key)},totalLength:text.length};})()`,{timeoutMs:180000});
+ const artifact=await persistSamEvidenceArtifact({outDir:dirname(reportPath),label,...descriptor,
+  readChunk:({transferId,offset,totalLength,length})=>evaluate(ws,`(()=>{const text=window[${JSON.stringify(key)}];if(typeof text!=='string')throw Error('MLS readback transfer missing');return {transferId:${JSON.stringify(transferId)},offset:${offset},totalLength:text.length,text:text.slice(${offset},${offset+length})};})()`)});
+ await evaluate(ws,`delete window[${JSON.stringify(key)}]`);
+ return {particles:JSON.parse(readFileSync(artifact.path,'utf8')),transport:artifact};
 }
 
 // After loading a saved flame basin (several are authored at 160 steps), drop
@@ -2769,38 +2782,51 @@ async function runAuthoredMlsScenario(ws){
   return {before,flow,state,particles};
  })()`,{timeoutMs:180000});
  if(args.has('--mls-composition')){
-  phase='authored-mls-constant-target-resize';
-  lastEvidence.authoredMlsResize=await evaluate(ws,`(async()=>{
+  phase='authored-mls-resize-prepare';
+  const resizeId=await evaluate(ws,`(()=>{
    const api=window.kaminosWaterSources;window.removeSceneObject(${JSON.stringify(lastEvidence.authoredMlsFlow.flow)});
-   const id=api.read().sources[0].id,source=window.kaminosLocalLiquidState().emitters.find(r=>r.id===id);
    const sampling={...api.read().simulation.sampling,particleTarget:12000,container:{min:[-2,-1,-2],max:[2,3,2]},worldBounds:{min:[-2,-1,-2],max:[2,3,2]}};
-   api.editSimulation({waterSampling:sampling});const rows=[];
-   for(const width of [.5,.25]){
-    api.edit(id,{drop:{...source.localLiquidEmitter.drop,width}});await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(1);
-    const state=window.kaminosLocalLiquidState(),particles=await api.requestParticleState();
-    if(state.failure||!particles.words.every(Number.isFinite))throw Error('Resized native grid failed');
-    rows.push({width,state,particles});
-   }
-   if(rows[0].particles.particleCount!==rows[1].particles.particleCount||rows[1].state.solver.gridDispatch.y<=1)throw Error('Resize changed target or bypassed the enlarged grid');
-   return rows;
-  })()`,{timeoutMs:180000});
+   api.editSimulation({waterSampling:sampling});return api.read().sources[0].id;
+  })()`);
+  lastEvidence.authoredMlsResize=[];
+  for(const width of [.5,.25]){
+   phase='authored-mls-resize-edit-'+width;
+   const row={width};lastEvidence.authoredMlsResize.push(row);writeReport({ok:false,inProgress:true,evidence:lastEvidence});
+   row.edited=await evaluate(ws,`(()=>{const api=window.kaminosWaterSources,id=${JSON.stringify(resizeId)},source=window.kaminosLocalLiquidState().emitters.find(r=>r.id===id);api.edit(id,{drop:{...source.localLiquidEmitter.drop,width:${width}}});return api.read();})()`);
+   phase='authored-mls-resize-release-'+width;writeReport({ok:false,inProgress:true,evidence:lastEvidence});
+   row.released=await evaluate(ws,`(async()=>{await window.kaminosWaterSources.release();window.kaminosPauseLocalLiquid(true);return window.kaminosLocalLiquidState();})()`,{timeoutMs:180000});
+   phase='authored-mls-resize-step-'+width;writeReport({ok:false,inProgress:true,evidence:lastEvidence});
+   await evaluate(ws,`window.kaminosWaterSources.advanceTo(window.kaminosLocalLiquidState().solver.clock.step+1)`,{timeoutMs:180000});
+   phase='authored-mls-resize-read-'+width;writeReport({ok:false,inProgress:true,evidence:lastEvidence});
+   row.state=await evaluate(ws,'window.kaminosLocalLiquidState()');
+   const readback=await evaluateParticleEvidence(ws,'window.kaminosWaterSources.requestParticleState()','resize-'+String(width).replace('.','-'));row.particles=readback.particles;row.readback=readback.transport;
+   if(row.state.failure||!row.particles.words.every(Number.isFinite))throw Error('Resized native grid failed');
+  }
+  const rows=lastEvidence.authoredMlsResize;
+  if(rows[0].particles.particleCount!==rows[1].particles.particleCount||rows[1].state.solver.gridDispatch.y<=1)throw Error('Resize changed target or bypassed the enlarged grid');
   // Restore the cheap mixed-source scene before checking its optical composition.
   await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(200);
   await wsRequest(ws,'Page.navigate',{url:lastEvidence.authoredMlsFlow.saved.url});
+  phase='authored-mls-flame-load';writeReport({ok:false,inProgress:true,evidence:lastEvidence});
   await evaluate(ws,`(async()=>{while(window.kaminosWaterSources?.read().sources.length!==2)await new Promise(r=>setTimeout(r,100));await window.kaminosSceneAuthoring.addFlameEmitter('vsp-73c7fa64b2498e1dc5a24f1feefe79a6c1ce1c1effeb2c90ae318c56b0c75350');})()`,{timeoutMs:180000});
   await applyLiveFireSteps(ws);
   phase='authored-mls-flame-composition';
+  await evaluate(ws,`(()=>{const u=new URL(location.href),h=new URLSearchParams(u.hash.slice(1));h.set('volume_light_field_water_transport','1');u.hash=h.toString();history.replaceState(history.state,'',u);})()`);
   await evaluate(ws,`(async()=>{const api=window.kaminosWaterSources;await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(240);window.kaminosSetCameraDebugPose({position:[2.4,2.7,2.4],target:[0,.4,0]});const c=document.getElementById('rendering-match-flame-camera');if(!c.checked)c.click();})()`,{timeoutMs:180000});
   await settleViewportFrames(ws,1200);
   lastEvidence.authoredMlsOptics={modes:[]};
   for(const mode of ['full','proxy','hidden','full']){
-   await evaluate(ws,`window.kaminosViewportSettings.set({water:${JSON.stringify(mode)}})`);await settleViewportFrames(ws,300);
-   const state=await evaluate(ws,`({water:window.kaminosLocalLiquidState(),transport:window.kaminosWaterFlameRenderingState(),proxy:window.kaminosWaterProxyDebugState(),camera:window.kaminosSceneEmissiveCameraDebugState()})`);
+   await evaluate(ws,`(()=>{const api=window.kaminosViewportSettings,hiddenIds=api.read().hiddenIds.filter(id=>id!=='water-field');if(${JSON.stringify(mode)}==='hidden')hiddenIds.push('water-field');return api.set({water:${JSON.stringify(mode==='hidden'?'full':mode)},hiddenIds});})()`);await settleViewportFrames(ws,300);
+   const state=await evaluate(ws,`({water:window.kaminosLocalLiquidState(),transport:window.kaminosWaterFlameRenderingState(),proxy:window.kaminosWaterProxyDebugState(),camera:window.kaminosSceneEmissiveCameraDebugState(),viewport:window.kaminosViewportSettings.read(),render:window.kaminosViewportShadingDebugState().lastRender})`);
    lastEvidence.authoredMlsOptics.modes.push({mode,...state});
-   if(state.water.failure||!state.water.camera.effective)throw Error('Shared matched camera missing in '+mode+': '+JSON.stringify(state));
+   if(state.water.failure||!state.camera.effective||(mode!=='hidden'&&!state.water.camera.effective))throw Error('Shared matched camera missing in '+mode+': '+JSON.stringify(state));
+   if(mode==='hidden'&&(!state.viewport.hiddenIds.includes('water-field')||state.proxy.hostPresentation!=='hidden'||state.proxy.viewportCameraSeesProxies||state.proxy.layer.visible))throw Error('Hidden water still presented: '+JSON.stringify(state));
+   if(lastEvidence.authoredMlsOptics.modes.length>1&&state.render.sceneFrameCount<=lastEvidence.authoredMlsOptics.modes.at(-2).render.sceneFrameCount)throw Error('Viewport did not render changed water display');
    if(mode==='full'&&!state.transport.effective)throw Error('MLS flame transport not effective: '+JSON.stringify(state));
    await capturePngScreenshot(ws,siblingPngPath('-'+mode));
   }
+  lastEvidence.authoredMlsOptics.saved=await evaluate(ws,`window.saveSceneAs({name:'hotwet-mls-water-flame-'+Date.now(),result:true})`);
+  if(!lastEvidence.authoredMlsOptics.saved.ok||!lastEvidence.authoredMlsOptics.saved.url)throw Error('No reopenable water/flame scene saved');
  }
 }
 
@@ -7387,8 +7413,8 @@ try {
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
   // Observe the fire's effective ray steps once a second for the live budget.
   liveBudgetTimer = setInterval(() => {
-    wsRequest(ws, 'Runtime.evaluate', { returnByValue: true, expression: 'window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null' }, { timeoutMs: 5000 })
-      .then(result => liveBudget.observe({ fireRaySteps: result?.result?.value ?? null })).catch(() => {});
+    wsRequest(ws, 'Runtime.evaluate', { returnByValue: true, expression: '(() => { const p=window.__kaminosVolumePrototype,s=p?.debugState?.(); return {active:p?.isActive?.() ?? s?.active ?? false,fireRaySteps:s?.controls?.raySteps ?? null}; })()' }, { timeoutMs: 5000 })
+      .then(result => liveBudget.observe(result?.result?.value ?? {active:false})).catch(() => {});
   }, 1000);
   for (let attempt=0;attempt<240;attempt++) {
     effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);

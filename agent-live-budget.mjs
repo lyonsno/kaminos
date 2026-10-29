@@ -10,7 +10,8 @@ const SUSTAINED_OBSERVATIONS = 2;
 export function createAgentLiveBudget({ allowed = false } = {}) {
   let maxFireRaySteps = null, over = 0, violation = null;
   return {
-    observe({ fireRaySteps } = {}) {
+    observe({ fireRaySteps, active = true } = {}) {
+      if (active === false) { over = 0; violation = null; return; }
       const steps = Number(fireRaySteps);
       if (fireRaySteps == null || !Number.isFinite(steps)) { over = 0; return; }
       maxFireRaySteps = maxFireRaySteps == null ? steps : Math.max(maxFireRaySteps, steps);
