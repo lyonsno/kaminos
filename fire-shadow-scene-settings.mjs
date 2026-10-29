@@ -4,7 +4,7 @@ import {validateShadowComparison,validateShadowSampling} from './fire-shadow-sam
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateCasterLevel} from './fire-shadow-casters.mjs';
 import {lightingDirections} from './scene-volume-gather.mjs';
-import {smokeShadowPlan,smokeAngularFilterFootprint} from './fire-smoke-shadow.mjs';
+import {smokeShadowPlan,validateSmokeAngularFilter} from './fire-smoke-shadow.mjs';
 
 const prefix='volume_light_field_hybrid_';
 export function readFireShadowSceneSettings(params) {
@@ -27,8 +27,8 @@ export function readFireShadowSceneSettings(params) {
     if(!['0','1'].includes(smokeFilter))throw Error('smoke shadow filter must be 0 or 1');
     smoke.smokeShadowFilter=smokeFilter==='1';
   }
-  if(params.has(prefix+'smoke_shadow_filter_angle')){smoke.smokeShadowFilterAngle=number('smoke_shadow_filter_angle',0);smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees:smoke.smokeShadowFilterAngle,tapsPerAxis:number('smoke_shadow_filter_taps',3)});}
-  if(params.has(prefix+'smoke_shadow_filter_taps')){smoke.smokeShadowFilterTaps=number('smoke_shadow_filter_taps',3);smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees:smoke.smokeShadowFilterAngle??0,tapsPerAxis:smoke.smokeShadowFilterTaps});}
+  if(params.has(prefix+'smoke_shadow_filter_angle')){smoke.smokeShadowFilterAngle=number('smoke_shadow_filter_angle',0);validateSmokeAngularFilter({angleDegrees:smoke.smokeShadowFilterAngle,tapsPerAxis:number('smoke_shadow_filter_taps',3)});}
+  if(params.has(prefix+'smoke_shadow_filter_taps')){smoke.smokeShadowFilterTaps=number('smoke_shadow_filter_taps',3);validateSmokeAngularFilter({angleDegrees:smoke.smokeShadowFilterAngle??0,tapsPerAxis:smoke.smokeShadowFilterTaps});}
   if(params.has(prefix+'smoke_shadow_steps')||params.has(prefix+'smoke_shadow_resolution')){
     smoke.smokeShadowSteps=number('smoke_shadow_steps',0);smoke.smokeShadowResolution=number('smoke_shadow_resolution',16);
     if(!Number.isSafeInteger(smoke.smokeShadowSteps)||smoke.smokeShadowSteps<0)throw Error('smoke shadow steps must be nonnegative integer');

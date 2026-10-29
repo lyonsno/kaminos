@@ -12,7 +12,7 @@ import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from '.
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateRuntimeShadowQuality as validateShadowQuality} from './fire-shadow-quality.mjs';
 import {createFireShadowCasters} from './fire-shadow-casters.mjs';
-import {createFireSmokeShadow,smokeShadowPlan,smokeAngularFilterFootprint,smokeShadowWork} from './fire-smoke-shadow.mjs';
+import {createFireSmokeShadow,smokeShadowPlan,validateSmokeAngularFilter,smokeShadowWork} from './fire-smoke-shadow.mjs';
 import {createSceneSmokeEnvironment,validateSmokeEnvironmentBlur} from './scene-smoke-environment.mjs';
 import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 
@@ -20,7 +20,7 @@ import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 // live GPU reduction of that same source, with independent raster visibility.
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',surfaceEnabled=true,smokeShadowSteps=0,smokeShadowResolution=16,smokeShadowFilter=false,smokeShadowFilterAngle=null,smokeShadowFilterTaps=3,shadowEdgeFilter=false,shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,getSourceRegions=null,smokeEnvironmentBlur=0,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null,surfaceLighting=null}) {
   if(smokeShadowFilterAngle===null)smokeShadowFilterAngle=Math.atan(2/smokeShadowResolution)*180/Math.PI;
-  smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps});
+  validateSmokeAngularFilter({angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps});
   if(typeof smokeShadowFilter!=='boolean')throw Error('smoke shadow filter must be boolean');
   if(typeof shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');
   if(typeof surfaceEnabled!=='boolean')throw Error('surface lighting enabled must be boolean');
@@ -219,7 +219,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const steps=value.steps??smokeShadowSteps,resolution=value.resolution??smokeShadowResolution;
       const filter=value.filter??smokeShadowFilter,angleDegrees=value.angleDegrees??smokeShadowFilterAngle,tapsPerAxis=value.tapsPerAxis??smokeShadowFilterTaps;
       if(typeof filter!=='boolean')throw Error('smoke shadow filter must be boolean');
-      validateSmoke(steps,resolution);smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees,tapsPerAxis});if(disposed)throw Error('hybrid lighting disposed');
+      validateSmoke(steps,resolution);validateSmokeAngularFilter({angleDegrees,tapsPerAxis});if(disposed)throw Error('hybrid lighting disposed');
       if(steps===smokeShadowSteps&&resolution===smokeShadowResolution&&filter===smokeShadowFilter&&angleDegrees===smokeShadowFilterAngle&&tapsPerAxis===smokeShadowFilterTaps)return;
       if(smokeShadow?.supportsLiveQuality){smokeShadow.setQuality({steps,resolution,filter,angleDegrees,tapsPerAxis});valid=false;}
       smokeShadowSteps=steps;smokeShadowResolution=resolution;smokeShadowFilter=filter;smokeShadowFilterAngle=angleDegrees;smokeShadowFilterTaps=tapsPerAxis;
