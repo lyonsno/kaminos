@@ -678,21 +678,21 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
-        <label class="slider-row"><span class="slider-label">Collisions</span><select id="local-liquid-support-mode"><option value="scene_primitives">Scene objects</option><option value="retained_analytical_basin">Legacy playground</option></select></label>
-        <label class="slider-row"><span class="slider-label">Show legacy playground</span><input id="local-liquid-support-visible" type="checkbox"></label>
-        <p class="hint">Scene objects: planes, spheres and bowls with uniform scale collide with water. Add and place them normally. Changing collision mode restarts water; the numerical world bounds remain the simulation container.</p>
+        <label class="slider-row" hidden><span class="slider-label">Collisions</span><select id="local-liquid-support-mode"><option value="scene_primitives">Scene objects</option></select></label>
+        <label class="slider-row" hidden><span class="slider-label">Show legacy playground</span><input id="local-liquid-support-visible" type="checkbox"></label>
+        <p class="hint">Scene objects: planes, spheres and bowls with uniform scale collide with water. Add and place them normally. The simulation bounds control its finite grid; walls can be disabled.</p>
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
           <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
           <button type="button" class="btn" data-water-budget="49152,3">Full</button>
         </div>
-        <div class="slider-row"><label class="slider-label" for="local-liquid-particles">Particle budget</label><input class="transform-input" id="local-liquid-particles" type="number" min="1024" step="1" value="49152"></div>
-        <div class="slider-row"><label class="slider-label" for="local-liquid-iterations">Density passes</label><input class="transform-input" id="local-liquid-iterations" type="number" min="1" step="1" value="3"></div>
+        <div class="slider-row"><label class="slider-label" for="local-liquid-particles">Particle budget</label><input class="transform-input" id="local-liquid-particles" type="number" min="1" step="1" value="12000"></div>
+        <div class="slider-row" hidden><label class="slider-label" for="local-liquid-iterations">Legacy density passes</label><input class="transform-input" id="local-liquid-iterations" type="number" min="1" step="1" value="3"></div>
         <div class="scene-object-tools">
           <button type="button" class="btn" id="local-liquid-apply">Apply &amp; Restart Water</button>
           <button type="button" class="btn" id="local-liquid-pause" aria-pressed="false">Pause Water</button>
         </div>
-        <p class="hint">Smaller budgets limit sustained water; fewer passes reduce compression accuracy. Applying restarts water and keeps emitter poses. Settings save with the scene.</p>
+        <p class="hint">This is the capacity for continuous release; initial drops use their authored sampling. Applying restarts water and keeps emitter poses. Settings save with the scene.</p>
         <div id="local-liquid-performance-status" class="hint" role="status" aria-live="polite"></div>
       </div>
     </section>
@@ -3464,7 +3464,7 @@ function syncWaterProxy() {
  if(host&&!waterProxy){
   const descriptor=()=>localLiquidHost===host?host.interfaceRecordDescriptor():null;
   waterProxy={host,layer:null,unsubscribe:null,
-   producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
+   producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:host.interfaceRecordDescriptor()?.capacity??16384,stepSeconds:host.interfaceRecordDescriptor()?.stepSeconds??1/60,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
  }
  if(waterProxy&&wanted&&!waterProxy.layer){
   const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.15});
@@ -6867,9 +6867,8 @@ async function applyLocalLiquidPerformance(values) {
   }
   const next = normalizeLocalLiquidSetup({...localLiquidSetup,
     particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support});
-  const capacity = measureFingerFluidParticleAllocationCapacity(sharedGpu.device.limits);
-  const admission = evaluateFingerFluidParticleAllocationRequest(next.particleCount, capacity);
-  if (!admission.ok) throw Error(admission.reason);
+  const bytes=next.particleCount*80;
+  if(bytes>sharedGpu.device.limits.maxStorageBufferBindingSize||bytes>sharedGpu.device.limits.maxBufferSize)throw Error('Requested MLS water allocation exceeds the device buffer limits');
   const generation = ++localLiquidGeneration;
   localLiquidHost?.dispose();
   localLiquidHost = null;
@@ -6881,7 +6880,7 @@ async function applyLocalLiquidPerformance(values) {
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
   if (!mounted) throw Error(localLiquidFailure || 'Water host could not restart; settings retained for retry');
-  setInfo(`Water restarted: ${next.particleCount.toLocaleString()} particles · ${next.densityIterations} density passes. Emitter poses retained.`);
+  setInfo(`Water restarted: ${next.particleCount.toLocaleString()} particles · MLS-MPM. Emitter poses retained.`);
   return true;
 }
 
@@ -6896,7 +6895,7 @@ function refreshLocalLiquidPerformance() {
     document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
     document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
     document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
-    document.getElementById('local-liquid-support-visible').closest('label').hidden=localLiquidSetup.support==='scene_primitives';
+    document.getElementById('local-liquid-support-visible').closest('label').hidden=true;
     document.getElementById('local-liquid-support-mode').value=localLiquidSetup.support;
     panel.dataset.setup = signature;
   }
@@ -6910,7 +6909,7 @@ function refreshLocalLiquidPerformance() {
   document.getElementById('local-liquid-performance-status').textContent = localLiquidFailure
     ? `Water unavailable: ${localLiquidFailure}`
     : loading ? 'Restarting water…'
-    : effective ? `${localLiquidPaused ? 'Paused' : 'Running'} · ${effective.particleCount.toLocaleString()} particles · ${effective.densityIterationsPerStep} density ${effective.densityIterationsPerStep === 1 ? 'pass' : 'passes'}`
+    : effective ? `${localLiquidPaused ? 'Paused' : 'Running'} · ${effective.particleCount.toLocaleString()} particles · MLS-MPM`
     : 'Water host not mounted';
 }
 
@@ -6954,7 +6953,7 @@ window.kaminosLocalLiquidReadSceneColor = region => {if(!localLiquidHost)throw E
 window.kaminosLocalLiquidState = () => {
   const hostState = localLiquidHost?.state() || null;
   return ({
-  requestedRoute: localLiquidSetup ? 'kaminos/finger-fluid/local-analytic-host-frame-v0' : null,
+  requestedRoute: localLiquidSetup ? 'kaminos/mls-mpm-finger-juice-v1' : null,
   effectiveRoute: localLiquidHost?.state().effectiveRoute || null,
   backend: renderer?.backend?.constructor?.name || null,
   mounted: Boolean(localLiquidHost),
@@ -12741,7 +12740,7 @@ async function releaseAuthoredWater(id){
  if(!emitters.length)throw Error('Show a water emitter before releasing water');
  const {createAuthoredWaterHost}=await import('./authored-water-host.mjs');
  if(!isCurrent())throw Error('Water release superseded or scene changed');
- const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
+ const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,readColliders:()=>workingScene.objects,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
  if(!isCurrent()){candidate?.dispose();throw Error('Water release superseded or scene changed');}
  if(!candidate)throw Error('Water replacement did not create an available host');
  try{candidate.setPaused(false);}catch(error){candidate.dispose();throw error;}
@@ -21585,7 +21584,7 @@ function updateAuthoringPropertySelection() {
   const water=document.getElementById('local-liquid-performance');if(water)water.hidden=workingScene.activeFieldId!=='water-field'||localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop');
   const source=document.getElementById('selected-water-properties');if(source){updateWaterSourceGuides();source.hidden=selectedSceneObjectEntry()?.type!==LOCAL_LIQUID_EMITTER_TYPE;}
   const simulation=document.getElementById('selected-water-simulation-properties');if(simulation)simulation.hidden=workingScene.activeFieldId!=='water-field'&&selectedSceneObjectEntry()?.type!==LOCAL_LIQUID_EMITTER_TYPE;
-  const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${localLiquidHost?'Current simulation':'Initial setup'} · Density passes ${state.settings.densityIterations} for all ${state.sourceCount} sources`;}
+  const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${localLiquidHost?'Current simulation':'Initial setup'} · MLS-MPM shared liquid`;}
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
@@ -24967,7 +24966,6 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
-  if(entry.type===LOCAL_LIQUID_EMITTER_TYPE&&record.localLiquidEmitter.mode!=='finite_drop'&&localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode!=='finite_drop').length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error('Water inlet capacity '+LOCAL_LIQUID_EMITTER_CAPACITY+' would be exceeded');
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
