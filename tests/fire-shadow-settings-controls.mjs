@@ -32,7 +32,7 @@ console.log('PASS status refresh preserves pending controls and native numeric w
 state={...state,shadowSampling:'complementary',shadowGrain:'screen-animated'};
 const nativeRoot=new Element('div');
 const nativeSettings=createFireShadowSettings({document,applyInitial:false,session:{redraw(){},dispose(){}},installNumberDrag:()=>{}});
-nativeSettings.mount({root:nativeRoot,document,invoke:async()=>{}});
+nativeSettings.mount({root:nativeRoot,document,invoke:async(name,value)=>nativeSettings.operations[name](value)});
 const nativeControls=walk(nativeRoot);
 assert(nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow steps'),'independent medium attenuation has a numeric cost control');
 const surfaceSwitch=nativeControls.find(v=>v.attrs['aria-label']==='Fire surface lighting');assert(surfaceSwitch,'ordinary inspector has true surface off');
@@ -59,8 +59,15 @@ const applied=await nativeSettings.operations.setCasterLevel('10k');assert.equal
 
 const widthControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow blur half-width (degrees)'),tapsControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke filter taps per axis');
 assert(widthControl&&tapsControl,'ordinary inspector exposes independent angular width and filter work');
-assert.equal(tapsControl.step,'2');assert.equal(widthControl.step,'.25');
+assert.equal(tapsControl.step,'1');assert.equal(widthControl.step,'.25');
 
 const environmentControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke environment blur');assert(environmentControl);
 document.defaultView.__kaminosSceneRadiance.setSmokeEnvironmentBlur=value=>{state={...state,smokeEnvironmentBlur:value};};
 await nativeSettings.operations.setSmokeEnvironmentBlur(.4);assert.equal(state.smokeEnvironmentBlur,.4);assert.equal(environmentControl.value,'0.4');
+
+const alert=nativeControls.find(v=>v.attrs.role==='alert');assert(alert,'invalid lighting edits need an independent persistent error surface');
+document.defaultView.__kaminosSceneRadiance.setSmokeShadowQuality=()=>{throw Error('smoke shadow steps must be nonnegative integer');};
+await nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow steps').listeners.change();assert.match(alert.textContent,/nonnegative integer/);nativeSettings.sync();assert.match(alert.textContent,/nonnegative integer/,'status refresh must not erase the reason for rejection');
+
+document.defaultView.__kaminosSceneRadiance.setSmokeShadowQuality=value=>{state={...state,smokeShadowSteps:value.steps};};
+const stepControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow steps');stepControl.value='2';await stepControl.listeners.change();assert.equal(alert.hidden,true,'a successful correction clears the error');

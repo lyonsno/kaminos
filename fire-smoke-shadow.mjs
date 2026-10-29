@@ -36,19 +36,22 @@ export function sampleSmokePrefix({far,tau},distance){
   return (i===0?0:tau[i-1])*(1-f)+(tau[Math.min(i,tau.length-1)]??0)*f;
 }
 
+export function validateSmokeAngularFilter({angleDegrees,tapsPerAxis=3}){
+  if(!Number.isFinite(angleDegrees)||angleDegrees<0||angleDegrees>=90)throw Error('smoke filter angle must be in [0,90) degrees');
+  if(!Number.isSafeInteger(tapsPerAxis)||tapsPerAxis<1||tapsPerAxis*tapsPerAxis>0xffffffff)throw Error('positive integer smoke filter taps per axis required');
+}
 export function smokeAngularFilterFootprint({direction,angleDegrees,tapsPerAxis=3}){
   if(!Array.isArray(direction)||direction.length!==3||direction.some(v=>!Number.isFinite(v))||Math.abs(Math.hypot(...direction)-1)>1e-6)throw Error('unit filter direction required');
-  if(!Number.isFinite(angleDegrees)||angleDegrees<0||angleDegrees>=90)throw Error('smoke filter angle must be in [0,90) degrees');
-  if(!Number.isSafeInteger(tapsPerAxis)||tapsPerAxis<1||tapsPerAxis%2!==1||tapsPerAxis*tapsPerAxis>0xffffffff)throw Error('odd positive smoke filter taps per axis required');
+  validateSmokeAngularFilter({angleDegrees,tapsPerAxis});
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],normalize=a=>{const n=Math.hypot(...a);return a.map(v=>v/n);};
   const tangent=normalize(cross(Math.abs(direction[1])<.9?[0,1,0]:[1,0,0],direction)),bitangent=cross(direction,tangent);
-  const half=(tapsPerAxis-1)/2,radius=Math.tan(angleDegrees*Math.PI/180),normalization=(half+1)**4,result=[];
-  for(let y=-half;y<=half;y++)for(let x=-half;x<=half;x++)result.push({direction:normalize(direction.map((v,a)=>v+radius*(tangent[a]*x+bitangent[a]*y)/Math.max(1,half))),weight:(half+1-Math.abs(x))*(half+1-Math.abs(y))/normalization});
+  const half=(tapsPerAxis-1)/2,radius=Math.tan(angleDegrees*Math.PI/180),normalization=(tapsPerAxis%2?(half+1)**2:(tapsPerAxis/2)*(tapsPerAxis/2+1))**2,result=[];
+  for(let y=-half;y<=half;y++)for(let x=-half;x<=half;x++)result.push({direction:normalize(direction.map((v,a)=>v+radius*(tangent[a]*x+bitangent[a]*y)/Math.max(.5,half))),weight:(half+1-Math.abs(x))*(half+1-Math.abs(y))/normalization});
   return result;
 }
 export function smokeShadowWork({resolution=16,steps=16,count=4,filter=false,angleDegrees=null,tapsPerAxis=3}={}){
   const plan=smokeShadowPlan({resolution,steps:Math.max(1,steps),count},{maxTextureDimension2D:Infinity});
-  if(angleDegrees!==null)smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees,tapsPerAxis});
+  if(angleDegrees!==null)validateSmokeAngularFilter({angleDegrees,tapsPerAxis});
   const integrationRays=steps?6*count*resolution*resolution:0,filterOutputs=filter?integrationRays*plan.groups:0;
   const filterDirectionsPerPrefix=angleDegrees===null?9:tapsPerAxis*tapsPerAxis,prefixReadsPerOutput=angleDegrees===null?9:4*filterDirectionsPerPrefix;
   return {integrationRays,maximumMediumReads:integrationRays*steps,prefixGroups:plan.groups,filterOutputs,filterDirectionsPerPrefix:filter?filterDirectionsPerPrefix:0,prefixReadsPerOutput:filter?prefixReadsPerOutput:0,prefixReads:filterOutputs*prefixReadsPerOutput};
@@ -107,7 +110,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
     if(typeof q.filter!=='boolean')throw Error('smoke shadow filter must be boolean');
     if(!Number.isSafeInteger(q.steps)||q.steps<0)throw Error('smoke shadow steps must be nonnegative integer');
     const plan=smokeShadowPlan({resolution:q.resolution,steps:Math.max(1,q.steps),count},device.limits);
-    if(q.angleDegrees!==null)smokeAngularFilterFootprint({direction:[1,0,0],angleDegrees:q.angleDegrees,tapsPerAxis:q.tapsPerAxis});
+    if(q.angleDegrees!==null)validateSmokeAngularFilter({angleDegrees:q.angleDegrees,tapsPerAxis:q.tapsPerAxis});
     return plan;
   };
   let quality={resolution,steps,filter,angleDegrees,tapsPerAxis},plan=validate(quality),gpu=null;
@@ -231,11 +234,12 @@ fn filterDirections(@builtin(global_invocation_id) id:vec3<u32>){
  if(filterQuality.z>=0.0){
   let ray=direction(face,(vec2<f32>(id.xy)+vec2<f32>(.5))/f32(resolution));
   let axis=select(vec3<f32>(1,0,0),vec3<f32>(0,1,0),abs(ray.y)<.9);let tangent=normalize(cross(axis,ray));let bitangent=cross(ray,tangent);
-  let half=i32(filterQuality.y-1.0)/2;let width=filterQuality.x/f32(max(1,half));
+  let count=u32(filterQuality.y);let half=(f32(count)-1.0)*0.5;let width=filterQuality.x/max(0.5,half);
   var minimum=vec4<f32>(65504);var transmission=vec4<f32>(0);var total=0.0;
-  for(var y=-half;y<=half;y++){for(var x=-half;x<=half;x++){
+  for(var iy=0u;iy<count;iy++){for(var ix=0u;ix<count;ix++){
+   let x=f32(ix)-half;let y=f32(iy)-half;
    let sampleRay=normalize(ray+width*(f32(x)*tangent+f32(y)*bitangent));let p=smokeCubeUV(sampleRay);let pixel=p.xy*f32(resolution)-vec2<f32>(.5);let base=floor(pixel);let f=fract(pixel);
-   let tent=f32(half+1-abs(x))*f32(half+1-abs(y));
+   let tent=(half+1.0-abs(x))*(half+1.0-abs(y));
    for(var j=0u;j<2u;j++){for(var i=0u;i<2u;i++){
     let neighbor=smokeCubeUV(direction(u32(p.z),(base+vec2<f32>(f32(i),f32(j))+vec2<f32>(.5))/f32(resolution)));
     let cell=clamp(vec2<u32>(floor(neighbor.xy*f32(resolution))),vec2<u32>(0),vec2<u32>(resolution-1u));

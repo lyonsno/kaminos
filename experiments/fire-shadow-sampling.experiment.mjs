@@ -98,7 +98,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         setBounceGain(value){if(!Number.isFinite(value)||value<0)throw Error('finite nonnegative bounce gain required');const control=document.getElementById('scene-gi-gain');if(!control)throw Error('scene GI control unavailable');control.value=String(value);control.dispatchEvent(new win.Event('change'));session.redraw();return read();},
       },
       mount({root:panel,document,invoke}){
-        const failed=error=>{sync(true);status.textContent=error.message;};
+        const errorOutput=document.createElement('p');errorOutput.setAttribute('role','alert');errorOutput.hidden=true;
+        if(errorOutput.style)errorOutput.style.color='#efaaa0';panel.append(errorOutput);
+        const perform=invoke;
+        invoke=(...args)=>Promise.resolve().then(()=>perform(...args)).then(result=>{errorOutput.textContent='';errorOutput.hidden=true;return result;});
+        const failed=error=>{sync(true);errorOutput.textContent=error.message;errorOutput.hidden=false;};
         const native=document.getElementById('rendering-fire-shadows');
         if(applyInitial&&native){
           const jump=document.createElement('button');jump.type='button';jump.textContent='Fire lighting controls → Scene · Rendering';
@@ -166,8 +170,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         }
         for(const [key,param,text,min] of [['smokeShadowSteps','steps','Smoke shadow steps',0],['smokeShadowResolution','resolution','Smoke shadow angular resolution',1],['smokeShadowFilterAngle','angleDegrees','Smoke shadow blur half-width (degrees)',0],['smokeShadowFilterTaps','tapsPerAxis','Smoke filter taps per axis',1]]){
           const row=document.createElement('label');row.textContent=text;
-          row.title=key==='smokeShadowSteps'?'Radial integration samples per direction. Zero disables smoke attenuation.':key==='smokeShadowResolution'?'Pixels per cube face. Doubling this value quadruples smoke-shadow rays and filter texels; blur angle stays fixed.':key==='smokeShadowFilterAngle'?'Half-width along each tangent axis, in degrees. Independent of map resolution and filter tap count.':'Odd positive count along each filter axis. 3 gives 9 directions; 5 gives 25. Each direction uses 4 transmission-interpolation reads.';
-          const number=document.createElement('input');number.type='number';number.min=String(min);number.step=key==='smokeShadowFilterAngle'?'.25':key==='smokeShadowFilterTaps'?'2':'1';number.setAttribute('aria-label',text);
+          row.title=key==='smokeShadowSteps'?'Radial integration samples per direction. Zero disables smoke attenuation.':key==='smokeShadowResolution'?'Pixels per cube face. Doubling this value quadruples smoke-shadow rays and filter texels; blur angle stays fixed.':key==='smokeShadowFilterAngle'?'Half-width along each tangent axis, in degrees. Independent of map resolution and filter tap count.':'Positive integer count along each filter axis. 2 gives 4 directions; 3 gives 9; 4 gives 16. Each direction uses 4 transmission-interpolation reads.';
+          const number=document.createElement('input');number.type='number';number.min=String(min);number.step=key==='smokeShadowFilterAngle'?'.25':'1';number.setAttribute('aria-label',text);
           number.addEventListener('change',()=>invoke('setSmokeShadowQuality',{[param]:Number(number.value)}).catch(failed));
           mediumControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
