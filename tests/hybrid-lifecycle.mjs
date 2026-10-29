@@ -33,6 +33,7 @@ assert.equal(mount.debugState().capturedPointCount,0);assert.equal(mount.debugSt
 assert(hostFrame,'distributed smoke remains live');assert.throws(()=>mount.readPointRegions(),/disabled/);
 mount.setSurfaceEnabled(true);
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
+assert(Object.values(mesh.material).some(value=>value?.isNode),'injected live lighting must be visible to Three material refresh, including unchanged surfaces in the GI source pass');
 assert.equal(batches[0],batches[1]);
 assert.equal(mount.debugState().frame.pointRegions.partition,'spatial');
 const twoSourceMaterialKey=mesh.material.customProgramCacheKey();

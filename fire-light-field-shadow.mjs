@@ -122,15 +122,13 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const complementary=uniform(validateShadowSampling(shadowSampling)==='complementary','bool');
   if(shadowSoftness>0&&sourceSizeNode===null)throw Error('soft shadows require a source size node');
   const enabled=uniform(requested?1:0),effective=uniform(0);
-  const createTarget=size=>new THREE.CubeRenderTarget(size,{
+  const target=new THREE.CubeRenderTarget(resolution,{
     type:THREE.HalfFloatType,format:THREE.RGBAFormat,
     minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,
     generateMipmaps:false,depthBuffer:true,
   });
-  let target=createTarget(resolution);
-  const configureTarget=value=>{value.texture.name='Live emission centroid kiln radial shadow';value.texture.colorSpace=THREE.NoColorSpace;};
-  configureTarget(target);
-  const radialTexture=THREE.TSL.nodeObject(new RadialDistanceCubeNode(target.texture));
+  target.texture.name='Live emission centroid kiln radial shadow';
+  target.texture.colorSpace=THREE.NoColorSpace;
   const cubeCamera=new THREE.CubeCamera(.005,100,target);
   const material=new THREE.NodeMaterial();
   const coverageMaterials=new Map();
@@ -153,7 +151,12 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const sampleDepth=ray=>{
   // Explicit LOD is necessary inside spatially divergent source branches.
   // These radial depth cubes have exactly one mip level.
-  const shadowSample=radialTexture.sample(ray).level(0);
+  const shadowSample=cubeTexture(target.texture,ray).level(0);
+  // This cube stores world-space radial distances, not environment radiance.
+  // Keep CubeCamera's backend convention but exclude CubeTextureNode's
+  // materialEnvRotation (otherwise rotating the HDR rotates solid shadows).
+  shadowSample.setupUV=(builder,uvNode)=>builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem
+    ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
   return shadowSample.r;
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
@@ -166,7 +169,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     const toSource=sourceNode.sub(pointNode),sign=mix(float(-1),float(1),step(float(0),pointNormalNode.dot(toSource)));
     const offset=pointNormalNode.mul(sign).mul(toSource.length().mul(float(2).div(resolutionNode)).max(.001));
     const pointDelta=pointNode.add(offset).sub(sourceNode),pointDistance=pointDelta.length();
-    const radial=radialTexture.sample(pointDelta.div(pointDistance.max(.00001))).level(0).r;
+    const radial=THREE.TSL.nodeObject(new RadialDistanceCubeNode(target.texture,pointDelta.div(pointDistance.max(.00001)))).level(0).r;
     const hard=step(pointDistance.sub(pointDistance.mul(float(2).div(resolutionNode)).max(.001)),radial);
     return mix(float(1),hard,enabled.mul(effective));
   };
@@ -207,11 +210,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     setQuality(value){
       if(!runtimeQuality)throw Error('runtime shadow quality unavailable');
       const next=validateRuntimeShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
-      if(next.resolution!==resolution){
-        const prior=target;target=createTarget(next.resolution);configureTarget(target);
-        cubeCamera.renderTarget=target;radialTexture.value=target.texture;
-        resolutionNode.value=next.resolution;prior.dispose();
-      }
+      if(next.resolution!==resolution){target.setSize(next.resolution,next.resolution);resolutionNode.value=next.resolution;}
       resolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
       qualityNodes.blockerSamples.value=blockerSamples;qualityNodes.filterSamples.value=filterSamples;qualityNodes.bands.value=strata.bands;qualityNodes.sectors.value=strata.sectors;
       Object.assign(status,{resolution,blockerSamples,filterSamples});

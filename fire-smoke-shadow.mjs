@@ -119,31 +119,20 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const pipeline=device.createComputePipeline({label:'smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_SHADOW_WGSL}),entryPoint:'integrate'}});
   const filterPipeline=device.createComputePipeline({label:'smoke neighboring-direction transmission filter',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_FILTER_WGSL}),entryPoint:'filterDirections'}});
   let outputGpu=null;
-  const receivingTexture=size=>{
-    const value=managed?new THREE.StorageTexture(...size):new THREE.ExternalTexture();
-    value.image={width:size[0],height:size[1]};value.type=THREE.HalfFloatType;value.format=THREE.RGBAFormat;value.colorSpace=THREE.NoColorSpace;
-    value.name='Live smoke receiving prefixes';
-    value.minFilter=value.magFilter=THREE.LinearFilter;value.generateMipmaps=false;value.flipY=false;
-    return value;
-  };
-  let external=receivingTexture(plan.size);
+  const external=managed?new THREE.StorageTexture(...plan.size):new THREE.ExternalTexture();
+  external.image={width:plan.size[0],height:plan.size[1]};external.type=THREE.HalfFloatType;external.format=THREE.RGBAFormat;external.colorSpace=THREE.NoColorSpace;
+  external.minFilter=external.magFilter=THREE.LinearFilter;external.generateMipmaps=false;external.flipY=false;
   const {uniform,vec2,vec3,float,int,texture,Fn,If,mix}=THREE.TSL;
-  // Keep one shader node, but replace its texture identity on a resize. Reusing
-  // a disposed StorageTexture can leave another already-built GI pass bound
-  // to the destroyed allocation in this Three version.
-  const receiving=texture(external);
   const layout=uniform(new THREE.Vector4()),enabled=uniform(steps>0,'bool');
   const lo=uniform(new THREE.Vector3(-1,-1,-1)),hi=uniform(new THREE.Vector3(1,3,1));
   let bound=null,group=null,filterGroup=null,metadata=null,disposed=false;
   function configure(next){
     const nextPlan=validate(next),resize=!gpu||nextPlan.size.some((n,a)=>n!==plan.size[a]);
     if(resize){
-      const oldGpu=gpu,oldOutput=outputGpu,oldExternal=external;
+      const oldGpu=gpu,oldOutput=outputGpu;
       gpu=device.createTexture({label:'live smoke radial optical-depth prefixes',size:nextPlan.size,format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
-      if(oldGpu){external=receivingTexture(nextPlan.size);receiving.value=external;}
-      if(managed){external.needsUpdate=true;renderer.initTexture(external);outputGpu=renderer.backend.get(external).texture;}
+      if(managed){external.setSize(...nextPlan.size);external.needsUpdate=true;renderer.initTexture(external);outputGpu=renderer.backend.get(external).texture;}
       else {outputGpu=device.createTexture({label:'smoke shadow receiving prefixes',size:nextPlan.size,format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});external.sourceTexture=outputGpu;external.image={width:nextPlan.size[0],height:nextPlan.size[1]};external.needsUpdate=true;}
-      if(oldGpu)oldExternal.dispose();
       oldGpu?.destroy();if(!managed)oldOutput?.destroy();
     }
     quality=next;plan=nextPlan;layout.value.set(next.resolution,Math.max(1,next.steps),count,plan.groups);enabled.value=next.steps>0;
@@ -154,7 +143,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   }
   configure(quality);
   return {
-    get external(){return external;},supportsLiveQuality:managed,
+    external,supportsLiveQuality:managed,
     setQuality(value){if(disposed)throw Error('smoke shadow disposed');configure({...quality,...value});},
     visibility(source,receiver,index){return Fn(()=>{
       const result=float(1).toVar();If(enabled,()=>{
@@ -162,7 +151,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
         const ray=distance.greaterThan(0).select(delta.div(distance.max(1e-20)),vec3(1,0,0)),cube=cubeCoordinates(ray);
         const uv=cube.xy.clamp(float(.5).div(layout.x),float(1).sub(float(.5).div(layout.x)));
         const x=distance.div(far).mul(layout.y).clamp(0,layout.y),base=x.floor();
-        const read=endpoint=>{const n=endpoint.sub(1).max(0).min(layout.y.sub(1)),coord=vec2(cube.z.add(index*6).add(uv.x).div(layout.z.mul(6)),n.div(4).floor().add(uv.y).div(layout.w));return receiving.sample(coord).level(0).element(int(n.mod(4)));};
+        const read=endpoint=>{const n=endpoint.sub(1).max(0).min(layout.y.sub(1)),coord=vec2(cube.z.add(index*6).add(uv.x).div(layout.z.mul(6)),n.div(4).floor().add(uv.y).div(layout.w));return texture(external,coord).level(0).element(int(n.mod(4)));};
         const before=float(0).toVar();If(base.greaterThan(0),()=>before.assign(read(base)));result.assign(mix(before,read(base.add(1)),x.sub(base)).negate().exp());
       });return result;
     })();},

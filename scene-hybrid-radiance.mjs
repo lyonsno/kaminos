@@ -95,7 +95,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let rebuildRevision=0,rebuildTask=null,rebuilding=false;
   function replaceLighting(){
     releasePoints();buildPoints(pointCount);installAllMaterials();
-    for(const row of originals.values())for(const material of row.owned){surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);material.needsUpdate=true;}
+    for(const row of originals.values())for(const material of row.owned){material.sceneRadianceNode=irradiance;surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);material.needsUpdate=true;}
   }
   function requestRebuild(){
     rebuildRevision++;
@@ -130,6 +130,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!list.every(m=>m.isMeshStandardMaterial||m.isMeshStandardNodeMaterial||m.isMeshPhysicalMaterial||m.isMeshPhysicalNodeMaterial))return;
       const owned=list.map(original=>{
         const material=cloneSceneRadianceMaterial(renderer.library,original),setup=material.setupMaterialLightings;
+        // The callback below injects a live graph outside Three's standard
+        // material properties. Expose it to the material observer as well:
+        // otherwise unchanged GI-source surfaces can skip uniform/binding
+        // refresh and submit a destroyed texture after a live shadow resize.
+        material.sceneRadianceNode=irradiance;
         const cacheKey=material.customProgramCacheKey;
         // This injected graph is not one of NodeMaterial's enumerated node
         // properties. A version bump alone can reuse its old texture bindings.
