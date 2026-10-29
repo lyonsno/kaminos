@@ -17,3 +17,13 @@ assert.throws(()=>checkedMechanism({...m,period:0}),/period/);
 assert.deepEqual(checkedMechanism(JSON.parse(JSON.stringify(m))),m);
 let chain=emptyMechanism();chain=appendJoint(chain,null,[-4,1]);for(let i=1;i<=12;i++)chain=appendJoint(chain,i-1,[i-4,1+i*.25]);assert.equal(evaluate(chain,.5).length,13);
 console.log('links: branched construction, rigid pose propagation, length edits, piston identities, rejection and round trip passed');
+
+// Restoring a differently connected forest with the same counts must rebuild ghost ownership.
+const T=await import('../lib/three.core.js');
+const {createMechanismView}=await import('../experiments/link-workshop/view.mjs');
+const root=new T.Group(),view=createMechanismView(root);
+let pair=appendJoint(appendJoint(emptyMechanism(),null,[0,0]),0,[2,0]);
+view.update(pair,0,0,true);
+pair=appendJoint(appendJoint(emptyMechanism(),null,[0,0]),null,[2,0]);
+assert.doesNotThrow(()=>view.update(pair,0,0,true),'Same-count restore can turn a link into an anchor');
+view.dispose();
