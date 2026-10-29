@@ -42,16 +42,11 @@ for(const mode of ['continuous','finite_drop','failure']){
  const c={Boolean,window:{_kaminosDirty(){}},localLiquidPaused:false,localLiquidHost:{setPaused(v){paused=v;}},refreshLocalLiquidPerformance(){},authoredWaterControls:{refreshStatus(){f.setRuntime({paused,step:12,particleCount:4096});f.controls.refreshStatus();}}};vm.createContext(c);vm.runInContext(application.slice(a,b+3),c);c.window.kaminosPauseLocalLiquid(true);assert.match(f.input('[data-state]').textContent,/Paused · tick 12/);
 }
 
-// Cross the actual finite host/facade/application/control boundary: accessor
-// forwarding cannot be established with a substitute application host.
+// Exercise the current MLS host's playback accessors through the application
+// and controls. GPU dependencies are fakes; native18 supplies real GPU evidence.
 {
- const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
- const finite=await createFiniteFluidHost({setup:{dt:1/240,support:{kind:'invisible_box'},solver:{rendererMode:'screen_space_refraction',particleCount:13824,diagnosticPopulation:{},diagnosticBox:{}}},device:{queue:{onSubmittedWorkDone:async()=>{}}},
-  createSolver:async()=>({available:true,step(){},getDebugState:()=>({particleCount:13824}),destroy(){}}),
-  createPresentation:()=>({state:()=>({}),render(){},dispose(){}})});
- const source=readFileSync(new URL('../authored-water-host.mjs',import.meta.url),'utf8');
- const facadeBody=source.slice(source.indexOf(' return {...finite,'),source.lastIndexOf('\n}'));
- const facade=new Function('finite','initial','records','pendingSetup','options',facadeBody)(finite,{sourceIds:['A']},[],{}, {setup:{}});
+ const {createAuthoredMlsHostFixture}=await import('./helpers/authored-mls-host.mjs');
+ let {host:facade}=await createAuthoredMlsHostFixture();
  const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
  const c={authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
   authoredWaterDraftPreview:null,localLiquidSetup:null,sceneObjectTransformState:()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}),describeAuthoredWaterDrop:()=>({}),resolveAuthoredWaterSampling:()=>({}),selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
@@ -75,10 +70,10 @@ for(const mode of ['continuous','finite_drop','failure']){
  await f.input('[data-pause]').onclick();check(true,0);assert.equal(Number(f.input('[data-width]').value),.75,'Playback toggle preserves pending amount');
  await f.input('[data-pause]').onclick();check(false,0);assert.equal(Number(f.input('[data-width]').value),.75);
  await c.window.kaminosWaterSources.advanceTo(12);check(true,12);assert.equal(Number(f.input('[data-width]').value),.75);
- await facade.restart();check(true,0);assert.equal(Number(f.input('[data-width]').value),.75);
+ facade.dispose();({host:facade}=await createAuthoredMlsHostFixture());facade.setPaused(true);c.localLiquidHost=facade;check(true,0);assert.equal(Number(f.input('[data-width]').value),.75);
  facade.dispose();
 }
-console.log('Real finite facade, public source state, controls and footer agree through play/pause/advance/reset');
+console.log('MLS host, public source state, controls and footer agree through play/pause/advance/replacement');
 
 {
  const children=[],f=fixture({sourceRoot:{append(node){children.push(node);}}});
@@ -96,8 +91,8 @@ for(const applied of ['finite_drop','continuous'])for(const action of ['pause','
 {
  const children=[],f=fixture({simulationRoot:{append(node){children.push(node);}}});
  assert.ok(children.includes(f.input('[data-simulation]')),'Selected simulation properties own the live editable settings, not just a link to the left tool');
- let passes=2;const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,selected:true,settings:{densityIterations:passes}}});f.api.editSimulation=patch=>{passes=patch.densityIterations;};f.controls.refresh();
- assert.equal(Number(f.input('[data-passes]').value),2);f.input('[data-passes]').value=5;f.input('[data-passes]').listeners.input();await f.controls.flush();assert.equal(passes,5);f.controls.refresh();assert.equal(Number(f.input('[data-passes]').value),5);
+ let sampling={spacing:.05,particleTarget:1000,container:{min:[-2,-1,-2],max:[2,3,2]}};const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,selected:true,settings:{waterSampling:sampling},sampling}});f.api.editSimulation=patch=>{assert.equal(patch.densityIterations,undefined);sampling=patch.waterSampling;};f.controls.refresh();
+ assert.equal(Number(f.input('[data-target]').value),1000);f.input('[data-target]').value=2000;f.input('[data-target]').listeners.input();await f.controls.flush();assert.equal(sampling.particleTarget,2000);f.controls.refresh();assert.equal(Number(f.input('[data-target]').value),2000);
 }
 
 {
