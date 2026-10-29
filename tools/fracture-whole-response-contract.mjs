@@ -59,9 +59,18 @@ export function assertShortPullResponse(row){
  assert.equal(after.hand,null,'Short pull left a hand after release');
  const loaded=after.samples.filter(s=>s.step>before.step&&s.handActive);
  assert.ok(loaded.length,'Short pull has no loaded physical step');
+ const finite=v=>v&&['x','y','z'].every(k=>Number.isFinite(v[k]));
+ const moved=loaded.filter(s=>finite(s.handContact)&&finite(s.handTarget)&&Math.hypot(...['x','y','z'].map(k=>s.handTarget[k]-s.handContact[k]))>1e-8);
+ assert.ok(moved.length,'Short pull submitted no moved target');
+ const inputs=row.inputs??[],down=inputs.find(e=>e.type==='pointerdown'&&e.trusted),up=inputs.find(e=>e.type==='pointerup'&&e.trusted);
+ assert.ok(down&&up&&up.at>=down.at,'Short pull needs recorded trusted down/up');
+ assert.ok(inputs.some(e=>e.trusted&&['pointermove','pointerup'].includes(e.type)&&(e.x!==down.x||e.y!==down.y)),'Short pull needs recorded movement');
+ assert.ok(!inputs.some(e=>['pointercancel','lostpointercapture'].includes(e.type)&&e.at>=down.at&&e.at<up.at),'Short pull was cancelled before pointer-up');
+ const active=row.commands.findIndex(c=>c.active.length);
+ assert.ok(active>=0&&!row.commands.slice(active+1).some(c=>!c.active.length&&c.at<up.at),'Short pull hand cleared before pointer-up');
  const indices=[...new Set(row.commands.flatMap(c=>c.active))];
  let displacement=0;
  for(const i of indices){const a=before.bodies[i]?.position,b=after.bodies[i]?.position;assert.ok(a&&b&&['x','y','z'].every(k=>Number.isFinite(a[k])&&Number.isFinite(b[k])),'Short pull needs finite body positions');displacement=Math.max(displacement,Math.hypot(...['x','y','z'].map(k=>b[k]-a[k])));}
  assert.ok(displacement>1e-8,'Short pull did not move grabbed material');
- return {loadedSteps:loaded.map(s=>s.step),grabbedCells:indices,maxGrabbedDisplacement:displacement};
+ return {loadedSteps:loaded.map(s=>s.step),movedTargetSteps:moved.map(s=>s.step),grabbedCells:indices,maxGrabbedDisplacement:displacement};
 }
