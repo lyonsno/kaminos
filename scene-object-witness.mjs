@@ -2681,6 +2681,43 @@ async function runAuthoredWaterPreviewScenario(ws) {
   })()`,{timeoutMs:60000});
 }
 
+async function runAuthoredMlsScenario(ws){
+ phase='authored-mls-ordinary-scene';
+ lastEvidence.authoredMls=await evaluate(ws,`(async()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  while(!window.kaminosWaterSources||!window.kaminosSceneAuthoring)await wait(100);
+  const api=window.kaminosWaterSources,sceneApi=window.kaminosSceneAuthoring;
+  window.kaminosSetCameraDebugPose({position:[3,2.5,3],target:[0,.5,0]});
+  const bowl=sceneApi.addMesh('bowl',{radius:1,thickness:.12});
+  window.kaminosSetSceneObjectTransform(bowl,{position:[0,.5,0],rotation:[0,0,0],scale:[1,1,1]});
+  sceneApi.setMaterial(bowl,{color:'#bb4422',roughness:.6});
+  await api.add();const id=api.read().selected.id;
+  window.kaminosSetSceneObjectTransform(id,{position:[0,.8,0],rotation:[0,0,0],scale:[1,1,1]});
+  const sampling={...api.read().simulation.sampling,spacing:.075,particleTarget:1000,container:{min:[-1.5,-.6,-1.5],max:[1.5,2,1.5]},worldBounds:{min:[-1.5,-.6,-1.5],max:[1.5,2,1.5]}};
+  api.editSimulation({waterSampling:sampling});await api.release();window.kaminosPauseLocalLiquid(true);
+  let state=window.kaminosLocalLiquidState();
+  if(state.requestedRoute!=='kaminos/mls-mpm-finger-juice-v1'||state.fallbackRoute!==null||!state.solver.collision.memberIds.includes(bowl))throw Error('Authored route or scene collider missing: '+JSON.stringify(state));
+  const before=await api.requestParticleState();
+  await api.advanceTo(Math.max(120,before.stepCount+120));
+  const after=await api.requestParticleState();
+  if(after.recordFloats!==20||!after.words.every(Number.isFinite))throw Error('Invalid native MLS particle layout');
+  const live=[];for(let i=0;i<after.words.length;i+=20)if(after.words[i+3]>0)live.push(after.words.slice(i,i+3).map((x,a)=>after.originWorld[a]+x*after.cellSize));
+  if(live.length!==before.particleCount)throw Error('Finite water lost its population');
+  const meanY=points=>points.reduce((v,p)=>v+p[1],0)/points.length;
+  const initial=[];for(let i=0;i<before.words.length;i+=20)initial.push(before.words.slice(i,i+3).map((x,a)=>before.originWorld[a]+x*before.cellSize));
+  if(meanY(live)>=meanY(initial)-.1)throw Error('MLS drop did not fall');
+  const frozen=after.stepCount;await wait(400);if(window.kaminosLocalLiquidState().solver.clock.step!==frozen)throw Error('Shared pause did not hold MLS');
+  const saved=await window.saveSceneAs({name:'hotwet-mls-native-'+Date.now(),result:true});
+  if(!saved)throw Error('Authored MLS scene save failed');
+  window.selectSceneObject(id);window.kaminosSetCameraDebugPose({position:[2.3,1.8,2.3],target:[0,.3,0]});
+  await wait(300);state=window.kaminosLocalLiquidState();
+  if(state.failure||state.effectiveRoute!==state.requestedRoute||!state.lastFrame?.sharedDevice)throw Error('Actual MLS frame not presented: '+JSON.stringify(state));
+  const resources=performance.getEntriesByType('resource').map(e=>e.name);
+  if(resources.some(u=>/\/(local-liquid-host|finger-fluid-gpu|paper-fluid-gpu)\.mjs(?:\?|$)/.test(u)))throw Error('Retired fluid host loaded in authored path');
+  return {bowl,id,state,before,after,saved,resources,meanY:{before:meanY(initial),after:meanY(live)}};
+ })()`,{timeoutMs:180000});
+}
+
 async function runAuthoredWaterDropScenario(ws) {
   phase='authored-water-ordinary-add';
   lastEvidence.authoredWater=await evaluate(ws,`(async()=>{
@@ -7364,6 +7401,8 @@ try {
     await runLocalLiquidPerformanceScenario(ws);
   } else if (scenario === 'authored-water-objects') {
     await runAuthoredWaterObjectsScenario(ws);
+  } else if (scenario === 'authored-mls') {
+    await runAuthoredMlsScenario(ws);
   } else if (scenario === 'authored-water-drop') {
     await runAuthoredWaterDropScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
