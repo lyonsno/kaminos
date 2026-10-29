@@ -39,7 +39,7 @@ export async function compileSceneLighting(renderer, passes) {
         renderer.contextNode=receivingContext;
       }
       scene.name=pass.name||scene.name;
-      await renderer.compileAsync(scene,camera);
+      await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0});
     } finally {
       if(receivingContext)receivingContext.value=receivingValue;
       renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;

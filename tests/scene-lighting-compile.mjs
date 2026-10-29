@@ -59,3 +59,8 @@ await assert.rejects(compileSceneLighting(renderer,[pass]),/native compile faile
 assert.equal(nativeCache.context.value,originalValue,'failure restores exact native receiving hooks');
 assert.equal(renderer.contextNode,initial.contextNode);
 console.log('PASS preparation preserves native context identity and restores hooks after failure');
+
+pass._renderCallDepths=new WeakMap([[renderer,2]]);
+renderer.compileAsync=async(s,c,target,options)=>{assert.equal(options?.callDepth,2,'warm the native render context observed for this pass and renderer');};
+await compileSceneLighting(renderer,[pass]);
+console.log('PASS preparation carries observed pass nesting');
