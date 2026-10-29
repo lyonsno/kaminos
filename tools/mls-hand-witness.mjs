@@ -83,7 +83,8 @@ try{
     report.phase='jet-control';report.jetControl=[];save();
     for(const requestedSpeed of [speed,report.resolvedRequest.jetSpeed]){
       const before=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
-      await page.getByRole('spinbutton',{name:'Jet speed',exact:true}).fill(String(requestedSpeed));
+      const input=page.getByRole('spinbutton',{name:'Jet speed',exact:true});
+      await input.click();await input.fill(String(requestedSpeed));await input.press('Tab');
       await page.waitForFunction(({speed,received,frames,seconds})=>{
         const s=window.kaminosWorkbenchExperiments.read(),f=s.fingerJuice;
         if(s.error||f.error||f.runtime?.failure)throw Error(s.error??f.error??f.runtime.failure);
