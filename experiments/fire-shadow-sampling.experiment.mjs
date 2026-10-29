@@ -99,7 +99,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       },
       mount({root:panel,document,invoke}){
         const errorOutput=document.createElement('p');errorOutput.setAttribute('role','alert');errorOutput.hidden=true;
-        if(errorOutput.style)errorOutput.style.color='#efaaa0';panel.append(errorOutput);
+        if(errorOutput.style)Object.assign(errorOutput.style,{color:'#efaaa0',position:'sticky',top:'0',zIndex:'2',background:'var(--panel-bg, #1d1e20)',padding:'8px',border:'1px solid currentColor',borderRadius:'4px'});panel.append(errorOutput);
         const perform=invoke;
         invoke=(...args)=>Promise.resolve().then(()=>perform(...args)).then(result=>{errorOutput.textContent='';errorOutput.hidden=true;return result;});
         const failed=error=>{sync(true);errorOutput.textContent=error.message;errorOutput.hidden=false;};
