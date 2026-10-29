@@ -57,7 +57,8 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
   image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
-  document.defaultView.addEventListener('focus',()=>{kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});});  const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
+  document.defaultView.addEventListener('focus',async()=>{try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
+  const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
   const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
   const blink=document.createElement('img');blink.id='asset-compare-blink';blink.hidden=true;blink.alt='Comparison input';frame.append(blink);pair.append(inputFrame,frame);
   const compareTools=document.createElement('div');compareTools.className='asset-compare-tools';compareTools.hidden=true;
