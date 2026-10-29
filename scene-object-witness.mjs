@@ -7266,7 +7266,7 @@ try {
     // Retina-class runs: --device-scale-factor 2 renders like the operator's display.
     ...(args.get('--device-scale-factor') ? [`--force-device-scale-factor=${Number(args.get('--device-scale-factor'))}`] : []),
     '--disable-gpu-sandbox', '--enable-unsafe-webgpu',
-    '--enable-features=Vulkan,UseSkiaRenderer',
+    ...(process.platform==='darwin'?['--use-angle=metal']:['--enable-features=Vulkan,UseSkiaRenderer']),
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   const chromeLaunchSignal = new Promise(resolveLaunch => {
