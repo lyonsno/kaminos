@@ -1,3 +1,4 @@
+import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -183,7 +184,6 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" data-volume-commit="confirm" min="1" max="4" step="0\.125" value="2">/);
   assert.match(index, /slider-help">Grid height as a multiple of the width\. 2 is what every saved basin was authored at\./);
   assert.match(index, /snapped to the nearest height that keeps the light lattices aligned \(steps of 4 cells at 32 and 64, 12 at 48 and 96\)/);
-  assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
   assert.match(index, /getElementById\('volume-grid-height-ratio-val'\)\.textContent = /);
   assert.ok(!index.includes('volume-grid-height-cells'), 'the cells control is gone');
   const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 1200);
@@ -216,7 +216,6 @@ test('cockpit: the height previews while edited and applies on confirm (the page
   assert.match(helpers, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio'\];/);
   assert.ok(!helpers.includes('setTimeout'), 'no idle timer');
   assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" data-volume-commit="confirm" min="1" max="4" step="0\.125" value="2">/);
-  assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
 
   const elements = {};
   const element = (id, value) => (elements[id] = { id, value, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
@@ -333,4 +332,12 @@ test('the admission receipt stays with the shape it describes until the request 
   prototype.setControls({ gridHeightRatio: 3.25 });
   assert.notEqual(prototype.debugState().gridHeight, receipt, 'a new request writes a new receipt');
   assert.equal(prototype.debugState().gridHeight.heightCells, 156);
+});
+
+
+test('cockpit uses confirmed live height while detached consumers use their own saved height',()=>{
+ const line=index.split('\n').find(line=>line.trim().startsWith('gridHeightRatio: parseFloat('));assert.ok(line,'the runtime reader owns a height value');
+ const live={getElementById:()=>({value:'4'})},detached={getElementById:()=>({value:'1.5'})};
+ const read=document=>runInNewContext('({'+line+'}).gridHeightRatio',{document,globalThis:{document:live},volumeRebuildControlValue:()=>2.5});
+ assert.equal(read(live),2.5,'unconfirmed live drafts do not rebuild the grid');assert.equal(read(detached),1.5,'a saved scene does not inherit the operator page height');
 });

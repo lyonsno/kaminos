@@ -421,3 +421,10 @@ test('FLUX.3 availability reports the selected package diagnosis',async()=>{
  const module=await import('../authoring-image-generation.mjs');
  assert.throws(()=>module.authoringImageWeightRoot({flux3:{mounted:false,weightsUrl:'/flux3-weights'},modelAvailability:{flux3:{status:'unavailable',reason:'dit/manifest.json: expected FLUX.3; found FLUX.2'}}},'flux3'),/expected FLUX\.3; found FLUX\.2/);
 });
+
+test('the kiln gets the exact admitted prompt and model request before async loading',async()=>{
+ const gate=deferred(),h=harness({onLoad:()=>gate.promise});
+ const run=h.service.run({prompt:'  engraved bronze lantern  ',seed:42,size:256,model:'flux2'});await tick();
+ const request=h.service.read().request;assert.equal(request.prompt,'engraved bronze lantern');assert.equal(request.width,256);assert.equal(request.seed,42);assert.match(request.id,/^kaminos-flux2-klein:/);
+ gate.resolve();await run;assert.equal(h.generations[0].prompt,request.prompt);assert.equal(h.service.read().request.id,request.id);
+});

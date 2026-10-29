@@ -1,3 +1,9 @@
+import {createKilnRecipeStore} from '../../inference-kiln-selection.mjs';
+import {FIRE_RENDER_DEFAULTS} from '../../scene-fire-render-settings.mjs';
+import {createSceneBloom,checkedSceneBloom} from '../../scene-bloom.mjs';
+import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
+import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
+import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
 import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
@@ -18,7 +24,17 @@ const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneR
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.checkedBurnAppearance??=checkedBurnAppearance;
+  context.createKilnRecipeStore??=createKilnRecipeStore;
+  // This domain fixture does not assemble the Rendering panel. Its controls
+  // are exercised by their owner tests and the native saved-kiln consumer.
+  context.readFireRendering??=()=>structuredClone(FIRE_RENDER_DEFAULTS);
+  context.restoreFireRendering??=()=>{};
+  context.promptEditTargets??=new Set();
+  context.checkedSceneBloom??=checkedSceneBloom;context.bloomControls??=null;
+  context.sceneBloom??=createSceneBloom({rebuild(){},redraw(){}});
   context.sceneAO ??= createSceneAOState();
+  context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
   context.sceneLightingPreparation ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}

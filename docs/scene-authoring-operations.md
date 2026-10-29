@@ -211,6 +211,35 @@ supported dimensions first, so the accepted scene file is not replaced by a
 configuration the live field did not admit. Other mesh scenes remain saveable.
 
 
+## Combustion
+
+A selected static, volumetric, single-mesh object has **Combustion -> Burnable
+wood** beside its Physics properties. Each enabled object owns independent
+thermal, fuel and retained-char state. Their gas feeds the currently mounted
+shared fire domain; checking the property does not start a source or change the
+scene's playback. Several objects can burn together. Collision membership is
+separate, through **Fire & smoke obstacle** and the domain's scene-collision
+setting.
+
+`kaminosSceneAuthoring.setBurnable(id, boolean)` uses the same history operation.
+`burningState(id)` reports off, waiting-for-fire, resident or failed, with the
+actual per-object field state. The visible label distinguishes actual burning
+from a merely warm object. Moving the object carries its material state; the
+ordinary shared fluid domain does not follow it independently.
+
+Turning Burnable off discards that object's evolved state and restores its
+authored material. Turning it back on starts cold. Removing an object and Undo
+retain its current state while that membership remains in history. Save/reopen
+preserves the burnable setting and authored material, not the evolved thermal
+or debris state. Duplicate starts an independent cold body. Material edits and
+their Undo update the displayed surface without resetting its thermal state.
+
+Linked Array/Mirror placements and inherited group repetitions are not admitted
+with burning. Make the copies editable first to obtain independent objects.
+Multi-mesh assets, surfels, structural collapse and fracture are separate work;
+this property uses the existing wood-like material law, not calibrated wood
+chemistry.
+
 ## Editable repetition
 
 Select a static mesh or a group of static meshes and use **Selection → Repetition**. **Array** offers Circle and Line; **Mirror** independently enables X/Y/Z reflections. The count includes the original. A complete circle omits the duplicate endpoint; a partial arc includes its end angle. Spacing is a vector per copy. World/Local chooses the axes and coordinate system for spacing and center. Local spacing and center coordinates follow the source scale; angular and mirror frames remain orthogonal. Center fields and Source origin / World origin / View pivot buttons choose the pivot. If a Circle is first enabled directly on its center, the initial center is offset by twice the source width so the placements are visible. Move the source or edit the center to change radius.

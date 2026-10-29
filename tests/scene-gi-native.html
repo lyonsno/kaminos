@@ -27,6 +27,12 @@ const frames=async()=>{for(let i=0;i<3;i++){pipeline.render();await renderer.bac
 const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,800,600),THREE.DataUtils.fromHalfFloat);
 window.giAssay={
   state:()=>({rendererSamples:renderer.samples,...gi.debugState()}),
+  emissionAttachment() {
+    const beauty=gi.beauty;
+    beauty.setMRT(THREE.TSL.mrt({...beauty.getMRT().outputNodes,emissive:THREE.TSL.emissive}));
+    beauty.renderTarget.dispose();beauty.needsUpdate=true;beauty.getTextureNode('emissive');
+    return {outputs:Object.keys(beauty.getMRT().outputNodes)};
+  },
   async receivedComparison() {
     const results=[];
     for(const ordinary of [false,true])for(const color of [0xffffff,0x111111]) {

@@ -84,6 +84,25 @@ Reloadable Workbench assets retain the existing individual-object Undo and scope
 resource-disposal behavior. This distinction does not add a checkpoint or replay
 facility for evolved experiment state.
 
+## Saved scene access across checkouts
+
+Load and Generate's kiln chooser use `scene-library-client.mjs` to browse the
+same local scene store and other configured stores. Choosing another store's
+scene imports an ordinary local copy and its available mesh/basin dependencies;
+the original stays untouched. Generate's Browse files option retains a fresh
+copy without accepting overwrite hints from the uploaded document.
+
+`KAMINOS_SCENES_DIR` selects the writable scene store. The library also discovers
+the server's normal sibling and user-data stores. To retain access to scenes
+outside those locations when changing served revisions, put one directory glob
+per line in `~/.config/kaminos/scene-library-globs`, for example
+`~/projects/*/scenes`. Blank lines and `#` comments are ignored. This extends
+normal discovery and is read for each library request.
+`KAMINOS_SCENE_LIBRARY_CONFIG` selects another file; an explicitly requested
+unreadable file produces a visible library error. The existing
+`KAMINOS_SCENE_LIBRARY_GLOBS` environment setting continues to replace discovery
+with its path-separator-delimited patterns.
+
 Temporary preview parks exact roots, groups and selection in the working-scene
 owner. `suspendMembership` removes them from active membership;
 `resumeMembership` returns surviving roots. Owner closure can retire a parked root

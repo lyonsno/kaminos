@@ -1,3 +1,4 @@
+import {checkedKilnSelection} from './inference-kiln-selection.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
@@ -48,7 +49,7 @@ export function checkedPreferences(raw){
  if(raw?.schema!==PREFERENCES_SCHEMA)throw Error('Unsupported preferences document');
  if(Object.hasOwn(raw,'startupConfigured')&&typeof raw.startupConfigured!=='boolean')throw Error('Invalid startup preference state');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
- return {...copy(raw),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
+ return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
 }
 export function sceneDefaultsApplyToLocation(value){
  const url=new URL(value,'http://localhost');

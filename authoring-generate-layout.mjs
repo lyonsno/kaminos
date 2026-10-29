@@ -20,7 +20,8 @@ export function generationComparisonView({selected,comparison,preparedSource=nul
   right:generationImageView({selected,preparedSource,showSegmented:prepared,preview}),label:prepared?'Segmented images':'Original images'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null}){
+
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -36,8 +37,27 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
   const canvas=document.createElement('canvas');canvas.id='asset-step-preview';canvas.hidden=true;canvas.setAttribute('role','img');
   const frame=document.createElement('div');frame.className='asset-image-view asset-compare-current';frame.append(preview,canvas);
-  const ceremony=createFlame?installGenerationFlame({document,slot:frame,createRenderer:createFlame}):null;
-  const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
+  const kilnPanel=document.createElement('section');kilnPanel.className='generation-kiln';
+  const kilnView=document.createElement('div');kilnView.className='generation-kiln-view';
+  const kilnTools=document.createElement('div');kilnTools.className='generation-kiln-tools';
+  const kilnLabel=document.createElement('span');kilnLabel.textContent='Inference Kiln';
+  const kilnChoose=document.createElement('button');kilnChoose.type='button';kilnChoose.textContent='Choose kiln…';
+  const kilnDesign=document.createElement('a');kilnDesign.textContent='Design in Workbench';kilnDesign.target='_blank';kilnDesign.rel='noopener';
+  const kilnStatus=document.createElement('p');kilnStatus.className='asset-help';kilnStatus.setAttribute('role','status');
+  const syncKiln=()=>{kilnLabel.textContent=kiln?.read()?.document?.label??'Inference Kiln';kilnDesign.href=kiln?.designURL?.()??'./inference-kiln-study.html?material=1';};
+  kilnTools.append(kilnLabel,kilnChoose,kilnDesign);kilnPanel.append(kilnTools,kilnView,kilnStatus);
+  const imageOptions=image.querySelector('.asset-text-image-actions'),imageActions=document.createElement('div');imageActions.className='asset-text-image-actions';
+  // Keep Generate/Stop and output size above the preview as it grows. All
+  // existing controls retain their identities and controller handlers.
+  for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
+  const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
+  if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
+  const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
+  kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
+  kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
+  const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
+  image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
+  document.defaultView.addEventListener('focus',()=>{kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});});  const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
   const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
   const blink=document.createElement('img');blink.id='asset-compare-blink';blink.hidden=true;blink.alt='Comparison input';frame.append(blink);pair.append(inputFrame,frame);
   const compareTools=document.createElement('div');compareTools.className='asset-compare-tools';compareTools.hidden=true;
@@ -45,6 +65,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const hold=document.createElement('button');hold.type='button';hold.id='asset-compare-hold';hold.textContent='Hold to show input';hold.title='Hold here to show the comparison input over the result';
   const setBlink=value=>{blink.hidden=!value;};hold.addEventListener('pointerdown',e=>{hold.setPointerCapture(e.pointerId);setBlink(true);});for(const name of ['pointerup','pointercancel','lostpointercapture','blur'])hold.addEventListener(name,()=>setBlink(false));hold.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();setBlink(true);}});hold.addEventListener('keyup',e=>{if(e.code==='Space')setBlink(false);});
   choose.onchange=()=>{history?.compare(choose.value);render();};compareTools.append(choose,hold);
+
   const tools=document.createElement('div');tools.className='asset-image-view-tools';
   const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='asset-show-segmented';toggle.checked=showSegmented;
   toggleLabel.append(toggle,document.createTextNode('Show segmented'));toggleLabel.title='Changes the displayed image; mesh generation still uses its prepared input.';
@@ -90,7 +111,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     const view=comparing?paired.right:generationImageView({selected:selected(),preparedSource:source&&!source.hidden?source.getAttribute('src'):null,showSegmented,preview:state?.preview});
     const identity=view.preview?.runId||selected()?.source||selected()?.path||null;
     if(identity!==viewIdentity){zoom.reset();viewIdentity=identity;}
-    const showing=!!(view.source||view.preview);frame.hidden=!showing&&!ceremony?.read().running;preview.hidden=!view.source;canvas.hidden=!view.preview;
+    const showing=!!(view.source||view.preview);frame.hidden=!showing;preview.hidden=!view.source;canvas.hidden=!view.preview;
     if(view.source&&preview.getAttribute('src')!==view.source)preview.src=view.source;
     if(!view.source)preview.removeAttribute('src');preview.alt=view.label;caption.textContent=comparing?paired.label:view.label;caption.hidden=!showing;
     if(view.preview){
