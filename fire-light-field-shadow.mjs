@@ -86,7 +86,11 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   if(batch&&(!activeBatches.has(batch)||batch.scene!==scene||batch.batchRenderer!==renderer))throw Error('fire-shadow-inactive-or-foreign-batch');
   const state=batch?null:RendererUtils.resetRendererAndSceneState(renderer,scene);
   const culling=[],autoUpdate=scene.matrixWorldAutoUpdate;
+  const lightingEnabled=renderer.lighting.enabled;
   try {
+    // This pass writes radial distance and source coverage only. Ordinary
+    // scene lights/environment must not invalidate its shader programs.
+    renderer.lighting.enabled=false;
     const disableCulling=object=>{
       if(object.isMesh&&object.castShadow) {culling.push([object,object.frustumCulled]);object.frustumCulled=false;}
     };
@@ -103,6 +107,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
     cubeCamera.update(renderer,scene);
   } finally {
     if(batch)delete batch.coverageMaterials;
+    renderer.lighting.enabled=lightingEnabled;
     scene.matrixWorldAutoUpdate=autoUpdate;
     for(const [object,frustumCulled] of culling) object.frustumCulled=frustumCulled;
     if(!batch)RendererUtils.restoreRendererAndSceneState(renderer,scene,state);
