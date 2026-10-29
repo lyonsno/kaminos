@@ -5,9 +5,9 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {MLS_ROUTE,analyzeMlsParticles} from '../mls-juice-contract.mjs';
-import {bindMlsWitnessSource,validateMlsHandWindow,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
+import {bindMlsWitnessSource,validateMlsHandWindow,resolveMlsHandRequest,validateMlsHandRequest,validateMlsJetControl,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
 
-const {values:a}=parseArgs({options:Object.fromEntries(['url','output','browser','playwright','capture','seconds','min-active','observe-seconds','width','height','scale','canvas-width','canvas-height'].map(k=>[k,{type:'string'}]))});
+const {values:a}=parseArgs({options:Object.fromEntries(['url','output','browser','playwright','capture','seconds','min-active','observe-seconds','width','height','scale','canvas-width','canvas-height','jet-control-speed'].map(k=>[k,{type:'string'}]))});
 const out=path.resolve(a.output);fs.mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'input',at:new Date().toISOString(),argv:process.argv,pageErrors:[],consoleErrors:[],states:[],browserClosed:false,
   seconds:Number(a.seconds??0),minActive:Number(a['min-active']??1),observeSeconds:Number(a['observe-seconds']??0),
@@ -20,6 +20,7 @@ try{
   report.cameraSource={file:a.capture,captureId:capture.captureId,sha256:createHash('sha256').update(image).digest('hex')};fs.writeFileSync(out+'/source.png',image);
   report.requested=JSON.parse(new URL(a.url).searchParams.get('experiment_inputs')??'{}');
   report.experiment=new URL(a.url).searchParams.get('experiment')??'hand-browser-juice';
+  report.resolvedRequest=resolveMlsHandRequest(report.experiment,report.requested);
   assert(Number.isFinite(report.seconds)&&report.seconds>=0,'invalid warmup');
   assert(Number.isFinite(report.observeSeconds)&&report.observeSeconds>=0,'invalid observation window');
   const viewport={width:Number(a.width??1280),height:Number(a.height??900)},scale=Number(a.scale??1);
@@ -54,13 +55,7 @@ try{
   }while(true);
   report.observed=state;assert.equal(state.fingerJuice.runtime.effectiveRoute,MLS_ROUTE);assert.equal(state.visible,true);
   const solver=state.fingerJuice.runtime.solver;
-  assert.equal(solver.particleCount,report.requested.particleCount??2400,'capacity mismatch');
-  assert.equal(solver.material.viscosity,report.requested.fluidViscosity??.1,'viscosity mismatch');
-  assert.equal(state.fingerJuice.packet.economics.lifetimeSeconds,report.requested.particleLifetimeSeconds??6,'packet lifetime mismatch');
-  assert.equal(state.fingerJuice.packet.economics.jetSpeedWorldPerSecond,report.requested.jetSpeed??1.15*1.7,'jet speed mismatch');
-  assert.equal(state.fingerJuice.load.requestedRate,report.requested.sourceFlux??360,'emission mismatch');
-  const requestedGrid=report.requested.fluidGridSize??64;
-  assert.deepEqual(solver.domain.gridDimensions,Array.isArray(requestedGrid)?requestedGrid:[requestedGrid,requestedGrid,requestedGrid],'domain mismatch');
+  validateMlsHandRequest(state,report.resolvedRequest);
   const nativeConfig={capacity:solver.particleCount,minActive:report.minActive,grid:solver.domain.gridDimensions,cell:solver.domain.cellSize};
   report.canvas=state.fingerJuice.runtime.lastFrame;
   if(a['canvas-width'])assert.equal(report.canvas.width,Number(a['canvas-width']),'canvas width mismatch');
@@ -82,6 +77,22 @@ try{
     assert(intervals.length>0,'missing populated-window callbacks');
     report.callbackSpacingMs=Object.fromEntries([['p50',.5],['p95',.95],['p99',.99]].map(([k,q])=>[k,intervals[Math.min(intervals.length-1,Math.floor(q*intervals.length))]]));
     report.progress=validateMlsHandWindow(report.windowStart.state,report.windowEnd.state);
+  }
+  if(a['jet-control-speed']){
+    const speed=Number(a['jet-control-speed']);assert(Number.isFinite(speed)&&speed>=0,'invalid control probe speed');
+    report.phase='jet-control';report.jetControl=[];save();
+    for(const requestedSpeed of [speed,report.resolvedRequest.jetSpeed]){
+      const before=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+      await page.getByRole('spinbutton',{name:'Jet speed',exact:true}).fill(String(requestedSpeed));
+      await page.waitForFunction(({speed,received,frames,seconds})=>{
+        const s=window.kaminosWorkbenchExperiments.read(),f=s.fingerJuice;
+        if(s.error||f.error||f.runtime?.failure)throw Error(s.error??f.error??f.runtime.failure);
+        return s.received>received&&f.runtime.frameCount>frames&&f.runtime.solver.clock.simulatedSeconds>seconds&&
+          f.packet.economics?.jetSpeedWorldPerSecond===speed;
+      },{speed:requestedSpeed,received:before.received,frames:before.fingerJuice.runtime.frameCount,seconds:before.fingerJuice.runtime.solver.clock.simulatedSeconds});
+      const after=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+      report.jetControl.push({requestedSpeed,before,after});save();validateMlsJetControl(before,after,requestedSpeed);
+    }
   }
   report.stopped=await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('stop'));
   assert.equal(report.stopped.running,false);assert.equal(report.stopped.retention.pending,0);assert.equal(report.stopped.retention.error,null);

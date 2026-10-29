@@ -12,7 +12,8 @@ test('capacity changes remount water while the camera remains live and reads act
   const video={style:{},videoWidth:640,videoHeight:480,play:async()=>{},requestVideoFrameCallback:fn=>{callback=fn;return 1;},cancelVideoFrameCallback(){}};
   const canvas={getContext:()=>({drawImage(){}}),toDataURL:()=> 'data:image/jpeg;base64,fixture'};
   const document={defaultView:{innerWidth:1000},location:{origin:'http://fixture'},createElement:tag=>tag==='video'?video:canvas};
-  const scene={attach:async()=>({}),setView(){},readView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose(){}};
+  let view;
+  const scene={attach:async()=>({}),setView:v=>view=v,readView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose(){}};
   const identity={model:'mobrecon_densestack_spiralconv',backend:'pytorch',device:'cpu',checkpointSha256:'fixture',sourceRevision:'fixture'};
   const track={stop:()=>stops++,getSettings:()=>({})};
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[track],getVideoTracks:()=>[track]})}}});
@@ -32,6 +33,9 @@ test('capacity changes remount water while the camera remains live and reads act
       setPacket:p=>{row.packet=p;},setPaused:p=>row.paused=p,dispose:()=>{row.disposed=true;disposed++;}};
   }}};
   instance=await experiment.create({host,inputs:{fingerJuice:true,fluidBackend:'mls-mpm',fluidGridSize:[192,80,256],jetSpeed:4.5,sceneLayout:'runway'},record:r=>records.push(r)});
+  document.defaultView.innerWidth=390;
+  instance.operations.frame();
+  assert.equal(view.position[2],11,'narrow runway must keep the full flight arc in view');
   assert.equal(typeof instance.operations.setParticleCount,'function','capacity control is absent');
   assert.equal(typeof instance.operations.setParticleLifetime,'function','particle lifetime control is absent');
   assert.equal(typeof instance.operations.setJetSpeed,'function','jet speed control is absent');

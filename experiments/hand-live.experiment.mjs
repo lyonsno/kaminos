@@ -88,7 +88,7 @@ export default {
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      sceneLayout,terrainSource:'prescribed_flat_receiver_not_hill',
+      sceneLayout,terrainSource:!fingerJuice?null:fluidBackend==='mls-mpm'?'prescribed_flat_receiver_not_hill':'retained_analytical_basin',
       fingerJuice:{enabled:fingerJuice,backend:fluidBackend,jetSpeedWorldPerSecond:jetSpeed,particleLifetimeSeconds:particleLifetime,packet:fluidPacket,runtime,error:fluidError,rebuilding,
         load:fingerFluidLoad(runtime,{particleCount,sourceFlux})}};
     };
@@ -205,7 +205,7 @@ export default {
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
         displayTransform:{center,scale:5,invertY:true}});
     };
-    const frame = () => scene.setView(sceneLayout==='runway'?{position:[0,3.5,7.5],target:[0,.65,-1.2]}:fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
+    const frame = () => scene.setView(sceneLayout==='runway'?(document.defaultView.innerWidth<600?{position:[0,4.4,11],target:[0,1,-1.2]}:{position:[0,3.5,7.5],target:[0,.65,-1.2]}):fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     const setAcquisition = value => {
       if (!['manual','detector'].includes(value.mode) || (value.mode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
       const padding=Number(value.padding ?? cropPadding), threshold=Number(value.threshold ?? detectorThreshold);

@@ -4,6 +4,35 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {MLS_ROUTE} from '../mls-juice-contract.mjs';
+import {RUNWAY_INPUTS} from '../experiments/hand-jet-runway.experiment.mjs';
+
+export function resolveMlsHandRequest(experiment,inputs){
+  assert(['hand-live','hand-browser-juice','hand-jet-runway'].includes(experiment),'unsupported hand experiment');
+  return {particleCount:2400,fluidViscosity:.1,particleLifetimeSeconds:6,jetSpeed:1.15*1.7,sourceFlux:360,fluidGridSize:64,
+    ...(experiment==='hand-jet-runway'?RUNWAY_INPUTS:{}),...inputs};
+}
+
+export function validateMlsHandRequest(state,requested){
+  const solver=state.fingerJuice.runtime.solver;
+  assert.equal(solver.particleCount,requested.particleCount,'capacity mismatch');
+  assert.equal(solver.material.viscosity,requested.fluidViscosity,'viscosity mismatch');
+  assert.equal(state.fingerJuice.packet.economics.lifetimeSeconds,requested.particleLifetimeSeconds,'packet lifetime mismatch');
+  assert.equal(state.fingerJuice.packet.economics.jetSpeedWorldPerSecond,requested.jetSpeed,'jet speed mismatch');
+  assert.equal(state.fingerJuice.load.requestedRate,requested.sourceFlux,'emission mismatch');
+  const grid=requested.fluidGridSize;
+  assert.deepEqual(solver.domain.gridDimensions,Array.isArray(grid)?grid:[grid,grid,grid],'domain mismatch');
+}
+
+export function validateMlsJetControl(before,after,speed){
+  validateMlsHandWindow(before,after);
+  assert.equal(after.sessionId,before.sessionId,'jet control restarted camera');
+  assert.equal(after.fingerJuice.jetSpeedWorldPerSecond,speed,'jet control state unchanged');
+  assert.equal(after.fingerJuice.packet.economics.jetSpeedWorldPerSecond,speed,'jet control packet unchanged');
+  const active=after.fingerJuice.packet.emitters.filter(e=>e.active);
+  assert(active.length>0,'jet control has no active emitters');
+  for(const emitter of active)assert.equal(emitter.strength,speed,'jet control emitter unchanged');
+  assert(after.fingerJuice.runtime.solver.liveInlets.totalAdmitted>=before.fingerJuice.runtime.solver.liveInlets.totalAdmitted,'jet control reset water');
+}
 
 export function validateMlsHandWindow(start,end){
   for(const state of [start,end]){

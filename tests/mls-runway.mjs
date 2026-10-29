@@ -25,6 +25,7 @@ native[0]=190;assert.throws(()=>analyzeMlsParticles(native,{capacity:100,grid:co
 for(const height of [.5,1.5,2.5])for(let pitch=-90;pitch<=90;pitch++)for(let yaw=0;yaw<360;yaw++){
   const p=pitch*Math.PI/180,a=yaw*Math.PI/180,v=4.5,vy=v*Math.sin(p);
   const time=(vy+Math.sqrt(vy*vy+2*9.81*height))/9.81;
+  assert(height+Math.max(0,vy)**2/(2*9.81)+.2<config.bounds.max[1],'receiver ceiling intersects reference launch arc');
   const offset=[v*Math.cos(p)*Math.cos(a)*time,0,v*Math.cos(p)*Math.sin(a)*time];
   for(const i of [0,2])assert(Math.abs(offset[i])+.6+.2<Math.min(-config.bounds.min[i],config.bounds.max[i]),'receiver shorter than launch range plus glove/margin');
 }
