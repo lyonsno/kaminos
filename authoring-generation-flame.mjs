@@ -18,11 +18,11 @@ export function installGenerationFlame({document,slot,createRenderer}){
    if(renderer&&renderedKey!==key){await renderer.setActive(false);await renderer.dispose();renderer=null;}
    if(!renderer&&!running&&!allowCold)return;
    if(!renderer){
-    startup=new AbortController();status.textContent='Loading kiln…';
+    refreshPending=false;startup=new AbortController();status.textContent='Loading kiln…';
     try{
      const value=await createRenderer(volume,{signal:startup.signal,prompt:running?(request?.prompt??draft()):draft(),request:running?request:null});
      if(disposed||generation!==epoch||!visible){await value.dispose();return;}
-     renderer=value;renderedKey=key;refreshPending=false;lastError=null;
+     renderer=value;renderedKey=key;lastError=null;
     }catch(error){if(error.name!=='AbortError'){lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';}return;}
    }
    if(generation!==epoch)return;
