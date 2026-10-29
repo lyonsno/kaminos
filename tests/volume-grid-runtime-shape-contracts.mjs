@@ -121,6 +121,7 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
     SOOT_BURNOUT_WGSL: (await import('../volume-physics-appearance.mjs')).SOOT_BURNOUT_WGSL,
     WAVELET_TURBULENCE_WGSL: (await import('../volume-wavelet-turbulence.mjs')).WAVELET_TURBULENCE_WGSL,
+    DISPLAY_RECONSTRUCTION_WGSL: (await import('../volume-display-reconstruction.mjs')).DISPLAY_RECONSTRUCTION_WGSL,
   };
   assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());
   const seen = [];
@@ -171,7 +172,7 @@ test('emissive seed readback: stats helper, field readback, capture check', asyn
 test('emissive seed witness is bound to its producer: frame, step and grid of the dispatch that wrote it', async () => {
   const { emissiveCoefficientsMismatch } = await import('../volume-arm-capture-checks.mjs');
   assert.match(source, /emissiveLightField\.encode\(encoder, currentFluid, options\.emissiveTimestampWrites\);\n\s+emissiveSeedProducer = \{ frameCount: state\.frameCount, simStepCount: state\.simStepCount, grid: \[gridSize, gridHeight, gridSize\] \};/);
-  assert.match(source, /emissiveLightField = createEmissiveLightField\(device, shader, uniformBuffer, fluidBuffers, frontBuffers, \(\) => reactantTextures\);\n\s+emissiveSeedProducer = null;/);
+  assert.match(source, /emissiveLightField = createEmissiveLightField\(device, shader, uniformBuffer, fluidBuffers, frontBuffers, \(\) => reactantTextures\);\n\s+displayReconstruction = createDisplayReconstruction\(device, shader, uniformBuffer, \(\) => \(\{fluid:fluidBuffers,reactant:reactantTextures\}\)\);\n\s+emissiveSeedProducer = null;/);
   assert.match(source, /if \(!emissiveSeedProducer\) return \{ status: 'unsupported', reason: 'emissive-seed-not-dispatched', grid: \[gridSize, gridHeight, gridSize\] \};/);
   const base = { status: 'sampled', grid: [48, 96, 48], cells: 4, finiteCells: 4, nonzeroCells: 2, extinctionStdDev: 0.5 };
   assert.equal(emissiveCoefficientsMismatch({ ...base, producer: { grid: [48, 96, 48], frameLag: 1 } }), null);
