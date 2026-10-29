@@ -1,4 +1,29 @@
-# MLS Finger Juice Contender
+# MLS liquid runtime
+
+## Authored water
+
+Ordinary Add → Water sources now use the rebuilt MLS-MPM engine. Their finite
+drops and continuous inlets share the scene device, current plane/sphere/bowl
+colliders, playback, source transforms and saved setup. The old fluid solver is
+not a fallback. Source speed and radius pass through in authored world units.
+Finite releases persist; continuous particles retain the producer’s six-second
+lifetime and report capacity saturation. Finite size/target/bounds changes apply
+on Replay; continuous pose/rate edits affect subsequent births immediately.
+
+The authored viewport uses the scene environment for reflection, raw scene
+lighting/depth for refraction, and one final scene-camera transform and selection
+overlay. Full, Proxy and Hidden preserve that camera. Flame emission and smoke
+compose before/after the water surface according to their depth. This is optical
+composition; it does not add a thermal response to water contact.
+
+The grid spans the authored bounds at the initial population’s derived cell
+width. Smaller drops at a fixed particle target require finer grids. The solver
+uses two-dimensional grid dispatch, respects the device’s actual buffer limits,
+and rejects unsupported allocations without silently changing target or bounds.
+
+## Producer experiment context
+
+The following describes the separate hand experiment, not the authored host.
 
 This is a provisional alternative to the incumbent fluid, not its replacement.
 Use the existing Workbench experiment `hand-browser-juice` with inputs

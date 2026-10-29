@@ -9,7 +9,7 @@ assert.equal(config.gridCells,192*80*256);
 for(const [i,v]of[-4.8,-.1,-6.4].entries())assert(Math.abs(config.min[i]-v)<1e-12);
 assert.throws(()=>mlsConfig({gridSize:[192,7,256]}),/grid size/);
 await assert.rejects(createMlsJuiceSolver({device:{limits:{maxStorageBufferBindingSize:10,maxBufferSize:100}},setup:{gridSize:config.grid}}),/device buffer limits/);
-await assert.rejects(createMlsJuiceSolver({device:{limits:{maxComputeWorkgroupsPerDimension:10}},setup:{gridSize:config.grid}}),/dispatch limit/);
+await assert.rejects(createMlsJuiceSolver({device:{limits:{maxComputeWorkgroupsPerDimension:10}},setup:{gridSize:config.grid}}),/dispatch capacity/);
 const packet=validateMlsPacket({authority:{simulation_safe:true},timestamp_ms:1000,emitters:[{
   id:'far-jet',active:true,origin_world:[3,1.5,-4],aim_world:[0,0,-1],radius:.0704,strength:4.5,lifetime_seconds:6,source_flux_particles_per_second:240
 }]});
