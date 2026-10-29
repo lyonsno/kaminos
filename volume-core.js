@@ -2174,7 +2174,7 @@ export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 8;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
 export const OPEN_WORLD_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
 export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = OPEN_WORLD_UNIFORM_OFFSET + 4;
-export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 4;
+export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3828,6 +3828,7 @@ struct Uniforms {
   wavelet_octave_weights: vec4<f32>,
   open_world_boundary: vec4<f32>,
   display_reconstruction: vec4<f32>,
+  display_interpolation: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -16749,6 +16750,8 @@ export function createKaminosVolumePrototype({
       displayAdmission = displayReconstruction.ensure([gridSize,gridHeight,gridSize],displayConfig);
     }
     uniforms.set([displayConfig.value,displayConfig.emission,displayConfig.smoke,displayConfig.scale], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET);
+    uniforms.set([displayConfig.alignment==='aligned'?1:0,displayConfig.emissionInterpolation==='interpolating'?1:0,
+      displayConfig.smokeInterpolation==='interpolating'?1:0,0], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
     if (displayAdmission?.changed) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
