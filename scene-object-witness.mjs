@@ -2713,7 +2713,7 @@ async function runAuthoredMlsScenario(ws){
   await wait(300);state=window.kaminosLocalLiquidState();
   if(state.failure||state.effectiveRoute!==state.requestedRoute||!state.lastFrame?.sharedDevice)throw Error('Actual MLS frame not presented: '+JSON.stringify(state));
   const resources=performance.getEntriesByType('resource').map(e=>e.name);
-  if(resources.some(u=>/\/(local-liquid-host|finger-fluid-gpu|paper-fluid-gpu)\.mjs(?:\?|$)/.test(u)))throw Error('Retired fluid host loaded in authored path');
+  if(resources.some(u=>['/local-liquid-host.mjs','/finger-fluid-gpu.mjs','/paper-fluid-gpu.mjs'].includes(new URL(u).pathname)))throw Error('Retired fluid host loaded in authored path');
   return {bowl,id,state,before,after,saved,resources,meanY:{before:meanY(initial),after:meanY(live)}};
  })()`,{timeoutMs:180000});
 }
@@ -7317,7 +7317,7 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  if(['authored-water-preview','authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
+  if(['authored-mls','authored-water-preview','authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
   else assertExpectedServerRoot(effectiveServerRoots);
 
   if (scenario === 'authored-water-preview') {
