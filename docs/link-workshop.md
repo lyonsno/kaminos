@@ -13,8 +13,7 @@ Mode. This first build constructs rooted forests, not closed loops.
 Connect piston takes two joint clicks. The piston follows their distance during
 posed motion; it does not drive a force or constraint solver. Pose A/B ghosts
 show the endpoints of the cycle. Play interpolates relative joint angles with
-cosine timing; Pause holds the displayed position. Editing a pose chooses that
-pose explicitly. All numeric tuning uses Kaminos number-drag controls.
+cosine timing; Stop returns to the selected authored pose for further editing. All numeric tuning uses Kaminos number-drag controls.
 
 Save mechanism / Open mechanism retain the construction, both poses and piston
 connections in a `kaminos.links.v1` JSON recipe. The experiment accepts that same
