@@ -33,7 +33,7 @@ function fixture({sourceRoot=null,simulationRoot=null}={}){
  f.api.edit=()=>{};await f.input('[data-release]').onclick();assert.equal(released,1);assert.equal(f.input('[data-source-error]').textContent,'');
 }
 {
- const f=fixture();let passes=2;const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,settings:{densityIterations:passes}}});f.api.editSimulation=patch=>{passes=patch.densityIterations;};f.controls.refresh();f.input('[data-passes]').value=4;f.input('[data-passes]').listeners.input();await f.settle();assert.equal(passes,4,'Simulation properties also commit automatically');
+ const f=fixture();let sampling={spacing:.05,particleTarget:1000,container:{min:[-2,-1,-2],max:[2,3,2]}};const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,settings:{waterSampling:sampling},sampling}});f.api.editSimulation=patch=>{assert.equal(patch.densityIterations,undefined,'MLS edits must not publish obsolete density passes');sampling=patch.waterSampling;};f.controls.refresh();f.input('[data-target]').value=2000;f.input('[data-target]').listeners.input();await f.settle();assert.equal(sampling.particleTarget,2000,'Simulation particle target also commits automatically');
 }
 {
  const f=fixture();let complete;f.hold(new Promise(r=>complete=r));f.draftWidth(.75);const pending=f.settle();f.select('B',1);f.draftWidth(1.25);complete();await pending;assert.equal(Number(f.input('[data-width]').value),1.25,'Old source completion must not replace the newer draft');await f.settle();assert.equal(f.edits.at(-1).id,'B');

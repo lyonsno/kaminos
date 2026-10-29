@@ -72,7 +72,8 @@ test('removing the final emitter emits an empty inlet update while retaining the
   }, 7);
   assert.equal(state.participation, 'authored-domain-present');
   assert.deepEqual(state.domain, defaultLocalLiquidSetup());
-  assert.equal(state.inletPacket.packet_id, 'kaminos-authored-liquid-7');
+  assert.equal(state.inletPacket.packet_id, 'authored-mls-7');
+  assert.equal(state.inletPacket.authority.simulation_safe, true);
   assert.deepEqual(state.inletPacket.emitters, []);
 });
 

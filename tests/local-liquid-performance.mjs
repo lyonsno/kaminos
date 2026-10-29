@@ -5,7 +5,6 @@ import {sceneContext} from './helpers/scene-context.mjs';
 import {readFileSync} from 'node:fs';
 import {defaultLocalLiquidSetup, normalizeLocalLiquidSetup} from '../local-liquid-setup.mjs';
 import {buildSceneDocument, planSceneRestore} from '../scene-persistence-core.js';
-import {measureFingerFluidParticleAllocationCapacity, evaluateFingerFluidParticleAllocationRequest} from '../finger-fluid-webgpu-core.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function harness() {
@@ -13,7 +12,7 @@ function harness() {
   const end=html.indexOf('\nfunction refreshLocalLiquidPerformance',start);
   assert.ok(start>=0 && end>start,'performance controls must rebuild the live host, not only change saved labels');
   const calls=[];
-  const context={structuredClone,normalizeLocalLiquidSetup,measureFingerFluidParticleAllocationCapacity,evaluateFingerFluidParticleAllocationRequest,
+  const context={structuredClone,normalizeLocalLiquidSetup,
     localLiquidSetup:defaultLocalLiquidSetup(),localLiquidGeneration:4,localLiquidFailure:null,
     localLiquidHost:{dispose:()=>calls.push('dispose')},localLiquidHostMount:{isLoading:()=>false},
     scenePlacementTools:{edits:{state:()=>({active:null,replaying:false})}},sceneSaveBlockedByFailedRestore:false,authoringBusy:false,
@@ -37,12 +36,22 @@ test('changing the fluid budget retires the old solver and mounts the requested 
 });
 
 test('invalid and device-impossible budgets leave the live water untouched',async()=>{
-  for (const values of [{particleCount:512,densityIterations:1},{particleCount:49152,densityIterations:0},{particleCount:1e9,densityIterations:1}]) {
+  for (const values of [{particleCount:0,densityIterations:1},{particleCount:49152,densityIterations:0},{particleCount:1e9,densityIterations:1}]) {
     const {context,calls}=harness();
     await assert.rejects(context.apply(values));
     assert.equal(context.localLiquidGeneration,4);
     assert.ok(context.localLiquidHost);
     assert.deepEqual(calls,[]);
+  }
+});
+
+test('MLS accepts small populations and checks the native 80-byte layout against actual device limits',async()=>{
+  const small=harness();await small.context.apply({particleCount:512,densityIterations:1});
+  assert.deepEqual(small.calls.slice(0,2),['dispose',['mount',512,1]]);
+  for(const limiting of ['maxStorageBufferBindingSize','maxBufferSize']){
+    const {context,calls}=harness();context.sharedGpu.device.limits[limiting]=512*80-1;
+    await assert.rejects(context.apply({particleCount:512,densityIterations:1}),/device buffer limits/);
+    assert.equal(context.localLiquidGeneration,4);assert.ok(context.localLiquidHost);assert.deepEqual(calls,[]);
   }
 });
 
