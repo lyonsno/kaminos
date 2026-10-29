@@ -14,7 +14,7 @@ assert.equal(drops.normalizeAuthoredWaterDrop(drop).width,.63,'Arbitrary request
 const make=(id,width,position=[0,1,0],scale=1)=>({id,label:id,transform:{position,rotation:[0,0,0],scale:[scale,scale,scale]},localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'finite_drop',drop:{width,samplesPerUnit:20}}});
 const records=[make('A',.63),make('B',.51,[1,1,0])],settings={...defaultLocalLiquidSetup(),waterSampling:sampling};
 assert.deepEqual(normalizeLocalLiquidSetup(settings).waterSampling,sampling,'Shared spacing/container must round-trip in saved scene domain');
-const setup=authoredDropSetup(records,settings);assert.equal(setup.solver.particleCount,2197+1000);assert.equal(setup.solver.diagnosticBox.collisionRadius,.025);assert.equal(drops.inspectAuthoredWaterCompatibility(records,sampling).compatible,true,'Independent sizes no longer create resolution mismatches');
+const setup=authoredDropSetup(records,settings);assert.equal(setup.solver.particleCount,2197+1000);assert.equal(setup.solver.cellSize,.05*Math.cbrt(3));assert.equal(drops.inspectAuthoredWaterCompatibility(records,sampling).compatible,true,'Independent sizes no longer create resolution mismatches');
 const shifted=structuredClone(records);shifted[0].transform.position[0]+=.017;assert.equal(authoredDropSetup(shifted,settings).solver.particleCount,setup.solver.particleCount);
 const record=make('preview',.63,pose.position,1.2);record.transform=pose;
 const {object}=createLocalLiquidEmitterObject(THREE,{id:record.id,label:record.label,transform:record.transform,settings:record.localLiquidEmitter},{sampling});
