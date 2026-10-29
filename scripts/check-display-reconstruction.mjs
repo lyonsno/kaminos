@@ -9,6 +9,7 @@ import {pathToFileURL} from 'node:url';
 const [root,sourceReport,store,out]=process.argv.slice(2);
 const raySteps=Number(process.env.DISPLAY_RAY_STEPS??8);
 const renderScale=Number(process.env.DISPLAY_RENDER_SCALE??.4);
+const interpolationComparison=process.env.DISPLAY_INTERPOLATION==='1';
 const report={ok:false,phase:'source',root,sourceReport,store,arms:[],errors:[],warnings:[],claim:'native display reconstruction comparison; no performance claim'};
 await fs.mkdir(out,{recursive:true});
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
@@ -83,15 +84,17 @@ try {
   report.requested={basin:process.env.DISPLAY_BASIN??null,raySteps,renderScale};
   await invoke('setControls',{'volume-resolution':'32','volume-render-scale':renderScale,'volume-steps':raySteps,
     'volume-ray-noise-animated':false,'volume-flame-priority':0,'volume-display-reconstruction':'off'});
+  if(interpolationComparison)await invoke('setControls',{'volume-raymarch-mode':'fixed'});
   report.initial=await page.evaluate(()=>({runtime:window.__kaminosVolumePrototype.debugState(),water:window.kaminosLocalLiquidState()}));
   assert.equal(report.initial.runtime.backend,'WebGPU:apple');assert.equal(report.initial.water.mounted,false);
   report.phase='evolve';await save();await invoke('setPaused',false);
   await step(page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=60));
   await invoke('setPaused',true);
-  const capture=async(label,mode,emission=.5,smoke=.5,scale='2')=>{
+  const capture=async(label,mode,emission=.5,smoke=.5,scale='2',alignment='cell-centred',emissionKernel='positive',smokeKernel='positive')=>{
     report.phase=label;await save();
     await invoke('setControls',{'volume-display-reconstruction':mode,'volume-display-grid-scale':scale,
-      'volume-emission-smoothing':emission,'volume-smoke-smoothing':smoke});
+      'volume-emission-smoothing':emission,'volume-smoke-smoothing':smoke,
+      'volume-display-alignment':alignment,'volume-emission-interpolation':emissionKernel,'volume-smoke-interpolation':smokeKernel});
     const a=await step(page.evaluate(async()=>{
       const r=window.__kaminosVolumePrototype;const frame=await r.sampleFrame({advanceSim:false,includeRgba:true,now:4000});
       if(!frame.ok||frame.simAdvanced||!frame.image||frame.image.rgba.length!==frame.image.width*frame.image.height*4)throw Error('Missing held native RGBA');
@@ -110,11 +113,27 @@ try {
     assert.equal(row.state.displayReconstruction.effective,mode!=='off',row.state.displayReconstruction.reason);
     assert.equal(row.state.controls.resolution,32);assert.equal(row.state.controls.raySteps,raySteps);
     assert.ok(new Set(pixels).size>8,'nonblank image');
-    if(mode!=='off')assert.deepEqual(row.state.displayReconstruction.grid,row.state.simGridDimensions.map(n=>n*Number(scale)));
+    assert.equal(row.state.displayReconstruction.alignment,alignment);
+    assert.equal(row.state.displayReconstruction.emissionInterpolation,emissionKernel);
+    assert.equal(row.state.displayReconstruction.smokeInterpolation,smokeKernel);
+    if(mode!=='off')assert.deepEqual(row.state.displayReconstruction.grid,row.state.simGridDimensions.map(n=>alignment==='aligned'?(n-1)*Number(scale)+1:n*Number(scale)));
     return row;
   };
   const baseline=await capture('native','off');
-  for(const mode of ['material','optical']) {
+  if(interpolationComparison) {
+    await capture('legacy-2-linear','material',0,0);
+    await capture('aligned-2-linear','material',0,0,'2','aligned');
+    await capture('aligned-2-emission','material',1,0,'2','aligned','interpolating');
+    await capture('aligned-2-mixed','material',1,1,'2','aligned','interpolating');
+    const first=await capture('aligned-2-both','material',1,1,'2','aligned','interpolating','interpolating');
+    const held=await capture('aligned-2-held','material',1,1,'2','aligned','interpolating','interpolating');
+    assert.equal(first.sha256,held.sha256,'interpolating held pixels stable');
+    assert.equal(first.state.displayReconstruction.builds,held.state.displayReconstruction.builds);
+    await capture('legacy-4-linear','material',0,0,'4');
+    await capture('aligned-4-linear','material',0,0,'4','aligned');
+    await capture('aligned-4-both','material',1,1,'4','aligned','interpolating','interpolating');
+    await capture('optical-2-both','optical',1,1,'2','aligned','interpolating','interpolating');
+  } else for(const mode of ['material','optical']) {
     await capture(mode+'-linear',mode,0,0);
     await capture(mode+'-emission',mode,1,0);
     await capture(mode+'-smoke',mode,0,1);
@@ -126,17 +145,26 @@ try {
   const returned=await capture('native-return','off');
   assert.equal(baseline.sha256,returned.sha256,'off restores exact baseline');
   assert.ok(report.arms.every(a=>a.state.simStepCount===baseline.state.simStepCount),'same simulation source across all arms');
-  assert.notEqual(report.arms.find(a=>a.label==='material-both').sha256,baseline.sha256,'candidate not ignored');
+  assert.notEqual(report.arms.find(a=>a.label===(interpolationComparison?'aligned-2-both':'material-both')).sha256,baseline.sha256,'candidate not ignored');
   if(process.env.DISPLAY_PROFILE==='1') {
     report.phase='gpu-profile';report.profiles=[];await save();
     await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
     // Seven interleaved samples expose cold setup separately and retain every
     // measurement. The unchanged held field isolates preparation from solving.
-    for(let repeat=0;repeat<7;repeat++)for(const mode of ['off','material','optical']) {
+    const profileArms=interpolationComparison?[
+      {mode:'off',alignment:'aligned',kernel:'interpolating',scale:'2',amount:1},
+      {mode:'material',alignment:'cell-centred',kernel:'positive',scale:'4',amount:0},
+      {mode:'material',alignment:'aligned',kernel:'positive',scale:'2',amount:0},
+      {mode:'material',alignment:'aligned',kernel:'interpolating',scale:'2',amount:1},
+      {mode:'material',alignment:'aligned',kernel:'interpolating',scale:'4',amount:1},
+    ]:['off','material','optical'].map(mode=>({mode,alignment:'cell-centred',kernel:'positive',scale:'2',amount:.5}));
+    for(let repeat=0;repeat<7;repeat++)for(const arm of profileArms) {
+      const {mode,alignment,kernel,scale,amount}=arm;
       await invoke('setControls',{'volume-display-reconstruction':mode,
-        'volume-display-grid-scale':'2','volume-emission-smoothing':.5,'volume-smoke-smoothing':.5});
+        'volume-display-grid-scale':scale,'volume-emission-smoothing':amount,'volume-smoke-smoothing':amount,
+        'volume-display-alignment':alignment,'volume-emission-interpolation':kernel,'volume-smoke-interpolation':kernel});
       const timing=await step(page.evaluate(()=>window.__kaminosVolumePrototype.sampleEmissiveRaymarchProfile({now:4000,includeDisplayPreparation:true})));
-      report.profiles.push({repeat,mode,...timing});await save();
+      report.profiles.push({repeat,arm,...timing});await save();
       assert.equal(timing.ok,true,timing.reason);
       assert.equal(timing.simStepCount,baseline.state.simStepCount);
       assert.equal(timing.displayReconstruction.effective,mode!=='off');
@@ -144,7 +172,8 @@ try {
     }
     await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(false));
   }
-  await capture('offer-material','material',.5,.25);
+  if(interpolationComparison)await capture('offer-material','material',1,1,'2','aligned','interpolating','interpolating');
+  else await capture('offer-material','material',.5,.25);
   await page.locator('#flame-view-look').click();await page.locator('#selected-volume-display-reconstruction').scrollIntoViewIfNeeded();
   await page.screenshot({path:out+'/workbench.png'});
   await invoke('setPaused',false);

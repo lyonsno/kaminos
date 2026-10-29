@@ -17,7 +17,7 @@ assert.equal(typeof core.resolveDisplayReconstruction, 'function',
 const {resolveDisplayReconstruction: resolve} = core;
 assert.equal(resolve({}).mode, 'off');
 assert.deepEqual(resolve({displayReconstruction:'material',displayGridScale:2,emissionSmoothing:0.25,smokeSmoothing:0.75}),
-  {mode:'material',value:1,scale:2,emission:0.25,smoke:0.75});
+  {mode:'material',value:1,scale:2,emission:0.25,smoke:0.75,alignment:'cell-centred',emissionInterpolation:'positive',smokeInterpolation:'positive'});
 assert.throws(()=>resolve({displayReconstruction:'invented'}), /reconstruction mode/);
 for(const f of [0,0.1,0.5,0.9,1])for(const amount of [0,0.25,1]) {
   const w=positiveCubicWeights(f,amount);
@@ -34,11 +34,11 @@ assert.throws(()=>resolve({emissionSmoothing:NaN}),/smoothing/);
 
 // Resource/cache policy, not a substitute for native shader conformance.
 globalThis.GPUTextureUsage={TEXTURE_BINDING:1,STORAGE_BINDING:2,COPY_SRC:4};
-globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2};
+globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2,STORAGE:4};
 const allocations=[], dispatches=[], passes=[];
-const device={limits:{maxTextureDimension3D:256},queue:{writeBuffer(){}},
+const device={limits:{maxTextureDimension3D:256,maxStorageBufferBindingSize:134217728,maxBufferSize:268435456,maxComputeWorkgroupsPerDimension:65535},queue:{writeBuffer(){}},
   createTexture(d){const t={...d,createView(){return {texture:t};},destroy(){t.destroyed=true;}};allocations.push(t);return t;},
-  createBuffer(){return {destroy(){}};},createShaderModule:d=>d,
+  createBuffer(d){return {...d,destroy(){}};},createShaderModule:d=>d,
   createComputePipeline:d=>({...d,getBindGroupLayout:i=>i}),createBindGroup:d=>d};
 const encoder={beginComputePass(descriptor){passes.push(descriptor);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(...v){dispatches.push(v);},end(){}};}};
 const input={fluid:[{},{}],reactant:[device.createTexture({}),device.createTexture({})]};
@@ -75,6 +75,16 @@ assert.equal(field.read().grid,null);
 assert.equal(field.ensure([8,8,8],config).admitted,true,'valid request recovers after refusal and native fallback');
 assert.equal(field.encode(encoder,0,[0,3]),true);
 assert.deepEqual(field.read().grid,[16,16,16]);
+const cubic=resolve({displayReconstruction:'material',displayAlignment:'aligned',emissionInterpolation:'interpolating'});
+assert.equal(field.ensure([8,8,8],cubic).admitted,true);
+assert.deepEqual(field.read().grid,[15,15,15]);
+passes.length=0;
+assert.equal(field.encode(encoder,0,[0,3]),true);
+assert.equal(passes.filter(p=>p.label.startsWith('display spline coefficients')).length,3);
+assert.equal(field.encode(encoder,0,[0,3]),false);
+const before=field.read();
+assert.equal(field.ensure([256,256,256],{...cubic,scale:1}).reason,'display-coefficients-exceed-device-buffer-size');
+assert.deepEqual(field.read(),before,'buffer-size refusal preserves accepted state');
 field.destroy();
 assert.ok(allocations.filter(t=>t.label).every(t=>t.destroyed));
 console.log('display reconstruction configuration: pass');
