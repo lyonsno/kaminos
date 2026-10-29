@@ -15,7 +15,7 @@ export const LOCAL_LIQUID_EMITTER_CAPACITY = 5;
 const clone = value => structuredClone(value);
 
 export function defaultLocalLiquidSetup() {
-  return {schema:LOCAL_LIQUID_SCHEMA,support:'scene_primitives',particleCount:49152,densityIterations:3,showSupportGeometry:false};
+  return {schema:LOCAL_LIQUID_SCHEMA,support:'scene_primitives',particleCount:12000,densityIterations:3,showSupportGeometry:false};
 }
 
 function checkedTriplet(value, name) {
