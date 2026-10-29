@@ -49,7 +49,7 @@ fn ordered(v:f32)->u32{let b=bitcast<u32>(v);return select(b^0x80000000u,~b,(b&0
 }
 @compute @workgroup_size(1) fn contact(){let face=atomicLoad(&hit[1]);if(face==0xffffffffu){return;}let x=intersection(face);atomicStore(&hit[2],bitcast<u32>(x.y));atomicStore(&hit[3],bitcast<u32>(x.z));}
 `;
-const materialFields=['color','map','normalMap','normalScale','normalMapType','roughness','roughnessMap','metalness','metalnessMap','aoMap','aoMapIntensity','emissive','emissiveMap','emissiveIntensity','side','alphaMap','alphaTest','opacity','transparent'];
+const materialFields=['color','map','normalMap','normalScale','normalMapType','flatShading','bumpMap','bumpScale','roughness','roughnessMap','metalness','metalnessMap','aoMap','aoMapIntensity','emissive','emissiveMap','emissiveIntensity','side','alphaMap','alphaTest','opacity','transparent'];
 export async function createResidentFractureSurface({renderer,prepared,materials,model,partOffsets}){
  const {device,positions,quaternions,joints,origin}=model.resident,n=prepared.cells.length,m=prepared.bonds.length,owned=[],meshes=[],copies=[];
  const packed=packResidentFractureFaces(prepared,materials);let wrapper,disposed=false,pickTask=null,boundsTask=null,pickCount=0,boundsCount=0;
@@ -66,13 +66,16 @@ export async function createResidentFractureSurface({renderer,prepared,materials
   for(const entryPoint of ['clearHit','nearest','selectFace','contact','clearBounds','bounds'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout,compute:{module:pickModule,entryPoint}});
   const pickGroup=device.createBindGroup({layout:pickLayout,entries:[faceBuffer,positions,quaternions,joints,ray,hit,parameters,offsetBuffer].map((buffer,binding)=>({binding,resource:{buffer}}))});
   const boundsGroup=device.createBindGroup({layout:pickLayout,entries:[faceBuffer,positions,quaternions,joints,ray,boundsBuffer,parameters,offsetBuffer].map((buffer,binding)=>({binding,resource:{buffer}}))});
-  const {textureLoad,ivec2,int,attribute,uniform,mat4,mat3,vec3,vec4,positionGeometry,normalGeometry,transformNormalToView}=THREE.TSL;
+  const {textureLoad,ivec2,int,attribute,uniform,mat4,mat3,vec3,vec4,positionGeometry,normalGeometry,normalLocal,Fn,texture,materialReference,transformNormalToView}=THREE.TSL;
   const separation=uniform(0);
   for(const piece of prepared.pieces){
    const pose=mat4(...[0,1,2,3].map(col=>textureLoad(wrapper,ivec2(col,piece.index))));
    const cap=attribute('fractureCap','float').toInt(),alive=textureLoad(wrapper,ivec2(0,cap.sub(1).max(0).add(n))).x;
    const make=(source,tint)=>{const material=new THREE.MeshStandardNodeMaterial();for(const k of materialFields)if(source[k]!==undefined)material[k]=source[k]?.clone&&!source[k].isTexture?source[k].clone():source[k];if(tint){material.color.copy(tint);material.map=null;material.metalness=0;material.roughness=.9;}
-    material.positionNode=pose.mul(vec4(positionGeometry,1)).xyz.add(vec3(...partOffsets[piece.index]).mul(separation));material.normalNode=transformNormalToView(mat3(pose).mul(normalGeometry)).normalize();material.maskNode=cap.equal(int(0)).or(alive.lessThan(.5));copies.push(material);return material;};
+    material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz.add(vec3(...partOffsets[piece.index]).mul(separation));})();
+    // Leave tangent-space maps, derivative tangents, flat shading and back-face
+    // inversion on the renderer's ordinary material normal path.
+    if(material.normalMap&&material.normalMapType===THREE.ObjectSpaceNormalMap){const mapped=texture(material.normalMap).xyz.mul(2).sub(1);material.normalNode=transformNormalToView(mat3(pose).mul(vec3(mapped.xy.mul(materialReference('normalScale','vec2')),mapped.z)));}material.maskNode=cap.equal(int(0)).or(alive.lessThan(.5));copies.push(material);return material;};
    const original=materials.map(x=>make(x)),color=new THREE.Color().setHSL((piece.part*.61803398875)%1,.5,.6),tinted=materials.map((x,i)=>make(x,i===prepared.capMaterial?null:color));
    const mesh=createCoarseSurfaceMesh(piece.arrays,original,piece.center),old=mesh.geometry;mesh.geometry=old.toNonIndexed();old.dispose();mesh.position.set(0,0,0);mesh.frustumCulled=false;
    mesh.geometry.setAttribute('fractureCap',new THREE.Float32BufferAttribute(Float32Array.from(Array.from(piece.faceInterfaces).flatMap((id,f)=>Array(3).fill(id?piece.faceBonds[f]+1:0))),1));
