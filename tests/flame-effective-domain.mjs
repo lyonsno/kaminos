@@ -4,7 +4,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import vm f
 import{flamePoseInDomain,flamePoseToDomain,normalizeFlameEmitterPose,immersedControlsForFlamePose,flameDomainTranslationForAcceptedPose,effectiveFlameDomainControls}from'../scene-flame-emitter.mjs';
 import{buildSceneDocument,planSceneRestore}from'../scene-persistence-core.js';
 import{applyVolumeEmitterFamilyRuntime}from'../volume-emitter-runtime.mjs';
-import{resolveGridHeight,gridShapeAdmission,resolveImmersedSourceConfig,resolveDisplayReconstruction}from'../volume-core.js';
+import{gridTuningPlan}from'../volume-grid-tuning.mjs';
+import{resolvePressureSolverConfig,resolveVelocityStaggeringConfig,resolveGridHeight,gridShapeAdmission,resolveImmersedSourceConfig,resolveDisplayReconstruction}from'../volume-core.js';
 const html=readFileSync(process.env.KAMINOS_HEIGHT_PAGE_SOURCE||new URL('../index.html',import.meta.url),'utf8'),grab=name=>{const at=html.indexOf(`function ${name}(`);return html.slice(at,html.indexOf('\n}',at)+2);};
 const primary=html.match(/function primaryAuthoredFlameSource\(\)[^\n]+/)[0];
 const pose=y=>({position:[0,y,0],rotation:[0,0,0],scale:[1,1,1]});
@@ -43,13 +44,17 @@ test('the actual cockpit and core admission prefix keep a source suspended after
  const limits={maxStorageBufferBindingSize:128*1024*1024,maxBufferSize:256*1024*1024,maxTextureDimension3D:2048};
  const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8'),at=core.indexOf('    setControls(next) {'),end=core.indexOf('      const sourceStateResetNeeded',at),prefix=core.slice(at+'    setControls(next) {'.length,end);
  const backend={gridSize:96,gridHeight:192,gridShape:resolveGridHeight({gridHeightRatio:2},96),controlsSnapshot:{...requested,gridHeightRatio:2},state:{},device:{limits},resolveGridHeight,gridShapeAdmission,normalizeGridSize:Number,boundarySplatTelemetryControlSignature:()=>'',canonicalSourceControlSignature:()=>'',stripRetiredRaymarchControls:controls=>({controls}),applyRuntimeQualityControls:x=>x,updateRetiredRaymarchControlReceipt:()=>null};
+ const acceptedControls=structuredClone(backend.controlsSnapshot);
  backend.resolveDisplayReconstruction=resolveDisplayReconstruction;
+ backend.gridTuningPlan=gridTuningPlan;backend.resolvePressureSolverConfig=resolvePressureSolverConfig;backend.resolveVelocityStaggeringConfig=resolveVelocityStaggeringConfig;
+ const validation=core.slice(core.indexOf("    validateGridControls(next) {"),at).trim().replace(/,$/, "");
+ backend.validateGridControls=vm.runInNewContext("({"+validation+"}).validateGridControls",backend);
  sceneContext(backend);vm.runInContext('function setControls(next){'+prefix+'}',backend);
  const fields=new Map(),prototype={previewGridShape:c=>{const shape=resolveGridHeight(c,c.resolution);return{...gridShapeAdmission(shape,limits),dimensions:[shape.widthCells,shape.heightCells,shape.widthCells]};},debugState:()=>({active:true,frameCount:1,simGridDimensions:[backend.gridSize,backend.gridHeight,backend.gridSize],gridHeight:backend.state.gridHeight}),setControls:c=>backend.setControls(c),setAnalyticEmitterDescriptor:()=>({mode:'off',count:0}),setCoreEmitterSourceMode:()=>({effectiveMode:'analytic-only',effectiveFlowRate:0})};
  const page={isSceneItemVisible:()=>true,performance,structuredClone,flamePoseInDomain,flamePoseToDomain,effectiveFlameDomainControls,flameEmitterPose:pose(4),flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterInjectionSuspended:true,authoredFlamePresent:true,routeExternalEmitters:null,volumeEmitterRuntimeFrame:0,volumePrototype:prototype,document:{getElementById:id=>{if(id==='emitter-assay-family')return{value:'ring'};if(!fields.has(id))fields.set(id,{id,value:'0',textContent:''});return fields.get(id);}},emitterCompilerControls:x=>x,applyVolumeEmitterFamilyRuntime,window:{},setVolumeControlValue(id,v){fields.get(id).value=String(v);},renderVolumeEmitterReceipt(){},syncAuthoredFlameSources(){},ensureAuthoredFlameEmitter(){}};
- page.sceneObjects=[];page.FLAME_EMITTER_TYPE='flame-emitter';page.FLAME_EMITTER_ID='flame-emitter';const start=html.indexOf('  function applyVolumeEmitterFamilyRuntimeToCockpit('),stop=html.indexOf('  applyFlameEmitterPose =',start);sceneContext(page);vm.runInContext(primary+'\n'+html.slice(start,stop),page);page.applyVolumeEmitterFamilyRuntimeToCockpit(requested);
- assert.equal(backend.state.gridHeight.admitted,false);assert.equal(backend.state.gridHeight.heightCells,384);assert.deepEqual(prototype.debugState().simGridDimensions,[96,192,96]);
- assert.equal(page.window.__kaminosVolumeEmitterReceipt.requested.sourceEnabled,false);assert.equal(page.flameEmitterInjectionSuspended,true);assert.equal(resolveImmersedSourceConfig(backend.controlsSnapshot,{grid:96,gridHeight:192}).effective.fluxEffectivePredicted,0);assert.deepEqual(page.flameEmitterPose.position,[0,4,0]);
+ page.sceneObjects=[];page.FLAME_EMITTER_TYPE='flame-emitter';page.FLAME_EMITTER_ID='flame-emitter';const start=html.indexOf('  function applyVolumeEmitterFamilyRuntimeToCockpit('),stop=html.indexOf('  applyFlameEmitterPose =',start);sceneContext(page);vm.runInContext(primary+'\n'+html.slice(start,stop),page);assert.throws(()=>page.applyVolumeEmitterFamilyRuntimeToCockpit(requested),/Fine material buffer exceeds/);
+ assert.equal(backend.controlsSnapshot.gridHeightRatio,2);assert.deepEqual(prototype.debugState().simGridDimensions,[96,192,96]);
+ assert.equal(page.flameEmitterInjectionSuspended,true);assert.deepEqual(backend.controlsSnapshot,acceptedControls);assert.deepEqual(page.flameEmitterPose.position,[0,4,0]);
 });
 test('a refused grid request cannot be saved as the accepted scene configuration',()=>{
  let message='',fireRoute=true;const runtime={active:true,gridHeight:{admitted:false}},context={activeSceneComposition:{},isFireLightFieldRoute:()=>fireRoute,scenePlacementTools:null,volumePrototype:{debugState:()=>runtime},greenroomPreviewIsActive:()=>false,sceneSaveBlockedByFailedRestore:false,setInfo:value=>message=value};

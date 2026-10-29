@@ -8111,7 +8111,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
-    if (displayReconstructionActive() && opticalStepping) {
+    if (displayReconstructionActive() && (opticalStepping || guided)) {
       directSupport = 1.0;
     } else if (LEAN_EMISSIVE_RAYMARCH) {
       neighborhood = sampleRaymarchNeighborhood(p);
@@ -8130,9 +8130,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       continue;
     }
     var reconstructed: FlowReconstructionSample;
-    if (displayReconstructionActive() && opticalStepping) {
+    if (displayReconstructionActive() && (opticalStepping || guided)) {
       // The prepared field contains the optical coefficients consumed below.
-      // Numerical/standard stepping needs no raw-carrier reconstruction here.
+      // Guided fixed-count and optical stepping consume the prepared coefficients directly.
     } else if (flowKernelReconstructionActive) {
       reconstructed = sampleWorldFlowReconstruction(p);
     } else if (LEAN_EMISSIVE_RAYMARCH) {
@@ -12980,9 +12980,9 @@ export function createKaminosVolumePrototype({
         { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
         { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
-        { binding: 34, resource: displayReconstruction.view },
         { binding: 35, resource: { buffer: rayAllocationHistory.buffer } },
         { binding: 37, resource: { buffer: rayAllocationHistory.uniform } },
+        { binding: 38, resource: displayReconstruction.view },
       ],
     });
   }
@@ -15125,7 +15125,7 @@ export function createKaminosVolumePrototype({
         { binding: 35, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
         { binding: 37, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 33, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'2d-array'} },
-        { binding: 34, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
+        { binding: 38, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -16771,7 +16771,8 @@ export function createKaminosVolumePrototype({
       rebuildSelectiveHeadLiveBindGroups();
     }
     state.displayReconstruction = {...displayReconstruction?.read(),requested:displayRequest.mode,
-      effective:displayConfig.value>0,reason:displayReason};
+      effective:displayConfig.value>0,reason:displayReason,scope:displayConfig.value>0?'fine-grid':null,
+      outerFields:worldSmoke?'native-thermal-moments':null};
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
