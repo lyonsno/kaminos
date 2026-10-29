@@ -123,6 +123,9 @@ export function createHandContactState({target={position:[-.04,.28,-.1],radius:.
       // Resolve fast travel rather than skipping elapsed time or tunnelling.
       for(const {body,radius}of bodies.values())h=Math.min(h,radius*.4/(body.velocity.length()+Math.sqrt(motorForce/body.mass*radius)));
       h=Math.min(h,cubeSize*.2/(box.velocity.length()+box.angularVelocity.length()*cubeSize+1e-9));
+      // Spread the remaining time evenly below the travel bound. A tiny tail
+      // after full-size steps destabilizes Cannon's timestep-dependent contacts.
+      h=remaining/Math.ceil(remaining/h);
       const omega=80;
       for(const {body,goal}of bodies.values()) {
         const delta=goal.vsub(body.position),den=1+2*omega*h+omega*omega*h*h;

@@ -11,6 +11,20 @@ const step=(s,t)=>{if(s.advance)s.advance(t);};
 step(falling,.1);
 assert.ok(falling.read().cubePosition[1]<.23,'a released cube must fall under gravity, not hover at its last pinch position');
 if(baseline)process.exit(0);
+// Browser frame durations need not divide the maximum physics step exactly.
+// A resting cube must not gain energy from a tiny final remainder step.
+for(const frameSeconds of [.0167,.0084,.0334]) {
+  const resting=create();
+  for(let i=0;i<180;i++) {
+    resting.advance(frameSeconds);
+    const s=resting.read();
+    assert.ok(s.cubePosition[1]<=.231 && s.cubePosition[1]>=.17,
+      `untouched cube stays above table without launching at frame ${i}, dt=${frameSeconds}: ${s.cubePosition}`);
+  }
+  assert.ok(Math.abs(resting.read().cubePosition[1]-.1825)<.002,'cube settles under irregular frame timing');
+  assert.ok(Math.abs(resting.read().simulationSeconds-180*frameSeconds)<1e-9,'all elapsed time is simulated');
+  resting.dispose();
+}
 // A thin table's enclosing sphere covers empty space well above its surface.
 // Reject those separated pairs before sphere-box contact generation.
 const collisionPairs=NaiveBroadphase.prototype.collisionPairs;
