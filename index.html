@@ -1954,11 +1954,29 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
     </div>
     <div class="slider-row">
-      <label class="slider-label" for="volume-emission-smoothing">Emission smoothing</label>
+      <label class="slider-label" for="volume-display-alignment">Sample alignment</label>
+      <select id="volume-display-alignment" data-volume-settings-role="renderer">
+        <option value="cell-centred">Cell-centred (original)</option><option value="aligned">Original knots (aligned)</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-emission-interpolation">Emission kernel</label>
+      <select id="volume-emission-interpolation" data-volume-settings-role="renderer">
+        <option value="positive">Smoothing B-spline</option><option value="interpolating">Interpolating B-spline</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-emission-smoothing">Emission cubic blend</label>
       <input type="range" id="volume-emission-smoothing" min="0" max="1" step="any" value="0.5" data-volume-settings-role="renderer">
     </div>
     <div class="slider-row">
-      <label class="slider-label" for="volume-smoke-smoothing">Smoke smoothing</label>
+      <label class="slider-label" for="volume-smoke-interpolation">Smoke kernel</label>
+      <select id="volume-smoke-interpolation" data-volume-settings-role="renderer">
+        <option value="positive">Smoothing B-spline</option><option value="interpolating">Interpolating B-spline</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-smoke-smoothing">Smoke cubic blend</label>
       <input type="range" id="volume-smoke-smoothing" min="0" max="1" step="any" value="0.5" data-volume-settings-role="renderer">
     </div>
     <div class="slider-row">
@@ -18568,6 +18586,9 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     quadratureJitter: document.getElementById('volume-quadrature-jitter').checked,
     displayReconstruction: document.getElementById('volume-display-reconstruction').value,
     displayGridScale: Number(document.getElementById('volume-display-grid-scale').value),
+    displayAlignment: document.getElementById('volume-display-alignment').value,
+    emissionInterpolation: document.getElementById('volume-emission-interpolation').value,
+    smokeInterpolation: document.getElementById('volume-smoke-interpolation').value,
     emissionSmoothing: Number(document.getElementById('volume-emission-smoothing').value),
     smokeSmoothing: Number(document.getElementById('volume-smoke-smoothing').value),
     flamePriority: Number(document.getElementById('volume-flame-priority').value),
@@ -18866,7 +18887,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
-  for(const id of ['volume-display-grid-scale','volume-emission-smoothing','volume-smoke-smoothing'])
+  for(const id of ['volume-display-grid-scale','volume-display-alignment','volume-emission-interpolation','volume-smoke-interpolation','volume-emission-smoothing','volume-smoke-smoothing'])
     document.getElementById(id).disabled=c.displayReconstruction==='off';
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
@@ -20030,6 +20051,9 @@ async function initKaminosVolumeRoute() {
     ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
     ['volume-display-reconstruction', 'volume_display_reconstruction'],
     ['volume-display-grid-scale', 'volume_display_grid_scale'],
+    ['volume-display-alignment', 'volume_display_alignment'],
+    ['volume-emission-interpolation', 'volume_emission_interpolation'],
+    ['volume-smoke-interpolation', 'volume_smoke_interpolation'],
     ['volume-emission-smoothing', 'volume_emission_smoothing'],
     ['volume-smoke-smoothing', 'volume_smoke_smoothing'],
     ['volume-flame-priority', 'volume_flame_priority'],
@@ -20393,6 +20417,9 @@ async function initKaminosVolumeRoute() {
     'volume-quadrature-jitter',
     'volume-display-reconstruction',
     'volume-display-grid-scale',
+    'volume-display-alignment',
+    'volume-emission-interpolation',
+    'volume-smoke-interpolation',
     'volume-emission-smoothing',
     'volume-smoke-smoothing',
     'volume-flame-priority',
