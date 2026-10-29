@@ -7,7 +7,7 @@ const options={cellWidth:.1274,uniformSupportRadius:.1274,nominalCellWidth:.185,
 const cached=applyWorldSpaceNeighbors(source,{...options,cacheSlots:512});
 assert.match(cached,/fn build_fine_neighbor_cache\(/,'Cache must be constructed on GPU from current grid');
 assert.match(cached,/fn build_nominal_neighbor_cache\(/,'Nominal cohesion support has separate neighbors');
-assert.match(cached,/world_cache_count\(index\) >= 0/,'Overflow must select the full uncapped linked traversal');
+assert.match(cached,/cachedCount >= 0/,'Overflow must select the full uncapped linked traversal');
 assert.match(cached,/world_cache_store_count\(index, -1\)/);
 assert.match(cached,/fn estimate_interface_curvature[^]*?world_cache_count\(index\)/);
 const plain=applyWorldSpaceNeighbors(source,options);

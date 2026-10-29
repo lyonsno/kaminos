@@ -13678,10 +13678,10 @@ export async function createWebGPUFingerFluidSolver({
   // for very small authored drops as well as ordinary uniform populations.
   const uniformNeighborSupportRadius=Math.max(0.00001,Math.fround(safeKernelRadius*safeUniformParticleRadiusScale));
   const worldNeighborCellWidth=radiusAwareNeighbors?uniformNeighborSupportRadius:nominalNeighborCellWidth;
-  const separateNominalNeighborGrid=radiusAwareNeighbors&&worldNeighborCellWidth!==nominalNeighborCellWidth;
+  const separateNominalNeighborGrid=radiusAwareNeighbors&&(worldNeighborCellWidth!==nominalNeighborCellWidth||(neighborCacheSlots>0&&uniformNeighborSupportRadius!==safeKernelRadius));
   if(!Number.isSafeInteger(neighborCacheSlots)||neighborCacheSlots<0||neighborCacheSlots%4)throw RangeError('Neighbor cache slots must be a nonnegative multiple of four');
   if(neighborCacheSlots&&!radiusAwareNeighbors)throw Error('Neighbor cache currently requires uniform finite PBF without sheet displacement');
-  const neighborIndexBytes=finitePBF?neighborCacheBytes(safeParticleCount,neighborCacheSlots):safeParticleCount*4;
+  const neighborIndexBytes=GRID_CELL_COUNT*4+neighborCacheBytes(safeParticleCount,neighborCacheSlots);
   if(neighborCacheSlots&&neighborIndexBytes>device.limits.maxStorageBufferBindingSize)throw RangeError('Neighbor cache exceeds device storage binding capacity; lower cache slots (overflow retains full search)');
 
   const safeUniformVolumeKernelNormalization = Math.fround(
@@ -13734,20 +13734,20 @@ export async function createWebGPUFingerFluidSolver({
   });
   const cellHeadsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-cellHeads',
-    size: GRID_CELL_COUNT * 4,
+    size: neighborIndexBytes,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   const particleNextBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particleNext',
-    size: neighborIndexBytes,
+    size: safeParticleCount*(finitePBF?16:4),
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   const nominalCellHeadsBuffer=separateNominalNeighborGrid?device.createBuffer({
-    label:'kaminos-finger-fluid-nominal-cellHeads',size:GRID_CELL_COUNT*4,
+    label:'kaminos-finger-fluid-nominal-cellHeads',size:neighborIndexBytes,
     usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,
   }):null;
   const nominalParticleNextBuffer=separateNominalNeighborGrid?device.createBuffer({
-    label:'kaminos-finger-fluid-nominal-particleNext',size:neighborIndexBytes,
+    label:'kaminos-finger-fluid-nominal-particleNext',size:safeParticleCount*16,
     usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,
   }):null;
   const paramsBuffer = device.createBuffer({

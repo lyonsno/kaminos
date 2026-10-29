@@ -20,8 +20,9 @@ export function applyNeighborCache(shader,slots){
   const payloadEnd=loop.lastIndexOf('current = particleNext[neighborIndex].w;');
   if(payloadEnd<payloadStart)throw Error('Neighbor cache missing link advance');
   const payload=loop.slice(payloadStart,payloadEnd);
-  const cached=`if (world_cache_count(index) >= 0) {
-    for (var cachedOrdinal = 0u; cachedOrdinal < u32(world_cache_count(index)); cachedOrdinal++) {
+  const cached=`let cachedCount = world_cache_count(index);
+  if (cachedCount >= 0) {
+    for (var cachedOrdinal = 0u; cachedOrdinal < u32(cachedCount); cachedOrdinal++) {
       let neighborIndex = world_cache_neighbor(index, cachedOrdinal);
       ${payload}
     }
@@ -42,14 +43,13 @@ export function applyNeighborCache(shader,slots){
  }
  if(edits.length!==13||!builderLoop)throw Error('Neighbor cache requires all thirteen consumers');
  for(const e of edits.reverse())shader=shader.slice(0,e.start)+e.text+shader.slice(e.end);
- const rows=1+slots/4;
  const helpers=`
-// Stored after the original N linked nodes, in the same storage binding.
-fn world_cache_base(index:u32)->u32 { return params.particleCount + index * ${rows}u; }
-fn world_cache_count(index:u32)->i32 { return particleNext[world_cache_base(index)].x; }
-fn world_cache_store_count(index:u32,count:i32) { particleNext[world_cache_base(index)].x=count; }
-fn world_cache_neighbor(index:u32,ordinal:u32)->u32 { return u32(particleNext[world_cache_base(index)+1u+ordinal/4u][ordinal%4u]); }
-fn world_cache_store_neighbor(index:u32,ordinal:u32,neighbor:u32) { particleNext[world_cache_base(index)+1u+ordinal/4u][ordinal%4u]=i32(neighbor); }
+// Scalar atomic entries after the hash heads avoid component-write aliasing.
+// Columns are contiguous across particles, so adjacent lanes read adjacent IDs.
+fn world_cache_count(index:u32)->i32 { return atomicLoad(&cellHeads[params.gridCellCount+index]); }
+fn world_cache_store_count(index:u32,count:i32) { atomicStore(&cellHeads[params.gridCellCount+index],count); }
+fn world_cache_neighbor(index:u32,ordinal:u32)->u32 { return u32(atomicLoad(&cellHeads[params.gridCellCount+(ordinal+1u)*params.particleCount+index])); }
+fn world_cache_store_neighbor(index:u32,ordinal:u32,neighbor:u32) { atomicStore(&cellHeads[params.gridCellCount+(ordinal+1u)*params.particleCount+index],i32(neighbor)); }
 `;
  function builder(nominal){
   let setup=builderSetup;
@@ -67,4 +67,4 @@ fn build_${nominal?'nominal':'fine'}_neighbor_cache(@builtin(global_invocation_i
  }
  return shader+helpers+builder(false)+builder(true);
 }
-export function neighborCacheBytes(particleCount,slots){return particleCount*(slots?32+slots*4:16);}
+export function neighborCacheBytes(particleCount,slots){return slots?particleCount*(slots+1)*4:0;}
