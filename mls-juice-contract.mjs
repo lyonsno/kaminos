@@ -1,12 +1,17 @@
 export const MLS_ROUTE='kaminos/mls-mpm-finger-juice-v1';
 export const MLS_SOURCE='matsuoka-601/Splash@3df5d621e6f153d7269037cbd8606bd83796f3fd';
+function gridDimensions(size){
+  const dimensions=Array.isArray(size)?[...size]:[size,size,size];
+  if(dimensions.length!==3||dimensions.some(v=>!Number.isSafeInteger(v)||v<8)||!Number.isSafeInteger(dimensions.reduce((n,v)=>n*v,1)))throw Error('Invalid MLS grid size');
+  return dimensions;
+}
 export function analyzeMlsParticles(words,{capacity,grid=64,cell=.05,modelSecondsPerSecond=Math.sqrt(9.81/(.4*cell)),minActive=1}){
   if(!Number.isSafeInteger(capacity)||capacity<1||words?.length!==capacity*20)throw Error('Incomplete native MLS particle layout');
   if(!Number.isSafeInteger(minActive)||minActive<0||minActive>capacity)throw Error('Invalid native population target');
-  const speeds=[];
+  const dimensions=gridDimensions(grid),speeds=[];
   for(let i=0;i<words.length;i++)if(!Number.isFinite(words[i]))throw Error('Nonfinite native MLS particle state');
   for(let i=0;i<words.length;i+=20)if(words[i+3]>0){
-    if([words[i],words[i+1],words[i+2]].some(v=>v<1.999||v>grid-2.999))throw Error('Native MLS particle escaped supported domain');
+    if([words[i],words[i+1],words[i+2]].some((v,axis)=>v<1.999||v>dimensions[axis]-2.999))throw Error('Native MLS particle escaped supported domain');
     speeds.push(Math.hypot(words[i+4],words[i+5],words[i+6])*cell*modelSecondsPerSecond);
   }
   if(speeds.length<minActive)throw Error(`Underpopulated native MLS state: ${speeds.length} < ${minActive}`);
@@ -18,10 +23,12 @@ export function analyzeMlsParticles(words,{capacity,grid=64,cell=.05,modelSecond
 export function mlsConfig(setup={}) {
   const capacity=setup.particleCount??12000,grid=setup.gridSize??64,cell=setup.cellSize??.05,viscosity=setup.viscosity??.1;
   if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Invalid MLS particle capacity');
-  if(!Number.isSafeInteger(grid)||grid<8)throw Error('Invalid MLS grid size');
+  const dimensions=gridDimensions(grid),gridCells=dimensions.reduce((n,v)=>n*v,1);
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
-  return {capacity,grid,cell,min:[-grid*cell/2,-2*cell,-grid*cell/2],dt:1/240,
+  const min=[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
+  return {capacity,grid,dimensions,gridCells,cell,min,
+    bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,
     modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
     particleRadius:cell*.65,obstacle:{center:[-.35,.24,0],radius:.24}};
 }
@@ -71,7 +78,7 @@ export function createMlsEmissionPlan(config) {
       let admitted=0,outside=0;
       const direction=e.aim_world.map(v=>v/Math.hypot(...e.aim_world));
       const origin=e.origin_world.map((v,i)=>(v-config.min[i])/config.cell);
-      const inDomain=origin.every(v=>v>=2&&v<=config.grid-3);
+      const inDomain=origin.every((v,i)=>v>=2&&v<=config.dimensions[i]-3);
       for(let j=0;j<requested;j++){
         if(!inDomain){outside++;continue;}
         let slot=-1;
@@ -86,7 +93,7 @@ export function createMlsEmissionPlan(config) {
         let u=cross(direction,axis);u=u.map(v=>v/Math.hypot(...u));const v=cross(direction,u);
         const phi=++serial*2.399963229728653,r=e.radius*Math.sqrt((serial*.618033988749895)%1)/config.cell;
         const position=origin.map((p,i)=>p+r*(u[i]*Math.cos(phi)+v[i]*Math.sin(phi)));
-        if(position.some(p=>p<1||p>config.grid-2)){expiry[slot]=0;outside++;continue;}
+        if(position.some((p,i)=>p<1||p>config.dimensions[i]-2)){expiry[slot]=0;outside++;continue;}
         births.push({slot,position,velocity:direction.map(d=>d*e.strength/config.cell/config.modelSecondsPerSecond),life:e.lifetime_seconds});admitted++;
       }
       totalAdmitted+=admitted;totalRejected+=requested-admitted;

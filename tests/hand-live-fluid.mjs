@@ -74,3 +74,11 @@ test('explicit particle lifetime changes future births and economics only',()=>{
   assert.equal(original.emitters[0].lifetime_seconds,6);
   assert.throws(()=>module.nativeFingerPacket(frame(),{...options(),lifetimeSeconds:0}),/lifetime/);
 });
+test('jet speed changes launch magnitude without changing fingers or source economics',()=>{
+  const original=module.nativeFingerPacket(frame(),options());
+  const jet=module.nativeFingerPacket(frame(),{...options(),jetSpeed:4.5});
+  assert.equal(jet.emitters[1].strength,4.5,'explicit jet speed ignored');
+  assert.deepEqual(jet.emitters.map(e=>[e.extension,e.active,e.origin_world,e.aim_world,e.source_flux_particles_per_second,e.radius]),
+    original.emitters.map(e=>[e.extension,e.active,e.origin_world,e.aim_world,e.source_flux_particles_per_second,e.radius]));
+  assert.throws(()=>module.nativeFingerPacket(frame(),{...options(),jetSpeed:-1}),/jet speed/);
+});

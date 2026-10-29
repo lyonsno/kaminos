@@ -11,6 +11,22 @@ rule, packet and raw/rendered recording are unchanged.
 Its Run/Sweep controls and emission-rate field use the same operations an agent
 can invoke. It is not a live hand or a substitute for hand-response judgment.
 
+`hand-jet-runway` is a separate live-hand setup with a rectangular
+192 x 80 x 256 grid at the same 0.05 cell width, a 4.5 world-units/second
+launch speed, 12,000 capacity and 1,800 requested births/second. It expands
+the actual receiver, not only its rendered floor. The receiver is still the
+prescribed flat domain and sphere, not Hill of Hills terrain or terrain contact.
+The stronger launch keeps the source pose, fingertip direction and extension
+rule unchanged. Jet speed and future-particle lifetime use the live numeric
+controls without resetting the camera or existing water.
+
+`fluidGridSize` accepts either a cubic side length or three axis lengths in
+the hand experiment; the synthetic nozzle accepts `gridSize`, `jetSpeed`, and
+an `emitter` object with `origin` and `direction`. Runtime `solver.domain`
+reports effective grid dimensions, cell size, origin and collision bounds.
+Larger grids increase real work. No capacity, timing or visual-quality claim
+follows from the preset or from a vacuum ballistic sizing calculation.
+
 ## Simulation
 
 The APIC transfers, quadratic 27-node stencil and weakly compressible pressure

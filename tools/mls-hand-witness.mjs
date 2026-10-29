@@ -19,6 +19,7 @@ try{
   const capture=JSON.parse(fs.readFileSync(a.capture)),image=Buffer.from(capture.request.image,'base64');
   report.cameraSource={file:a.capture,captureId:capture.captureId,sha256:createHash('sha256').update(image).digest('hex')};fs.writeFileSync(out+'/source.png',image);
   report.requested=JSON.parse(new URL(a.url).searchParams.get('experiment_inputs')??'{}');
+  report.experiment=new URL(a.url).searchParams.get('experiment')??'hand-browser-juice';
   assert(Number.isFinite(report.seconds)&&report.seconds>=0,'invalid warmup');
   assert(Number.isFinite(report.observeSeconds)&&report.observeSeconds>=0,'invalid observation window');
   const viewport={width:Number(a.width??1280),height:Number(a.height??900)},scale=Number(a.scale??1);
@@ -28,7 +29,7 @@ try{
   context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport,deviceScaleFactor:scale,
     recordVideo:{dir:out+'/video',size:viewport},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
-  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-live-fluid.mjs'],out,report});
+  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-live-fluid.mjs',...(report.experiment==='hand-jet-runway'?['experiments/hand-jet-runway.experiment.mjs']:[])],out,report});
   await page.route('**/__mls-camera.png',route=>route.fulfill({contentType:'image/png',body:image}));
   await page.addInitScript(()=>{
     navigator.mediaDevices.getUserMedia=async()=>{
@@ -38,7 +39,7 @@ try{
       const draw=()=>{if(stream.getTracks().some(t=>t.readyState==='live')){ctx.drawImage(image,0,0);requestAnimationFrame(draw);}};draw();return stream;
     };
   });
-  report.phase='load';save();await page.goto(a.url);await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='hand-browser-juice');
+  report.phase='load';save();await page.goto(a.url);await page.waitForFunction(id=>window.kaminosWorkbenchExperiments?.state().id===id,report.experiment);
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   assert.equal(report.initial.identity.backend,'webgpu-local');
   assert.equal(report.initial.fingerJuice.backend,'mls-mpm');
@@ -56,7 +57,11 @@ try{
   assert.equal(solver.particleCount,report.requested.particleCount??2400,'capacity mismatch');
   assert.equal(solver.material.viscosity,report.requested.fluidViscosity??.1,'viscosity mismatch');
   assert.equal(state.fingerJuice.packet.economics.lifetimeSeconds,report.requested.particleLifetimeSeconds??6,'packet lifetime mismatch');
+  assert.equal(state.fingerJuice.packet.economics.jetSpeedWorldPerSecond,report.requested.jetSpeed??1.15*1.7,'jet speed mismatch');
   assert.equal(state.fingerJuice.load.requestedRate,report.requested.sourceFlux??360,'emission mismatch');
+  const requestedGrid=report.requested.fluidGridSize??64;
+  assert.deepEqual(solver.domain.gridDimensions,Array.isArray(requestedGrid)?requestedGrid:[requestedGrid,requestedGrid,requestedGrid],'domain mismatch');
+  const nativeConfig={capacity:solver.particleCount,minActive:report.minActive,grid:solver.domain.gridDimensions,cell:solver.domain.cellSize};
   report.canvas=state.fingerJuice.runtime.lastFrame;
   if(a['canvas-width'])assert.equal(report.canvas.width,Number(a['canvas-width']),'canvas width mismatch');
   if(a['canvas-height'])assert.equal(report.canvas.height,Number(a['canvas-height']),'canvas height mismatch');
@@ -64,7 +69,7 @@ try{
     report.phase='populated-window';save();
     const warm=await page.evaluate(async()=>Array.from(await window.kaminosWorkbenchExperiments.invoke('snapshotWater')));
     fs.writeFileSync(out+'/particles-before-window.json',JSON.stringify(warm));
-    report.populationBefore=analyzeMlsParticles(warm,{capacity:solver.particleCount,minActive:report.minActive});
+    report.populationBefore=analyzeMlsParticles(warm,nativeConfig);
     report.windowStart=await page.evaluate(async()=>{
       window.__mlsFrames={times:[],running:true};
       const tick=t=>{if(!window.__mlsFrames.running)return;window.__mlsFrames.times.push(t);requestAnimationFrame(tick);};requestAnimationFrame(tick);
@@ -83,7 +88,7 @@ try{
   report.phase='native-state';save();
   const words=await page.evaluate(async()=>Array.from(await window.kaminosWorkbenchExperiments.invoke('snapshotWater')));
   fs.writeFileSync(out+'/particles.json',JSON.stringify(words));
-  report.population=analyzeMlsParticles(words,{capacity:solver.particleCount,minActive:report.minActive});
+  report.population=analyzeMlsParticles(words,nativeConfig);
   await page.screenshot({path:out+'/hand-and-water.png'});
   assert.deepEqual(report.pageErrors,[]);assert.deepEqual(report.consoleErrors,[]);
   report.video=await page.video().path();report.status='complete';report.phase='complete';

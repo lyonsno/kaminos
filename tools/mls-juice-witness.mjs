@@ -46,6 +46,7 @@ try{
   }
   fs.copyFileSync(new URL(import.meta.url),out+'/witness.mjs');
   report.browserExecutable=fs.realpathSync(a.browser);assert(!report.browserExecutable.includes('/Google Chrome.app/'),'independent browser required');
+  report.requested=JSON.parse(new URL(a.url).searchParams.get('experiment_inputs')??'{}');
   const {chromium}=await import(pathToFileURL(a.playwright));report.phase='browser';save();
   context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport:{width:1280,height:900},
     recordVideo:{dir:out+'/video',size:{width:1280,height:900}},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
@@ -56,6 +57,9 @@ try{
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   await verifySource();save();
   assert.equal(report.initial.runtime.requestedRoute,MLS_ROUTE);
+  const requestedGrid=report.requested.gridSize??64;
+  assert.deepEqual(report.initial.runtime.solver.domain.gridDimensions,Array.isArray(requestedGrid)?requestedGrid:[requestedGrid,requestedGrid,requestedGrid],'domain mismatch');
+  assert.equal(report.initial.jetSpeed,report.requested.jetSpeed??1.955,'jet speed mismatch');
   report.phase='run';save();
   await page.getByRole('checkbox',{name:'Run',exact:true}).check();
   let state;
@@ -70,7 +74,7 @@ try{
   const words=await page.evaluate(async()=>Array.from(await window.kaminosWorkbenchExperiments.invoke('snapshot')));
   fs.writeFileSync(out+'/particles.json',JSON.stringify(words));
   const runtime=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
-  Object.assign(report,analyzeMlsParticles(words,{capacity:runtime.runtime.solver.particleCount}));
+  Object.assign(report,analyzeMlsParticles(words,{capacity:runtime.runtime.solver.particleCount,grid:runtime.runtime.solver.domain.gridDimensions,cell:runtime.runtime.solver.domain.cellSize}));
   report.state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());report.route=report.state.runtime.effectiveRoute;
   await page.screenshot({path:out+'/surface.png'});
   report.video=await page.video().path();

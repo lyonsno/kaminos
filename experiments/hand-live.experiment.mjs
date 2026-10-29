@@ -13,6 +13,10 @@ export default {
     if(!['legacy','mls-mpm'].includes(fluidBackend))throw Error('Unsupported fluid backend');
     const fluidViscosity=Number(inputs.fluidViscosity??.1);
     if(!Number.isFinite(fluidViscosity)||fluidViscosity<0)throw Error('Invalid fluid viscosity');
+    const fluidGridSize=inputs.fluidGridSize??64,sceneLayout=inputs.sceneLayout??'compact';
+    if(!['compact','runway'].includes(sceneLayout))throw Error('Unsupported hand scene layout');
+    let jetSpeed=Number(inputs.jetSpeed??1.15*1.7);
+    if(!Number.isFinite(jetSpeed)||jetSpeed<0)throw Error('Invalid jet speed');
     const browser=inputs.backend==='webgpu';
     const idlePacket=reason=>idleFingerPacket(reason,browser?'mobrecon-browser-mesh-finger-juice-v1':undefined);
     if(inputs.backend!==undefined&&!['webgpu','native'].includes(inputs.backend))throw Error('Unsupported hand backend');
@@ -61,7 +65,7 @@ export default {
     if(!Number.isFinite(sourceFlux)||sourceFlux<0)throw Error('Invalid source flux');
     let fluid=null,fluidError=null,fluidState=null,fluidPacket=idlePacket(),fluidKey=null,displayCenter=[0,0,0];
     let waterChanges=Promise.resolve(),rebuilding=false,waterInitialized=false;
-    let capacityInput,fluxInput,lifetimeInput,waterStatus;
+    let capacityInput,fluxInput,lifetimeInput,jetInput,waterStatus;
     const useFluid=operation=>{
       if(!fluid)return null;
       const owned=fluid;
@@ -84,13 +88,14 @@ export default {
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      fingerJuice:{enabled:fingerJuice,backend:fluidBackend,particleLifetimeSeconds:particleLifetime,packet:fluidPacket,runtime,error:fluidError,rebuilding,
+      sceneLayout,terrainSource:'prescribed_flat_receiver_not_hill',
+      fingerJuice:{enabled:fingerJuice,backend:fluidBackend,jetSpeedWorldPerSecond:jetSpeed,particleLifetimeSeconds:particleLifetime,packet:fluidPacket,runtime,error:fluidError,rebuilding,
         load:fingerFluidLoad(runtime,{particleCount,sourceFlux})}};
     };
     const updateFluid=()=>{
       if(!fluid)return;
       mesh.updateWorldMatrix(true,false);
-      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount,lifetimeSeconds:particleLifetime}):idlePacket();
+      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux,particleCount,lifetimeSeconds:particleLifetime,jetSpeed}):idlePacket();
       const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters,packet.economics]);
       if(key===fluidKey)return;
       if(!useFluid(live=>{live.setPacket(packet);return true;}))return;
@@ -102,6 +107,7 @@ export default {
       if(capacityInput&&document.activeElement!==capacityInput)capacityInput.value=particleCount;
       if(fluxInput&&document.activeElement!==fluxInput)fluxInput.value=sourceFlux;
       if(lifetimeInput&&document.activeElement!==lifetimeInput)lifetimeInput.value=particleLifetime;
+      if(jetInput&&document.activeElement!==jetInput)jetInput.value=jetSpeed;
       if(waterStatus){
         const load=fingerFluidLoad(fluidState,{particleCount,sourceFlux});
         waterStatus.textContent=rebuilding?`Allocating ${particleCount.toLocaleString()} particles...`:fluidError?`Water: ${fluidError}`:
@@ -199,7 +205,7 @@ export default {
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
         displayTransform:{center,scale:5,invertY:true}});
     };
-    const frame = () => scene.setView(fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
+    const frame = () => scene.setView(sceneLayout==='runway'?{position:[0,3.5,7.5],target:[0,.65,-1.2]}:fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     const setAcquisition = value => {
       if (!['manual','detector'].includes(value.mode) || (value.mode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
       const padding=Number(value.padding ?? cropPadding), threshold=Number(value.threshold ?? detectorThreshold);
@@ -219,7 +225,7 @@ export default {
       try{
         await previous?.dispose();
         if(disposed)throw Error('experiment closed');
-        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true,...(fluidBackend==='mls-mpm'?{viscosity:fluidViscosity}:{})},packet:idlePacket()});
+        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true,...(fluidBackend==='mls-mpm'?{viscosity:fluidViscosity,gridSize:fluidGridSize}:{})},packet:idlePacket()});
         if(disposed){await candidate.dispose();throw Error('experiment closed');}
         fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
         fluidState=useFluid(live=>live.read());
@@ -278,6 +284,10 @@ export default {
     return {
       read,operations:{start,stop,frame,setAcquisition,setParticleCount,
       snapshotWater(){if(!fluid)throw Error('Water is not mounted');return fluid.snapshot();},
+      setJetSpeed(value){
+        if(!Number.isFinite(value)||value<0)throw Error('Invalid jet speed');jetSpeed=value;updateFluid();sync();jetInput?.setCustomValidity('');
+        record({kind:'hand-live.jet-speed',phase:'applied',effective:read()});return read();
+      },
       setParticleLifetime(value){
         if(!Number.isFinite(value)||value<=0)throw Error('Invalid particle lifetime');particleLifetime=value;updateFluid();sync();
         lifetimeInput?.setCustomValidity('');
@@ -312,6 +322,11 @@ export default {
           lifetimeInput.setAttribute('aria-label','Particle lifetime (s)');lifetimeInput.title='Applies to new particles; existing water keeps its lifetime';
           lifetimeInput.oninput=()=>{if(lifetimeInput.value.trim())invoke('setParticleLifetime',Number(lifetimeInput.value)).catch(cause=>{lifetimeInput.setCustomValidity(cause.message);lifetimeInput.reportValidity();});};
           label.append(grip,lifetimeInput);root.append(label);host.controls.installNumberDrag({input:lifetimeInput,grip,step:1});
+          const speedLabel=document.createElement('label'),speedGrip=document.createElement('span');speedGrip.textContent='Jet speed';
+          jetInput=document.createElement('input');jetInput.type='number';jetInput.min='0';jetInput.step='any';jetInput.className='transform-input';
+          jetInput.setAttribute('aria-label','Jet speed');jetInput.title='Launch speed in world units per second';
+          jetInput.oninput=()=>{if(jetInput.value.trim())invoke('setJetSpeed',Number(jetInput.value)).catch(cause=>{jetInput.setCustomValidity(cause.message);jetInput.reportValidity();});};
+          speedLabel.append(speedGrip,jetInput);root.append(speedLabel);host.controls.installNumberDrag({input:jetInput,grip:speedGrip,step:.1});
         }
         const modeSelect=document.createElement('select');modeSelect.setAttribute('aria-label','Crop mode');
         for(const [value,label] of [['detector','Automatic crop'],['manual','Manual crop']]) {

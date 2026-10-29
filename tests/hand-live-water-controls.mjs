@@ -27,16 +27,23 @@ test('capacity changes remount water while the camera remains live and reads act
   const host={controls:{document},scene:{open:async()=>scene},fluid:{openInlets:async({setup})=>{
     if(delay)await new Promise(resolve=>finishMount=resolve);
     if(fail)throw Error('fixture allocation failed');
-    const row={count:setup.particleCount,paused:true};mounted.push(row);
+    const row={count:setup.particleCount,setup,paused:true};mounted.push(row);
     return {read:()=>({setup,solver:{particleCount:setup.particleCount,liveInlets:{poolCapacity:setup.particleCount,expectedParticleReleaseRate:0,inlets:[]}}}),
       setPacket:p=>{row.packet=p;},setPaused:p=>row.paused=p,dispose:()=>{row.disposed=true;disposed++;}};
   }}};
-  instance=await experiment.create({host,inputs:{fingerJuice:true},record:r=>records.push(r)});
+  instance=await experiment.create({host,inputs:{fingerJuice:true,fluidBackend:'mls-mpm',fluidGridSize:[192,80,256],jetSpeed:4.5,sceneLayout:'runway'},record:r=>records.push(r)});
   assert.equal(typeof instance.operations.setParticleCount,'function','capacity control is absent');
   assert.equal(typeof instance.operations.setParticleLifetime,'function','particle lifetime control is absent');
+  assert.equal(typeof instance.operations.setJetSpeed,'function','jet speed control is absent');
   await instance.operations.setParticleCount(4800);
   assert.equal(mounted.length,0,'editing idle capacity must not allocate a solver');
   await instance.operations.start();
+  assert.deepEqual(mounted[0].setup.gridSize,[192,80,256]);
+  assert.equal(instance.read().fingerJuice.jetSpeedWorldPerSecond,4.5);
+  instance.operations.setJetSpeed(5);
+  assert.equal(instance.read().fingerJuice.jetSpeedWorldPerSecond,5);
+  assert.equal(mounted.length,1,'speed edit must preserve water and camera');
+  assert.throws(()=>instance.operations.setJetSpeed(-1),/jet speed/);
   instance.operations.setParticleLifetime(20);
   assert.equal(instance.read().fingerJuice.particleLifetimeSeconds,20);
   assert.equal(mounted.length,1,'lifetime edit must preserve the current water');

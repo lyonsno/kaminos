@@ -15,9 +15,10 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
   if(!isCurrent()){surface.dispose();solver.dispose();return null;}
   const group=new THREE.Group();group.name='MLS Finger Juice tray';
   const material=new THREE.MeshStandardMaterial({color:0x707d7a,roughness:.55,metalness:.1});
-  const c=solver.config,extent=(c.grid-5)*c.cell;
-  const floor=new THREE.Mesh(new THREE.BoxGeometry(extent,.08,extent),material);floor.position.y=-.04;group.add(floor);
-  for(const [x,z,sx,sz] of [[-extent/2,0,.06,extent],[extent/2,0,.06,extent],[0,-extent/2,extent,.06],[0,extent/2,extent,.06]]){
+  const c=solver.config,extentX=(c.dimensions[0]-5)*c.cell,extentZ=(c.dimensions[2]-5)*c.cell;
+  const centerX=(c.bounds.min[0]+c.bounds.max[0])/2,centerZ=(c.bounds.min[2]+c.bounds.max[2])/2;
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(extentX,.08,extentZ),material);floor.position.set(centerX,-.04,centerZ);group.add(floor);
+  for(const [x,z,sx,sz] of [[c.bounds.min[0],centerZ,.06,extentZ],[c.bounds.max[0],centerZ,.06,extentZ],[centerX,c.bounds.min[2],extentX,.06],[centerX,c.bounds.max[2],extentX,.06]]){
     const wall=new THREE.Mesh(new THREE.BoxGeometry(sx,.18,sz),material);wall.position.set(x,.09,z);group.add(wall);
   }
   const sphere=new THREE.Mesh(new THREE.SphereGeometry(c.obstacle.radius,24,16),material);

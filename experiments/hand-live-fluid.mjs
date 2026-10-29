@@ -10,12 +10,13 @@ const cosine=(a,b)=>length(a)*length(b)>1e-8?a.reduce((n,v,i)=>n+v*b[i],0)/(leng
 
 // Palm's distal-axis/full-extension v1 rule, from LERMS live-finger-fluid.ts.
 // Only placement changes: the mesh and water now share one world and camera.
-export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux=360,particleCount=2400,lifetimeSeconds=6}) {
+export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux=360,particleCount=2400,lifetimeSeconds=6,jetSpeed=1.15*1.7}) {
   if(frame.source!=='mobrecon_densestack_spiralconv'||frame.jointBasis!=='upstream_j_reg_mano_to_mpii')throw Error('Unsupported native joint basis');
   const points=frame.meshJointsMeters;
   if(!Array.isArray(points)||points.length!==21||points.some(p=>!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)))throw Error('Invalid mesh joints');
   if(!Number.isFinite(nowMs)||!Number.isFinite(frame.captureEpochMs)||!Number.isFinite(sourceFlux)||sourceFlux<0)throw Error('Invalid inlet clock or flux');
   if(!Number.isFinite(lifetimeSeconds)||lifetimeSeconds<=0)throw Error('Invalid particle lifetime');
+  if(!Number.isFinite(jetSpeed)||jetSpeed<0)throw Error('Invalid jet speed');
   if(!center?.every(Number.isFinite)||center.length!==3||!matrix?.elements?.every(Number.isFinite))throw Error('Invalid mesh placement');
   const age=nowMs-frame.captureEpochMs;
   const reason=!running?'camera_stopped':age<0?'future_sample':age>MAX_SAMPLE_AGE_MS?'stale_sample':frame.acquisitionDetails?.fallback?'no_detection_fallback':null;
@@ -29,7 +30,7 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
     const origin=world(chain[3]),direction=origin.clone().sub(world(chain[2])).normalize();
     const active=!reason&&extension>=.86;
     return {id,extension,active,emission_state:active?'jet':'off',origin_world:origin.toArray(),aim_world:direction.toArray(),
-      radius:(id==='middle'?.052:.044)*1.6,strength:1.15*1.7,lifetime_seconds:lifetimeSeconds,
+      radius:(id==='middle'?.052:.044)*1.6,strength:jetSpeed,lifetime_seconds:lifetimeSeconds,
       optical_density_scale:1.7,reconstruction_radius_scale:1.6,
       chemistry:f===0?'splash':f===1?'knockback':f===2?'pooling':'weird'};
   });
@@ -42,7 +43,7 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
     interaction_scope:'operator_finger_juice_experiment_not_world_registration',
     simulation_authority:reason?'invalid':'live_simulation',authority:{simulation_safe:!reason,stale:age>MAX_SAMPLE_AGE_MS,reason},
     economics:{requestedParticleCount:particleCount,requestedActiveParticleBudget:particleCount,sourceFluxParticlesPerSecond:sourceFlux,
-      opticalDensityScale:1.7,reconstructionRadiusScale:1.6,lifetimeSeconds,fallbackActive:false},emitters};
+      opticalDensityScale:1.7,reconstructionRadiusScale:1.6,lifetimeSeconds,jetSpeedWorldPerSecond:jetSpeed,fallbackActive:false},emitters};
 }
 
 export function idleFingerPacket(reason='no_sample',route=NATIVE_FINGER_ROUTE) {

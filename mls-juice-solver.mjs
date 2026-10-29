@@ -21,14 +21,18 @@ const boundary=`
 
 export async function createMlsJuiceSolver({device,setup,packet,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
+  for(const size of [config.capacity*80,config.gridCells*16]){
+    if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
+  }
+  if(Math.ceil(config.gridCells/64)>(device.limits?.maxComputeWorkgroupsPerDimension??Infinity))throw Error('MLS grid exceeds effective one-dimensional dispatch limit');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0;
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
-  const cells=buffer(config.grid**3*16,U.STORAGE|U.COPY_DST,'MLS grid');
+  const cells=buffer(config.gridCells*16,U.STORAGE|U.COPY_DST,'MLS grid');
   const densities=buffer(config.capacity*4,U.STORAGE,'MLS density');
   const uniform=(values,label)=>{const b=buffer(16,U.UNIFORM|U.COPY_DST,label);device.queue.writeBuffer(b,0,values);return b;};
-  const box=uniform(new Float32Array([config.grid,config.grid,config.grid,0]),'MLS grid extent');
+  const box=uniform(new Float32Array([...config.dimensions,0]),'MLS grid extent');
   const count=uniform(new Uint32Array([config.capacity,0,0,0]),'MLS allocated slots');
   const dt=uniform(new Float32Array([config.dt*config.modelSecondsPerSecond,0,0,0]),'MLS model dt');
   const obstacle=uniform(new Float32Array([...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),config.obstacle.radius/config.cell]),'MLS prescribed sphere');
@@ -69,7 +73,8 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
       @group(0) @binding(3) var<uniform> obstacle:vec4f;
       @compute @workgroup_size(64) fn grid(@builtin(global_invocation_id) id:vec3u){
         if(id.x>=arrayLength(&cells)||cells[id.x].mass<=0){return;}
-        let n=u32(box.x);let p=vec3f(f32(id.x/(n*n)),f32((id.x/n)%n),f32(id.x%n));
+        let ny=u32(box.y);let nz=u32(box.z);
+        let p=vec3f(f32(id.x/(ny*nz)),f32((id.x/nz)%ny),f32(id.x%nz));
         var v=vec3f(f32(cells[id.x].vx),f32(cells[id.x].vy),f32(cells[id.x].vz))/f32(cells[id.x].mass);
         v.y-=.4*dt;
         for(var axis=0;axis<3;axis++){
@@ -103,13 +108,14 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
           for(const b of births){encoder.copyBufferToBuffer(upload,source,particles,b.slot*80,80);source+=80;}
           encoder.clearBuffer(cells);
           dispatch(encoder,kernels[0],config.capacity);dispatch(encoder,kernels[1],config.capacity);
-          dispatch(encoder,update,config.grid**3);dispatch(encoder,kernels[2],config.capacity);
+          dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
         }
         device.queue.submit([encoder.finish()]);pending=true;
         device.queue.onSubmittedWorkDone().catch(e=>{failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
         return true;
       },
-      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.grid**3,
+      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.gridCells,
+        domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
