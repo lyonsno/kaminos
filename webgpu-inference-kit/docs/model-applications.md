@@ -15,9 +15,11 @@ npm install @kaminos/flux2-klein@^0.1.2
 npm install @kaminos/supermat@^0.1.1
 # Motion generation with your own shared rendering host:
 npm install @kaminos/unimate-webgpu@^0.2.1 @kaminos/webgpu-inference-kit@^0.1.60
+# Background removal (bundled runtime):
+npm install @kaminos/u2net@^0.1.0
 ```
 
-These versions include the application interfaces described here. U2Net currently uses the [source-package installation](#u2net-background-removal) below while its first npm publication is pending. Klein and UniMate require kit 0.1.60 or later in the 0.1 series. Use a bundler such as Vite or esbuild and serve over HTTPS or localhost. Model weights download separately; each guide describes memory requirements, model terms and custom weight locations. SuperMat's [worker build recipe](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md#install) covers bundling its CPU worker.
+These versions include the application interfaces described here. Klein and UniMate require kit 0.1.60 or later in the 0.1 series. Use a bundler such as Vite or esbuild and serve over HTTPS or localhost. Model weights download separately; each guide describes memory requirements, model terms and custom weight locations. SuperMat's [worker build recipe](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md#install) covers bundling its CPU worker.
 
 ## Install the source packages
 
@@ -129,12 +131,10 @@ Device selection, loading/warmup, resident resources, model options, input/outpu
 
 ## U2Net background removal
 
-`createU2NetApp` turns opaque RGB/RGBA pixels into the existing rembg-style cutout, with the shared application's queued admission, pause/resume, stop/retry and resource lifetime. It accepts the host's session and foreground service, exposes its loaded low-level runner, and preserves the producer's segment size and output provenance. See [the U2Net application](https://github.com/lyonsno/kaminos/blob/main/models/u2net/README.md) for a source-package install and the image input contract.
+`createU2NetApp` turns opaque RGB/RGBA pixels into the existing rembg-style cutout, with the shared application's queued admission, pause/resume, stop/retry and resource lifetime. It accepts the host's session and foreground service, exposes its loaded low-level runner, and preserves the producer's segment size and output provenance. See [the U2Net application](https://github.com/lyonsno/kaminos/blob/main/models/u2net/README.md) for installation and the image input contract.
 
 ```sh
-node scripts/pack-u2net-module.mjs --out /absolute/path/to/artifacts
-# Run from the external application directory:
-npm install /absolute/path/to/artifacts/kaminos-u2net-0.1.0.tgz
+npm install @kaminos/u2net@^0.1.0
 ```
 
 U2Net keeps its existing 320×320 network and rembg preparation semantics. The application offers foreground service at its real GPU segments and CPU preparation windows; it does not change the mask model or guarantee a particular display cadence.
