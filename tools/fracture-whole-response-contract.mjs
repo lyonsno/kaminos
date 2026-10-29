@@ -42,3 +42,12 @@ export function assertReleasedMaterialAdvances(released,free){
  assert.ok(free.material.step>released.material.step&&free.material.time>released.material.time,'Release needs observed physical evolution');
  for(const b of free.material.bodies)for(const key of ['position','velocity','angularVelocity','quaternion'])assert.ok(Object.values(b[key]).every(Number.isFinite),'Released material has non-finite physical state');
 }
+
+export function assertResidentFrameTransfers(before,after){
+ for(const value of [before,after]){
+  assert.ok(value&&Array.isArray(value.maps)&&Number.isSafeInteger(value.fences)&&value.fences>=0&&Array.isArray(value.devices),'Incomplete resident transfer observation');
+  assert.ok(value.devices.length&&value.devices.every(d=>d.vendor==='apple'&&d.fallback===false),'Native Apple GPU required for this witness');
+ }
+ assert.equal(after.maps.length,before.maps.length,'Ordinary frames acquired GPU state');
+ assert.equal(after.fences,before.fences,'Ordinary frames waited for GPU completion');
+}

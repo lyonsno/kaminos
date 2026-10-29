@@ -55,8 +55,8 @@ export async function runReplay([url,sourcePath,out,optionsPath]){
   for(const c of options.cases){
    const fixture=materialFixture(source,c.config??{});const record={name:c.name,config:fixture.config,steps:c.steps,states:[]};result.cases.push(record);save();
    await page.evaluate(async fixture=>{const {createCoarseFractureDynamics}=await import('/fracture-coarse-dynamics.mjs');window.replayMaterial=await createCoarseFractureDynamics(fixture,window.replayRenderer);},fixture);
-   record.initial=await page.evaluate(()=>window.replayMaterial.snapshot());if(c.diagnostics)record.initial.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());save();
-   for(let step=0;step<c.steps;step++){await page.evaluate(()=>window.replayMaterial.step());const state=await page.evaluate(()=>window.replayMaterial.snapshot());if(c.diagnostics)state.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());record.states.push(state);save();}
+   record.initial=await page.evaluate(async()=>{await window.replayMaterial.acquire();return window.replayMaterial.snapshot();});if(c.diagnostics)record.initial.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());save();
+   for(let step=0;step<c.steps;step++){await page.evaluate(()=>window.replayMaterial.step());const state=await page.evaluate(async()=>{await window.replayMaterial.acquire();return window.replayMaterial.snapshot();});if(c.diagnostics)state.solver=await page.evaluate(()=>window.replayMaterial.readSolverDiagnostics());record.states.push(state);save();}
    const last=record.states.at(-1);try{record.unloaded={status:'passed',...assertWholeObjectAtRest({initial:{material:record.initial},unloaded:{material:last}})};}catch(error){record.unloaded={status:'failed',error:error.message};}
    await page.evaluate(()=>{window.replayMaterial.dispose();window.replayMaterial=null;});save();
   }

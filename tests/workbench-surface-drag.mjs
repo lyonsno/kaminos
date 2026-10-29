@@ -10,3 +10,20 @@ test('foreign foreground material occludes the owned surface and retains editor 
  const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},owned=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),foreground=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);foreground.position.z=2;owned.updateMatrixWorld(true);foreground.updateMatrixWorld(true);
  const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[owned],sceneRoots:()=>[owned,foreground],callback:hit=>{seen.push(hit);return true;}}),e=new Event('pointerdown',{cancelable:true});Object.assign(e,{clientX:250,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);assert.equal(seen.length,0,'Covered material must not receive a grab');assert.equal(e.defaultPrevented,false);assert.equal(controls.enabled,true);stop();
 });
+test('resident pick uses moved GPU surface and cancels a pending hit on disposal',async()=>{
+ const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);root.position.x=100;root.updateMatrixWorld(true);let resolve,requests=0;
+ const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],pick:ray=>{requests++;assert.ok(ray.direction[2]<0);return new Promise(r=>{resolve=r;});},callback:e=>{seen.push(e);return true;}});
+ const event=()=>{const e=new Event('pointerdown',{cancelable:true});Object.assign(e,{clientX:250,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);};
+ event();assert.equal(requests,1,'Resident surface must be queried even when CPU geometry is elsewhere');resolve({object:root,point:[0,0,1],distance:4,localPoint:[0,0,.5],cell:7});await new Promise(r=>setImmediate(r));assert.equal(seen[0].cell,7);assert.equal(controls.enabled,false);stop();assert.equal(seen.at(-1).phase,'cancel');assert.equal(controls.enabled,true);
+ const seen2=[];const stop2=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],pick:()=>new Promise(r=>{resolve=r;}),callback:e=>{seen2.push(e);return true;}});event();stop2();resolve({object:root,point:[0,0,1],distance:4});await new Promise(r=>setImmediate(r));assert.equal(seen2.length,0);assert.equal(controls.enabled,true);
+});
+test('resident misses and foreground hits replay navigation; an early release never creates a hand',async()=>{
+ for(const mode of ['miss','occluded','released']){
+  const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),front=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[],navigation=[];camera.position.set(0,0,5);camera.lookAt(0,0,0);root.updateMatrixWorld(true);front.position.z=2;front.updateMatrixWorld(true);let resolve;
+  const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],sceneRoots:()=>mode==='occluded'?[root,front]:[root],pick:()=>new Promise(r=>resolve=r),callback:e=>{seen.push(e);return true;}});
+  const send=type=>{const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:250,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);};
+  for(const type of ['pointerdown','pointermove','pointerup'])canvas.addEventListener(type,e=>navigation.push(e.type));
+  send('pointerdown');send('pointermove');send('pointerup');resolve(mode==='miss'?null:{object:root,point:[0,0,.5],distance:4.5});await new Promise(r=>setImmediate(r));
+  assert.equal(seen.length,0);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);assert.deepEqual(navigation,mode==='released'?[]:['pointerdown','pointermove','pointerup']);stop();
+ }
+});

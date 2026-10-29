@@ -23,3 +23,19 @@ export function coarseFixture(prepared,{strength=2000}={}){
  const {area,center,normal}=prepared.interface,cells=prepared.pieces.map((p,index)=>({index,id:`coarse:${index}`,pinned:index===0,position:p.center,halfExtents:p.halfExtents,mass:index===0?0:p.volume,volume:p.volume,column:index,row:0,layer:0}));
  return {cells,bonds:[{id:'coarse-interface:0',a:0,b:1,area,normal,anchorA:center.map((v,k)=>v-cells[0].position[k]),anchorB:center.map((v,k)=>v-cells[1].position[k])}],dimensions:{dx:Math.min(...cells.map(c=>c.halfExtents[0]*2)),dy:Math.min(...cells.map(c=>c.halfExtents[1]*2)),dz:Math.min(...cells.map(c=>c.halfExtents[2]*2))},floorY:Math.min(...cells.map(c=>c.position[1]-c.halfExtents[1]))-10,config:{gravity:0,timeStep:1/60,substeps:1,solverIterations:20,stiffness:10000,strength,friction:0,gripStiffness:250,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true}};
 }
+
+// The render and pick consumers retain every source/cap face. GPU bond state
+// decides whether a cap exists visibly; CPU topology never follows live damage.
+export function packResidentFractureFaces(prepared,materials){
+ const owners=[],values=[];
+ for(const piece of prepared.pieces){const a=piece.arrays;
+  for(let face=0;face<a.indices.length/3;face++){
+   const cap=piece.faceInterfaces[face]!==0,bond=piece.faceBonds[face];
+   if(cap&&(!Number.isInteger(bond)||bond<0||bond>=prepared.bonds.length))throw Error('Interior face needs its actual material bond');
+   const points=Array.from(a.indices.subarray(face*3,face*3+3),i=>Array.from(a.positions.subarray(i*3,i*3+3),(x,k)=>x-piece.center[k]));
+   values.push(...points[0],piece.index,...points[1],cap?bond+1:0,...points[2],materials[a.faceMaterial[face]]?.side??0);
+   owners.push({cell:piece.index,face,points});
+  }
+ }
+ return {faces:Float32Array.from(values),owners};
+}

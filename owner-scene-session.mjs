@@ -72,10 +72,10 @@ export function createOwnerSceneSession(hooks) {
     setView(view) {active(); return structuredClone(hooks.setView(structuredClone(view)));},
     redraw() {active(); return hooks.redraw();},
     onFrame:callback=>subscribe(hooks.onFrame,callback),
-    onSurfaceDrag(callback){
+    onSurfaceDrag(callback,options={}){
       active();
       if(typeof hooks.onSurfaceDrag!=='function')throw Error('Scene host does not support surface dragging');
-      return subscribe(fn=>hooks.onSurfaceDrag(fn,()=>[...objects.keys()]),callback);
+      return subscribe(fn=>hooks.onSurfaceDrag(fn,()=>[...objects.keys()],options),callback);
     },
     onPick(callback){
       active();

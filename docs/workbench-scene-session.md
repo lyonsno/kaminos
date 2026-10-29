@@ -91,3 +91,14 @@ The application emits after its ordinary click selection, with the same overlay,
 gizmo and drag suppression. This subscription observes selection; it does not
 replace scene selection or camera gestures. Session disposal unsubscribes and
 suppresses stale callbacks. A host without picking rejects subscription explicitly.
+
+`session.onSurfaceDrag(callback, {pick, onError})` optionally accepts an asynchronous
+resident-surface picker. The picker receives a world-space unit ray and returns
+null or `{object, point, distance, ...contactData}` for the current visible
+surface. The host checks session ownership and foreign foreground occlusion,
+holds the pointer gesture while the hit is pending, and restores navigation on
+a miss or declined contact. Disposal cancels pending gestures. Without this
+option, the existing CPU raycast path remains synchronous. A resident consumer
+must use current geometry for this query; its CPU rest mesh is not a live hit
+surface. Domain contact data such as local barycentric position passes through
+the start callback.
