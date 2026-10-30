@@ -3,7 +3,7 @@ import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';im
 const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
 const out=resolve(args.get('--out')),repo=resolve(args.get('--repo')),origin=args.get('--url'),mode=args.get('--mode')??'cells',width=Number(args.get('--width')??7.68),samples=Number(args.get('--samples')??12);
 mkdirSync(out,{recursive:true});const r={status:'running',phase:'source',route:'shared-webgpu-pass-timestamps',requested:{mode,width,samples},errors:[],consoleErrors:[],cases:{}};let browser,page;const save=()=>writeFileSync(out+'/report.json',JSON.stringify(r,null,2));save();
-const source=()=>createHash('sha256').update(['ash/tile-gpu.mjs','ash/scene-gpu.mjs','ash/tile-plan.mjs','experiments/ash-gpu-deposition.experiment.mjs','tools/ash-pass-timer.mjs'].map(p=>readFileSync(repo+'/'+p)).join('\n')).digest('hex');
+const source=()=>createHash('sha256').update(['ash/tile-gpu.mjs','ash/gpu-plan.mjs','ash/scene-gpu.mjs','ash/tile-plan.mjs','experiments/ash-gpu-deposition.experiment.mjs','tools/ash-pass-timer.mjs','tools/ash-cost-witness.mjs','tools/ash-cost-contracts.mjs'].map(p=>readFileSync(repo+'/'+p)).join('\n')).digest('hex');
 try{
  assert.ok(Number.isInteger(samples)&&samples>0);r.sourceBefore=source();r.server=await verifyAuthoringServer({origin,repoRoot:repo});
  const {chromium}=await import(args.get('--playwright'));r.browserExecutable=args.get('--browser');assert.match(r.browserExecutable,/Chrome for Testing|chromium/);
@@ -21,7 +21,9 @@ try{
   for(let i=0;i<samples+2;i++){
    if(name==='moving')await page.evaluate(({id,x,g})=>window.kaminosSetSceneObjectTransform(id,{position:[x,g+.125,1.8]}),{id,g,x:1.8-i*.08});
    const compute=await page.evaluate(()=>window.__ashTimer.measure(()=>window.kaminosWorkbenchExperiments.invoke('advance',{steps:1})));
-   const render=await page.evaluate(()=>window.__ashTimer.measure(()=>window.__kaminosRenderSceneForInspection()));
+   // Three's FRAME nodes update on its internal RAF. A second render in the
+   // same frame only presents cached textures, even though the draw returns true.
+   const render=await page.evaluate(async()=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));let frame;const timing=await window.__ashTimer.measure(()=>{frame=window.__kaminosRenderSceneForInspection();});return {...timing,frame};});
    if(i>=2)r.cases[name].samples.push({compute,render});
   }
   r.cases[name].diagnostics=await invoke('diagnostics');r.cases[name].state=await invoke('read');await frame(name);const checkpoint=await invoke('snapshot');writeFileSync(out+'/'+name+'-checkpoint.json',JSON.stringify(checkpoint));save();

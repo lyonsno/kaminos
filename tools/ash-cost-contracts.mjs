@@ -6,6 +6,11 @@ export function validateAshCostReport(report){
  if(!report.browserClosed||report.errors?.length||report.consoleErrors?.length)throw Error('Unclean cost witness');
  for(const name of ['settled','moving']){
   const rows=report.cases?.[name]?.samples;if(!rows?.length)throw Error('Missing '+name+' samples');
+  let frame=-1;
+  for(const row of rows){
+   if(!row.render?.frame?.drawn||!Number.isSafeInteger(row.render.frame.frame)||row.render.frame.frame<=frame||!row.render.passes?.some(p=>p.colorAttachments>1))throw Error('Missing fresh scene render');
+   frame=row.render.frame.frame;
+  }
   for(const row of rows)for(const key of ['compute','render']){
    const passes=row[key]?.passes;if(!passes?.length)throw Error('Missing '+key+' passes');
    for(const pass of passes){if(!Array.isArray(pass.timestamps)||pass.timestamps.length!==2||BigInt(pass.timestamps[0])<=0n||BigInt(pass.timestamps[1])<BigInt(pass.timestamps[0]))throw Error('Invalid pass timestamps');}
