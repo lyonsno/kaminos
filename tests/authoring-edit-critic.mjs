@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import * as historyModule from '../authoring-image-history.mjs';
 import {createAuthoringPromptExpansion} from '../authoring-prompt-expansion.mjs';
 import {installEditCritic} from '../authoring-edit-critic.mjs';
@@ -27,6 +28,14 @@ const malformed=critic.review();resolve({task:'critique',text:'A scene caption',
 assert.equal(history.read().viewed.editReview.status,'unstructured');assert.equal(history.read().viewed.editReview.raw.text,'A scene caption');
 const passed=critic.review();resolve({task:'critique',text:'The body is blue.\nNEXT EDIT:\nNONE',partial:false,stopReason:'eos'});await passed;
 assert.equal(history.read().viewed.editReview.correction,'');assert.equal(history.read().viewed.editReview.status,'complete');
+const observed=JSON.parse(fs.readFileSync(new URL('./fixtures/bfl-pup/critic-success.json',import.meta.url))).response;
+const inline=critic.review();resolve(observed);await inline;
+assert.equal(history.read().viewed.editReview.status,'complete','actual inline terminal marker must form a complete review');
+assert.equal(history.read().viewed.editReview.correction,'','observed NONE punctuation must not become an edit command');
+for(const text of ['Assessment. NEXT EDIT:', 'Assessment. NEXT EDIT: blue NEXT EDIT: red']){
+ const bad=critic.review();resolve({task:'critique',text,partial:false,stopReason:'eos'});await bad;
+ assert.equal(history.read().viewed.editReview.status,'unstructured','missing or ambiguous correction must remain unstructured');
+}
 console.log('Edit critic: image/request identity, explicit adoption, stale, partial, wrong-task and unstructured returns pass');
 
 // Exercise the real operation and visible controls, with deterministic model text.
