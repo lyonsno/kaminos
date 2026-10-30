@@ -26,3 +26,10 @@ async function setup(){
  await runtime.dispose();
 }
 console.log('Native workshop history through empty state and numeric preview/commit/cancel/replay passed');
+{
+ const {runtime,op,edits,target}=await setup(),packet=op.exportBodies();packet.bodies=packet.bodies.filter(b=>b.id==='link:1');packet.bodies[0].object.materials[0].color=0xff00ff;await op.importBodies(packet);
+ const color=()=>op.exportBodies().bodies.find(b=>b.id==='link:1').object.materials[0].color;
+ const h=target();edits.begin(h.id);const change=h.read();change.scale[0]=4;edits.preview(change);edits.cancel();assert.equal(color(),0xff00ff,'Cancel restores returned appearance');assert.equal(runtime.read().recipe.nodes[1].length,2);
+ op.move({joint:1,point:[3,0],mode:'build'});assert.equal(runtime.read().bodies.replacements,0);edits.undo();assert.equal(color(),0xff00ff,'Undo construction restores appearance');edits.redo();assert.equal(runtime.read().recipe.nodes[1].length,3);assert.equal(runtime.read().bodies.replacements,0);
+ await runtime.dispose();
+}

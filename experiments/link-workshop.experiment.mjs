@@ -19,22 +19,23 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
  function pause(){playing=false;stop();stop=()=>{};t=mode==='B'?1:0;update();}
  function apply(next,label){ensure();pause();edits.apply(whole,{recipe:checkedMechanism(next)},label);record({kind:'links.edit',phase:'applied',effective:read()});return read();}
  edits.register(geometryTarget,{read:()=>view.replacementState(),check:v=>structuredClone(v),write:v=>{view.setBodies(v);session.redraw();refresh();}});
- const snapshot=()=>({recipe:structuredClone(model)});
- edits.register(whole,{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe)}),write:v=>{model=checkedMechanism(v.recipe);selected=model.nodes.length?Math.max(0,Math.min(selected,model.nodes.length-1)):-1;pistonStart=null;update();}});
+ function restoreGeometry(packet){if(!packet)return;const keys=new Map(view.bodyManifest().bodies.map(b=>[b.id,b.geometryKey]));view.setBodies({...packet,bodies:packet.bodies.filter(b=>keys.get(b.id)===b.geometryKey)});}
+ const snapshot=()=>({recipe:structuredClone(model),geometry:view.replacementState()});
+ edits.register(whole,{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe),geometry:structuredClone(v.geometry??view.replacementState())}),write:v=>{model=checkedMechanism(v.recipe);selected=model.nodes.length?Math.max(0,Math.min(selected,model.nodes.length-1)):-1;pistonStart=null;update();restoreGeometry(v.geometry);session.redraw();refresh();}});
  function handleRead(joint=selected,requestedMode=mode){
   const f=frames(model,requestedMode==='B'?1:0)[joint];if(!f)throw Error('Choose an existing joint');
   root.updateWorldMatrix(true,false);const position=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),q=root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle)),e=new T.Euler().setFromQuaternion(q);
-  return {recipe:structuredClone(model),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
+  return {recipe:structuredClone(model),geometry:view.replacementState(),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
  }
  edits.register(target,{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
   pause();selected=v.joint;const base=v.recipe,n=base.nodes[selected],f=frames(base,v.mode==='B'?1:0)[selected];root.updateWorldMatrix(true,false);const p=new T.Vector3(...v.position).applyMatrix4(root.matrixWorld.clone().invert());
   model=checkedMechanism(base);
-  if(!edits.state().active){update();return;}
+  if(!edits.state().active){update();restoreGeometry(v.geometry);session.redraw();refresh();return;}
   const oldWorld=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),moved=oldWorld.distanceTo(new T.Vector3(...v.position))>1e-7;
   const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
   if(moved&&!resized)model=moveJoint(base,selected,[p.x,p.y],v.mode);
   else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
-  update();
+  update();restoreGeometry(v.geometry);session.redraw();refresh();
  }});
  seat=host.controls.components.register(asset.id,{enter(){editing=true;pause();update();},exit(){editing=false;update();},target(){if(selected<0)return null;if(!edits.state().active)putProxy();return {id:target,type:'link-joint',label:`Joint ${selected+1}`,object:proxy,read:handleRead,frameObjects:[view.markers()[selected]]};},pick(event,{camera,canvas}){
   if(playing){if(status)status.textContent='Stop playback to edit joints.';return;}const r=canvas.getBoundingClientRect(),ray=new T.Raycaster();ray.setFromCamera(new T.Vector2((event.clientX-r.left)/r.width*2-1,1-(event.clientY-r.top)/r.height*2),camera);
