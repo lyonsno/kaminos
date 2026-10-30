@@ -2703,7 +2703,11 @@ async function runAuthoredWaterPreviewScenario(ws) {
 async function runAuthoredWaterProductScenario(ws){
  phase='water-product-authoring';
  lastEvidence.waterProduct=await evaluate(ws,`(async()=>{
-  const wait=ms=>new Promise(r=>setTimeout(r,ms));while(!window.kaminosWaterSources||!window.kaminosWorkbenchState||!document.querySelector('[data-mode]'))await wait(100);
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  while(!window.kaminosWaterSources||!window.kaminosWorkbenchState||!document.querySelector('[data-mode]')||!window.kaminosWorkbenchExperiments){
+   if(window.kaminosWorkbenchExperimentError)throw Error(window.kaminosWorkbenchExperimentError);
+   await wait(100);
+  }
   const api=window.kaminosWaterSources,sceneApi=window.kaminosSceneAuthoring;
   const visible=selector=>{const n=document.querySelector(selector);return !!n&&n.getClientRects().length>0;};
   window.kaminosSetCameraDebugPose({position:[1.7,1.4,1.7],target:[0,.25,0]});
