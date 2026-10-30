@@ -48,3 +48,9 @@ test('a newborn receives liquid on exposed faces and continues growing beyond it
  advanceCrust(s,7);assert.ok(children.some(({id,volume})=>grainVolume(s.grains[id])>volume*1.01),'all early newborns are stranded at their birth size');
  for(const {id} of children){const g=s.grains[id];assert.equal(g.facePools[g.supportFace],null,'buried attachment face must not hold an exposed film');}
 });
+test('wetting reaches a shared edge away from its midpoint',()=>{
+ const s=createCrust({setup:'neighbors',settings:{mobility:12000,feed:0,evaporation:0,growth:0,nucleation:0}});empty(s);const g=s.grains[0],p=s.pools[g.facePools[0]];
+ p.entry=[0,0];p.water=.22**2*.016*.04;p.salt=p.water;s.ledger.initialWater=p.water;s.ledger.initialSalt=p.salt;
+ advanceCrust(s,.1);assert.ok(s.pools[g.facePools[3]].water>0,'wet corner was blocked by a midpoint-only edge port');
+ assert.equal(s.pools[g.facePools[4]].water,0,'the dry upper edge must remain disconnected');
+});
