@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {launchChrome,sourceIdentity} from '../../../models/flux2-klein/cdp-harness.mjs';
 import {verifyAuthoringServer} from '../../../scene-authoring-witness-identity.mjs';
 import {validateCast} from './receipt.mjs';
+import {closeOwnedBrowser} from './cleanup.mjs';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const [planPath,mode,castId]=process.argv.slice(2),plan=JSON.parse(await fs.readFile(planPath)),root=path.dirname(planPath);
 const cast=mode==='cast'?plan.casts.find(c=>`${c.cell}-seed${c.seed}`===castId):null;
@@ -77,7 +78,7 @@ finally{
   report.phases=await browser.evaluate('window.assayPhases??[]');report.gpuErrors=await browser.evaluate('window.assayErrors??[]');
   if(await browser.evaluate('!!window.assayFailure')){const capture=await browser.evaluate(`(()=>{const c=assayFailure;return {...c,tensors:Object.fromEntries(Object.entries(c.tensors??{}).map(([k,v])=>[k,{...v,bytes:undefined}])),noise:Object.fromEntries(Object.entries(c.noise??{}).map(([k,v])=>[k,{...v,values:undefined}]))}})()`);for(const [k,v] of Object.entries(capture.tensors??{}))v.file=await saveArray(`window.assayFailure.tensors[${JSON.stringify(k)}].bytes`,`failure-${k}.bin`);for(const [k,v] of Object.entries(capture.noise??{}))v.file=await saveArray(`window.assayFailure.noise[${JSON.stringify(k)}].values`,`failure-noise-${k}.bin`);report.failureCapture=capture;}
  }catch(e){report.captureError=String(e);}
- try{await browser.close();}catch(e){report.cleanupError=String(e);report.ok=false;process.exitCode=1;}
+ try{await closeOwnedBrowser(browser,report);}catch(e){report.cleanupError=String(e);report.ok=false;process.exitCode=1;}
  }else if(report.ownedBrowserPid&&!report.browserExit){process.kill(report.ownedBrowserPid,'SIGTERM');report.startupCleanup=report.ownedBrowserPid;}
  report.finishedAt=new Date().toISOString();await write();if(!report.ok)await fs.writeFile(path.join(out,'failure.json'),JSON.stringify(report,null,2)+'\n');
 }
