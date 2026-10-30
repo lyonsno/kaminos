@@ -80,3 +80,12 @@ c.setActiveSceneObject=id=>{c.activeSceneObjectId=id;c.activeSceneFieldId=null;}
 const pendingAdd=c.addAuthoredWaterDrop({mode:'continuous'});
 c.activeSceneObjectId=null;c.activeSceneFieldId='water-field';finishInsertion();await pendingAdd;
 assert.equal(c.activeSceneFieldId,'water-field','Completing Add cannot replace the newer simulation selection');
+
+// A new stream is independently sized, even when the existing volume is tiny or large.
+c.recordSceneObjectInsertion=async()=>{};c.registerSceneObject=(_object,record)=>created.push(record);
+c.sceneObjects=[first];c.localLiquidEmitterRecords=()=>[first];
+for(const scale of [.25,3]){
+ first.transform.scale=[scale,scale,scale];
+ await c.addAuthoredWaterDrop({mode:'continuous'});
+ assert.deepEqual(created.at(-1).transform.scale,[1,1,1]);
+}

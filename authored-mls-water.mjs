@@ -5,14 +5,23 @@ import {mlsConfig,MLS_ROUTE,validateMlsPacket} from './mls-juice-contract.mjs';
 
 // Source objects retain their authored units. The old PBF adapter's radius and
 // speed divisors are deliberately absent from this engine's world-unit packet.
-export function authoredMlsInlets(records,epochMs=Date.now(),generation=1){
+export function authoredMlsCellSize(records,options={}){
+ return records.some(r=>r.localLiquidEmitter?.mode==='finite_drop')?resolveAuthoredWaterSampling(records,options).spacing*Math.cbrt(3):.05;
+}
+export function authoredMlsParticleVolume(cellSize=.05){return cellSize**3/3;}
+export function canonicalAuthoredWaterFlowRecords(records,setup={}){
+ const particleVolume=authoredMlsParticleVolume(authoredMlsCellSize(records,setup));
+ return records.map(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE?{...r,localLiquidEmitter:{...r.localLiquidEmitter,volumeRate:r.localLiquidEmitter.volumeRate??(r.localLiquidEmitter.rate??1200)*particleVolume}}:r);
+}
+export function authoredMlsInlets(records,epochMs=Date.now(),generation=1,cellSize=.05){
  const emitters=[];
  for(const r of records){
   if(r?.type!==LOCAL_LIQUID_EMITTER_TYPE||typeof r.id!=='string'||!r.id)throw Error('Invalid authored MLS water source');
   const pose=normalizeLocalLiquidEmitterPose(r.transform),s=normalizeLocalLiquidEmitter(r.localLiquidEmitter,pose);
   if(s.mode==='finite_drop')continue;
-  emitters.push({id:r.id,active:s.rate>0,origin_world:pose.position,aim_world:new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).toArray(),
-   radius:s.baseRadius*pose.scale[0],strength:s.strength,source_flux_particles_per_second:s.rate,lifetime_seconds:s.lifetimeSeconds??1e30});
+  const rate=s.volumeRate==null?s.rate:s.volumeRate/authoredMlsParticleVolume(cellSize);
+  emitters.push({id:r.id,active:rate>0,origin_world:pose.position,aim_world:new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).toArray(),
+   radius:s.baseRadius*pose.scale[0],strength:s.strength,source_flux_particles_per_second:rate,lifetime_seconds:s.lifetimeSeconds??1e30});
  }
  return validateMlsPacket({packet_id:`authored-mls-${generation}`,route_identity:MLS_ROUTE,authority:{simulation_safe:true},timestamp_ms:epochMs,emitters});
 }
@@ -29,7 +38,7 @@ export function authoredMlsSetup(records,options={}){
  const capacity=initialCount+(hasFlow?(options.particleCount??12000):0);
  // One unit of mass per sample, at the producer's rest density of three samples
 // per grid cell. Deriving cell width from authored spacing preserves that law.
- const cell=finite.length?sampling.spacing*Math.cbrt(3):.05;
+ const cell=authoredMlsCellSize(records,options);
  const bounds=structuredClone(sampling.container??sampling.worldBounds);
  const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
  const originWorld=bounds.min.map(v=>v-2*cell);

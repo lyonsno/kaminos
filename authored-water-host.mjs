@@ -6,5 +6,5 @@ export function authoredDropSetup(records,options={}){
 export async function createAuthoredWaterHost(options){
  const initial=authoredMlsSetup(options.emitters??[],options.setup??{});
  const {createAuthoredMlsHost}=await import('./authored-mls-host.mjs');
- return createAuthoredMlsHost({...options,initial,makePacket:authoredMlsInlets});
+ return createAuthoredMlsHost({...options,initial,makePacket:(records,epoch,generation)=>authoredMlsInlets(records,epoch,generation,initial.solver.cellSize)});
 }

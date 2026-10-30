@@ -2831,6 +2831,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import {authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
@@ -12639,6 +12640,10 @@ function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiqui
 const waterSettingTargets=new Set();
 function applyAuthoredWaterSettings(id,patch){
  assertSceneConstructionAvailable();const row=workingScene.objects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
+ if(Object.hasOwn(patch,'rate')&&!Object.hasOwn(patch,'volumeRate')){
+  const cell=localLiquidHost?.state().solver?.domain?.cellSize??authoredMlsCellSize(localLiquidEmitterRecords(),localLiquidSetup??{});
+  patch={...patch,volumeRate:patch.rate*authoredMlsParticleVolume(cell)};
+ }
  const target='@authored-water:'+id;
  if(!waterSettingTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>structuredClone(workingScene.objects.find(r=>r.id===id).localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(workingScene.objects.find(r=>r.id===id).object)),write:value=>{
   replaceAuthoredWaterSettings(id,value);
@@ -12758,7 +12763,7 @@ async function addAuthoredWaterDrop({mode='finite_drop'}={}){
   const vacant=candidates.find(position=>position.every((v,k)=>v-radius>=bounds.min[k]&&v+radius<=bounds.max[k])&&sources.every(r=>Math.hypot(...position.map((v,k)=>v-r.transform.position[k]))>=radius+Math.sqrt(3)*r.localLiquidEmitter.drop.width*r.transform.scale[0]/2));
   if(vacant)transform.position=vacant;
  }
- if(mode==='continuous')transform.rotation=[Math.PI/2,0,0];
+ if(mode==='continuous'){transform.rotation=[Math.PI/2,0,0];transform.scale=[1,1,1];}
  const labels=new Set(workingScene.objects.map(r=>sceneObjectDisplayLabel(r))),baseLabel=mode==='continuous'?'Water emitter':'Water volume';let label=baseLabel;for(let n=2;labels.has(label);n++)label=baseLabel+' '+n;
  const record=createLocalLiquidEmitterSceneRecord({id,label,transform,settings});
  const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();sharedWorkbench?.update({source:'Authored water source',status:'Initial preview',clock:'Release starts water'});window._kaminosDirty?.();return id;

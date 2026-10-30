@@ -1,3 +1,4 @@
+import {canonicalAuthoredWaterFlowRecords} from './authored-mls-water.mjs';
 import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
@@ -111,7 +112,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
   if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
   if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
-  const objects = authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE);
+  const objects = canonicalAuthoredWaterFlowRecords(authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE),data.localLiquid??{});
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   const flameIds=new Set();for(const record of flameSources){if(flameIds.has(record.id))throw Error('Duplicate flame source identity');flameIds.add(record.id);}
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');

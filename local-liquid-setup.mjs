@@ -45,9 +45,11 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
   if(!['continuous','finite_drop'].includes(mode))throw Error('Unknown water source mode');
   if(value.lifetimeSeconds!=null&&(!Number.isFinite(value.lifetimeSeconds)||value.lifetimeSeconds<=0))throw Error('Water lifetime must be positive or disabled');
   const retention=Object.hasOwn(value,'lifetimeSeconds')?{lifetimeSeconds:value.lifetimeSeconds}:{};
+  if(Object.hasOwn(value,'volumeRate')&&(!Number.isFinite(value.volumeRate)||value.volumeRate<0))throw Error('Water volume flow must be nonnegative');
+  const flow=Object.hasOwn(value,'volumeRate')?{volumeRate:value.volumeRate}:{};
   if(mode==='finite_drop'){
     if(pose)normalizeLocalLiquidEmitterPose(pose);
-    return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,...retention,drop:normalizeAuthoredWaterDrop(value.drop)};
+    return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,...retention,...flow,drop:normalizeAuthoredWaterDrop(value.drop)};
   }
   for (const key of ['baseRadius','strength','rate']) {
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
@@ -60,7 +62,7 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
     const radius=value.baseRadius*checked.scale[0];
     if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...retention,...(Object.hasOwn(value,'mode')?{mode}: {})};
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...retention,...flow,...(Object.hasOwn(value,'mode')?{mode}: {})};
 }
 
 function normalizeLegacySetup(value) {
