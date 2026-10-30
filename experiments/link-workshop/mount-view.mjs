@@ -1,16 +1,16 @@
 import * as T from '../../lib/three.core.js';
 import {mountMatrix,previewMountMatrix} from './mounts.mjs';
 export function createMountView(root){
- const group=new T.Group();root.add(group);const ring=new T.TorusGeometry(.13,.025,8,24),tube=new T.CylinderGeometry(1,1,1,16),markers=new Map(),pistons=[];
+ const group=new T.Group();root.add(group);const overlays=new T.Group();overlays.userData.kaminosEditorOnly=true;overlays.userData.mechanismOverlay=true;group.add(overlays);const ring=new T.TorusGeometry(.13,.025,8,24),tube=new T.CylinderGeometry(1,1,1,16),markers=new Map(),pistons=[];
  const cyan=new T.MeshBasicMaterial({color:0x59eee0,depthTest:false}),gold=new T.MeshBasicMaterial({color:0xffbe62,depthTest:false}),barrel=new T.MeshStandardMaterial({color:0x405d78,metalness:.6,roughness:.3}),rod=new T.MeshStandardMaterial({color:0xc7dfe9,metalness:.8,roughness:.2});
  const selectedMaterial=new T.MeshStandardMaterial({color:0xffce70,metalness:.6,roughness:.3});
- const preview=new T.LineSegments(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xb9dded,transparent:true,opacity:.2,depthWrite:false}));preview.raycast=()=>{};group.add(preview);let previewKey='';
- const lines=new T.LineSegments(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffc379,depthTest:false,transparent:true,opacity:.8}));lines.renderOrder=101;lines.raycast=()=>{};group.add(lines);
+ const preview=new T.LineSegments(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xb9dded,transparent:true,opacity:.2,depthWrite:false}));preview.userData.mechanismOverlay=true;preview.raycast=()=>{};overlays.add(preview);let previewKey='';
+ const lines=new T.LineSegments(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffc379,depthTest:false,transparent:true,opacity:.8}));lines.userData.mechanismOverlay=true;lines.renderOrder=101;lines.raycast=()=>{};overlays.add(lines);
  function segment(mesh,a,b,r){mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),b.clone().sub(a).normalize());mesh.scale.set(r,a.distanceTo(b),r);}
  return {pistonMeshes:()=>pistons.flat(),markers:()=>[...markers.values()].map(v=>v.ring),object:id=>markers.get(id)?.group,update(model,t,entries,selected,visible,showTravel=false,selectedPiston=null){
   root.updateWorldMatrix(true,false);group.matrixAutoUpdate=false;group.matrix.copy(root.matrixWorld).invert(); // world-space frames inside the construction
   const ids=new Set((model.mounts??[]).map(m=>m.id));for(const [id,v]of markers)if(!ids.has(id)){v.group.removeFromParent();v.axes.dispose();markers.delete(id);}
-  const errors=[],world=new Map();for(const m of model.mounts??[]){let v=markers.get(m.id);if(!v){const g=new T.Group(),r=new T.Mesh(ring,cyan),axes=new T.AxesHelper(.27);r.userData.mount=m.id;r.renderOrder=102;axes.raycast=()=>{};g.add(r,axes);group.add(g);v={group:g,ring:r,axes};markers.set(m.id,v);}
+  const errors=[],world=new Map();for(const m of model.mounts??[]){let v=markers.get(m.id);if(!v){const g=new T.Group();g.userData.mechanismOverlay=true;const r=new T.Mesh(ring,cyan),axes=new T.AxesHelper(.27);r.userData.mount=m.id;r.renderOrder=102;axes.raycast=()=>{};g.add(r,axes);overlays.add(g);v={group:g,ring:r,axes};markers.set(m.id,v);}
    try{const matrix=mountMatrix(root,model,m.id,t,entries);matrix.decompose(v.group.position,v.group.quaternion,v.group.scale);world.set(m.id,new T.Vector3().setFromMatrixPosition(matrix));v.group.visible=visible;v.ring.material=m.id===selected?gold:cyan;v.ring.scale.setScalar((model.attachments??[]).some(a=>a.sourceMount===m.id)?1.35:1);}catch(e){v.group.visible=false;errors.push(e.message);}
   }
   const points=[];for(const a of model.attachments??[])if(a.targetMount&&world.has(a.sourceMount)&&world.has(a.targetMount))points.push(...world.get(a.sourceMount).toArray(),...world.get(a.targetMount).toArray());lines.geometry.dispose();lines.geometry=new T.BufferGeometry();lines.geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));lines.visible=visible;

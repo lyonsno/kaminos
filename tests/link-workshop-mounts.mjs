@@ -25,7 +25,11 @@ follower.dispose();console.log('Mount persistence, scaled source alignment, live
  const scene=new T.Scene(),root=new T.Group(),payload=new T.Object3D();scene.add(root,payload);payload.position.set(5,3,0);root.userData.linkMechanism={...structuredClone(recipe),attachments:[],mountPistons:[]};
  const entries=[{id:'mech',object:root,type:'pbr'},{id:'cube',object:payload,type:'procedural-mesh'}],edits=createSceneEdits({read(){throw Error('ordinary pose not part of this test');},write(){}});
  const host={scene:{objects:()=>entries,async open(){return {async attach(root){return {id:'mech',root};},redraw(){},readView(){return {};},onFrame(){return ()=>{};},async dispose(){}};}},controls:{document:{defaultView:{kaminosSceneEdits:edits}},components:{register(){return {changed(fn){fn?.();},dispose(){}};}}}};
- let runtime=await createMechanismController({host,inputs:{root}});const before=payload.position.toArray();runtime.operations.fasten({source:'corner',target:'tip'});assert.notDeepEqual(payload.position.toArray(),before);edits.undo();near(payload.position.toArray(),before);assert.equal(runtime.read().recipe.attachments.length,0);edits.redo();assert.equal(runtime.read().recipe.attachments.length,1);
+ let runtime=await createMechanismController({host,inputs:{root}});const before=payload.position.toArray();const original=JSON.stringify(runtime.read().recipe);const historyBefore=JSON.stringify(edits.state());
+ runtime.operations.previewFasten({source:'corner',target:'tip'});near(payload.position.toArray(),before);assert.equal(JSON.stringify(runtime.read().recipe),original);assert.equal(JSON.stringify(edits.state()),historyBefore);assert.equal(runtime.read().seatingPreview.objectId,'cube');
+ runtime.operations.cancelPreview();assert.equal(runtime.read().seatingPreview,null);near(payload.position.toArray(),before);
+ runtime.operations.previewFasten({source:'corner',target:'tip'});runtime.operations.confirmFasten();const seated=payload.position.toArray();assert.notDeepEqual(seated,before);runtime.operations.selectConnection({objectId:'cube'});runtime.operations.deleteSelected();assert.equal(runtime.read().recipe.attachments.length,0);near(payload.position.toArray(),seated);edits.undo();assert.equal(runtime.read().recipe.attachments.length,1);edits.undo();near(payload.position.toArray(),before);
+ runtime.operations.fasten({source:'corner',target:'tip'});assert.notDeepEqual(payload.position.toArray(),before);edits.undo();near(payload.position.toArray(),before);assert.equal(runtime.read().recipe.attachments.length,0);edits.redo();assert.equal(runtime.read().recipe.attachments.length,1);
  await runtime.dispose();edits.undo();near(payload.position.toArray(),before);assert.equal(root.userData.linkMechanism.attachments.length,0);edits.redo();runtime=await createMechanismController({host,inputs:{root}});assert.equal(runtime.read().recipe.attachments.length,1);edits.clear();await runtime.dispose();
 }
 
@@ -42,4 +46,18 @@ follower.dispose();console.log('Mount persistence, scaled source alignment, live
  rb.operations.period({seconds:4});ra.operations.seek({cycle:.5});const before=payload.position.toArray(),offset=structuredClone(ra.read().recipe.attachments[0].offset);
  edits.undo();ra.follow('cube');ra.tick();near(payload.position.toArray(),before);assert.deepEqual(ra.read().recipe.attachments[0].offset,offset);
  edits.redo();ra.follow('cube');near(payload.position.toArray(),before);assert.deepEqual(ra.read().recipe.attachments[0].offset,offset);edits.clear();await ra.dispose();await rb.dispose();
+}
+
+// Detached seating computation includes a moving mechanism and its payload at
+// its current pose, without moving either live object or changing its recipe.
+{
+ const {seatingWorlds,createFasteningView}=await import('../experiments/link-workshop/fastening-view.mjs');
+ const scene=new T.Scene(),a=new T.Group(),b=new T.Group(),payload=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());scene.add(a,b,payload);b.position.set(8,1,0);b.scale.setScalar(.7);a.rotation.z=.3;
+ const base={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,1]}],pistons:[]};
+ const model={...structuredClone(base),mounts:[{id:'dest',owner:{joint:1},position:[0,0,0],rotation:[0,0,.2]},{id:'source',owner:{objectId:'b'},position:[.2,0,0],rotation:[0,0,-.1]}]};a.userData.linkMechanism=model;
+ b.userData.linkMechanism={...structuredClone(base),attachments:[{objectId:'p',joint:1,offset:structuredClone(frame)}]};b.userData.mechanismFraction=.8;
+ const entries=[{id:'a',object:a},{id:'b',object:b},{id:'p',object:payload}],binding={objectId:'b',sourceMount:'source',targetMount:'dest',offset:{...structuredClone(frame),scale:[.7,.7,.7]}};
+ scene.updateMatrixWorld(true);const before=entries.map(e=>e.object.matrixWorld.clone());const worlds=seatingWorlds(a,model,binding,.4,entries);assert.equal(worlds.size,2);entries.forEach((e,i)=>near(e.object.matrixWorld.elements,before[i].elements));
+ const fa=createAttachmentFollower(a,()=>entries),fb=createAttachmentFollower(b,()=>entries);const next={...model,attachments:[binding]};fa.update(next,.4);fb.update(b.userData.linkMechanism,.8);near(worlds.get('b').elements,b.matrixWorld.elements);near(worlds.get('p').elements,payload.matrixWorld.elements);
+ const visual=createFasteningView(a);visual.update(next,.4,entries,'b');assert.ok(visual.connectionMeshes().length>0);assert.ok(visual.connectionMeshes().every(o=>o.userData.connection==='b'));visual.preview(entries,worlds);assert.ok(visual.group.children.some(o=>o.userData.kaminosEditorOnly));visual.update({...next,attachments:[]},.4,entries,null);assert.equal(visual.connectionMeshes().length,0);visual.dispose();fa.dispose();fb.dispose();payload.geometry.dispose();payload.material.dispose();
 }
