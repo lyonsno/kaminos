@@ -2831,6 +2831,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import {waterDomainPose,checkedWaterDomainPose,waterDomainSampling} from './authored-water-domain.mjs';
 import {authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
@@ -2896,6 +2897,7 @@ let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null, localLiquidDomainGuide = null;
+let waterDomainProxy=null;
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
 let flameDomainDraft = null, flameDomainProxy = null;
@@ -6400,13 +6402,14 @@ function updateTransformInspector() {
   inspector.dataset.selectedGroupId = workingScene.activeGroupId || '';
   inspector.dataset.selectionCount=String(workingScene.selection.ids.length);
   inspector.dataset.selectedFieldId=workingScene.activeFieldId||'';
-  inspector.hidden=!!workingScene.activeFieldId;
+  inspector.hidden=!!workingScene.activeFieldId&&workingScene.activeFieldId!=='water-field';
   inspector.dataset.componentEditing=String(!!sceneComponents?.active());
   document.body.dataset.componentEditing=inspector.dataset.componentEditing;
   for(const button of document.querySelectorAll('#transform-bar button[onclick]'))if(/snapToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
+  for(const input of document.querySelectorAll('[data-transform-field^="rotation."]'))input.disabled=!entry||workingScene.activeFieldId==='water-field';
   updateSplatCorrectionPanel(entry);
   syncEditorHelperVisibility();syncSelectionInspector();
   if (!entry && workingScene.activeGroupId) {
@@ -11325,6 +11328,7 @@ async function initScene() {
     } else {
       const component=sceneComponents?.target();
       if(component&&transformControls.object===component.object&&transformControls.dragging){const active=scenePlacementTools?.edits.state().active;if(!scenePlacementTools?.state().gizmoEditing||!active)return;try{scenePlacementTools.edits.preview({...active.before,...sceneObjectTransformState(component.object)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
+      if(workingScene.activeFieldId==='water-field'&&transformControls.object===waterDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(waterDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(workingScene.activeFieldId==='flame-field'&&transformControls.object===flameDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(flameDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
@@ -11417,6 +11421,7 @@ async function initScene() {
     localOrientation:()=>sceneComponents?.active()?sceneComponents.target()?.localOrientation??[0,0,0]:workingScene.activeFieldId?[0,0,0]:workingScene.selection.activeId?selectionRootState(workingScene.selection.activeId).rotation:[0,0,0],
     read: id => {
       const component=sceneComponents?.resolve(id);if(component)return component.read();
+      if(id==='@water-domain')return acceptedWaterDomainPose();
       if(id==='@flame-domain')return structuredClone(flameDomainDraft||acceptedFlameDomainPose());
       if(id==='@selection-transform')return selectionTransforms.pose();
       if (id?.startsWith('@group:')) return structuredClone(workingScene.groups.find(group=>`@group:${group.id}`===id)?.transform || null);
@@ -11424,7 +11429,7 @@ async function initScene() {
       return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
     },
     write: applyAuthoredScenePose,
-    object: id => sceneComponents?.resolve(id)?.object??(id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object),
+    object: id => sceneComponents?.resolve(id)?.object??(id==='@water-domain'?waterDomainEditObject():id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object),
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
     busy: () => authoringBusy||sceneLightingPreparation?.state().compiling,
@@ -11432,6 +11437,7 @@ async function initScene() {
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
+      if(event.id==='@water-domain'){setInfo(localLiquidHost?'Water bounds changed · Restart applies them; current water is preserved':'Water bounds changed · Play uses this volume');return;}
       if(event.id==='@flame-domain'){settleAuthoredFlameDomain(event);return;}
       if(event.id==='@selection-transform'&&Object.keys(event.after.roots).some(id=>id===FLAME_EMITTER_ID||workingScene.groups.find(g=>'@group:'+g.id===id)?.objectIds.includes(FLAME_EMITTER_ID)))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (workingScene.groups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
@@ -11441,6 +11447,7 @@ async function initScene() {
     historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
   sceneMembership.attachHistory(scenePlacementTools.edits);
+  scenePlacementTools.edits.register('@water-domain',{read:acceptedWaterDomainPose,write:writeWaterDomainPose,check:checkWaterDomainPose});
   scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
   window.kaminosFlameDomain={helpers:()=>({guideVisible:flameDomainGuide?.visible??false,guideCount:scene.children.filter(object=>object.name==='Flame simulation bounds').length}),read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
@@ -12181,6 +12188,7 @@ function clearSceneEditingState(){
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
+  if(waterDomainProxy){waterDomainProxy.removeFromParent();waterDomainProxy=null;}
   if(localLiquidDomainGuide){scene.remove(localLiquidDomainGuide);disposeObjectTree(localLiquidDomainGuide);localLiquidDomainGuide=null;}
   if (flameDomainGuide) {
     scene.remove(flameDomainGuide);
@@ -12629,6 +12637,32 @@ window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
 function updateWaterSourceGuides(){for(const row of workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object?.children??[])if(child.userData.kaminosWaterSourceGuide)child.visible=row.id===workingScene.activeObjectId&&row.object.children.some(c=>c.userData.kaminosWaterPreview&&!c.visible);}
 function setAuthoredWaterPreviewVisible(visible){for(const row of workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object.children)if(child.userData.kaminosWaterPreview)child.visible=visible;updateWaterSourceGuides();}
 function selectedWaterSource(){const row=selectedSceneObjectEntry();return row?.type===LOCAL_LIQUID_EMITTER_TYPE?row:null;}
+function acceptedWaterDomainPose(){
+ if(!localLiquidSetup)throw Error('Add water first');
+ return waterDomainPose(resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup));
+}
+function checkWaterDomainPose(pose){
+ return checkedWaterDomainPose(pose,authoredMlsCellSize(localLiquidEmitterRecords(),localLiquidSetup??{}));
+}
+function waterDomainEditObject(){
+ if(!waterDomainProxy){waterDomainProxy=new THREE.Object3D();waterDomainProxy.userData.kaminosEditorHelper=true;waterDomainProxy.userData.kaminosSceneObject={label:'Water simulation volume'};scene.add(waterDomainProxy);}
+ if(!transformControls?.dragging)applySceneObjectTransformState(waterDomainProxy,acceptedWaterDomainPose());
+ return waterDomainProxy;
+}
+function waterDomainBounds(){
+ const sampling=resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{});
+ return sampling.container??sampling.worldBounds;
+}
+function writeWaterDomainPose(pose){
+ if(!localLiquidSetup)throw Error('Water simulation is absent');
+ const sources=localLiquidEmitterRecords(),sampling=resolveAuthoredWaterSampling(sources,localLiquidSetup);
+ localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:waterDomainSampling(sampling,pose,authoredMlsCellSize(sources,localLiquidSetup))});
+ // Bounds are authored setup, like the existing numeric bounds controls. Keep
+ // evolved water intact; Restart allocates the changed grid explicitly.
+ localLiquidHost?.setSetup(localLiquidSetup);
+ if(waterDomainProxy)applySceneObjectTransformState(waterDomainProxy,acceptedWaterDomainPose());
+ syncWaterDomainGuide();authoredWaterControls?.refresh();window._kaminosDirty?.();
+}
 function authoredWaterSimulationState(){
  const sources=localLiquidEmitterRecords(),finite=sources.filter(r=>r.localLiquidEmitter.mode==='finite_drop');
  const sampling=resolveAuthoredWaterSampling(sources,localLiquidSetup??{}),descriptions=finite.map(r=>describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling));
@@ -12636,7 +12670,7 @@ function authoredWaterSimulationState(){
  return {present:!!localLiquidSetup,scope:'all_water',sampling,compatibility:inspectAuthoredWaterCompatibility(sources,sampling),boundsFit:planAuthoredWaterBounds(sources,sampling),selected:workingScene.activeFieldId==='water-field',sourceCount:sources.length,particleCount:localLiquidHost?.state().solver?.particleCount??proposed,proposedParticleCount:proposed,requestedVolume,representedVolume,relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0,settings:localLiquidSetup?structuredClone({...localLiquidSetup,waterSampling:sampling}):null};
 }
 
-function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter),transform:sceneObjectTransformState(row.object),sampling:describeAuthoredWaterDrop(row.localLiquidEmitter.drop,sceneObjectTransformState(row.object),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{})),initialPreview:(()=>{const p=row.object?.children.find(c=>c.userData.kaminosWaterPreview);return p?.userData.initialStateOnly?{kind:'initial_particles',draft:!!authoredWaterDraftPreview,particleCount:p.count,visible:p.visible,spacing:p.userData.spacing*row.object.scale.x,glyphRadius:p.userData.glyphRadius*row.object.scale.x}:null;})()}:null,failure:localLiquidFailure,simulation:authoredWaterSimulationState(),sources:localLiquidEmitterRecords().map(r=>({id:r.id,mode:r.localLiquidEmitter.mode??'continuous'})),runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount,capacity:runtime.solver?.capacity??runtime.solver?.particleCount,population:runtime.solver?.population,clock:runtime.solver?.clock,cadence:runtime.solver?.cadence,liveInlets:runtime.solver?.liveInlets,pendingSourceChanges:runtime.pendingSourceChanges}:null};}
+function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter),transform:sceneObjectTransformState(row.object),sampling:describeAuthoredWaterDrop(row.localLiquidEmitter.drop,sceneObjectTransformState(row.object),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{})),initialPreview:(()=>{const p=row.object?.children.find(c=>c.userData.kaminosWaterPreview);return p?.userData.initialStateOnly?{kind:'initial_particles',draft:!!authoredWaterDraftPreview,particleCount:p.count,visible:p.visible,spacing:p.userData.spacing*row.object.scale.x,glyphRadius:p.userData.glyphRadius*row.object.scale.x}:null;})()}:null,failure:localLiquidFailure,simulation:authoredWaterSimulationState(),sources:localLiquidEmitterRecords().map(r=>({id:r.id,mode:r.localLiquidEmitter.mode??'continuous'})),runtime:runtime?{domain:runtime.solver?.domain,paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount,capacity:runtime.solver?.capacity??runtime.solver?.particleCount,population:runtime.solver?.population,clock:runtime.solver?.clock,cadence:runtime.solver?.cadence,liveInlets:runtime.solver?.liveInlets,pendingSourceChanges:runtime.pendingSourceChanges}:null};}
 const waterSettingTargets=new Set();
 function applyAuthoredWaterSettings(id,patch){
  assertSceneConstructionAvailable();const row=workingScene.objects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
@@ -25398,9 +25432,9 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   if(JSON.stringify(next)!==JSON.stringify(workingScene.selection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
   workingScene.select(next.ids,next.activeId,[...(activeSceneComposition?['flame-field']:[]),...(localLiquidSetup?['water-field']:[])]);
   const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
-  currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():workingScene.activeFieldId==='flame-field'?flameDomainEditObject():workingScene.activeGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
+  currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():workingScene.activeFieldId==='flame-field'?flameDomainEditObject():workingScene.activeFieldId==='water-field'?waterDomainEditObject():workingScene.activeGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
   renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
-  if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);if(workingScene.activeFieldId==='flame-field')transformControls.setMode('translate');}transformControls.visible=!!currentMesh;}
+  if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);if(workingScene.activeFieldId==='flame-field'||workingScene.activeFieldId==='water-field')transformControls.setMode('translate');}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(workingScene.selection);
 }
 function readSceneSelection(){
@@ -25431,11 +25465,11 @@ function styleSimulationDomainGuide(guide,id){
 }
 function syncWaterDomainGuide(){
   if(localLiquidSetup&&!localLiquidDomainGuide){
-    const {boundsMin,boundsMax}=fingerFluidAnalyticalSupportGeometry();
-    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(...boundsMin),new THREE.Vector3(...boundsMax)),0x5bd8f5);
+    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(),0x5bd8f5);
     localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
     localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
   }
+  if(localLiquidDomainGuide&&localLiquidSetup){const b=waterDomainBounds();localLiquidDomainGuide.box.set(new THREE.Vector3(...b.min),new THREE.Vector3(...b.max));}
   if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!localLiquidSetup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
 }
 function pickWaterDomainFromViewportPointer(event){
@@ -25483,7 +25517,7 @@ function setupSelectionTransforms(){
   sceneMembershipBatch.attachHistory(scenePlacementTools.edits);
   window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
     set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>sceneSelectionHistory.set([...workingScene.groups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...workingScene.objects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
-    transform:patch=>{if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(workingScene.selection.ids.length)setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);return {...next};}};
+    transform:patch=>{if(workingScene.selection.ids.length===1&&workingScene.activeFieldId==='water-field')return scenePlacementTools.edits.apply('@water-domain',patch,'Transform water volume');if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(workingScene.selection.ids.length)setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);return {...next};}};
 }
 
 function createPageSceneMembershipBatch(){
@@ -25677,6 +25711,7 @@ function installSelectionInput(){
 function selectedPlacementEntry() {
   if(sceneComponents?.active())return sceneComponents.target();
   if(workingScene.selection.ids.length>1&&workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))return null;
+  if(workingScene.activeFieldId==='water-field')return {id:'@water-domain',type:'simulation-domain',label:'Water simulation volume',object:waterDomainEditObject()};
   if(workingScene.activeFieldId==='flame-field')return {id:'@flame-domain',type:'simulation-domain',label:'Fire & smoke domain',object:flameDomainEditObject()};
   if(workingScene.selection.ids.length>1)return {id:'@selection-transform',type:'selection',label:`${workingScene.selection.ids.length} selected · ${selectedSceneObjectEntry()?.label||selectedSceneGroupEntry()?.label||''}`,object:selectionTransformProxy()};
   const group=selectedSceneGroupEntry();
