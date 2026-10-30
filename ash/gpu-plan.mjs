@@ -63,3 +63,8 @@ export function pairTransfer({a,b,axis,solidA,solidB,penetrationA,penetrationB})
  const diff=a-b;if(Math.abs(diff)<=.5)return 0;
  return Math.sign(diff)*(Math.abs(diff)-.5)*.5;
 }
+// Packed dispatch grid, with shader-side rejection of padded groups.
+export function ashDispatchGrid(groups,limit=65535){
+ if(!Number.isSafeInteger(groups)||groups<0||!Number.isSafeInteger(limit)||limit<1||groups>limit*limit)throw Error('Ash dispatch exceeds effective GPU capacity');
+ return [Math.min(groups,limit),Math.max(1,Math.ceil(groups/limit)),1];
+}

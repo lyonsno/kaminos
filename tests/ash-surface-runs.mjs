@@ -1,0 +1,5 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';import {patchLayout} from '../ash/gpu-plan.mjs';import {exposedFaces,exposedRuns,cellCoord,cellIndex} from '../ash/tile-plan.mjs';
+const expand=(p,runs)=>runs.flatMap(r=>Array.from({length:r.length},(_,k)=>{const c=cellCoord(p,r.cell);c[r.face<2?2:0]+=k;return {cell:cellIndex(p,c),face:r.face,low:r.low,high:r.high};})).sort((a,b)=>a.cell-b.cell||a.face-b.face);
+test('flat bed coalesces exact coplanar faces within tile rows',()=>{const p=patchLayout({cellSize:1,bounds:{min:[0,0,0],max:[16,1,16]},tileSize:16}),v=new Float32Array(p.count).fill(1),runs=exposedRuns(p,v);assert.equal(runs.length,36);assert.deepEqual(expand(p,runs),exposedFaces(p,v));});
+test('runs preserve fractional strips, voids, solid occlusion and partial tile boundaries exactly',()=>{for(const b of [1,3,4,8]){const p=patchLayout({cellSize:1,bounds:{min:[0,0,0],max:[11,4,9]},tileSize:b}),v=Float32Array.from({length:p.count},(_,i)=>[0,.25,.5,1,1,1,1][i%7]),solid=Uint8Array.from({length:p.count},(_,i)=>i%13===0?2:0);assert.deepEqual(expand(p,exposedRuns(p,v,solid)),exposedFaces(p,v,solid));}});

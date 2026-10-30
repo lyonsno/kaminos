@@ -39,3 +39,12 @@ export function exposedFaces(p,values,solid=new Uint8Array(p.count)){
   if(axis===1?(f===2?b<1:a<1||b<=0):a>b)faces.push({cell:i,face:f,low:axis===1?0:b,high:a});
  }}return faces;
 }
+// Exact same face bands, coalesced only along a horizontal tile row.
+export function exposedRuns(p,values,solid=new Uint8Array(p.count)){
+ const faces=exposedFaces(p,values,solid),map=new Map(faces.map(f=>[f.cell*6+f.face,f])),used=new Set(),runs=[];
+ for(const f of faces){const key=f.cell*6+f.face;if(used.has(key))continue;const c=cellCoord(p,f.cell),axis=f.face<2?2:0;let length=1;used.add(key);
+  while(c[axis]+length<p.dims[axis]&&Math.floor((c[axis]+length)/p.tiles.width)===Math.floor(c[axis]/p.tiles.width)){
+   const q=[...c];q[axis]+=length;const k=cellIndex(p,q)*6+f.face,n=map.get(k);if(!n||n.low!==f.low||n.high!==f.high)break;used.add(k);length++;
+  }runs.push({...f,length});
+ }return runs;
+}
