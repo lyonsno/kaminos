@@ -166,6 +166,14 @@ function rewritePbrGlbToPixal3d(baseGlb) {
     document.materials[0].name = 'Pixal3D learned PBR';
   }
   const meta = document.extras?.trellis ?? {};
+  const postprocess = meta.geometry?.postprocess;
+  if (postprocess?.originalSchema === 'pixal3d.mesh-postprocess.v0') {
+    const { originalSchema, ...rest } = postprocess;
+    meta.geometry = {
+      ...meta.geometry,
+      postprocess: { ...rest, schema: originalSchema },
+    };
+  }
   document.extras = { pixal3d: meta };
 
   const json = new TextEncoder().encode(JSON.stringify(document));
@@ -192,9 +200,49 @@ export async function encodePixal3dPbrGLB(mesh, options = {}) {
 }
 
 export async function finishPixal3dMesh(mesh, options = {}) {
-  const finished = await finishTrellisMesh(mesh, options);
+  const userPostprocess = options.postprocessMesh;
+  const wrappedOptions =
+    typeof userPostprocess === 'function'
+      ? {
+          ...options,
+          postprocessMesh: async input => {
+            const processed = await userPostprocess(input);
+            const receipt = processed?.metadata?.postprocess;
+            if (receipt?.schema === 'pixal3d.mesh-postprocess.v0') {
+              return {
+                ...processed,
+                metadata: {
+                  ...processed.metadata,
+                  postprocess: {
+                    ...receipt,
+                    schema: 'trellis2.mesh-postprocess.v0',
+                    originalSchema: 'pixal3d.mesh-postprocess.v0',
+                  },
+                },
+              };
+            }
+            return processed;
+          },
+        }
+      : options;
+  const finished = await finishTrellisMesh(mesh, wrappedOptions);
+  const receipt = finished.mesh?.metadata?.postprocess;
+  const restoredMesh =
+    receipt?.originalSchema === 'pixal3d.mesh-postprocess.v0'
+      ? {
+          ...finished.mesh,
+          metadata: {
+            ...finished.mesh.metadata,
+            postprocess: (() => {
+              const { originalSchema, ...rest } = receipt;
+              return { ...rest, schema: originalSchema };
+            })(),
+          },
+        }
+      : finished.mesh;
   return {
     ...finished,
+    mesh: restoredMesh,
     glb: rewritePbrGlbToPixal3d(finished.glb),
   };
 }

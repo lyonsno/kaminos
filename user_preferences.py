@@ -22,6 +22,15 @@ def validate_preferences(value):
         raise ValueError('Invalid navigation preference')
     if 'startupConfigured' in value and not isinstance(value['startupConfigured'], bool):
         raise ValueError('Invalid startup preference state')
+    kiln = value.get('inferenceKiln')
+    if kiln is not None:
+        if not isinstance(kiln, dict) or kiln.get('schema') != 'kaminos.inference-kiln-selection.v1':
+            raise ValueError('Invalid kiln selection')
+        name = kiln.get('sceneFile')
+        if not isinstance(name, str) or not name.endswith('.kaminos.json') or '/' in name or chr(92) in name:
+            raise ValueError('Choose a saved kiln scene')
+        if not isinstance(kiln.get('promptObjectId'), str) or not kiln['promptObjectId'].strip():
+            raise ValueError('Choose the kiln prompt lettering')
     defaults = value.get('sceneDefaults')
     if defaults is not None and not isinstance(defaults, dict):
         raise ValueError('Scene defaults must be a settings object')

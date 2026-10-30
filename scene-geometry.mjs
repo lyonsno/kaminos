@@ -2,6 +2,9 @@ import {checkedPose} from './scene-edit-session.mjs';
 import {normalizeBurner,createAnnularBurner} from './annular-burner.mjs';
 export const PROCEDURAL_MESH_TYPE='procedural-mesh';
 export const PROCEDURAL_MESH_SOURCE='kaminos:geometry';
+export const proceduralMeshRecordDomain={type:PROCEDURAL_MESH_TYPE,check:checkedProceduralMesh,
+ fields:r=>({geometry:r.geometry,surface:r.surface,...(r.waterCollision===false?{waterCollision:false}:{})}),
+ reloadable:r=>{checkedProceduralMesh(r);return true;},load:(r,loaders,options)=>loaders.procedural(r,options)};
 export const ANNULAR_SURFACE_KEYS=['bedColor','rimColor','glowColor','glow','coolingSeconds'];
 export const GEOMETRY_DEFAULTS={box:{width:1,height:1,depth:1},plane:{width:2,depth:2},sphere:{radius:.5},bowl:{radius:.7,thickness:.08},cylinder:{radius:.5,height:1}};
 export function checkedGeometry(value) {

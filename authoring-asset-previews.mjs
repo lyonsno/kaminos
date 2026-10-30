@@ -1,13 +1,15 @@
 // One independent WebGL2 preview context; scene/inference device is untouched.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {AssetKTX2Loader as KTX2Loader} from './asset-ktx2-loader.mjs';
+import {configureAssetTextures} from './asset-texture-support.mjs';
 import {thumbnailDistance} from './authoring-browse-layout.mjs';
 let renderer,initializing,tail=Promise.resolve();
 const cache=new Map();
 async function preview(entry){
  if(!initializing){renderer=new THREE.WebGPURenderer({forceWebGL:true,alpha:false,antialias:true});renderer.setSize(192,192);renderer.setPixelRatio(1);renderer.toneMapping=THREE.ACESFilmicToneMapping;initializing=renderer.init();}
  await initializing;
- const model=(await new GLTFLoader().loadAsync(entry.source)).scene;
+ const model=(await configureAssetTextures(new GLTFLoader(),renderer,()=>new KTX2Loader()).loadAsync(entry.source)).scene;
  try{
   let meshes=0;model.traverse(object=>{if(object.isMesh)meshes++;});model.updateMatrixWorld(true);
   const box=new THREE.Box3().setFromObject(model);if(!meshes||box.isEmpty())throw Error('Mesh has no visible geometry');

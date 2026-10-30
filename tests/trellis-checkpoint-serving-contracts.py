@@ -14,8 +14,8 @@ import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
+from model_installations import ModelInstallations
 
-assert hasattr(serve, 'TRELLIS_CHECKPOINT_ROOT'), 'Kaminos must accept a local TRELLIS checkpoint package root'
 
 with TemporaryDirectory() as directory:
     root = Path(directory) / 'pack'
@@ -26,8 +26,8 @@ with TemporaryDirectory() as directory:
     (root / 'dino.patchBias.f32').write_bytes(payload)
     (Path(directory) / 'outside.bin').write_bytes(b'secret')
 
-    previous = serve.TRELLIS_CHECKPOINT_ROOT
-    serve.TRELLIS_CHECKPOINT_ROOT = root.resolve()
+    previous = serve.MODEL_INSTALLATIONS
+    serve.MODEL_INSTALLATIONS = ModelInstallations(environ={'KAMINOS_TRELLIS_CHECKPOINT_ROOT':str(root.resolve())}, config_path=root.parent/'no-installations.json')
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), serve.KaminosHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -53,12 +53,12 @@ with TemporaryDirectory() as directory:
         assert response.status == 404, response.status
     finally:
         server.shutdown()
-        serve.TRELLIS_CHECKPOINT_ROOT = previous
+        serve.MODEL_INSTALLATIONS = previous
 
-previous = serve.TRELLIS_CHECKPOINT_ROOT
-serve.TRELLIS_CHECKPOINT_ROOT = None
+previous = serve.MODEL_INSTALLATIONS
+serve.MODEL_INSTALLATIONS = ModelInstallations(environ={}, config_path=root.parent/'no-installations.json')
 try:
     assert serve.runtime_config()['trellisPage'] is None
 finally:
-    serve.TRELLIS_CHECKPOINT_ROOT = previous
+    serve.MODEL_INSTALLATIONS = previous
 print('TRELLIS checkpoint mount serves the package and nothing outside it')

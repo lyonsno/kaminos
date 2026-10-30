@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {PROMPT_RELIEF_SOURCE} from '../inference-kiln-record.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,6 +10,7 @@ import {createSceneMembershipOperations} from '../scene-membership-operations.mj
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createSceneEnvironmentState} from '../scene-environment-state.mjs';
+import {sceneContext} from './helpers/scene-context.mjs';
 import {checkedSelection,changeSelection} from '../scene-selection.mjs';
 import {createLocalLiquidEmitterObject,createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
 import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE} from '../local-liquid-setup.mjs';
@@ -16,7 +18,7 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function install(context,first,last){const a=html.indexOf(first),b=html.indexOf(last,a);assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),context);}
 function fixture(){
  const workingScene=createWorkingScene(),scene=new THREE.Scene(),calls={selection:0,exit:0,water:0};
- const context=vm.createContext({THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
+ const context=sceneContext({writeObjectBurnable(){},THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
  checkedSelection,changeSelection,createLocalLiquidEmitterObject,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE,
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',FLAME_EMITTER_TYPE:'flame',localLiquidSetup:null,
  sceneNavigation:{prepare(){}},applyGiProxySetting(){},createSceneGroupForObjects(){},
@@ -60,7 +62,7 @@ for(const group of [false,true])test(`source reconstruction preserves ${group?'g
 });
 
 for(const type of ['image','pbr','glb','splat'])test(`${type} source loader preserves selection through its production registration path`,async()=>{
- const {context,workingScene,calls}=fixture(),current=context.currentMesh;
+ const {context,workingScene,calls}=fixture(),current=context.currentMesh;context.PROMPT_RELIEF_SOURCE=PROMPT_RELIEF_SOURCE;
  const documentEffects=[];
  Object.assign(context,{shouldClearSceneForImport:()=>false,greenroomPreviewIsActive:()=>false,
   sceneEnvironment:createSceneEnvironmentState({presets:{studio:{exposure:1.5,intensity:2.75}}}),
@@ -78,7 +80,7 @@ for(const type of ['image','pbr','glb','splat'])test(`${type} source loader pres
   applySplatCorrectionToRecord(){},buildRenderHandoffV0(){},RENDER_HANDOFF_SCHEMA:'test',
  });
  for(const [a,b] of [['async function showImagePlane(','// --- PBR Material Preview ---'],['async function showPBRPreview(','// --- GLB Inspector ---'],['async function showGLB(','// Scene-session owners borrow this loader'],['async function handleFiles(','// --- Drag & Drop ---'],['async function greenroomImportSplat(','window.greenroomImportSplat =']])install(context,a,b);
- const row={id:'restored',source:'/fixture.'+type,type,fileName:'fixture.'+type,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}};
+ const row={id:'restored',source:type==='pbr'?'demos/fixture':'/api/read?root=fixture&path=fixture.'+type,type,fileName:'fixture.'+type,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}};
  await context.sceneMembership.reconstruct(row);
  assert.equal(workingScene.activeObjectId,'selected');assert.equal(context.currentMesh,current);assert.equal(calls.selection,0);assert.deepEqual(documentEffects,[]);
  assert.ok(workingScene.find('restored'));

@@ -14,20 +14,21 @@ import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
+from model_installations import ModelInstallations
+sys.path.insert(0,str(Path(__file__).resolve().parent/'helpers'))
+from installed_model_fixture import image_package
 
-assert hasattr(serve, 'KLEIN_WEIGHTS_ROOT'), 'Kaminos must accept a local klein weight package root'
 
 with TemporaryDirectory() as directory:
     root = Path(directory) / 'klein'
-    for part in ('te', 'dit', 'vae'):
-        (root / part).mkdir(parents=True)
-        (root / part / 'manifest.json').write_text(json.dumps({'part': part}))
+    image_package(root, 'flux2')
     payload = bytes(range(256)) * 4
     (root / 'te' / 'te-embed.bin').write_bytes(payload)
+    te_path=root/'te'/'manifest.json';te=json.loads(te_path.read_text());te['embedding']['shape']=[8,64];te_path.write_text(json.dumps(te))
     (Path(directory) / 'outside.bin').write_bytes(b'secret')
 
-    previous = serve.KLEIN_WEIGHTS_ROOT
-    serve.KLEIN_WEIGHTS_ROOT = root.resolve()
+    previous = serve.MODEL_INSTALLATIONS
+    serve.MODEL_INSTALLATIONS = ModelInstallations(environ={'KAMINOS_KLEIN_WEIGHTS_ROOT':str(root.resolve())}, config_path=root.parent/'no-installations.json')
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), serve.KaminosHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -59,7 +60,7 @@ with TemporaryDirectory() as directory:
         assert response.status == 200 and body == b'' and response.getheader('Content-Length') == str(len(payload))
 
         response, body = get('/klein-weights/dit/manifest.json')
-        assert response.status == 200 and json.loads(body) == {'part': 'dit'}
+        assert response.status == 200 and json.loads(body)['schema'] == 'kaminos.flux2-klein.transformer-weights.v1'
         assert response.getheader('Content-Type').startswith('application/json')
 
         response, _ = get('/klein-weights/te/te-embed.bin', {'Range': f'bytes={len(payload)}-{len(payload) + 3}'})
@@ -69,11 +70,11 @@ with TemporaryDirectory() as directory:
             response, body = get(escape)
             assert response.status == 404 and b'secret' not in body, (escape, response.status)
 
-        serve.KLEIN_WEIGHTS_ROOT = None
+        serve.MODEL_INSTALLATIONS = ModelInstallations(environ={}, config_path=root.parent/'no-installations.json')
         assert serve.runtime_config()['klein'] is None
         response, _ = get('/klein-weights/te/manifest.json')
         assert response.status == 404, 'an unmounted package must not fall through to repository files'
     finally:
         server.shutdown()
-        serve.KLEIN_WEIGHTS_ROOT = previous
+        serve.MODEL_INSTALLATIONS = previous
 print('klein weight serving contracts passed')

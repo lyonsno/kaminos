@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
+import { runInContext } from 'node:vm';
+import {sceneContext} from './helpers/scene-context.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
 import { resolveFlameLightingRoute } from '../scene-authoring.mjs';
@@ -63,7 +64,8 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
   edits.subscribe(() => { context.activeSceneComposition = field.composition; });
   const guardStart = source.indexOf('function assertSceneConstructionAvailable()');
   const guardEnd = source.indexOf('function checkedObjectData(', guardStart);
-  runInNewContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
+  sceneContext(context);
+  runInContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
   return { context, dialog, button, select, status, edits, settings,
     read: () => field, mounts: () => mountCount, pending: () => pending,
     boot: () => boot, bootCalls: () => bootCalls, basinLoads: () => basinLoads,

@@ -1,12 +1,42 @@
+import {createKilnRecipeStore} from '../../inference-kiln-selection.mjs';
+import {FIRE_RENDER_DEFAULTS} from '../../scene-fire-render-settings.mjs';
+import {createSceneBloom,checkedSceneBloom} from '../../scene-bloom.mjs';
+import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
+import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
+import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
+import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
+import {createSceneDocumentSession} from '../../scene-document-session.mjs';
+import {createSceneLoadRequests} from '../../scene-load-generation.mjs';
+import {planSceneRestore} from '../../scene-persistence-core.js';
+import {compositionRestoreUrl,savedSceneLocation} from '../../scene-authoring.mjs';
+import {readOwnerExperimentAddress} from '../../owner-experiment-entry.mjs';
+import {readFileSync} from 'node:fs';
+
+const page=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
+const recordStart=page.indexOf('const sceneRecords = createSceneRecordOperations(');
+const recordEnd=page.indexOf('\n});',recordStart)+4;
+if(recordStart<0||recordEnd<recordStart)throw Error('Missing production scene-record installation');
+const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneRecords =','globalThis.sceneRecords =');
 
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.checkedBurnAppearance??=checkedBurnAppearance;
+  context.createKilnRecipeStore??=createKilnRecipeStore;
+  // This domain fixture does not assemble the Rendering panel. Its controls
+  // are exercised by their owner tests and the native saved-kiln consumer.
+  context.readFireRendering??=()=>structuredClone(FIRE_RENDER_DEFAULTS);
+  context.restoreFireRendering??=()=>{};
+  context.promptEditTargets??=new Set();
+  context.checkedSceneBloom??=checkedSceneBloom;context.bloomControls??=null;
+  context.sceneBloom??=createSceneBloom({rebuild(){},redraw(){}});
   context.sceneAO ??= createSceneAOState();
+  context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
+  context.sceneLightingPreparation ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {
     context.sceneObjects ??= [];
@@ -50,7 +80,35 @@ export function sceneContext(context, options) {
     clearHistoryTargets(){for(const id of context.sceneMembershipEditTargets??[])context.scenePlacementTools.edits.unregister(id);context.sceneMembershipEditTargets?.clear();context.compoundRetentionTargets?.clear();},
   };
   context.sceneMembershipBatch ??= {clearHistoryTargets(){},attachHistory(){}};
-  return vm.createContext(context,options);
+  const result=vm.createContext(context,options);
+  if(!context.sceneRecords){context.createSceneRecordOperations=createSceneRecordOperations;vm.runInContext(recordInstallation,result);}
+  if(!context.sceneDocument)composePageDocumentSession(result);
+  return result;
+}
+
+// Install the actual page's document owner and its explicit adapters. Legacy
+// fixture fields seed initial state only; production has no mutable flag aliases.
+export function composePageDocumentSession(context) {
+  context.createSceneDocumentSession=createSceneDocumentSession;
+  context.sceneLoadRequests??=context.workingScene?.loads??createSceneLoadRequests();
+  context.planSceneRestore??=planSceneRestore;
+  context.compositionRestoreUrl??=compositionRestoreUrl;
+  context.savedSceneLocation??=savedSceneLocation;
+  context.readOwnerExperimentAddress??=readOwnerExperimentAddress;
+  context.authoringWorkspace??=null;
+  context.isCompositionAuthoring??=()=>false;
+  context.FLAME_EMITTER_TYPE??='flame-emitter';
+  context.setInfo??=()=>{};
+  context.grBrowseScenes??=()=>{};
+  context.URL??=URL;context.URLSearchParams??=URLSearchParams;
+  context.location??={};context.location.origin??='http://localhost:9000';
+  context.location.href??=context.location.origin+'/'+(context.location.search??'')+(context.location.hash??'');
+  context.history??={replaceState(_state,_title,url){context.location.href=String(url);}};
+  const a=page.indexOf('function createPageSceneDocumentSession('),b=page.indexOf('\nconst sceneDocument =',a);
+  if(a<0||b<a)throw Error('Missing production document-session installation');
+  vm.runInContext(page.slice(a,b),context);
+  context.sceneDocument=context.createPageSceneDocumentSession({filename:context.currentSceneFile??null,blocked:context.sceneSaveBlockedByFailedRestore??false});
+  return context.sceneDocument;
 }
 
 export function runInSceneContext(code, context, options) {

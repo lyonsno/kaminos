@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {sceneContext} from './helpers/scene-context.mjs';
 import {readFileSync} from 'node:fs';
 import {defaultLocalLiquidSetup, normalizeLocalLiquidSetup} from '../local-liquid-setup.mjs';
 import {buildSceneDocument, planSceneRestore} from '../scene-persistence-core.js';
@@ -20,7 +21,8 @@ function harness() {
     refreshLocalLiquidPerformance:()=>{},setInfo:text=>calls.push(text),
     mountLocalLiquidHost:async()=>{calls.push(['mount',context.localLiquidSetup.particleCount,context.localLiquidSetup.densityIterations]);return true;},
     window:{_kaminosDirty:()=>{}}};
-  vm.runInNewContext(html.slice(start,end)+'\nthis.apply=applyLocalLiquidPerformance;',context);
+  sceneContext(context);
+  vm.runInContext(html.slice(start,end)+'\nthis.apply=applyLocalLiquidPerformance;',context);
   return {context,calls};
 }
 

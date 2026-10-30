@@ -1,8 +1,25 @@
 # Model applications
 
-Klein, SuperMat and UniMate use a shared runner for session admission, foreground ownership, cancellation and retirement. Each model keeps its application interface, complete output and lower-level producer available for hosts that need direct control.
+Klein, SuperMat, UniMate and U2Net use a shared runner for session admission, foreground ownership, cancellation and retirement. Each model keeps its application interface, complete output and lower-level producer available for hosts that need direct control.
 
-The [hand application guide](../../models/mobrecon/GETTING_STARTED.md) applies the same shared runner to WiLoR detection and MobRecon reconstruction. Its `createHandMeshApp()` entry point takes browser frames and returns hand presence, vertices and landmarks; the standalone hand demo consumes it. That port currently uses checkout/bundler imports and locally prepared models, with model terms handled by its one-command setup. Its guide explains fresh input after admission and whole-operation waiting when sharing a session.
+The [hand application guide](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) applies the same shared runner to WiLoR detection and MobRecon reconstruction. Its `createHandMeshApp()` entry point takes browser frames and returns hand presence, vertices and landmarks; the standalone hand demo consumes it. That port currently uses checkout/bundler imports and locally prepared models, with model terms handled by its one-command setup. Its guide explains fresh input after admission and whole-operation waiting when sharing a session.
+
+## Install
+
+Choose the model package for your application:
+
+```sh
+# Image generation (the kit is also installed as a dependency):
+npm install @kaminos/flux2-klein@^0.1.2
+# Material estimation (bundled runtime and CPU worker):
+npm install @kaminos/supermat@^0.1.1
+# Motion generation with your own shared rendering host:
+npm install @kaminos/unimate-webgpu@^0.2.1 @kaminos/webgpu-inference-kit@^0.1.60
+# Background removal (bundled runtime):
+npm install @kaminos/u2net@^0.1.0
+```
+
+These versions include the application interfaces described here. Klein and UniMate require kit 0.1.60 or later in the 0.1 series. Use a bundler such as Vite or esbuild and serve over HTTPS or localhost. Model weights download separately; each guide describes memory requirements, model terms and custom weight locations. SuperMat's [worker build recipe](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md#install) covers bundling its CPU worker.
 
 ## Install the source packages
 
@@ -27,7 +44,7 @@ npm install /path/to/artifacts/supermat/kaminos-supermat-VERSION.tgz
 npm install /path/to/artifacts/kaminos-webgpu-inference-kit-VERSION.tgz /path/to/artifacts/kaminos-unimate-webgpu-VERSION.tgz
 ```
 
-Klein and UniMate import the kit's public `core` entry point; SuperMat includes its runtime in its bundle. Use a bundler such as Vite or esbuild. SuperMat's CPU worker must accompany the application bundle; its [build recipe](../../models/supermat/GETTING_STARTED.md#install) explains Vite and esbuild handling. Serve over HTTPS or localhost in a WebGPU-capable browser. The first load downloads each model's hosted weights; the model guides describe custom weight locations and memory requirements.
+Klein and UniMate import the kit's public `core` entry point; SuperMat includes its runtime in its bundle. Use a bundler such as Vite or esbuild. SuperMat's CPU worker must accompany the application bundle; its [build recipe](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md#install) explains Vite and esbuild handling. Serve over HTTPS or localhost in a WebGPU-capable browser. The first load downloads each model's hosted weights; the model guides describe custom weight locations and memory requirements.
 
 ## Choose the model operation
 
@@ -63,7 +80,7 @@ try {
 
 The host supplies its device, kit session and foreground service, and submits frames through that service. The first `run()` loads UniMate; subsequent calls reuse it. `read()` exposes stage and solver progress, `togglePause()` pauses/resumes an admitted cooperative run, and `stop()` cancels pending work. `destroy()` settles work and frees model resources while leaving the borrowed host alive. The generator's text encoding and solver both run inside admission; queued cancellation does not take foreground ownership. Each generator receives a distinct runtime route by default.
 
-Inputs may be a stock skeleton, prepared conditioning, or a rigged GLB. Solver tolerances, guidance and partial-motion callbacks remain available through the [UniMate API](../../models/unimate/package/README.md). Its lower-level denoiser, text encoder, solver and decoding functions are still exported. UniMate's interface differs from the `load/pause/resume` wrappers above; the shared runner supplies their common lifetime.
+Inputs may be a stock skeleton, prepared conditioning, or a rigged GLB. Solver tolerances, guidance and partial-motion callbacks remain available through the [UniMate API](https://github.com/lyonsno/kaminos/blob/main/models/unimate/package/README.md). Its lower-level denoiser, text encoder, solver and decoding functions are still exported. UniMate's interface differs from the `load/pause/resume` wrappers above; the shared runner supplies their common lifetime.
 
 ## Keep your renderer drawing
 
@@ -92,7 +109,7 @@ drawing = false;
 await app.destroy();
 ```
 
-The [Klein outside example](../../models/flux2-klein/examples/external-app/app.js) and [SuperMat outside example](../../models/supermat/examples/external-app/app.js) include concrete GPU rendering and controls. The foreground service uses the model's cooperative boundaries during inference and also services idle frames. Its receipts describe submissions and request completion; they are not display-presentation timestamps.
+The [Klein outside example](https://github.com/lyonsno/kaminos/blob/main/models/flux2-klein/examples/external-app/app.js) and [SuperMat outside example](https://github.com/lyonsno/kaminos/blob/main/models/supermat/examples/external-app/app.js) include concrete GPU rendering and controls. The foreground service uses the model's cooperative boundaries during inference and also services idle frames. Its receipts describe submissions and request completion; they are not display-presentation timestamps.
 
 To borrow your renderer's device, pass `{ device, load: false }`. Klein requires `shader-f16` on that device. To share a coordinated host, pass `{ session, foreground, load: false }` using the same device and queue. The host must finish its current foreground run before releasing its admission. An app destroys only the device/session/foreground objects it created; borrowed resources survive. `snapshot()` exposes that ownership, load state, active phase, control state and fatal error.
 
@@ -110,16 +127,14 @@ To borrow your renderer's device, pass `{ device, load: false }`. Klein requires
 
 The runner returns `run`, `pause`, `resume`, `stop`, `snapshot` and a `pending` promise getter for destruction to await. It acquires foreground ownership only after its queued job is admitted, serializes CPU foreground windows with pause, closes control, unregisters the transient model route, and finishes foreground work before releasing admission. Cancellation while queued never takes another job's foreground ownership. Cleanup errors reach `onFatal` and reject the run.
 
-Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices remain model-specific. See [Klein's wrapper](../../models/flux2-klein/klein-app.js), [SuperMat's wrapper](../../models/supermat/supermat-app.js) and [UniMate's generator](../../models/unimate/unimate-generator.js) for the complete integrations.
+Device selection, loading/warmup, resident resources, model options, input/output processing and final app destruction stay in the model wrappers. Those choices remain model-specific. See [Klein's wrapper](https://github.com/lyonsno/kaminos/blob/main/models/flux2-klein/klein-app.js), [SuperMat's wrapper](https://github.com/lyonsno/kaminos/blob/main/models/supermat/supermat-app.js) and [UniMate's generator](https://github.com/lyonsno/kaminos/blob/main/models/unimate/unimate-generator.js) for the complete integrations.
 
 ## U2Net background removal
 
-`createU2NetApp` turns opaque RGB/RGBA pixels into the existing rembg-style cutout, with the shared application's queued admission, pause/resume, stop/retry and resource lifetime. It accepts the host's session and foreground service, exposes its loaded low-level runner, and preserves the producer's segment size and output provenance. See [the U2Net application](../../models/u2net/README.md) for a source-package install and the image input contract.
+`createU2NetApp` turns opaque RGB/RGBA pixels into the existing rembg-style cutout, with the shared application's queued admission, pause/resume, stop/retry and resource lifetime. It accepts the host's session and foreground service, exposes its loaded low-level runner, and preserves the producer's segment size and output provenance. See [the U2Net application](https://github.com/lyonsno/kaminos/blob/main/models/u2net/README.md) for installation and the image input contract.
 
 ```sh
-node scripts/pack-u2net-module.mjs --out /absolute/path/to/artifacts
-# Run from the external application directory:
-npm install /absolute/path/to/artifacts/kaminos-u2net-0.1.0.tgz
+npm install @kaminos/u2net@^0.1.0
 ```
 
 U2Net keeps its existing 320×320 network and rembg preparation semantics. The application offers foreground service at its real GPU segments and CPU preparation windows; it does not change the mask model or guarantee a particular display cadence.

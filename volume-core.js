@@ -26,6 +26,8 @@ import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
 import {followingDomainShift} from './moving-volume.mjs';
 import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
+import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDisplayReconstruction, displayPreparationTiming } from './volume-display-reconstruction.mjs';
+export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
@@ -1535,6 +1537,11 @@ export async function requestKaminosSharedWebGpuDevice({
   }
   const features = new Set(hostFeatures);
   if (adapter.features?.has?.('timestamp-query')) features.add('timestamp-query');
+  // GPU-compressed mesh textures remain compressed only when the shared device
+  // enables a format the adapter supports. Unsupported devices retain RGBA.
+  for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc']) {
+    if(adapter.features?.has?.(feature))features.add(feature);
+  }
   for (const feature of features) {
     if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
   }
@@ -2162,7 +2169,8 @@ export const JOINED_BOUNDARY_UNIFORM_FLOATS = 12;
 export const WAVELET_TURBULENCE_UNIFORM_OFFSET = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
 export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 4;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
-export const VOLUME_UNIFORM_FLOATS = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
+export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
+export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3806,6 +3814,8 @@ struct Uniforms {
   joined_ghost_geometry: vec4<f32>,
   joined_ghost_dims: vec4<f32>,
   wavelet_turbulence: vec4<f32>,
+  display_reconstruction: vec4<f32>,
+  display_interpolation: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -6310,6 +6320,7 @@ ${FLAME_GUIDANCE_WGSL}
 override RAY_STEP_STATS: bool = false;
 @group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${EMISSIVE_TRANSPORT_WGSL}
+${DISPLAY_RECONSTRUCTION_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
 
@@ -7927,13 +7938,15 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
-    if (LEAN_EMISSIVE_RAYMARCH) {
+    if (displayReconstructionActive() && opticalStepping) {
+      directSupport = 1.0;
+    } else if (LEAN_EMISSIVE_RAYMARCH) {
       neighborhood = sampleRaymarchNeighborhood(p);
       directSupport = raymarchNeighborhoodSupport(neighborhood);
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
+    if (!displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -7944,7 +7957,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       continue;
     }
     var reconstructed: FlowReconstructionSample;
-    if (flowKernelReconstructionActive) {
+    if (displayReconstructionActive() && opticalStepping) {
+      // The prepared field contains the optical coefficients consumed below.
+      // Numerical/standard stepping needs no raw-carrier reconstruction here.
+    } else if (flowKernelReconstructionActive) {
       reconstructed = sampleWorldFlowReconstruction(p);
     } else if (LEAN_EMISSIVE_RAYMARCH) {
       reconstructed = reconstructRaymarchNeighborhood(neighborhood);
@@ -8788,7 +8804,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       // Boundary Fire has its own material support; shellAmount belongs to
       // the separate topology-shell renderer (many valid basins set it to 0).
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
-      let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      var medium: EmissiveMaterial;
+      if (displayReconstructionActive()) {
+        medium = sampleDisplayMaterial(p, visibleSmokeAuthority);
+      } else {
+        medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      }
       let sigma = medium.absorption + medium.scattering;
       let scatteredSource = medium.scattering * incidentAt(p);
       let emission = medium.emission + scatteredSource;
@@ -11529,6 +11550,7 @@ export function createKaminosVolumePrototype({
   let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
   let emissiveLightField = null;
+  let displayReconstruction = null;
   // The draw that last dispatched the emissive seed (review GR-02).
   let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
@@ -12490,6 +12512,8 @@ export function createKaminosVolumePrototype({
     sceneVolumeSource = null;
     emissiveLightField?.destroy();
     emissiveLightField = null;
+    displayReconstruction?.destroy();
+    displayReconstruction = null;
     selectiveHeadLiveRuntime?.destroy();
     selectiveHeadLiveRuntime = null;
     selectiveHeadLiveBindGroups = null;
@@ -12670,6 +12694,7 @@ export function createKaminosVolumePrototype({
         { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
         { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
+        { binding: 34, resource: displayReconstruction.view },
       ],
     });
   }
@@ -14350,6 +14375,7 @@ export function createKaminosVolumePrototype({
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, () => reactantTextures);
+    displayReconstruction = createDisplayReconstruction(device, shader, uniformBuffer, () => ({fluid:fluidBuffers,reactant:reactantTextures}));
     emissiveSeedProducer = null;
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
@@ -14802,6 +14828,7 @@ export function createKaminosVolumePrototype({
         { binding: 25, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
         { binding: 26, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
         { binding: 33, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'2d-array'} },
+        { binding: 34, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -16425,6 +16452,28 @@ export function createKaminosVolumePrototype({
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
     state.physicsAppearance = physicsAppearance;
+    const displayRequest = resolveDisplayReconstruction(controlsSnapshot);
+    const displaySupported = emissiveRaymarchAdmission().eligible && debugRaymarchShaderSpecialization !== 'force-full' && physicsAppearance.effective.render
+      && !sceneTransportConsumer && !state.joinedRendering?.enabled && productFrameOwner === 'prototype';
+    let displayConfig = displaySupported ? displayRequest : {...displayRequest,value:0};
+    let displayReason = displayRequest.value&&!displaySupported?'requires-native-physics-beauty-without-joined-transport':null;
+    let displayAdmission = displayReconstruction?.ensure([gridSize,gridHeight,gridSize],displayConfig);
+    if (displayAdmission?.admitted === false) {
+      displayReason = displayAdmission.reason;
+      displayConfig = {...displayRequest,value:0};
+      displayAdmission = displayReconstruction.ensure([gridSize,gridHeight,gridSize],displayConfig);
+    }
+    uniforms.set([displayConfig.value,displayConfig.emission,displayConfig.smoke,displayConfig.scale], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET);
+    uniforms.set([displayConfig.alignment==='aligned'?1:0,
+      displayConfig.emissionInterpolation==='monotone'?2:displayConfig.emissionInterpolation==='interpolating'?1:0,
+      displayConfig.smokeInterpolation==='monotone'?2:displayConfig.smokeInterpolation==='interpolating'?1:0,0], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
+    if (displayAdmission?.changed) {
+      rebuildFluidBindGroups();
+      rebuildSceneSolidBindingViews();
+      rebuildSelectiveHeadLiveBindGroups();
+    }
+    state.displayReconstruction = {...displayReconstruction?.read(),requested:displayRequest.mode,
+      effective:displayConfig.value>0,reason:displayReason};
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
@@ -20462,6 +20511,10 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (displayReconstruction?.encode(encoder,currentFluid,
+      [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],options.displayTimestampWrites)) {
+      state.displayReconstruction = {...state.displayReconstruction,...displayReconstruction.read(),builtThisDraw:true};
+    } else if (state.displayReconstruction) state.displayReconstruction.builtThisDraw=false;
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
     }
@@ -20696,17 +20749,21 @@ export function createKaminosVolumePrototype({
       return { ok: false, reason: 'profile-requires-ordinary-camera-raymarch' };
     }
     ensureFrameTexture();
-    const query = device.createQuerySet({ type: 'timestamp', count: 2 });
-    const resolved = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
-    const readback = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const includePreparation = options.includeDisplayPreparation === true && state.displayReconstruction?.effective === true;
+    const queryCount = includePreparation ? 4 : 2;
+    const query = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const resolved = device.createBuffer({ size: queryCount*8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readback = device.createBuffer({ size: queryCount*8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     device.pushErrorScope('validation');
     let errorScopeOpen = true;
     try {
       let encoder = device.createCommandEncoder({ label: 'held emissive camera raymarch cost' });
       encoder = prepareSharedSceneConsumers(encoder);
       encodeBoundarySidecar(encoder);
+      if (includePreparation) displayReconstruction.invalidate();
       encodeDraw(encoder, frameTexture.createView(), 'held emissive camera raster', readbackPipeline, {
         timestampWrites: { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+        displayTimestampWrites: includePreparation ? {querySet:query,beginningOfPassWriteIndex:2,endOfPassWriteIndex:3} : null,
       });
       const identity = {
         simStepCount: state.simStepCount, backend: state.backend,
@@ -20714,9 +20771,10 @@ export function createKaminosVolumePrototype({
         raymarchShaderSpecialization: { ...state.raymarchShaderSpecialization },
         opticalStepping: { ...state.opticalStepping },
         incidentLight: { ...state.physicalColor.incidentLight },
+        displayReconstruction: {...state.displayReconstruction},
       };
-      encoder.resolveQuerySet(query, 0, 2, resolved, 0);
-      encoder.copyBufferToBuffer(resolved, 0, readback, 0, 16);
+      encoder.resolveQuerySet(query, 0, queryCount, resolved, 0);
+      encoder.copyBufferToBuffer(resolved, 0, readback, 0, queryCount*8);
       device.queue.submit([encoder.finish()]);
       await readback.mapAsync(GPUMapMode.READ);
       const times = new BigUint64Array(readback.getMappedRange().slice(0));
@@ -20725,8 +20783,14 @@ export function createKaminosVolumePrototype({
       errorScopeOpen = false;
       if (validationError) return { ok: false, reason: 'raymarch-profile-gpu-validation', error: validationError.message, ...identity };
       if (times[0] === 0n || times[1] <= times[0]) return { ok: false, reason: 'missing-or-invalid-raymarch-timestamps', timestamps: Array.from(times, String), ...identity };
+      if (includePreparation && (times[2]===0n || times[3]<=times[2])) {
+        return {ok:false,reason:'missing-or-invalid-display-preparation-timestamps',timestamps:Array.from(times,String),...identity};
+      }
       return { ok: true, scope: 'camera-raymarch-raster-only-not-lighting-simulation-or-frame',
-        ms: Number(times[1] - times[0]) / 1e6, timestamps: Array.from(times, String), ...identity };
+        ms: Number(times[1] - times[0]) / 1e6,
+        ...(includePreparation ? {...displayPreparationTiming(times),
+          preparationScope:'seed-through-classified-field-and-camera-not-lighting-simulation-or-frame'} : {}),
+        timestamps: Array.from(times, String), ...identity };
     } finally {
       if (errorScopeOpen) await device.popErrorScope();
       query.destroy();
@@ -21662,6 +21726,7 @@ export function createKaminosVolumePrototype({
     fluidLayoutInForce = 'authored';
     state.frameCount = upload.receiverInitialSimStepCount;
     state.simStepCount = upload.receiverInitialSimStepCount;
+    displayReconstruction?.invalidate();
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.boundarySidecarBuilt = false;
@@ -27288,6 +27353,7 @@ export function createKaminosVolumePrototype({
       return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
     },
     setControls(next) {
+      resolveDisplayReconstruction({...controlsSnapshot,...next});
       if(Object.hasOwn(next,'raymarchMode')||Object.hasOwn(next,'opticalTolerance')) {
         const config=opticalSteppingConfig({mode:next.raymarchMode??controlsSnapshot.raymarchMode??'numerical',
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});

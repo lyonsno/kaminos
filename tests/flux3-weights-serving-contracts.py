@@ -10,8 +10,8 @@ import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
+from model_installations import ModelInstallations
 
-assert hasattr(serve, 'FLUX3_WEIGHTS_ROOT'), 'Kaminos must accept an explicit local FLUX.3 package root'
 
 with TemporaryDirectory() as directory:
     root = Path(directory) / 'flux3'
@@ -39,8 +39,8 @@ with TemporaryDirectory() as directory:
         (root / 'te' / 'tokenizer.json').write_text('{}')
     restore()
     (Path(directory) / 'outside.bin').write_bytes(b'secret')
-    previous = serve.FLUX3_WEIGHTS_ROOT
-    serve.FLUX3_WEIGHTS_ROOT = root.resolve()
+    previous = serve.MODEL_INSTALLATIONS
+    serve.MODEL_INSTALLATIONS = ModelInstallations(environ={'KAMINOS_FLUX3_WEIGHTS_ROOT':str(root.resolve())}, config_path=root.parent/'no-installations.json')
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), serve.KaminosHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -89,12 +89,12 @@ with TemporaryDirectory() as directory:
         assert serve.runtime_config()['flux3']['mounted'] is False
         (root / 'vae' / 'manifest.json').unlink()
         assert serve.runtime_config()['flux3']['mounted'] is False
-        serve.FLUX3_WEIGHTS_ROOT = None
+        serve.MODEL_INSTALLATIONS = ModelInstallations(environ={}, config_path=root.parent/'no-installations.json')
         assert serve.runtime_config()['flux3'] is None
         response, _ = get('/flux3-weights/te/manifest.json')
         assert response.status == 404
     finally:
         server.shutdown()
         server.server_close()
-        serve.FLUX3_WEIGHTS_ROOT = previous
+        serve.MODEL_INSTALLATIONS = previous
 print('FLUX.3 local weight serving contracts passed')

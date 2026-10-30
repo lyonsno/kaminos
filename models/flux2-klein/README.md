@@ -75,20 +75,123 @@ Then open `http://localhost:18709/index.html?weights=` (an empty base loads from
 
 ## Using it in an application
 
-Klein is on npm as [`@kaminos/flux2-klein`](https://www.npmjs.com/package/@kaminos/flux2-klein), which brings `@kaminos/webgpu-inference-kit` with it: `npm install @kaminos/flux2-klein`. Its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs; `node pack-klein.mjs --out <dir>` builds the same package from this checkout. Your application creates the WebGPU device and lends it to Klein:
+Use `createKleinApp()` to load the model, generate an image and draw it to a canvas. Keep the app for more prompts, then release it when you’re finished. It creates its own WebGPU device and schedules generation cooperatively.
+
+Install the browser application package in your own project. The inference kit is installed as its dependency:
+
+```sh
+npm install @kaminos/flux2-klein@^0.1.2
+```
+
+Save the following as `index.html` beside your application's `node_modules`, serve that directory with `python3 -m http.server 8080`, and visit `http://localhost:8080`. Chrome with WebGPU and `shader-f16` is required. The first generation downloads about 3.2 GB of hosted Mint weights, cached for later visits; see [memory requirements](#memory) above.
+
+```html
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My first Klein image</title>
+<script type="importmap">
+{ "imports": {
+  "@kaminos/flux2-klein": "./node_modules/@kaminos/flux2-klein/index.js",
+  "@kaminos/webgpu-inference-kit/core": "./node_modules/@kaminos/webgpu-inference-kit/src/core.js"
+} }
+</script>
+<form id="prompt-form">
+  <label>Prompt <input id="prompt" required value="a blue tank engine on a sunny branch line"></label>
+  <button id="generate">Generate</button>
+  <button id="release" type="button" disabled>Release model</button>
+</form>
+<p id="status" role="status">Enter a prompt and generate an image.</p>
+<canvas id="image" aria-label="Generated image" style="max-width:100%;height:auto" hidden></canvas>
+<script type="module">
+import { createKleinApp } from '@kaminos/flux2-klein';
+
+const form = document.getElementById('prompt-form');
+const prompt = document.getElementById('prompt');
+const generate = document.getElementById('generate');
+const release = document.getElementById('release');
+const status = document.getElementById('status');
+const canvas = document.getElementById('image');
+let klein;
+
+form.onsubmit = async event => {
+  event.preventDefault();
+  generate.disabled = release.disabled = true;
+  try {
+    if (!klein) {
+      status.textContent = 'Loading model weights…';
+      klein = await createKleinApp({
+        onProgress: (part, file, { loadedBytes, totalBytes }) => {
+          status.textContent = `Loading ${part}: ${Math.round(100 * loadedBytes / totalBytes)}%`;
+        },
+      });
+    }
+    status.textContent = 'Generating…';
+    const image = await klein.generate({
+      prompt: prompt.value, seed: 7, width: 512, height: 512, steps: 3,
+      onPhase: phase => { status.textContent = `Generating: ${phase}…`; },
+      onStep: (step, steps) => { status.textContent = `Step ${step} of ${steps}…`; },
+    });
+    canvas.width = image.width;
+    canvas.height = image.height;
+    canvas.getContext('2d').putImageData(new ImageData(image.rgba, image.width, image.height), 0, 0);
+    canvas.hidden = false;
+    status.textContent = 'Done. Enter another prompt to reuse the loaded model.';
+  } catch (error) {
+    status.textContent = `Could not generate: ${error.message}`;
+  } finally {
+    generate.disabled = false;
+    release.disabled = !klein;
+  }
+};
+
+release.onclick = async () => {
+  generate.disabled = release.disabled = true;
+  try {
+    await klein.destroy();
+    status.textContent = 'Model released. Generate again to reload it from the cache.';
+  } catch (error) {
+    status.textContent = `Could not release: ${error.message}`;
+  } finally {
+    klein = undefined;
+    generate.disabled = false;
+  }
+};
+</script>
+</html>
+```
+
+The [package API guide](package-README.md) covers progress, previews, weights, low-memory mode, pause/resume/stop and device ownership. `generate()` retains the model's options, callbacks and full output. `pipelineOptions` at creation forwards model settings such as `weightsBase`, `level` and `residency`.
+
+### Sharing a device with your renderer
+
+Pass `{ device }` to borrow an existing WebGPU device with `shader-f16`, or `{ session, foreground }` to use your host's inference session and foreground service. Destruction leaves borrowed resources open. With `load: false`, attach your renderer through `app.foreground` before `app.load()`, so the same attachment serves frames before, during and after generation. The package guide documents that callback contract.
+
+[`examples/external-app`](examples/external-app) exercises that composition, including load failure, progress, generation previews, pause/resume, repeat use and borrowed-device survival. `node run-external-app.mjs --chrome <exe> --weights-dir <dir> --out <dir>` installs the example from packed tarballs outside this checkout and runs it.
+
+### Build the package from source
+
+For local model changes, run this from the Kaminos repository root, then install the printed tarball in your application:
+
+```sh
+node models/flux2-klein/pack-klein.mjs --out /absolute/path/to/klein-package
+```
+
+### Direct pipeline control
+
+`KleinPipeline` remains available when your host already owns its inference invocation and scheduling:
 
 ```js
 import { KleinPipeline } from '@kaminos/flux2-klein';
 
-const klein = new KleinPipeline(device);        // hosted weights; weightsBase and level choose others
+const klein = new KleinPipeline(device);
 await klein.load(onProgress);
-const { rgba, width, height } = await klein.generate({ prompt, seed, width: 512, height: 512, steps: 3, onStep, onPreview });
-await klein.destroy();                            // Klein's buffers are freed; the device stays yours
+const image = await klein.generate({ prompt, seed, width: 512, height: 512, steps: 3, onStep, onPreview });
+await klein.destroy(); // frees Klein's buffers; the borrowed device stays yours
 ```
 
-[`examples/external-app`](examples/external-app) is a complete application built that way, and `node run-external-app.mjs --chrome <exe> --weights-dir <dir> --out <dir>` installs it from the packed tarballs into a directory outside this checkout and runs it: a failing load, load progress, generation with step and preview events, an invalid size, a second generation reusing the prompt encoding, `destroy()`, and the device still working afterwards.
-
-To share the GPU with a renderer, pass a `schedule` with an inference-kit route runtime and its queued invocation; [`createKleinDemo`](klein-demo.js) shows that wiring on this page: an inference session on a shared device, a foreground service for the renderer's frames, a route per run, and pause, resume and stop through the inference control.
+For that lower-level path, a `schedule` supplies the inference-kit route runtime and queued invocation. [`createKleinDemo`](klein-demo.js) shows the demo's complete wiring. The application interface manages that lifetime for ordinary use.
 
 ## License
 

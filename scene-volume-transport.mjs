@@ -42,6 +42,12 @@ struct TransportVertex { @builtin(position) position: vec4<f32>, @location(0) uv
 @fragment fn fs(in: TransportVertex) -> @location(0) vec4<f32> {
   return textureSampleLevel(radiance, radianceSampler, in.uv, 0.0);
 }
+struct EmissionComposite { @location(0) color:vec4<f32>, @location(1) emission:vec4<f32> };
+@fragment fn fsEmission(in:TransportVertex)->EmissionComposite {
+  let value=textureSampleLevel(radiance,radianceSampler,in.uv,0.0);
+  return EmissionComposite(value,value);
+}
+
 `;
 
 export function createSceneVolumeTransport(device) {
@@ -60,11 +66,12 @@ export function createSceneVolumeTransport(device) {
   const composite=device.createRenderPipeline({label:SCENE_VOLUME_TRANSPORT+' composite',
     layout:device.createPipelineLayout({bindGroupLayouts:[compositeLayout]}),
     vertex:{module:compositeModule,entryPoint:'vs'},fragment:{module:compositeModule,entryPoint:'fs',targets:[{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});
+  let emissionComposite=null;
   const sampler=device.createSampler({minFilter:'linear',magFilter:'linear'});
   let texture=null,compositeGroup=null,extent='',source=null,sourceLayout=null,lightLayout=null,disposed=false;
   const pipelines=new Map();
   return {
-    encode({encoder,targetView,frontDepthView,sceneDepthView,forwardScale,width,height,code,mainLayout,mainGroup,lighting=null,constants={},foreground=false}) {
+    encode({encoder,targetView,frontDepthView,sceneDepthView,forwardScale,width,height,code,mainLayout,mainGroup,lighting=null,constants={},foreground=false,emissionTargetView=null}) {
       if(disposed)throw Error('Native scene transport disposed');
       if(!encoder||!targetView||!frontDepthView||!sceneDepthView)throw Error('Native scene transport needs current encoder and attachments');
       if(![width,height].every(v=>Number.isSafeInteger(v)&&v>0))throw Error('Native scene transport extent must be positive integers');
@@ -92,8 +99,11 @@ export function createSceneVolumeTransport(device) {
       const group=device.createBindGroup({layout:segmentLayout,entries:[{binding:2,resource:frontDepthView},{binding:3,resource:sceneDepthView},{binding:4,resource:{buffer:params}}]});
       const march=encoder.beginRenderPass({label:SCENE_VOLUME_TRANSPORT+(foreground?':foreground':':background'),colorAttachments:[{view:texture.createView(),loadOp:'clear',clearValue:{r:0,g:0,b:0,a:0},storeOp:'store'}]});
       march.setPipeline(pipelines.get(key));march.setBindGroup(0,mainGroup);march.setBindGroup(1,group);if(lighting)march.setBindGroup(2,lighting.group);march.draw(3);march.end();
-      const compose=encoder.beginRenderPass({label:SCENE_VOLUME_TRANSPORT+':linear-over',colorAttachments:[{view:targetView,loadOp:'load',storeOp:'store'}]});
-      compose.setPipeline(composite);compose.setBindGroup(0,compositeGroup);compose.draw(3);compose.end();
+      if(emissionTargetView&&!emissionComposite)emissionComposite=device.createRenderPipeline({label:SCENE_VOLUME_TRANSPORT+' emission composite',
+        layout:device.createPipelineLayout({bindGroupLayouts:[compositeLayout]}),vertex:{module:compositeModule,entryPoint:'vs'},
+        fragment:{module:compositeModule,entryPoint:'fsEmission',targets:[{format:'rgba16float',blend},{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});
+      const compose=encoder.beginRenderPass({label:SCENE_VOLUME_TRANSPORT+':linear-over',colorAttachments:[targetView,...(emissionTargetView?[emissionTargetView]:[])].map(view=>({view,loadOp:'load',storeOp:'store'}))});
+      compose.setPipeline(emissionTargetView?emissionComposite:composite);compose.setBindGroup(0,compositeGroup);compose.draw(3);compose.end();
       return {identity:SCENE_VOLUME_TRANSPORT,segment:foreground?'camera-to-water':'water-to-opaque',width,height,colorSpace:'linear_hdr',displayTransform:'none',privateSubmit:false};
     },
     dispose(){if(disposed)return;disposed=true;texture?.destroy();params.destroy();pipelines.clear();},

@@ -1,0 +1,44 @@
+{
+  "upstream": "mrdoob/three.js",
+  "revision": "r185",
+  "commit": "2431a09f46f34c560bc8e44b33be0e567723d5b9",
+  "files": {
+    "loaders/KTX2Loader.js": {
+      "bytes": 36567,
+      "sha256": "3a3233ce3409443076d3414b78832e1405fcfac5ecb34d367365fd0781127d6c"
+    },
+    "utils/WorkerPool.js": {
+      "bytes": 3110,
+      "sha256": "5ac7095fd566bc9ae48376055fd66edf27cb9ebbf9e1269dc206bfd4933ae9eb"
+    },
+    "libs/ktx-parse.module.js": {
+      "bytes": 19932,
+      "sha256": "f40c491f6c44dde511268121f778a0050e73b1a15fd844c1ae2c78c73213eafc"
+    },
+    "libs/zstddec.module.js": {
+      "bytes": 39754,
+      "sha256": "5cbf818e842628a4464e748594a6deae18ceddda3c2f541e7b3a0ff5fc7611e2"
+    },
+    "math/ColorSpaces.js": {
+      "bytes": 4290,
+      "sha256": "cc35c01c793cd17ccded7bc8142abffd3ce0d60dd6de8d5d216983bd05aee262"
+    },
+    "libs/basis/basis_transcoder.js": {
+      "bytes": 57529,
+      "sha256": "8478b5b6d6b74e7d3082b89f6417321d8d1dc0307f2b30d4484bb11b441696a1"
+    },
+    "libs/basis/basis_transcoder.wasm": {
+      "bytes": 527333,
+      "sha256": "6cf17dc889352c42e9acf8897107978d127005fe3386c36a0e3845e27967630a"
+    },
+    "libs/basis/README.md": {
+      "bytes": 1388,
+      "sha256": "a578df416c1e0852e9c36a1cf91b4d28d91a251294f87ce610a3bc7ca4df15e0"
+    }
+  },
+  "basisLicense": {
+    "source": "https://raw.githubusercontent.com/BinomialLLC/basis_universal/master/LICENSE",
+    "sha256": "065fcf48d6af21c0b75e23be5ed5753aee75c892e1c2cf178fa6736305614a5c",
+    "local": "libs/basis/LICENSE"
+  }
+}

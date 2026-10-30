@@ -144,6 +144,12 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Octaves'],
     ['volume-wavelet-strength','Detail strength'],
   ] },
+  { name:'Display reconstruction', view:'look', open:true, fields:[
+    ['volume-display-reconstruction','Reconstruction'], ['volume-display-grid-scale','Display grid scale'],
+    ['volume-display-alignment','Sample alignment'],
+    ['volume-emission-interpolation','Emission kernel'], ['volume-emission-smoothing','Emission cubic blend'],
+    ['volume-smoke-interpolation','Smoke kernel'], ['volume-smoke-smoothing','Smoke cubic blend'],
+  ] },
   { name:'Carriers & added forces', view:'motion', fields:[
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],

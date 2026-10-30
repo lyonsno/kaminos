@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {liveLogHeatWGSL} from '../live-log-heat-gpu.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
@@ -13,4 +14,11 @@ test('thermal surface cells carry an actual point and outward normal, not an int
   assert.deepEqual(Array.from(s),[1,-.25,-.25,1,1,0,0,0]);
   assert.equal(mask[1+4*(1+4*1)],0);
   assert.equal(mask.samples[(1+4*(1+4*1))*8+3],0);
+});
+
+
+test('wood samples transported heat without adding an appearance carrier',()=>{
+ const source=liveLogHeatWGSL(true);
+ const sampling=source.slice(source.indexOf('fn fluidHeat('),source.indexOf('fn surfaceHeat('));
+ assert.doesNotMatch(sampling,/base\+2u/,'appearance support cannot become extra heating');
 });

@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import{readFileSync}from'node:fs';import{compositionRestoreUrl}from'../scene-authoring.mjs';
 import {readOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 const startupSceneRedirect=Symbol('saved-scene-recovery-redirect');
@@ -14,18 +15,14 @@ test('saved document address preserves renderer and unknown view parameters',asy
 });
 
 test('successful current in-place Load adopts the document address; superseded load cannot',async()=>{
- const {savedSceneLocation}=await import('../scene-authoring.mjs');
- const begin=html.indexOf('function claimLoadedSceneFile('),end=html.indexOf('async function loadSceneFile(',begin),claim=html.slice(begin,end);
- const call=html.indexOf('  claimLoadedSceneFile(file, sceneFile);',end);
- const gate=html.lastIndexOf('  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;',call);
- assert.ok(gate> end&&call>gate);
  for(const current of [true,false]){
-  const c=vm.createContext({currentSceneFile:'A.kaminos.json',file:{name:'B.kaminos.json'},sceneFile:'B.kaminos.json',loadRequestId:2,
-   sceneLoadRequests:{isCurrent:()=>current},savedSceneLocation,URL,URLSearchParams,
+  const c=sceneContext({currentSceneFile:'A.kaminos.json',
    location:{href:'http://localhost/index.html?workspace=workbench#scene=A.kaminos.json&extra=kept'},
-   history:{replaceState(_state,_title,url){c.location.href=url;}}});
-  vm.runInContext(claim,c);vm.runInContext('(function(){'+html.slice(gate,call+'  claimLoadedSceneFile(file, sceneFile);'.length)+'})()',c);
-  assert.equal(c.currentSceneFile,current?'B.kaminos.json':'A.kaminos.json');
+   async applySceneDocument(){if(!current)c.sceneLoadRequests.invalidate();},
+  });
+  const data={version:8,objects:[{id:'root',type:'pbr',source:'demos/cube.glb'}]};
+  await c.sceneDocument.restore({text:async()=>JSON.stringify(data)},{sceneFile:'B.kaminos.json'});
+  assert.equal(c.sceneDocument.state().filename,current?'B.kaminos.json':'A.kaminos.json');
   assert.equal(new URLSearchParams(new URL(c.location.href).hash.slice(1)).get('scene'),current?'B.kaminos.json':'A.kaminos.json');
  }
 });
@@ -52,15 +49,14 @@ test('hash-carried workspace survives another changed-recipe recovery',()=>{
  assert.equal(new URL(recovery).searchParams.get('workspace'),null);
 });
 
-test('valid disk files cannot claim same-named or absent server documents',()=>{
- const begin=html.indexOf('function claimLoadedSceneFile('),end=html.indexOf('async function loadSceneFile(',begin),claim=html.slice(begin,end);
+test('valid disk files cannot claim same-named or absent server documents',async()=>{
  for(const name of ['stored-B.kaminos.json','absent-file.kaminos.json']){
-  const c=vm.createContext({currentSceneFile:'stored-A.kaminos.json',file:{name},savedSceneLocation:(href,name)=>{const url=new URL(href);const hash=new URLSearchParams(url.hash.slice(1));hash.set('scene',name);url.hash=hash.toString();return url.href;},URL,URLSearchParams,
-   location:{href:'http://localhost/index.html?workspace=workbench#scene=stored-A.kaminos.json&extra=kept'},
-   history:{replaceState(_state,_title,url){c.location.href=String(url);}}});
-  vm.runInContext(claim,c);vm.runInContext('claimLoadedSceneFile(file)',c);
-  assert.equal(c.currentSceneFile,null,'an imported file has no stored overwrite target');
-  const url=new URL(c.location.href);assert.equal(new URLSearchParams(url.hash.slice(1)).has('scene'),false,'disk bytes must not publish a server document address');
+  const c=sceneContext({currentSceneFile:'stored-A.kaminos.json',applySceneDocument:async()=>true,
+   location:{href:'http://localhost/index.html?workspace=workbench#scene=stored-A.kaminos.json&extra=kept'}});
+  const data={version:8,objects:[{id:'root',type:'pbr',source:'demos/cube.glb'}]};
+  await c.sceneDocument.restore({name,text:async()=>JSON.stringify(data)});
+  assert.equal(c.sceneDocument.state().filename,null,'an imported file has no stored overwrite target');
+  const url=new URL(c.location.href);assert.equal(new URLSearchParams(url.hash.slice(1)).has('scene'),false);
   assert.equal(url.searchParams.get('workspace'),'workbench');assert.equal(new URLSearchParams(url.hash.slice(1)).get('extra'),'kept');
  }
 });

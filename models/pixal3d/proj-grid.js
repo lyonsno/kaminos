@@ -624,12 +624,13 @@ export function createPixal3dProjGridAdapter({
             cameraControls,
             new Float32Array([fPixels, f(effectiveDistance), scaleDenom, halfRes, invRes, 0, 0, 0]),
           );
-          for (const op of operations) {
+          for (let i = 0; i < operations.length; i++) {
+            const op = operations[i];
             await runtime.runKernel(op.kernel, {
               stage: op.stage,
               dispatch: op.dispatch,
               schedulerInvocation: invocation,
-              yieldAfter: true,
+              yieldAfter: i === operations.length - 1,
             });
           }
           return outputs;

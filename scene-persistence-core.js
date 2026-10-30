@@ -1,18 +1,16 @@
+import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
-import {checkedGiProxySetting,canHaveGiProxy} from './scene-gi-proxy-settings.mjs';
 import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,checkedFireSourceRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
-import {legacyRimLightRecord,checkedSceneLightRecord} from './scene-spot-light.mjs';
-import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
+import {legacyRimLightRecord} from './scene-spot-light.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
-import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, normalizeFlameDomainScale, flamePoseInDomain,flameDomainControlsFromSettings } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 import {normalizeCameraViews} from './scene-camera-views.mjs';
-import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
+import {CAMERA_TYPE,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 11;
@@ -20,52 +18,6 @@ export const SCENE_VERSION = 11;
 function cloneJson(value) {
   if (value === undefined) return undefined;
   return value === null ? null : JSON.parse(JSON.stringify(value));
-}
-
-function normalizeSceneObjectRecord(record) {
-  if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
-  if(record.type===FIRE_DOMAIN_TYPE)return checkedFireDomainRecord(record);
-  if(record.type===CAMERA_TYPE)record=checkedCameraRecord(record);
-  if(record.type==='light')record=checkedSceneLightRecord(record);
-  const id = String(record.id || record.fileName || record.source || 'object');
-  if(record.type===FLAME_EMITTER_TYPE)record=checkedFireSourceRecord({...record,id});
-  if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
-  return {
-    id,
-    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled!==false}:{}),
-    ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
-    ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
-    ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface),...(record.waterCollision===false?{waterCollision:false}:{})} : {}),
-    ...(record.emission?{emission:cloneJson(record.emission)}:{}),
-    ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
-    ...(record.giProxy!=null?{giProxy:checkedGiProxySetting({...record,type:record.type??'glb'},record.giProxy)}:{}),
-    ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
-    source: record.source ?? null,
-    type: record.type ?? 'glb',
-    fileName: record.fileName ?? 'object.glb',
-    label: record.label ?? record.fileName ?? id,
-    groupId: record.groupId ?? null,
-    createdAt: record.createdAt ?? null,
-    transform: record.type === FLAME_EMITTER_TYPE ? normalizeFlameEmitterPose(record.transform) : cloneJson(record.transform ?? {
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-    }),
-    materials: cloneJson(record.materials ?? null),
-    splat: cloneJson(record.splat ?? null),
-    image: cloneJson(record.image ?? null),
-    ...(record.generation?{generation:cloneJson(record.generation)}:{}),
-    ...(record.assetOrigin?{assetOrigin:cloneJson(record.assetOrigin)}:{}),
-    renderRoute: record.renderRoute ?? null,
-    renderCapabilities: cloneJson(record.renderCapabilities ?? null),
-    renderHandoffSchema: record.renderHandoffSchema ?? null,
-    ...(record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE
-      ? { localLiquidEmitter: cloneJson(record.localLiquidEmitter) } : {}),
-    // Arrival leveling (stored/leveled orientation) keeps Undo Leveling
-    // available after reopen; the page validates it when restoring.
-    ...(record.arrivalLeveling && typeof record.arrivalLeveling === 'object'
-      ? { arrivalLeveling: cloneJson(record.arrivalLeveling) } : {}),
-  };
 }
 
 function normalizeSceneGroupRecord(record) {
@@ -144,20 +96,11 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
-  if(record?.type===CAMERA_TYPE&&record.source===CAMERA_SOURCE){try{checkedCameraRecord(record);return true;}catch{return false;}}
-  if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
-  if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
+  return defaultSceneRecordOperations.reloadable(record);
+}
 
-  const type = record?.type || 'glb';
-  const source = record?.source;
-  if (type === BURNER_BED_TYPE) return source === BURNER_BED_SOURCE;
-  if (type === FLAME_EMITTER_TYPE){try{checkedFireSourceRecord(record);return true;}catch{return false;}}
-  if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
-  if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
-  if (type === 'pbr') return source.startsWith('demos/');
-  if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
-  if (type === 'image') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
-  return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
+export function assertSceneSourcesReloadable(records=[]) {
+  return defaultSceneRecordOperations.assertReloadable(records);
 }
 
 export function planSceneRestore(data, { allowEmpty = false } = {}) {

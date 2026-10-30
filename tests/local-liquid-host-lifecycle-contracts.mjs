@@ -78,16 +78,9 @@ test('successful async mount reconciles emitter records edited while creation wa
   assert.deepEqual(host.emitters, ['A','B'], 'mounted solver consumes the latest same-scene emitter membership');
 });
 
-test('scene-load continuations recheck ownership before publishing loaded identity', () => {
-  const loadFileStart = indexHtml.indexOf('async function loadSceneFile(');
-  const claimFile = indexHtml.indexOf('claimLoadedSceneFile(file, sceneFile);', loadFileStart);
-  const loadSlice = indexHtml.slice(loadFileStart, claimFile);
-  assert.match(loadSlice, /sceneLoadRequests\.begin\(\)/, 'each scene load must own a supersedable load request');
-  assert.match(loadSlice, /sceneLoadRequests\.isCurrent\(loadRequestId\)/, 'async load continuations must test current request ownership');
-  assert.match(loadSlice, /sceneLoadRequests\.awaitStage\(loadRequestId, loadSceneObjects\(/, 'the production scene loader must bind its async host/load stage to request ownership');
-  assert.match(indexHtml.slice(claimFile - 400, claimFile + 100), /sceneLoadRequests\.isCurrent\(loadRequestId\)/,
-    'stale load cannot publish file identity after host admission');
-});
+// Document-session continuation/identity is exercised through its production
+// owner in scene-document-session.mjs and scene-saved-bootstrap.mjs. This file
+// retains the local host's request-generation tests below.
 
 test('overlapping scene-load stages cannot publish an older file after the newer host resolves', async () => {
   const requests = createSceneLoadRequests();

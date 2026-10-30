@@ -117,7 +117,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         inputs=await processor(text,raw.length?raw:undefined,{padding:false,truncation:false});
         const promptLength=inputs.input_ids.dims[1];
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
-        await load();
+        const modelReused=!!model;await load();
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         class GeneratedPresence extends tf.LogitsProcessor{
           _call(ids,logits){
@@ -143,7 +143,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         if(!expanded)throw Error('The prompt helper returned empty output.');
         const last=Number(ids.at(-1)),stopReason=[248046,248044].includes(last)?'eos':'output-limit';
-        return {text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
+        return {modelReused,text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
           generationMs:performance.now()-generationStarted,totalMs:performance.now()-started,
           backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,modelUrl:base,referenceCount:images.length,
           runtimeCompatibility:['Transformers.js4.2 text-only continuation delta'],

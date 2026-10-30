@@ -6,6 +6,10 @@ export const LEGACY_LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v0';
 export const LOCAL_LIQUID_EMITTER_SCHEMA = 'kaminos.local-liquid-emitter.v1';
 export const LOCAL_LIQUID_EMITTER_TYPE = 'local-liquid-emitter';
 export const LOCAL_LIQUID_EMITTER_SOURCE = 'kaminos:local-liquid-emitter';
+export const localLiquidRecordDomain={type:LOCAL_LIQUID_EMITTER_TYPE,
+ fields:r=>r.source===LOCAL_LIQUID_EMITTER_SOURCE?{localLiquidEmitter:r.localLiquidEmitter}:{},
+ reloadable:r=>r.source===LOCAL_LIQUID_EMITTER_SOURCE,load:(r,loaders,options)=>loaders.water(r,options),
+ capture(entry,{metadata}){const value=metadata.localLiquidEmitter??entry.localLiquidEmitter;return value?.mode==='finite_drop'?{materials:null}:{};}};
 export const LOCAL_LIQUID_EMITTER_CAPACITY = 5;
 
 const clone = value => structuredClone(value);

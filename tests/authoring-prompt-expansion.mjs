@@ -52,3 +52,24 @@ test('ordinary servers resolve the explicit prompt-helper mount and never invent
  assert.throws(()=>prompt.authoringPromptWeightRoot({}),/unavailable/i);
  assert.throws(()=>prompt.authoringPromptWeightRoot({pup:{mounted:false,modelUrl:'/pup-weights'}}),/unavailable/i);
 });
+test('resident application operation reuses its provider and explicit unload releases it',async()=>{
+ let creates=0,disposed=0;
+ const c=prompt.createAuthoringPromptExpansion({keepLoaded:true,createHelper:()=>{creates++;return{resident:true,expand:async()=>({text:'caption',partial:false}),dispose:async()=>{disposed++;}};}});
+ await c.expand({prompt:'first'});await c.expand({prompt:'second'});assert.equal(creates,1);assert.equal(disposed,0);assert.equal(c.read().resident,true);
+ await c.setKeepLoaded(false);assert.equal(disposed,1);assert.equal(c.read().resident,false);assert.equal(c.read().keepLoaded,false);
+});
+
+test('waiting operation exposes queue position and skip choice to the retained provider',async()=>{
+ let callbacks,input;const gate=deferred();
+ const c=prompt.createAuthoringPromptExpansion({keepLoaded:true,createHelper:x=>{callbacks=x;return{expand:async options=>{input=options;callbacks.onWait({jobId:'canonical',position:4,heldBy:['other-job']});return gate.promise;},dispose:async()=>{}};}});
+ const run=c.expand({prompt:'a kettle'});await tick();
+ assert.equal(input.admission,'queue');assert.equal(c.read().queue.jobId,'canonical');assert.match(c.read().progress,/position 4/);
+ assert.equal(c.runOutsideQueue(),true);assert.equal(input.bypassSignal.aborted,true);
+ gate.resolve({text:'expanded',gpuLease:{status:'bypassed'}});await run;
+ assert.match(c.read().coordination,/outside Greenroom/);assert.equal(c.runOutsideQueue(),false);
+ await c.dispose();
+});
+
+test('prompt availability reports the selected package diagnosis',()=>{
+ assert.throws(()=>prompt.authoringPromptWeightRoot({modelAvailability:{pup:{status:'unavailable',reason:'Missing decoder payload on this installation'}}}),/Missing decoder payload/);
+});
