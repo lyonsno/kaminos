@@ -94,7 +94,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
      await burning?.prepare();
     }
     if(admitted&&request?.id!==admitted.id&&burning?.read(plan.promptObjectId).status==='resident'){burning.reset(plan.promptObjectId);feedPixels=0;feedSteps=0;positionFeed();}
-    if(admitted?.id!==request?.id){burnWindow=admitted?createKilnBurnWindow({seconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5}):null;}
+    if(admitted?.id!==request?.id||(admitted&&!burnWindow)){burnWindow=admitted?createKilnBurnWindow({seconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5}):null;}
     prompt=next;request=admitted;editor?.sync();
    });preparation=work;return work;
   }
