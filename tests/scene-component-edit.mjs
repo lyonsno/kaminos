@@ -26,3 +26,11 @@ test('an assembly scope keeps native member selection and exits to its owner wit
  selected='outlet';assert.equal(edit.active(),true);edit.toggle(selected);
  assert.equal(edit.active(),false);assert.equal(selected,'@group:burner');
 });
+test('owner hover and cancellation follow active selection and explicit entry',()=>{
+ let selected='machine',moves=0,cancels=0;
+ const edit=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){}});
+ const seat=edit.register('machine',{enter(){},exit(){},target(){return null;},hover(e,c){moves++;assert.equal(c.camera,'camera');},cancel(){cancels++;return true;}});
+ assert.equal(edit.hover({},{}),false);seat.enter();assert.equal(edit.active(),true);
+ edit.hover({},{camera:'camera'});assert.equal(moves,1);assert.equal(edit.cancel(),true);assert.equal(cancels,1);
+ selected='elsewhere';assert.equal(edit.hover({},{}),false);assert.equal(edit.cancel(),false);seat.dispose();
+});

@@ -37,3 +37,9 @@ const analytic=v3.replacementState(),returned=v3.exportBodies();v3.importBodies(
 const frozenView=createMechanismView(new T.Group());frozenView.update(m,0,0,false);
 for(const translation of [0,100]){const p=frozenView.exportBodies();p.bodies=p.bodies.filter(b=>b.id==='link:1');p.bodies[0].object.object.matrixAutoUpdate=false;p.bodies[0].object.object.matrix[12]=translation;assert.throws(()=>frozenView.importBodies(p),/matrix|frame/i,'Frozen roots must not bypass effective pose');assert.equal(frozenView.bodyManifest().replacements,0);}
 frozenView.dispose();
+// History snapshots must not serialize analytical geometry that will be discarded.
+const fastRoot=new T.Group(),fast=createMechanismView(fastRoot);fast.update(m,0,0,false);
+const originalJSON=T.Object3D.prototype.toJSON;let exports=0;
+T.Object3D.prototype.toJSON=function(...args){exports++;return originalJSON.apply(this,args);};
+try{assert.deepEqual(fast.replacementState().bodies,[]);assert.equal(exports,0,'Empty replacement snapshots must skip analytical mesh export');}finally{T.Object3D.prototype.toJSON=originalJSON;}
+const existing=fastRoot.children[0];fast.setBodies({schema:'kaminos.assembly-geometry.v1',bodies:[]});assert.equal(fastRoot.children[0],existing,'Restoring an already empty replacement state must retain the body view');fast.dispose();
