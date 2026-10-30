@@ -48,10 +48,11 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
   };
   try {
     let contact=null,bodyBuffer,impulseBuffer,impulseReadback;
+    const couplingSteps=config.goinPile?.couplingSteps??1;
     if(pile){
       bodyBuffer=buffer(config.goinPile.count*112,U.STORAGE|U.COPY_DST,'MLS goin body state');
       impulseBuffer=buffer(config.goinPile.count*32,U.STORAGE|U.COPY_SRC|U.COPY_DST,'MLS goin impulses');
-      impulseReadback=buffer(config.goinPile.count*32,U.COPY_DST|U.MAP_READ,'MLS asynchronous contact return');
+      impulseReadback=buffer(config.goinPile.count*32*couplingSteps,U.COPY_DST|U.MAP_READ,'MLS asynchronous chronological contact return');
       resources.push(bodyBuffer,impulseBuffer);
       const response=await fetch(new URL('./mls-goin-contact.wgsl',import.meta.url));
       if(!response.ok)throw Error('MLS goin contact shader unavailable');
@@ -106,9 +107,8 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         clock.observe(nowMs,paused);
         if(pending||paused)return false;
-        // A coupled transaction ends before the next substep can read obsolete body state.
-        // All elapsed time remains in the clock; asynchronous completion pumps the backlog.
-        const startTime=time,steps=clock.advance(nowMs,paused,pile?1:Infinity);if(!steps)return false;
+        // Coupling interval is explicit. Preserve every impulse slice and all clock debt.
+        const startTime=time,steps=clock.advance(nowMs,paused,pile?couplingSteps:Infinity);if(!steps)return false;
         const injections=[];
         for(let i=0;i<steps;i++){
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
@@ -118,25 +118,28 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         if(upload){const values=new Float32Array(upload.getMappedRange());let i=0;for(const births of injections)for(const b of births){
           values.set(b.position,i*20);values[i*20+3]=b.life;values.set(b.velocity,i*20+4);i++;
         }upload.unmap();}
-        const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0;
-        if(pile){device.queue.writeBuffer(bodyBuffer,0,pile.pack());encoder.clearBuffer(impulseBuffer);}
+        const bodyUpload=pile?device.createBuffer({size:steps*config.goinPile.count*112,usage:U.COPY_SRC,mappedAtCreation:true}):null;
+        if(bodyUpload){const values=new Float32Array(bodyUpload.getMappedRange());for(let i=0;i<steps;i++)values.set(pile.pack(i*config.dt),i*config.goinPile.count*28);bodyUpload.unmap();}
+        const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0,bodyStep=0;
         for(const births of injections){
+          if(pile){encoder.copyBufferToBuffer(bodyUpload,bodyStep*config.goinPile.count*112,bodyBuffer,0,config.goinPile.count*112);encoder.clearBuffer(impulseBuffer);}
           for(const b of births){encoder.copyBufferToBuffer(upload,source,particles,b.slot*80,80);source+=80;}
           encoder.clearBuffer(cells);
           dispatch(encoder,kernels[0],config.capacity);dispatch(encoder,kernels[1],config.capacity);
           dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
           if(contact)dispatch(encoder,contact,config.capacity);
+          if(pile)encoder.copyBufferToBuffer(impulseBuffer,0,impulseReadback,bodyStep*config.goinPile.count*32,config.goinPile.count*32);
+          bodyStep++;
         }
-        if(pile)encoder.copyBufferToBuffer(impulseBuffer,0,impulseReadback,0,config.goinPile.count*32);
         device.queue.submit([encoder.finish()]);pending=true;
         inFlight=(async()=>{
           if(pile){
             await impulseReadback.mapAsync(GPUMapMode.READ);
             const result=new Int32Array(impulseReadback.getMappedRange()).slice();impulseReadback.unmap();
-            if(!disposed)pile.complete(result);
+            if(!disposed)for(let i=0;i<steps;i++)pile.complete(result.subarray(i*config.goinPile.count*8,(i+1)*config.goinPile.count*8));
           }else await device.queue.onSubmittedWorkDone();
         })().catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{
-          pending=false;upload?.destroy();
+          pending=false;upload?.destroy();bodyUpload?.destroy();
           if(pile&&!paused&&!disposed&&!failure)api.advance(now(),Date.now());
         });
         return true;

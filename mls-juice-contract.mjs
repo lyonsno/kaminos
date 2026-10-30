@@ -27,8 +27,9 @@ export function mlsConfig(setup={}) {
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
   const min=[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
-  const goinPile=setup.goinPile==null?null:{count:24,mass:.25,radius:.22,thickness:.1,particleMass:.001,...setup.goinPile};
+  const goinPile=setup.goinPile==null?null:{count:24,mass:.25,radius:.22,thickness:.1,particleMass:.001,couplingSteps:1,...setup.goinPile};
   if(goinPile&&(!Number.isSafeInteger(goinPile.count)||goinPile.count<1||['mass','radius','thickness','particleMass'].some(k=>!Number.isFinite(goinPile[k])||goinPile[k]<=0)))throw Error('Invalid goin pile');
+  if(goinPile&&(!Number.isSafeInteger(goinPile.couplingSteps)||goinPile.couplingSteps<1))throw Error('Invalid goin coupling interval');
   return {capacity,grid,dimensions,gridCells,cell,min,
     goinPile,
     bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,

@@ -20,14 +20,16 @@ export function createMlsGoinPile(config){
   }
   const alive=()=>{if(disposed)throw Error('Goin pile disposed');};
   function read(){return {route:'mls-particle-contact/cannon-es-0.20.0',steps,timeSeconds:steps*config.dt,
-    particleMass:p.particleMass,bodyMass:p.mass,contacts:totalContacts,impulse:[...totalImpulse],
+    particleMass:p.particleMass,bodyMass:p.mass,couplingSteps:p.couplingSteps,feedbackIntervalSeconds:p.couplingSteps*config.dt,contacts:totalContacts,impulse:[...totalImpulse],
     bodies:bodies.map((b,i)=>({id:`goin-${i}`,position:b.position.toArray(),quaternion:b.quaternion.toArray(),velocity:b.velocity.toArray(),
       angularVelocity:b.angularVelocity.toArray(),radius:p.radius,thickness:p.thickness,mass:b.mass,sleeping:b.sleepState===CANNON.Body.SLEEPING}))};}
   return {read,
-    pack(){alive();const data=new Float32Array(bodies.length*GOIN_BODY_FLOATS);
+    pack(offsetSeconds=0){alive();const data=new Float32Array(bodies.length*GOIN_BODY_FLOATS);
       for(const [i,b]of bodies.entries()){
         b.updateInertiaWorld(true);
-        const o=i*GOIN_BODY_FLOATS;data.set([...b.position.toArray(),p.radius,...b.quaternion.toArray(),
+        const predictedPosition=b.position.toArray().map((v,axis)=>v+b.velocity.toArray()[axis]*offsetSeconds);
+        const predictedRotation=b.quaternion.clone();predictedRotation.integrate(b.angularVelocity,offsetSeconds,b.angularFactor,predictedRotation);predictedRotation.normalize();
+        const o=i*GOIN_BODY_FLOATS;data.set([...predictedPosition,p.radius,...predictedRotation.toArray(),
           ...b.velocity.toArray(),p.thickness/2,...b.angularVelocity.toArray(),b.invMass],o);
         const m=b.invInertiaWorld.elements;
         for(let row=0;row<3;row++)data.set([m[row*3],m[row*3+1],m[row*3+2],0],o+16+row*4);
