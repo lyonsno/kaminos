@@ -85,7 +85,11 @@ fn backPoint(pixel:vec2i,center:f32)->vec3f{
   let normal=normalize(mix(macroN,detailN,.35));
   let normalVariance=clamp(1.-dot(detailN,macroN),0.,1.);
   let rawExitDepth=textureLoad(backTex,p,0).x;
-  let slabExitDepth=max(rawExitDepth,depth+amount*.35);
+  let visibleExitDepth=min(rawExitDepth,sceneD);
+  let enclosingSpan=max(visibleExitDepth-depth,0.);
+  let spanSupportRatio=amount/max(enclosingSpan,1e-4);
+  let slabSupported=rawExitDepth>depth&&spanSupportRatio>=.25;
+  let slabExitDepth=select(depth+amount*.85,max(rawExitDepth,depth+amount*.35),slabSupported);
   let submergedOpaque=sceneD<slabExitDepth;
   let waterExitDepth=min(slabExitDepth,sceneD);
   let geometricPathLength=max(waterExitDepth-depth,0.);
@@ -95,8 +99,8 @@ fn backPoint(pixel:vec2i,center:f32)->vec3f{
   let metricScale=1./max(abs(insideRay.z),.25);
   let metricGeometricPath=geometricPathLength*metricScale;
   let metricSceneBoundedPath=sceneBoundedPath*metricScale;
-  let opticalThicknessPath=min(amount*.85,metricSceneBoundedPath);
-  let absorptionPath=min(mix(opticalThicknessPath,mix(metricGeometricPath,max(metricGeometricPath,opticalThicknessPath),denseBodyConfidence),select(0.,1.,rawExitDepth>depth)),metricSceneBoundedPath);
+  let opticalThicknessPath=min(amount*.85*metricScale,metricSceneBoundedPath);
+  let absorptionPath=min(mix(opticalThicknessPath,mix(metricGeometricPath,max(metricGeometricPath,opticalThicknessPath),denseBodyConfidence),select(0.,1.,slabSupported)),metricSceneBoundedPath);
   let fresnel=.02037+(1.-.02037)*pow(1.-max(0.,dot(macroN,view)),5.);
   let absorption=exp(-vec3f(1.10,0.42,0.18)*absorptionPath);
   let transmissionMinContribution=clamp(camera.optics.x,0.,1.);
@@ -117,14 +121,15 @@ fn backPoint(pixel:vec2i,center:f32)->vec3f{
       var exitN=normalize(cross(edx,edy));if(exitN.z>0.){exitN=-exitN;}
       let rawOutgoing=refract(insideRay,-exitN,1.333);
       let outgoingRay=select(insideRay,rawOutgoing,length(rawOutgoing)>.001);
-      let postExitDepthSpan=clamp(sceneD-waterExitDepth,0.,max(geometricPathLength,amount*.6));
+      let validSceneDepth=sceneD>waterExitDepth&&sceneD<camera.params.w;
+      let postExitDepthSpan=select(max(geometricPathLength,amount*.6),sceneD-waterExitDepth,validSceneDepth);
       let postExitPosView=exitPosView+outgoingRay*(postExitDepthSpan/max(abs(outgoingRay.z),.25));
       let postClip=camera.projection*vec4f(postExitPosView,1.);
       let postW=max(abs(postClip.w),1e-4);
       targetUv=clamp(vec2f(postClip.x/postW*.5+.5,.5-postClip.y/postW*.5),vec2f(.001),vec2f(.999));
     }
     let twoInterfaceDelta=clamp(targetUv*vec2f(colorSize)-vec2f(pixel),vec2f(-28.),vec2f(28.));
-    let baseRefractPixel=vec2f(pixel)+mix(entryOffset,twoInterfaceDelta,select(0.,1.,rawExitDepth>depth));
+    let baseRefractPixel=vec2f(pixel)+mix(entryOffset,twoInterfaceDelta,select(0.,1.,slabSupported||submergedOpaque));
     let coneRadius=clamp(1.+denseBodyConfidence*normalVariance*16.,1.,5.5);
     let offsets=array<vec2f,5>(vec2f(0.,0.),vec2f(1.,0.),vec2f(-1.,0.),vec2f(0.,1.),vec2f(0.,-1.));
     var radSum=vec3f(0.);var wSum=0.;

@@ -503,7 +503,10 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
     const insideRay = refractVec3(viewDir, transportN, 1.0 / 1.333);
     const metricScale = 1.0 / Math.max(Math.abs(insideRay[2]), 0.25);
     const metricGeometricPath = geometricPathLength * metricScale;
-    const slabExitDepth = Math.max(rawExitDepth, depth + geometricPathLength * 0.35);
+    const visibleExitDepth = Math.min(rawExitDepth, sceneD);
+    const spanSupportRatio = geometricPathLength / Math.max(visibleExitDepth - depth, 1e-4);
+    const slabSupported = rawExitDepth > depth && spanSupportRatio >= 0.25;
+    const slabExitDepth = slabSupported ? Math.max(rawExitDepth, depth + geometricPathLength * 0.35) : depth + geometricPathLength * 0.85;
     const submergedOpaque = sceneD < slabExitDepth;
     const waterExitDepth = Math.min(slabExitDepth, sceneD);
     const colorSize = [320, 200];
@@ -539,13 +542,14 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
       .replace('backPoint(exitP+[0, 1],exitCenter)-backPoint(exitP-[0, 1],exitCenter)', '[0, 1, 0]')
       .replace('if(exitN.z>0.){exitN=-exitN;}', 'exitN = tiltedBackNormal;')
       .replace('refract(insideRay,-exitN,1.333)', 'refractVec3(insideRay, negVec(exitN), 1.333)')
-      .replace('toVec2(pixel)+mix(entryOffset,twoInterfaceDelta,select(0.,1.,rawExitDepth>depth))', 'addVec2(pixel, mixVec2(entryOffset, twoInterfaceDelta, rawExitDepth > depth ? 1 : 0))');
+      .replace('toVec2(pixel)+mix(entryOffset,twoInterfaceDelta,select(0.,1.,slabSupported||submergedOpaque))', 'addVec2(pixel, mixVec2(entryOffset, twoInterfaceDelta, (slabSupported || submergedOpaque) ? 1 : 0))');
 
     return vm.runInNewContext(jsRefract + '\n({ baseRefractPixel, pixel, targetUv, exitUv });', {
       uv,
       depth,
       sceneD,
       waterExitDepth,
+      slabSupported,
       submergedOpaque,
       geometricPathLength,
       metricGeometricPath,
@@ -559,6 +563,7 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
       colorSize,
       entryOffset: [0, 0],
       tiltedBackNormal,
+      camera: { params: { w: 1000.0 } },
       backTex: {},
       eye: () => entryEye,
       projectPoint,
@@ -643,6 +648,55 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
   assert.ok(
     Math.abs(submergedShift.baseRefractPixel[0] - expectedSubmergedHitX) < 1e-3,
     `BL-R2-1: submerged opaque plane must sample at projected inside-ray hit ${expectedSubmergedHitX} without hidden back-surface exit deflection (got ${submergedShift.baseRefractPixel[0]})`,
+  );
+
+  // BL-R3-1 regression: varying background depth (sceneD) while holding camera, slab, and incident direction fixed
+  // must match the analytic planar displacement within numerical tolerance rather than freezing at a thickness cap.
+  const expectedBackgroundDisplacements = [
+    { sceneD: 1.8, expectedX: -8.744488 },
+    { sceneD: 2.4, expectedX: -6.558366 },
+    { sceneD: 10.0, expectedX: -1.574008 },
+    { sceneD: 100.0, expectedX: -0.157401 },
+  ];
+  for (const { sceneD, expectedX } of expectedBackgroundDisplacements) {
+    const res = evalParallelInterfaceShift({
+      viewDir: [0.6, 0, -0.8],
+      depth: 1.0,
+      geometricPathLength: 0.4,
+      sceneD,
+    });
+    const actualX = res.baseRefractPixel[0] - res.pixel[0];
+    assert.ok(
+      Math.abs(actualX - expectedX) < 1e-3,
+      `BL-R3-1: background depth ${sceneD} must produce projected displacement ${expectedX} px (got ${actualX} px)`,
+    );
+  }
+
+  // BL-R3-2 regression: separated water bodies with an unsupported air gap between nearest front and farthest back
+  // must fall back to accumulated water thickness rather than absorbing through the empty air gap.
+  const touchingChords = evalMlsSlabPath({
+    depth: 1.0,
+    sceneD: 100.0,
+    rawExitDepth: 1.2,
+    amount: 0.2,
+    denseBodyConfidence: 1.0,
+    cutoff: 0.25,
+  });
+  const separatedChords = evalMlsSlabPath({
+    depth: 1.0,
+    sceneD: 100.0,
+    rawExitDepth: 10.0,
+    amount: 0.2,
+    denseBodyConfidence: 1.0,
+    cutoff: 0.25,
+  });
+  assert.ok(
+    separatedChords.absorptionPath <= touchingChords.absorptionPath + 1e-6,
+    `BL-R3-2: separated chords with an 8.8-unit air gap and amount=0.2 must not absorb through the air gap (touching=${touchingChords.absorptionPath}, separated=${separatedChords.absorptionPath})`,
+  );
+  assert.ok(
+    separatedChords.transmissionContribution >= 0.25,
+    `BL-R3-2: separated chords with amount=0.2 must remain above the 0.25 transmission cutoff (got ${separatedChords.transmissionContribution})`,
   );
 }
 
