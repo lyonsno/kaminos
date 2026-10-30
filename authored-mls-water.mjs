@@ -12,7 +12,7 @@ export function authoredMlsInlets(records,epochMs=Date.now(),generation=1){
   const pose=normalizeLocalLiquidEmitterPose(r.transform),s=normalizeLocalLiquidEmitter(r.localLiquidEmitter,pose);
   if(s.mode==='finite_drop')continue;
   emitters.push({id:r.id,active:s.rate>0,origin_world:pose.position,aim_world:new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).toArray(),
-   radius:s.baseRadius*pose.scale[0],strength:s.strength,source_flux_particles_per_second:s.rate,lifetime_seconds:6});
+   radius:s.baseRadius*pose.scale[0],strength:s.strength,source_flux_particles_per_second:s.rate,lifetime_seconds:s.lifetimeSeconds??1e30});
  }
  return validateMlsPacket({packet_id:`authored-mls-${generation}`,route_identity:MLS_ROUTE,authority:{simulation_safe:true},timestamp_ms:epochMs,emitters});
 }
@@ -34,7 +34,7 @@ export function authoredMlsSetup(records,options={}){
  const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
  const originWorld=bounds.min.map(v=>v-2*cell);
  const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
-  boundaryWalls:sampling.container!==null,obstacle:null};
+  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);

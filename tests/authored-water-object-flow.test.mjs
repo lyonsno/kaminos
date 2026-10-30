@@ -70,3 +70,13 @@ const savedPreview=()=>JSON.parse(JSON.stringify(serializer.serializeSceneObject
 row.object.traverse(o=>{if(o.material)o.material.opacity=.55;});const beforeDraft=savedPreview();
 row.object.children.find(o=>o.userData.kaminosWaterSourceGuide).material.opacity=.7;
 assert.deepEqual(savedPreview(),beforeDraft,'Transient preview replacement must not change the serialized authored scene');
+
+// Add already selects during admission. Its async history completion must not
+// steal a selection made meanwhile (including opening simulation properties).
+let finishInsertion;
+c.recordSceneObjectInsertion=()=>new Promise(resolve=>finishInsertion=resolve);
+c.registerSceneObject=(_object,record)=>{c.activeSceneObjectId=record.id;c.activeSceneFieldId=null;};
+c.setActiveSceneObject=id=>{c.activeSceneObjectId=id;c.activeSceneFieldId=null;};
+const pendingAdd=c.addAuthoredWaterDrop({mode:'continuous'});
+c.activeSceneObjectId=null;c.activeSceneFieldId='water-field';finishInsertion();await pendingAdd;
+assert.equal(c.activeSceneFieldId,'water-field','Completing Add cannot replace the newer simulation selection');
