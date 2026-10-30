@@ -30,3 +30,18 @@ test('successful generation hands the remaining physical strip to completion ins
  await view.setVisible(true);view.render({status:'running',request:{id:'one',prompt:'full strip'}});await tick();await tick();view.render({status:'complete'});await tick();await tick();
  assert.equal(finished,1);assert.deepEqual(prepared,['full strip']);await view.dispose();
 });
+for(const duringPreparation of [false,true])test(`real saving/complete sequence finishes the admitted strip (pending preparation=${duringPreparation})`,async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let release,active=false,finished=0;
+ const gate=new Promise(r=>release=r);
+ const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'draft'})},slot:element(),createRenderer:async()=>({prepare:()=>gate,setActive:async x=>{active=x;},finish(){if(active)finished++;},dispose(){},debugState:()=>({})})});
+ await view.setVisible(true);view.render({status:'running',request:{id:'one',prompt:'full strip'}});await tick();
+ if(!duringPreparation){release();await tick();await tick();}
+ view.render({status:'saving',request:{id:'one',prompt:'full strip'}});await tick();view.render({status:'complete',request:{id:'one',prompt:'full strip'}});
+ release();await tick();await tick();assert.equal(finished,1);await view.dispose();
+});
+test('a recipe refresh waits for physical completion and then replaces the kiln',async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let created=0,release;
+ const drained=new Promise(r=>release=r);
+ const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'draft'})},slot:element(),createRenderer:async()=>{created++;return {prepare:async()=>{},setActive:async()=>{},finish:()=>drained,dispose(){},debugState:()=>({})};}});
+ await view.setVisible(true);view.render({status:'running',request:{id:'one',prompt:'full strip'}});await tick();await tick();await view.refresh();view.render({status:'complete'});await tick();await tick();assert.equal(created,1);release();await tick();await tick();assert.equal(created,2);await view.dispose();
+});
