@@ -105,13 +105,14 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
   let opticalThickness = thickness * 0.22 * (0.55 + 0.45 * smoothstep(0.0, 3.6, input.speed));
   let depthWeight = edge * surfaceWeight;
+  let smoothCap = (1.0 - r2) * (1.0 - r2);
   let supportSafeViewDepth = input.viewDepth;
-  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius * 0.35);
-  let smoothFrontViewDepth = max(0.001, input.viewDepth - cap * input.radius * 0.35);
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth - (0.65 + 0.35 * smoothCap) * input.radius * 0.22);
+  let smoothFrontViewDepth = frontSurfaceViewDepth;
   var output: AccumFragmentOutput;
   output.accumulation = vec4<f32>(opticalThickness, input.speed * opticalThickness, depthWeight, smoothFrontViewDepth * depthWeight);
   output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
-  output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius * 0.35);
+  output.backDepth = vec4<f32>(input.viewDepth + (0.65 + 0.35 * smoothCap) * input.radius * 0.22);
   return output;
 }
 
@@ -160,16 +161,16 @@ fn readBackDepth(pixel: vec2<i32>) -> f32 {
     return centerDepth;
   }
   let radius = max(params.viewport.z, 0.016);
-  var depthSum = centerDepth * 2.5;
-  var weightSum = 2.5;
+  var depthSum = centerDepth * 2.0;
+  var weightSum = 2.0;
   for (var y = -2; y <= 2; y = y + 1) {
     for (var x = -2; x <= 2; x = x + 1) {
       if (x == 0 && y == 0) { continue; }
-      let sampleDepth = readRawBackDepth(pixel + vec2<i32>(x, y));
+      let sampleDepth = readRawBackDepth(pixel + vec2<i32>(x * 3, y * 3));
       if (sampleDepth <= 0.001) { continue; }
-      let depthDelta = (sampleDepth - centerDepth) / (radius * 2.6);
-      if (abs(depthDelta) > 3.0) { continue; }
-      let weight = exp(-f32(x * x + y * y) / 5.0 - depthDelta * depthDelta);
+      let depthDelta = (sampleDepth - centerDepth) / (radius * 3.0);
+      if (abs(depthDelta) > 2.5) { continue; }
+      let weight = exp(-f32(x * x + y * y) / 4.5 - depthDelta * depthDelta);
       depthSum = depthSum + sampleDepth * weight;
       weightSum = weightSum + weight;
     }
@@ -201,25 +202,26 @@ fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
   return depthSum / max(weightSum, 0.0001);
 }
 
-// Bilateral-filter the min-blended front surface (opticalSlabFrontDepth.x) so
-// front-layer particles fuse into a smooth glass sheet without mixing in deep
-// interior lattice layers.
+// Strided screen-space bilateral filter on the min-blended front surface
+// (opticalSlabFrontDepth.x) so adjacent 25-35px particle billboards fuse into
+// a continuous glassy sheet without mixing in deep interior lattice layers.
 fn readFrontDepth(pixel: vec2<i32>) -> f32 {
   let centerDepth = readRawFrontDepth(pixel);
   if (centerDepth >= 29.5) {
     return centerDepth;
   }
   let radius = max(params.viewport.z, 0.016);
-  var depthSum = centerDepth * 2.5;
-  var weightSum = 2.5;
+  var depthSum = centerDepth * 2.0;
+  var weightSum = 2.0;
   for (var y = -3; y <= 3; y = y + 1) {
     for (var x = -3; x <= 3; x = x + 1) {
       if (x == 0 && y == 0) { continue; }
-      let sampleDepth = readRawFrontDepth(pixel + vec2<i32>(x, y));
+      let samplePixel = pixel + vec2<i32>(x * 4, y * 4);
+      let sampleDepth = readRawFrontDepth(samplePixel);
       if (sampleDepth >= 29.5) { continue; }
-      let depthDelta = (sampleDepth - centerDepth) / (radius * 2.6);
-      if (abs(depthDelta) > 3.0) { continue; }
-      let weight = exp(-f32(x * x + y * y) / 6.5 - depthDelta * depthDelta);
+      let depthDelta = (sampleDepth - centerDepth) / (radius * 3.2);
+      if (abs(depthDelta) > 2.5) { continue; }
+      let weight = exp(-f32(x * x + y * y) / 5.5 - depthDelta * depthDelta);
       depthSum = depthSum + sampleDepth * weight;
       weightSum = weightSum + weight;
     }
@@ -572,11 +574,11 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
 }
 
 fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
-  return liquidWorldNormalAtRadius(pixel, 6, false);
+  return liquidWorldNormalAtRadius(pixel, 8, false);
 }
 
 fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
-  return liquidWorldNormalAtRadius(pixel, 2, false);
+  return liquidWorldNormalAtRadius(pixel, 4, false);
 }
 
 fn reconstructEntryNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
@@ -599,8 +601,8 @@ fn estimateInterfaceNormal(
   centerAccum: vec4<f32>,
   coverageContinuity: f32,
 ) -> InterfaceNormalEstimate {
-  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 1);
-  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 3);
+  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 4);
+  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 8);
   let variance = sqrt(max(1.0 - dot(detailNormal, macroNormal), 0.0));
   let denseBodyConfidence = smoothstep(0.68, 0.94, coverageContinuity)
     * smoothstep(2.35, 4.60, centerAccum.x)
