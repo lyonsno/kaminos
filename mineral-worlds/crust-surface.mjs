@@ -1,3 +1,4 @@
+import {facePoint,facePatch} from './crust-faces.mjs';
 import {Group,Mesh,InstancedMesh,BoxGeometry,PlaneGeometry,BufferGeometry,Float32BufferAttribute,MeshStandardNodeMaterial,MeshBasicNodeMaterial,Matrix4,Quaternion,Vector3,Color,DoubleSide} from '../lib/three.webgpu.js';
 import {grainDimensions,grainCenter,trackGeometry,trackPoint} from './crust.mjs';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -25,9 +26,16 @@ export function createCrustSurface(state){
   for(const p of s.pools){
    const g=trackGeometry(s,p);if(p.water<=0||g.closed)continue;
    const fraction=clamp(p.water/g.capacity,0,1);
+   if(p.kind==='face'&&typeof p.face==='number'){
+    const grain=s.grains[p.grain],patch=facePatch(s,p),[u,v]=patch.lo,[U,V]=patch.hi,points=[[u,v],[U,v],[U,V],[u,V]].map(uv=>facePoint(grain,p.face,uv,.001));
+    quad(water,...points);if(showInterfaces)for(let i=0;i<4;i++){const a=points[i],b=points[(i+1)%4];ribbon(lines,a,b,.0015);}continue;
+   }
    if(p.kind==='face'){
     const grain=s.grains[p.grain],center=grainCenter(grain),[w,,d]=grainDimensions(grain),r=Math.sqrt(fraction),co=Math.cos(grain.angle),sn=Math.sin(grain.angle),point=(x,z)=>[center[0]+co*x-sn*z,grain.faces[4]+.003,center[2]+sn*x+co*z];
     quad(water,point(-w*r/2,-d*r/2),point(w*r/2,-d*r/2),point(w*r/2,d*r/2),point(-w*r/2,d*r/2));continue;
+   }
+   if(p.kind==='junction'&&s.setup==='neighbors'){
+    const w=.6*Math.sqrt(fraction);quad(water,[-w,.002,-w],[w,.002,-w],[w,.002,w],[-w,.002,w]);continue;
    }
    if(p.kind==='junction'){
     const point=g.point,r=Math.sqrt(g.area/Math.PI)*Math.sqrt(fraction),steps=20;
