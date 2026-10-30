@@ -28,3 +28,35 @@ collision, actuator stroke clearance, closed-loop constraint solution or a
 successful generated-shell pipeline. Analytical geometry is constructed from
 user choices, with one incoming rigid link per non-anchor joint and explicit
 parent identities; no model inference is needed for a new arrangement.
+
+## Constructed bodies and appearance return
+
+The workshop now derives rigid bodies from that recipe: bored link plates,
+anchor blocks, axle pins, hollow barrels, and sliding rods. Incident links use
+distinct depth layers around their shared joint axis; unrelated joints reuse
+layers. Pins span the layers they connect. These are construction rules for the
+planar forest, not fixture-specific arm roles. Link plate bores and axle radii
+are derived together, including short links.
+
+Piston barrel and rod lengths are fixed during playback. An adaptive distance
+enclosure over the authored cycle chooses their lengths, including interior
+extrema. A warning identifies travel that would push the rod through the rear
+of its barrel. This is a visible limitation of a single-stage telescope; the
+construction does not solve collisions or manufacture a multistage cylinder.
+
+**Export body geometry** writes `mechanism.bodies.json`: the recipe plus identified
+body-local Three object geometry. **Replace body geometry** accepts that package
+or a subset of its bodies. The same operations are `exportBodies` and
+`importBodies(packet)`. Import participates in native Undo/Redo. Body IDs are
+recipe node/piston indices scoped to the open workshop. A geometry key checks
+construction dimensions, and a returned root must retain the exported local
+frame. A malformed or mismatched package leaves existing geometry intact.
+Build edits retire replacements whose dimensions changed; pose edits retain
+compatible bodies. This first port is JSON geometry, not a GLB/TRELLIS importer.
+
+Save mechanism retains the authored recipe; retain the body package separately
+for returned geometry and import it after opening that recipe. Closing/reopening
+only a recipe reconstructs its analytical bodies. The round-trip test establishes
+that geometry can return to authored motion; it does not establish generated
+shape correspondence. The next generation stage can consume these local bodies
+and their construction parameters without bespoke carrier scripting.
