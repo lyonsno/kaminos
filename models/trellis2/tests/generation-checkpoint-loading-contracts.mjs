@@ -21,7 +21,7 @@ test('checkpoint loading does not require or fetch a package image',async()=>{
   assert.equal(typeof inputs.validateGenerationCheckpoints,'function');
   const manifest=checkpointOnly(),r=recorder();
   const plan=inputs.validateGenerationCheckpoints(manifest);
-  assert.equal(plan.tensorCount,inputs.validateGenerationInputs(m).tensorCount-1);
+  assert.equal(plan.tensorCount,inputs.validateGenerationInputs(m).tensorCount-2);
   assert.ok(!plan.tensorKeys.includes('image.pixels'));
   const loaded=await inputs.loadGenerationCheckpoints(manifest,r.fetch);
   assert.ok(!Object.hasOwn(loaded,'pixelValues'));
@@ -37,7 +37,7 @@ test('checkpoint loading does not require or fetch a package image',async()=>{
 test('caller pixels are returned unchanged and package pixels cannot shadow them',async()=>{
   const pixels=new Float32Array(512*512*3);pixels[0]=1.25;
   for(const manifest of [m,checkpointOnly()]){
-    const r=recorder(),loaded=await inputs.loadGenerationInputs(manifest,r.fetch,{pixelValues:pixels});
+    const r=recorder(),loaded=await inputs.loadGenerationInputs(manifest,r.fetch,{pixelValues:pixels,highResolutionPixelValues:new Float32Array(1024*1024*3)});
     assert.ok(loaded.pixelValues===pixels,'selected caller pixel array must not be replaced');
     assert.ok(!r.fetched.includes('image.pixels'));
     assert.deepEqual(r.fetched,Object.values(m.dino.prefix));
@@ -88,6 +88,23 @@ test('downstream checkpoints remain stage/block/parameter loaded',async()=>{
 test('legacy input loading still requires and fetches its package image',async()=>{
   const r=recorder(),loaded=await inputs.loadGenerationInputs(m,r.fetch);
   assert.deepEqual(loaded.pixelValues,{checkpointKey:'image.pixels'});
-  assert.deepEqual(r.fetched,[...Object.values(m.dino.prefix),'image.pixels']);
+  assert.deepEqual(r.fetched,[...Object.values(m.dino.prefix),'image.pixels','image.high-pixels']);
   await assert.rejects(inputs.loadGenerationInputs(checkpointOnly(),r.fetch),/complete identified tensor/);
+});
+
+test('legacy checkpoint pack cannot silently run cascade from only512 pixels',async()=>{
+  const legacy=structuredClone(m);delete legacy.image.highResolution;let calls=0;
+  await assert.rejects(inputs.loadGenerationInputs(legacy,async()=>{calls++;}),/lacks 1024 pixels/);
+  assert.equal(calls,0);
+});
+
+test('missing, partial, nonfinite high image refuses before any fetch;512 does not need it',async()=>{
+  const low=new Float32Array(512*512*3),nonfinite=new Float32Array(1024*1024*3);nonfinite[4]=NaN;
+  for(const high of [undefined,new Float32Array(3),nonfinite]){
+    let calls=0;await assert.rejects(inputs.loadGenerationInputs(m,async()=>{calls++;},{pixelValues:low,highResolutionPixelValues:high}),/1024x1024/);assert.equal(calls,0);
+  }
+  const preview=structuredClone(m);preview.pipelineType='512';preview.meshResolution=512;delete preview.models.highResolutionShape;
+  for(const role of ['shapeDecoder','textureDecoder'])preview.models[role].config.resolution=32;
+  const r=recorder(),loaded=await inputs.loadGenerationInputs(preview,r.fetch,{pixelValues:low});
+  assert.equal(loaded.highResolutionPixelValues,undefined);assert.ok(!r.fetched.some(k=>k.startsWith('image.')));
 });

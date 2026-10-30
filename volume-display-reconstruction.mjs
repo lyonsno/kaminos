@@ -14,7 +14,7 @@ export function resolveDisplayReconstruction(controls = {}) {
   if(!['cell-centred','aligned'].includes(alignment))throw Error('Unknown display alignment');
   const emissionInterpolation=controls.emissionInterpolation??'positive';
   const smokeInterpolation=controls.smokeInterpolation??'positive';
-  if(![emissionInterpolation,smokeInterpolation].every(v=>['positive','interpolating'].includes(v)))
+  if(![emissionInterpolation,smokeInterpolation].every(v=>['positive','interpolating','monotone'].includes(v)))
     throw Error('Unknown display interpolation');
   return { mode, value, scale, emission, smoke, alignment, emissionInterpolation, smokeInterpolation };
 }
@@ -53,8 +53,21 @@ export function sampleDisplayLine(samples,coefficients,q,kind,amount) {
   const cell=Math.floor(q), f=q-cell, weights=positiveCubicWeights(f);
   const at=(values,i)=>values[Math.max(0,Math.min(values.length-1,i))];
   const linear=at(samples,cell)*(1-f)+at(samples,cell+1)*f;
-  const cubic=weights.reduce((sum,w,i)=>sum+w*at(kind==='interpolating'?coefficients:samples,cell+i-1),0);
+  const cubic=kind==='monotone'
+    ? monotoneCubicSample(...[cell-1,cell,cell+1,cell+2].map(i=>at(samples,i)),f)
+    : weights.reduce((sum,w,i)=>sum+w*at(kind==='interpolating'?coefficients:samples,cell+i-1),0);
   return linear+amount*(cubic-linear);
+}
+
+export function monotoneCubicSample(before,left,right,after,f) {
+  const slope=(a,b)=>{
+    if(a===0||b===0||Math.sign(a)!==Math.sign(b))return 0;
+    const small=Math.min(Math.abs(a),Math.abs(b)),large=Math.max(Math.abs(a),Math.abs(b));
+    return Math.sign(a)*small*(2/(1+small/large));
+  };
+  const delta=right-left, m0=slope(left-before,delta), m1=slope(delta,after-right);
+  // Local PCHIP-style derivatives. Repeating endpoints makes boundary slopes zero.
+  return left+f*(m0+f*(3*delta-2*m0-m1+f*(m0+m1-2*delta)));
 }
 
 export function displayPreparationTiming(times) {
@@ -77,23 +90,41 @@ fn displayWeights(f: f32, amount: f32) -> vec4<f32> {
   let cubic=vec4<f32>((1.0-f)*(1.0-f)*(1.0-f),3.0*f3-6.0*f2+4.0,-3.0*f3+3.0*f2+3.0*f+1.0,f3)/6.0;
   return mix(vec4<f32>(0.0,1.0-f,f,0.0),cubic,amount);
 }
+fn displayMonotoneSlope(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
+  let same=((a>vec4<f32>(0.0)) & (b>vec4<f32>(0.0))) | ((a<vec4<f32>(0.0)) & (b<vec4<f32>(0.0)));
+  let small=min(abs(a),abs(b));
+  let large=select(vec4<f32>(1.0),max(abs(a),abs(b)),same);
+  return select(vec4<f32>(0.0),sign(a)*small*(2.0/(1.0+small/large)),same);
+}
+fn displayMonotoneCubic(before: vec4<f32>, left: vec4<f32>, right: vec4<f32>, after: vec4<f32>, f: f32) -> vec4<f32> {
+  let delta=right-left;
+  let m0=displayMonotoneSlope(left-before,delta);
+  let m1=displayMonotoneSlope(delta,after-right);
+  return left+f*(m0+f*(3.0*delta-2.0*m0-m1+f*(m0+m1-2.0*delta)));
+}
 fn displayAxisSample(c: vec3<u32>, dst: vec3<u32>, axis: u32, amounts: vec2<f32>, aligned: bool, scale: f32, kernels: vec2<f32>) -> vec4<f32> {
   let src=textureDimensions(displayFilterInput);
   let q=select((f32(c[axis])+0.5)*f32(src[axis])/f32(dst[axis])-0.5,f32(c[axis])/scale,aligned);
   let cell=i32(floor(q)); let f=fract(q);
   let cubicWeights=displayWeights(f,1.0);
   let linearWeights=displayWeights(f,0.0);
-  let interpolating=vec4<bool>(vec3<bool>(kernels.x>0.5 && amounts.x>0.0),kernels.y>0.5 && amounts.y>0.0);
+  let interpolating=vec4<bool>(vec3<bool>(kernels.x==1.0 && amounts.x>0.0),kernels.y==1.0 && amounts.y>0.0);
+  let monotone=vec4<bool>(vec3<bool>(kernels.x==2.0 && amounts.x>0.0),kernels.y==2.0 && amounts.y>0.0);
+  var samples: array<vec4<f32>,4>;
   var linear=vec4<f32>(0.0);var cubic=vec4<f32>(0.0);
   for(var i=0u;i<4u;i++) {
     var p=vec3<i32>(c); p[axis]=clamp(cell+i32(i)-1,0,i32(src[axis])-1);
     let raw=textureLoad(displayFilterInput,p,0);
+    if(any(monotone)){samples[i]=raw;}
     var coefficient=raw;
     if(any(interpolating)) {
       let index=u32(p.x)+src.x*(u32(p.y)+src.y*u32(p.z));
       coefficient=select(raw,displayCoefficients[index],interpolating);
     }
     linear+=raw*linearWeights[i];cubic+=coefficient*cubicWeights[i];
+  }
+  if(any(monotone)) {
+    cubic=select(cubic,displayMonotoneCubic(samples[0],samples[1],samples[2],samples[3],f),monotone);
   }
   return mix(linear,cubic,vec4<f32>(vec3<f32>(amounts.x),amounts.y));
 }
@@ -277,7 +308,8 @@ export function createDisplayReconstruction(device, module, uniformBuffer, getIn
       const nextKey=JSON.stringify([sourceKey,sourceIndex,config]);
       if(key===nextKey)return false;
       device.queue.writeBuffer(amounts,0,new Float32Array([config.emission,config.smoke,config.alignment==='aligned'?1:0,config.scale,
-        config.emissionInterpolation==='interpolating'?1:0,config.smokeInterpolation==='interpolating'?1:0,0,0]));
+        config.emissionInterpolation==='monotone'?2:config.emissionInterpolation==='interpolating'?1:0,
+        config.smokeInterpolation==='monotone'?2:config.smokeInterpolation==='interpolating'?1:0,0,0]));
       const pass=encoder.beginComputePass({label:'prepare flame display reconstruction',
         ...(timing?{timestampWrites:{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}}:{})});
       const dispatch=shape=>pass.dispatchWorkgroups(...shape.map(n=>Math.ceil(n/4)));
@@ -308,7 +340,7 @@ export function createDisplayReconstruction(device, module, uniformBuffer, getIn
     },
     invalidate(){key=null;},
     read(){return {...config,grid:shapes[3]??null,bytes:shapes.reduce((sum,s)=>sum+s.reduce((a,b)=>a*b,16),0)+coefficientBytes+diagonals.reduce((sum,b)=>sum+b.size,0),builds,
-      format:'rgba32float',filter:'separable-bspline',lighting:'unchanged-native-source',simulationWrites:false};},
+      format:'rgba32float',filter:'separable-cubic',lighting:'unchanged-native-source',simulationWrites:false};},
     destroy(){for(const t of textures)t.destroy();coefficientBuffer?.destroy();for(const b of diagonals)b.destroy();coefficientFallback.destroy();fallback.destroy();amounts.destroy();},
   };
 }

@@ -161,6 +161,22 @@ try:
         'pixelTensor':image_tensor,'preparation':{'reportPath':str(foreground/'report.json'),'reportSha256':sha(prep_bytes),
             'route':prep['effectiveRoute'],'modelCalls':prep['modelCalls'],'provenance':prep['preparation']},
         'handoff':'foreground-prepared normalized pixels; no retained conditioning or learned fields'}
+    if a.pipeline_type=='1024_cascade':
+        # Both resolutions come from the same full prepared RGB crop. Never
+        # upsample the 512 encoder input to stand in for the 1024 source input.
+        high_pixels=np.asarray(rgb.resize((1024,1024),Image.Resampling.LANCZOS),dtype=np.float32)/np.float32(255)
+        high_values=np.ascontiguousarray(((high_pixels-mean)/std)[None],dtype='<f4')
+        high_data=high_values.tobytes();high_digest=sha(high_data)
+        high_file=out/('prepared-pixels-'+high_digest+'.f32')
+        if high_file.exists() and file_sha(high_file)!=high_digest:raise ValueError('prepared high-resolution pixel identity collision')
+        if not high_file.exists():high_file.write_bytes(high_data)
+        high_key='image.highResolutionPixels'
+        m['tensors'][high_key]={'file':high_file.name,'shape':[1,1024,1024,3],'dtype':'float32',
+            'byteLength':len(high_data),'sha256':high_digest}
+        m['image']['highResolution']={'pixelTensor':high_key,'pixelValuesShape':[1,1024,1024,3],
+            'pixelValuesSha256':high_digest,'pixelValuesByteLength':len(high_data),
+            'resize':{'size':[1024,1024],'filter':'PIL.Image.LANCZOS','operationApplied':True},
+            'sourceFileSha256':image_row['sha256']}
     m['comparison']='explicit foreground-prepared source preview; changed input/settings, browser noise not matched MLX RNG'
     m['status']='succeeded';m['phase']=None
     manifest=json.dumps(m,indent=2)+'\n';atomic_text(manifest_path,manifest)

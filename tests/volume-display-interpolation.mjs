@@ -31,4 +31,28 @@ assert.equal(config.emissionInterpolation,'interpolating');
 assert.equal(config.smokeInterpolation,'positive');
 assert.throws(()=>display.resolveDisplayReconstruction({displayAlignment:'unknown'}),/alignment/);
 assert.throws(()=>display.resolveDisplayReconstruction({smokeInterpolation:'unknown'}),/interpolation/);
+
+// Local monotone Hermite uses repeated end samples, not spline coefficients.
+for(const samples of [[2],[1,4],[0,1,0],[0,0,1,0,0],[3,3,3,3],[0,2,1,0,5,0],[-4,-2,-3,1],
+  [0,1e-8,1000,1000,2]]) {
+  const sample=(q,amount=1)=>display.sampleDisplayLine(samples,null,q,'monotone',amount);
+  samples.forEach((v,i)=>close(sample(i),v));
+  close(sample(-.25),samples[0]);
+  close(sample(samples.length-.75),samples.at(-1));
+  for(let i=0;i<samples.length-1;i++) {
+    let previous=samples[i];
+    for(let step=1;step<=32;step++) {
+      const f=step/32, value=sample(i+f), a=samples[i],b=samples[i+1];
+      assert.ok(value>=Math.min(a,b)-1e-11 && value<=Math.max(a,b)+1e-11,'no new segment extremum');
+      assert.ok((value-previous)*Math.sign(b-a)>=-1e-11,'segment stays monotone');
+      close(sample(i+f,0),a+(b-a)*f);
+      close(sample(i+f,.5),.5*(value+a+(b-a)*f));
+      previous=value;
+    }
+  }
+}
+for(const f of [.125,.5,.875])close(display.sampleDisplayLine([0,1,2,3],null,1+f,'monotone',1),1+f);
+close(display.sampleDisplayLine([0,1,3,4],null,1.25,'monotone',1),1.4375);
+close(display.sampleDisplayLine([0,1,0],null,.5,'monotone',1),.5);
+assert.equal(display.resolveDisplayReconstruction({emissionInterpolation:'monotone',smokeInterpolation:'monotone'}).emissionInterpolation,'monotone');
 console.log('display interpolation knots, coefficients and controls: pass');

@@ -16464,8 +16464,9 @@ export function createKaminosVolumePrototype({
       displayAdmission = displayReconstruction.ensure([gridSize,gridHeight,gridSize],displayConfig);
     }
     uniforms.set([displayConfig.value,displayConfig.emission,displayConfig.smoke,displayConfig.scale], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET);
-    uniforms.set([displayConfig.alignment==='aligned'?1:0,displayConfig.emissionInterpolation==='interpolating'?1:0,
-      displayConfig.smokeInterpolation==='interpolating'?1:0,0], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
+    uniforms.set([displayConfig.alignment==='aligned'?1:0,
+      displayConfig.emissionInterpolation==='monotone'?2:displayConfig.emissionInterpolation==='interpolating'?1:0,
+      displayConfig.smokeInterpolation==='monotone'?2:displayConfig.smokeInterpolation==='interpolating'?1:0,0], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
     if (displayAdmission?.changed) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();

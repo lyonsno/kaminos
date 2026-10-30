@@ -1,12 +1,12 @@
 {
   "schema": "trellis2.alpha-preparation-source.v0",
   "source": {
-    "commit": "1201553c339008eb5e10ab6131acc11ab7cd0158",
+    "commit": "c0e66f782ac86f86212e049cf029478602b0e8d2",
     "moduleSha256": "2622afae8c5a9581ded6e6bbabcde31fb2a012f50ac6a154e3747c1af625d9cb",
     "pillow": "12.3.0",
     "numpy": "2.5.4",
     "modelCalls": 0,
-    "route": "preprocess_image_with_provenance(input-alpha) / PIL RGB LANCZOS512",
+    "route": "preprocess_image_with_provenance(input-alpha) / PIL RGB LANCZOS512 and LANCZOS1024 from the same crop",
     "pattern": "channel=(37*x+101*y+79*c+17*variant)%256; alpha-table and margins in generator"
   },
   "cases": [
@@ -48,7 +48,9 @@
       ],
       "croppedRgbSha256": "4f8f1ab96b444f26882a34cec06eccde953e3fb168d902f2ac41a09d1c2dd20d",
       "preparedRgbSha256": "bee9490f8e2ad4ebc90b84bd29a872ecb1d838b66fb7a78c729fed4c9f397dca",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "4358d6c7dd911ccadd91f6d71a02b26ecb54c8ed55eaa66949d9d1192187a134",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "even-center",
@@ -88,7 +90,9 @@
       ],
       "croppedRgbSha256": "448bc72f70230e316006fb4f63fa8444722811cc59d2f31efc300a329790d9ac",
       "preparedRgbSha256": "c3fd1e759b2164f76116624f345537d0738e07b771dbe81620a9ed59d7a1aeb8",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "23259a39a8f962356c40fd79c6f69d7871e768e042dc985a990c134e87ef0969",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "wide-padding",
@@ -128,7 +132,9 @@
       ],
       "croppedRgbSha256": "fde819a5c861d0648b02cf0b2b1013411dfb63e9541496f6345a3b35f2a731f5",
       "preparedRgbSha256": "9daf3b04667597c373a230284b0f1f1e76e7d6fe783bd44427f4a6a7b1241ea0",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "4b9980a8bf6c91ff0021cb3ef599a88e365ea4efdb277df88c1a2ab15dba2ec1",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "tall-padding",
@@ -168,7 +174,9 @@
       ],
       "croppedRgbSha256": "dea4834b7adffe0260fa9067e3bc36faa27ca858bed9c9508525d1a3aca69c91",
       "preparedRgbSha256": "d3e3f2e27f3b4d43b48a92d3d290c759814c8517c0146cbd895548485e5458c3",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "3fa9fe690e038c26326882e1389329d153f1b4327e073366a14f75b3d76513d4",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "threshold-and-rounding",
@@ -208,7 +216,9 @@
       ],
       "croppedRgbSha256": "3c97b2442d15bd011f1cc5e09169ec2cfad9c557dceb86caa75e84a0fce264c2",
       "preparedRgbSha256": "f7ff1ab57366e415d75c094eb8e5cb59f9fb427991cceec8ca9a8aec1ebeec72",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "f12a1a62e639c3b20a218668c97cf012b02efa62634a572f17fe4f72b44b46dd",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "rgb-downscale",
@@ -248,7 +258,9 @@
       ],
       "croppedRgbSha256": "6d2d250a7f068e0c31ab6825e006b104fe43b4fdb9f75cd606afc4eee287bf48",
       "preparedRgbSha256": "c47b11b8cef7b7a5f7ebe061cce6be4be250471a6ef94be99863e52998cef565",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "3b57b5624626b99da01d2728cdaacd27c3868a872bf1319797e021fddaf67a31",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "rgba-max-side-downscale",
@@ -288,7 +300,9 @@
       ],
       "croppedRgbSha256": "8a44d8bd45116fbf6b1ec6ff106b820c16467840eb1077f7582a5146a5011780",
       "preparedRgbSha256": "c242283009752a29e7d815eda235bc040996ec6c628e98d7d38ec4b4497b86a5",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "912d304fb38dc08234001fe2bed4fd2f5302b1ac7b71ba7f61a4b9abbd776066",
+      "highResolutionByteLength": 3145728
     },
     {
       "name": "thin-max-side-downscale",
@@ -328,7 +342,9 @@
       ],
       "croppedRgbSha256": "1937da5310f8923048d1dd62913bd740fa59d8009af330bac6021aa8afa795c6",
       "preparedRgbSha256": "97dfc37147a4000e54cd951c2a753b56c3796ed49606af8a31fa7ca02cee420a",
-      "preparedByteLength": 786432
+      "preparedByteLength": 786432,
+      "highResolutionRgbSha256": "f648cb48e4076f3702dd59cbe3528ed437a93832e9bfff8edcb2941751d7cfa2",
+      "highResolutionByteLength": 3145728
     }
   ]
 }

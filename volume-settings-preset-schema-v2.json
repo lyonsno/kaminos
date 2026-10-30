@@ -2014,7 +2014,7 @@
       "param": "volume_emission_interpolation",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["positive", "interpolating"],
+      "allowedValues": ["positive", "interpolating", "monotone"],
       "additiveDefault": "positive"
     },
     {
@@ -2022,7 +2022,7 @@
       "param": "volume_smoke_interpolation",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["positive", "interpolating"],
+      "allowedValues": ["positive", "interpolating", "monotone"],
       "additiveDefault": "positive"
     },
     {

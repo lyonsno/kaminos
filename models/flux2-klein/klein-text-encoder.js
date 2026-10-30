@@ -26,7 +26,9 @@ export function qwenRopeTable(L, theta, positions = null) {
 }
 
 export class KleinTextEncoder {
-  constructor(device, manifest) {
+  constructor(device, manifest, { attentionMode = 'materialized' } = {}) {
+    if (!['materialized', 'causal-tiled'].includes(attentionMode)) throw Error(`unsupported attentionMode: ${attentionMode}`);
+    this.attentionMode = attentionMode;
     this.device = device; this.manifest = manifest; this.cfg = manifest.config;
     this.D = this.cfg.hidden_size; this.QH = this.cfg.num_attention_heads; this.KVH = this.cfg.num_key_value_heads;
     this.F = this.cfg.intermediate_size; this.layers = manifest.layers; this.taps = manifest.taps;
@@ -82,11 +84,11 @@ export class KleinTextEncoder {
   }
 
   // Same splitting contract as KleinTransformer.gemm: column ranges under a cooperative budget.
-  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm' }) {
+  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm', causal = null }) {
     const st = this.sharedType ?? 'f32';
     const version = gemmVersionFor(this.gemmVersion, bType, st, K), tile = version === 3 ? 128 : 64;
     const pipe = version === 3 ? this.pipeline(`gemm3-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV3({ bType, epilogue, sType: st, group, tm: 8, tn: 8 }))
-      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
+      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}${causal ? `-causal-${causal}` : ''}`, gemmShaderV2({ bType, epilogue, sType: st, group, causal }))
       : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
@@ -152,6 +154,29 @@ export class KleinTextEncoder {
     this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta, positions));
   }
 
+  // Whole causal tiles are skipped within the GEMM dispatch. Keep physical
+  // score strides and head groups unchanged so this adds no query dispatches.
+  async attention(enc) {
+    const { act: a, L, QH, KVH } = this;
+    const group = (() => {
+      const budget = this.sched.budget(), rep = QH / KVH;
+      const cap = Math.min(QH, scoreHeads(L, rep));
+      if (!Number.isFinite(budget)) return cap;
+      const g = Math.floor(budget / (4 * L * L * HEAD));
+      return Math.max(rep, Math.min(cap, g - (g % rep)));
+    })();
+    for (let h0 = 0; h0 < QH; h0 += group) {
+      const hn = Math.min(group, QH - h0);
+      await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: (h0 / (QH / KVH)) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
+        bDiv: QH / KVH, c: a.scores, cOff: 0, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores', causal: this.attentionMode === 'causal-tiled' ? 'scores' : null });
+      const rows = hn * L;
+      this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
+      await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
+        bDiv: QH / KVH, c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'te.values', causal: this.attentionMode === 'causal-tiled' ? 'values' : null });
+      if (hn < QH) await this.sched.boundary(`te.attention[${h0}]`);
+    }
+  }
+
   // embeddings: Float32Array [L][D] (host-gathered rows); mask: Int32Array [L].
   // Writes [L][taps * D] into `out` (a GPU buffer), e.g. the transformer's prompt-embedding input.
   async encode(embeddings, mask, out, onLayer = null) {
@@ -161,13 +186,6 @@ export class KleinTextEncoder {
     dev.queue.writeBuffer(a.mask, 0, mask);
     const rms = this.pipeline('rmsnorm', rmsNormShader());
     const enc = this.sched;
-    const group = (() => {
-      const budget = this.sched.budget(), rep = QH / KVH;
-      const cap = Math.min(QH, scoreHeads(L, rep));
-      if (!Number.isFinite(budget)) return cap;
-      const g = Math.floor(budget / (4 * L * L * HEAD));
-      return Math.max(rep, Math.min(cap, g - (g % rep)));
-    })();
     for (let i = 0; i < this.layers; i++) {
       const lw = name => this.w(i, name);
       this.dispatch(enc, rms, [a.hidden, lw('input_layernorm').buf, a.norm, this.uniform([L, D, lw('input_layernorm').elemOff, eps])], L);
@@ -175,17 +193,7 @@ export class KleinTextEncoder {
       this.dispatch(enc, this.pipeline('qwen-qkv', qwenQkvPrepShader()), [a.proj, lw('q_norm').buf, a.rope, a.q, a.k, a.vt,
         this.uniform([L, QH, KVH, lw('q_norm').elemOff, lw('k_norm').elemOff, eps, 0, 0])], L, QH);
       await this.sched.boundary(`te.layer${i}.qkv`);
-      // Attention in head groups aligned to the grouped KV heads (one group when uncooperative).
-      for (let h0 = 0; h0 < QH; h0 += group) {
-        const hn = Math.min(group, QH - h0);
-        await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: (h0 / (QH / KVH)) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
-          bDiv: QH / KVH, c: a.scores, cOff: 0, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores' });
-        const rows = hn * L;
-        this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
-        await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
-          bDiv: QH / KVH, c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'te.values' });
-        if (hn < QH) await this.sched.boundary(`te.layer${i}.attention[${h0}]`);
-      }
+      await this.attention(enc);
       this.dispatch(enc, this.pipeline('h2r', headsToRowsShader()), [a.o, a.attn, this.uniform([L, QH, QH * HEAD, 0, 0, L, 0, 0])], L, QH);
       await this.linear(enc, a.attn, L, lw('o_proj'), a.hidden, 'add');
       this.dispatch(enc, rms, [a.hidden, lw('post_attention_layernorm').buf, a.norm, this.uniform([L, D, lw('post_attention_layernorm').elemOff, eps])], L);

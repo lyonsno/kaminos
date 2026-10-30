@@ -1,3 +1,4 @@
+import {fullscreenGraphContext} from './lib/addons/tsl/display/FullscreenGraphContext.js';
 import GIConvergence from './scene-gi-convergence.mjs';
 import {Node,RenderTarget,NodeMaterial,QuadMesh,Matrix4,Vector2,HalfFloatType,FloatType,RGBAFormat,RedFormat,NearestFilter,RendererUtils,TSL} from './lib/three.webgpu.js';
 const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context,reference,mix,positionWorld,normalView,positionViewDirection}=TSL;
@@ -116,6 +117,8 @@ export default class SceneGIHistory extends Node {
   }
   setup(builder) {
     this.ao.build(builder);this.gi.build(builder);
+    const graphContext=fullscreenGraphContext(this._graphContext,builder,this.version);
+    if(graphContext===this._graphContext)return this.outputAO;
     const visibility=TSL.property('float'),irradiance=TSL.property('vec3'),surface=TSL.property('vec4'),sampleCount=TSL.property('float'),variance=TSL.property('float');
     const resolve=Fn(()=>{
       const coords=uv();surface.assign(vec4(0));sampleCount.assign(0);variance.assign(0);
@@ -172,9 +175,10 @@ export default class SceneGIHistory extends Node {
       });
       return vec4(0);
     });
-    this.material.contextNode=context(builder.getSharedContext());
+    this.material.contextNode=context(graphContext.shared);
     this.material.colorNode=resolve();this.material.outputNode=outputStruct(visibility,vec4(irradiance,sampleCount),surface,variance);
     this.material.needsUpdate=true;
+    this._graphContext=graphContext;
     return this.outputAO;
   }
   dispose(){this.epoch++;this.convergence.dispose();super.dispose();for(const t of this.targets)t.dispose();this.material.dispose();}

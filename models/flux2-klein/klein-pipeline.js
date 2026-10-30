@@ -154,13 +154,14 @@ export class KleinPipeline {
   // about 2.6 GB at 512 instead of 4 GB, at the cost of those reloads. A re-roll swaps nothing.
   // Weights: the hosted copy by default; weightsBase and level choose another base or jank level
   // (see klein-weights.js), and explicit textEncoderUrl / transformerUrl / vaeUrl roots override both.
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, encoderUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all', cacheWeights = true } = {}) {
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, encoderUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all', cacheWeights = true, textAttentionMode = 'causal-tiled' } = {}) {
     const defaults = kleinWeightUrls({ base: weightsBase, level });
     this.device = device;
     this.urls = { textEncoderUrl: textEncoderUrl ?? defaults.textEncoderUrl, transformerUrl: transformerUrl ?? defaults.transformerUrl,
       vaeUrl: vaeUrl ?? defaults.vaeUrl };
     this.encoderUrl = encoderUrl ?? `${this.urls.vaeUrl.replace(/\/$/, '').replace(/[^/]+$/, '')}encoder`;
     this.kernels = { gemmVersion, sharedType, vaeActType };
+    this.textAttentionMode = textAttentionMode;
     this.residency = residency;
     // Local packages already live on disk: opt out of both CacheStorage and HTTP cache copies.
     this.cacheWeights = cacheWeights;
@@ -190,7 +191,7 @@ export class KleinPipeline {
     const tokenizerBytes = await getWeightBytes(`${te}/${tok.file}`, { sha256: tok.sha256, bytes: tok.bytes, gzip: tok.gzip,
       onBytes: n => { if (transferBytes(tok)) { loadedBytes += n; progress('text-encoder', tok.file); } } }, stats);
     this.tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes)));
-    this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
+    this.textEncoder = this.createTextEncoder(this.teManifest);
     Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
     const lean = this.residency === 'lean';
     let bytes = 0;
@@ -286,6 +287,8 @@ export class KleinPipeline {
     }
     return {latents:await this.referenceEncoder.encode(rgb,width,height),ids:this.referenceIds(height/16,width/16)};
   }
+  createTextEncoder(manifest) { return new KleinTextEncoder(this.device, manifest, { attentionMode: this.textAttentionMode }); }
+
   createTransformer(manifest) { return new KleinTransformer(this.device, manifest); }
   // The text length a generation asks for before device limits: the reference's padding (512) or
   // 'fitN', the prompt's own length plus N padding tokens.

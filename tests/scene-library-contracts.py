@@ -31,7 +31,7 @@ with TemporaryDirectory() as directory:
     serve.SCENES_DIR = own
     os.environ["KAMINOS_SCENE_LIBRARY_GLOBS"] = os.pathsep.join([str(root / "*" / "scenes")])
 
-    listing, status = call("handle_scene_library", {})
+    listing, status = call("handle_scene_library", {"metadata": ["1"]})
     assert status == 200
     stores = {store["label"]: store for store in listing["stores"]}
     assert set(stores) == {"beaming"}, "other stores with scenes are listed; this server's own and empty stores are not"

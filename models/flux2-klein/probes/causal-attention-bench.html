@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><title>Klein causal attention comparison</title><pre id="log"></pre>
+<script type="module">
+import { KleinTextEncoder } from '../klein-text-encoder.js';
+const opts=new URLSearchParams(location.search), tokens=(opts.get('tokens')??'80,512,2048,257').split(',').map(Number),reps=Number(opts.get('reps')??3);
+window.attentionBench=(async()=>{
+ const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+ if(!adapter)throw Error('WebGPU adapter missing');
+ const device=await adapter.requestDevice({requiredFeatures:['shader-f16'],requiredLimits:{maxBufferSize:adapter.limits.maxBufferSize,maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxStorageBuffersPerShaderStage:adapter.limits.maxStorageBuffersPerShaderStage}});
+ const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
+ const manifest={layers:1,taps:[1],config:{hidden_size:2560,num_attention_heads:32,num_key_value_heads:8,intermediate_size:9728}},H=32,KV=8,D=128;
+ const modes=['materialized','causal-tiled'];
+ const models=modes.map(attentionMode=>{const t=new KleinTextEncoder(device,manifest,{attentionMode});Object.assign(t,{gemmVersion:2,sharedType:'f16'});return t;});
+ let seed=7;const rand=n=>Float32Array.from({length:n},()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296-.5)*2);
+ const read=async b=>{const rb=device.createBuffer({size:b.size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST}),enc=device.createCommandEncoder();enc.copyBufferToBuffer(b,0,rb,0,b.size);device.queue.submit([enc.finish()]);await rb.mapAsync(GPUMapMode.READ);const out=new Float32Array(rb.getMappedRange().slice(0));rb.unmap();rb.destroy();return out;};
+ const rows=[];
+ try{for(const L of tokens){
+  const q=rand(H*L*D),k=rand(KV*L*D),vt=rand(KV*D*L),mask=Int32Array.from({length:L},(_,i)=>i<Math.max(1,L-13)?1:0);
+  for(const t of models){for(const b of Object.values(t.act??{}))b.destroy();t.L=L;t.act={q:t.buffer(q.byteLength),k:t.buffer(k.byteLength),vt:t.buffer(vt.byteLength),o:t.buffer(q.byteLength),mask:t.buffer(mask.byteLength),scores:t.buffer(t.scoreBufferBytes(L))};for(const [name,data]of Object.entries({q,k,vt,mask}))device.queue.writeBuffer(t.act[name],0,data);}
+  const run=async t=>{await t.attention(t.sched);await t.sched.flush('causal-bench');await device.queue.onSubmittedWorkDone();};
+  for(const t of models)await run(t);
+  const samples=[[],[]],orders=[];
+  for(let i=0;i<reps;i++){const order=i%2?[1,0]:[0,1];orders.push(order.map(j=>modes[j]));for(const j of order){const start=performance.now();await run(models[j]);samples[j].push(performance.now()-start);}}
+  const outputs=await Promise.all(models.map(t=>read(t.act.o)));
+  let e=0,r2=0,maxAbs=0,nonFinite=0;for(let i=0;i<q.length;i++){if(!Number.isFinite(outputs[0][i])||!Number.isFinite(outputs[1][i]))nonFinite++;const d=outputs[0][i]-outputs[1][i];e+=d*d;r2+=outputs[0][i]**2;maxAbs=Math.max(maxAbs,Math.abs(d));}
+  // Independent scalar causal/GQA oracle for a few queries including block edges.
+  const oracle=[];for(const qi of [...new Set([0,Math.min(63,L-1),Math.min(64,L-1),L-1])]){const h=7,kv=Math.floor(h/(H/KV)),scores=[];let mx=-Infinity;for(let j=0;j<=qi;j++){if(!mask[j])continue;let s=0;for(let d=0;d<D;d++)s+=q[(h*L+qi)*D+d]*k[(kv*L+j)*D+d];s/=Math.sqrt(D);scores.push([j,s]);mx=Math.max(mx,s);}let den=0;for(const v of scores){v[1]=Math.exp(v[1]-mx);den+=v[1];}for(const d of [0,31,127]){let value=0;for(const[j,w]of scores)value+=w/den*vt[(kv*D+d)*L+j];const actual=outputs[1][(h*L+qi)*D+d];oracle.push({query:qi,head:h,dim:d,expected:value,actual,absError:Math.abs(value-actual)});}}
+  const median=xs=>[...xs].sort((a,b)=>a-b)[Math.floor(xs.length/2)];
+  const row={tokens:L,heads:H,kvHeads:KV,headDim:D,orders,variants:models.map((t,j)=>({mode:t.attentionMode,samplesMs:samples[j],medianMs:median(samples[j]),scoreBytes:t.act.scores.size,pipelineKeys:Object.keys(t.pipelines)})),relL2:Math.sqrt(e/r2),maxAbs,nonFinite,oracleMaxAbs:Math.max(...oracle.map(x=>x.absError)),oracle,outputElements:outputs.map(x=>x.length),errors:errors.splice(0)};
+  rows.push(row);document.getElementById('log').textContent+=JSON.stringify(row)+'\n';
+ }}finally{for(const t of models)t.destroy();device.destroy();}
+ return {route:'KleinTextEncoder.attention',adapter:{vendor:adapter.info?.vendor,architecture:adapter.info?.architecture},rows};
+})();window.attentionBenchReady=true;
+</script>

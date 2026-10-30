@@ -73,6 +73,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs","scene-gi-history.mjs","scene-gi-convergence.mjs","scene-gi-source-comparison.mjs","scene-lighting-filter.mjs","scene-surface-lighting.mjs",
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
+    "lib/addons/tsl/display/FullscreenGraphContext.js",
     "lib/addons/tsl/display/SSGINode.js","lib/addons/tsl/display/SSGINode.LICENSE","lib/addons/tsl/display/DenoiseNode.js","lib/addons/math/SimplexNoise.js",
     "models/supermat/supermat-app.js","models/supermat/supermat-route.js","models/supermat/supermat-ops.js","models/supermat/supermat-model.js",
     "models/supermat/supermat-kernels.js","models/supermat/supermat-preprocess.js","models/supermat/supermat-maps.js","models/supermat/supermat-cpu-worker.js"]){

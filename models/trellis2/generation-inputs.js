@@ -8,9 +8,9 @@ import {generationTensorStorage} from './generation-storage.js';
 // Source DINO scales pixels in F32, uses decimal F64 ImageNet statistics, then
 // converts the normalized tensor to F32. Preserve both rounding boundaries.
 export function normalizePreparedTrellisRgb({pixels,width,height}={}){
-  if(width!==512||height!==512||
-    !(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==512*512*3)
-    throw TypeError('complete prepared 512x512 RGB bytes and explicit dimensions required');
+  if(![512,1024].includes(width)||height!==width||
+    !(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==width*height*3)
+    throw TypeError('complete prepared 512x512 RGB bytes or 1024x1024 RGB bytes and explicit dimensions required');
   const mean=[.485,.456,.406],std=[.229,.224,.225],values=new Float32Array(pixels.length);
   for(let i=0;i<pixels.length;i++)values[i]=(Math.fround(pixels[i]/255)-mean[i%3])/std[i%3];
   return values;
@@ -69,7 +69,11 @@ function validateGenerationPackage(m,includeImage){
     if(!/^[\w.-]+$/.test(row.file??''))throw TypeError('safe tensor file required '+key);
     generationTensorStorage(row);admitted.add(key);
   };
-  if(includeImage)tensor(m.image?.pixelTensor,shapes.image);
+  if(includeImage){tensor(m.image?.pixelTensor,shapes.image);
+    // Historical packages remain usable as checkpoint stores and replay evidence.
+    // New execution admission below requires the independently prepared high image.
+    if(type==='1024_cascade'&&m.image?.highResolution)tensor(m.image.highResolution.pixelTensor,[1,1024,1024,3]);
+  }
   if(!/^[a-f0-9]{64}$/.test(m.dino?.identity?.files?.['model.safetensors']?.sha256??'')||m.dino?.layers?.length!==24)
     throw TypeError('identified complete24layer DINO checkpoint required');
   for(const [key,shape]of Object.entries(shapes.dinoPrefix))tensor(m.dino.prefix?.[key],shape);
@@ -106,11 +110,17 @@ export async function loadGenerationInputs(m,fetchTensor,input){
     const pixels=input?.pixelValues;
     if(!(pixels instanceof Float32Array)||pixels.length!==512*512*3||!pixels.every(Number.isFinite))
       throw TypeError('complete finite prepared 512x512 RGB pixel values required');
-    return {...await loadGenerationCheckpoints(m,fetchTensor),pixelValues:pixels};
+    const high=input.highResolutionPixelValues;
+    if(generationPipelineType(m)==='1024_cascade'&&(!(high instanceof Float32Array)||high.length!==1024*1024*3||!high.every(Number.isFinite)))
+      throw TypeError('complete finite prepared 1024x1024 highResolutionPixelValues required');
+    return {...await loadGenerationCheckpoints(m,fetchTensor),pixelValues:pixels,...(generationPipelineType(m)==='1024_cascade'?{highResolutionPixelValues:high}:{})};
   }
   const plan=validateGenerationInputs(m);
+  if(generationPipelineType(m)==='1024_cascade'&&!m.image?.highResolution?.pixelTensor)
+    throw TypeError('Cascade image package lacks 1024 pixels; rerun pack-prepared-generation.py from the original foreground');
   const checkpoints=await loadGenerationCheckpointPlan(m,fetchTensor,plan);
-  return {...checkpoints,pixelValues:await fetchTensor(m.image.pixelTensor)};
+  return {...checkpoints,pixelValues:await fetchTensor(m.image.pixelTensor),
+    ...(generationPipelineType(m)==='1024_cascade'?{highResolutionPixelValues:await fetchTensor(m.image.highResolution.pixelTensor)}:{})};
 }
 
 export async function loadGenerationCheckpoints(m,fetchTensor){

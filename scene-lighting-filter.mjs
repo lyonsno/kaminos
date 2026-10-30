@@ -1,3 +1,4 @@
+import {fullscreenGraphContext} from './lib/addons/tsl/display/FullscreenGraphContext.js';
 import {Node,RenderTarget,NodeMaterial,QuadMesh,HalfFloatType,Vector2,RendererUtils,TSL} from './lib/three.webgpu.js';
 import {denoise} from './lib/addons/tsl/display/DenoiseNode.js';
 const {Fn,NodeUpdateType,passTexture,context,uv,vec2,vec3,vec4,float,int,If,Loop,property,getViewPosition,dot,max,pow,abs,luminance,textureSize,sin,cos,mat2,PI,outputStruct}=TSL;
@@ -29,6 +30,8 @@ export default class SceneLightingFilter extends Node {
   }
   setup(builder){
     this.ao.build(builder);this.gi.build(builder);
+    const graphContext=fullscreenGraphContext(this._graphContext,builder,this.version);
+    if(graphContext===this._graphContext)return this.aoNode;
     const a=property('vec4'),g=property('vec4'),r=this.reference;
     const filter=Fn(()=>{
       const coords=uv(),depth=this.depth.sample(coords).r.toVar(),normal=this.normal.sample(coords).rgb.normalize().toVar();
@@ -60,8 +63,9 @@ export default class SceneLightingFilter extends Node {
       });
       return vec4(0);
     });
-    this.material.contextNode=context(builder.getSharedContext());
+    this.material.contextNode=context(graphContext.shared);
     this.material.colorNode=filter();this.material.outputNode=outputStruct(a,g);this.material.needsUpdate=true;
+    this._graphContext=graphContext;
     return this.aoNode;
   }
   dispose(){super.dispose();this.target.dispose();this.material.dispose();this.reference.noiseNode.value.dispose();}

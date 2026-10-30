@@ -35,8 +35,8 @@ assert.throws(()=>resolve({emissionSmoothing:NaN}),/smoothing/);
 // Resource/cache policy, not a substitute for native shader conformance.
 globalThis.GPUTextureUsage={TEXTURE_BINDING:1,STORAGE_BINDING:2,COPY_SRC:4};
 globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2,STORAGE:4};
-const allocations=[], dispatches=[], passes=[];
-const device={limits:{maxTextureDimension3D:256,maxStorageBufferBindingSize:134217728,maxBufferSize:268435456,maxComputeWorkgroupsPerDimension:65535},queue:{writeBuffer(){}},
+const allocations=[], dispatches=[], passes=[], writes=[];
+const device={limits:{maxTextureDimension3D:256,maxStorageBufferBindingSize:134217728,maxBufferSize:268435456,maxComputeWorkgroupsPerDimension:65535},queue:{writeBuffer(buffer,offset,data){writes.push({buffer,data:[...data]});}},
   createTexture(d){const t={...d,createView(){return {texture:t};},destroy(){t.destroyed=true;}};allocations.push(t);return t;},
   createBuffer(d){return {...d,destroy(){}};},createShaderModule:d=>d,
   createComputePipeline:d=>({...d,getBindGroupLayout:i=>i}),createBindGroup:d=>d};
@@ -85,6 +85,19 @@ assert.equal(field.encode(encoder,0,[0,3]),false);
 const before=field.read();
 assert.equal(field.ensure([256,256,256],{...cubic,scale:1}).reason,'display-coefficients-exceed-device-buffer-size');
 assert.deepEqual(field.read(),before,'buffer-size refusal preserves accepted state');
+const monotone=resolve({displayReconstruction:'material',displayAlignment:'aligned',emissionInterpolation:'monotone',smokeInterpolation:'positive'});
+assert.equal(field.ensure([8,8,8],monotone).admitted,true);
+passes.length=0;writes.length=0;
+assert.equal(field.encode(encoder,0,[0,3]),true,'kernel edit rebuilds held state');
+assert.equal(passes.length,4,'local cubic does not dispatch coefficient solves');
+assert.ok(writes.some(w=>w.data.length===8&&w.data[4]===2&&w.data[5]===0),'independent GPU kernel codes');
+assert.equal(field.read().emissionInterpolation,'monotone');
+assert.equal(field.encode(encoder,0,[0,3]),false,'local cubic caches held state');
+field.ensure([8,8,8],{...monotone,smokeInterpolation:'interpolating'});
+passes.length=0;writes.length=0;
+assert.equal(field.encode(encoder,0,[0,3]),true);
+assert.equal(passes.length,7,'mixed local/spline uses coefficients only for the spline channel');
+assert.ok(writes.some(w=>w.data.length===8&&w.data[4]===2&&w.data[5]===1));
 field.destroy();
 assert.ok(allocations.filter(t=>t.label).every(t=>t.destroyed));
 console.log('display reconstruction configuration: pass');
