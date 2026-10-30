@@ -8119,7 +8119,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!displayReconstructionActive() && !worldActive && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
+    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
