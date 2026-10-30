@@ -1,3 +1,4 @@
+import {resolveMlsMaterial} from './mls-material.mjs';
 export const MLS_ROUTE='kaminos/mls-mpm-finger-juice-v1';
 export const MLS_SOURCE='matsuoka-601/Splash@3df5d621e6f153d7269037cbd8606bd83796f3fd';
 function gridDimensions(size){
@@ -21,17 +22,18 @@ export function analyzeMlsParticles(words,{capacity,grid=64,cell=.05,modelSecond
     worldSpeed:{p50:percentile(.5),p95:percentile(.95),p99:percentile(.99),max:speeds.at(-1)??null},authority:'complete_native_gpu_snapshot'};
 }
 export function mlsConfig(setup={}) {
-  const capacity=setup.particleCount??12000,grid=setup.gridSize??64,cell=setup.cellSize??.05,viscosity=setup.viscosity??.1;
+  const capacity=setup.particleCount??12000,grid=setup.gridSize??64,cell=setup.cellSize??.05;
   if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Invalid MLS particle capacity');
   const dimensions=gridDimensions(grid),gridCells=dimensions.reduce((n,v)=>n*v,1);
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
-  if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
+  const modelSecondsPerSecond=Math.sqrt(9.81/(.4*cell)),restDensity=3;
+  const material=resolveMlsMaterial({cell,modelSecondsPerSecond,restDensity,viscosity:setup.viscosity,mlsMaterial:setup.mlsMaterial});
   const min=setup.originWorld??[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
   if(!Array.isArray(min)||min.length!==3||!min.every(Number.isFinite))throw Error('Invalid MLS domain origin');
   const obstacle=setup.obstacle===null?null:(setup.obstacle??{center:[-.35,.24,0],radius:.24});
   return {capacity,grid,dimensions,gridCells,cell,min,
     bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,
-    modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
+    modelSecondsPerSecond,restDensity,...material,
     particleRadius:cell*.65,obstacle,boundaryWalls:setup.boundaryWalls!==false};
 }
 

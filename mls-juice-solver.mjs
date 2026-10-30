@@ -181,7 +181,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
-        material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
+        material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false,world:{...config.materialUnits},pressureCourantNumber:config.materialUnits.pressureWaveSpeed*config.dt/config.cell},
         collision:support?support.read():{route:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'},initialParticleCount:initialParticles?.length/20||0}),
       async snapshot(){
         if(disposed)throw Error('MLS solver disposed');

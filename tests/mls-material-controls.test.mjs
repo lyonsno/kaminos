@@ -1,0 +1,20 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {waterControlsFixture} from './helpers/water-controls.mjs';
+const f=waterControlsFixture();
+const settings={particleCount:4000};
+const material={pressureWaveSpeed:4.520785,kinematicViscosity:.0018456};
+let state={selected:null,sources:[],simulation:{present:true,settings,material}};
+const edits=[];f.api.read=()=>state;f.api.editSimulation=patch=>{edits.push(patch);state={...state,simulation:{...state.simulation,settings:{...state.simulation.settings,...patch}}};};
+f.controls.refresh();
+assert.equal(f.input('[data-wave-speed]').value,material.pressureWaveSpeed,'inspector must show derived coefficient before enabling');
+assert.equal(f.input('[data-world-material]').checked,false);
+f.input('[data-world-material]').checked=true;f.input('[data-world-material]').onchange();await f.controls.flush();
+assert.deepEqual(edits.at(-1).mlsMaterial,material,'enabling must preserve current coefficients without a rounded jump');
+f.input('[data-wave-speed]').value=17;f.input('[data-wave-speed]').listeners.input();await f.controls.flush();
+assert.equal(edits.at(-1).mlsMaterial.pressureWaveSpeed,17,'world coefficient must be editable without an arbitrary ceiling');
+f.input('[data-kinematic-viscosity]').value=0;f.input('[data-kinematic-viscosity]').listeners.input();await f.controls.flush();
+assert.equal(edits.at(-1).mlsMaterial.kinematicViscosity,0);
+f.input('[data-world-material]').checked=false;f.input('[data-world-material]').onchange();await f.controls.flush();
+assert.equal(edits.at(-1).mlsMaterial,null,'disabling explicitly restores legacy material parameterization');
+f.controls.dispose();console.log('MLS inspector shares the simulation edit path and preserves material on opt-in');

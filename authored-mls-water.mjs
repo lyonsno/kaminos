@@ -8,6 +8,10 @@ import {mlsConfig,MLS_ROUTE,validateMlsPacket} from './mls-juice-contract.mjs';
 export function authoredMlsCellSize(records,options={}){
  return records.some(r=>r.localLiquidEmitter?.mode==='finite_drop')?resolveAuthoredWaterSampling(records,options).spacing*Math.cbrt(3):.05;
 }
+// Inspector uses the same conversion as the solver without allocating particles.
+export function authoredMlsMaterial(records,options={}){
+ return mlsConfig({cellSize:authoredMlsCellSize(records,options),mlsMaterial:options.mlsMaterial}).materialUnits;
+}
 export function authoredMlsParticleVolume(cellSize=.05){return cellSize**3/3;}
 export function canonicalAuthoredWaterFlowRecords(records,setup={}){
  const particleVolume=authoredMlsParticleVolume(authoredMlsCellSize(records,setup));
@@ -43,7 +47,7 @@ export function authoredMlsSetup(records,options={}){
  const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
  const originWorld=bounds.min.map(v=>v-2*cell);
  const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
-  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true};
+  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);

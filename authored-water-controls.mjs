@@ -21,6 +21,11 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <label>Additional particle slots<input class="transform-input" type="number" step="256" min="1" data-capacity></label>
   <p class="hint">Added to the initial water particles to form one shared, recyclable pool. Departed initial water also frees slots for emitters. A full pool stops new emission until water leaves or retires. This changes capacity, not flow rate or particle size.</p>
   <p class="hint" data-allocation-summary></p><div data-initial-resolution><label>Initial volume particle target<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-resolution-summary></p></div>
+  <h3>Water material</h3>
+  <label><input type="checkbox" data-world-material>Keep material coefficients constant as resolution changes</label>
+  <label>Pressure wave speed · m/s<input class="transform-input" type="number" min="0" step="0.1" data-wave-speed></label>
+  <label>Kinematic viscosity · m²/s<input class="transform-input" type="number" min="0" step="0.0001" data-kinematic-viscosity></label>
+  <p class="hint">Enable to edit these values; enabling keeps their current values. With this off, the original grid coefficients stay fixed and these world values change with resolution. Numerical damping can still change. Restart applies material edits.</p>
   <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
   <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
   <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation.</p><p role="alert" data-simulation-error></p>
@@ -64,7 +69,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   return {mode:$('[data-mode]').value,...($('[data-mode]').value==='continuous'?{volumeRate:value('[data-rate]')/1000,baseRadius:value('[data-radius]'),strength:value('[data-strength]'),lifetimeSeconds:$('[data-retire]').checked?value('[data-lifetime]'):null}:{}),drop:{...selected.settings.drop,width:value('[data-width]')}};
  };
  const simulationProposal=()=>{
-  const patch={particleCount:number($('[data-capacity]'))};
+  const patch={particleCount:number($('[data-capacity]')),mlsMaterial:$('[data-world-material]').checked?{pressureWaveSpeed:number($('[data-wave-speed]')),kinematicViscosity:number($('[data-kinematic-viscosity]'))}:null};
   if(api.read().simulation?.sampling)patch.waterSampling={...api.read().simulation.sampling,particleTarget:number($('[data-target]')),container:$('[data-container]').checked?bounds():null,...(!$('[data-container]').checked?{worldBounds:bounds()}:{})};
   return patch;
  };
@@ -117,11 +122,12 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  }
  function preview(){revision++;dirty=true;showProposal();queuePreview();queue('source');}
  for(const input of node.querySelectorAll('input[type=number]')){
-  const kind=input===$('[data-capacity]')||input===$('[data-target]')||input.dataset.bound?'simulation':'source';
-  input.addEventListener('input',kind==='simulation'?()=>{simulationRevision++;simulationDirty=true;showProposal();queuePreview();queue(kind);}:preview);
+  const kind=input===$('[data-capacity]')||input===$('[data-target]')||input===$('[data-wave-speed]')||input===$('[data-kinematic-viscosity]')||input.dataset.bound?'simulation':'source';
+  input.addEventListener('input',kind==='simulation'?()=>{simulationRevision++;simulationDirty=true;showProposal();if(input!==$('[data-wave-speed]')&&input!==$('[data-kinematic-viscosity]'))queuePreview();queue(kind);}:preview);
   const drag=controls.installNumberDrag({input,step:Number(input.step),onStart:()=>{gestures.add(kind);stopTimer(kind);},onEnd:()=>{gestures.delete(kind);if((kind==='source'?dirty:simulationDirty)&&!disposed)void flush(kind);}});scrubs.push(drag);
   input.addEventListener('pointercancel',()=>{restorePreview();stopTimer(kind);if(kind==='simulation'){simulationDirty=false;simulationRevision++;}else{dirty=false;revision++;sourceError.textContent='';}refresh();});
  }
+ $('[data-world-material]').onchange=()=>{simulationRevision++;simulationDirty=true;for(const key of ['wave-speed','kinematic-viscosity'])$('[data-'+key+']').disabled=!$('[data-world-material]').checked;queue('simulation');};
  $('[data-mode]').onchange=preview;$('[data-retire]').onchange=preview;$('[data-container]').onchange=()=>{simulationRevision++;simulationDirty=true;queuePreview();queue('simulation');};
  $('[data-add]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.add();});
  $('[data-add-flow]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.add({mode:'continuous'});});
@@ -144,6 +150,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   const simulation=s.simulation;simulationPanel.hidden=!simulation?.present||simulation.selected===false;$('[data-select-simulation]').disabled=!simulation?.present;
   if(!simulation?.present){stopTimer('simulation');simulationDirty=false;simulationRevision++;}
   if(simulation?.settings&&!simulationDirty){$('[data-capacity]').value=simulation.settings.particleCount??12000;if(simulation.sampling){$('[data-target]').value=simulation.sampling.particleTarget??Math.round(simulation.requestedVolume/simulation.sampling.spacing**3);$('[data-container]').checked=simulation.sampling.container!==null;const b=simulation.sampling.container??simulation.sampling.worldBounds;$('[data-bounds]').hidden=false;for(const input of simulationPanel.querySelectorAll('[data-bound]'))input.value=b[input.dataset.bound][Number(input.dataset.axis)];}}
+  if(!simulationDirty){const m=simulation?.settings?.mlsMaterial??simulation?.material;$('[data-world-material]').checked=!!simulation?.settings?.mlsMaterial;for(const [selector,key]of [['wave-speed','pressureWaveSpeed'],['kinematic-viscosity','kinematicViscosity']]){$('[data-'+selector+']').value=m?.[key]??'';$('[data-'+selector+']').disabled=!$('[data-world-material]').checked;}}
   $('[data-allocation-summary]').textContent=simulation?.present?`On Restart: ${(simulation.proposedParticleCount??0).toLocaleString()} initial + ${(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0).toLocaleString()} additional = ${((simulation.proposedParticleCount??0)+(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0)).toLocaleString()} total slots.`:'';
   showResolutionSummary(simulation);$('[data-initial-resolution]').hidden=!s.sources?.some(r=>r.mode==='finite_drop')&&selected?.settings?.mode!=='finite_drop';
   $('[data-release]').disabled=!(s.sources?.length||selected);

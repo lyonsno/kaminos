@@ -1,3 +1,4 @@
+import {normalizeMlsMaterial} from './mls-material.mjs';
 import { Euler, Vector3 } from './lib/three.core.js';
 import { normalizeAuthoredWaterDrop, normalizeAuthoredWaterSampling } from './authored-water-drop.mjs';
 
@@ -83,7 +84,7 @@ function normalizeLocalLiquidSetupCore(value) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
   return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
-    showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
+    showSupportGeometry:value.showSupportGeometry??true,...(value.mlsMaterial!=null?{mlsMaterial:normalizeMlsMaterial(value.mlsMaterial)}:{}),...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
 }
 
 export function normalizeLocalLiquidSetup(value) {
