@@ -9,7 +9,7 @@ export function createFractureHandCommands(model){
   set(...args){model.setSurfaceHand(...args);target={...args[1]};dirty=false;},
   move(point){model.moveHand(point);if(target&&['x','y','z'].some(k=>target[k]!==point[k]))dirty=true;target={...point};},
   step,
-  release(){try{if(dirty)step();}finally{cancel();}},
+  release(){const submitted=dirty;try{if(dirty)step();return submitted;}finally{cancel();}},
   cancel,
  };
 }

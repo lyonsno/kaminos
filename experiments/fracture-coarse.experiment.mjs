@@ -2,6 +2,7 @@ import {Group,MeshStandardMaterial,MeshBasicMaterial,Mesh,SphereGeometry,Vector3
 import {shapeHierarchyView} from '../fracture-shape-partition.mjs';
 import {collectFractureSurface} from '../fracture-coarse-surface.mjs';
 import {createResidentFractureSurface} from '../fracture-resident-surface.mjs';
+import {createFractureFrameClock} from '../fracture-frame-clock.mjs';
 import {createFractureHandCommands} from '../fracture-hand-commands.mjs';
 import {createCoarseFractureDynamics} from '../fracture-coarse-dynamics.mjs';
 
@@ -11,16 +12,17 @@ export default {
   if(typeof inputs.source!=='string'||!inputs.source)throw Error('Choose a source mesh');
   const session=await host.scene.open(),workers=new Set(),workerCalls=new Map(),drags=[],owned=new Group();
   owned.name='Fracturable material';
-  let disposed=false,model,handCommands,residentSurface,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,colorParts=inputs.colorParts??true,inspectionWasRunning=false,separation=0,strength=Number(inputs.strength??3000000);
+  let disposed=false,model,handCommands,clock,residentSurface,prepared,surface,asset,view,meshes=[],busy=true,error='',running=true,stepping=false,stepFinished=Promise.resolve(),generation=0,workerId=0,unframe,undrag,grip=null,selectedCell=null,status,marker,playButton,strengthInput,separationInput,inspectInput,inspectParts=false,colorParts=inputs.colorParts??true,inspectionWasRunning=false,separation=0,strength=Number(inputs.strength??3000000);
   const capMaterial=new MeshStandardMaterial({color:0xa57850,roughness:1});
   function callWorker(file,data){return new Promise((resolve,reject)=>{const worker=new Worker(new URL(file,import.meta.url),{type:'module'}),id=++workerId;workers.add(worker);workerCalls.set(worker,reject);const finish=()=>{workers.delete(worker);workerCalls.delete(worker);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(Error(data.error)):resolve(data);};worker.onerror=e=>{finish();reject(Error(e.message));};worker.postMessage({id,...data});});}
   const event=(kind,value)=>record({kind:`fracture-coarse:${kind}`,value});
-  const read=()=>({route:'kaminos.fracture.whole-object-direct-grab.v1',source:inputs.source,busy,error,running,strength,inspectParts,colorParts,separation,selectedCell,
+  const syncClock=()=>clock?.setActive(running&&!inspectParts&&!busy&&!disposed&&!globalThis.document?.hidden);
+  const read=()=>({clock:clock?.read()??null,route:'kaminos.fracture.whole-object-direct-grab.v1',source:inputs.source,busy,error,running,strength,inspectParts,colorParts,separation,selectedCell,
    parts:view?.parts.map(p=>({id:p.id,triangles:p.triangles,areaFraction:p.areaFraction})),
    prepared:prepared?{route:prepared.route,receipt:prepared.receipt,cells:prepared.cells.length,bonds:prepared.bonds.length,internalBonds:prepared.bonds.filter(b=>b.kind==='internal').length,attachmentBonds:prepared.bonds.filter(b=>b.kind!=='internal').length}:null,
    material:model?.submitted()??null,presentation:residentSurface?.read()??null,visibleCapTriangles:null,setup:{...inputs,strength},
    claim:'Whole detected object with breakable coarse material and direct surface grabbing; detailed original exterior retained, approximate mass/inertia and floor collisions'});
-  function sync(){if(status){const s=model?.submitted();status.textContent=busy?'Preparing all material…':error||`${view.parts.length} detected parts · ${prepared.cells.length} live material cells\nGPU fracture state · ${s.step} submitted steps\n${grip?'Dragging material':inspectParts?'Inspecting all detected parts':'Drag the surface to pull; release to let go.'}`;}
+  function sync(){syncClock();if(status){const s=model?.submitted();status.textContent=busy?'Preparing all material…':error||`${view.parts.length} detected parts · ${prepared.cells.length} live material cells\nGPU fracture state · ${s.step} submitted steps\n${grip?'Dragging material':inspectParts?'Inspecting all detected parts':'Drag the surface to pull; release to let go.'}`;}
    if(playButton)playButton.textContent=running?'Pause':'Play';if(inspectInput)inspectInput.checked=colorParts;
    for(const [input,value]of [[strengthInput,strength],[separationInput,separation]])if(input&&input.ownerDocument.activeElement!==input)input.value=String(value);
   }
@@ -29,7 +31,7 @@ export default {
    marker.visible=Boolean(grip);if(grip)marker.position.fromArray(grip.target);
    session.redraw();sync();
   }
-  function release(cancel=false){try{cancel?handCommands?.cancel():handCommands?.release();}finally{grip=null;draw();event('release',null);}}
+  function release(cancel=false){try{if(cancel)handCommands?.cancel();else if(handCommands?.release())clock?.accountReleaseStep();}finally{grip=null;draw();event('release',null);}}
   async function advance(count=1){if(!Number.isSafeInteger(count)||count<1)throw Error('Positive physical step count required');if(busy||stepping||!model)throw Error('Material is busy');stepping=true;let finish;stepFinished=new Promise(r=>{finish=r;});try{for(let i=0;i<count;i++){if(disposed)break;handCommands.step();}draw();return read();}catch(e){running=false;error=e.message;sync();throw e;}finally{stepping=false;finish();}}
   function grab({index,point,localPoint,normal=[0,1,0]}){
    if(busy||!model||inspectParts)return false;if(!Number.isInteger(index)||!meshes[index])throw Error('Grab requires a current material cell');
@@ -43,7 +45,7 @@ export default {
     const offsets=prepared.pieces.map(piece=>{const part=view.parts.find(p=>p.id===piece.part),offset=new Vector3(...part.center).sub(objectCenter);if(offset.lengthSq()<1e-12)offset.set(0,1,0);return offset.toArray();});
     let presentation;try{presentation=await createResidentFractureSurface({renderer:host.scene.renderer(),prepared,materials,model:candidate,partOffsets:offsets});}catch(error){candidate.dispose();throw error;}
     if(disposed||token!==generation){await presentation.dispose();candidate.dispose();return read();}
-    await residentSurface?.dispose();model?.dispose();model=candidate;handCommands=createFractureHandCommands(model);residentSurface=presentation;meshes=presentation.meshes;for(const mesh of meshes)owned.add(mesh);
+    await residentSurface?.dispose();model?.dispose();model=candidate;handCommands=createFractureHandCommands(model);clock=createFractureFrameClock({timeStep:prepared.config.timeStep,step:()=>handCommands.step()});residentSurface=presentation;meshes=presentation.meshes;for(const mesh of meshes)owned.add(mesh);
     grip=null;selectedCell=null;busy=false;running=false;error='';draw();event('reset',{cells:prepared.cells.length,bonds:prepared.bonds.length});return read();
    }catch(e){busy=false;error=e.message;sync();throw e;}}
   let objectCenter;
@@ -65,7 +67,8 @@ export default {
     if(disposed||busy||inspectParts)return null;const current=residentSurface;asset.root.updateWorldMatrix(true,false);const inverse=asset.root.matrixWorld.clone().invert(),start=new Vector3(...ray.origin).applyMatrix4(inverse),direction=new Vector3(...ray.direction).transformDirection(inverse);
     const result=await current.pick(start.toArray(),direction.toArray());if(!result||disposed||current!==residentSurface)return null;const world=asset.root.localToWorld(new Vector3(...result.point));return{...result,object:meshes[result.cell],point:world.toArray(),distance:world.distanceTo(new Vector3(...ray.origin))};
    },onError:e=>{error=e.message;running=false;sync();}});
-   unframe=session.onFrame(()=>{if(running&&!inspectParts&&!busy&&!stepping&&!disposed)void advance().catch(()=>{});});
+   unframe=session.onFrame(({timestampMs})=>{if(stepping||disposed)return;try{if(clock.tick(timestampMs))draw();}catch(e){running=false;error=e.message;sync();}});
+   globalThis.document?.addEventListener('visibilitychange',syncClock);
    const operations={reset,advance,acquire:async()=>{await stepFinished;await model.acquire();return{...read(),material:model.snapshot()};},pause:async()=>{running=false;await stepFinished;sync();return read();},play:()=>{inspectParts=false;separation=0;running=true;draw();return read();},grab,move,release:()=>{release();return read();},
     strength:value=>{if(!(value>0&&Number.isFinite(value)))throw Error('Positive finite cohesion required');model.setStrength(value);strength=value;updateInputs({...inputs,strength});sync();return read();},
     inspect:value=>{colorParts=Boolean(value);draw();return read();},separation:value=>{if(!Number.isFinite(value)||value<0)throw Error('Nonnegative separation required');if(value>0&&!inspectParts)inspectionWasRunning=running;separation=value;inspectParts=value>0;running=inspectParts?false:inspectionWasRunning;release(true);draw();return read();},frame,
@@ -81,7 +84,7 @@ export default {
     separationInput=number('Separate parts for inspection',0,0,.01,'separation');
     function button(text,operation){const b=document.createElement('button');b.textContent=text;b.addEventListener('click',()=>run(typeof operation==='function'?operation():operation));root.append(b);return b;}
     playButton=button('Pause',()=>running?'pause':'play');button('Reset fracture','reset');button('Frame object','frame');status=document.createElement('p');status.setAttribute('role','status');status.style.whiteSpace='pre-line';root.append(status);sync();
-   },async dispose(){if(disposed)return;running=false;generation++;undrag?.();disposed=true;unframe?.();for(const w of workers){w.terminate();workerCalls.get(w)?.(Error('Fracture closed'));}workers.clear();drags.forEach(d=>d.dispose());await stepFinished;await residentSurface?.dispose();model?.dispose();owned.remove(marker);marker.geometry.dispose();marker.material.dispose();capMaterial.dispose();await session.dispose();}};
+   },async dispose(){if(disposed)return;running=false;generation++;undrag?.();disposed=true;unframe?.();globalThis.document?.removeEventListener('visibilitychange',syncClock);syncClock();for(const w of workers){w.terminate();workerCalls.get(w)?.(Error('Fracture closed'));}workers.clear();drags.forEach(d=>d.dispose());await stepFinished;await residentSurface?.dispose();model?.dispose();owned.remove(marker);marker.geometry.dispose();marker.material.dispose();capMaterial.dispose();await session.dispose();}};
   }catch(e){disposed=true;workers.forEach(w=>w.terminate());await residentSurface?.dispose();model?.dispose();capMaterial.dispose();await session.dispose();throw e;}
  },
 };
