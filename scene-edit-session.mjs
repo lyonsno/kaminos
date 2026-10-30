@@ -21,6 +21,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   let replaying = false;
   let settling = null;
   const targets = new Map();
+  const historyScopes = new Set();
+  const historyScope = () => [...historyScopes].find(scope => scope.active());
   const captureHistory=(id,value)=>clone(history(id)?.capture(clone(value))??value);
   const restoreHistory=(id,value)=>clone(history(id)?.restore(clone(value))??value);
   const listeners = new Set();
@@ -31,7 +33,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     return checkedPose(value);
   };
   const put = (id, value) => targets.has(id) ? targets.get(id).write(clone(value)) : write(id, value);
-  const state = () => ({ active: active ? clone(active) : null, undoCount: past.length, redoCount: future.length, replaying });
+  const state = () => ({ active: active ? clone(active) : null, undoCount: historyScope()?.state().undoCount ?? past.length, redoCount: historyScope()?.state().redoCount ?? future.length, replaying });
   const hasHistoryEntry = id => past.some(entry => entry.id === id) || future.some(entry => entry.id === id);
   const waitForReplay = () => {
     if (!replaying) return Promise.resolve();
@@ -148,6 +150,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     assertAvailable();
     if(active===settling && active && key==='before')return cancel();
     if (active) throw new Error('Finish the active scene edit first');
+    const scope = historyScope();
+    if (scope) { const result = key === 'before' ? scope.undo() : scope.redo(); notify(); return result; }
     const entry = from.at(-1);
     if (!entry) return false;
     const previous = get(entry.id,entry[key]);
@@ -232,6 +236,11 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
 
   return {
     begin, preview, commit, cancel, apply, applySettled, state, isSettling:()=>Boolean(settling), waitForReplay, hasHistoryEntry, subscribe,
+    registerHistoryScope(scope) {
+      if (!['active','state','undo','redo'].every(key => typeof scope?.[key] === 'function')) throw new Error('History scope requires active, state, undo and redo');
+      historyScopes.add(scope);
+      return { changed: notify, dispose() { historyScopes.delete(scope); notify(); } };
+    },
     register(id, target) {
       if (!id.startsWith('@') || targets.has(id)) throw new Error('Duplicate or invalid edit target');
       if (!target || typeof target.read !== 'function' || typeof target.write !== 'function') {
