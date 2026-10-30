@@ -3,13 +3,8 @@ import {registerSceneObjectPoseHistory} from '../../scene-object-pose-history.mj
 import {frames} from './model.mjs';
 const pose=m=>{const p=new T.Vector3(),q=new T.Quaternion(),s=new T.Vector3();m.decompose(p,q,s);const e=new T.Euler().setFromQuaternion(q);return {position:p.toArray(),rotation:[e.x,e.y,e.z],scale:s.toArray()};};
 const matrix=p=>new T.Matrix4().compose(new T.Vector3(...p.position),new T.Quaternion().setFromEuler(new T.Euler(...p.rotation)),new T.Vector3(...p.scale));
-// A joint carries a rigid mounting frame. Scaling the construction changes joint
-// positions, not the independently authored dimensions of a carried scene object.
-export function jointMatrix(root,model,joint,t){
- const f=frames(model,t)[joint];if(!f)throw Error('Choose a joint');root.updateWorldMatrix(true,false);
- const position=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),rotation=root.getWorldQuaternion(new T.Quaternion()).normalize().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle));
- return new T.Matrix4().compose(position,rotation,new T.Vector3(1,1,1));
-}
+import {jointMatrix,attachmentBase,connectionOrder} from './mounts.mjs';
+export {jointMatrix} from './mounts.mjs';
 export function attachmentFrame(root,model,joint,t,object){object.updateWorldMatrix(true,false);return pose(jointMatrix(root,model,joint,t).invert().multiply(object.matrixWorld));}
 // History belongs to the scene relationship, not to a transient controller.
 // Weak keys let a destroyed payload release its adapter naturally. An unattached
@@ -26,8 +21,8 @@ function retainHistory(object,objectId,objects){
   return null;
  };
  registerSceneObjectPoseHistory(object,{
-  capture(value){const b=binding();if(!b)return value;object.parent.updateWorldMatrix(true,false);const world=object.parent.matrixWorld.clone().multiply(matrix(value));return {...value,linkAttachment:pose(jointMatrix(b.root,b.model,b.a.joint,b.t).invert().multiply(world))};},
-  restore(value){if(!value.linkAttachment)return value;const b=binding();if(!b)throw Error('Restore the attachment before replaying its offset');b.a.offset=structuredClone(value.linkAttachment);const world=jointMatrix(b.root,b.model,b.a.joint,b.t).multiply(matrix(b.a.offset));object.parent.updateWorldMatrix(true,false);owner.last=world.clone();return pose(object.parent.matrixWorld.clone().invert().multiply(world));}
+  capture(value){const b=binding();if(!b)return value;object.parent.updateWorldMatrix(true,false);const world=object.parent.matrixWorld.clone().multiply(matrix(value));return {...value,linkAttachment:pose(attachmentBase(b.root,b.model,b.a,b.t,owner.objects()).invert().multiply(world))};},
+  restore(value){if(!value.linkAttachment)return value;const b=binding();if(!b)throw Error('Restore the attachment before replaying its offset');b.a.offset=structuredClone(value.linkAttachment);const world=attachmentBase(b.root,b.model,b.a,b.t,owner.objects()).multiply(matrix(b.a.offset));object.parent.updateWorldMatrix(true,false);owner.last=world.clone();return pose(object.parent.matrixWorld.clone().invert().multiply(world));}
  });historyOwners.set(object,owner);return owner;
 }
 export function createAttachmentFollower(root,objects){
@@ -35,15 +30,17 @@ export function createAttachmentFollower(root,objects){
  // Standalone followers can omit the construction from their lookup; the app
  // supplies it under its durable scene ID so reconstruction resolves a new root.
  const entries=objects().some(e=>e.object===root)?objects:()=>[...objects(),{id:root.uuid,object:root}];
- return {reset(){for(const owner of tracked.values())owner.last=null;},dispose(){liveFrames.delete(root);tracked.clear();},update(model,t){
+ return {reset(){for(const owner of tracked.values())owner.last=null;},dispose(){liveFrames.delete(root);tracked.clear();},update(model,t,{onlyObjectId}={}){
   root.userData.linkMechanism=model;liveFrames.set(root,t);const all=entries(),present=new Set();let changed=false;
-  for(const a of model.attachments??[]){const entry=all.find(e=>e.id===a.objectId),object=entry?.object;if(!object?.parent)continue;present.add(a.objectId);
+  const order=connectionOrder(all);
+  for(const a of [...(model.attachments??[])].sort((a,b)=>order.indexOf(a.objectId)-order.indexOf(b.objectId))){if(onlyObjectId&&a.objectId!==onlyObjectId)continue;const entry=all.find(e=>e.id===a.objectId),object=entry?.object;if(!object?.parent)continue;present.add(a.objectId);
+   if(a.targetMount){const target=model.mounts?.find(m=>m.id===a.targetMount);if(target?.owner.objectId&&!all.some(e=>e.id===target.owner.objectId))continue;}
    const owner=retainHistory(object,a.objectId,entries);tracked.set(a.objectId,owner);object.updateWorldMatrix(true,false);
-   if(owner.last&&!object.matrixWorld.equals(owner.last))a.offset=attachmentFrame(root,model,a.joint,t,object);
-   const world=jointMatrix(root,model,a.joint,t).multiply(matrix(a.offset));object.parent.updateWorldMatrix(true,false);
+   if(owner.last&&!object.matrixWorld.equals(owner.last))a.offset=pose(attachmentBase(root,model,a,t,all).invert().multiply(object.matrixWorld));
+   const world=attachmentBase(root,model,a,t,all).multiply(matrix(a.offset));object.parent.updateWorldMatrix(true,false);
    if(!object.matrixWorld.equals(world))changed=true;
    const local=object.parent.matrixWorld.clone().invert().multiply(world);local.decompose(object.position,object.quaternion,object.scale);object.updateMatrixWorld(true);owner.last=object.matrixWorld.clone();
   }
-  for(const id of tracked.keys())if(!present.has(id))tracked.delete(id);return changed;
+  for(const id of tracked.keys())if(!onlyObjectId&&!present.has(id))tracked.delete(id);return changed;
  }};
 }

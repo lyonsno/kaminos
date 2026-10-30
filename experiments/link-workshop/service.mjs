@@ -1,3 +1,4 @@
+import {connectionOrder} from './mounts.mjs';
 import {createMechanismController} from '../link-workshop.experiment.mjs';
 import {emptyMechanism,checkedMechanism} from './model.mjs';
 import {mechanismObject,MECHANISM_SOURCE} from './record.mjs';
@@ -10,8 +11,12 @@ export function installMechanisms({host,addRecord,onFrame,onError}){
    runtime.mount({root:host.controls.document.createElement('div'),document:host.controls.document,invoke:(name,arg)=>Promise.resolve().then(()=>runtime.operations[name](arg))});runtimes.set(root,runtime);return runtime;
   }).finally(()=>pending.delete(root));pending.set(root,job);return job;
  }
- onFrame(()=>{const entries=host.scene.objects(),roots=new Set(entries.filter(e=>e.object?.userData.linkMechanism).map(e=>e.object));
-  for(const [root,runtime]of runtimes)if(!roots.has(root)){runtimes.delete(root);void runtime.dispose().catch(onError);}else runtime.tick();
+ onFrame(({deltaSeconds=0}={})=>{const entries=host.scene.objects(),roots=new Set(entries.filter(e=>e.object?.userData.linkMechanism).map(e=>e.object));
+  for(const [root,runtime]of runtimes)if(!roots.has(root)){runtimes.delete(root);void runtime.dispose().catch(onError);}
+  for(const runtime of runtimes.values())runtime.advance(deltaSeconds);
+  const order=connectionOrder(entries);
+  for(const id of order){const owner=entries.find(e=>e.object?.userData.linkMechanism?.attachments?.some(a=>a.objectId===id));if(owner)runtimes.get(owner.object)?.follow(id);}
+  for(const runtime of runtimes.values())runtime.tick();
   for(const root of roots)if(!runtimes.has(root)&&!pending.has(root))void ensure(root).catch(onError);
  });
  return {ensure,async add(recipe=emptyMechanism()){
