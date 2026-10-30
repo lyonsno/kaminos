@@ -7,6 +7,9 @@ import {applySceneEnvironmentBackground} from './scene-environment-background.mj
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createProceduralMesh} from './scene-geometry.mjs';
 import {createPromptLettering} from './prompt-lettering.mjs';
+import {installKilnPromptEditor} from './kiln-prompt-editor.mjs';
+import {createPromptRelief} from './inference-kiln-relief.mjs';
+import {promptReliefMetadata} from './inference-kiln-record.mjs';
 import {cameraViewFromRecord} from './scene-camera.mjs';
 import {createSceneColliderCollection} from './scene-collider.mjs';
 import {flameSourceInputs} from './scene-fire-domain.mjs';
@@ -23,15 +26,16 @@ import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
 const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 // Same records, material fields, gas solver, transported light and HDR camera as
 // Workbench. This surface owns only its scene and borrowed-device resources.
-export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
+export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,input:promptInput=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
  const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],lightEntries=[],owned=[],frames=new Set();
- let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0;
+ let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null;
  const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
+ viewport.style.aspectRatio=String(aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
  if(!view||view.projection==='orthographic')throw Error('Choose a perspective kiln camera');
  const camera=new THREE.PerspectiveCamera(view.fov,aspect,view.near,view.far);camera.position.fromArray(view.position);camera.up.fromArray(view.up??[0,1,0]);camera.lookAt(...view.target);camera.updateMatrixWorld();
  const renderer=new THREE.WebGPURenderer({antialias:true,device:sharedGpu.device});
- const canvas=renderer.domElement;canvas.id='generation-flame-canvas';canvas.setAttribute('aria-label','Physical kiln preview');viewport.append(canvas);
+ const canvas=renderer.domElement;canvas.id='generation-flame-canvas';canvas.setAttribute('aria-label','Inference kiln');viewport.append(canvas);
  renderer.setPixelRatio(1);renderer.setSize(width,height);renderer.shadowMap.enabled=true;renderer.toneMapping=THREE.AgXToneMapping;
  const hidden=plan.editorDisplay?.hiddenIds??[],visible=id=>sceneItemVisible(id,hidden,plan),colliders=createSceneColliderCollection(THREE);
  const add=(object,record)=>{
@@ -48,7 +52,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
  }});
  function failure(error){lastError=error.message;viewport.dataset.error=lastError;}
  async function dispose(){
-  if(disposed)return;disposed=true;active=false;
+  if(disposed)return;disposed=true;active=false;editor?.dispose();
   if(fire){await fire.setActive(false);await sharedGpu.device.queue.onSubmittedWorkDone();}
   lighting?.dispose();await lighting?.whenRebuilt?.().catch(()=>{});await burning?.dispose();fire?.setSceneTransportConsumer(null);fire?.dispose();
   hdr?.dispose();pipeline?.dispose();sceneBloom?.dispose();gi?.dispose();colliders.clear();frames.clear();
@@ -62,7 +66,21 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   const target=entries.find(row=>row.id===plan.promptObjectId);if(!target)throw Error('Saved kiln prompt was not reconstructed');
   // Change only the preview's chosen prompt. Keep the authored pose, burn
   // settings and material; geometry comes from the same lettering constructor.
-  if(prompt!==target.object.userData.kaminosPromptRelief.prompt){const replacement=createPromptLettering(document,prompt,'composed');target.object.geometry.dispose();target.object.geometry=replacement.geometry;target.object.userData.kaminosPromptRelief=replacement.userData.kaminosPromptRelief;replacement.material.dispose();}
+  if(promptInput){editor=installKilnPromptEditor({document,viewport,input:promptInput,camera,object:target.object,onPresentation:()=>{if(!pipeline||disposed||active)return;app.foreground.request({requestId:`kiln-edit-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-edit'},run(){draw();return {status:'submitted'};}});},onError:failure});}
+  async function prepare({prompt:next,request:admitted=null}){
+   if(active)throw Error('Pause combustion before replacing its admitted text');
+   if(next.trim()){
+    const canvas=editor?await editor.rasterize(next):null;
+    if(disposed)return;
+    const replacement=canvas?null:createPromptLettering(document,next,'composed');
+    const geometry=canvas?createPromptRelief(canvas):replacement.geometry;
+    burning?.forget(target.object);target.object.geometry.dispose();target.object.geometry=geometry;
+    target.object.userData.kaminosPromptRelief=promptReliefMetadata(next,'composed');replacement?.material.dispose();
+   }
+   prompt=next;request=admitted;editor?.sync();
+  }
+  if(request||!promptInput)await prepare({prompt,request});
+
   const ground=saved.environment?.ground;
   if(ground?.visible){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:ground.color,roughness:ground.roughness,metalness:0}));mesh.rotation.x=-Math.PI/2;mesh.position.y=ground.height;mesh.receiveShadow=true;scene.add(mesh);}
   if(saved.backdrop)throw Error('Use an ordinary backdrop mesh for the kiln scene');
@@ -105,7 +123,8 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   // One cold frame, no idle simulation or private RAF loop.
   const cold=app.foreground.request({requestId:`kiln-cold-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-cold'},run(){draw();return {status:'submitted'};}});await cold.completion;
   return {
-   async setActive(value){if(disposed)return;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;fire.canvasElement().hidden=!active;
+   prepare,syncEditor:()=>editor?.sync(),
+   async setActive(value){if(disposed)return;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;editor?.setBurning(active);fire.canvasElement().hidden=!active;
     if(active){await fire.setActive(true);await burning.sync();if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
      if(!lighting){lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,getSourceGuide:()=>({position:[...plan.flameSources[0].transform.position],radius:settings.inputRadius,height:settings.plumeHeight,depth:settings.emitterSourceDepth}),...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
      const value=(id,fallback)=>rendering[id]??fallback;
@@ -114,7 +133,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
    },
    debugState:()=>({identity:'kaminos.inference-kiln-preview.v1',sceneFile:recipe.selection?.sceneFile??null,sceneLabel:saved.label,promptObjectId:plan.promptObjectId,prompt,requestSource:request?'admitted-generation-prompt':'editor-draft',active,error:lastError,frameCount,
     effective:{device:'app-shared-device',width,height,settings,objects:entries.map(row=>({id:row.id,visible:visible(row.id),transform:row.transform,burnable:row.burnable})),camera:view,bloom:sceneBloom.read()},
-    runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
+    editor:editor?.read()??null,runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
    dispose,
   };
  }catch(error){await dispose();throw error;}
