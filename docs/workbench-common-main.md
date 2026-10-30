@@ -51,6 +51,15 @@ domain-state or recording service, and state the continuation actually supported
 Choose flexibility that serves the next useful interaction; a generic framework
 is a separate investment.
 
+Continuous water emitters keep their chosen `volumeRate` and an independent
+`emissionEnabled` switch in the authored object. The native Emission checkbox
+and agent `kaminosWaterSources.edit(id, {emissionEnabled: false})` use the same
+undoable edit. Stopping emission preserves flow, placement and existing water;
+re-enabling uses the current settings. A zero flow stays zero. Saved scenes
+retain the switch; older sources with no switch keep their existing behavior.
+The stage-word pour study consumes these controls and resumes an existing water
+run. Reset water clears the simulation while preserving authored source edits.
+
 ## Run The Small Example
 
 From the checkout, use an available port:

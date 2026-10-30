@@ -31,12 +31,12 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <label>Source type<select class="select-input" data-mode><option value="finite_drop">Initial water volume</option><option value="continuous">Continuous emitter</option></select></label>
   <div data-drop><label>Initial volume width<input class="transform-input" type="number" min="0" step="0.01" data-width></label><p class="hint" data-proposed></p><p class="hint">Places water once at the start. Move and size this object in the viewport; Restart uses its new initial shape. Resolution belongs to Water simulation.</p></div>
   <div data-flow hidden>
+   <label><input type="checkbox" data-emission>Emission</label>
    <label>Flow · litres/s<input class="transform-input" type="number" min="0" step="0.1" data-rate></label>
    <label>Aperture radius<input class="transform-input" type="number" min="0.035" max="0.18" step=".001" data-radius></label>
    <label>Launch speed · m/s<input class="transform-input" type="number" min=".25" max="2.6" step=".01" data-strength></label>
    <label><input type="checkbox" data-retire>Retire emitted water after a time</label><label data-lifetime-field>Lifetime · simulation seconds<input class="transform-input" type="number" min="0" step="1" data-lifetime></label>
    <p class="hint">Without timed retirement, water stays until it leaves the simulation bounds or you reset it. Placement, rate and speed affect new water immediately.</p>
-   <button class="btn" data-stop>Stop emission</button>
   </div>
   <p role="status" data-source-status></p><p role="alert" data-source-error></p>
   <button class="btn" data-source-simulation>Select Water simulation</button>
@@ -127,7 +127,10 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  $('[data-add-flow]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.add({mode:'continuous'});});
  $('[data-source-simulation]').onclick=()=>call(()=>api.selectSimulation(),{error:sourceError});
  $('[data-select-simulation]').onclick=()=>call(()=>api.selectSimulation());
- $('[data-stop]').onclick=()=>{stopTimer('source');revision++;dirty=false;return call(()=>api.edit(selected.id,{mode:'continuous',volumeRate:0}),{error:sourceError});};
+ $('[data-emission]').onchange=()=>{
+  const id=selected?.id,emissionEnabled=$('[data-emission]').checked;
+  return call(async()=>{if(await flush('source')&&selected?.id===id)await api.edit(id,{emissionEnabled});},{error:sourceError});
+ };
  $('[data-match]').onclick=()=>call(()=>api.match(selected?.id??api.read().simulation?.compatibility?.match?.referenceId),{error:$('[data-match-error]')});
  $('[data-fit-bounds]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.fitBounds();});
  $('[data-reset]').onclick=()=>call(()=>api.reset());
@@ -149,6 +152,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   $('[data-release]').disabled=!(s.sources?.length||selected);
   if(selected){
    $('[data-label]').textContent=selected.label;
+   $('[data-emission]').checked=selected.settings.emissionEnabled!==false;
    if(!dirty){
     const finite=selected.settings.mode==='finite_drop';$('[data-mode]').value=finite?'finite_drop':'continuous';$('[data-rate]').value=(selected.settings.volumeRate??selected.settings.rate*.05**3/3)*1000;$('[data-radius]').value=selected.settings.baseRadius;$('[data-strength]').value=selected.settings.strength;$('[data-retire]').checked=selected.settings.lifetimeSeconds!=null;$('[data-lifetime]').value=selected.settings.lifetimeSeconds??6;
     const d=normalizeAuthoredWaterDrop(selected.settings.drop);$('[data-width]').value=d.width;if(!s.simulation?.sampling)$('[data-container]').checked=d.container!==null;

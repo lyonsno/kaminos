@@ -5,7 +5,7 @@ export default {
  async create({host,inputs,record}){
   const document=host.controls.document,app=document.defaultView,water=app.kaminosWaterSources;
   if(!water||!app.kaminosSceneAuthoring)throw Error('Open the authored scene before the pour study');
-  let session,asset,emitterId,recipe,status,wordField,disposed=false,disposal,borrowed=false,resumeFlow=.008,pending=Promise.resolve();
+  let session,asset,emitterId,recipe,status,wordField,disposed=false,disposal,borrowed=false,pending=Promise.resolve();
   // Mounted controls and agent operations share this boundary, including close.
   const serial=action=>value=>{
    if(disposed)return Promise.reject(Error('Pour study is closed'));
@@ -36,11 +36,11 @@ export default {
     const width=next.rows[0].length*next.pitch,depth=next.rows.length*next.pitch;
     app.kaminosSetSceneObjectTransform(nextEmitter,{position:[-width/2+.5,1.0,(73-48)*next.pitch],rotation:[Math.PI/2,0,0]});
     app.renameSceneObject(nextEmitter,'Pour into '+label);
-    water.edit(nextEmitter,{baseRadius:.075,strength:.25,volumeRate:.008});
+    water.edit(nextEmitter,{baseRadius:.075,strength:.25,volumeRate:.008,emissionEnabled:false});
     water.editSimulation({particleCount:8000,waterSampling:{spacing:.05/Math.cbrt(3),container:null,worldBounds:{min:[-width/2-.3,0,-depth/2-.3],max:[width/2+.3,1.3,depth/2+.3]}}});
-    app.selectSceneObject(nextAsset.id);
+    app.selectSceneObject(nextEmitter);
    }catch(error){if(nextEmitter)app.removeSceneObject(nextEmitter);await nextSession.dispose();throw error;}
-   session=nextSession;asset=nextAsset;emitterId=nextEmitter;recipe=next;resumeFlow=.008;
+   session=nextSession;asset=nextAsset;emitterId=nextEmitter;recipe=next;
    if(wordField)wordField.value=label;
    record({kind:'stage-pour.mold',phase:'applied',effective:{label,recipe,emitterId,moldId:asset.id}});
    return read();
@@ -55,7 +55,6 @@ export default {
    recipe=checkedStageMold(molds[0].object.userData.kaminosStageMold);session=await host.scene.open();
    try{asset=await session.attach(molds[0].object,{owned:false});}catch(error){await session.dispose();throw error;}
    emitterId=sources[0].id;borrowed=true;
-   resumeFlow=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId)?.localLiquidEmitter.volumeRate||.008;
   }else{await makeWord(inputs.word??'DENOISER');frame();}
   return {
    read,
@@ -63,13 +62,12 @@ export default {
     async pour(){
      if(disposed)throw Error('Pour study is closed');
      const source=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId);if(!source)throw Error('The pour emitter was removed; build the word again.');
-     if(source.localLiquidEmitter.volumeRate===0)water.edit(emitterId,{volumeRate:resumeFlow});
+     water.edit(emitterId,{emissionEnabled:true});
      if(water.read().runtime)app.kaminosPauseLocalLiquid(false);else await water.release(emitterId);
      const result=read();record({kind:'stage-pour.release',phase:'applied',effective:result});return result;
     },
     stopPour(){
-     const source=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId);if(source?.localLiquidEmitter.volumeRate>0)resumeFlow=source.localLiquidEmitter.volumeRate;
-     water.edit(emitterId,{volumeRate:0});return read();
+     water.edit(emitterId,{emissionEnabled:false});return read();
     },
     selectEmitter(){app.selectSceneObject(emitterId);return read();},
    }).map(([name,action])=>[name,serial(action)])),
@@ -81,12 +79,10 @@ export default {
     const call=(name,value)=>invoke(name,value).then(()=>{status.textContent='';}).catch(error=>{status.textContent=error.message;});
     wordField.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();call('makeWord',wordField.value);}});
     const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:12px 0';
-    for(const [text,name]of [['Build word','makeWord'],['Pour','pour'],['Stop pouring','stopPour'],['Reset water','reset'],['Edit pour','selectEmitter'],['Frame mold','frame']]){
+    for(const [text,name]of [['Build word','makeWord'],['Pour','pour'],['Reset water','reset']]){
      const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=text;b.addEventListener('click',()=>call(name,name==='makeWord'?wordField.value:undefined));buttons.append(b);
     }
-    const help=document.createElement('p');help.textContent='Pour into the runner and watch the letters fill. Select the emitter to change its flow and placement in Properties. Reset water preserves those edits. Save retains the mold and source; the liquid restarts when released.';
-    const scope=document.createElement('p');scope.textContent='This study explores liquid in letter-shaped channels. Burning is not connected yet.';
-    root.append(heading,label,buttons,help,scope,status);
+    root.append(heading,label,buttons,status);
    },
    dispose(){if(!disposed){disposed=true;disposal=pending.then(()=>retire());}return disposal;},
   };

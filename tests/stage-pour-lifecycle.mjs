@@ -24,3 +24,21 @@ test('saved native pair can be borrowed without replacing it or deleting it on c
  const f=fixture(),first=await f.open();const saved=[...f.entries.values()];await first.dispose();for(const row of saved)f.entries.set(row.id,row);
  const reopened=await f.open();assert.equal((await reopened.read()).moldId,saved.find(r=>r.source==='kaminos:stage-mold-v1').id);assert.equal(f.entries.size,2);await reopened.dispose();assert.equal(f.entries.size,2,'closing a viewer preserves loaded authored objects');
 });
+test('pour consumes native source settings across stop, edit, resume and reset',async()=>{
+ const f=fixture(),app=f.document.defaultView,water=app.kaminosWaterSources;
+ let runtime=null,releases=0;const read=water.read;water.read=()=>({...read(),runtime});
+ water.release=async()=>{releases++;runtime={paused:false,step:17};};
+ water.reset=()=>{runtime=null;};app.kaminosPauseLocalLiquid=paused=>{runtime.paused=paused;};
+ const e=await f.open(),id=(await e.read()).emitterId,settings=f.entries.get(id).localLiquidEmitter;
+ water.edit(id,{volumeRate:.0023,baseRadius:.06,strength:.8});await e.invoke('pour');
+ assert.equal(releases,1);assert.equal(settings.volumeRate,.0023);
+ await e.invoke('stopPour');assert.equal(settings.volumeRate,.0023,'stopping leaves the chosen flow on the source');
+ assert.equal(settings.emissionEnabled,false);
+ water.edit(id,{volumeRate:.0031,emissionEnabled:false});await e.invoke('pour');
+ assert.equal(settings.volumeRate,.0031);assert.equal(settings.emissionEnabled,true);
+ assert.equal(settings.baseRadius,.06);assert.equal(settings.strength,.8);
+ assert.equal(releases,1,'resuming preserves the existing water world');assert.equal(runtime.step,17);
+ water.edit(id,{emissionEnabled:false,volumeRate:0});await e.invoke('pour');assert.equal(settings.volumeRate,0,'explicit zero survives');
+ await e.invoke('reset');assert.equal(settings.volumeRate,0);await e.invoke('pour');assert.equal(releases,2);
+ await e.dispose();
+});
