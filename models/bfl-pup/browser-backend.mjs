@@ -2,6 +2,7 @@
 // This adapter owns Transformers.js tensors; callers receive text and provenance.
 import {prepareReference} from './reference-policy.mjs';
 import {installTextRopeCompatibility} from './text-rope-compat.mjs';
+import {independentImageProcessor} from './ordered-image-processor.mjs';
 export const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 export const BFL_SOURCE_REVISION = '3f3edb52b2c55de0d49feab28598b68f7f8e4830';
 
@@ -67,6 +68,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   onProgress({phase:'processor'});
   const processor=await tf.AutoProcessor.from_pretrained(packagePath);
   if(!processor.tokenizer)throw Error('The browser package must identify Qwen3VLProcessor, including its tokenizer.');
+  processor.components.image_processor=independentImageProcessor(processor.image_processor,tf.cat);
   const templateResponse=await fetch(base+'/chat_template.jinja');
   if(!templateResponse.ok)throw Error(`BFL chat template HTTP ${templateResponse.status}`);
   processor.chat_template=await templateResponse.text();
