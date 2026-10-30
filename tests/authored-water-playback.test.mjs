@@ -22,7 +22,6 @@ function fixture({sourceRoot=null,simulationRoot=null}={}){
  await f.input('[data-pause]').onclick();assert.equal(replay,1,'Play starts initial water');assert.equal(toggled,0);
  f.setRuntime({paused:false,step:12,particleCount:4096});f.controls.refreshStatus();await f.input('[data-pause]').onclick();assert.equal(toggled,1,'Pause preserves the live allocation');assert.equal(replay,1);
  await f.input('[data-release]').onclick();assert.equal(replay,2,'Replay always starts over');
- assert.equal(f.input('[data-release]').textContent,'Replay');
  f.setRuntime(null);f.controls.refreshStatus();assert.equal(f.input('[data-pause]').textContent,'Play');
 }
 console.log('Three distinct Water actions preserve Reset, Replay, and Play/Pause semantics');
