@@ -1,3 +1,4 @@
+import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
@@ -11649,6 +11650,7 @@ export function createKaminosVolumePrototype({
   }
   let worldOpticalFallback = null, worldRenderUniform = null;
   let worldSmokeOverlay = 'off';
+  let adaptiveMaterialOptions = null, adaptiveMaterialError = null;
   // All fluid bind groups include the optical texture, including compute passes
   // which do not sample it. Replace it before encoding any fine-grid commands.
   function prepareWorldSmoke() {
@@ -11676,6 +11678,9 @@ export function createKaminosVolumePrototype({
       worldSmoke?.destroy();worldSolidProducer?.destroy();
       worldSolidProducer=createGpuSceneSolidProducer(device,{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
       worldSmoke=createWorldSmoke(device,plan,{translate:[...productTransform.translate],scale:productTransform.scale});worldSmokeKey=key;
+      adaptiveMaterialError=null;
+      try {if(adaptiveMaterialOptions)worldSmoke.configureAdaptiveMaterial(adaptiveMaterialOptions);}
+      catch(error){adaptiveMaterialError=error.message;}
       rebuildFluidBindGroups();
     }
     if(regions.middle){
@@ -18306,6 +18311,7 @@ export function createKaminosVolumePrototype({
     const profile = { identity: SIM_GPU_PROFILE_IDENTITY, status: 'unsupported', reason: null };
     if (!gpuInitialized || !device) { profile.reason = 'gpu-not-initialized'; return profile; }
     if (!device.features?.has?.('timestamp-query')) { profile.reason = 'timestamp-query-not-supported'; return profile; }
+    if (adaptiveMaterialOptions) { profile.reason = 'adaptive-material-timing-uninstrumented'; return profile; }
     const steps = Math.max(1, Math.min(4096, Math.floor(Number(options.steps) || 64)));
     // An override lets one page profile both appearance models back to back
     // (ABAB), so GPU clock state is shared between the arms being compared.
@@ -28589,6 +28595,13 @@ export function createKaminosVolumePrototype({
       return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
         dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
     },
+    configureAdaptiveMaterial(options) {
+      const requested=options===null?null:validateAllocation({...adaptiveMaterialOptions,...options,weights:{...adaptiveMaterialOptions?.weights,...options?.weights}});
+      const effective=worldSmoke?.configureAdaptiveMaterial(requested)??null;
+      adaptiveMaterialOptions=requested;adaptiveMaterialError=null;
+      return {requested,effective,status:worldSmoke?'configured':'awaiting-world-field'};
+    },
+    adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
     setWorldSmokeOverlay(mode) {
       if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
       worldSmokeOverlay=mode;
