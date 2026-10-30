@@ -60,7 +60,7 @@ Use `load: false` to obtain the device and `materials.foreground` before loading
 
 For an existing coordinated host, pass `{ session, foreground }` from the same device and queue. Destruction preserves borrowed device/session/foreground resources. A standalone app owns its created device; its destruction releases it. `snapshot()` reports ownership and phase. `materials.adapter` retains direct access to the original producer when the host needs the lower-level interface.
 
-The packaged [outside application source](examples/external-app/app.js) uses file input, material-map canvases, pause/resume/stop and a continuously rendered activity strip. Bundle that example as `dist/app.js`, copy its `index.html` into `dist`, and copy the exported worker beside the bundle as in the build recipe above. The existing [cooperative demo](https://github.com/lyonsno/kaminos/blob/main/models/supermat/supermat-demo.html) uses the same application entry point with its numerical and scheduling options.
+Start with [Material Studio](https://github.com/lyonsno/kaminos/tree/main/models/supermat/examples/external-app): choose an image, infer its materials, inspect the maps, and download PNGs. Copy the example folder, run `npm install`, then `npm run dev`. Its build script includes the CPU worker. The existing [cooperative demo](https://github.com/lyonsno/kaminos/blob/main/models/supermat/supermat-demo.html) uses the same application entry point with its numerical and scheduling options.
 
 ## Adapter-Level Load, Run, Release
 

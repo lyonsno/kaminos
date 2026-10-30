@@ -15,7 +15,10 @@ export async function packSuperMatModule({ out, version = '0.1.1' } = {}) {
   const stage = await fs.mkdtemp(path.join(os.tmpdir(), 'supermat-pack-'));
   try {
     await buildSuperMatModule(stage);
-    await fs.cp(new URL('../models/supermat/examples/', import.meta.url), path.join(stage, 'examples'), { recursive: true });
+    await fs.cp(new URL('../models/supermat/examples/', import.meta.url), path.join(stage, 'examples'), {
+      recursive: true,
+      filter: source => !['node_modules', 'dist', '.git'].includes(path.basename(source)),
+    });
     await fs.copyFile(new URL('../models/supermat/GETTING_STARTED.md', import.meta.url), path.join(stage, 'README.md'));
     await fs.copyFile(new URL('../models/supermat/LICENSE', import.meta.url), path.join(stage, 'LICENSE'));
     await fs.copyFile(new URL('../webgpu-inference-kit/THIRD_PARTY_NOTICES.txt', import.meta.url), path.join(stage, 'THIRD_PARTY_NOTICES.txt'));
