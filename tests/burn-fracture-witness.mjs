@@ -9,6 +9,15 @@ const read={identity:'kaminos.burn-fracture.replay.v1',effective:{backend:'WebGP
 const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const snapshot={matrices:[...identity,...identity],positions:new Array(8).fill(0),quaternions:[0,0,0,1,0,0,0,1],velocities:new Array(8).fill(0),angularVelocities:new Array(8).fill(0),alive:[true],geometry:new Array(12).fill(0),state:{seconds:0}};
 checkBurnFractureObservation(read,snapshot);
+// Physical comparison failures remain evidence, so the other material can still be captured.
+const coldComparison=checkBurnFractureObservation(read,{...snapshot,alive:[false]},{comparison:{name:'cold',maximumMovement:.02}});
+assert.deepEqual(coldComparison.expectations?.map(x=>x.passed),[false,false],'Record cold behavior failures without aborting the comparison');
+const burnedComparison=checkBurnFractureObservation(read,{...snapshot,alive:[false]},{comparison:{name:'burned',maximumMovement:.2}});
+assert.deepEqual(burnedComparison.expectations.map(x=>x.passed),[true,true]);
+assert.equal([coldComparison,burnedComparison].every(row=>row.expectations.every(x=>x.passed)),false,'A passing burned case cannot erase cold failures');
+assert.deepEqual(checkBurnFractureObservation(read,snapshot,{comparison:{name:'cold',maximumMovement:.009}}).expectations.map(x=>x.passed),[true,true]);
+assert.deepEqual(checkBurnFractureObservation(read,snapshot,{comparison:{name:'burned',maximumMovement:0}}).expectations.map(x=>x.passed),[false,false]);
+assert.throws(()=>checkBurnFractureObservation({...read,effective:{backend:'WebGL'}},snapshot,{comparison:{name:'cold',maximumMovement:0}}),'Invalid runtime evidence must still abort');
 const noFailure={...snapshot,alive:[false],damage:new Array(12).fill(0),state:{seconds:.5,steps:30}};
 assert.throws(()=>checkBurnFractureObservation(read,noFailure,{requireStressFailure:true}),/stress|failure/i,'A disconnected region with zero load-failure evidence cannot establish material failure');
 const loaded={...noFailure,geometry:[1,...new Array(11).fill(0)],damage:[3,2,1.2,10,0,0,0,0,0,0,0,1]};

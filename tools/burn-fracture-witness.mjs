@@ -35,12 +35,11 @@ try{
   const read=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read())),before=await invoke('snapshot');checkBurnFractureObservation(read,before);assert.equal(read.sceneContact,'finite-editable-support');
   assert.deepEqual(read.contactGeometry.replayMatrix,replayMatrix);
   const observation={name,input:{path:file,sha256,url},read,before};report.observations.push(observation);await save();await page.screenshot({path:path.join(out,name+'-before.png')});
-  report.phase='advance:'+name;await save();await invoke('advance',.5);observation.after=await invoke('snapshot');observation.verdict=checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.after);await save();
+  report.phase='advance:'+name;await save();await invoke('advance',.5);observation.after=await invoke('snapshot');await save();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'-after.png')});
   const moves=before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.after.positions[Math.floor(i/3)*4+i%3]));observation.maximumMovement=Math.max(...moves);
   const rotations=before.quaternions.map((v,i)=>Math.abs(v-observation.after.quaternions[i]));observation.maximumRotationDelta=Math.max(...rotations);
-  if(name==='cold'){assert.equal(observation.verdict.broken,0,'Unloaded original material must not fracture');assert.ok(observation.maximumMovement<.01,'Original contact-supported object must remain stable');}
-  else {assert.ok(observation.verdict.broken>0,'Observed material loss must remove connections');assert.ok(observation.maximumMovement>.01,'Regions must actually move after support loss');}
+  observation.verdict=checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.after,{comparison:{name,maximumMovement:observation.maximumMovement}});await save();
   report.phase='playback:'+name;await save();
   await page.getByRole('button',{name:'Run',exact:true}).click();
   observation.playbackStarted=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));await save();
@@ -54,10 +53,12 @@ try{
    observation.supportRecord=support;assert.ok(support,'Registered support is required');
    await invoke('moveSupport',[0,-10,0]);await invoke('advance',.25);observation.unsupported=await invoke('snapshot');
    const moved=Math.max(...before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.unsupported.positions[Math.floor(i/3)*4+i%3])));
-   assert.ok(moved>.1,'Removing contact must release gravity without unpinning a region');await page.screenshot({path:path.join(out,'cold-unsupported.png')});
+   checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.unsupported);
+   observation.verdict.expectations.push({claim:'Removing contact must release gravity without unpinning a region',passed:moved>.1,actual:moved,expected:'maximum coordinate movement > 0.1'});await save();await page.screenshot({path:path.join(out,'cold-unsupported.png')});
   }
   await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
- assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+ report.phase='comparison';report.failedExpectations=report.observations.flatMap(row=>row.verdict.expectations.filter(x=>!x.passed).map(x=>({name:row.name,...x})));await save();
+ assert.deepEqual(report.errors,[]);assert.deepEqual(report.observations.map(x=>x.name),['cold','burned']);assert.equal(report.failedExpectations.length,0,JSON.stringify(report.failedExpectations));report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
 finally{await context?.close();await save();}

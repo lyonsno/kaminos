@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {BURN_FRACTURE_IDENTITY} from '../burn-fracture-core.mjs';
-export function checkBurnFractureObservation(read,snapshot,{requireStressFailure=false}={}){
+export function checkBurnFractureObservation(read,snapshot,{requireStressFailure=false,comparison}={}){
  assert.equal(read.identity,'kaminos.burn-fracture.replay.v1');assert.equal(read.effective.backend,'WebGPU');assert.equal(read.effective.adapter?.vendor,'apple');
  assert.equal(read.thermal,'frozen-not-live-coupled');assert.equal(read.mechanics.identity,BURN_FRACTURE_IDENTITY);assert.equal(read.mechanics.runtimeReadbacks,0);
  if(read.sceneContact==='finite-editable-support'){
@@ -19,7 +19,18 @@ export function checkBurnFractureObservation(read,snapshot,{requireStressFailure
  for(let i=0;i<n;i++)assert.ok(Math.abs(Math.hypot(...snapshot.quaternions.slice(i*4,i*4+4))-1)<1e-3);
  const failures=snapshot.damage?burnFailureEvidence(snapshot):null;
  if(requireStressFailure)assert.ok(failures?.stress.length>0,'Surviving material must have a recorded stress failure');
- return {regions:n,connections:m,broken:snapshot.alive.filter(x=>!x).length,seconds:snapshot.state.seconds,failures};
+ const verdict={regions:n,connections:m,broken:snapshot.alive.filter(x=>!x).length,seconds:snapshot.state.seconds,failures};
+ if(comparison){
+  const {name,maximumMovement}=comparison;assert.ok(['cold','burned'].includes(name));assert.ok(Number.isFinite(maximumMovement)&&maximumMovement>=0);
+  verdict.expectations=name==='cold'?[
+   {claim:'Original material must not fracture under its supported load',passed:verdict.broken===0,actual:verdict.broken,expected:'0 broken connections'},
+   {claim:'Original contact-supported object must remain stable',passed:maximumMovement<.01,actual:maximumMovement,expected:'maximum coordinate movement < 0.01'},
+  ]:[
+   {claim:'Observed material loss must remove connections',passed:verdict.broken>0,actual:verdict.broken,expected:'> 0 broken connections'},
+   {claim:'Regions must actually move after support loss',passed:maximumMovement>.01,actual:maximumMovement,expected:'maximum coordinate movement > 0.01'},
+  ];
+ }
+ return verdict;
 }
 
 export function burnFailureEvidence(snapshot){
