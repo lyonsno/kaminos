@@ -50,3 +50,7 @@ for(const rows of [[small],[small,small]]){
  assert.throws(()=>authoredMlsSetup(rows,extreme),/f32 capacity/);
 }
 assert.equal(inspectAuthoredMlsMaterial([],extreme).executable,false,'Removing the last finite source also changes the grid scale, without breaking inspection');
+
+// Reject conversion underflow even when JavaScript arithmetic reaches zero
+// before the final f32 representability check.
+assert.throws(()=>mlsConfig({mlsMaterial:{pressureWaveSpeed:1e-200,kinematicViscosity:0}}),/f32 capacity/);

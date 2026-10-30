@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup} from '../local-liquid-setup.mjs';
 import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
-import {authoredMlsMaterial} from '../authored-mls-water.mjs';
+import {authoredMlsMaterial,inspectAuthoredMlsMaterial,authoredMlsSetup} from '../authored-mls-water.mjs';
 // Exercise the actual editor function and history, substituting only scene/GPU
 // consumers. Invalid material must never be installed or strand a transaction.
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -17,7 +17,7 @@ const make=new Function('setup','records','createSceneEdits','normalizeLocalLiqu
  const workingScene={objects:[]},LOCAL_LIQUID_EMITTER_TYPE='local-liquid-emitter';
  const scenePlacementTools={edits:createSceneEdits({read:()=>{},write:()=>{}})};
  const syncLocalLiquidHostEmitters=()=>{},updateAuthoringPropertySelection=()=>{},window={};
- const authoredWaterControls={refresh:()=>authoredMlsMaterial(records,localLiquidSetup)};
+ const authoredWaterControls={refresh:()=>{}};
  ${source}
  return {edit:editAuthoredWaterSimulation,read:()=>structuredClone(localLiquidSetup),history:scenePlacementTools.edits};
 `);
@@ -54,7 +54,7 @@ const makeSources=new Function('setup','records','createSceneEdits','normalizeLo
  const localLiquidEmitterRecords=()=>workingScene.objects.map(({object,...r})=>r),sceneObjectTransformState=o=>o.pose;
  const assertSceneConstructionAvailable=()=>{},serializeSceneObject=r=>r,replaceAuthoredWaterPreviewChildren=()=>{};
  const createLocalLiquidEmitterObject=()=>({object:{}}),syncLocalLiquidHostEmitters=()=>{},updateAuthoringPropertySelection=()=>{};
- const authoredWaterControls={refresh:()=>authoredMlsMaterial(localLiquidEmitterRecords(),localLiquidSetup)};
+ const authoredWaterControls={refresh:()=>{}};
  const scenePlacementTools={edits:createSceneEdits({read:()=>{},write:()=>{}})};
  ${sourceEdits}
  return {edit:applyAuthoredWaterSettings,read:()=>({setup:structuredClone(localLiquidSetup),records:localLiquidEmitterRecords()}),history:scenePlacementTools.edits};
@@ -74,3 +74,33 @@ assert.equal(sources.read().records[0].localLiquidEmitter.drop.width,.5);
 const invalid=make({...sourceSetup,waterSampling:{...sourceSetup.waterSampling,particleTarget:1000000}},records,createSceneEdits,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsMaterial);
 assert.doesNotThrow(()=>invalid.edit({mlsMaterial:null}));
 assert.equal(invalid.read().mlsMaterial,undefined);
+
+// History restores authored proposals, including non-executable ones. This is
+// the actual simulation target/history; the scale target substitutes only the
+// native scene transform writer (exercised separately in the browser).
+const scaledRecords=structuredClone(records);
+const recovery=make(sourceSetup,scaledRecords,createSceneEdits,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsMaterial);
+recovery.history.register('@scale',{read:()=>scaledRecords[0].transform,write:pose=>{scaledRecords[0].transform=pose;}});
+const check=(executable,undoCount,redoCount)=>{
+ const read=inspectAuthoredMlsMaterial(scaledRecords,recovery.read());
+ assert.equal(read.executable,executable);
+ assert.deepEqual(recovery.history.state(),{active:null,undoCount,redoCount,replaying:false});
+ if(!executable){assert.match(read.error,/f32 capacity/);assert.equal(read.kinematicViscosity,1e37);assert.throws(()=>authoredMlsSetup(scaledRecords,recovery.read()),/f32 capacity/);}
+};
+recovery.history.apply('@scale',{scale:[.2,.2,.2]});check(false,1,0);
+recovery.edit({mlsMaterial:null});check(true,2,0);
+assert.equal(recovery.history.undo(),true);check(false,1,1);
+assert.equal(recovery.history.undo(),true);check(true,0,2);
+assert.equal(recovery.history.redo(),true);check(false,1,1);
+assert.equal(recovery.history.redo(),true);check(true,2,0);
+
+// Fixing the same invalid proposal by enlarging its source must also be undoable.
+const smallRecords=structuredClone(records);smallRecords[0].transform.scale=[.2,.2,.2];
+const sourceRepair=makeSources(sourceSetup,smallRecords,createSceneEdits,normalizeLocalLiquidSetup,normalizeLocalLiquidEmitter,resolveAuthoredWaterSampling,authoredMlsMaterial);
+sourceRepair.edit('drop',{drop:{...smallRecords[0].localLiquidEmitter.drop,width:2.5}});
+assert.equal(inspectAuthoredMlsMaterial(sourceRepair.read().records,sourceRepair.read().setup).executable,true);
+assert.equal(sourceRepair.history.undo(),true);
+assert.equal(inspectAuthoredMlsMaterial(sourceRepair.read().records,sourceRepair.read().setup).executable,false);
+assert.equal(sourceRepair.history.redo(),true);
+assert.equal(inspectAuthoredMlsMaterial(sourceRepair.read().records,sourceRepair.read().setup).executable,true);
+assert.equal(sourceRepair.history.state().active,null);
