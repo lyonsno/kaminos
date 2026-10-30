@@ -60,7 +60,11 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     }
     if(ownerComponents?.active()){
       if(event.code==='KeyA'&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey){steal(event);attempt(()=>ownerComponents.selectAll(event.altKey?'deselect':'select'));return;}
-      if(['Delete','Backspace'].includes(event.key)||['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
+      if(['Delete','Backspace'].includes(event.key)){
+        if(event.ctrlKey||event.metaKey||event.altKey)return;
+        steal(event);if(!event.repeat)attempt(()=>{if(!ownerComponents.remove?.())setInfo('This component editor does not support deletion');});return;
+      }
+      if(['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
       return;
     }
     if(!live())return;

@@ -92,3 +92,14 @@ selected=null;key('Tab');assert.equal(active(),false);assert.match(infos.at(-1),
 selected='mesh-1';key('Tab');assert.equal(active(),true);
 present=false;assert.equal(api.active(),false,'removing the object ends Edit Mode');
 assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[true,true,true]);
+
+// Owner-defined components use Delete without falling through to parent object deletion.
+{
+ const doc=Object.assign(new EventTarget(),{body,activeElement:body});let removed=0,on=true,held=false;
+ installPolyEditMode({document:doc,viewport,canvas,camera,objectFor:()=>object,selectedId:()=> 'mechanism',blocked:()=>held,ownerComponents:{active:()=>on,remove:()=>{removed++;return true;}}});
+ const press=(props={})=>{const e=new Event('keydown',{cancelable:true});for(const [k,v]of Object.entries({key:'Delete',code:'Delete',target:body,...props}))Object.defineProperty(e,k,{value:v});doc.dispatchEvent(e);return e;};
+ assert.equal(press().defaultPrevented,true);assert.equal(removed,1);
+ press({key:'Backspace'});assert.equal(removed,2);
+ press({target:field});press({repeat:true});press({metaKey:true});assert.equal(removed,2);
+ held=true;press();assert.equal(removed,2);held=false;on=false;assert.equal(press().defaultPrevented,false);
+}

@@ -17,6 +17,7 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
   },
   pick(event,context){if(!active())return false;current.adapter.pick?.(event,context);return true;},
   selectAll(action){if(active())current.adapter.selectAll?.(action);},
+  remove(){if(!active()||!current.adapter.remove)return false;cancel();try{current.adapter.remove();return true;}finally{refresh();}},
   register(id,adapter){
    if(!id||owners.has(id)||!['target','enter','exit'].every(k=>typeof adapter?.[k]==='function'))throw Error('Component editing requires one adapter per scene object');
    owners.set(id,adapter);let disposed=false;

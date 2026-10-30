@@ -6435,7 +6435,7 @@ function updateTransformInspector() {
   if (!entry && workingScene.activeGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
-    empty.textContent = workingScene.selection.ids.length>1?`${workingScene.selection.ids.length} selected · Transform volumes individually`:'No object selected';
+    empty.textContent = sceneComponents?.active()?'Component editing · select a movable component to transform':workingScene.selection.ids.length>1?`${workingScene.selection.ids.length} selected · Transform volumes individually`:'No object selected';
   }
   if (!entry) return;
 
@@ -12880,7 +12880,7 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:()=>selectedPlacementEntry()??(sceneComponents?.active()?selectedSceneObjectEntry():null),onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
