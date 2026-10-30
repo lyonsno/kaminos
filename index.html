@@ -12747,6 +12747,9 @@ function editAuthoredWaterSimulation(patch){
  const target='@authored-water-simulation';
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
+  if(localLiquidSetup&&JSON.stringify({...next,transmissionMinContribution:undefined})===JSON.stringify({...localLiquidSetup,transmissionMinContribution:undefined})){
+   localLiquidSetup=next;localLiquidHost?.setSetup?.(localLiquidSetup);authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();return;
+  }
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);

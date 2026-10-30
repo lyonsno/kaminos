@@ -103,15 +103,15 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let edge = smoothstep(1.0, 0.46, r2);
   let surfaceWeight = mix(0.55, 1.0, input.surface);
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
-  let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, 3.6, input.speed));
+  let opticalThickness = thickness * 0.22 * (0.55 + 0.45 * smoothstep(0.0, 3.6, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
-  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius);
-  let smoothFrontViewDepth = max(0.001, input.viewDepth - cap * input.radius * 0.42);
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius * 0.35);
+  let smoothFrontViewDepth = max(0.001, input.viewDepth - cap * input.radius * 0.35);
   var output: AccumFragmentOutput;
   output.accumulation = vec4<f32>(opticalThickness, input.speed * opticalThickness, depthWeight, smoothFrontViewDepth * depthWeight);
   output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
-  output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius);
+  output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius * 0.35);
   return output;
 }
 
@@ -149,9 +149,32 @@ fn readSupportOrderingDepth(pixel: vec2<i32>) -> f32 {
   return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).y;
 }
 
-fn readBackDepth(pixel: vec2<i32>) -> f32 {
+fn readRawBackDepth(pixel: vec2<i32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(opticalSlabBackDepth));
   return textureLoad(opticalSlabBackDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
+}
+
+fn readBackDepth(pixel: vec2<i32>) -> f32 {
+  let centerDepth = readRawBackDepth(pixel);
+  if (centerDepth <= 0.001) {
+    return centerDepth;
+  }
+  let radius = max(params.viewport.z, 0.016);
+  var depthSum = centerDepth * 2.5;
+  var weightSum = 2.5;
+  for (var y = -2; y <= 2; y = y + 1) {
+    for (var x = -2; x <= 2; x = x + 1) {
+      if (x == 0 && y == 0) { continue; }
+      let sampleDepth = readRawBackDepth(pixel + vec2<i32>(x, y));
+      if (sampleDepth <= 0.001) { continue; }
+      let depthDelta = (sampleDepth - centerDepth) / (radius * 2.6);
+      if (abs(depthDelta) > 3.0) { continue; }
+      let weight = exp(-f32(x * x + y * y) / 5.0 - depthDelta * depthDelta);
+      depthSum = depthSum + sampleDepth * weight;
+      weightSum = weightSum + weight;
+    }
+  }
+  return depthSum / max(weightSum, 0.0001);
 }
 
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
@@ -178,14 +201,30 @@ fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
   return depthSum / max(weightSum, 0.0001);
 }
 
-// Front-surface normals use the Partition-of-Unity smoothed depth so overlapping
-// particle splats form a continuous liquid sheet without sphere-edge cliffs.
+// Bilateral-filter the min-blended front surface (opticalSlabFrontDepth.x) so
+// front-layer particles fuse into a smooth glass sheet without mixing in deep
+// interior lattice layers.
 fn readFrontDepth(pixel: vec2<i32>) -> f32 {
-  let accum = readAccum(pixel);
-  if (accum.z < 0.018 || accum.x < 0.012) {
-    return readRawFrontDepth(pixel);
+  let centerDepth = readRawFrontDepth(pixel);
+  if (centerDepth >= 29.5) {
+    return centerDepth;
   }
-  return edgePreservingDepth(pixel, accum);
+  let radius = max(params.viewport.z, 0.016);
+  var depthSum = centerDepth * 2.5;
+  var weightSum = 2.5;
+  for (var y = -3; y <= 3; y = y + 1) {
+    for (var x = -3; x <= 3; x = x + 1) {
+      if (x == 0 && y == 0) { continue; }
+      let sampleDepth = readRawFrontDepth(pixel + vec2<i32>(x, y));
+      if (sampleDepth >= 29.5) { continue; }
+      let depthDelta = (sampleDepth - centerDepth) / (radius * 2.6);
+      if (abs(depthDelta) > 3.0) { continue; }
+      let weight = exp(-f32(x * x + y * y) / 6.5 - depthDelta * depthDelta);
+      depthSum = depthSum + sampleDepth * weight;
+      weightSum = weightSum + weight;
+    }
+  }
+  return depthSum / max(weightSum, 0.0001);
 }
 
 fn reconstructWorldPosition(pixel: vec2<i32>, viewDepth: f32) -> vec3<f32> {
@@ -244,6 +283,8 @@ fn traceDeferredSceneInterval(
   let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
   let dimsFloat = vec2<f32>(dims);
   var distance = minimumDistance;
+  var prevDistance = minimumDistance;
+  var prevDepthDelta = -1.0;
   for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
     if (waterSegment) {
       distance = minimumDistance + (maximumDistance - minimumDistance) * f32(stepIndex) / 23.0;
@@ -252,32 +293,43 @@ fn traceDeferredSceneInterval(
     let samplePosition = rayOrigin + rayDirection * distance;
     let projected = projectWorldToDeferred(samplePosition);
     if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
+      prevDistance = distance;
       distance = distance + 0.05 + distance * 0.105;
       continue;
     }
     let scenePixel = clamp(vec2<i32>(projected.xy * dimsFloat), vec2<i32>(0), dims - vec2<i32>(1));
     let sceneDepth = textureLoad(deferredLinearDepthObject, scenePixel, 0).x;
     let depthDelta = projected.z - sceneDepth;
-    let crossingTolerance = 0.028 + distance * 0.012;
+    let crossingTolerance = 0.018 + distance * 0.008;
     let validHostDepth = (sceneDepth > params.hostFrameControls.z) && (sceneDepth < (params.hostFrameControls.y - 0.01));
-    if (validHostDepth && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
+    if (validHostDepth && depthDelta >= -crossingTolerance && depthDelta <= 0.09 + distance * 0.015) {
       let scenePosition = reconstructWorldPosition(scenePixel, sceneDepth);
-      let alongRay = dot(scenePosition - rayOrigin, rayDirection);
+      var alongRay = dot(scenePosition - rayOrigin, rayDirection);
+      if (stepIndex > 0u && prevDepthDelta < 0.0 && depthDelta >= 0.0) {
+        let t = clamp(-prevDepthDelta / max(depthDelta - prevDepthDelta, 0.0001), 0.0, 1.0);
+        alongRay = mix(prevDistance, distance, t);
+      }
       let across = reconstructWorldPosition(scenePixel + vec2<i32>(1, 0), sceneDepth) - scenePosition;
       let down = reconstructWorldPosition(scenePixel + vec2<i32>(0, 1), sceneDepth) - scenePosition;
       let pixelFootprint = max(length(across) + length(down), 0.0001);
       let transverseError = length(scenePosition - (rayOrigin + rayDirection * alongRay));
-      if (alongRay < minimumDistance || alongRay > maximumDistance || transverseError > pixelFootprint) {
+      if (alongRay < minimumDistance || alongRay > maximumDistance || transverseError > pixelFootprint * 1.35) {
+        prevDistance = distance;
+        prevDepthDelta = depthDelta;
         distance = distance + 0.05 + distance * 0.105;
         continue;
       }
+      let refinedPosition = rayOrigin + rayDirection * alongRay;
+      let refinedProjected = projectWorldToDeferred(refinedPosition);
       hit.valid = 1.0;
-      hit.uv = projected.xy;
-      hit.position = rayOrigin + rayDirection * alongRay;
+      hit.uv = clamp(select(projected.xy, refinedProjected.xy, refinedProjected.w > 0.5), vec2<f32>(0.001), vec2<f32>(0.999));
+      hit.position = refinedPosition;
       hit.distance = alongRay;
-      hit.confidence = 1.0 - smoothstep(0.0, 0.22, abs(depthDelta));
+      hit.confidence = 1.0 - smoothstep(0.0, 0.16, abs(depthDelta));
       return hit;
     }
+    prevDistance = distance;
+    prevDepthDelta = depthDelta;
     distance = distance + 0.05 + distance * 0.105;
   }
   return hit;
@@ -582,7 +634,7 @@ struct OpticalSlab {
 }
 
 fn evaluateOpticalSlab(pixel: vec2<i32>, centerAccum: vec4<f32>) -> OpticalSlab {
-  let entryDepth = readRawFrontDepth(pixel);
+  let entryDepth = readFrontDepth(pixel);
   let exitDepth = readBackDepth(pixel);
   let geometricPathLength = max(0.0, exitDepth - entryDepth);
   let spanInParticleDiameters = geometricPathLength / max(params.viewport.z * 2.0, 0.001);
@@ -664,7 +716,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
     return background;
   }
 
-  let supportOrderingDepth = readRawFrontDepth(pixel);
+  let supportOrderingDepth = readSupportOrderingDepth(pixel);
   let hostSceneDepth = textureLoad(deferredLinearDepthObject, pixel, 0).x;
   if (hostSceneDepth > 0.0 && supportOrderingDepth >= hostSceneDepth - 0.002) {
     return background;
@@ -693,7 +745,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   }
   let coverageContinuity = smoothstep(0.42, 0.90, coverageSupportSum / max(coverageWeightSum, 0.001));
   let legacyCoverage = centerCoverage * coverageContinuity;
-  let shadingDepth = edgePreservingDepth(pixel, centerAccum);
+  let shadingDepth = readFrontDepth(pixel);
   let slab = evaluateOpticalSlab(pixel, centerAccum);
   let interfaceNormal = estimateInterfaceNormal(pixel, shadingDepth, centerAccum, coverageContinuity);
   let denseCoverageClosure = max(legacyCoverage, smoothstep(0.48, 0.84, coverageContinuity));
@@ -773,18 +825,20 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
       queryDirection = insideWorldRay;
     }
   }
-  let opticalThicknessPath = min(thickness * 0.12, metricSceneBoundedPath);
+  let opticalThicknessPath = min(thickness * 0.06, metricSceneBoundedPath);
   let prelimSlabPath = min(
     select(
       mix(opticalThicknessPath, geometricPathLength, queryValidity),
-      max(waterPath, opticalThicknessPath * interfaceNormal.denseBodyConfidence),
+      waterPath,
       geometricPathKnown,
     ),
     metricSceneBoundedPath,
   );
   let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
   let prelimAbsorption = exp(-calibratedAbsorptionCoefficient * prelimSlabPath);
-  let transmissionContribution = (1.0 - prelimFresnel) * max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b));
+  let prelimTransmittance = exp(-3.2 * prelimSlabPath);
+  let transmissionContribution = (1.0 - prelimFresnel)
+    * min(max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b)), prelimTransmittance);
   let transmissionRayActive = transmissionContribution >= transmissionMinContribution;
   queryValidity = select(0.0, queryValidity, transmissionRayActive);
   if (!submergedSurface && queryValidity > 0.5) {
@@ -824,7 +878,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
     absorptionPath = prelimSlabPath;
   }
   if (geometricPathKnown) {
-    absorptionPath = min(max(waterPath, opticalThicknessPath * interfaceNormal.denseBodyConfidence), metricSceneBoundedPath);
+    absorptionPath = waterPath;
   }
   absorptionPath = min(absorptionPath, metricSceneBoundedPath);
   let absorption = exp(-calibratedAbsorptionCoefficient * absorptionPath);
@@ -855,7 +909,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   let refractedRadiance = mix(
     refractedScene.rgb,
     select(transmissionQuadratureRadiance, robustBodyRadiance, bodyTransportMode == 1),
-    select(0.0, queryValidity, hasDeferredTransmissionHit),
+    select(0.0, queryValidity * refractionQuery.confidence * 0.55, hasDeferredTransmissionHit),
   );
 
   let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
