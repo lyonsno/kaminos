@@ -1,0 +1,3 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';import {ashDispatchGrid} from '../ash/gpu-plan.mjs';
+test('dispatch grid covers all work with only final-row padding',()=>{for(const n of [0,1,15,16,17,31,256]){const [x,y,z]=ashDispatchGrid(n,16);assert.equal(z,1);assert.ok(x<=16&&y<=16);assert.ok(x*y>=n,`${n} groups omitted`);assert.ok(n===0||x*y-n<16);const seen=[];for(let j=0;j<y;j++)for(let i=0;i<x;i++){const index=j*16+i;if(index<n)seen.push(index);}assert.deepEqual(seen,Array.from({length:n},(_,i)=>i));}assert.throws(()=>ashDispatchGrid(257,16),/capacity/);});

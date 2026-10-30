@@ -48,14 +48,14 @@ export default {id:'ash-gpu-deposition',title:'Ash — GPU live contact',async c
    try{
     const bounds={min:[-width/2,groundY,centerZ-width/2],max:[width/2,groundY+height,centerZ+width/2]},layout=patchLayout({cellSize,bounds,...(tiled?{tileSize}:{})});
     // Reject impossible allocation before allocating a CPU support map.
-    if(layout.count*16>device.limits.maxStorageBufferBindingSize||Math.ceil(layout.count/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Requested patch exceeds effective GPU capacity');
+    if(!tiled&&(layout.count*16>device.limits.maxStorageBufferBindingSize||Math.ceil(layout.count/64)>device.limits.maxComputeWorkgroupsPerDimension))throw Error('Requested patch exceeds effective GPU capacity');
     const solid=new Uint8Array(layout.count),[nx,ny,nz]=layout.dims;
     if(!tiled)for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
      const wx=bounds.min[0]+(x+.5)*cellSize,wy=(y+.5)*cellSize,wz=bounds.min[2]+(z+.5)*cellSize;
      const sx=Math.floor((wx+supportScale)/supportCell),sy=Math.floor(wy/supportCell),sz=Math.floor((wz-supportCenterZ+supportScale)/supportCell);
      if(sx>=0&&sx<grid&&sy>=0&&sy<supportHeight&&sz>=0&&sz<grid)solid[x+nx*(y+ny*z)]=support.cells[sx+grid*(sy+supportHeight*sz)]?1:0;
     }
-    const next=await (tiled?createGpuTiledAsh:createGpuAshPatch)({renderer,cellSize,bounds,solid,tileSize,sceneRecords:tiled?sceneRecords:null});
+    const next=await (tiled?createGpuTiledAsh:createGpuAshPatch)({renderer,cellSize,bounds,solid,tileSize,sceneRecords:tiled?sceneRecords:null,surfaceMode:inputs.surfaceMode??'cells'});
     if(asset){asset.root.add(next.root);patch?.dispose();}else asset=await session.attach(next.root,{owned:true,presentation:true,metadata:{label:'GPU ash patch',source:'ash:gpu-patch',type:'experiment'}});
     // Stable registration root cannot be disposed when replacing its child.
     patch=next;lastPose=null;sync();session.redraw();return read();

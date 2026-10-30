@@ -1,5 +1,6 @@
 import {Box3,Vector3,Matrix4,Mesh} from '../lib/three.core.js';
 import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
+import {ashDispatchGrid} from './gpu-plan.mjs';
 import {sceneTiles} from './scene-plan.mjs';
 
 // Object-local occupancy survives rigid motion. Geometry is conservatively
@@ -10,6 +11,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
  const blank=device.createBuffer({size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const code=`
+ const ROW:u32=${device.limits.maxComputeWorkgroupsPerDimension}u;
  const B:u32=${t.width}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
  const TD=vec3<u32>(${t.dims.map(n=>n+'u')});const D=vec3<u32>(${p.dims.map(n=>n+'u')});
  const O=vec3<f32>(${p.origin.map(n=>Number(n).toFixed(12))});const S:f32=${p.cellSize.toFixed(12)};
@@ -23,16 +25,16 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  fn ti(c:vec3<u32>)->u32{return c.x+TD.x*(c.y+TD.y*c.z);}
  fn cell(wg:u32,lid:u32)->vec3<u32>{let i=(wg%G)*64u+lid;return tc(jobs[1u+wg/G])*B+vec3<u32>(i%B,(i/B)%B,i/(B*B));}
  @compute @workgroup_size(64) fn clear(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
-  let local=(w.x%G)*64u+l.x;if(local>=V){return;}let c=cell(w.x,l.x);
+  let group=w.x+w.y*ROW;if(group>=jobs[0]*G){return;}let local=(group%G)*64u+l.x;if(local>=V){return;}let c=cell(group,l.x);
   if(all(c<D)){solid[c.x+D.x*(c.y+D.y*c.z)]=0u;}
-  if(local==0u){let a=vec3<i32>(tc(jobs[1u+w.x/G]));
+  if(local==0u){let a=vec3<i32>(tc(jobs[1u+group/G]));
    for(var z=-1;z<=1;z++){for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
     let q=a+vec3<i32>(x,y,z);if(all(q>=vec3<i32>(0))&&all(q<vec3<i32>(TD))){let i=ti(vec3<u32>(q))*8u;atomicStore(&headers[i],1u);atomicStore(&headers[i+2u],1u);}
    }}}
   }
  }
  @compute @workgroup_size(64) fn stamp(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
-  if((w.x%G)*64u+l.x>=V){return;}let c=cell(w.x,l.x);if(any(c>=D)){return;}
+  let group=w.x+w.y*ROW;if(group>=jobs[0]*G||(group%G)*64u+l.x>=V){return;}let c=cell(group,l.x);if(any(c>=D)){return;}
   let world=O+(vec3<f32>(c)+vec3<f32>(.5))*S;
   let point=(pose.inverse*vec4<f32>(world,1)).xyz;let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));
   if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return;}
@@ -109,7 +111,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   }
   lastTiles=dirty.size;if(!dirty.size)return false;
   device.queue.writeBuffer(jobs,0,new Uint32Array([dirty.size,...dirty]));
-  const encoder=device.createCommandEncoder(),dispatch=(name,bind)=>{const pass=encoder.beginComputePass({label:'ash scene '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(dirty.size*t.groupsPerTile);pass.end();};
+  const encoder=device.createCommandEncoder(),dispatch=(name,bind)=>{const pass=encoder.beginComputePass({label:'ash scene '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(...ashDispatchGrid(dirty.size*t.groupsPerTile,device.limits.maxComputeWorkgroupsPerDimension));pass.end();};
   dispatch('clear',clearGroup);
   // Recompose all overlapping members, including unchanged objects, so moving
   // or removing one object cannot erase another object's occupied cells.
