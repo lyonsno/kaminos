@@ -11650,7 +11650,7 @@ export function createKaminosVolumePrototype({
   }
   let worldOpticalFallback = null, worldRenderUniform = null;
   let worldSmokeOverlay = 'off';
-  let adaptiveMaterialOptions = null, adaptiveMaterialError = null;
+  let adaptiveMaterialOptions = controlsSnapshot.adaptiveMaterial?validateAllocation(controlsSnapshot.adaptiveMaterial):null, adaptiveMaterialError = null;
   // All fluid bind groups include the optical texture, including compute passes
   // which do not sample it. Replace it before encoding any fine-grid commands.
   function prepareWorldSmoke() {
@@ -27796,6 +27796,10 @@ export function createKaminosVolumePrototype({
     setControls(next) {
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
       this.validateGridControls(next);
+      if(Object.hasOwn(next,'adaptiveMaterial')) {
+        const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
+        if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);
+      }
       if(Object.hasOwn(next,'raymarchMode')||Object.hasOwn(next,'opticalTolerance')) {
         const config=opticalSteppingConfig({mode:next.raymarchMode??controlsSnapshot.raymarchMode??'numerical',
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
