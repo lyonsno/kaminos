@@ -26597,10 +26597,16 @@ sceneInitialization.then(async () => {
     if (admission === startupSceneRedirect) return null;
     const fireBoot = fireAtBoot(new URLSearchParams(location.search), startupSceneHash);
     window.__kaminosFireBoot = fireBoot;
-    return fireBoot.boot ? initKaminosVolumeRoute() : null;
+    if (!fireBoot.boot) return null;
+    return initKaminosVolumeRoute().catch(error => {
+      reportKaminosVolumeRouteInitFailure(error);
+      throw error;
+    });
   });
   ownerVolumeReady=volumeLoaded;
-  volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  // Admission errors belong to scene restoration, not the preset's failure UI.
+  // Observe this derived rejection even when admission prevents restore awaiting it.
+  volumeLoaded.catch(() => {});
   const startupSceneRestore = startupSceneAdmission.then(async admission => {
     if (admission === startupSceneRedirect) return startupSceneRedirect;
     await Promise.all([environmentLoaded, volumeLoaded]);
