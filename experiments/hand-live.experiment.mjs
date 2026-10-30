@@ -225,7 +225,7 @@ export default {
       try{
         await previous?.dispose();
         if(disposed)throw Error('experiment closed');
-        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true,...(fluidBackend==='mls-mpm'?{viscosity:fluidViscosity,gridSize:fluidGridSize}:{})},packet:idlePacket()});
+        const candidate=await host.fluid.openInlets({backend:fluidBackend,setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:count,densityIterations:3,showSupportGeometry:true,...(fluidBackend==='mls-mpm'?{viscosity:fluidViscosity,gridSize:fluidGridSize,goinPile:inputs.goinPile}:{})},packet:idlePacket()});
         if(disposed){await candidate.dispose();throw Error('experiment closed');}
         fluid=candidate;fluidError=null;updateFluid();useFluid(live=>live.setPaused(!running));
         fluidState=useFluid(live=>live.read());
@@ -283,6 +283,7 @@ export default {
     };
     return {
       read,operations:{start,stop,frame,setAcquisition,setParticleCount,
+      resetPile(){return queueWater(async()=>{await mountWater(particleCount);record({kind:'hand-live.reset-pile',phase:'applied',effective:read()});return read();});},
       snapshotWater(){if(!fluid)throw Error('Water is not mounted');return fluid.snapshot();},
       setJetSpeed(value){
         if(!Number.isFinite(value)||value<0)throw Error('Invalid jet speed');jetSpeed=value;updateFluid();sync();jetInput?.setCustomValidity('');
@@ -308,6 +309,7 @@ export default {
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
         if(fingerJuice){
+          if(inputs.goinPile){const reset=document.createElement('button');reset.textContent='Reset pile';reset.onclick=()=>invoke('resetPile').catch(cause=>{fluidError=String(cause);sync();});root.append(reset);}
           for(const [labelText,value,min,step,operation] of [['Particle capacity',particleCount,0,2400,'setParticleCount'],['Emission / second',sourceFlux,0,60,'setSourceFlux']]){
             const label=document.createElement('label');label.textContent=labelText;label.style.display='block';
             const input=document.createElement('input');input.type='number';input.min=min;input.step=step;input.value=value;

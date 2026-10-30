@@ -11,7 +11,7 @@ export default {
     if(!emitter.origin?.every(Number.isFinite)||emitter.origin.length!==3||!emitter.direction?.every(Number.isFinite)||emitter.direction.length!==3||Math.hypot(...emitter.direction)<1e-8)throw Error('Invalid nozzle pose');
     const scene=await host.scene.open();let fluid,unsubscribe;
     try{
-    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000,viscosity:inputs.viscosity??.1,gridSize:inputs.gridSize??64},packet:idleFingerPacket()});
+    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000,viscosity:inputs.viscosity??.1,gridSize:inputs.gridSize??64,goinPile:inputs.goinPile},packet:idleFingerPacket()});
     let running=false,moving=inputs.moving??true,flux=inputs.sourceFlux??1800,time=0,origin=[...emitter.origin],direction=[...emitter.direction],status;
     const read=()=>({source:'explicit_synthetic_nozzle_not_camera',running,moving,flux,jetSpeed,origin,direction,runtime:fluid.read()});
     const publish=()=>{

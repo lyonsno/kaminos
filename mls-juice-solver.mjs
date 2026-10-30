@@ -21,13 +21,14 @@ const boundary=`
 
 export async function createMlsJuiceSolver({device,setup,packet,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
+  const pile=config.goinPile?(await import('./mls-goin-pile.mjs')).createMlsGoinPile(config):null;
   for(const size of [config.capacity*80,config.gridCells*16]){
     if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
   }
   if(Math.ceil(config.gridCells/64)>(device.limits?.maxComputeWorkgroupsPerDimension??Infinity))throw Error('MLS grid exceeds effective one-dimensional dispatch limit');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
-  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0;
+  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,inFlight=Promise.resolve();
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
   const cells=buffer(config.gridCells*16,U.STORAGE|U.COPY_DST,'MLS grid');
   const densities=buffer(config.capacity*4,U.STORAGE,'MLS density');
@@ -35,7 +36,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
   const box=uniform(new Float32Array([...config.dimensions,0]),'MLS grid extent');
   const count=uniform(new Uint32Array([config.capacity,0,0,0]),'MLS allocated slots');
   const dt=uniform(new Float32Array([config.dt*config.modelSecondsPerSecond,0,0,0]),'MLS model dt');
-  const obstacle=uniform(new Float32Array([...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),config.obstacle.radius/config.cell]),'MLS prescribed sphere');
+  const obstacle=uniform(new Float32Array([...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),pile?-2:config.obstacle.radius/config.cell]),'MLS prescribed sphere');
   const resources=[particles,cells,box,count,densities,dt,obstacle];
   const make=async(code,entry,bindings,constants={})=>{
     const module=device.createShaderModule({label:`MLS ${entry}`,code});
@@ -46,6 +47,18 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
     return {pipeline,group};
   };
   try {
+    let contact=null,bodyBuffer,impulseBuffer,impulseReadback;
+    if(pile){
+      bodyBuffer=buffer(config.goinPile.count*112,U.STORAGE|U.COPY_DST,'MLS goin body state');
+      impulseBuffer=buffer(config.goinPile.count*32,U.STORAGE|U.COPY_SRC|U.COPY_DST,'MLS goin impulses');
+      impulseReadback=buffer(config.goinPile.count*32,U.COPY_DST|U.MAP_READ,'MLS asynchronous contact return');
+      resources.push(bodyBuffer,impulseBuffer);
+      const response=await fetch(new URL('./mls-goin-contact.wgsl',import.meta.url));
+      if(!response.ok)throw Error('MLS goin contact shader unavailable');
+      contact=await make(await response.text(),'contact',[[0,0],[1,7],[2,8]],{
+        cell:config.cell,timeScale:config.modelSecondsPerSecond,originX:config.min[0],originY:config.min[1],originZ:config.min[2],
+        particleMass:config.goinPile.particleMass,impulseScale:1048576,extentX:config.dimensions[0],extentY:config.dimensions[1],extentZ:config.dimensions[2]});
+    }
     const kernels=[];
     for(const name of ['p2g_1','p2g_2','g2p']){
       const response=await fetch(new URL(`./vendor/splash-mls-mpm/${name}.wgsl`,import.meta.url));
@@ -86,14 +99,16 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         cells[id.x].vx=i32(v.x*65536.);cells[id.x].vy=i32(v.y*65536.);cells[id.x].vz=i32(v.z*65536.);
       }`,'grid',[[0,1],[1,2],[2,5],[3,6]]);
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
-    return {config,particles,
+    const api={config,particles,
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
       advance(nowMs=now(),epochMs=Date.now()){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         clock.observe(nowMs,paused);
         if(pending||paused)return false;
-        const startTime=time,steps=clock.advance(nowMs,paused);if(!steps)return false;
+        // A coupled transaction ends before the next substep can read obsolete body state.
+        // All elapsed time remains in the clock; asynchronous completion pumps the backlog.
+        const startTime=time,steps=clock.advance(nowMs,paused,pile?1:Infinity);if(!steps)return false;
         const injections=[];
         for(let i=0;i<steps;i++){
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
@@ -104,14 +119,26 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
           values.set(b.position,i*20);values[i*20+3]=b.life;values.set(b.velocity,i*20+4);i++;
         }upload.unmap();}
         const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0;
+        if(pile){device.queue.writeBuffer(bodyBuffer,0,pile.pack());encoder.clearBuffer(impulseBuffer);}
         for(const births of injections){
           for(const b of births){encoder.copyBufferToBuffer(upload,source,particles,b.slot*80,80);source+=80;}
           encoder.clearBuffer(cells);
           dispatch(encoder,kernels[0],config.capacity);dispatch(encoder,kernels[1],config.capacity);
           dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
+          if(contact)dispatch(encoder,contact,config.capacity);
         }
+        if(pile)encoder.copyBufferToBuffer(impulseBuffer,0,impulseReadback,0,config.goinPile.count*32);
         device.queue.submit([encoder.finish()]);pending=true;
-        device.queue.onSubmittedWorkDone().catch(e=>{failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
+        inFlight=(async()=>{
+          if(pile){
+            await impulseReadback.mapAsync(GPUMapMode.READ);
+            const result=new Int32Array(impulseReadback.getMappedRange()).slice();impulseReadback.unmap();
+            if(!disposed)pile.complete(result);
+          }else await device.queue.onSubmittedWorkDone();
+        })().catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{
+          pending=false;upload?.destroy();
+          if(pile&&!paused&&!disposed&&!failure)api.advance(now(),Date.now());
+        });
         return true;
       },
       read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.gridCells,
@@ -119,15 +146,18 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
-        collision:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
+        bodies:pile?.read()??null,
+        collision:pile?'dynamic_goin_cylinders_particle_contact_async_substep_exchange':'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
       async snapshot(){
         if(disposed)throw Error('MLS solver disposed');
+        await inFlight;if(failure)throw Error(failure);
         const readback=device.createBuffer({size:config.capacity*80,usage:U.COPY_DST|U.MAP_READ});
         try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(particles,0,readback,0,config.capacity*80);device.queue.submit([encoder.finish()]);
           await readback.mapAsync(GPUMapMode.READ);return new Float32Array(readback.getMappedRange()).slice();
         }finally{readback.destroy();}
       },
-      dispose(){if(disposed)return;disposed=true;for(const b of owned)b.destroy();}
+      dispose(){if(disposed)return;disposed=true;pile?.dispose();for(const b of owned)b.destroy();}
     };
-  }catch(error){for(const b of owned)b.destroy();throw error;}
+    return api;
+  }catch(error){pile?.dispose();for(const b of owned)b.destroy();throw error;}
 }

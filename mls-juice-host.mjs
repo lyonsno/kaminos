@@ -21,8 +21,17 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
   for(const [x,z,sx,sz] of [[c.bounds.min[0],centerZ,.06,extentZ],[c.bounds.max[0],centerZ,.06,extentZ],[centerX,c.bounds.min[2],extentX,.06],[centerX,c.bounds.max[2],extentX,.06]]){
     const wall=new THREE.Mesh(new THREE.BoxGeometry(sx,.18,sz),material);wall.position.set(x,.09,z);group.add(wall);
   }
-  const sphere=new THREE.Mesh(new THREE.SphereGeometry(c.obstacle.radius,24,16),material);
-  sphere.position.fromArray(c.obstacle.center);group.add(sphere);scene.add(group);
+  const coins=[],coinMaterial=c.goinPile?new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}):null;
+  if(c.goinPile){
+    for(const body of solver.read().bodies.bodies){
+      const coin=new THREE.Mesh(new THREE.CylinderGeometry(body.radius,body.radius,body.thickness,32),coinMaterial);
+      coin.name=body.id;coin.position.fromArray(body.position);coin.quaternion.fromArray(body.quaternion);group.add(coin);coins.push(coin);
+    }
+  }else{
+    const sphere=new THREE.Mesh(new THREE.SphereGeometry(c.obstacle.radius,24,16),material);
+    sphere.position.fromArray(c.obstacle.center);group.add(sphere);
+  }
+  scene.add(group);
   const options={type:THREE.HalfFloatType,depthBuffer:false,minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter};
   const color=new THREE.RenderTarget(1,1,options),output=new THREE.RenderTarget(1,1,options);
   const depth=new THREE.RenderTarget(1,1,{type:THREE.FloatType,format:THREE.RedFormat,depthBuffer:true,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter});
@@ -51,6 +60,9 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
         const size=renderer.getDrawingBufferSize(new THREE.Vector2());
         for(const t of [color,output,depth])t.setSize(size.x,size.y);renderer.initRenderTarget(output);
         if(advance)solver.advance();
+        if(coins.length)for(const [i,b]of solver.read().bodies.bodies.entries()){
+          coins[i].position.fromArray(b.position);coins[i].quaternion.fromArray(b.quaternion);
+        }
         if(pipeline.outputColorTransform){pipeline.outputColorTransform=false;pipeline.needsUpdate=true;}
         renderer.setRenderTarget(color);pipeline.render();
         scene.overrideMaterial=depthMaterial;scene.background=null;
@@ -71,9 +83,9 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
     state:()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,
       registered:true,mounted:!disposed,frameCount,paused,presentation:'full',failure,lastFrame,
       clock:{...solver.read().clock,paused},setup:structuredClone(setup),solver:solver.read(),surface:surface.read(),
-      scope:'provisional_finger_juice; prescribed_tray_sphere; no_two_way_or_fire_transport'}),
+      scope:c.goinPile?'provisional_liquid_goin_pile; asynchronous_substep_exchange; flat_support; no_game_custody_or_fire':'provisional_finger_juice; prescribed_tray_sphere; no_two_way_or_fire_transport'}),
     dispose(){if(disposed)return;disposed=true;device.removeEventListener('uncapturederror',gpuError);surface.dispose();solver.dispose();scene.remove(group);
-      group.traverse(o=>o.geometry?.dispose());material.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();presentation.dispose();
+      group.traverse(o=>o.geometry?.dispose());coinMaterial?.dispose();material.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();presentation.dispose();
       pipeline.outputColorTransform=originalOutputTransform;pipeline.needsUpdate=true;}
   };
 }

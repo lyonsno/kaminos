@@ -27,7 +27,10 @@ export function mlsConfig(setup={}) {
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
   const min=[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
+  const goinPile=setup.goinPile==null?null:{count:24,mass:.25,radius:.22,thickness:.1,particleMass:.001,...setup.goinPile};
+  if(goinPile&&(!Number.isSafeInteger(goinPile.count)||goinPile.count<1||['mass','radius','thickness','particleMass'].some(k=>!Number.isFinite(goinPile[k])||goinPile[k]<=0)))throw Error('Invalid goin pile');
   return {capacity,grid,dimensions,gridCells,cell,min,
+    goinPile,
     bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,
     modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
     particleRadius:cell*.65,obstacle:{center:[-.35,.24,0],radius:.24}};
@@ -42,9 +45,9 @@ export function createMlsClock(dt) {
     const delta=previous===null?0:(now-previous)/1000;previous=now;
     if(!paused){accumulator+=delta;elapsed+=delta;}
   }
-  return {observe,advance(now,paused=false){
+  return {observe,advance(now,paused=false,transactionSteps=Infinity){
     observe(now,paused);
-    const count=paused?0:Math.floor((accumulator+1e-10)/dt);
+    const count=paused?0:Math.min(transactionSteps,Math.floor((accumulator+1e-10)/dt));
     accumulator-=count*dt;steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
     simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};

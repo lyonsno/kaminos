@@ -51,7 +51,8 @@ try{
   context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport:{width:1280,height:900},
     recordVideo:{dir:out+'/video',size:{width:1280,height:900}},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
-  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/mls-juice.experiment.mjs'],out,report});
+  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/mls-juice.experiment.mjs',
+    ...(report.requested.goinPile?['mls-goin-pile.mjs','mls-goin-contact.wgsl','node_modules/cannon-es/dist/cannon-es.js']:[])],out,report});
   report.phase='load';save();await page.goto(a.url);
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='mls-juice');
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
@@ -60,6 +61,7 @@ try{
   const requestedGrid=report.requested.gridSize??64;
   assert.deepEqual(report.initial.runtime.solver.domain.gridDimensions,Array.isArray(requestedGrid)?requestedGrid:[requestedGrid,requestedGrid,requestedGrid],'domain mismatch');
   assert.equal(report.initial.jetSpeed,report.requested.jetSpeed??1.955,'jet speed mismatch');
+  if(report.requested.goinPile)assert.equal(report.initial.runtime.solver.bodies.bodies.length,report.requested.goinPile.count??24,'requested pile missing');
   report.phase='run';save();
   await page.getByRole('checkbox',{name:'Run',exact:true}).check();
   let state;
@@ -76,6 +78,14 @@ try{
   const runtime=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   Object.assign(report,analyzeMlsParticles(words,{capacity:runtime.runtime.solver.particleCount,grid:runtime.runtime.solver.domain.gridDimensions,cell:runtime.runtime.solver.domain.cellSize}));
   report.state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());report.route=report.state.runtime.effectiveRoute;
+  if(report.requested.goinPile){
+    const pile=report.state.runtime.solver.bodies;
+    assert(pile.steps>0,'goin clock stalled');
+    assert(pile.contacts>0,'no liquid/goin contact');
+    assert(pile.bodies.every(b=>[...b.position,...b.velocity,...b.angularVelocity,...b.quaternion].every(Number.isFinite)),'nonfinite goin state');
+    report.goinDisplacement=pile.bodies.map((b,i)=>Math.hypot(...b.position.map((v,j)=>v-report.initial.runtime.solver.bodies.bodies[i].position[j])));
+    assert(report.goinDisplacement.some(v=>v>.2),'liquid did not dislodge a goin');
+  }
   await page.screenshot({path:out+'/surface.png'});
   report.video=await page.video().path();
   await context.close();context=null;report.browserClosed=true;
