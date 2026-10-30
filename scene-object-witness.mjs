@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import {assertAuthoredWaterPopulation} from './authored-water-evidence.mjs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -2694,6 +2695,88 @@ async function runAuthoredWaterPreviewScenario(ws) {
   })()`,{timeoutMs:60000});
 }
 
+async function runAuthoredWaterProductScenario(ws){
+ phase='water-product-authoring';
+ lastEvidence.waterProduct=await evaluate(ws,`(async()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));while(!window.kaminosWaterSources||!window.kaminosWorkbenchState||!document.querySelector('[data-mode]'))await wait(100);
+  const api=window.kaminosWaterSources,sceneApi=window.kaminosSceneAuthoring;
+  const visible=selector=>{const n=document.querySelector(selector);return !!n&&n.getClientRects().length>0;};
+  window.kaminosSetCameraDebugPose({position:[1.7,1.4,1.7],target:[0,.25,0]});
+  const bowl=sceneApi.addMesh('bowl',{radius:.6,thickness:.08});window.kaminosSetSceneObjectTransform(bowl,{position:[0,.45,0],rotation:[0,0,0],scale:[1,1,1]});sceneApi.setMaterial(bowl,{color:'#bb4422',roughness:.6});
+  document.querySelector('[data-scene-add="water-volume"]').click();while(api.read().sources.length!==1)await wait(50);
+  const volume=api.read().selected.id;if(api.read().selected.settings.mode!=='finite_drop')throw Error('Add volume created the wrong source');
+  if(!visible('#selected-water-properties')||visible('#selected-water-simulation-properties'))throw Error('Volume properties not exclusively on selected source');
+  const initialPreview=api.read().selected.initialPreview;if(!initialPreview?.visible||api.read().runtime)throw Error('Initial volume is not an editable particle preview');
+  document.querySelector('[data-scene-add="water-emitter"]').click();while(api.read().sources.length!==2)await wait(50);
+  const flow=api.read().selected.id;if(api.read().selected.settings.mode!=='continuous')throw Error('Add emitter did not create continuous flow');
+  if(!visible('#selected-water-properties')||visible('#selected-water-simulation-properties'))throw Error('Emitter properties not exclusively on selected source');
+  const emitterUi={mode:document.querySelector('[data-mode]').value,retire:document.querySelector('[data-retire]').checked};
+  if(emitterUi.retire)throw Error('Hidden timed retirement still default');
+  window.removeSceneObject(volume);window.selectSceneObject(flow);
+  window.kaminosSetSceneObjectTransform(flow,{position:[0,.8,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]});api.edit(flow,{rate:64,baseRadius:.04,strength:.5});
+  const bounds={min:[-.7,-.2,-.7],max:[.7,1,.7]};api.editSimulation({particleCount:128,waterSampling:{...api.read().simulation.sampling,container:bounds}});
+  await document.querySelector('[data-source-simulation]').onclick();await wait(100);
+  if(visible('#selected-water-properties')||!visible('#selected-water-simulation-properties'))throw Error('Selecting simulation does not own shared controls: '+JSON.stringify({selection:window.kaminosSelection.read(),sourceError:document.querySelector('[data-source-error]').textContent}));
+  const input=document.querySelector('[data-capacity]');input.value=256;input.dispatchEvent(new Event('input',{bubbles:true}));await wait(400);
+  if(api.read().simulation.settings.particleCount!==256)throw Error('Capacity did not auto-apply');
+  await window.kaminosSceneEdits.undo();if(api.read().simulation.settings.particleCount!==128)throw Error('Capacity undo lost its prior value');
+  await window.kaminosSceneEdits.redo();if(api.read().simulation.settings.particleCount!==256)throw Error('Capacity redo failed');
+  api.editSimulation({particleCount:128});await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(1680);await wait(300);
+  const retained={state:window.kaminosLocalLiquidState(),particles:await api.requestParticleState()};
+  if(retained.state.solver.liveInlets.totalAdmitted!==128)throw Error('Full retained pool should stop admission');
+  api.editSimulation({particleCount:256});if(!api.read().runtime.pendingSourceChanges)throw Error('Unapplied capacity change not identified');
+  if(api.read().runtime.capacity!==128)throw Error('Requested capacity misreported as effective allocation');
+  await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(1200);await wait(300);
+  const expanded={state:window.kaminosLocalLiquidState(),particles:await api.requestParticleState()};
+  if(expanded.state.solver.liveInlets.totalAdmitted!==256)throw Error('Expanded allocation did not allow more retained water');
+  const ui=document.querySelector('#water-simulation-property-slot [data-state]').textContent;
+  if(!ui.includes('256 live / 256 capacity')||!ui.includes('Paused'))throw Error('Simulation inspector misreports its completed population: '+ui);
+  return {bowl,flow,initialPreview,emitterUi,retained,expanded,ui};
+ })()`,{timeoutMs:180000});
+ for(const key of ['retained','expanded']){const row=lastEvidence.waterProduct[key];assert.equal(assertAuthoredWaterPopulation(row.state,row.particles),key==='retained'?128:256);}
+ await capturePngScreenshot(ws,siblingPngPath('-simulation'));
+ phase='water-product-retirement-and-recycling';
+ lastEvidence.waterRetention=await evaluate(ws,`(async()=>{
+  const api=window.kaminosWaterSources,flow=${JSON.stringify(lastEvidence.waterProduct.flow)},wait=ms=>new Promise(r=>setTimeout(r,ms));
+  api.edit(flow,{lifetimeSeconds:.5});await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(240);await wait(200);
+  const timed={state:window.kaminosLocalLiquidState(),particles:await api.requestParticleState()};
+  api.edit(flow,{lifetimeSeconds:null,rate:480});
+  const bounds={min:[-.7,-.2,-.7],max:[.7,1,.7]};api.editSimulation({particleCount:16,waterSampling:{...api.read().simulation.sampling,container:null,worldBounds:bounds}});
+  // Deliberately aim out of the open world. Exited GPU slots must become reusable.
+  window.kaminosSetSceneObjectTransform(flow,{position:[.69,.6,0],rotation:[0,Math.PI/2,0],scale:[1,1,1]});api.edit(flow,{strength:2.6});
+  await api.release();window.kaminosPauseLocalLiquid(true);
+  for(let i=1;i<=6;i++)await api.advanceTo(i*120);
+  await wait(200);const exited={state:window.kaminosLocalLiquidState(),particles:await api.requestParticleState()};
+  if(exited.state.solver.liveInlets.totalAdmitted<=16)throw Error('Exited slots never returned to admission');
+  return {timed,exited};
+ })()`,{timeoutMs:180000});
+ const timed=lastEvidence.waterRetention.timed,exited=lastEvidence.waterRetention.exited;
+ const timedCount=assertAuthoredWaterPopulation(timed.state,timed.particles);assert(timedCount>20&&timedCount<40,'Explicit half-second retirement should retain approximately 32 particles');
+ assertAuthoredWaterPopulation(exited.state,exited.particles);
+ phase='water-product-completed-cadence';
+ lastEvidence.waterCadence=await evaluate(ws,`(async()=>{
+  const api=window.kaminosWaterSources,flow=${JSON.stringify(lastEvidence.waterProduct.flow)};
+  window.kaminosSetSceneObjectTransform(flow,{position:[0,.8,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]});api.edit(flow,{rate:1200,strength:1.15,lifetimeSeconds:null});
+  api.editSimulation({particleCount:32000,waterSampling:{...api.read().simulation.sampling,container:{min:[-.7,-.2,-.7],max:[.7,1,.7]}}});
+  await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(240);window.kaminosPauseLocalLiquid(false);
+  const frames=[],start=performance.now();await new Promise(resolve=>{const sample=now=>{const s=window.kaminosLocalLiquidState();frames.push({now,sceneFrame:s.frameCount,step:s.solver.clock.step,completedStep:s.solver.clock.completedStep,backlogSeconds:s.solver.clock.backlogSeconds,pending:s.solver.pending,cadence:s.solver.cadence});if(now-start<3000)requestAnimationFrame(sample);else resolve();};requestAnimationFrame(sample);});
+  window.kaminosPauseLocalLiquid(true);const atPause=window.kaminosLocalLiquidState().solver.clock.step;await api.advanceTo(atPause);
+  const state=window.kaminosLocalLiquidState();
+  if(state.failure||frames.length<2||frames.at(-1).completedStep<=frames[0].completedStep)throw Error('No advancing completed fluid cadence recorded');
+  return {frames,state};
+ })()`,{timeoutMs:180000});
+ const cadenceBody=await evaluateParticleEvidence(ws,'window.kaminosWaterSources.requestParticleState()','water-product-cadence');lastEvidence.waterCadence.particles=cadenceBody.particles;lastEvidence.waterCadence.readback=cadenceBody.transport;
+ assertAuthoredWaterPopulation(lastEvidence.waterCadence.state,lastEvidence.waterCadence.particles);
+ await evaluate(ws,`window.selectSceneObject(${JSON.stringify(lastEvidence.waterProduct.flow)})`);await delay(200);
+ await capturePngScreenshot(ws,siblingPngPath('-source'));
+ phase='water-product-save-and-reopen';
+ lastEvidence.waterSaved=await evaluate(ws,`window.saveSceneAs({name:'hotwet-water-authoring-'+Date.now(),result:true})`);
+ if(!lastEvidence.waterSaved.ok||!lastEvidence.waterSaved.url)throw Error('No reopenable authored water scene');
+ await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(200);await wsRequest(ws,'Page.navigate',{url:lastEvidence.waterSaved.url});
+ lastEvidence.waterReopened=await evaluate(ws,`(async()=>{while(!window.kaminosWaterSources?.read().sources.length)await new Promise(r=>setTimeout(r,100));const api=window.kaminosWaterSources;window.kaminosPauseLocalLiquid(true);window.selectSceneObject(${JSON.stringify(lastEvidence.waterProduct.flow)});const r=api.read();if(r.selected.settings.lifetimeSeconds!==null||r.selected.settings.rate!==1200||r.simulation.settings.particleCount!==32000)throw Error('Saved source or simulation settings lost');return {read:r,resources:window.__kaminosWitnessResourceNames};})()`,{timeoutMs:180000});
+ if(lastEvidence.waterReopened.resources.some(u=>['/local-liquid-host.mjs','/finger-fluid-gpu.mjs','/paper-fluid-gpu.mjs'].includes(new URL(u).pathname)))throw Error('Old fluid runtime loaded');
+}
+
 async function runAuthoredMlsScenario(ws){
  phase='authored-mls-ordinary-scene';
  lastEvidence.authoredMls=await evaluate(ws,`(async()=>{
@@ -2741,7 +2824,7 @@ async function runAuthoredMlsScenario(ws){
   const api=window.kaminosWaterSources,wait=ms=>new Promise(r=>setTimeout(r,ms));
   const finite=api.read().sources[0].id;
   await api.add();const flow=api.read().selected.id;
-  api.edit(flow,{mode:'continuous',rate:240,strength:1.5});
+  api.edit(flow,{mode:'continuous',rate:240,strength:1.5,lifetimeSeconds:6});
   window.kaminosSetSceneObjectTransform(flow,{position:[-.35,1,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]});
   await api.release();window.kaminosPauseLocalLiquid(true);
   const start=window.kaminosLocalLiquidState();await api.advanceTo(start.solver.clock.step+120);
@@ -7513,6 +7596,8 @@ try {
     await runLocalLiquidPerformanceScenario(ws);
   } else if (scenario === 'authored-water-objects') {
     await runAuthoredWaterObjectsScenario(ws);
+  } else if (scenario === 'authored-water-product') {
+    await runAuthoredWaterProductScenario(ws);
   } else if (scenario === 'authored-mls') {
     await runAuthoredMlsScenario(ws);
   } else if (scenario === 'authored-water-drop') {

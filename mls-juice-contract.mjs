@@ -77,6 +77,9 @@ export function createMlsEmissionPlan(config) {
     if(!Number.isSafeInteger(count)||count<0||count>config.capacity)throw Error('Initial MLS population exceeds capacity');
     for(let i=0;i<count;i++)expiry[i]=Infinity;
     cursor=count%config.capacity;
+  },reconcileOccupancy(words){
+    if(!(words instanceof Uint32Array)||words.length!==Math.ceil(config.capacity/32))throw Error('Incomplete MLS occupancy readback');
+    for(let i=0;i<config.capacity;i++)if(!(words[i>>>5]&(1<<(i&31))))expiry[i]=0;
   },step(packet,time,epochMs){
     const valid=packet.authority.simulation_safe&&epochMs>=packet.timestamp_ms&&epochMs-packet.timestamp_ms<=750;
     const births=[];last=[];
