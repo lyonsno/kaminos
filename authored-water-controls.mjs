@@ -21,9 +21,9 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <label>Additional particle slots<input class="transform-input" type="number" step="256" min="1" data-capacity></label>
   <p class="hint">Added to the initial water particles to form one shared, recyclable pool. Departed initial water also frees slots for emitters. A full pool stops new emission until water leaves or retires. This changes capacity, not flow rate or particle size.</p>
   <p class="hint" data-allocation-summary></p><div data-initial-resolution><label>Initial volume particle target<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-resolution-summary></p></div>
-  <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
+  <h3>Simulation bounds</h3><p class="hint">Move or Scale this volume in the viewport or Transform inspector. Scale is the world size on each axis; sources stay in place. The box remains aligned with world axes.</p><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
   <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
-  <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation.</p><p role="alert" data-simulation-error></p>
+  <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation; it starts water again from the sources.</p><p class="hint" data-running-bounds></p><p role="alert" data-simulation-error></p>
   <div data-compatibility><p class="hint" data-compatibility-status role="status"></p><p class="hint" data-match-plan></p><button class="btn" data-match>Match initial volumes to selected setup</button><p role="alert" data-match-error></p></div>
  </div>
  <div data-selected hidden>
@@ -173,6 +173,8 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  function refreshStatus(s=api.read()){
   const runtime=s.runtime,population=runtime?.population,capacity=runtime?.capacity??runtime?.particleCount;
   const text=runtime?`${runtime.paused?'Paused':'Playing'} · tick ${runtime.clock?.completedStep??runtime.step??0} · ${population?.active!=null?population.active.toLocaleString()+' live':'live count pending'} / ${capacity?.toLocaleString()??'unknown'} capacity`:s.failure?`Water stopped: ${s.failure}`:'Initial state. Play starts water; Restart begins again from the sources.';
+  const bounds=runtime?.domain?.boundsWorld;const fmt=v=>v.map(n=>Number(n.toPrecision(4))).join(', ');
+  $('[data-running-bounds]').textContent=bounds?`Current running grid: [${fmt(bounds.min)}] to [${fmt(bounds.max)}]. Edited bounds apply on Restart.`:'';
   const timing=runtime?.cadence,clock=runtime?.clock;
   $('[data-cadence]').textContent=timing?`Fluid updates ${timing.completedBatches} · last batch ${timing.lastBatchSteps} steps (${(timing.lastBatchSteps*(clock?.dt??1/240)*1000).toFixed(0)} ms simulated) · ${(1000*(clock?.backlogSeconds??0)).toFixed(0)} ms waiting. Scene FPS is independent of fluid updates.`:'';
   const blocker=!s.runtime&&s.simulation?.compatibility?.compatible===false?s.simulation.compatibility.message:'';
