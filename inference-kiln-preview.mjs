@@ -29,7 +29,7 @@ const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 // Workbench. This surface owns only its scene and borrowed-device resources.
 export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,input:promptInput=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
  const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],lightEntries=[],owned=[],frames=new Set();
- let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false,finishResolve=null;
+ let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false,finishResolve=null,promptBody=null;
  const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  viewport.style.aspectRatio=String(aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
@@ -75,7 +75,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
    clearTimeout(draftTimer);if(active||disposed||!promptInput?.value.trim())return;
    draftTimer=setTimeout(()=>{prepare({prompt:promptInput.value}).catch(failure);},250);
   }
-  if(promptInput){editor=installKilnPromptEditor({document,viewport,input:promptInput,camera,object:letteringPose,onChange:scheduleDraft,onPresentation:()=>{target.object.visible=letteringPose.visible;if(!pipeline||disposed||active)return;app.foreground.request({requestId:`kiln-edit-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-edit'},run(){draw();return {status:'submitted'};}});},onError:failure});promptPreparation=createKilnPromptPreparation({rasterize:value=>editor.rasterize(value)});}
+  if(promptInput){editor=installKilnPromptEditor({document,viewport,input:promptInput,camera,object:letteringPose,onChange:scheduleDraft,onPresentation:()=>{target.object.visible=letteringPose.visible;promptBody?.setMounted(visible(plan.promptObjectId));if(!pipeline||disposed||active)return;app.foreground.request({requestId:`kiln-edit-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-edit'},run(){draw();return {status:'submitted'};}});},onError:failure});promptPreparation=createKilnPromptPreparation({rasterize:value=>editor.rasterize(value)});}
   async function prepare({prompt:next,request:admitted=null}){
    if(active)throw Error('Pause combustion before replacing its admitted text');
    clearTimeout(draftTimer);const revision=++prepareRevision;
@@ -136,7 +136,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   burning=createSceneBurning({objects:()=>entries,runtime:()=>fire,createGas:createLogGasSourceGpu,
    createBody:async entry=>{
     const body=await createSceneBurnBody({entry,renderer,scene,surfaceMask:entry===target?preparedMask:null,kelvinPerHeat:()=>settings.physicalKelvinPerHeat,ground:()=>({center:[0,ground?.height??-.85,0],height:ground?.height??-.85,radius:5,visible:ground?.visible??true}),onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}});
-    if(entry===target){const encode=body.encodeGasSource;body.encodeGasSource=(encoder,frame,gas)=>{feedPixels=Math.min(Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),feedPixels+46*frame.dt);feedSteps++;positionFeed();encode(encoder,frame,gas);if(finishing&&feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;queueMicrotask(()=>setActive(false).catch(failure));}};}
+    if(entry===target){promptBody=body;const mount=body.setMounted;body.setMounted=value=>mount(value&&letteringPose.visible);const encode=body.encodeGasSource;body.encodeGasSource=(encoder,frame,gas)=>{feedPixels=Math.min(Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),feedPixels+46*frame.dt);feedSteps++;positionFeed();encode(encoder,frame,gas);if(finishing&&feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;queueMicrotask(()=>setActive(false).catch(failure));}};}
     return body;
    },onError:failure});
   // Show the assembled cold scene before asynchronous simulation preparation.

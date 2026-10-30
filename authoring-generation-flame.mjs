@@ -54,8 +54,8 @@ export function installGenerationFlame({document,slot,createRenderer}){
   if(changed){if(!active){allowCold=refreshPending;epoch++;if(!renderer)abort();}sync();}
  }
  return {render,element:tile,
-  setVisible(value){if(visible===!!value)return lifecycle;visible=!!value;if(visible)allowCold=true;tile.hidden=!visible;return sync();},
-  refresh(){allowCold=true;if(running||draining){refreshPending=true;return lifecycle;}renderedKey=null;return sync({refresh:true});},
+  setVisible(value){if(visible===!!value)return lifecycle;if(!value&&draining){finishPending=true;draining=false;}visible=!!value;if(visible)allowCold=true;tile.hidden=!visible;return sync();},
+  refresh(){allowCold=true;if(running||draining||finishPending){refreshPending=true;return lifecycle;}renderedKey=null;return sync({refresh:true});},
   read:()=>({running,error:lastError,visible,renderer:renderer?.debugState?.()??null}),
   async dispose(){disposed=true;visible=false;epoch++;abort();await sync();tile.remove();},
  };

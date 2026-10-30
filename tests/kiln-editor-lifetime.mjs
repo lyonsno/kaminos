@@ -45,3 +45,9 @@ test('a recipe refresh waits for physical completion and then replaces the kiln'
  const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'draft'})},slot:element(),createRenderer:async()=>{created++;return {prepare:async()=>{},setActive:async()=>{},finish:()=>drained,dispose(){},debugState:()=>({})};}});
  await view.setVisible(true);view.render({status:'running',request:{id:'one',prompt:'full strip'}});await tick();await tick();await view.refresh();view.render({status:'complete'});await tick();await tick();assert.equal(created,1);release();await tick();await tick();assert.equal(created,2);await view.dispose();
 });
+for(const refresh of [false,true])test(`visibility pauses and resumes completion (deferred recipe=${refresh})`,async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let created=0,active=false,finishing=false,done;
+ const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'draft'})},slot:element(),createRenderer:async()=>{created++;return {prepare:async()=>{},setActive:async value=>{active=value;if(!value){finishing=false;done?.();}},finish(){finishing=true;return new Promise(r=>done=r);},dispose(){},debugState:()=>({active,finishing})};}});
+ await view.setVisible(true);const request={id:'one',prompt:'full strip'};for(const status of ['running','saving','complete']){view.render({status,request});await tick();await tick();}
+ if(refresh)await view.refresh();await view.setVisible(false);assert.equal(active,false);await view.setVisible(true);assert.equal(active,true);assert.equal(finishing,true);assert.equal(created,1);done();await tick();await tick();assert.equal(created,refresh?2:1);await view.dispose();
+});
