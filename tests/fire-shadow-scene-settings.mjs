@@ -37,3 +37,8 @@ assert.equal(angularReload.smokeShadowFilterTaps,5,'filter work must survive sce
 
 const budgetRoute=new URLSearchParams({volume_light_field_hybrid_points:'8',volume_light_field_hybrid_point_evaluation_budget:'4'});
 assert.equal(readFireShadowSceneSettings(budgetRoute).pointEvaluationBudget,4,'saved receiver budget must be distinct from captured point count');
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_smoke_shadow_medium_grid:'16'})).smokeShadowMediumResolution,16);
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_smoke_shadow_medium_grid:'-1'})),/resolution/);
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:"importance"}))).angularPattern,"importance");

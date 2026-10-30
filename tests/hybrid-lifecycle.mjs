@@ -163,6 +163,7 @@ assert.equal(mount.debugState().geometryBuilds,afterAspect,'same-domain resoluti
 mount.setSmokeShadowQuality({steps:8,resolution:4});consume(field);
 assert.equal(mount.debugState().frame.smokeShadow.generation,field.source.generation);
 assert(passes.includes('live smoke shadow prefix integration'));
+mount.setSmokeShadowQuality({mediumResolution:2});consume(field);assert.deepEqual(mount.debugState().frame.smokeShadow.medium.dimensions,[2,4,2]);assert.equal(mount.debugState().smokeShadowMediumResolution,2);assert.equal(mount.debugState().smokeShadowResolution,4);assert.equal(mount.debugState().smokeShadowSteps,8);mount.setSmokeShadowQuality({mediumResolution:0});consume(field);assert.equal(mount.debugState().frame.smokeShadow.medium.mode,'raw');
 mount.setSmokeShadowQuality({filter:true});consume(field);
 assert.equal(mount.debugState().smokeShadowFilter,true);
 assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'angular-tent-transmission');
