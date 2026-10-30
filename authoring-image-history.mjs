@@ -90,14 +90,30 @@ export function createEditCritic({history,operation}){
    const input=request(),source=input.resultImage.source;
    // Do not recursively copy previous reviews into the next operation's input.
    delete input.resultImage.editReview;delete input.reference.editReview;
-   const raw=await operation.expand({...input,admission});if(!raw)return null;
-   if(raw.task!=='critique')throw Error('The provider did not return the requested review task.');
-   const marker=/^\s*NEXT EDIT:\s*/m.exec(raw.text),assessment=marker?raw.text.slice(0,marker.index).trim():raw.text;
-   let correction=marker?raw.text.slice(marker.index+marker[0].length).trim():'';
-   if(correction==='NONE')correction='';
-   const status=raw.partial||raw.stopReason!=='eos'?'partial':!marker||!assessment?'unstructured':'complete';
-   const review={schema:'kaminos.edit-review.v1',status,assessment,correction,raw,request:{...input,reference:{kind:'image',source:input.reference.source},resultImage:{kind:'image',source}},createdAt:Date.now()};
-   history.annotate(source,{editReview:review});return review;
+   function retain(raw,limits={}){
+    if(raw.task!=='critique')throw Error('The provider did not return the requested review task.');
+    const marker=/^\s*NEXT EDIT:\s*/m.exec(raw.text),assessment=marker?raw.text.slice(0,marker.index).trim():raw.text;
+    let correction=marker?raw.text.slice(marker.index+marker[0].length).trim():'';
+    if(correction==='NONE')correction='';
+    const status=raw.partial||raw.stopReason!=='eos'?'partial':!marker||!assessment?'unstructured':'complete';
+    const review={schema:'kaminos.edit-review.v1',status,assessment,correction,raw,request:{...input,reference:{kind:'image',source:input.reference.source},resultImage:{kind:'image',source}},createdAt:Date.now(),...limits};
+    history.annotate(source,{editReview:review});return review;
+   }
+   const previousRequest=operation.read().request;
+   function retainInterrupted(error){
+    const state=operation.read(),owned=state.request;
+    // A rejected call may leave an older operation's draft in shared state.
+    if(owned===previousRequest||owned?.task!=='critique'||owned.prompt!==input.prompt||owned.resultImage?.source!==source||owned.reference?.source!==input.reference.source)return;
+    if(!['failed','stopped'].includes(state.status))return;
+    const raw=error?.result||state.result||{task:'critique',text:state.draft,partial:true,stopReason:state.status};
+    if(raw.task!=='critique'||typeof raw.text!=='string'||!raw.text.trim())return;
+    return retain(raw,{status:state.status,error:error?.message||state.error,greenroomHandback:error?.greenroomHandback||state.greenroomHandback});
+   }
+   let raw;
+   try{raw=await operation.expand({...input,admission});}
+   catch(error){retainInterrupted(error);throw error;}
+   if(!raw){retainInterrupted();return null;}
+   return retain(raw);
   },
   adopt(source,text){
    const entry=history.read().viewed;
