@@ -33,3 +33,13 @@ console.log('Native workshop history through empty state and numeric preview/com
  op.move({joint:1,point:[3,0],mode:'build'});assert.equal(runtime.read().bodies.replacements,0);edits.undo();assert.equal(color(),0xff00ff,'Undo construction restores appearance');edits.redo();assert.equal(runtime.read().recipe.nodes[1].length,3);assert.equal(runtime.read().bodies.replacements,0);
  await runtime.dispose();
 }
+{
+ const {createWorkbenchSceneHost}=await import('../workbench-scene-host.mjs');
+ const {openExperiment}=await import('../workbench-experiments.mjs');
+ const scene=new T.Scene(),rows=new Map(),edits=createSceneEdits({read(){throw Error('Missing target');},write(){throw Error('Missing target');}});let serial=0;
+ const sceneHost=createWorkbenchSceneHost({scene,camera:new T.PerspectiveCamera(),controls:{target:new T.Vector3(),update(){}},loadAsset(){throw Error('Unused');},registerObject(root,metadata){const row={id:'object'+(++serial),root,...metadata};rows.set(row.id,row);return row;},findObject:root=>[...rows.values()].find(r=>r.root===root),removeObject:handle=>{handle.root.removeFromParent();rows.delete(handle.id);},redraw(){},onFrame(){return ()=>{};}});
+ const host={scene:{...sceneHost,refreshPresentation(){}},controls:{document:{defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}},components:{register(){return {changed(fn){fn?.();},dispose(){}};}}}};
+ const rt=await openExperiment(workshop,{host,record(){},inputs:{recipe:{schema:'kaminos.links.v1',nodes:[{parent:null,point:[0,0]},{parent:0,length:1,angles:[0,.5]}],pistons:[],period:3}}});
+ const pending=rt.invoke('motionSpace');const outcome=pending.catch(e=>e);await rt.dispose();await outcome;
+ assert.equal(rows.size,0,'Closing must release in-flight motion-space registrations');assert.equal(scene.children.length,0,'No orphan guide roots after closure');
+}
