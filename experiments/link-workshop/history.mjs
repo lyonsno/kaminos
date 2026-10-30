@@ -1,3 +1,4 @@
+import {restorePlacements} from './placements.mjs';
 import {checkedMechanism} from './model.mjs';
 // Scene membership can destroy/reconstruct a root before the next render frame.
 // Retained edit targets address its stable scene ID, never a disposed controller.
@@ -14,7 +15,7 @@ export function mechanismHistory(edits,objectId,objects){
     read:()=>slot.adapter?slot.adapter.read():fallback({}),
     readForReplay:value=>slot.adapter?.readForReplay?slot.adapter.readForReplay(value):fallback(value),
     check:value=>slot.adapter?slot.adapter.check(value):{...value,recipe:checkedMechanism(value.recipe)},
-    write:value=>{if(slot.adapter)return slot.adapter.write(value);root().userData.linkMechanism=checkedMechanism(value.recipe);}
+    write:value=>{if(slot.adapter)return slot.adapter.write(value);root().userData.linkMechanism=checkedMechanism(value.recipe);restorePlacements(value.placements,objects());}
    });
   }
   if(slot.adapter)throw Error('Mechanism already has a live editing controller');slot.adapter=adapter;
