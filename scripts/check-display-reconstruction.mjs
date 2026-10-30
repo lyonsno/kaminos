@@ -11,6 +11,7 @@ const raySteps=Number(process.env.DISPLAY_RAY_STEPS??8);
 const renderScale=Number(process.env.DISPLAY_RENDER_SCALE??.4);
 const interpolationComparison=process.env.DISPLAY_INTERPOLATION==='1';
 const localCubicComparison=process.env.DISPLAY_LOCAL_CUBIC==='1';
+const blendComparison=process.env.DISPLAY_BLEND_SWEEP==='1';
 const report={ok:false,phase:'source',root,sourceReport,store,arms:[],errors:[],warnings:[],claim:'native display reconstruction comparison; no performance claim'};
 await fs.mkdir(out,{recursive:true});
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
@@ -92,7 +93,7 @@ try {
   report.requested={basin:process.env.DISPLAY_BASIN??null,raySteps,renderScale};
   await invoke('setControls',{'volume-resolution':'32','volume-render-scale':renderScale,'volume-steps':raySteps,
     'volume-ray-noise-animated':false,'volume-flame-priority':0,'volume-display-reconstruction':'off'});
-  if(interpolationComparison||localCubicComparison)await invoke('setControls',{'volume-raymarch-mode':'fixed'});
+  if(interpolationComparison||localCubicComparison||blendComparison)await invoke('setControls',{'volume-raymarch-mode':'fixed'});
   report.initial=await page.evaluate(()=>({runtime:window.__kaminosVolumePrototype.debugState(),water:window.kaminosLocalLiquidState()}));
   assert.equal(report.initial.runtime.backend,'WebGPU:apple');assert.equal(report.initial.water.mounted,false);
   report.phase='evolve';await save();await invoke('setPaused',false);
@@ -124,11 +125,28 @@ try {
     assert.equal(row.state.displayReconstruction.alignment,alignment);
     assert.equal(row.state.displayReconstruction.emissionInterpolation,emissionKernel);
     assert.equal(row.state.displayReconstruction.smokeInterpolation,smokeKernel);
+    assert.equal(row.state.displayReconstruction.emission,emission);
+    assert.equal(row.state.displayReconstruction.smoke,smoke);
+    assert.equal(row.state.displayReconstruction.scale,Number(scale));
     if(mode!=='off')assert.deepEqual(row.state.displayReconstruction.grid,row.state.simGridDimensions.map(n=>alignment==='aligned'?(n-1)*Number(scale)+1:n*Number(scale)));
     return row;
   };
   const baseline=await capture('native','off');
-  if(localCubicComparison) {
+  if(blendComparison) {
+    for(const scale of ['2','4']) {
+      const first=await capture('blend-'+scale+'-0','material',0,.657,scale,'aligned','monotone','monotone');
+      await capture('blend-'+scale+'-half','material',.5,.657,scale,'aligned','monotone','monotone');
+      await capture('blend-'+scale+'-full','material',1,.657,scale,'aligned','monotone','monotone');
+      await capture('spline-'+scale+'-full','material',1,.657,scale,'aligned','interpolating','monotone');
+      const zero=await capture('spline-'+scale+'-0','material',0,.657,scale,'aligned','interpolating','monotone');
+      assert.equal(first.sha256,zero.sha256,'zero blend is kernel-independent');
+      const returned=await capture('blend-'+scale+'-returned','material',0,.657,scale,'aligned','monotone','monotone');
+      const held=await capture('blend-'+scale+'-held','material',0,.657,scale,'aligned','monotone','monotone');
+      assert.equal(first.sha256,returned.sha256,'zero blend restores exact held frame');
+      assert.equal(returned.sha256,held.sha256,'unchanged held frame repeats');
+      assert.equal(returned.state.displayReconstruction.builds,held.state.displayReconstruction.builds,'held preparation reused');
+    }
+  } else if(localCubicComparison) {
     await capture('spline-mixed','material',.5,.5,'2','aligned','interpolating','positive');
     const first=await capture('local-mixed','material',.5,.5,'2','aligned','monotone','positive');
     const repeat=await capture('local-held','material',.5,.5,'2','aligned','monotone','positive');
@@ -165,7 +183,7 @@ try {
   const returned=await capture('native-return','off');
   assert.equal(baseline.sha256,returned.sha256,'off restores exact baseline');
   assert.ok(report.arms.every(a=>a.state.simStepCount===baseline.state.simStepCount),'same simulation source across all arms');
-  assert.notEqual(report.arms.find(a=>a.label===(localCubicComparison?'local-mixed':interpolationComparison?'aligned-2-both':'material-both')).sha256,baseline.sha256,'candidate not ignored');
+  assert.notEqual(report.arms.find(a=>a.label===(blendComparison?'blend-2-full':localCubicComparison?'local-mixed':interpolationComparison?'aligned-2-both':'material-both')).sha256,baseline.sha256,'candidate not ignored');
   if(process.env.DISPLAY_PROFILE==='1') {
     report.phase='gpu-profile';report.profiles=[];await save();
     await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
