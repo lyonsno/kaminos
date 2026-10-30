@@ -58,7 +58,8 @@ export function solveLegTarget({THREE,chain,target}){
  return {residual:position(toe).distanceTo(target),reached:position(toe).toArray(),target:target.toArray()};
 }
 
-export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initial,time=0,snapshot}){
+export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initial,time=0,groundHeight,snapshot}){
+ if(!Number.isFinite(groundHeight))throw Error('Grounded walk requires an explicit flat support height');
  if(!(speed>0))throw Error('Grounded walk requires a measured positive stride speed');
  const period=(walking.frames-1)/walking.fps,group=new THREE.Group(),bones=new Map(),spec=walking.frame(0,{mode:'cycle'}).bones;
  for(const row of spec){const b=new THREE.Bone();b.name=row.name;bones.set(row.name,b);}
@@ -81,7 +82,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
  });
  for(const [j,leg] of legs.entries()){
   const heights=samples.map(s=>s[j].toe[1]).sort((a,b)=>a-b),threshold=heights[Math.floor(heights.length*.6)];
-  leg.ground=heights[0];leg.offset=samples[0][j].hip;
+  leg.sourceGround=heights[0];leg.ground=groundHeight;leg.offset=samples[0][j].hip;
   leg.mean=samples.reduce((sum,row)=>sum.map((v,k)=>v+(row[j].relative[k]-row[j].hip[k])/samples.length),[0,0,0]);
   leg.stance=samples.map((s,i)=>{
    const prev=samples[(i+samples.length-1)%samples.length][j].relative,next=samples[(i+1)%samples.length][j].relative;
@@ -89,7 +90,8 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   });
   if(!leg.stance.some(Boolean)||leg.stance.every(Boolean))throw Error(`No alternating support/swing interval in ${leg.name}`);
  }
- let state={schema:'kaminos.grounded-walk.v1',frontTime:time,rearTime:time,baseTime:time,legTimes:Object.fromEntries(legs.map(l=>[l.name,time])),velocities:{},feet:{}};
+ const sourceFloors=legs.map(l=>l.sourceGround).sort((a,b)=>a-b),sourceFloor=(sourceFloors[1]+sourceFloors[2])/2;
+ let state={schema:'kaminos.grounded-walk.v1',groundHeight,frontTime:time,rearTime:time,baseTime:time,legTimes:Object.fromEntries(legs.map(l=>[l.name,time])),velocities:{},feet:{}};
  const phase=t=>((t%period)+period)%period*walking.fps;
  const localPose=(base)=>sampleLegGroups({THREE,walking,base,front:state.frontTime,rear:state.rearTime,legTimes:state.legTimes});
  function update(path){
@@ -97,7 +99,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   for(const leg of legs){
    let clock=state.legTimes[leg.name],f=phase(clock),index=Math.floor(f),stance=leg.stance[index],earlyLift=false;
    const previous=state.feet[leg.name],reach=at(leg.chain[0]).distanceTo(at(leg.chain[1]))+at(leg.chain[1]).distanceTo(at(leg.chain[2]))+at(leg.chain[2]).distanceTo(at(leg.chain[3]));
-   if(stance&&previous?.stance&&at(leg.chain[0]).distanceTo(new THREE.Vector3(...previous.anchor))>reach*.95){
+   if(stance&&previous?.stance&&at(leg.chain[0]).add(new THREE.Vector3(0,groundHeight-sourceFloor,0)).distanceTo(new THREE.Vector3(...previous.anchor))>reach*.95){
     let skip=0;while(leg.stance[(index+skip)%leg.stance.length])skip++;
     state.legTimes[leg.name]+=(skip-(f-index))/walking.fps;clock=state.legTimes[leg.name];f=phase(clock);index=(index+skip)%leg.stance.length;stance=false;earlyLift=true;
     load(localPose(baseFrame(state.baseTime,path)));
@@ -105,6 +107,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
    const hip=at(leg.chain[0]),source=at(leg.chain[3]),axis=new THREE.Vector3(0,1,0),bodyYaw=Math.atan2(path.direction[0],path.direction[1])-Math.atan2(forward[0],forward[1]);
    const mean=new THREE.Vector3(...leg.mean).applyAxisAngle(axis,bodyYaw),variation=source.clone().sub(hip).sub(mean),velocity=state.velocities[leg.name];
    if(velocity&&Math.hypot(...velocity)>1e-12){const direction=Math.atan2(velocity[0],velocity[1]),bodyDirection=Math.atan2(path.direction[0],path.direction[1]);variation.applyAxisAngle(axis,direction-bodyDirection);source.copy(hip).add(mean).add(variation);}
+   source.y+=groundHeight-leg.sourceGround;
    const old=state.feet[leg.name];let anchor=old?.anchor??null,release=old?.release??null,releaseTime=old?.releaseTime??clock;
    if(stance&&!old?.stance){anchor=source.clone().setY(leg.ground).toArray();release=null;}
    if(!stance&&old?.stance){release=new THREE.Vector3(...old.target).sub(source).toArray();releaseTime=clock;anchor=null;}
@@ -121,7 +124,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   }
  }
  function restore(value){
-  if(value?.schema!=='kaminos.grounded-walk.v1'||!Number.isFinite(value.baseTime)||!Number.isFinite(value.frontTime)||value.frontTime<0||!Number.isFinite(value.rearTime)||value.rearTime<0||legs.some(l=>{
+  if(value?.schema!=='kaminos.grounded-walk.v1'||value.groundHeight!==groundHeight||!Number.isFinite(value.baseTime)||!Number.isFinite(value.frontTime)||value.frontTime<0||!Number.isFinite(value.rearTime)||value.rearTime<0||legs.some(l=>{
    const f=value.feet?.[l.name];return !f||typeof f.stance!=='boolean'||!Number.isFinite(value.legTimes?.[l.name])||!Number.isFinite(f.releaseTime)||!Number.isFinite(f.phase)||['target',...(f.stance?['anchor']:[]),...(f.release?['release']:[])].some(k=>!Array.isArray(f[k])||f[k].length!==3||!f[k].every(Number.isFinite));
   }))throw Error('Invalid grounded walk snapshot');
   state=structuredClone(value);
@@ -137,7 +140,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   const steps=Math.max(1,Math.ceil(bound/speed*walking.fps));let previous=from;
   for(let step=1;step<=steps;step++){
    const t=step/steps,angle=start+delta*t,next={position:to.position.map((v,i)=>from.position[i]+(v-from.position[i])*t),direction:[Math.sin(angle),Math.cos(angle)]};
-   for(const leg of legs){const v=hip(next,leg).sub(hip(previous,leg));state.velocities[leg.name]=[v.x,v.z];}
+   for(const leg of legs){const v=hip(next,leg).sub(hip(previous,leg));if(v.length()>64*Number.EPSILON*Math.max(1,...next.position.map(Math.abs),...leg.offset.map(Math.abs)))state.velocities[leg.name]=[v.x,v.z];}
    for(const name of ['front','rear']){
     const pair=legs.filter(l=>l.group===name),distance=pair.reduce((sum,l)=>sum+hip(previous,l).distanceTo(hip(next,l)),0)/pair.length;
     state[name+'Time']+=distance/speed;for(const leg of pair)state.legTimes[leg.name]+=distance/speed;
@@ -146,10 +149,15 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   }
  }
  function frame(base){
-  const pose=localPose(base);load(pose);const diagnostics={};
+  const pose=localPose(base);pose.actorMatrix=new THREE.Matrix4().makeTranslation(0,groundHeight-sourceFloor,0).multiply(new THREE.Matrix4().fromArray(base.actorMatrix)).toArray();load(pose);const diagnostics={};
   for(const leg of legs)diagnostics[leg.name]=solveLegTarget({THREE,chain:leg.chain,target:new THREE.Vector3(...state.feet[leg.name].target)});
   const rows=pose.bones.map(row=>{const bone=bones.get(row.name);bone.updateMatrix();return {...row,localMatrix:bone.matrix.toArray(),worldMatrix:bone.matrixWorld.toArray()};});
   return {...pose,bones:rows,grounding:{space:'authored-placement',feet:diagnostics}};
  }
- return {advance,frame,restore,snapshot:()=>structuredClone(state),read:()=>({...structuredClone(state),space:'authored-placement',support:'clip-derived flat-ground foot targets',ground:legs.map(l=>({name:l.name,height:l.ground}))})};
+ function setGroundHeight(next){
+  if(!Number.isFinite(next))throw Error('Grounded walk requires an explicit flat support height');
+  const delta=next-groundHeight;if(delta===0)return;groundHeight=next;state.groundHeight=next;
+  for(const leg of legs){leg.ground=next;const foot=state.feet[leg.name];foot.target[1]+=delta;if(foot.anchor)foot.anchor[1]+=delta;}
+ }
+ return {advance,frame,restore,setGroundHeight,snapshot:()=>structuredClone(state),read:()=>({...structuredClone(state),space:'authored-placement',support:'explicit flat-ground foot targets',bodySeatingOffset:groundHeight-sourceFloor,ground:legs.map(l=>({name:l.name,height:l.ground}))})};
 }

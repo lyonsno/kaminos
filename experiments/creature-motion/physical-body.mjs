@@ -30,6 +30,7 @@ export function createPhysicalEncounterWorld(){
   return solveContacts.call(this,dt,space);
  };
  let last={contacts:[],steps:0},disposed=false;
+ function acceptedPose(p){const q=p.body.quaternion,yaw=2*Math.atan2(q.y,q.w),r=rotate(sub(p.motion.pivot,p.center),yaw),root=p.body.position.toArray().map((x,i)=>x+r[i]);return {pivot:[...p.motion.pivot],translation:sub(root,p.motion.pivot),angle:-yaw,axis:[0,-1,0]};}
  function solve(rows,commands,seconds){
   if(disposed)throw Error('Physical encounter world disposed');
   if(!Number.isFinite(seconds)||seconds<0)throw Error('Finite nonnegative physical time required');
@@ -58,7 +59,7 @@ export function createPhysicalEncounterWorld(){
    const yaw=-motion.angle,rotated=rotate(sub(center,motion.pivot),yaw),target=motion.pivot.map((x,i)=>x+motion.translation[i]+rotated[i]);
    const velocity=seconds?sub(target,center).map(x=>x/seconds):[0,0,0],omega=seconds?yaw/seconds:0;
    const radius=Math.max(...spheres.map((s,i)=>Math.max(Math.hypot(...sub(s.point,center)),Math.hypot(...sub(s.point,center).map((x,j)=>x+offsets[i][j])))+s.radius)),minimum=Math.min(...spheres.map(s=>s.radius));
-   prepared.push({row,body,motion,center,velocity,omega,radius,minimum,offsets,starts:body.shapeOffsets.map(o=>o.clone()),active:Boolean(cmd)});
+   prepared.push({journey:[],row,body,motion,center,velocity,omega,radius,minimum,offsets,starts:body.shapeOffsets.map(o=>o.clone()),active:Boolean(cmd)});
   }
   world.broadphase.dirty=true;
   let remaining=seconds,steps=0;const contacts=[];
@@ -76,9 +77,10 @@ export function createPhysicalEncounterWorld(){
     p.body.torque.set(0,p.body.inertia.y*(p.omega-p.body.angularVelocity.y)*gain,0);
    }
    world.step(h);remaining=Math.max(0,remaining-h);steps++;
+   for(const p of prepared)p.journey.push({...acceptedPose(p),seconds:seconds-remaining});
    for(const c of world.contacts){const a=prepared.find(p=>p.body===c.bi),b=prepared.find(p=>p.body===c.bj);contacts.push({a:a.row.id,b:b.row.id,point:c.bi.position.vadd(c.ri).toArray(),normal:c.ni.toArray(),force:c.multiplier});}
   }
-  const motions=new Map();for(const p of prepared){const q=p.body.quaternion,yaw=2*Math.atan2(q.y,q.w),r=rotate(sub(p.motion.pivot,p.center),yaw),root=p.body.position.toArray().map((x,i)=>x+r[i]);motions.set(p.row.id,{pivot:[...p.motion.pivot],translation:sub(root,p.motion.pivot),angle:-yaw,axis:[0,-1,0]});}
+  const motions=new Map();for(const p of prepared)motions.set(p.row.id,{...acceptedPose(p),journey:p.journey});
   last={contacts,steps};return {motions,...last};
  }
  return {solve,read:()=>({backend:'cannon-es-cpu',engineVersion:'0.20.0',degreesOfFreedom:'world-xz-and-yaw',...last,bodies:bodies.size,shapes:[...bodies].flatMap(([id,b])=>b.shapes.map((s,i)=>({id,position:b.pointToWorldFrame(b.shapeOffsets[i]).toArray(),radius:s.radius})))}),dispose(){disposed=true;for(const b of bodies.values())world.removeBody(b);bodies.clear();}};

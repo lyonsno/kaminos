@@ -33,3 +33,8 @@ const spinning=api.createPhysicalEncounterWorld(),long={...body('long',0),moveme
 const spun=spinning.solve([long,wall],[{id:'long',motion:{pivot:[-1,0,0],translation:[0,0,0],angle:Math.PI}}],.2);
 assert.ok(spun.contacts.length,'Turning body must make actual contacts during its sweep');assert.ok(spun.steps>24,'Tip travel must refine temporal resolution for a fast turn');
 assert.ok(api.movementContactGap(api.moveTorso(long,spun.motions.get('long')),wall)>-.04,'Turning leaves the end of the body outside the obstacle');spinning.dispose();
+// The grounding consumer needs the accepted sweep, including angular motion.
+const traced=api.createPhysicalEncounterWorld(),single=body('trace',0),trace=traced.solve([single],[{id:'trace',motion:{pivot:[0,0,0],translation:[.2,0,.1],angle:.3}}],.1),accepted=trace.motions.get('trace');
+assert.equal(accepted.journey?.length,trace.steps,'Every accepted physical substep must reach the foot consumer');
+assert.deepEqual(accepted.journey.at(-1).translation,accepted.translation);assert.equal(accepted.journey.at(-1).angle,accepted.angle);
+assert.ok(Math.abs(accepted.journey.at(-1).seconds-.1)<1e-12);assert.ok(accepted.journey.every((s,i,a)=>s.seconds>0&&(!i||s.seconds>a[i-1].seconds)));traced.dispose();

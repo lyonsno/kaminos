@@ -28,10 +28,10 @@ for(const kind of ['forelimb','hindlimb'])for(const side of ['left','right']){
 const cycle={frames:61,fps:30,frame(i){return {actorMatrix:new THREE.Matrix4().toArray(),bones:rows.map(r=>({name:r.name,parent:r.parent,localMatrix:new THREE.Matrix4().makeTranslation(...r.p).multiply(new THREE.Matrix4().makeRotationX(r.name.endsWith('shoulder')||r.name.endsWith('hip')?.2*Math.sin(i/60*Math.PI*2+(r.name.includes('right')?Math.PI:0)):0)).toArray()}))};}};
 const baseFrame=(time,path)=>{const p=cycle.frame(Math.floor(time*30)%60);p.actorMatrix=new THREE.Matrix4().makeTranslation(path.position[0],0,path.position[1]).multiply(new THREE.Matrix4().makeRotationY(Math.atan2(path.direction[0],path.direction[1]))).toArray();return p;};
 const initial={position:[0,0],direction:[0,1]},turn={position:[0,0],direction:[Math.sin(.2),Math.cos(.2)]};
-const grounded=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,initial});
+const grounded=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial});
 grounded.advance(initial,turn);
 assert.ok(grounded.read().frontTime>grounded.read().rearTime*3,'Chest turning around pelvis must advance front steps more than rear steps');
-const snapshot=grounded.snapshot(),copy=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,initial:turn,snapshot});
+const snapshot=grounded.snapshot(),copy=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial:turn,snapshot});
 assert.deepEqual(copy.read(),grounded.read(),'Restoration must retain limb timing, contacts and release transitions');
 const first=grounded.frame(baseFrame(0,turn));assert.deepEqual(first,grounded.frame(baseFrame(0,turn)),'Pose reads may not advance contact state');
 assert.deepEqual(snapshot,grounded.snapshot());
@@ -42,4 +42,20 @@ grounded.advance(turn,next,.1);copy.advance(turn,next,.1);assert.deepEqual(copy.
 const pose=grounded.frame(baseFrame(.1,next));
 for(const name of ['pelvis','spine-chest'])assert.deepEqual(pose.bones.find(b=>b.name===name).localMatrix,baseFrame(.1,next).bones.find(b=>b.name===name).localMatrix,'Grounding may not move the physical torso');
 for(const [name,foot] of Object.entries(grounded.read().feet))if(foot.stance){assert.deepEqual(foot.target,foot.anchor);assert.ok(pose.grounding.feet[name].residual<.01,'Fixture planted contact should be reachable');}
-assert.throws(()=>feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,initial:next,snapshot:{...grounded.snapshot(),frontTime:NaN}}),/snapshot/);
+assert.throws(()=>feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial:next,snapshot:{...grounded.snapshot(),frontTime:NaN}}),/snapshot/);
+const common=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial});
+assert.ok(common.read().ground.every(g=>g.height===0),'All foot contacts must use one explicit support plane');
+const {createWanderMotion}=await import('../experiments/creature-motion/wander-motion.mjs');
+const {createWalkingPoseAdapter}=await import('../experiments/creature-motion/walking-pose.mjs');
+const moving={...cycle,frame(i){const pose=cycle.frame(i);pose.actorMatrix=new THREE.Matrix4().makeTranslation(0,0,i*.04).toArray();const byName=new Map(pose.bones.map(b=>[b.name,b]));function world(b){return b.worldMatrix??(b.worldMatrix=new THREE.Matrix4().fromArray(b.parent?world(byName.get(b.parent)):pose.actorMatrix).multiply(new THREE.Matrix4().fromArray(b.localMatrix)).toArray());}pose.bones.forEach(world);return pose;}};
+const walk=createWalkingPoseAdapter({THREE,adapter:moving});
+const make=()=>createWanderMotion({THREE,adapter:moving,walking:walk,sourceKey:'curved-step-fixture',travel:'source',locomotion:{bodyLength:2},grounded:{groundHeight:0},area:{center:[0,0],radii:[9,6],yaw:0},position:[0,0],direction:[0,-1]});
+const delayed=make(),split=make();delayed.advance(2);for(let i=0;i<60;i++)split.advance(1/30);
+const da=delayed.read(),db=split.read();assert.ok(Math.hypot(...da.path.position.map((v,i)=>v-db.path.position[i]))<1e-8,'Compare the same actual body journey');
+for(const key of ['frontTime','rearTime'])assert.ok(Math.abs(da.grounding[key]-db.grounding[key])<1e-5,'Delayed ticks must retain the curved attachment journey');
+for(const name of Object.keys(da.grounding.feet)){assert.equal(da.grounding.feet[name].stance,db.grounding.feet[name].stance);assert.ok(Math.hypot(...da.grounding.feet[name].target.map((v,i)=>v-db.grounding.feet[name].target[i]))<1e-5);}
+const identity=make(),ib=identity.snapshot();identity.advance(.1);const integrated=identity.snapshot().grounding,ip=identity.read().path;identity.contact(ib,{position:ip.position,direction:ip.direction});assert.deepEqual(identity.snapshot().grounding,integrated,'Identity physical feedback must preserve the curved integration');
+const physical=make(),pb=physical.snapshot();physical.advance(.1);const finish={position:[.02,0],direction:[.1,-Math.sqrt(.99)]};
+physical.contact(pb,{...finish,journey:[{position:[.01,0],direction:[0,-1],seconds:.05},{...finish,seconds:.1}]});assert.ok(physical.read().grounding.frontTime>0);
+const lifted=grounded.snapshot(),oldOffset=grounded.read().bodySeatingOffset;assert.equal(typeof grounded.setGroundHeight,'function');grounded.setGroundHeight(.5);
+assert.equal(grounded.read().groundHeight,.5);assert.equal(grounded.read().bodySeatingOffset,oldOffset+.5);for(const name of Object.keys(lifted.feet))assert.ok(Math.abs(grounded.read().feet[name].target[1]-lifted.feet[name].target[1]-.5)<1e-12);
