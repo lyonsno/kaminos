@@ -1,9 +1,10 @@
+import {checkLimbAttachmentReach,limbAttachmentGroups,withLimbAttachmentReach} from './limb-attachment-reach.mjs';
 import {skinTransport} from '../../hindquarter-live-core.mjs';
 import {registerExportGeometrySnapshot} from '../../scene-export-geometry.mjs';
 
 // The verified Mushfinger body/weights and same rigid DQ transport, with scene
 // attachment left to Hotwet's owner session. No renderer or frame loop here.
-export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fleshPrepared=null,retainPoses=false,deformerFactory=null,rotationSigns='dominant'}) {
+export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fleshPrepared=null,retainPoses=false,deformerFactory=null,rotationSigns='dominant',limbAttachmentReach=0}) {
  if(typeof retainPoses!=='boolean')throw Error('Pose retention must be boolean');
  if(!['dominant','tree-coherent'].includes(rotationSigns))throw Error('Unknown deformation rotation-sign policy');
  const rig=manifest.bones.map(b=>({name:b.name,parent:b.parent,restMatrix:b.restMatrix.flat()})),channels=[...manifest.channels];
@@ -27,6 +28,8 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   if(candidate.triangles.some(i=>!Number.isInteger(i)||i<0||i>=m.vertices))throw Error('Skin triangle index is outside the body');
  }
  validate(skin);
+ let bindingSupported=limbAttachmentGroups(skin.manifest).supported;
+ let originalSkin=skin;checkLimbAttachmentReach(limbAttachmentReach);skin=withLimbAttachmentReach(originalSkin,limbAttachmentReach);
  const group=new THREE.Group();group.name='Creature · generated walking';
  let geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();
  const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.kaminosDynamicGeometry=true;group.add(mesh);
@@ -82,7 +85,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
  }
  if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){if(deformer.raycast)return deformer.raycast(...args,this);const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
  registerExportGeometrySnapshot(mesh,syncCpuGeometry);
- function replaceSkin(candidate){
+ function replaceBoundSkin(candidate){
   active();validate(candidate);
   const begin=performance.now(),matrices=palette();let nextDeformer;
   const result=deformer?candidate.rest:transport(candidate.rest,candidate.weights,matrices);if(!deformer)deformations++;
@@ -95,11 +98,19 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
-  const previous=geometry;geometry=next;deformer=nextDeformer;mesh.geometry=next;skin=candidate;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;cpuKey='';cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
+  const previous=geometry;geometry=next;deformer=nextDeformer;mesh.geometry=next;skin=candidate;bindingSupported=limbAttachmentGroups(skin.manifest).supported;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;cpuKey='';cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ function replaceSkin(candidate){
+  active();validate(candidate);const effective=withLimbAttachmentReach(candidate,limbAttachmentReach);
+  replaceBoundSkin(effective);originalSkin=candidate;return runtime.read();
+ }
+ function setLimbAttachmentReach(value){
+  active();checkLimbAttachmentReach(value);if(value===limbAttachmentReach)return runtime.read();
+  replaceBoundSkin(withLimbAttachmentReach(originalSkin,value));limbAttachmentReach=value;return runtime.read();
+ }
+ const runtime={group,bones,mesh,update,replaceSkin,setLimbAttachmentReach,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',binding:{limbAttachmentReach,supported:bindingSupported},deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  // Proposal query: compute only small support geometry from the given pose.
  // No live Bone, attention state, skin buffer, or physical state is touched.
  runtime.flesh.project=pose=>{

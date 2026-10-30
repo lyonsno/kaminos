@@ -1,3 +1,4 @@
+import {checkLimbAttachmentReach,limbAttachmentGroups,registerLimbAttachmentReach} from './limb-attachment-reach.mjs';
 import {createWanderPath} from './wander-path.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
@@ -25,6 +26,7 @@ function checkAuthoredTransform(t){
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ checkLimbAttachmentReach(inputs.limb_attachment_reach);
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
@@ -61,6 +63,7 @@ async function checkRecipeView(view,current){
 export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySources}={}){
  checkRecipeInputs(recipe);
  const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
+ if((recipe.limb_attachment_reach??0)!==0&&!limbAttachmentGroups(loaded.manifest).supported)throw Error('Limb attachment reach requires mapped limb and body bones');
  const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
  const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
  validateCreatureFleshPoses(loaded,[check.frame(0),wander?wander.frame(wander.read().frame):walking.frame(recipe.sample??0,{mode:recipe.action==='wander'?'cycle':recipe.mode??'source',cycle:recipe.cycle??0})]);
@@ -84,7 +87,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let reachEdit,session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
@@ -112,7 +115,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{engagement:{...engagement.read(),enabled:chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+  recipe:{limb_attachment_reach:runtime.read().binding.limbAttachmentReach,...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
 
 
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
@@ -232,7 +235,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(()=>reachEdit?.dispose());attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -275,7 +278,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   runtime.flesh.setContacts(contacts.map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(inverse).toArray(),b:new THREE.Vector3(...c.b).applyMatrix4(inverse).toArray(),radius:c.radius/scale.x})));runtime.flesh.advance(seconds);session.redraw();
  }
  try{
-  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
+  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory,limbAttachmentReach:inputs.limb_attachment_reach??0});
   placement.add(runtime.group);
   if(inputs.attention){
    // Interests resolve from the live scene this creature stands in; the
@@ -316,6 +319,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   }
   placement.name=inputs.label??'Creature';
   asset=await session.attach(placement,{owned:true,metadata:{fileName:placement.name,source:inputs.case,label:placement.name}});
+  reachEdit=registerLimbAttachmentReach({edits:document.defaultView?.kaminosSceneEdits,runtime,changed(){chosenInputs={...chosenInputs,limb_attachment_reach:runtime.read().binding.limbAttachmentReach};session.redraw();host.scene.refreshPresentation?.(asset);refresh();}});
   player=makePlayer();
   if(encounterContext)releaseEncounter=encounterContext.register(contactState);
   // Keep each loaded skin with its own request so a superseded load that
@@ -357,6 +361,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
   };
   const operations={
+   limbAttachmentReach:operation('limbAttachmentReach',async input=>{await reachEdit.set(input?.value);return read();}),
    action:operation('action',async input=>{
     if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
     unsubscribe();player.pause();

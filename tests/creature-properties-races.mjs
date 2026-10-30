@@ -16,7 +16,7 @@ async function fixture(){
  const session={async attach(root){scene.add(root);return {id:'animal',root,owned:true};},onFrame(){throw Error('Paused property updates cannot rely on a frame callback');},redraw(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),async dispose(){scene.clear();}};
  const host={controls:{document,mountObject:x=>(seating=x,{dispose(){},update(){}})},scene:{open:async()=>session}};
  const api=await openExperiment({id:'fixture/creature',title:'Creature',create:args=>createWalkingCreature(args,{loadSources:async()=>data,loadSkin:input=>input.case==='lean'?pending:Promise.resolve(skin(input.case_sha256))})},{host,inputs:{case:'heavy',case_sha256:heavy,choices,blend_frames:0},record(){}});
- const mount=await api.mount({root:new Element(),reopen:async()=>{}});const all=nodes(seating.properties),cast=all.find(n=>n['aria-label']==='Creature cast'),error=all.find(n=>n.role==='alert');
+ const mount=await api.mount({root:new Element(),reopen:async()=>{}});const all=nodes(seating.properties),cast=all.find(n=>n['aria-label']==='Creature cast'),error=all.find(n=>n['aria-label']==='Creature setup error');
  return {api,mount,cast,file:all.find(n=>n['aria-label']==='Open creature setup'),update:seating.onSelected,mode:all.find(n=>n['aria-label']==='Creature playback'),error,rejectLean,heavy,startLean(){cast.value='lean';return cast.onchange();}};
 }
 test('paused cast loading disables its controls immediately through the actual experiment mount',async()=>{
