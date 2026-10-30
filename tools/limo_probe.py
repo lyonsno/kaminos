@@ -138,6 +138,24 @@ def source_modules(root):
         importlib.import_module('image.conditional_pipelines'))
 
 
+def scene_batch(dataset_module, config, resolution):
+    import torch
+    if resolution <= 0 or resolution % 16:
+        raise ValueError('resolution must be a positive multiple of 16')
+    class ResolutionDataset(dataset_module.SpheresDataset):
+        def _resize_data(self, data, batch_random_int):
+            if resolution == 512:
+                return super()._resize_data(data, batch_random_int)
+            for key, value in data.items():
+                data[key] = torch.nn.functional.interpolate(
+                    value.unsqueeze(0), size=(resolution,resolution), mode='area').squeeze(0)
+    batch = ResolutionDataset(config,target_layers=list(TARGETS),split='test')[0]
+    for key in (*CONDITIONS,'sphere_mask'):
+        if tuple(batch[key].shape[-2:]) != (resolution,resolution):
+            raise ValueError(f'effective conditioning resolution mismatch: {key}')
+    return batch
+
+
 def run(args, report, report_path):
     import torch
     from diffusers import FluxTransformer2DModel
@@ -166,11 +184,11 @@ def run(args, report, report_path):
         str(path.relative_to(args.scene)):digest(path) for path in sorted(args.scene.rglob('*')) if path.is_file()}}
     config=dataset_module.SpheresDatasetConfig(data_dir=str(args.scene),
         augmentation_cfg=dataset_module.SpheresAugConfig())
-    dataset=dataset_module.SpheresDataset(config,target_layers=list(TARGETS),split='test')
-    batch=dataset[0]
+    batch=scene_batch(dataset_module,config,args.resolution)
     height,width=batch['image'].shape[-2:]
     mask=(batch['sphere_mask'][0].numpy()+1)/2>.5
     report['input']={'width':width,'height':height,'conditions':CONDITIONS,
+        'resize':'source area interpolation before source color conversion',
         'maskPixels':int(mask.sum()),'scope':'official rendered fixture geometry; not inferred MoGe geometry'}
     Image.fromarray(np.uint8(((batch['image'].permute(1,2,0).numpy()+1)/2).clip(0,1)*255)).save(args.output_dir/'input.png')
     Image.fromarray(np.uint8(mask)*255).save(args.output_dir/'mask.png')
@@ -221,6 +239,7 @@ def run(args, report, report_path):
         return result
     _,prompt_embeds,pooled_embeds,_=source_utils.prepare_target_and_prompt_ev(cfg,encode,encoders,tokenizers,'mps')
     report['encodedPrompts']=prompts
+    report['textTokens']=int(prompt_embeds[args.targets[0]][args.evs[0]].shape[1])
     pipe.text_encoder=None; pipe.text_encoder_2=None
     del encoders,tokenizers
     components.clear()
@@ -252,6 +271,7 @@ def run(args, report, report_path):
                     save_json(report_path,report)
                     return values
                 latents=packed_noise(pipe,width,height,generator,pipe.transformer.dtype,'mps')
+                report['imageTokens']=int(latents.shape[1])
                 torch.mps.synchronize(); start=time.perf_counter()
                 image=pipe(prompt_embeds=prompt_embeds[target][ev],pooled_prompt_embeds=pooled_embeds[target][ev],
                     latent_conditions=conditions,latents=latents,width=width,height=height,guidance_scale=1.0,
@@ -277,6 +297,7 @@ def main(argv=None):
     parser.add_argument('--evs',nargs='+',type=int,choices=EVS,default=list(EVS))
     parser.add_argument('--steps',type=int,default=20)
     parser.add_argument('--seed',type=int,default=0)
+    parser.add_argument('--resolution',type=int,default=512)
     parser.add_argument('--quantized-transformer',type=Path)
     parser.add_argument('--quantized-t5',type=Path)
     args=parser.parse_args(argv)
@@ -285,13 +306,15 @@ def main(argv=None):
     if path.exists(): raise FileExistsError('choose a fresh output directory; preserve prior probe evidence')
     report={'schema':'kaminos.limo-probe.v0','status':'failed','phase':'initialization',
         'receiver':'welcome-to-the-desert-of-the-real','estimator':'LiMo-image',
-        'requestedDevice':'mps','requested':{'targets':args.targets,'evs':args.evs,'steps':args.steps,'seed':args.seed,
+        'requestedDevice':'mps','requested':{'targets':args.targets,'evs':args.evs,'steps':args.steps,'seed':args.seed,'resolution':args.resolution,
             'quantizedTransformer':str(args.quantized_transformer) if args.quantized_transformer else None,
             'quantizedT5':str(args.quantized_t5) if args.quantized_t5 else None},
         'scope':'selected sphere outputs only; no reconstructed HDR or environment quality claim'}
     save_json(path,report)
     try:
         if args.steps<=0: raise ValueError('steps must be positive')
+        if args.resolution<=0 or args.resolution%16:
+            raise ValueError('resolution must be a positive multiple of 16')
         if len(set(args.targets))!=len(args.targets) or len(set(args.evs))!=len(args.evs):
             raise ValueError('duplicate target or EV would overwrite retained output')
         run(args,report,path)

@@ -15,6 +15,42 @@ import limo_probe as probe
 
 
 class LimoProbeTests(unittest.TestCase):
+    def test_resolution_resizes_all_raw_layers_before_source_color_conversion(self):
+        class Dataset:
+            def __init__(self,*args,**kwargs): pass
+            def _resize_data(self,data,index):
+                for key,value in data.items():
+                    data[key]=torch.nn.functional.interpolate(value[None],size=(512,512),mode='area')[0]
+            def __getitem__(self,index):
+                data={key:torch.arange(48,dtype=torch.float32).reshape(3,4,4) for key in probe.CONDITIONS}
+                data['sphere_mask']=torch.ones(1,4,4)
+                self._resize_data(data,index)
+                self.color_conversion_shape=tuple(data['image'].shape)
+                return data
+        module=SimpleNamespace(SpheresDataset=Dataset)
+        for size in (256,512):
+            batch=probe.scene_batch(module,None,size)
+            self.assertEqual(set(batch),set(probe.CONDITIONS)|{'sphere_mask'})
+            for key,value in batch.items():
+                self.assertEqual(tuple(value.shape[-2:]),(size,size))
+                self.assertTrue(torch.isfinite(value).all())
+            self.assertEqual(float(batch['image'][0,0,0]),0)
+        for size in (0,-16,255):
+            with self.assertRaisesRegex(ValueError,'multiple of 16'):
+                probe.scene_batch(module,None,size)
+
+    def test_requested_resolution_survives_early_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv=[]
+            for name in ('source-root','support','checkpoint','metadata','scene'):
+                argv.extend(['--'+name,temp])
+            argv.extend(['--output-dir',temp,'--resolution','256'])
+            with patch.object(probe,'require_mps',side_effect=RuntimeError('MPS unavailable')):
+                with self.assertRaisesRegex(RuntimeError,'MPS unavailable'): probe.main(argv)
+            report=json.loads((Path(temp)/'probe.json').read_text())
+            self.assertEqual(report['requested']['resolution'],256)
+            self.assertNotIn('input',report)
+
     def packed_asset_fixture(self, root):
         checkpoint_sha='29e6f6e98e81c0ac187d95927641d4ef61c3d1b9e18f278c06369d98cbc1a6be'
         transformer=root/'transformer'; transformer.mkdir()
