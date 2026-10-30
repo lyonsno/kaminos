@@ -22,6 +22,11 @@ import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInte
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
 }
+function groundHeightInPlacement(height,transform){
+ const m=transform?new THREE.Matrix4().compose(new THREE.Vector3(...transform.position),new THREE.Quaternion(...transform.quaternion),new THREE.Vector3(...transform.scale)):new THREE.Matrix4();
+ if(Math.abs(m.elements[1])+Math.abs(m.elements[9])>1e-8)throw Error('Grounded walk currently requires an upright authored placement');
+ return new THREE.Vector3(0,height,0).applyMatrix4(m.invert()).y;
+}
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
@@ -33,6 +38,7 @@ function checkRecipeInputs(inputs){
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
  if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.engage!==undefined&&typeof a.engage!=='boolean')throw Error('Attention engagement must be boolean');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
+ if(inputs.grounded_walk===true&&!Number.isFinite(inputs.grounded_ground_height))throw Error('Grounded walk needs an explicit scene support height');
  if(inputs.grounded_walk!==undefined&&typeof inputs.grounded_walk!=='boolean')throw Error('Grounded walk must be boolean');
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
@@ -62,7 +68,7 @@ export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySource
  checkRecipeInputs(recipe);
  const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
  const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
- const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,grounded:recipe.grounded_walk===true,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
+ const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,grounded:recipe.grounded_walk===true?{groundHeight:groundHeightInPlacement(recipe.grounded_ground_height,recipe.transform)}:false,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
  validateCreatureFleshPoses(loaded,[check.frame(0),wander?wander.frame(wander.read().frame):walking.frame(recipe.sample??0,{mode:recipe.action==='wander'?'cycle':recipe.mode??'source',cycle:recipe.cycle??0})]);
  return loaded;
 }
@@ -89,7 +95,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
- const makeWander=options=>createWanderMotion({THREE,adapter,walking,locomotion:true,grounded:chosenInputs.grounded_walk===true,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ const makeWander=options=>createWanderMotion({THREE,adapter,walking,locomotion:true,grounded:chosenInputs.grounded_walk===true?{groundHeight:groundHeightInPlacement(chosenInputs.grounded_ground_height,authoredTransform())}:false,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
  const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
@@ -160,6 +166,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function syncArea(){
   if(!wander)return true;
+  if(chosenInputs.grounded_walk===true){try{wander.setGroundHeight(groundHeightInPlacement(chosenInputs.grounded_ground_height,authoredTransform()));}catch(error){actionError=error.message;unsubscribe();player.pause();return false;}}
   if(zoneProvider){try{
    const frame=authoredPlacement(),rows=zoneProvider.roots();if(!rows.length){actionError=null;unsubscribe();player.pause();return false;}
    const areas=rows.map(row=>({id:row.id,preference:row.preference,area:wanderAreaInPlacement({THREE,areaRoot:row.root,placement:frame})})),key=JSON.stringify(areas);
@@ -215,8 +222,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),pivot=point(from.position),end=point(to.position),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
    const a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
    encounterContext.stage({time:frameStamp,seconds:physicalSeconds,nextBody:contactState(wander.frame(state.frame)),motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis},accept:motion=>{
-    const position=pivot.clone().add(new THREE.Vector3(...motion.translation)).applyMatrix4(inverse),worldDirection=new THREE.Vector3(from.direction[0],0,from.direction[1]).transformDirection(matrix).applyAxisAngle(new THREE.Vector3(0,-1,0),motion.angle).transformDirection(inverse);
-    state=wander.contact(before,{position:[position.x,position.z],direction:[worldDirection.x,worldDirection.z]});present();
+    const localMotion=motion=>{const position=pivot.clone().add(new THREE.Vector3(...motion.translation)).applyMatrix4(inverse),direction=new THREE.Vector3(from.direction[0],0,from.direction[1]).transformDirection(matrix).applyAxisAngle(new THREE.Vector3(0,-1,0),motion.angle).transformDirection(inverse);return {position:[position.x,position.z],direction:[direction.x,direction.z],seconds:motion.seconds};};
+    state=wander.contact(before,{...localMotion(motion),journey:motion.journey?.map(localMotion)});present();
    },after});return read();
   }
   present();encounterContext?.commit(frameStamp,contactState());after();return read();
