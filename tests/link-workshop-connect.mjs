@@ -35,6 +35,8 @@ try {
  // Undo follows the unfinished connection, never an earlier completed scene edit.
  c.operations.cancelConnection();c.operations.period({seconds:4});
  const accepted=JSON.stringify(c.read().recipe);
+ let notified;const stopHistory=edits.subscribe(state=>{notified=state;});
+ c.operations.tool({value:'connect'});assert.deepEqual(notified,edits.state(),'entering empty Connect publishes effective history counts');stopHistory();
  c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cube'});c.operations.connectEnd({joint:1});c.operations.previewConnection({kind:'piston'});
  edits.undo();assert.equal(c.read().connectionDraft?.ends.length,1,'Undo removes the latest connection pick');assert.equal(c.read().connectionDraft.kind,null);assert.equal(JSON.stringify(c.read().recipe),accepted);
  edits.undo();assert.equal(c.read().connectionDraft.ends.length,0);assert.equal(edits.undo(),false,'empty Connect does not undo an unrelated scene edit');assert.equal(JSON.stringify(c.read().recipe),accepted);
