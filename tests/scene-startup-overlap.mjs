@@ -2,15 +2,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {fireAtBoot} from '../fire-boot.mjs';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=source.indexOf('  const startupSceneHash ='),end=source.indexOf('  startupSceneRestore.catch',start);
+const start=source.indexOf('  const startupSceneRedirect ='),end=source.indexOf('  startupSceneRestore.catch',start);
 assert.ok(start>=0&&end>start);
 const code=source.slice(start,end)+';globalThis.result=startupSceneRestore;';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-test('saved document fetch overlaps environment/fire preparation; application waits for both',async()=>{
+test('saved document fetch overlaps environment preparation; application waits for both owners',async()=>{
  const environment=deferred(),volume=deferred();const events=[];
- const c={URLSearchParams,location:{hash:'#scene=chosen.kaminos.json',search:''},environmentLoaded:environment.promise,volumeLoaded:volume.promise,
+ const c={URLSearchParams,location:{hash:'#scene=chosen.kaminos.json',search:''},environmentLoaded:environment.promise,window:{},ownerVolumeReady:null,fireAtBoot,initKaminosVolumeRoute:()=>volume.promise,reportKaminosVolumeRouteInitFailure(){},
   fetch:async url=>{events.push(['fetch',url]);return {ok:true,json:async()=>({version:8,objects:[]})};},
   sceneDocument:{holdRestore:()=>events.push(['hold']),state:()=>({blocked:false})},
   planSceneRestore:()=>({composition:null}),File:class {constructor(parts,name){this.name=name;}},
@@ -23,6 +24,6 @@ test('saved document fetch overlaps environment/fire preparation; application wa
  assert.deepEqual(events.map(e=>e[0]),['fetch','hold','apply']);
 });
 test('ordinary startup requests no saved document',async()=>{
- const c={URLSearchParams,location:{hash:''},environmentLoaded:Promise.resolve(),volumeLoaded:Promise.resolve(),fetch:()=>assert.fail('ordinary startup has no scene payload')};
+ const c={URLSearchParams,location:{hash:'',search:''},environmentLoaded:Promise.resolve(),window:{},ownerVolumeReady:null,fireAtBoot,initKaminosVolumeRoute:()=>assert.fail('ordinary startup has no fire'),reportKaminosVolumeRouteInitFailure(){},fetch:()=>assert.fail('ordinary startup has no scene payload')};
  vm.runInNewContext(code,c);await c.result;
 });
