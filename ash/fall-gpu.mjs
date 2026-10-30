@@ -1,4 +1,5 @@
 import * as THREE from '../lib/three.webgpu.js';
+import {ashAirAdmissionWGSL} from './scan-wgsl.mjs';
 import {fallingLayout,sourceSettings,fallingGroupState} from './fall-plan.mjs';
 const SHADER=`
 struct Parcel {position:vec4<f32>,velocity:vec4<f32>}
@@ -81,11 +82,9 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  for(var axis=0u;axis<3u;axis++){for(var side=0u;side<2u;side++){var q=vec3<i32>(c);q[axis]+=select(-1,1,side==1u);if(all(q>=vec3<i32>(0))&&all(q<vec3<i32>(p.dims.xyz))){let n=vec3<u32>(q)/${tiles.width}u;let j=n.x+${tiles.dims[0]}u*(n.y+${tiles.dims[1]}u*n.z);atomicStore(&tiles[j*8u+2u],1u);}}}}
 @compute @workgroup_size(1) fn prepare_fall(){`);
   code=code.replace('@group(0) @binding(4) var<storage,read_write> wake:array<atomic<u32>>;','').replace('atomicStore(&wake[3],1u);','wake_cell(i);');
-  code=code.replace('atomicStore(&state[1],0u);atomicAdd(&state[2],1u);',`atomicStore(&state[1],0u);atomicAdd(&state[2],1u);atomicStore(&draw[1],0u);
- var need=u32(ceil(bitcast<f32>(atomicLoad(&state[0]))/8.0));var count=0u;
- for(var group=0u;group<${groups}u;group++){let a=atomicLoad(&groupData[group*2u]);let b=atomicLoad(&groupData[group*2u+1u]);let slots=min(64u,p.dims.w-group*64u);let occupied=countOneBits(a)+countOneBits(b);let free=slots-occupied;
- if(occupied>0u||(need>0u&&free>0u)){atomicStore(&groupData[${groups*2}u+count],group);count++;need-=min(need,free);}atomicStore(&groupData[group*2u],0u);atomicStore(&groupData[group*2u+1u],0u);}
- atomicStore(&groupData[${groups*3}u],count);atomicStore(&groupData[${groups*3+1}u],1u);atomicStore(&groupData[${groups*3+2}u],1u);`);
+  const prepareStart=code.indexOf('@compute @workgroup_size(1) fn prepare_fall(){');
+  const prepareEnd=code.indexOf('@compute @workgroup_size(64) fn fall(',prepareStart);
+  code=code.slice(0,prepareStart)+ashAirAdmissionWGSL(groups)+'\n'+code.slice(prepareEnd);
   code=code.replace('@builtin(global_invocation_id) gid:vec3<u32>','@builtin(workgroup_id) wg:vec3<u32>,@builtin(local_invocation_id) lane:vec3<u32>').replace('let i=gid.x;if(i>=p.dims.w)',`let group=atomicLoad(&groupData[${groups*2}u+wg.x]);let i=group*64u+lane.x;if(i>=p.dims.w)`);
   code=code.replace('atomicAdd(&state[1],1u);',`atomicOr(&groupData[group*2u+lane.x/32u],1u<<(lane.x%32u));let slot=atomicAdd(&state[1],1u);visible[slot]=i;atomicAdd(&draw[1],1u);`);
   // One packed storage/indirect buffer holds masks, group list and dispatch args.

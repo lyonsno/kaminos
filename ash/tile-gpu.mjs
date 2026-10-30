@@ -1,4 +1,5 @@
 import * as THREE from '../lib/three.webgpu.js';
+import {ashDrawPrefixWGSL} from './scan-wgsl.mjs';
 import {patchLayout,seedPatch,ASH_SURFACE_MIN_FILL,ashDispatchGrid,validateAshRunEncoding} from './gpu-plan.mjs';
 import {seededTiles,cellCoord,tileIndex} from './tile-plan.mjs';
 import {createGpuAshFall} from './fall-gpu.mjs';
@@ -104,10 +105,7 @@ fn surface_band(c:vec3<u32>,face:u32)->vec2<f32>{
  for(var i=0u;i<2u;i++){let count=atomicLoad(&jobs[${t.count*2+8}u+i])*G;let offset=${t.count*2}u+i*4u;
  atomicStore(&jobs[offset],min(count,DISPATCH_ROW));atomicStore(&jobs[offset+1u],max(1u,(count+DISPATCH_ROW-1u)/DISPATCH_ROW));}
 }
-@compute @workgroup_size(1) fn draw_prefix(){
- var total=0u;for(var tile=0u;tile<NT;tile++){prefix[tile]=total;total+=atomicLoad(&headers[tile*8u+3u]);}prefix[NT]=total;
- atomicStore(&draw[1],total);atomicStore(&jobs[${t.count*2+8}u+4],total);
-}
+${ashDrawPrefixWGSL(t.count,t.count*2+12)}
 `;}
 const address=THREE.TSL.wgslFn(`fn ash_face_address(rank:u32,nt:u32,v:u32,faces:ptr<storage,array<u32>,read>,prefix:ptr<storage,array<u32>,read>)->vec2<u32>{
  var lo=0u;var hi=nt;loop{if(lo>=hi){break;}let mid=(lo+hi)/2u;if((*prefix)[mid+1u]<=rank){lo=mid+1u;}else{hi=mid;}}

@@ -3,7 +3,7 @@ import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';im
 const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
 const out=resolve(args.get('--out')),repo=resolve(args.get('--repo')),origin=args.get('--url'),mode=args.get('--mode')??'cells',width=Number(args.get('--width')??7.68),samples=Number(args.get('--samples')??12);
 mkdirSync(out,{recursive:true});const r={status:'running',phase:'source',route:'shared-webgpu-pass-timestamps',requested:{mode,width,samples},errors:[],consoleErrors:[],cases:{}};let browser,page;const save=()=>writeFileSync(out+'/report.json',JSON.stringify(r,null,2));save();
-const source=()=>createHash('sha256').update(['ash/tile-gpu.mjs','ash/gpu-plan.mjs','ash/scene-gpu.mjs','ash/tile-plan.mjs','experiments/ash-gpu-deposition.experiment.mjs','tools/ash-pass-timer.mjs','tools/ash-cost-witness.mjs','tools/ash-cost-contracts.mjs'].map(p=>readFileSync(repo+'/'+p)).join('\n')).digest('hex');
+const source=()=>createHash('sha256').update(['ash/fall-gpu.mjs','ash/fall-plan.mjs','ash/scan-wgsl.mjs','ash/tile-gpu.mjs','ash/gpu-plan.mjs','ash/scene-gpu.mjs','ash/tile-plan.mjs','experiments/ash-gpu-deposition.experiment.mjs','tools/ash-pass-timer.mjs','tools/ash-cost-witness.mjs','tools/ash-cost-contracts.mjs'].map(p=>readFileSync(repo+'/'+p)).join('\n')).digest('hex');
 try{
  assert.ok(Number.isInteger(samples)&&samples>0);r.sourceBefore=source();r.server=await verifyAuthoringServer({origin,repoRoot:repo});
  const {chromium}=await import(args.get('--playwright'));r.browserExecutable=args.get('--browser');assert.match(r.browserExecutable,/Chrome for Testing|chromium/);
