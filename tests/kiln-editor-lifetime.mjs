@@ -10,3 +10,8 @@ test('admitting words into an existing kiln retains its renderer and prepares th
  assert.equal(created,1,'typing and admission must not reconstruct the kiln');assert.equal(disposed,0);assert.equal(prepared.at(-1).prompt,'changed words');
  input.value='next draft';view.render({status:'running',request:{id:'one',prompt:'changed words'}});await tick();assert.equal(prepared.length,1,'draft changes cannot mutate the admitted burn');await view.dispose();
 });
+test('hiding an idle kiln stops compute but preserves the assembled scene',async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let created=0,disposed=0;
+ const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'same'})},slot:element(),createRenderer:async()=>{created++;return {setActive:async()=>{},dispose:()=>disposed++,debugState:()=>({})};}});
+ await view.setVisible(true);await view.setVisible(false);assert.equal(disposed,0);await view.setVisible(true);assert.equal(created,1);await view.dispose();assert.equal(disposed,1);
+});

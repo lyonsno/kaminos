@@ -1,6 +1,7 @@
 import {Matrix4} from './lib/three.core.js';
 // One browser text layout for editing and for the glyph mask consumed by the
 // existing solid/thermal constructor. No per-character picking or custom undo.
+export const KILN_PROMPT_WINDOW_HEIGHT=224;
 const width=1024;
 const typography='box-sizing:border-box;width:1024px;margin:0;border:0;padding:20px 60px;font:500 76px Georgia;line-height:92px;letter-spacing:normal;text-align:center;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8;';
 const escape=value=>value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
@@ -17,16 +18,16 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
  const home=input.parentNode,after=input.nextSibling,priorStyle=input.getAttribute('style'),priorPlaceholder=input.placeholder;
  layer.append(input);input.classList.add('kiln-prompt-input');input.placeholder='Describe your image…';input.wrap='soft';
  const mirror=document.createElement('div');mirror.setAttribute('aria-hidden','true');mirror.style.cssText=typography+'position:fixed;left:-100000px;top:0;visibility:hidden;';document.body.append(mirror);
- let height=180,burning=false,disposed=false,presented=null;
+ let height=KILN_PROMPT_WINDOW_HEIGHT,burning=false,disposed=false,presented=null;
  function measure(value){mirror.textContent=value+'\u200b';return Math.max(180,mirror.scrollHeight);}
  function position(){
   if(disposed)return;const rect={width:viewport.clientWidth,height:viewport.clientHeight};
   input.style.transform=promptPlaneTransform({camera,object,width:rect.width,height:rect.height,textHeight:height});
  }
- function present(){const editing=!burning||document.activeElement===input;layer.dataset.editing=String(editing);input.style.color=editing?'#b8b2a8':'transparent';object.visible=!editing;if(presented!==editing){presented=editing;onPresentation();}}
+ function present(){const editing=!burning||document.activeElement===input;layer.dataset.editing=String(editing);input.style.color=editing?'#b8b2a8':'transparent';input.style.opacity=editing?'1':'0';object.visible=!editing;if(presented!==editing){presented=editing;onPresentation();}}
  function sync(){
-  height=measure(input.value);input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:hidden;outline:none;caret-color:#ffcd8d;`;
-  position();present();
+  height=KILN_PROMPT_WINDOW_HEIGHT;const scroll=input.scrollTop;input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:auto;scrollbar-width:thin;outline:none;caret-color:#ffcd8d;`;
+  input.scrollTop=scroll;position();present();
  }
  const edit=()=>{sync();onChange(input.value);};
  input.addEventListener('input',edit);input.addEventListener('focus',present);input.addEventListener('blur',present);
@@ -41,7 +42,7 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
    const image=new document.defaultView.Image();image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
    try{await image.decode();canvas.getContext('2d').drawImage(image,0,0);return canvas;}catch(error){onError(error);throw error;}
   },
-  read:()=>({width,height,text:input.value,editing:!burning||document.activeElement===input,transform:input.style.transform}),
+  read:()=>({width,height,contentHeight:measure(input.value),scrollTop:input.scrollTop,text:input.value,editing:!burning||document.activeElement===input,transform:input.style.transform}),
   dispose(){if(disposed)return;disposed=true;observer.disconnect();input.removeEventListener('input',edit);input.removeEventListener('focus',present);input.removeEventListener('blur',present);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();object.visible=true;},
  };
 }
