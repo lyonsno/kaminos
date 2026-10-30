@@ -1,5 +1,6 @@
 import {createSceneLiquidSupport,SCENE_LIQUID_COLLIDER_WGSL,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL} from './scene-liquid-support.mjs';
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
+import {createWebGpuGpuTimer} from './webgpu-inference-kit/src/gpu-timing.js';
 
 const boundaryFor=(config,sceneSupport)=>`
         ${sceneSupport?`var world=domain.xyz+particles[id.x].position*domain.w;
@@ -27,7 +28,7 @@ const boundaryFor=(config,sceneSupport)=>`
     }
 }`;
 
-export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,now=()=>performance.now()}) {
+export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,profile=false,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
   for(const size of [config.capacity*80,config.gridCells*16]){
     if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
@@ -37,6 +38,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   if(gridY>dispatchLimit)throw Error('MLS grid exceeds effective two-dimensional dispatch capacity');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
+  const timer=createWebGpuGpuTimer({device,queue:device.queue,options:profile}),timingBatches=[];
   let support=null;
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
   let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
@@ -123,7 +125,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           atomicAdd(&occupancy[0],1u);atomicOr(&occupancy[1u+id.x/32u],1u<<(id.x%32u));
         }`,'census',[[0,0],[1,8]]);
     }
-    const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
+    const dispatch=(encoder,kernel,n,timestampWrites)=>{const pass=encoder.beginComputePass(timestampWrites?{timestampWrites}:undefined);pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const execute=(steps,epochMs)=>{
         const startedAt=now(),startTime=time,injections=[];
         for(let i=0;i<steps;i++){
@@ -134,15 +136,21 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         if(upload){const values=new Float32Array(upload.getMappedRange());let i=0;for(const births of injections)for(const b of births){
           values.set(b.position,i*20);values[i*20+3]=b.life;values.set(b.velocity,i*20+4);i++;
         }upload.unmap();}
-        const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0;
+        const token=timer.begin(),timing=profile?{steps,startTime,cpuEncodeMs:null,submitToCompletionMs:null,gpuMs:null,gpuStatus:token?'pending':timer.summary.status==='active'?'untimed':timer.summary.status}:null;
+        if(timing){timingBatches.push(timing);if(token)token.listeners.push(t=>{timing.gpuMs=t.ms;timing.gpuStatus=t.status;});}
+        const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0,index=0;
         for(const births of injections){
           for(const b of births){encoder.copyBufferToBuffer(upload,source,particles,b.slot*80,80);source+=80;}
           encoder.clearBuffer(cells);
-          dispatch(encoder,kernels[0],config.capacity);dispatch(encoder,kernels[1],config.capacity);
-          dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
+          dispatch(encoder,kernels[0],config.capacity,token&&index===0?{querySet:token.timestampWrites.querySet,beginningOfPassWriteIndex:token.timestampWrites.beginningOfPassWriteIndex}:undefined);dispatch(encoder,kernels[1],config.capacity);
+          dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity,token&&index===steps-1?{querySet:token.timestampWrites.querySet,endOfPassWriteIndex:token.timestampWrites.endOfPassWriteIndex}:undefined);
+          index++;
         }
+        if(token)timer.encodeResolve(encoder,token);
         if(census){encoder.clearBuffer(census);dispatch(encoder,censusKernel,config.capacity);encoder.copyBufferToBuffer(census,0,censusReadback,0,censusWords*4);}
         device.queue.submit([encoder.finish()]);pending=true;
+        const submittedAt=now();if(timing)timing.cpuEncodeMs=submittedAt-startedAt;
+        if(token){timer.markSubmitted(token);timer.flush();}
         const submittedStep=clock.read().step;
         const completion=censusReadback?censusReadback.mapAsync(GPUMapMode.READ).then(()=>{
           const words=new Uint32Array(censusReadback.getMappedRange()).slice();censusReadback.unmap();
@@ -153,6 +161,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         }):device.queue.onSubmittedWorkDone();
         pendingCompletion=completion.then(()=>{
           const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;
+          if(timing)timing.submitToCompletionMs=completedAt-submittedAt;
           cadence.lastBatchWallMs=completedAt-startedAt;cadence.lastCompletionIntervalMs=lastCompletedAt===null?null:completedAt-lastCompletedAt;lastCompletedAt=completedAt;
         }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
         return true;
@@ -177,6 +186,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         return clock.read();
       },
       read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,capacity:config.capacity,population:population?{...population}:null,cadence:{...cadence},gridCells:config.gridCells,
+        timing:{...timer.summary,scope:'simulation_passes_excluding_census_render_and_queue_wait',batches:timingBatches.map(b=>({...b}))},
         gridDispatch:{x:gridX,y:gridY},deviceLimits:{maxStorageBufferBindingSize:device.limits?.maxStorageBufferBindingSize??null,maxBufferSize:device.limits?.maxBufferSize??null,maxComputeWorkgroupsPerDimension:dispatchLimit},
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
@@ -190,7 +200,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           await readback.mapAsync(GPUMapMode.READ);return new Float32Array(readback.getMappedRange()).slice();
         }finally{readback.destroy();}
       },
-      dispose(){if(disposed)return;disposed=true;support?.dispose();for(const b of owned)b.destroy();}
+      dispose(){if(disposed)return;disposed=true;timer.destroy();support?.dispose();for(const b of owned)b.destroy();}
     };
-  }catch(error){support?.dispose();for(const b of owned)b.destroy();throw error;}
+  }catch(error){timer.destroy();support?.dispose();for(const b of owned)b.destroy();throw error;}
 }
