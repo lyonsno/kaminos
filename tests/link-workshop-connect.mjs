@@ -32,5 +32,17 @@ try {
  c.operations.tool({value:'connect'});cube.position.x=3;scene.updateMatrixWorld(true);
  adapter.pick({clientX:70,clientY:50},{camera,canvas});
  assert.equal(c.read().connectionDraft.ends[0].owner.joint,1,'unobstructed joint remains directly pickable');
+ // Undo follows the unfinished connection, never an earlier completed scene edit.
+ c.operations.cancelConnection();c.operations.period({seconds:4});
+ const accepted=JSON.stringify(c.read().recipe);
+ c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cube'});c.operations.connectEnd({joint:1});c.operations.previewConnection({kind:'piston'});
+ edits.undo();assert.equal(c.read().connectionDraft?.ends.length,1,'Undo removes the latest connection pick');assert.equal(c.read().connectionDraft.kind,null);assert.equal(JSON.stringify(c.read().recipe),accepted);
+ edits.undo();assert.equal(c.read().connectionDraft.ends.length,0);assert.equal(edits.undo(),false,'empty Connect does not undo an unrelated scene edit');assert.equal(JSON.stringify(c.read().recipe),accepted);
+ edits.redo();assert.equal(c.read().connectionDraft.ends.length,1);edits.redo();assert.equal(c.read().connectionDraft.ends.length,2);
+ c.operations.connectEnd({joint:0});edits.undo();assert.equal(c.read().connectionDraft.ends.length,2,'undo a replacement first pick restores the prior pair');
+ c.operations.restartConnection();assert.equal(c.read().connectionDraft.ends.length,0);edits.undo();assert.equal(c.read().connectionDraft.ends.length,2);
+ edits.undo();c.operations.connectEnd({joint:0});assert.equal(edits.redo(),false,'a new pick clears draft redo');
+ c.operations.previewConnection({kind:'piston'});c.operations.commitConnection();edits.undo();assert.equal(JSON.stringify(c.read().recipe),accepted,'completed connection remains one scene operation');
+ edits.undo();assert.equal(c.read().recipe.period,3,'scene history resumes outside the draft');
  console.log('Connect enters native editing; endpoints, alternatives, cancellation, atomic history and stale preview rejection passed');
 }finally{edits.clear();await c.dispose();cube.geometry.dispose();cube.material.dispose();}

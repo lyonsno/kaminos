@@ -15,7 +15,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  if(!edits||!host.controls.components)throw Error('Native component editing is required');
  const session=await host.scene.open(),root=inputs.root??new T.Group(),proxy=new T.Object3D();root.name='Link workshop';
  let model=checkedMechanism(inputs.root?.userData.linkMechanism??inputs.recipe??emptyMechanism()),selected=model.nodes.length-1,mode='build',tool='draw',editing=false,playing=false,time=0,t=0,disposed=false,refresh=()=>{},seat,controls;
- let placementIds=[],previewIdentity=null,connectionDraft=null,connectionIdentity=null;
+ let placementIds=[],previewIdentity=null,connectionDraft=null,connectionIdentity=null,connectionPast=[],connectionFuture=[],connectionHistory;
  const connectView=createConnectView(root,document);
  const seatingIdentity=()=>JSON.stringify([model,t,objects().map(e=>{e.object.updateWorldMatrix(true,false);return [e.id,e.object.matrixWorld.elements,e.object.userData.linkMechanism,e.object.userData.mechanismFraction];})]);
  let target,whole,mountTarget,selectedConnection=null,seatingPreview=null,showOverlays=true,selectedMount=null,selectedPiston=null,connectionStart=null,showTravel=false,mountStatus={errors:[],lengths:[]};
@@ -30,7 +30,9 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  function putProxy(){if(selectedMount){let matrix;try{matrix=mountMatrix(root,model,selectedMount,t,objects());}catch{return;}matrix.decompose(proxy.position,proxy.quaternion,proxy.scale);proxy.updateMatrixWorld(true);return;}if(selected<0||!model.nodes[selected])return;root.updateWorldMatrix(true,false);const f=frames(model,t)[selected],p=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld);proxy.position.copy(p);proxy.quaternion.copy(root.getWorldQuaternion(new T.Quaternion())).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle));proxy.scale.set(model.nodes[selected].length??1,1,1);proxy.updateMatrixWorld(true);}
  function update(follow=true){root.userData.linkMechanism=model;root.userData.mechanismFraction=t;if(follow)follower.update(model,t);if(seatingPreview&&previewIdentity!==seatingIdentity()){seatingPreview=null;fasteningView.clearPreview();}if(connectionDraft?.kind&&connectionIdentity!==seatingIdentity()){connectionDraft.kind=null;connectionDraft.error='Scene changed. Choose a preview again.';fasteningView.clearPreview();}connectView.update(draftRecipe(),t,objects(),connectionDraft,showOverlays);view.update(model,t,selectedPiston?-1:selected,showOverlays&&!playing&&mode!=='build',selectedPiston?.kind==='pistons'?selectedPiston.index:null);mountStatus=mountView.update(model,t,objects(),selectedMount,showOverlays,showOverlays&&showTravel,selectedPiston?.kind==='mountPistons'?selectedPiston.index:null);fasteningView.update(model,t,objects(),showOverlays?selectedConnection:null);fasteningView.showOverlays(showOverlays);grid.visible=showOverlays&&editing&&mode==='build'&&tool==='draw';origin.visible=!model.nodes.length;if(!edits.state().active)putProxy();session.redraw();refresh();}
  function draftRecipe(){return {...model,mounts:[...(model.mounts??[]),...(connectionDraft?.ends??[]).filter(m=>!model.mounts?.some(x=>x.id===m.id))]};}
- function clearConnection(){connectionDraft=null;connectionIdentity=null;fasteningView.clearPreview();}
+ function clearConnection(){connectionDraft=null;connectionIdentity=null;connectionPast=[];connectionFuture=[];fasteningView.clearPreview();connectionHistory?.changed();}
+ function rememberConnection(){connectionPast.push(structuredClone(connectionDraft.ends));connectionFuture=[];}
+ function replayConnection(from,to){if(!from.length)return false;to.push(structuredClone(connectionDraft.ends));connectionDraft={ends:from.pop(),kind:null,error:null};connectionIdentity=null;fasteningView.clearPreview();update();return true;}
  function connectionCandidate(kind){
   if(connectionDraft?.ends.length!==2)throw Error('Pick two ends first');
   const [a,b]=connectionDraft.ends,next=checkedMechanism(draftRecipe());
@@ -111,6 +113,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   root.updateWorldMatrix(true,false);const plane=new T.Plane(new T.Vector3(0,0,1),0).applyMatrix4(root.matrixWorld),p=ray.ray.intersectPlane(plane,new T.Vector3());if(!p)return;p.applyMatrix4(root.matrixWorld.clone().invert());const at=[p.x,p.y].map(x=>snap?Math.round(x*4)/4:x);
   try{const next=appendJoint(model,event.shiftKey?null:(selected<0?null:selected),at);apply(next,'Draw link');seat.changed(()=>{selected=model.nodes.length-1;update();});}catch(e){if(status)status.textContent=e.message;}
  }});
+ connectionHistory=edits.registerHistoryScope({active:()=>!!(tool==='connect'&&connectionDraft&&seat.active()),state:()=>({undoCount:connectionPast.length,redoCount:connectionFuture.length}),undo:()=>replayConnection(connectionPast,connectionFuture),redo:()=>replayConnection(connectionFuture,connectionPast)});
  unsubscribe=edits.subscribe(()=>{if(!disposed){putProxy();refresh();}});
  const operations={
   connectEnd({mount,objectId,joint,position=[0,0,0],rotation=[0,0,0]}){
@@ -119,12 +122,13 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
    if(!endpoint){const owner=objectId?{objectId}:{joint};const entry=objects().find(e=>e.id===objectId);if(objectId&&(!entry||entry.object===root||!['glb','pbr','procedural-mesh'].includes(entry.type)))throw Error('Pick a mesh object');
     endpoint={id:T.MathUtils.generateUUID(),owner,position,rotation,label:objectId?(entry.label??entry.object.name??'Object'):`Link ${joint+1}`};checkedMechanism({...model,mounts:[...(model.mounts??[]),endpoint]});mountMatrix(root,{...model,mounts:[...(model.mounts??[]),endpoint]},endpoint.id,t,objects());}
    endpoint=structuredClone(endpoint);endpoint.label=endpoint.owner.objectId?(objects().find(e=>e.id===endpoint.owner.objectId)?.label??endpoint.label??'Object'):`Link ${endpoint.owner.joint+1}`;
-   if(connectionDraft.ends.length===2)connectionDraft.ends=[];
-   if(connectionDraft.ends[0]?.id===endpoint.id)throw Error('Pick a different second end');
-   connectionDraft.ends.push(endpoint);connectionDraft.kind=null;connectionDraft.error=null;selectedMount=null;selectedConnection=null;selectedPiston=null;fasteningView.clearPreview();update();return read();
+   if(connectionDraft.ends.length===1&&connectionDraft.ends[0]?.id===endpoint.id)throw Error('Pick a different second end');
+   rememberConnection();if(connectionDraft.ends.length===2)connectionDraft.ends=[];
+   connectionDraft.ends.push(endpoint);connectionHistory.changed();connectionDraft.kind=null;connectionDraft.error=null;selectedMount=null;selectedConnection=null;selectedPiston=null;fasteningView.clearPreview();update();return read();
   },
   previewConnection({kind}){pause();fasteningView.clearPreview();if(connectionDraft){connectionDraft.kind=null;connectionDraft.error=null;}try{const {next,binding}=connectionCandidate(kind);if(binding)fasteningView.preview(objects(),seatingWorlds(root,{...next,attachments:model.attachments??[]},binding,t,objects()));connectionDraft.kind=kind;connectionIdentity=seatingIdentity();update();return read();}catch(e){if(connectionDraft)connectionDraft.error=e.message;update();throw e;}},
   commitConnection(){if(!connectionDraft?.kind)throw Error('Choose a connection preview first');if(connectionIdentity!==seatingIdentity()){connectionDraft.kind=null;fasteningView.clearPreview();update();throw Error('Scene changed; choose a preview again');}const kind=connectionDraft.kind,{next,binding}=connectionCandidate(kind);apply(next,kind==='fasten'?'Fasten objects':'Connect piston',{reset:false,placements:binding?[binding.objectId]:[]});tool='select';if(binding)operations.selectConnection({objectId:binding.objectId});else operations.selectPiston({kind:'mountPistons',index:model.mountPistons.length-1});return read();},
+  restartConnection(){if(!connectionDraft)return operations.tool({value:'connect'});if(connectionDraft.ends.length)rememberConnection();connectionDraft={ends:[],kind:null,error:null};connectionIdentity=null;fasteningView.clearPreview();update();connectionHistory.changed();return read();},
   cancelConnection(){clearConnection();update();return read();},
 
   selectPiston({kind='pistons',index}){if(!['pistons','mountPistons'].includes(kind)||!Number.isInteger(index)||!model[kind]?.[index])throw Error('Choose an existing piston');seat.changed(()=>{pause();selectedMount=null;selectedConnection=null;selectedPiston={kind,index};update();});return read();},
@@ -174,7 +178,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const pistonChoice=button(alternatives,'Add piston',()=>invoke('previewConnection',{kind:'piston'}),()=>connectionDraft?.kind==='piston');
   for(const [b,kind]of [[fastenChoice,'fasten'],[pistonChoice,'piston']])b.onmouseenter=b.onfocus=()=>{if(!b.disabled&&connectionDraft?.kind!==kind)invoke('previewConnection',{kind}).catch(()=>{});};
   const commitDraft=button(draftBar,'Connect',()=>invoke('commitConnection'));
-  button(draftBar,'Start over',()=>{operations.cancelConnection();return invoke('tool',{value:'connect'});});
+  button(draftBar,'Start over',()=>invoke('restartConnection'));
   button(draftBar,'Cancel',()=>invoke('tool',{value:'select'}));
   const connectionBar=document.createElement('div');top.append(connectionBar);
   const connectionText=document.createElement('span');connectionBar.append(connectionText);
@@ -235,7 +239,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const keys=event=>{if(playback.hidden||event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||edits.state().active)return;if(event.code==='Space'&&event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();invoke(playing?'pause':'play').catch(e=>status.textContent=e.message);}else if(event.key==='Escape'&&editing){operations.cancelPreview();operations.cancelConnection();pistonStart=null;connectionStart=null;tool='select';refresh();}};
   document.addEventListener('keydown',keys);removeKeys=()=>document.removeEventListener('keydown',keys);refresh();
 
- },async dispose(){if(disposed)return;playing=false;stop();seat.dispose();unsubscribe();history.dispose();follower.dispose();controls?.dispose();for(const f of fields)f.dispose();proxy.removeFromParent();disposed=true;removeKeys();await session.dispose();view.dispose();mountView.dispose();fasteningView.dispose();connectView.dispose();root.remove(editorGeometry,visual);grid.geometry.dispose();grid.material.dispose();origin.geometry.dispose();origin.material.dispose();}};
+ },async dispose(){if(disposed)return;playing=false;stop();seat.dispose();connectionHistory.dispose();unsubscribe();history.dispose();follower.dispose();controls?.dispose();for(const f of fields)f.dispose();proxy.removeFromParent();disposed=true;removeKeys();await session.dispose();view.dispose();mountView.dispose();fasteningView.dispose();connectView.dispose();root.remove(editorGeometry,visual);grid.geometry.dispose();grid.material.dispose();origin.geometry.dispose();origin.material.dispose();}};
 }
 export default {id:'link-workshop',title:'Link workshop',async create(context){
  const service=context.host.controls.document.defaultView.kaminosMechanisms;
