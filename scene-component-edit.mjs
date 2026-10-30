@@ -11,6 +11,7 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
   active,target,exit,
   scope(){return active()?current.adapter.scope?.()??null:null;},
   ownsTransforms(){return active()&&!current.adapter.scope;},
+  context(){return active()?{ownerId:current.id}:null;},
   resolve(id){const value=target();return value?.id===id?value:null;},
   toggle(id){
    if(active()){exit();return true;}

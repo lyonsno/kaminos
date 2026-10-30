@@ -43,3 +43,27 @@ console.log('Native workshop history through empty state and numeric preview/com
  const pending=rt.invoke('motionSpace');const outcome=pending.catch(e=>e);await rt.dispose();await outcome;
  assert.equal(rows.size,0,'Closing must release in-flight motion-space registrations');assert.equal(scene.children.length,0,'No orphan guide roots after closure');
 }
+{
+ const {createSceneComponentEdit}=await import('../scene-component-edit.mjs');
+ const {createSceneOwnerControls}=await import('../scene-owner-controls.mjs');
+ class Element{constructor(){this.children=[];this.style={};this.className='';this.hidden=false;}append(...nodes){for(const n of nodes){if(typeof n==='string')continue;n.remove?.();this.children.push(n);n.parent=this;}}remove(){if(this.parent)this.parent.children.splice(this.parent.children.indexOf(this),1);this.parent=null;}setAttribute(k,v){this[k]=v;}}
+ const scene=new T.Group(),edits=createSceneEdits({read(){throw Error('Missing target');},write(){throw Error('Missing target');}});
+ let selected=null,asset,owners;
+ const components=createSceneComponentEdit({selected:()=>selected,cancel:()=>edits.cancel(),refresh:()=>owners?.update()});
+ const win={kaminosSceneEdits:edits,kaminosSelection:{set(ids){selected=ids[0];owners?.update();}}};
+ const document={defaultView:win,createElement:()=>new Element()},viewport=new Element(),inspector=new Element();
+ owners=createSceneOwnerControls({document,viewport,inspector,selected:()=>components.context?.()??(components.active()?components.target():selected===asset?.id?{id:selected,object:asset.root}:null)});
+ const session={async attach(root){scene.add(root);asset={id:'workshop',root};return asset;},redraw(){},readView(){return {};},setView(){},onFrame(){return ()=>{};},async dispose(){scene.clear();}};
+ const runtime=await workshop.create({host:{scene:{async open(){return session;}},controls:{document,components,mountObject:owners.mount,installNumberDrag:()=>({dispose(){}})}}});
+ runtime.mount({root:new Element(),document,invoke:async(op,args)=>runtime.operations[op](args)});
+ const notice=()=>viewport.children[0].children.find(e=>e['aria-label']==='Construction mode');
+ const visible=()=>{assert.equal(inspector.children[0].hidden,false,'Empty editor retains owner properties');assert.equal(viewport.children[0].hidden,false,'Empty editor retains instruction container');assert.equal(notice().hidden,false);};
+ runtime.operations.tool({value:'draw'});visible();assert.match(notice().textContent,/place a fixed anchor/);assert.equal(components.target(),null,'Owner context must not create a fake transform target');
+ components.cancel();visible();assert.match(notice().textContent,/SELECT/);
+ runtime.operations.tool({value:'draw'});visible();
+ const camera=new T.PerspectiveCamera(38,1,.01,100);camera.position.set(0,0,10);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ components.pick({clientX:50,clientY:50,shiftKey:false},{camera,canvas:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})}});
+ visible();assert.equal(runtime.read().recipe.nodes.length,1);assert.equal(components.target().type,'link-joint');
+ selected='elsewhere';owners.update();assert.equal(inspector.children[0].hidden,true,'Changing owner hides old controls');assert.equal(components.active(),false);
+ await runtime.dispose();
+}
