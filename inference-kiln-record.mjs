@@ -1,3 +1,4 @@
+import {checkedBurnerSeconds} from './kiln-burn-window.mjs';
 import {BufferGeometry,BufferGeometryLoader,Mesh,MeshStandardMaterial} from './lib/three.core.js';
 export const PROMPT_RELIEF_SOURCE='kaminos:prompt-relief-v1';
 export const promptReliefRecordDomain={type:'pbr',source:PROMPT_RELIEF_SOURCE,
@@ -27,7 +28,7 @@ export function checkedPromptRelief(value){
  if(value.geometry.data.groups?.some(g=>!Number.isSafeInteger(g.start)||!Number.isSafeInteger(g.count)||g.start<0||g.count<0||g.start%3||g.count%3||g.start+g.count>triangleVertices||!Number.isSafeInteger(g.materialIndex)||g.materialIndex<0))throw Error('Invalid saved prompt triangles');
  const sphere=value.geometry.data.boundingSphere;
  if(sphere!==undefined&&(!sphere||!Array.isArray(sphere.center)||sphere.center.length!==3||!sphere.center.every(Number.isFinite)||!Number.isFinite(sphere.radius)||sphere.radius<0))throw Error('Invalid saved prompt geometry bounds');
- return structuredClone(value);
+ return {...structuredClone(value),burnerSeconds:checkedBurnerSeconds(value.burnerSeconds)};
 }
 export function promptReliefRecord(object){
  const value=object?.userData?.kaminosPromptRelief;if(!value)return null;

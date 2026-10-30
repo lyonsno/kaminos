@@ -25059,9 +25059,9 @@ async function addPromptLettering(prompt){
   setActiveSceneObject(id);return id;
 }
 const promptEditTargets=new Set();
-function setPromptLettering(id,prompt){
+function setPromptLettering(id,prompt,{burnerSeconds}={}){
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);if(!entry?.object.userData.kaminosPromptRelief)throw Error('Select prompt lettering');
-  if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');if(entry.object.userData.kaminosPromptRelief.prompt===prompt)return;
+  if(typeof prompt!=='string'||!prompt.trim())throw Error('Enter a prompt to burn');if(entry.object.userData.kaminosPromptRelief.prompt===prompt&&burnerSeconds===undefined)return;
   const target='@prompt-lettering:'+id;
   if(!promptEditTargets.has(target)){
    const current=()=>{const row=workingScene.objects.find(row=>row.id===id)??workingScene.retained(id);if(!row?.object.userData.kaminosPromptRelief)throw Error('Prompt lettering is absent');return row.object;};
@@ -25069,7 +25069,7 @@ function setPromptLettering(id,prompt){
     const object=current(),replacement=restorePromptRelief({promptRelief:value});sceneBurning.forget(object);object.geometry.dispose();object.geometry=replacement.geometry;replacement.material.dispose();const {geometry,...metadata}=value;object.userData.kaminosPromptRelief=metadata;void sceneBurning.sync();window._kaminosDirty?.();
   }});promptEditTargets.add(target);}
   const object=createPromptLettering(document,prompt,entry.burnable?.appearance?.profile??'incineration');
-  try{return scenePlacementTools.edits.apply(target,promptReliefRecord(object).promptRelief,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
+  try{const value=promptReliefRecord(object).promptRelief;value.burnerSeconds=burnerSeconds??entry.object.userData.kaminosPromptRelief.burnerSeconds??5;return scenePlacementTools.edits.apply(target,value,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
 }
 function addSceneSpotLight() {
   assertSceneConstructionAvailable();const id=makeSceneObjectId('light');

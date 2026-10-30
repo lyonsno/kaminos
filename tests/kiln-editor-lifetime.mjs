@@ -51,3 +51,10 @@ for(const refresh of [false,true])test(`visibility pauses and resumes completion
  await view.setVisible(true);const request={id:'one',prompt:'full strip'};for(const status of ['running','saving','complete']){view.render({status,request});await tick();await tick();}
  if(refresh)await view.refresh();await view.setVisible(false);assert.equal(active,false);await view.setVisible(true);assert.equal(active,true);assert.equal(finishing,true);assert.equal(created,1);done();await tick();await tick();assert.equal(created,refresh?2:1);await view.dispose();
 });
+test('a second hide during asynchronous reactivation preserves the outstanding admitted burn',async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let active=false,finishing=false,done,release,gate=null;
+ const view=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'next draft'})},slot:element(),createRenderer:async()=>({prepare:async()=>{},async setActive(value){if(value&&gate)await gate;active=value;if(!value){finishing=false;done?.();}},finish(){finishing=true;return new Promise(r=>done=r);},dispose(){},debugState:()=>({active,finishing})})});
+ await view.setVisible(true);for(const status of ['running','saving','complete']){view.render({status,request:{id:'one',prompt:'admitted words'}});await tick();await tick();}
+ await view.setVisible(false);gate=new Promise(r=>release=r);const first=view.setVisible(true);await tick();const hide=view.setVisible(false);release();await first;await hide;gate=null;await view.setVisible(true);
+ assert.equal(finishing,true,'the unfinished admitted burn must resume after the second hide');await view.dispose();
+});

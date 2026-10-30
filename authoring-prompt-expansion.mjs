@@ -60,7 +60,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
 export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read().selected}){
  const byId=id=>document.getElementById(id),prompt=byId('asset-prompt');
  const root=document.createElement('div');root.className='asset-prompt-help';
- root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
+ root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><details id="asset-prompt-retained" hidden><summary>Retained expansion</summary><pre id="asset-prompt-draft" aria-label="Retained prompt expansion"></pre><button type="button" id="asset-prompt-use">Use in kiln</button></details>`;
  prompt.insertAdjacentElement('afterend',root);
  const admissionControls=document.createElement('div');admissionControls.className='asset-prompt-residency';
  admissionControls.innerHTML=`<label title="Start without waiting for Greenroom. This can overlap another job and share its GPU and memory."><input type="checkbox" id="asset-prompt-outside-queue"> Run outside queue</label><button type="button" id="asset-prompt-skip-queue" hidden title="Remove this expansion from the queue and start it alongside any current job">Run outside queue now</button>`;root.append(admissionControls);
@@ -75,7 +75,7 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  const current=()=>({model:byId('asset-image-model').value,reference:byId('asset-use-reference').checked?reference():null});
  const use=()=>{
   const state=controller.read();if(!promptExpansionMatches(state.request,current()))return false;
-  const text=byId('asset-prompt-draft').value;if(!text.trim())return false;
+  const text=controller.read().draft;if(!text.trim())return false;
   applied={request:state.request,result:state.result,text};prompt.value=text;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();return true;
  };
  function render(){
@@ -88,8 +88,8 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   prompt.readOnly=busy;
   const matches=promptExpansionMatches(state.request,current()),wasApplied=applied?.request===state.request&&prompt.value===applied.text;
   const showDraft=!!state.draft&&!wasApplied;
-  const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
-  if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
+  const draft=byId('asset-prompt-draft');byId('asset-prompt-retained').hidden=!showDraft;
+  if(state.draft!==painted){draft.textContent=state.draft;painted=state.draft;}
   byId('asset-prompt-use').hidden=!showDraft||busy;byId('asset-prompt-use').disabled=!matches;
   byId('asset-prompt-undo').hidden=!wasApplied||busy;
   let message=state.error||state.progress||'';

@@ -1,3 +1,4 @@
+import {createKilnBurnWindow} from './kiln-burn-window.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -29,7 +30,7 @@ const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 // Workbench. This surface owns only its scene and borrowed-device resources.
 export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,input:promptInput=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
  const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],lightEntries=[],owned=[],frames=new Set();
- let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false,finishResolve=null,promptBody=null;
+ let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false,finishResolve=null,promptBody=null,burnWindow=null,burnTimer=null,emitting=false;
  const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  viewport.style.aspectRatio=String(aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
@@ -53,7 +54,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
  }});
  function failure(error){lastError=error.message;viewport.dataset.error=lastError;}
  async function dispose(){
-  if(disposed)return;disposed=true;active=false;finishResolve?.();finishResolve=null;clearTimeout(draftTimer);promptPreparation?.dispose();await warmup?.catch(()=>{});await preparation.catch(()=>{});editor?.dispose();
+  if(disposed)return;disposed=true;active=false;finishResolve?.();finishResolve=null;clearTimeout(burnTimer);clearTimeout(draftTimer);promptPreparation?.dispose();await warmup?.catch(()=>{});await preparation.catch(()=>{});editor?.dispose();
   if(fire){await fire.setActive(false);await sharedGpu.device.queue.onSubmittedWorkDone();}
   lighting?.dispose();await lighting?.whenRebuilt?.().catch(()=>{});await burning?.dispose();fire?.setSceneTransportConsumer(null);fire?.dispose();
   hdr?.dispose();pipeline?.dispose();sceneBloom?.dispose();gi?.dispose();colliders.clear();frames.clear();
@@ -72,8 +73,8 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   const aperture=new THREE.ClippingGroup();aperture.clippingPlanes=[new THREE.Plane(new THREE.Vector3(0,1,0),KILN_PROMPT_WINDOW_HEIGHT/1024),new THREE.Plane(new THREE.Vector3(0,-1,0),KILN_PROMPT_WINDOW_HEIGHT/1024)].map(p=>p.applyMatrix4(letteringPose.matrixWorld));scene.add(aperture);aperture.add(target.object);
   function positionFeed(){target.object.position.copy(basePosition).addScaledVector(feedAxis,(KILN_PROMPT_WINDOW_HEIGHT-preparedHeight+2*feedPixels)/1024);target.object.updateMatrixWorld(true);}
   function scheduleDraft(){
-   clearTimeout(draftTimer);if(active||disposed||!promptInput?.value.trim())return;
-   draftTimer=setTimeout(()=>{prepare({prompt:promptInput.value}).catch(failure);},250);
+   clearTimeout(draftTimer);if(active||request||disposed||!promptInput?.value.trim())return;
+   draftTimer=setTimeout(()=>{if(!active&&!request&&!disposed)prepare({prompt:promptInput.value}).catch(failure);},250);
   }
   if(promptInput){editor=installKilnPromptEditor({document,viewport,input:promptInput,camera,object:letteringPose,onChange:scheduleDraft,onPresentation:()=>{target.object.visible=letteringPose.visible;promptBody?.setMounted(visible(plan.promptObjectId));if(!pipeline||disposed||active)return;app.foreground.request({requestId:`kiln-edit-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-edit'},run(){draw();return {status:'submitted'};}});},onError:failure});promptPreparation=createKilnPromptPreparation({rasterize:value=>editor.rasterize(value)});}
   async function prepare({prompt:next,request:admitted=null}){
@@ -89,10 +90,11 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
      await sharedGpu.device.queue.onSubmittedWorkDone();if(disposed||revision!==prepareRevision){replacement?.dispose?.();return;}
      burning?.forget(target.object);target.object.geometry.dispose();target.object.geometry=built?built.geometry.clone():replacement.geometry;
      preparedMask=built?.surfaceMask??null;preparedHeight=built?.height??KILN_PROMPT_WINDOW_HEIGHT;preparedText=next;feedPixels=0;feedSteps=0;positionFeed();
-     target.object.userData.kaminosPromptRelief=promptReliefMetadata(next,'composed');replacement?.material.dispose();
+     target.object.userData.kaminosPromptRelief={...promptReliefMetadata(next,'composed'),burnerSeconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5};replacement?.material.dispose();
      await burning?.prepare();
     }
     if(admitted&&request?.id!==admitted.id&&burning?.read(plan.promptObjectId).status==='resident'){burning.reset(plan.promptObjectId);feedPixels=0;feedSteps=0;positionFeed();}
+    if(admitted?.id!==request?.id){burnWindow=admitted?createKilnBurnWindow({seconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5}):null;}
     prompt=next;request=admitted;editor?.sync();
    });preparation=work;return work;
   }
@@ -132,11 +134,27 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   fire.setForegroundOpportunityRequester(request=>app.foreground.request({...request,requestId:`kiln-${request.requestId}`}));
   fire.setRaymarchSmokePresentationMode(settings.raymarchSmokePresentation);
   fire.setImmersedSources(flameSourceInputs(plan.flameSources,{controls:settings,translation:plan.flameDomainTranslation,scale:plan.flameDomainScale,visible}));
+  function setEmission(value){
+   if(emitting===value)return;emitting=value;
+   const sources=flameSourceInputs(plan.flameSources,{controls:settings,translation:plan.flameDomainTranslation,scale:plan.flameDomainScale,visible});
+   fire.setImmersedSources(sources.map(source=>({...source,controls:{...source.controls,immersedSourceEnabled:value&&source.controls.immersedSourceEnabled}})));
+  }
+  // Installing the authored sources above retains their shape. The valve is
+  // closed until an admitted request starts its visible emission interval.
+  emitting=true;setEmission(false);
+  function advanceBurnWindow(){
+   if(!active||!burnWindow)return;const state=burnWindow.read();setEmission(state.emitting);
+   feedPixels=Math.max(feedPixels,Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)*state.progress);positionFeed();
+   clearTimeout(burnTimer);
+   if(state.emitting)burnTimer=setTimeout(advanceBurnWindow,Math.max(0,(state.seconds-state.elapsedSeconds)*1000));
+   else if(finishing)queueMicrotask(()=>completeBurn().catch(failure));
+  }
+  async function completeBurn(){finishing=false;request=null;await setActive(false);finishResolve?.();finishResolve=null;}
   if(post.bloom?.composeFlame&&visible('flame-field'))fire.setSceneTransportConsumer(frame=>{transport=frame;try{return frame.renderHost();}finally{transport=null;}});
   burning=createSceneBurning({objects:()=>entries,runtime:()=>fire,createGas:createLogGasSourceGpu,
    createBody:async entry=>{
     const body=await createSceneBurnBody({entry,renderer,scene,surfaceMask:entry===target?preparedMask:null,kelvinPerHeat:()=>settings.physicalKelvinPerHeat,ground:()=>({center:[0,ground?.height??-.85,0],height:ground?.height??-.85,radius:5,visible:ground?.visible??true}),onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}});
-    if(entry===target){promptBody=body;const mount=body.setMounted;body.setMounted=value=>mount(value&&letteringPose.visible);const encode=body.encodeGasSource;body.encodeGasSource=(encoder,frame,gas)=>{feedPixels=Math.min(Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),feedPixels+46*frame.dt);feedSteps++;positionFeed();encode(encoder,frame,gas);if(finishing&&feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;queueMicrotask(()=>setActive(false).catch(failure));}};}
+    if(entry===target){promptBody=body;const mount=body.setMounted;body.setMounted=value=>mount(value&&letteringPose.visible);const encode=body.encodeGasSource;body.encodeGasSource=(encoder,frame,gas)=>{advanceBurnWindow();feedSteps++;encode(encoder,frame,gas);};}
     return body;
    },onError:failure});
   // Show the assembled cold scene before asynchronous simulation preparation.
@@ -151,16 +169,16 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   })().catch(error=>{warmState='failed';failure(error);throw error;});
   warmup.catch(()=>{});
   if(request||!promptInput)await prepare({prompt,request});else scheduleDraft();
-  async function setActive(value){if(disposed)return;finishing=false;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;editor?.setBurning(active);fire.canvasElement().hidden=!active;
-    if(active){clearTimeout(draftTimer);await warmup;await preparation;await burning.prepare();await fire.setActive(true);if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
+  async function setActive(value){if(disposed)return;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;editor?.setBurning(active);fire.canvasElement().hidden=!active;
+    if(active){clearTimeout(draftTimer);await warmup;await preparation;await burning.prepare();if(!active||disposed)return;if(burnWindow){if(!burnWindow.read().started)burnWindow.start();else burnWindow.resume();advanceBurnWindow();}await fire.setActive(true);if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
 
-    }else{await fire.setActive(false);scheduleDraft();const still=app.foreground.request({requestId:`kiln-stopped-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-stopped'},run(){draw();return {status:'submitted'};}});await still.completion;finishResolve?.();finishResolve=null;}
+    }else{burnWindow?.pause();clearTimeout(burnTimer);setEmission(false);await fire.setActive(false);scheduleDraft();await new Promise(resolve=>document.defaultView.requestAnimationFrame(resolve));if(disposed||active)return;const still=app.foreground.request({requestId:`kiln-stopped-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-stopped'},run(){draw();return {status:'submitted'};}});await still.completion;}
    }
   return {
-   prepare,setActive,finish(){if(!active)return Promise.resolve();finishing=true;const completion=new Promise(resolve=>{finishResolve=resolve;});if(feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;setActive(false).catch(failure);}return completion;},syncEditor:()=>editor?.sync(),
-   debugState:()=>({identity:'kaminos.inference-kiln-preview.v1',sceneFile:recipe.selection?.sceneFile??null,sceneLabel:saved.label,promptObjectId:plan.promptObjectId,prompt,requestSource:request?'admitted-generation-prompt':'editor-draft',active,error:lastError,frameCount,
+   prepare,setActive,async cancel(){finishing=false;request=null;await setActive(false);finishResolve?.();finishResolve=null;},finish(){if(!request)return Promise.resolve();finishing=true;const completion=new Promise(resolve=>{finishResolve=resolve;});advanceBurnWindow();return completion;},syncEditor:()=>editor?.sync(),
+   debugState:()=>({identity:'kaminos.inference-kiln-preview.v1',sceneFile:recipe.selection?.sceneFile??null,sceneLabel:saved.label,promptObjectId:plan.promptObjectId,prompt,requestSource:request?'admitted-generation-prompt':'editor-draft',active,error:lastError,frameCount,presentation:{promptVisible:target.object.visible,nativeEditing:editor?.read().editing},
     effective:{device:'app-shared-device',width,height,settings,objects:entries.map(row=>({id:row.id,visible:visible(row.id),transform:row.transform,burnable:row.burnable})),camera:view,bloom:sceneBloom.read()},
-    preparation:{worker:promptPreparation?.read()??null,runtime:warmState,text:preparedText,height:preparedHeight,route:promptPreparation?'worker-solid-and-thermal-mask':'authored-solid'},feed:{finishing,pixels:feedPixels,steps:feedSteps,distance:Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),pixelsPerSimulationSecond:46},editor:editor?.read()??null,runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
+    preparation:{worker:promptPreparation?.read()??null,runtime:warmState,text:preparedText,height:preparedHeight,route:promptPreparation?'worker-solid-and-thermal-mask':'authored-solid'},burner:burnWindow?{...burnWindow.read(),emitting}:null,feed:{finishing,pixels:feedPixels,steps:feedSteps,distance:Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),clock:'visible-burner-window'},editor:editor?.read()??null,runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
    dispose,
   };
  }catch(error){await dispose();throw error;}

@@ -16,7 +16,8 @@ export function installGenerationFlame({document,slot,createRenderer}){
    if(generation!==epoch)return;
    if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
    if(finishPending&&renderer?.finish){
-    finishPending=false;await renderer.setActive(true);if(generation!==epoch)return;
+    await renderer.setActive(true);if(generation!==epoch)return;
+    finishPending=false;
     draining=true;const finishingRenderer=renderer;
     Promise.resolve(renderer.finish()).then(()=>{
      if(disposed||renderer!==finishingRenderer||generation!==epoch)return;
@@ -37,7 +38,8 @@ export function installGenerationFlame({document,slot,createRenderer}){
     }catch(error){if(error.name!=='AbortError'){lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';}return;}
    }
    if(generation!==epoch)return;
-   await renderer.setActive(running);
+   if(!running&&['failed','stopped'].includes(lastStatus)&&renderer.cancel)await renderer.cancel();
+   else await renderer.setActive(running);
    status.textContent='';tile.dataset.state=running?'burning':'idle';
   }).catch(error=>{lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';});
   return lifecycle;
