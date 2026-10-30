@@ -31,3 +31,14 @@ if(!process.env.CASE || process.env.CASE==='history'){
  runtime=await createMechanismController({host,inputs:{root}});edits.undo();assert.equal(runtime.read().recipe.nodes.length,1);edits.redo();assert.equal(runtime.read().recipe.nodes.length,2);edits.clear();await runtime.dispose();
 }
 console.log('Attachment-relative history, scaled rigid frames, and reconstructed mechanism history passed');
+
+{
+ const scene=new T.Scene(),entries=[],object=new T.Object3D();scene.add(object);object.position.set(2,0,0);entries.push({id:'payload',object});let root=new T.Group(),model=recipe();scene.add(root);entries.push({id:'mechanism',object:root});root.userData.linkMechanism=model;
+ model.attachments=[{objectId:'payload',joint:1,offset:attachmentFrame(root,model,1,0,object)}];let follower=createAttachmentFollower(root,()=>entries);follower.update(model,1);
+ const edits=createSceneEdits({read:()=>pose(object),write:(_,p)=>{object.position.fromArray(p.position);object.rotation.set(...p.rotation);object.scale.fromArray(p.scale);},history:()=>sceneObjectPoseHistory(object)});
+ const before=pose(object);edits.apply('payload',{...before,position:[...before.position.slice(0,2),.5]});follower.update(model,1);const saved=structuredClone(model);entries.pop();root.removeFromParent();follower.dispose();
+ root=new T.Group();root.userData.linkMechanism=structuredClone(saved);scene.add(root);entries.push({id:'mechanism',object:root});
+ // Reconstructed scene record exists, but its frame-driven controller does not.
+ edits.undo();assert.equal(root.userData.linkMechanism.attachments[0].offset.position[2],0,'Undo restores attachment data before controller recreation');edits.redo();assert.equal(root.userData.linkMechanism.attachments[0].offset.position[2],.5);edits.undo();
+ follower=createAttachmentFollower(root,()=>entries);follower.update(root.userData.linkMechanism,0);near(object.position.toArray(),[2,0,0]);edits.redo();follower.update(root.userData.linkMechanism,0);near(object.position.toArray(),[2,0,.5]);follower.dispose();
+}
