@@ -106,14 +106,14 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let opticalThickness = thickness * 0.22 * (0.55 + 0.45 * smoothstep(0.0, 3.6, input.speed));
   let depthWeight = edge * surfaceWeight;
   let smoothKernel = (1.0 - r2) * (1.0 - r2);
-  let relDepth = clamp(input.viewDepth - length(params.cameraPosition.xyz), -1.8, 1.8);
-  let frontWeight = smoothKernel * surfaceWeight * exp(-relDepth * 4.0);
-  let frontSurfaceViewDepth = max(0.001, input.viewDepth - (0.55 + 0.45 * cap) * input.radius * 0.65);
-  let minSafeFrontDepth = max(0.001, input.viewDepth - smoothKernel * input.radius * 0.65);
+  let relDepth = clamp(input.viewDepth - length(params.cameraPosition.xyz), -1.1, 1.1);
+  let frontWeight = smoothKernel * surfaceWeight * exp(-relDepth * 7.5);
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth - (0.72 + 0.28 * smoothKernel) * input.radius * 0.28);
+  let minSafeFrontDepth = max(0.001, input.viewDepth - smoothKernel * input.radius * 0.28);
   var output: AccumFragmentOutput;
   output.accumulation = vec4<f32>(opticalThickness, frontWeight, depthWeight, frontSurfaceViewDepth * frontWeight);
   output.frontDepth = vec4<f32>(minSafeFrontDepth, minSafeFrontDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
-  output.backDepth = vec4<f32>(max(0.001, input.viewDepth + smoothKernel * input.radius * 0.65));
+  output.backDepth = vec4<f32>(max(0.001, input.viewDepth + smoothKernel * input.radius * 0.28));
   return output;
 }
 
@@ -213,7 +213,11 @@ fn readSoftFrontDepth(pixel: vec2<i32>) -> f32 {
     return minDepth;
   }
   let softDepth = accum.w / accum.y;
-  return select(softDepth, minDepth, minDepth < 29.5 && softDepth - minDepth > 0.22);
+  if (minDepth >= 29.5) {
+    return softDepth;
+  }
+  let lag = max(0.0, softDepth - minDepth);
+  return mix(softDepth, minDepth + 0.08, smoothstep(0.12, 0.36, lag));
 }
 
 fn readFrontDepth(pixel: vec2<i32>) -> f32 {
