@@ -7,6 +7,12 @@ import {checkBurnFractureInput} from '../burn-fracture-core.mjs';
 // Schema fields from the retained native R3 snapshot; values test validation only.
 const snapshot={identity:'frozen-material-residue-snapshot-v1',material:new Array(64).fill(0),initial:new Array(8).fill(1),read:{identity:'finite-wood-residue-v1',sourceWorld:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],steps:600}};
 assert.equal(readBurnReplay({snapshot}).n,2);assert.equal(readBurnReplay({snapshots:[snapshot]}).steps,600);
+const replayPose=[0,1,0,0,-1,0,0,0,0,0,1,0,2,3,4,1];
+const posed=readBurnReplay({snapshot},replayPose);
+assert.deepEqual(posed.matrix,replayPose,'A matched mechanical pose must override recorded placement without replacing source evidence');
+assert.deepEqual(posed.recordedMatrix,snapshot.read.sourceWorld);
+assert.deepEqual(snapshot.read.sourceWorld,[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+for(const matrix of [[],new Array(16).fill(0),[...replayPose.slice(0,15),NaN]])assert.throws(()=>readBurnReplay({snapshot},matrix));
 for(const raw of [{},{snapshots:[snapshot,snapshot]},{snapshot:{...snapshot,material:[]}},{snapshot:{...snapshot,initial:[1]}},{snapshot:{...snapshot,material:[NaN,...snapshot.material.slice(1)]}},{snapshot:{...snapshot,read:{...snapshot.read,sourceWorld:[]}}}])assert.throws(()=>readBurnReplay(raw));
 const prepared={cells:[{}],bonds:[{id:'a',a:0,b:0}]},sections={count:1,buffer:{},device:{},mapping:{connections:[{id:'a',a:0,b:0}]}};
 checkBurnFractureInput(prepared,sections,[0]);checkBurnFractureInput(prepared,sections,[]);

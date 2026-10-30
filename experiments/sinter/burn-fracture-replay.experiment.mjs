@@ -18,7 +18,8 @@ export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanic
    const materialResponse=await fetch(inputs.material);if(!materialResponse.ok)throw Error('Material observation load failed: '+materialResponse.status);const bytes=await materialResponse.arrayBuffer();if(await sha256(bytes)!==inputs.materialSha256)throw Error('Replay material hash mismatch');const raw=JSON.parse(new TextDecoder().decode(bytes));
    asset=await session.loadAsset({url:inputs.source,normalize:false,metadata:{label:'Burned material mechanics',source:inputs.source}});
    const meshes=[];asset.root.traverse(m=>{if(m.isMesh)meshes.push(m);});if(meshes.length!==1)throw Error('Replay currently requires the same single-mesh source as the observed burn');const source=meshes[0];
-   field=createBurnReplayField({renderer,mesh:source,raw});
+   field=createBurnReplayField({renderer,mesh:source,raw,replayMatrix:inputs.replayMatrix});
+   contactGeometry={recordedMatrix:field.input.recordedMatrix,replayMatrix:field.input.matrix};
    structure=createSceneBurnStructure({renderer,field,parent:asset.root});await structure.configure(true);if(structure.read().status!=='resident')throw Error(structure.read().error??'Section preparation failed');
    const {prepared}=structure.resident(),world=new THREE.Matrix4().fromArray(field.input.matrix),inverse=world.clone().invert();
    const scale=new THREE.Vector3().setFromMatrixScale(world);worldScale=scale.x;
@@ -26,7 +27,7 @@ export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanic
    // F_local=F_world/s and torque_local=torque_world/s^2. Preserve SI material
    // under the source-coordinate solver by scaling K/strength by s and mass by s^3.
    const localMaterial={...material,tension:material.tension*worldScale,compression:material.compression*worldScale,shear:material.shear*worldScale,density:material.density*worldScale**3};
-   const bodies=replayRegionBodies(prepared,field,localMaterial.density);contactGeometry={model:bodies.contactModel,massModel:bodies.massModel,unmapped:bodies.unmapped};
+   const bodies=replayRegionBodies(prepared,field,localMaterial.density);Object.assign(contactGeometry,{model:bodies.contactModel,massModel:bodies.massModel,unmapped:bodies.unmapped});
    bodies.prepared={...bodies.prepared,bonds:bodies.prepared.bonds.map(b=>({...b,linearStiffness:b.linearStiffness*worldScale,rotationalStiffness:b.rotationalStiffness*worldScale}))};
    const originalBounds=new THREE.Box3();for(const c of prepared.cells)for(let corner=0;corner<8;corner++)originalBounds.expandByPoint(new THREE.Vector3(...c.position.map((v,k)=>v+((corner>>k)&1?1:-1)*c.halfExtents[k])).applyMatrix4(world));
    const extent=originalBounds.getSize(new THREE.Vector3()),supportCenter=originalBounds.getCenter(new THREE.Vector3()),thickness=extent.length()*.06;

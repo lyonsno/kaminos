@@ -4,18 +4,18 @@ import {LOG_RESIDUE} from './log-consumption.mjs';
 import {createBurnMaterial} from './burn-table-material.mjs';
 import {createCoarseSurfaceMesh} from './fracture-coarse-surface.mjs';
 
-export function readBurnReplay(raw){
+export function readBurnReplay(raw,replayMatrix){
  const snapshot=raw?.snapshot??(raw?.snapshots?.length===1?raw.snapshots[0]:null);
  if(snapshot?.identity!=='frozen-material-residue-snapshot-v1'||snapshot?.read?.identity!=='finite-wood-residue-v1')throw Error('Observed complete frozen material snapshot required');
  const {material,initial}=snapshot,n=Math.cbrt(initial?.length);
  if(!Number.isInteger(n)||n<1||material?.length!==initial.length*8||!material.every(Number.isFinite)||!initial.every(x=>x===0||x===1))throw Error('Complete finite material and initial occupancy required');
- const matrix=snapshot.read.sourceWorld;
- if(!Array.isArray(matrix)||matrix.length!==16||!matrix.every(Number.isFinite)||new THREE.Matrix4().fromArray(matrix).determinant()===0)throw Error('Recorded material coordinate frame required');
- return {snapshot,n,matrix,steps:snapshot.read.steps,sourceAuthority:'retained-native-material-observation',evolvedMaterial:false};
+ const recordedMatrix=snapshot.read.sourceWorld,matrix=replayMatrix??recordedMatrix;
+ for(const frame of [recordedMatrix,matrix])if(!Array.isArray(frame)||frame.length!==16||!frame.every(Number.isFinite)||new THREE.Matrix4().fromArray(frame).determinant()===0)throw Error('Finite invertible recorded and replay coordinate frames required');
+ return {snapshot,n,matrix:[...matrix],recordedMatrix:[...recordedMatrix],steps:snapshot.read.steps,sourceAuthority:'retained-native-material-observation',evolvedMaterial:false};
 }
 
-export function createBurnReplayField({renderer,mesh,raw}){
- const input=readBurnReplay(raw),{snapshot,n}=input,device=renderer.backend.device,owned=[];
+export function createBurnReplayField({renderer,mesh,raw,replayMatrix}){
+ const input=readBurnReplay(raw,replayMatrix),{snapshot,n}=input,device=renderer.backend.device,owned=[];
  mesh.geometry.computeBoundingBox();const bounds=mesh.geometry.boundingBox.clone(),size=bounds.getSize(new THREE.Vector3()),observed=Uint32Array.from(snapshot.initial);
  const computed=createLogSurfaceMask(mesh.geometry,bounds,n,{filled:true});
  if(computed.some((v,i)=>v!==observed[i]))throw Error('Imported source geometry does not reproduce the observed material occupancy');
