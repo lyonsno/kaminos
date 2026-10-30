@@ -15,7 +15,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  const origin=new T.Mesh(new T.SphereGeometry(.1,12,8),new T.MeshBasicMaterial({color:0x59dee2}));root.add(origin);
  root.userData.linkMechanism=model;
  const visual=new T.Group();root.add(visual);const view=createMechanismView(visual),asset=await session.attach(root,{owned:!inputs.root,metadata:{label:root.name,type:'pbr',source:MECHANISM_SOURCE,mechanism:model}});root.parent.add(proxy);
- const objects=()=>host.scene.objects?.()??[{id:asset.id,object:root}],history=mechanismHistory(edits,asset.id,objects),follower=createAttachmentFollower(root,objects);let cycle=0,removeKeys=()=>{};
+ const objects=host.scene.objects?()=>host.scene.objects():()=>[{id:asset.id,object:root}],history=mechanismHistory(edits,asset.id,objects),follower=createAttachmentFollower(root,objects);let cycle=0,removeKeys=()=>{};
  let pistonStart=null,snap=true,status,fields=[],stop=()=>{},unsubscribe=()=>{};
  const ensure=()=>{if(disposed||!root.parent)throw Error('Workshop removed; Undo or reopen it');};
  const read=()=>({objectId:asset.id,recipe:structuredClone(model),mode,tool,selected,editing,playing,cycle,fraction:t,points:evaluate(model,t),pistonStart,view:session.readView(),motion:'authored joint kinematics; pistons follow attachment distance'});
