@@ -19,7 +19,21 @@ export async function runWaterSourceWitness({evaluate,ws,capture,out}) {
    const p=moved.particles;newPositions.push(p.originWorld.map((v,a)=>v+p.words[i*20+a]*p.cellSize));
   }
   if(newPositions.length!==12||newPositions.some(p=>Math.abs(p[0]-.25)>.06))throw Error('Live births did not follow the moved source');
-  await api.advanceTo(96);const full=await take();
+  const flow=api.read().selected.settings.volumeRate;
+  const emission=document.querySelector('[data-emission]');
+  emission.checked=false;await emission.onchange();
+  await api.advanceTo(36);const stopped=await take();
+  if(stopped.state.solver.liveInlets.totalAdmitted!==24||api.read().selected.settings.volumeRate!==flow||api.read().selected.settings.emissionEnabled!==false)throw Error('Stopping changed flow or admitted water');
+  window.kaminosSetSceneObjectTransform(id,{position:[-.2,.6,0]});
+  emission.checked=true;await emission.onchange();
+  await api.advanceTo(48);const resumed=await take();
+  const resumedPositions=[];for(let i=24;i<36;i++){const p=resumed.particles;resumedPositions.push(p.originWorld.map((v,a)=>v+p.words[i*20+a]*p.cellSize));}
+  if(resumed.state.solver.liveInlets.totalAdmitted!==36||resumedPositions.some(p=>Math.abs(p[0]+.2)>.06)||api.read().selected.settings.volumeRate!==flow)throw Error('Resume did not use retained flow and current pose');
+  const rate=document.querySelector('[data-rate]');rate.value='';rate.dispatchEvent(new Event('input',{bubbles:true}));
+  let invalidRejected=false;try{await api.commitEdits();}catch{invalidRejected=true;}
+  if(!invalidRejected||api.read().selected.settings.volumeRate!==flow)throw Error('Incomplete native draft was silently accepted');
+  rate.value=String(flow*1000);rate.dispatchEvent(new Event('input',{bubbles:true}));await api.commitEdits();
+  await api.advanceTo(108);const full=await take();
   window.kaminosSetSceneObjectTransform(id,{position:[-.25,.6,0]});await api.advanceTo(120);const fullMoved=await take();
   if(full.state.solver.liveInlets.totalAdmitted!==64||fullMoved.state.solver.liveInlets.totalAdmitted!==64)throw Error('Full pool silently added or replaced retained water');
   window.selectSceneObject(id);window.kaminosSetCameraDebugPose({position:[1.1,.9,1.2],target:[0,.3,0]});await wait(150);
@@ -27,7 +41,7 @@ export async function runWaterSourceWitness({evaluate,ws,capture,out}) {
   const ui=status.textContent;
   const inlet=fullMoved.state.solver.liveInlets.inlets.find(e=>e.id===id);
   if(inlet.blockedReason!=='capacity'||Math.abs(inlet.originWorld[0]+.25)>1e-8||!ui.includes('capacity is full'))throw Error('Full moved source is not explained: '+JSON.stringify({inlet,ui}));
-  return {id,bowl,defaults,before,moved,newPositions,full,fullMoved,ui,source:await(await fetch('/api/runtime-config')).json()};
+  return {id,bowl,defaults,before,moved,newPositions,stopped,resumed,resumedPositions,invalidRejected,full,fullMoved,ui,source:await(await fetch('/api/runtime-config')).json()};
  })()`,{timeoutMs:60000});
  await capture(ws,out);
  return evidence;

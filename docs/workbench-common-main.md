@@ -51,6 +51,17 @@ domain-state or recording service, and state the continuation actually supported
 Choose flexibility that serves the next useful interaction; a generic framework
 is a separate investment.
 
+## Authored water source controls
+
+Select the water emitter to edit its pose, flow, aperture and launch speed in
+the native inspector. `localLiquidEmitter.emissionEnabled` controls new emission
+without changing the saved flow rate or removing water already in the scene.
+Re-enabling uses the current settings; zero flow stays zero. Saved scenes retain
+the switch; older sources without the field keep their existing behavior.
+Before an experiment action consumes water properties entered in the inspector,
+`await kaminosWaterSources.commitEdits()` accepts and validates pending native
+drafts. Invalid drafts reject the action and remain available for correction.
+
 ## Run The Small Example
 
 From the checkout, use an available port:
