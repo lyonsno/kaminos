@@ -284,7 +284,10 @@ export function transformPose(base, {
   } else if (operation === 'scale') {
     const index = { x: 0, y: 1, z: 2 }[axis];
     const factors=[0,1,2].map(i=>!axis||(plane?i!==index:i===index)?amount:1);
-    if(axis&&(frame==='world'||JSON.stringify(frameRotation)!==JSON.stringify(base.rotation))){
+    // Matching axes need no decomposition. A zero scale is a legitimate input
+    // for the target's own clamp; decomposing its singular matrix invents shear.
+    const scaleFrameRotation=frame==='world'?[0,0,0]:frameRotation;
+    if(axis&&JSON.stringify(scaleFrameRotation)!==JSON.stringify(base.rotation)){
       const basis=new Matrix4().makeRotationFromQuaternion(new Quaternion().setFromEuler(new Euler(...(frame==='local'?frameRotation:[0,0,0]))));
       const target=basis.clone().multiply(new Matrix4().makeScale(...factors)).multiply(basis.clone().invert()).multiply(new Matrix4().compose(new Vector3(),new Quaternion().setFromEuler(new Euler(...base.rotation)),new Vector3(...base.scale)));
       const position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();target.decompose(position,rotation,scale);
