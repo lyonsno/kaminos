@@ -6,6 +6,8 @@ import {mlsConfig} from '../mls-juice-contract.mjs';
 import {createMlsGoinPile} from '../mls-goin-pile.mjs';
 import {resolveMlsHandRequest,validateMlsHandRequest,validateMlsGoinRequest} from '../tools/mls-witness-source.mjs';
 import {nativeFingerPacket} from '../experiments/hand-live-fluid.mjs';
+import playground from '../experiments/hand-play-space.experiment.mjs';
+import pileExperiment from '../experiments/hand-goin-pile.experiment.mjs';
 
 // Local mapping policy fixture. Browser contract conformance is separately replayed.
 const source={captureId:'mapping-fixture',pixelBasis:'unmirrored_camera',cropBox:[100,80,300,280],cropUV:Array(42).fill(.5),meshJointsMeters:[[.02,.03,.04]]};
@@ -50,4 +52,13 @@ const layoutPile=createMlsGoinPile(mlsConfig({goinPile:{count:4,stackCenters:cen
 const effective=layoutPile.read();layoutPile.dispose();
 validateMlsGoinRequest(effective,{count:4,stackCenters:centers});
 assert.throws(()=>validateMlsGoinRequest({...effective,stackCenters:null},{count:4,stackCenters:centers}),/layout mismatch/);
+const create=pileExperiment.create;let actualInputs,markings,disposed=0;
+try{
+  pileExperiment.create=async({inputs})=>{actualInputs=inputs;return {read:()=>({}),dispose:async()=>{disposed++;}};};
+  const host={scene:{open:async()=>({attach:async group=>{markings=group;},redraw(){},dispose:async()=>{disposed++;}})}};
+  const instance=await playground.create({host,inputs:{goinPile:{count:12}},record(){}});
+  assert.equal(actualInputs.goinPile.count,12);
+  assert.deepEqual(markings.children.map(r=>[r.position.x,r.position.z]),actualInputs.goinPile.stackCenters,'inlays must match the effective pile layout');
+  await instance.dispose();assert.equal(disposed,2);
+}finally{pileExperiment.create=create;}
 console.log('Camera-plane mapping, coherent tilt/mirror, stable wrist anchor and broad goin layout');
