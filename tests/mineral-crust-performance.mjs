@@ -43,3 +43,7 @@ test('an anchored branch evaluates its retained attachment without reconstructin
  state.grains=new Proxy(grains,{get(target,key){if(typeof key==='string'&&gap.walls.includes(Number(key)))unrelatedReads++;return Reflect.get(target,key);}});
  const actual=trackGeometry(state,branch);assert.deepEqual(actual,expected);assert.equal(unrelatedReads,0,'retained branch anchors must not rebuild their parent slot geometry');
 });
+
+test('gap geometry retains its endpoint semantics when a saved track has an anchor field',()=>{
+ const state=createCrust({rows:3}),gap=state.pools.find(p=>p.kind==='gap'),before=trackGeometry(state,gap);gap.anchor=[20,0,20];assert.deepEqual(trackGeometry(state,gap),before);
+});
