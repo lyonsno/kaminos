@@ -1,4 +1,4 @@
-import {pairTransfer} from './gpu-plan.mjs';
+import {pairTransfer,ASH_SURFACE_MIN_FILL} from './gpu-plan.mjs';
 export const tileIndex=(p,c)=>{const t=p.tiles;return Math.floor(c[0]/t.width)+t.dims[0]*(Math.floor(c[1]/t.width)+t.dims[1]*Math.floor(c[2]/t.width));};
 export const cellCoord=(p,i)=>[i%p.dims[0],Math.floor(i/p.dims[0])%p.dims[1],Math.floor(i/(p.dims[0]*p.dims[1]))];
 export const cellIndex=(p,c)=>c[0]+p.dims[0]*(c[1]+p.dims[1]*c[2]);
@@ -34,7 +34,7 @@ export function referenceTileStep(p,{values,solid=new Uint8Array(p.count),pendin
 // Side strips preserve partial-cell heights. Faces use -X,+X,-Y,+Y,-Z,+Z.
 export function exposedFaces(p,values,solid=new Uint8Array(p.count)){
  const fill=c=>c.some((v,k)=>v<0||v>=p.dims[k])?0:solid[cellIndex(p,c)]?1:values[cellIndex(p,c)],faces=[];
- for(let i=0;i<p.count;i++)if(values[i]>0){const c=cellCoord(p,i),a=values[i];for(let f=0;f<6;f++){
+ for(let i=0;i<p.count;i++)if(values[i]>=ASH_SURFACE_MIN_FILL&&!solid[i]){const c=cellCoord(p,i),a=values[i];for(let f=0;f<6;f++){
   const axis=Math.floor(f/2),q=[...c];q[axis]+=f%2?1:-1;const b=fill(q);
   if(axis===1?(f===2?b<1:a<1||b<=0):a>b)faces.push({cell:i,face:f,low:axis===1?0:b,high:a});
  }}return faces;
