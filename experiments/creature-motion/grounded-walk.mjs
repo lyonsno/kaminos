@@ -137,6 +137,10 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   const hip=(path,leg)=>new THREE.Vector3(...leg.offset).applyAxisAngle(new THREE.Vector3(0,1,0),yaw(path)-sourceYaw).add(new THREE.Vector3(path.position[0],0,path.position[1]));
   // Resolve each source-frame-sized phase increment, including delayed ticks.
   const bound=Math.hypot(...to.position.map((v,i)=>v-from.position[i]))+Math.abs(delta)*Math.max(...legs.map(l=>Math.hypot(l.offset[0],l.offset[2])));
+  // A floating-point remainder is not a new contact decision. Scale the
+  // threshold to coordinate arithmetic, far below meaningful foot travel.
+  const roundoff=64*Number.EPSILON*Math.max(1,...from.position.map(Math.abs),...to.position.map(Math.abs),...legs.flatMap(l=>l.offset.map(Math.abs)));
+  if(bound<=roundoff)return;
   const steps=Math.max(1,Math.ceil(bound/speed*walking.fps));let previous=from;
   for(let step=1;step<=steps;step++){
    const t=step/steps,angle=start+delta*t,next={position:to.position.map((v,i)=>from.position[i]+(v-from.position[i])*t),direction:[Math.sin(angle),Math.cos(angle)]};
