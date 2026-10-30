@@ -5,7 +5,7 @@ import {sceneTiles} from './scene-plan.mjs';
 // Object-local occupancy survives rigid motion. Geometry is conservatively
 // voxelized by the shared producer; live poses resample only affected ash tiles.
 export function createAshSceneSolids({device,layout:p,collision,headers}){
- const t=p.tiles,cache=new Map(),boundsCache=new WeakMap();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
+ const t=p.tiles,cache=new Map(),boundsCache=new WeakMap(),pendingDirty=new Set();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
  const jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:(t.count+1)*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
  const blank=device.createBuffer({size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
@@ -93,7 +93,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    if(!mesh.isMesh)return;for(let n=mesh;n;n=n.parent)if(!n.visible||n.userData?.kaminosEditorHelper||n.userData?.kaminosEditorOnly)return;
    meshes.set(mesh.uuid,{mesh,id,objectKey});
   });}
-  const dirty=new Set(),include=box=>{for(const i of sceneTiles(p,box))dirty.add(i);};
+  const dirty=pendingDirty,include=box=>{for(const i of sceneTiles(p,box))dirty.add(i);};
   for(const [key,m] of cache)if(!meshes.has(key)){include(m.box);destroy(m);cache.delete(key);}
   for(const [key,{mesh,id,objectKey}] of meshes){
    const spec=geometry(mesh);let m=cache.get(key);const matrix=mesh.matrixWorld.toArray();
@@ -114,7 +114,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   // Recompose all overlapping members, including unchanged objects, so moving
   // or removing one object cannot erase another object's occupied cells.
   for(const m of cache.values())if(sceneTiles(p,m.box).some(i=>dirty.has(i)))dispatch('stamp',m.group);
-  device.queue.submit([encoder.finish()]);updates++;return true;
+  device.queue.submit([encoder.finish()]);dirty.clear();updates++;return true;
  }
- return {update,read:()=>({route:'cached-local-triangle-occupancy',shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:(t.count+1)*4+84+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
+ return {update,read:()=>({route:'cached-local-triangle-occupancy',pendingDirtyTiles:pendingDirty.size,shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:(t.count+1)*4+84+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
 }
