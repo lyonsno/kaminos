@@ -18,7 +18,7 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
  const home=input.parentNode,after=input.nextSibling,priorStyle=input.getAttribute('style'),priorPlaceholder=input.placeholder;
  layer.append(input);input.classList.add('kiln-prompt-input');input.placeholder='Describe your image…';input.wrap='soft';
  const mirror=document.createElement('div');mirror.setAttribute('aria-hidden','true');mirror.style.cssText=typography+'position:fixed;left:-100000px;top:0;visibility:hidden;';document.body.append(mirror);
- let height=KILN_PROMPT_WINDOW_HEIGHT,burning=false,disposed=false,presented=null;
+ let height=KILN_PROMPT_WINDOW_HEIGHT,burning=false,disposed=false,presented=null,caretFrame=0;
  function measure(value){mirror.textContent=value+'\u200b';return Math.max(180,mirror.scrollHeight);}
  function position(){
   if(disposed)return;const rect={width:viewport.clientWidth,height:viewport.clientHeight};
@@ -29,8 +29,27 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
   height=KILN_PROMPT_WINDOW_HEIGHT;const scroll=input.scrollTop;input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:auto;scrollbar-width:thin;outline:none;caret-color:#ffcd8d;`;
   input.scrollTop=scroll;position();present();
  }
- const edit=()=>{sync();onChange(input.value);};
- input.addEventListener('input',edit);input.addEventListener('focus',present);input.addEventListener('blur',present);
+ // Measure the native caret using the same transformed typography. This runs
+ // on editing/selection events, never on the simulation or render hot path.
+ function revealCaret(){
+  if(caretFrame||disposed||document.activeElement!==input)return;
+  caretFrame=document.defaultView.requestAnimationFrame(()=>{
+   caretFrame=0;if(disposed||document.activeElement!==input)return;
+   const probe=document.createElement('div'),marker=document.createElement('span');
+   probe.style.cssText=input.style.cssText+'visibility:hidden;pointer-events:none;';
+   probe.setAttribute('aria-hidden','true');
+   const at=input.selectionDirection==='backward'?input.selectionStart:input.selectionEnd;
+   marker.textContent='\u200b';
+   probe.append(document.createTextNode(input.value.slice(0,at)),marker,document.createTextNode(input.value.slice(at)||'\u200b'));
+   layer.append(probe);probe.scrollTop=input.scrollTop;probe.scrollLeft=input.scrollLeft;
+   const rect=marker.getBoundingClientRect().toJSON();probe.remove();
+   input.dispatchEvent(new document.defaultView.CustomEvent('kiln-caret',{bubbles:true,detail:rect}));
+  });
+ }
+ const edit=()=>{sync();onChange(input.value);revealCaret();};
+ const focus=()=>{present();revealCaret();};
+ input.addEventListener('selectionchange',revealCaret);input.addEventListener('keyup',revealCaret);
+ input.addEventListener('input',edit);input.addEventListener('focus',focus);input.addEventListener('blur',present);
  // Existing callers sometimes set .value before dispatching/redrawing. Keep
  // their original element and native setter; the consumer calls sync on render.
  const observer=new document.defaultView.ResizeObserver(position);observer.observe(viewport);
@@ -43,6 +62,6 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
    try{await image.decode();canvas.getContext('2d').drawImage(image,0,0);return canvas;}catch(error){onError(error);throw error;}
   },
   read:()=>({width,height,contentHeight:measure(input.value),scrollTop:input.scrollTop,text:input.value,editing:!burning||document.activeElement===input,transform:input.style.transform}),
-  dispose(){if(disposed)return;disposed=true;observer.disconnect();input.removeEventListener('input',edit);input.removeEventListener('focus',present);input.removeEventListener('blur',present);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();object.visible=true;},
+  dispose(){if(disposed)return;disposed=true;observer.disconnect();document.defaultView.cancelAnimationFrame(caretFrame);input.removeEventListener('selectionchange',revealCaret);input.removeEventListener('keyup',revealCaret);input.removeEventListener('input',edit);input.removeEventListener('focus',focus);input.removeEventListener('blur',present);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();object.visible=true;},
  };
 }

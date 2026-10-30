@@ -47,7 +47,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
  function render(state){
   renderer?.syncEditor?.();
   const active=['loading','running','stopping'].includes(state?.status),next=state?.request??null;
-  const nextBurning=['running','stopping'].includes(state?.status);
+  const nextBurning=state?.status==='running'||state?.status==='stopping'&&burning&&next?.id===request?.id;
   const interrupted=state?.status!==lastStatus&&['failed','stopped'].includes(state?.status);
   const changed=active!==running||nextBurning!==burning||(active&&next?.id!==request?.id)||interrupted;
   if(changed)finishPending=running&&!active&&['saving','complete'].includes(state?.status);
