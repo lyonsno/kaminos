@@ -42,3 +42,14 @@ console.log('Attachment-relative history, scaled rigid frames, and reconstructed
  edits.undo();assert.equal(root.userData.linkMechanism.attachments[0].offset.position[2],0,'Undo restores attachment data before controller recreation');edits.redo();assert.equal(root.userData.linkMechanism.attachments[0].offset.position[2],.5);edits.undo();
  follower=createAttachmentFollower(root,()=>entries);follower.update(root.userData.linkMechanism,0);near(object.position.toArray(),[2,0,0]);edits.redo();follower.update(root.userData.linkMechanism,0);near(object.position.toArray(),[2,0,.5]);follower.dispose();
 }
+
+// Reopening the experiment on a restored scene must reuse its selected mechanism.
+{
+ const experiment=(await import('../experiments/link-workshop.experiment.mjs')).default;
+ const roots=[new T.Group(),new T.Group()];for(const r of roots)r.userData.linkMechanism=recipe();
+ const entries=roots.map((object,i)=>({id:'saved-'+i,object}));let added=0,selected;
+ const runtime={read:()=>({objectId:'saved-1'}),operations:{frame(){}}};
+ const host={scene:{objects:()=>entries,selection:()=>({activeId:'saved-1'}),select:id=>selected=id},controls:{document:{defaultView:{kaminosSelection:{read:()=>({activeId:'saved-1'})},kaminosMechanisms:{ensure:async root=>{assert.equal(root,roots[1]);return runtime;},add:async()=>{added++;return runtime;}}}}}};
+ await experiment.create({host,inputs:{}});assert.equal(added,0,'Restoring the workshop must not add an empty mechanism');assert.equal(selected,'saved-1');
+ await experiment.create({host,inputs:{recipe:recipe()}});assert.equal(added,1,'Explicit recipe still creates a new mechanism');
+}

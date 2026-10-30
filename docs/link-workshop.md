@@ -24,7 +24,7 @@ remains available under the inspector's Recipe section.
 Select a joint, choose a mesh in Object to attach, and Attach object. Placement
 is preserved. Select the payload and use native G/R/S to edit its offset.
 Detach releases it at its displayed pose. GLB, PBR and procedural meshes are
-supported; simulation emitters and nested mechanisms require another binding.
+supported; simulation emitters require another binding. Mechanism roots can be attached and keep their independent motion.
 Missing payloads remain visible as unresolved references.
 
 Construction/pose tools occupy the viewport header. Play/Pause holds and resumes;
