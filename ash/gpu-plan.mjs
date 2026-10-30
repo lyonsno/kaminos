@@ -68,3 +68,7 @@ export function ashDispatchGrid(groups,limit=65535){
  if(!Number.isSafeInteger(groups)||groups<0||!Number.isSafeInteger(limit)||limit<1||groups>limit*limit)throw Error('Ash dispatch exceeds effective GPU capacity');
  return [Math.min(groups,limit),Math.max(1,Math.ceil(groups/limit)),1];
 }
+// A run uses one uint: cell-face address plus (length-1)*six faces per tile.
+export function validateAshRunEncoding(tileSize){
+ if(!Number.isSafeInteger(tileSize)||tileSize<1||6*tileSize**4>2**32)throw Error('Ash run address exceeds 32-bit storage capacity');
+}
