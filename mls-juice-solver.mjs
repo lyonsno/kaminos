@@ -29,6 +29,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,inFlight=Promise.resolve();
+  const couplingTiming={batches:0,queueAndReadbackMs:0,bodyStepMs:0};
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
   const cells=buffer(config.gridCells*16,U.STORAGE|U.COPY_DST,'MLS grid');
   const densities=buffer(config.capacity*4,U.STORAGE,'MLS density');
@@ -131,12 +132,15 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
           if(pile)encoder.copyBufferToBuffer(impulseBuffer,0,impulseReadback,bodyStep*config.goinPile.count*32,config.goinPile.count*32);
           bodyStep++;
         }
-        device.queue.submit([encoder.finish()]);pending=true;
+        const submittedAt=performance.now();device.queue.submit([encoder.finish()]);pending=true;
         inFlight=(async()=>{
           if(pile){
             await impulseReadback.mapAsync(GPUMapMode.READ);
+            couplingTiming.queueAndReadbackMs+=performance.now()-submittedAt;
             const result=new Int32Array(impulseReadback.getMappedRange()).slice();impulseReadback.unmap();
+            const bodyStarted=performance.now();
             if(!disposed)for(let i=0;i<steps;i++)pile.complete(result.subarray(i*config.goinPile.count*8,(i+1)*config.goinPile.count*8));
+            couplingTiming.bodyStepMs+=performance.now()-bodyStarted;couplingTiming.batches++;
           }else await device.queue.onSubmittedWorkDone();
         })().catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{
           pending=false;upload?.destroy();bodyUpload?.destroy();
@@ -149,7 +153,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
-        bodies:pile?.read()??null,
+        bodies:pile?.read()??null,couplingTiming:pile?{...couplingTiming,authority:'cpu_wall_spans_not_gpu_timestamps'}:null,
         collision:pile?'dynamic_goin_cylinders_particle_contact_async_substep_exchange':'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
       async snapshot(){
         if(disposed)throw Error('MLS solver disposed');
