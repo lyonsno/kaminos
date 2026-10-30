@@ -503,3 +503,9 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
 .asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
 .asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+
+.asset-edit-review{grid-column:1/-1;min-width:0;border-top:1px solid #41484a;padding-top:8px;font-size:12px;line-height:1.5;}
+.asset-edit-review textarea{display:block;width:100%;box-sizing:border-box;margin:6px 0;padding:8px;background:#101212;color:#eee;border:1px solid #41484a;border-radius:4px;font:inherit;resize:vertical;}
+.asset-edit-review [hidden]{display:none!important;}
+#asset-review-assessment{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;margin:6px 0;}
+#asset-review-status{color:#c5bfae;}

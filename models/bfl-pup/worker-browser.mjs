@@ -8,7 +8,7 @@ self.onmessage=async({data})=>{
  try{
   if(helper)send('progress',{phase:'resident'});
   helper??=await createBrowserPromptHelper({modelUrl:data.modelUrl,onProgress:value=>send('progress',value)});
-  result=await helper.expand({prompt:data.prompt,images:data.images,onText:value=>send('text',value)});
+  result=await helper.expand({prompt:data.prompt,images:data.images,task:data.task,onText:value=>send('text',value)});
  }catch(failure){error=String(failure?.stack||failure);}
  finally{if(error||!data.keepLoaded){try{await helper?.dispose();}catch(failure){error=String(failure?.stack||failure);}helper=null;}}
  send(error?'error':'complete',error||result);activeRequest=null;

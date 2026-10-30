@@ -73,3 +73,12 @@ test('waiting operation exposes queue position and skip choice to the retained p
 test('prompt availability reports the selected package diagnosis',()=>{
  assert.throws(()=>prompt.authoringPromptWeightRoot({modelAvailability:{pup:{status:'unavailable',reason:'Missing decoder payload on this installation'}}}),/Missing decoder payload/);
 });
+
+test('critic uses the shared resident provider with original and result in order',async()=>{
+ let received;const c=prompt.createAuthoringPromptExpansion({createHelper:()=>({expand:async x=>{received=x;return{text:'Assessment\nNEXT EDIT:\nblue',task:'critique'};},dispose:async()=>{}})});
+ await c.expand({task:'critique',prompt:'blue',reference:{kind:'image',source:'/original'},resultImage:{kind:'image',source:'/result'}});
+ assert.equal(received.task,'critique');assert.deepEqual(received.images,['/original','/result']);
+ assert.equal(c.read().request.resultImage.source,'/result');
+ assert.equal(prompt.promptExpansionMatches(c.read().request,{model:'flux3',reference:{kind:'image',source:'/original'}}),false,'review text cannot be adopted as an expansion');
+ await assert.rejects(c.expand({task:'critique',prompt:'blue',reference:{kind:'image',source:'/original'}}),/result/i);
+});
