@@ -271,9 +271,12 @@ upsampling the 512 image is not equivalent.
 tensors. Old packages remain valid checkpoint stores, but their old 512-only
 image cannot run the corrected cascade: select the original image in Kaminos
 or prepare a new package from the original foreground. The weight files can
-be reused. Generation outputs and page asset provenance expose
+be reused when their texture checkpoint matches the requested pipeline. Generation outputs and page asset provenance expose
 `conditioningShapes` for the actual stage bindings.
 
-This adds the second encoder pass and its larger context. It does not establish
-full reference parity: the existing base packager still selects the 512 texture
-flow checkpoint, whose separate 1024 checkpoint integration remains outstanding.
+This adds the second encoder pass and its larger context. Input and checkpoint
+selection alone do not establish numerical or generated-output parity.
+
+### Pipeline-matched texture checkpoints
+
+`pack-generation.py --pipeline-type 1024_cascade` (the default) expands the official 1024 texture flow and high-resolution shape flow. `--pipeline-type 512` expands the 512 texture flow and omits the high-resolution shape checkpoint. Prepared-image packaging reuses those weights; it cannot convert a checkpoint base from one texture profile to the other. Rebuild the base for the desired profile before preparing its images. Browser execution rejects an unidentified or mismatched texture checkpoint before fetching model tensors, while historical package validation and retained-result inspection remain available. Existing correctly identified 512 packages continue to execute.

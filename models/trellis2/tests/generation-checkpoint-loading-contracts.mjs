@@ -103,7 +103,7 @@ test('missing, partial, nonfinite high image refuses before any fetch;512 does n
   for(const high of [undefined,new Float32Array(3),nonfinite]){
     let calls=0;await assert.rejects(inputs.loadGenerationInputs(m,async()=>{calls++;},{pixelValues:low,highResolutionPixelValues:high}),/1024x1024/);assert.equal(calls,0);
   }
-  const preview=structuredClone(m);preview.pipelineType='512';preview.meshResolution=512;delete preview.models.highResolutionShape;
+  const preview=structuredClone(m);preview.models.textureFlow.identity.path='/ckpts/slat_flow_imgshape2tex_dit_1_3B_512_bf16.safetensors';preview.pipelineType='512';preview.meshResolution=512;delete preview.models.highResolutionShape;
   for(const role of ['shapeDecoder','textureDecoder'])preview.models[role].config.resolution=32;
   const r=recorder(),loaded=await inputs.loadGenerationInputs(preview,r.fetch,{pixelValues:low});
   assert.equal(loaded.highResolutionPixelValues,undefined);assert.ok(!r.fetched.some(k=>k.startsWith('image.')));

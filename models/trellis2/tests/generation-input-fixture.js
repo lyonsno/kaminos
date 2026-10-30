@@ -9,6 +9,7 @@ for(const [role,config]of Object.entries({sparseFlow:{...cfg,guidanceRescale:.7,
   highResolutionShape:cfg,textureFlow:{...cfg,guidanceStrength:1,guidanceRescale:0,guidanceInterval:[.6,.9]},
   shapeDecoder:dc,textureDecoder:{...dc,mode:'texture'},occupancyDecoder:{resolution:16,latentChannels:8,outChannels:1,channels:[512,128,32],numResBlocks:2,numResBlocksMiddle:2}}))
   m.models[role]={config,identity:{sha256:(role==='highResolutionShape'?'b':'a').repeat(64)},tensors:{}};
+m.models.textureFlow.identity.path='/ckpts/slat_flow_imgshape2tex_dit_1_3B_1024_bf16.safetensors';
 const shapes=generationInputShapes(m),tensor=(key,shape)=>{
   m.tensors[key]={file:key+'.f32',dtype:'float32',shape,byteLength:shape.reduce((n,x)=>n*x,4),sha256:'c'.repeat(64)};return key;};
 tensor('image.pixels',shapes.image);
