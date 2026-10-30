@@ -8,11 +8,11 @@ const sha256=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('
 export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanics',
  async create({host,inputs,record}){
   for(const key of ['source','sourceSha256','material','materialSha256'])if(typeof inputs[key]!=='string'||!inputs[key])throw Error('Replay input required: '+key);
-  const session=await host.scene.open(),renderer=host.scene.renderer();let asset,field,structure,dynamics,surface,playback,platform,contactGeometry,unframe,disposed=false,running=false,error=null,button,status,syncSupport=()=>{},worldScale;
+  const session=await host.scene.open(),renderer=host.scene.renderer();let asset,field,structure,dynamics,surface,playback,platform,contactGeometry,unframe,disposed=false,running=false,resetting=false,resetTask=null,error=null,button,resetButton,contactToggle,status,syncSupport=()=>{},worldScale;
   const material=checkedBurnMaterial(inputs.materialModel);
-  const read=()=>({identity:'kaminos.burn-fracture.replay.v1',inputs,effective:{backend:renderer.backend.isWebGPUBackend?'WebGPU':'unsupported',adapter:renderer.backend.device.adapterInfo?{vendor:renderer.backend.device.adapterInfo.vendor,description:renderer.backend.device.adapterInfo.description}:null},sourceAuthority:'retained-native-material-observation',thermal:'frozen-not-live-coupled',sceneContact:'finite-editable-support',contactGeometry,worldScale,worldMaterial:material,running,error,playback:playback?.read(),structure:structure?.read(),mechanics:dynamics?.read(),surface:surface?.read()});
-  const sync=()=>{if(button)button.textContent=running?'Pause':'Run';if(status)status.textContent=error??`${dynamics?.read().regions??0} regions`;};
-  const dispose=async()=>{if(disposed)return;disposed=true;running=false;unframe?.();await playback?.settled();surface?.dispose();dynamics?.dispose();structure?.dispose();field?.dispose();await session.dispose();};
+  const read=()=>({identity:'kaminos.burn-fracture.replay.v1',inputs,effective:{backend:renderer.backend.isWebGPUBackend?'WebGPU':'unsupported',adapter:renderer.backend.device.adapterInfo?{vendor:renderer.backend.device.adapterInfo.vendor,description:renderer.backend.device.adapterInfo.description}:null},sourceAuthority:'retained-native-material-observation',thermal:'frozen-not-live-coupled',sceneContact:'finite-editable-support',contactGeometry,worldScale,worldMaterial:material,running,resetting,error,playback:playback?.read(),structure:structure?.read(),mechanics:dynamics?.read(),surface:surface?.read()});
+  const sync=()=>{if(button){button.textContent=running?'Pause':'Run';button.disabled=resetting||!!error;}if(resetButton)resetButton.disabled=resetting;if(contactToggle){contactToggle.checked=dynamics?.read().contactsEnabled??true;contactToggle.disabled=resetting||!!error;}if(status)status.textContent=error??(resetting?'Resetting':`Recorded material · ${dynamics?.read().regions??0} regions`);};
+  const dispose=async()=>{if(disposed)return;disposed=true;running=false;unframe?.();await resetTask?.catch(()=>{});await playback?.settled();surface?.dispose();dynamics?.dispose();structure?.dispose();field?.dispose();await session.dispose();};
   try{
    const sourceResponse=await fetch(inputs.source);if(!sourceResponse.ok)throw Error('Source load failed: '+sourceResponse.status);if(await sha256(await sourceResponse.arrayBuffer())!==inputs.sourceSha256)throw Error('Replay source hash mismatch');
    const materialResponse=await fetch(inputs.material);if(!materialResponse.ok)throw Error('Material observation load failed: '+materialResponse.status);const bytes=await materialResponse.arrayBuffer();if(await sha256(bytes)!==inputs.materialSha256)throw Error('Replay material hash mismatch');const raw=JSON.parse(new TextDecoder().decode(bytes));
@@ -36,7 +36,8 @@ export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanic
    const registration=await session.attach(platform,{owned:true,metadata:{label:'Mechanical support'}});
    const support=()=>{platform.updateWorldMatrix(true,false);const local=inverse.clone().multiply(platform.matrixWorld),position=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();local.decompose(position,q,s);return {position:position.toArray(),quaternion:q.toArray(),halfExtents:supportSize.map((v,k)=>v*s.getComponent(k)/2),friction:.6};};
    const gravity=new THREE.Vector3(0,-9.81,0).applyMatrix3(new THREE.Matrix3().setFromMatrix4(inverse)).toArray();
-   dynamics=await createBurnFractureGpu({renderer,prepared:bodies.prepared,sections:structure.resident(),finiteSupports:[support()],regionMasses:bodies.masses,material:localMaterial,gravity});
+   const createDynamics=()=>createBurnFractureGpu({renderer,prepared:bodies.prepared,sections:structure.resident(),finiteSupports:[support()],regionMasses:bodies.masses,material:localMaterial,gravity});
+   dynamics=await createDynamics();
    let supportMatrix=platform.matrixWorld.clone();syncSupport=()=>{platform.updateWorldMatrix(true,false);if(!supportMatrix.equals(platform.matrixWorld)){dynamics.setSupport(0,support());supportMatrix.copy(platform.matrixWorld);}};
    surface=createBurnFractureSurface({renderer,prepared,materials:structure.resident().sourceMaterials,field,dynamics});
    source.visible=false;
@@ -47,14 +48,27 @@ export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanic
    const box=new THREE.Box3().setFromObject(surface.mesh),center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length();
    session.setView({target:center.toArray(),position:center.clone().add(new THREE.Vector3(1,.5,1.4).normalize().multiplyScalar(radius*1.3)).toArray()});
    const fail=cause=>{running=false;error=cause.message;sync();};
-   playback=createBurnFracturePlayback({stepSeconds:prepared.config.timeStep,advance:seconds=>{syncSupport();dynamics.advance(seconds);session.redraw();},completed:()=>renderer.backend.device.queue.onSubmittedWorkDone(),onError:fail});
+   const createPlayback=()=>createBurnFracturePlayback({stepSeconds:prepared.config.timeStep,advance:seconds=>{syncSupport();dynamics.advance(seconds);session.redraw();},completed:()=>renderer.backend.device.queue.onSubmittedWorkDone(),onError:fail});
+   playback=createPlayback();
    unframe=session.onFrame(({deltaSeconds})=>{if(!running||disposed)return;try{playback.tick(deltaSeconds);sync();}catch(cause){fail(cause);}});sync();
    return {read,operations:{
-    run(value=true){if(disposed)throw Error('Replay is disposed');running=value===true;sync();record({kind:'burn-fracture.run',effective:running});return read();},
-    async advance(seconds){if(running)throw Error('Pause before exact mechanics advance');await playback.settled();if(disposed)throw Error('Replay is disposed');syncSupport();dynamics.advance(seconds);session.redraw();sync();return read();},
+    run(value=true){if(disposed||resetting)throw Error('Replay is unavailable');running=value===true;sync();record({kind:'burn-fracture.run',effective:running});return read();},
+    async advance(seconds){if(running||resetting)throw Error('Pause before exact mechanics advance');await playback.settled();if(disposed)throw Error('Replay is disposed');syncSupport();dynamics.advance(seconds);session.redraw();sync();return read();},
     moveSupport(position){if(!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite))throw Error('Finite world support position required');platform.position.fromArray(position);syncSupport();host.scene.refreshPresentation(registration);record({kind:'burn-fracture.support',position:[...position]});return read();},
+    contacts(value){if(resetting)throw Error('Reset is in progress');dynamics.setContactsEnabled(value);platform.material.color.setHex(value?0x6b7779:0x303536);session.redraw();sync();record({kind:'burn-fracture.contact',enabled:value});return read();},
+    reset(){if(disposed||resetting)throw Error('Replay is unavailable');running=false;resetting=true;sync();
+     resetTask=(async()=>{await playback.settled();const enabled=dynamics.read().contactsEnabled;let next;
+      try{next=await createDynamics();next.setContactsEnabled(enabled);if(disposed){next.dispose();return;}surface.dispose();dynamics.dispose();dynamics=next;surface=createBurnFractureSurface({renderer,prepared,materials:structure.resident().sourceMaterials,field,dynamics});asset.root.add(surface.mesh);supportMatrix.copy(platform.matrixWorld);playback=createPlayback();error=null;record({kind:'burn-fracture.reset',contactsEnabled:enabled});session.redraw();return read();}
+      catch(cause){if(next&&next!==dynamics)next.dispose();fail(cause);throw cause;}finally{resetting=false;sync();}
+     })();return resetTask;
+    },
     snapshot:()=>dynamics.snapshot(),
     sectionSnapshot:()=>structure.snapshot(),
-   },mount({root,document,invoke}){button=document.createElement('button');button.type='button';button.addEventListener('click',()=>invoke('run',!running).catch(e=>{error=e.message;sync();}));status=document.createElement('p');status.setAttribute('role','status');root.append(button,status);sync();},dispose};
+   },mount({root,document,invoke}){
+    const command=(name,op,arg)=>{const b=document.createElement('button');b.type='button';b.textContent=name;b.addEventListener('click',()=>invoke(op,typeof arg==='function'?arg():arg).catch(e=>{error=e.message;sync();}));return b;};
+    button=command('Run','run',()=>!running);resetButton=command('Reset','reset');
+    const label=document.createElement('label');contactToggle=document.createElement('input');contactToggle.type='checkbox';contactToggle.addEventListener('change',()=>invoke('contacts',contactToggle.checked).catch(e=>{error=e.message;sync();}));label.append(contactToggle,document.createTextNode('Support contact'));
+    status=document.createElement('p');status.setAttribute('role','status');root.append(button,resetButton,label,status);sync();
+   },dispose};
   }catch(cause){await dispose();throw cause;}
  }};

@@ -3,12 +3,13 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {checkBurnFractureObservation,checkBurnMaterialContrast} from './burn-fracture-contract.mjs';
+import {checkBurnFractureObservation,checkBurnMaterialContrast,burnMassMotion} from './burn-fracture-contract.mjs';
 import {readBurnReplay} from '../burn-fracture-replay.mjs';
 const [origin,out,assetPath,coldPath,hotPath]=process.argv.slice(2);
+const releaseComparison=process.env.BURN_RELEASE_COMPARE==='1';
 if(!origin||!out)throw Error('Usage: burn-fracture-witness.mjs <origin> <out> <asset> <cold material> <burned material>');
 await fs.mkdir(out,{recursive:true});
-const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],observations:[]},save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');
+const report={status:'running',phase:'launch',releaseComparison,claim:releaseComparison?'diagnostic-observation-not-collapse-acceptance':'material-and-collapse-comparison',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],observations:[]},save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');
 let context;
 try{
  await save();if(!hotPath)throw Error('Complete source, cold and burned material inputs required');report.revision=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
@@ -16,10 +17,11 @@ try{
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);context=await chromium.launchPersistentContext(path.join(out,'browser-profile'),{executablePath:report.executable,headless:true,viewport:{width:1280,height:900},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  const page=context.pages()[0];page.setDefaultTimeout(0);let reject;const failure=new Promise((_,fail)=>{reject=fail;});failure.catch(()=>{});const guard=p=>Promise.race([p,failure]);
  const fail=e=>{report.errors.push(String(e));reject(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
- report.phase='material-kernel';await save();await guard(page.goto(origin));report.materialKernel=await guard(page.evaluate(async()=>{const {probeBurnStress}=await import('/tools/burn-material-kernel-probe.mjs');return probeBurnStress();}));await save();
+ await guard(page.goto(origin));
+ if(!releaseComparison){report.phase='material-kernel';await save();report.materialKernel=await guard(page.evaluate(async()=>{const {probeBurnStress}=await import('/tools/burn-material-kernel-probe.mjs');return probeBurnStress();}));await save();
  report.phase='production-material-load';await save();
  report.materialLoad=await guard(page.evaluate(async()=>{const {probeBurnMaterialLoad}=await import('/tools/burn-material-load-probe.mjs');try{return await probeBurnMaterialLoad();}catch(error){return {error:String(error.stack??error),rows:error.probeEvidence??[]};}}));await save();
- assert.ok(!report.materialLoad.error,report.materialLoad.error);report.materialLoad.verdict=checkBurnMaterialContrast(report.materialLoad.rows);await save();
+ assert.ok(!report.materialLoad.error,report.materialLoad.error);report.materialLoad.verdict=checkBurnMaterialContrast(report.materialLoad.rows);await save();}
  const asset=await fs.readFile(assetPath),sourceSha256=hash(asset),upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.ok(upload.ok());const receipt=await upload.json();assert.equal(receipt.sha256,sourceSha256);
  report.source={path:assetPath,sha256:sourceSha256,url:receipt.source};report.sources=[];
  for(const name of ['tools/burn-material-load-probe.mjs','tools/burn-material-kernel-probe.mjs','tools/burn-fracture-contract.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
@@ -34,7 +36,8 @@ try{
   assert.equal(new URL(page.url()).searchParams.get('experiment'),'sinter-burn-fracture-replay');report.effectiveUrl=page.url();
   const read=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read())),before=await invoke('snapshot');checkBurnFractureObservation(read,before);assert.equal(read.sceneContact,'finite-editable-support');
   assert.deepEqual(read.contactGeometry.replayMatrix,replayMatrix);
-  const observation={name,input:{path:file,sha256,url},read,before};report.observations.push(observation);await save();await page.screenshot({path:path.join(out,name+'-before.png')});
+  const supportRecord=await page.evaluate(()=>window.kaminosSceneObjectDebugState().find(r=>r.label==='Mechanical support'));assert.ok(supportRecord?.transform?.position);
+  const observation={name,input:{path:file,sha256,url},read,before,supportRecord};report.observations.push(observation);await save();await page.screenshot({path:path.join(out,name+'-before.png')});
   report.phase='advance:'+name;await save();await invoke('advance',.5);observation.after=await invoke('snapshot');await save();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'-after.png')});
   const moves=before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.after.positions[Math.floor(i/3)*4+i%3]));observation.maximumMovement=Math.max(...moves);
@@ -56,9 +59,26 @@ try{
    checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.unsupported);
    observation.verdict.expectations.push({claim:'Removing contact must release gravity without unpinning a region',passed:moved>.1,actual:moved,expected:'maximum coordinate movement > 0.1'});await save();await page.screenshot({path:path.join(out,'cold-unsupported.png')});
   }
+  if(releaseComparison){
+   report.phase='contact-off:'+name;await save();
+   await invoke('moveSupport',observation.supportRecord.transform.position);
+   await page.getByLabel('Support contact',{exact:true}).uncheck();
+   await page.getByRole('button',{name:'Reset',exact:true}).click();
+   await guard(page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).resetting));
+   observation.releaseBefore=await invoke('snapshot');assert.equal(observation.releaseBefore.state.steps,0);assert.equal(observation.releaseBefore.state.contactsEnabled,false);
+   assert.ok(observation.releaseBefore.positions.every((v,i)=>Math.abs(v-before.positions[i])<1e-5),'Reset must restore every original region, not just the visible root');
+   await invoke('advance',.25);observation.releaseAfter=await invoke('snapshot');
+   assert.deepEqual(observation.releaseAfter.supportCollisionMasks,[0],'Contact-off must reach the resident GPU mask');
+   checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.releaseAfter);
+   observation.releaseMotion=burnMassMotion(observation.releaseBefore,observation.releaseAfter);await save();
+   await page.screenshot({path:path.join(out,name+'-contact-off.png')});
+   await page.getByLabel('Support contact',{exact:true}).check();await page.getByRole('button',{name:'Reset',exact:true}).click();await guard(page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).resetting));await invoke('advance',1/60);
+   observation.contactRestored=await invoke('snapshot');assert.deepEqual(observation.contactRestored.supportCollisionMasks,[1]);
+   if(name==='burned'){await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'mobile-controls.png')});await page.setViewportSize({width:1280,height:900});}
+  }
   await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
  report.phase='comparison';report.failedExpectations=report.observations.flatMap(row=>row.verdict.expectations.filter(x=>!x.passed).map(x=>({name:row.name,...x})));await save();
- assert.deepEqual(report.errors,[]);assert.deepEqual(report.observations.map(x=>x.name),['cold','burned']);assert.equal(report.failedExpectations.length,0,JSON.stringify(report.failedExpectations));report.status='passed';report.phase='complete';
+ assert.deepEqual(report.errors,[]);assert.deepEqual(report.observations.map(x=>x.name),['cold','burned']);if(!releaseComparison)assert.equal(report.failedExpectations.length,0,JSON.stringify(report.failedExpectations));report.status=releaseComparison?'observed':'passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
 finally{await context?.close();await save();}

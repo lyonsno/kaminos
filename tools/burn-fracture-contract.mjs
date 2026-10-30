@@ -1,5 +1,23 @@
 import assert from 'node:assert/strict';
 import {BURN_FRACTURE_IDENTITY} from '../burn-fracture-core.mjs';
+export function burnMassMotion(before,after){
+ const masses=before.state.regionMasses,gravity=before.state.gravity,seconds=after.state.seconds-before.state.seconds;
+ assert.deepEqual(after.state.regionMasses,masses,'Release comparison must retain mass');
+ assert.deepEqual(after.state.gravity,gravity,'Release comparison must retain gravity');
+ assert.ok(seconds>0&&Number.isFinite(seconds));
+ assert.ok(masses.length>0&&masses.every(x=>Number.isFinite(x)&&x>=0));
+ const mass=masses.reduce((a,b)=>a+b,0);assert.ok(mass>0);
+ assert.ok(gravity.length===3&&gravity.every(Number.isFinite));
+ const result={mass,seconds};
+ for(const [field,key]of [['positions','displacement'],['velocities','velocityChange']]){
+  for(const snapshot of [before,after]){assert.equal(snapshot[field].length,masses.length*4);assert.ok(snapshot[field].every(Number.isFinite));}
+  result[key]=[0,1,2].map(k=>masses.reduce((sum,m,i)=>sum+m*(after[field][i*4+k]-before[field][i*4+k]),0)/mass);
+ }
+ const gravitySquared=gravity.reduce((s,x)=>s+x*x,0);
+ result.gravityVelocityFraction=gravitySquared>0?result.velocityChange.reduce((s,v,k)=>s+v*gravity[k],0)/(gravitySquared*seconds):null;
+ return result;
+}
+
 export function checkBurnFractureObservation(read,snapshot,{requireStressFailure=false,comparison}={}){
  assert.equal(read.identity,'kaminos.burn-fracture.replay.v1');assert.equal(read.effective.backend,'WebGPU');assert.equal(read.effective.adapter?.vendor,'apple');
  assert.equal(read.thermal,'frozen-not-live-coupled');assert.equal(read.mechanics.identity,BURN_FRACTURE_IDENTITY);assert.equal(read.mechanics.runtimeReadbacks,0);
