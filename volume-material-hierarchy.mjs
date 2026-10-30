@@ -98,7 +98,10 @@ export function predictDemand(nodes,signals,{dims,basePitch,horizon}){
   const visit=n=>{
    const nb=box(n);if(nb.lo.some((v,a)=>v>=hi[a]||nb.hi[a]<=lo[a]))return;
    if(n.children){for(const child of n.children)visit(byKey.get(child));return;}
-   const dst=result.get(n.key);for(const k of fields)dst[k]=Math.max(dst[k]??0,signal[k]??0);
+   // Signals are brick-average densities. A guard intersecting one sliver of
+   // an otherwise empty brick must not equal the measured source's priority.
+   const coverage=nb.lo.reduce((fraction,v,a)=>fraction*Math.max(0,Math.min(nb.hi[a],hi[a])-Math.max(v,lo[a]))/(nb.hi[a]-v),1);
+   const dst=result.get(n.key);for(const k of fields)dst[k]=Math.max(dst[k]??0,(signal[k]??0)*coverage);
   };
   const first=lo.map(v=>Math.max(0,Math.floor(v/4))),last=hi.map((v,a)=>Math.min(roots[a]-1,Math.floor(v/4)));
   for(let z=first[2];z<=last[2];z++)for(let y=first[1];y<=last[1];y++)for(let x=first[0];x<=last[0];x++)visit(byKey.get(key(0,[x,y,z])));

@@ -38,6 +38,11 @@ const moving=new MaterialHierarchy({dims:[12,4,4],options:{budget:0}}).allocate(
 const predicted=predictDemand(moving.nodes,new Map([['0:0:0:0',{reaction:1,motion:[5,0,0]}]]),{dims:[12,4,4],basePitch:1,horizon:1});
 assert.ok(predicted.get('0:1:0:0').reaction>0);
 assert.ok(predicted.get('0:2:0:0').reaction>0);
+// A stationary measured hotspot keeps priority over a partly covered neighbor.
+// Otherwise a small budget can refine only its empty guard on the first update.
+const startup=predictDemand(moving.nodes,new Map([['0:0:0:0',{reaction:1,motion:[0,0,0]}]]),{dims:[12,4,4],basePitch:1,horizon:0});
+assert.ok(startup.get('0:0:0:0').reaction>startup.get('0:1:0:0').reaction,'measured fire must outrank its partial interpolation guard');
+assert.ok(startup.get('0:1:0:0').reaction>0,'interpolation guard remains active');
 assert.throws(()=>materialImportance({reaction:NaN}),/finite/);
 // Partial edge bricks cover the physical grid without overweighting padding.
 const partial=new MaterialHierarchy({dims:[7,5,3],options:{budget:2}}).allocate(new Map([['0:1:1:0',{reaction:1}]]));
