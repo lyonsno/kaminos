@@ -2132,6 +2132,9 @@ async function fetchServerRoots(baseUrl) {
   if (!resp.ok || roots.error) {
     throw new Error(`server root identity unavailable: ${roots.error || resp.status}`);
   }
+  const runtimeResponse=await fetch(new URL('/api/runtime-config',baseUrl));
+  if(!runtimeResponse.ok)throw Error('server source identity unavailable');
+  roots.runtime=await runtimeResponse.json();
   return roots;
 }
 
@@ -2140,7 +2143,9 @@ function assertExpectedServerRoot(roots) {
   if (!scenesPath) throw new Error('server root identity unavailable: missing scenes root');
   if (!isAbsolute(scenesPath)) throw new Error(`server root identity is not absolute: ${scenesPath}`);
   if (!expectedServerRoot) return;
-  const effectiveServerRoot = resolve(scenesPath, '..');
+  const effectiveServerRoot = roots.runtime?.source?.repoRoot;
+  if(!effectiveServerRoot)throw Error('server source identity unavailable');
+  if(!isAbsolute(effectiveServerRoot))throw Error('server source identity is not absolute');
   if (effectiveServerRoot !== expectedServerRoot) {
     throw new Error(`effective server root mismatch: expected ${expectedServerRoot} but server reported ${effectiveServerRoot}`);
   }
@@ -2712,7 +2717,19 @@ async function runAuthoredWaterProductScenario(ws){
   if(!visible('#selected-water-properties')||visible('#selected-water-simulation-properties'))throw Error('Emitter properties not exclusively on selected source');
   const emitterUi={mode:document.querySelector('[data-mode]').value,retire:document.querySelector('[data-retire]').checked};
   if(emitterUi.retire)throw Error('Hidden timed retirement still default');
-  window.removeSceneObject(volume);window.selectSceneObject(flow);
+  // Native mixed-scene flow: same physical source, two initial sampling budgets.
+  window.kaminosSetSceneObjectTransform(volume,{position:[0,.45,0],rotation:[0,0,0],scale:[1,1,1]});
+  window.kaminosSetSceneObjectTransform(flow,{position:[0,.8,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]});
+  api.edit(flow,{volumeRate:.004});const mixed=[];
+  for(const target of [1000,8000]){
+   api.editSimulation({particleCount:1024,waterSampling:{...api.read().simulation.sampling,particleTarget:target,container:{min:[-.7,-.2,-.7],max:[.7,1,.7]}}});
+   await api.release();window.kaminosPauseLocalLiquid(true);await api.advanceTo(120);
+   const state=window.kaminosLocalLiquidState(),solver=state.solver,particleVolume=solver.domain.cellSize**3/solver.material.restDensity;
+   const expected=.004*.5,actual=solver.liveInlets.totalAdmitted*particleVolume;
+   if(Math.abs(actual-expected)>particleVolume*1.1)throw Error('Sampling changed physical emission amount: '+JSON.stringify({target,actual,expected,solver}));
+   mixed.push({target,actual,expected,state});
+  }
+  api.reset();window.removeSceneObject(volume);window.selectSceneObject(flow);
   window.kaminosSetSceneObjectTransform(flow,{position:[0,.8,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]});api.edit(flow,{rate:64,baseRadius:.04,strength:.5});
   const bounds={min:[-.7,-.2,-.7],max:[.7,1,.7]};api.editSimulation({particleCount:128,waterSampling:{...api.read().simulation.sampling,container:bounds}});
   await document.querySelector('[data-source-simulation]').onclick();await wait(100);
@@ -2731,7 +2748,7 @@ async function runAuthoredWaterProductScenario(ws){
   if(expanded.state.solver.liveInlets.totalAdmitted!==256)throw Error('Expanded allocation did not allow more retained water');
   const ui=document.querySelector('#water-simulation-property-slot [data-state]').textContent;
   if(!ui.includes('256 live / 256 capacity')||!ui.includes('Paused'))throw Error('Simulation inspector misreports its completed population: '+ui);
-  return {bowl,flow,initialPreview,emitterUi,retained,expanded,ui};
+  return {bowl,flow,initialPreview,emitterUi,mixed,retained,expanded,ui};
  })()`,{timeoutMs:180000});
  for(const key of ['retained','expanded']){const row=lastEvidence.waterProduct[key];assert.equal(assertAuthoredWaterPopulation(row.state,row.particles),key==='retained'?128:256);}
  await capturePngScreenshot(ws,siblingPngPath('-simulation'));
@@ -2773,7 +2790,7 @@ async function runAuthoredWaterProductScenario(ws){
  lastEvidence.waterSaved=await evaluate(ws,`window.saveSceneAs({name:'hotwet-water-authoring-'+Date.now(),result:true})`);
  if(!lastEvidence.waterSaved.ok||!lastEvidence.waterSaved.url)throw Error('No reopenable authored water scene');
  await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(200);await wsRequest(ws,'Page.navigate',{url:lastEvidence.waterSaved.url});
- lastEvidence.waterReopened=await evaluate(ws,`(async()=>{while(!window.kaminosWaterSources?.read().sources.length)await new Promise(r=>setTimeout(r,100));const api=window.kaminosWaterSources;window.kaminosPauseLocalLiquid(true);window.selectSceneObject(${JSON.stringify(lastEvidence.waterProduct.flow)});const r=api.read();if(r.selected.settings.lifetimeSeconds!==null||r.selected.settings.rate!==1200||r.simulation.settings.particleCount!==32000)throw Error('Saved source or simulation settings lost');return {read:r,resources:window.__kaminosWitnessResourceNames};})()`,{timeoutMs:180000});
+ lastEvidence.waterReopened=await evaluate(ws,`(async()=>{while(!window.kaminosWaterSources?.read().sources.length)await new Promise(r=>setTimeout(r,100));const api=window.kaminosWaterSources;window.kaminosPauseLocalLiquid(true);window.selectSceneObject(${JSON.stringify(lastEvidence.waterProduct.flow)});const r=api.read();if(r.selected.settings.lifetimeSeconds!==null||Math.abs(r.selected.settings.volumeRate-.05)>1e-12||r.simulation.settings.particleCount!==32000)throw Error('Saved source or simulation settings lost');return {read:r,resources:window.__kaminosWitnessResourceNames};})()`,{timeoutMs:180000});
  if(lastEvidence.waterReopened.resources.some(u=>['/local-liquid-host.mjs','/finger-fluid-gpu.mjs','/paper-fluid-gpu.mjs'].includes(new URL(u).pathname)))throw Error('Old fluid runtime loaded');
 }
 
