@@ -44,3 +44,17 @@ let buildFinished=false;buildRejected.catch(()=>buildFinished=true);
 await Promise.resolve();assert.equal(buildFinished,false,'graph failure also drains previously submitted pipelines');
 releases[0]();await buildRejection;
 console.log('PASS rejection drains outstanding native work before releasing caller state');
+
+// The same native compiler can give its driver barrier to the pass owner.
+releases.length=rejects.length=0;
+renderer._nodes.getForRenderAsync=async o=>{events.push(['build',o.object.id]);};
+const shared=[];
+await WebGPURenderer.prototype.compileAsync.call(renderer,new Scene(),new PerspectiveCamera(),null,{pipelineWork:shared});
+assert.equal(shared.length,1);
+assert.equal(releases.length,2,'all native work submitted before handing back the barrier');
+let settled=false;shared[0].then(()=>settled=true);
+rejects[0](Error('shared native rejection'));await Promise.resolve();assert.equal(settled,false);
+releases[1]();const results=await shared[0];
+assert.equal(results.length,2);assert.equal(results[0].status,'rejected');assert.match(results[0].reason.message,/shared native rejection/);
+assert.equal(results[1].status,'fulfilled');
+console.log('PASS shared native barrier preserves complete results and rejection');
