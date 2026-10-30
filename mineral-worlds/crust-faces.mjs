@@ -5,7 +5,7 @@ export function faceFrame(g,face){
  const f=g.faces,c=Math.cos(g.angle),s=Math.sin(g.angle),x=[c,0,s],z=[-s,0,c],y=[0,1,0],world=(a,b,h)=>[g.x+c*a-s*b,h,g.z+s*a+c*b];
  if(face<2)return {origin:world(f[face],f[3],f[5]),u:z,v:y,w:f[2]-f[3],h:f[4]-f[5],normal:x.map(a=>a*(face===0?1:-1))};
  if(face<4)return {origin:world(f[1],f[face],f[5]),u:x,v:y,w:f[0]-f[1],h:f[4]-f[5],normal:z.map(a=>a*(face===2?1:-1))};
- return {origin:world(f[1],f[3],f[4]),u:x,v:z,w:f[0]-f[1],h:f[2]-f[3],normal:y};
+ return {origin:world(f[1],f[3],f[face]),u:x,v:z,w:f[0]-f[1],h:f[2]-f[3],normal:y.map(v=>v*(face===4?1:-1))};
 }
 export function facePoint(g,face,uv,offset=0){const f=faceFrame(g,face);return f.origin.map((a,i)=>a+f.u[i]*uv[0]*f.w+f.v[i]*uv[1]*f.h+f.normal[i]*offset);}
 export function faceUV(g,face,point){const f=faceFrame(g,face),d=point.map((a,i)=>a-f.origin[i]);return [d.reduce((n,a,i)=>n+a*f.u[i],0)/f.w,d.reduce((n,a,i)=>n+a*f.v[i],0)/f.h];}
