@@ -18,6 +18,7 @@ import socket
 import socketserver
 import subprocess
 import sys
+from scene_catalogue import SceneCatalogue
 import tempfile
 import threading
 import time
@@ -919,7 +920,8 @@ def _atomic_write_json(path, document):
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
+            os.replace(temporary_path, path)
+            return os.fstat(handle.fileno())
     except Exception:
         try:
             os.unlink(temporary_path)
@@ -2439,6 +2441,10 @@ def scene_library_import_basin(document, scene_store):
         f"volume settings preset not found: {preset_id} (looked in this server's stores and "
         + ', '.join(str(store) for store in searched) + ')'
     )
+
+
+def scene_catalogue():
+    return SceneCatalogue(SCENES_DIR / ".scene-catalogue")
 
 
 def scene_library_stores():
@@ -4092,6 +4098,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"error": str(error)}, 400)
             except FileNotFoundError as error:
                 self.send_json({"error": str(error)}, 404)
+        elif parsed.path == "/api/scene-thumbnail":
+            self.handle_scene_thumbnail(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-catalogue":
+            self.handle_scene_catalogue(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library":
             self.handle_scene_library(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library-read":
@@ -4948,7 +4958,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
-        _atomic_write_json(scene_path, data)
+        written_stat = _atomic_write_json(scene_path, data)
+        scene_catalogue().remember(scene_path, data, written_stat)
         self.send_json({"saved": filename, "path": str(scene_path)})
 
     def handle_gpu_lease(self):
@@ -5251,8 +5262,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         dependencies = [scene_library_import_dependency(obj.get("source"), store)
                         for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
         filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
-        _atomic_write_json(SCENES_DIR / filename, document)
+        written_stat = _atomic_write_json(SCENES_DIR / filename, document)
+        scene_catalogue().remember(SCENES_DIR / filename, document, written_stat)
         self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "basin": basin, "from": str(store.parent.name)})
+
+    def handle_scene_thumbnail(self, params):
+        name = (params.get("name") or [""])[0]
+        if Path(name).name != name or not name.endswith(".kaminos.json"):
+            self.send_json({"error": "Invalid scene name"}, 400)
+            return
+        try:
+            data = scene_catalogue().thumbnail(SCENES_DIR, name, (params.get("version") or [""])[0])
+        except (OSError, ValueError, RuntimeError):
+            self.send_json({"error": "Saved preview is unavailable or changed"}, 404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_scene_catalogue(self, params):
+        self.send_json({"scenes": scene_catalogue().list(
+            SCENES_DIR, hydrate=(params.get("metadata") or [""])[0] == "1")})
 
     def handle_scene_library(self, params):
         """List scenes saved by other Kaminos servers on this machine (read-only)."""
@@ -5265,16 +5297,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         stores = []
         for store_id, path in library_stores.items():
-            scenes = []
-            for scene_path in sorted(path.glob("*.kaminos.json")):
-                entry = {"name": scene_path.name, "label": "", "timestamp": ""}
-                try:
-                    data = json.loads(scene_path.read_text())
-                    entry["label"] = str(data.get("label") or (data.get("capture") or {}).get("label") or "")
-                    entry["timestamp"] = str(data.get("timestamp") or "")
-                except (OSError, ValueError) as error:
-                    entry["error"] = str(error)
-                scenes.append(entry)
+            scenes = scene_catalogue().list(path, hydrate=True)
             if scenes:
                 stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name in ("consumer", "state", "native-consumer") else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})
