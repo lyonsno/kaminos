@@ -1,6 +1,6 @@
 {
   "name": "@kaminos/unimate-webgpu",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "UniMate text-to-motion for any rigged skeleton, running in the browser on WebGPU: generate skeletal animation from a prompt, bring your own .glb rig, and export an animated, skinned .glb.",
   "type": "module",
   "license": "MIT",
@@ -39,6 +39,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@kaminos/webgpu-inference-kit": "^0.1.57"
+    "@kaminos/webgpu-inference-kit": "^0.1.60"
   }
 }

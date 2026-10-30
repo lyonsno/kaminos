@@ -20,6 +20,12 @@ export function withViewportVisibility(objects,visible,render) {
  try {for(const entry of objects)if(entry.object&&!visible(entry.id)){restored.push([entry.object,entry.object.visible]);entry.object.visible=false;}return render();}
  finally {for(const [object,prior] of restored)object.visible=prior;}
 }
+// The preparation owner holds rendering and scene edits throughout this interval.
+export async function withViewportVisibilityAsync(objects,visible,prepare) {
+ const restored=[];
+ try {for(const entry of objects)if(entry.object&&!visible(entry.id)){restored.push([entry.object,entry.object.visible]);entry.object.visible=false;}return await prepare();}
+ finally {for(const [object,prior] of restored)object.visible=prior;}
+}
 export function visibilityShortcut(event,{activeElement,viewport,outliner,hover=false}={}) {
  if(event.defaultPrevented||event.repeat||event.isComposing||event.ctrlKey||event.metaKey||event.code!=='KeyH'||event.altKey&&event.shiftKey)return null;
  if([event.target,activeElement].some(node=>node?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')))return null;

@@ -23,7 +23,7 @@ fn solid(c:vec3<i32>)->bool{
 }
 fn fluidHeat(c:vec3<i32>)->f32{
   let base=u32(c.x+i32(params.gridDt.x)*(c.y+i32(params.gridDt.y)*c.z))*4u;
-  return max(0.0,fluid[base+1u].y)+0.20*max(0.0,fluid[base+2u].x);
+  return max(0.0,fluid[base+1u].y);
 }
 fn surfaceHeat(s:Surface)->f32{
   if(s.point.w==0.0){return 0.0;}
@@ -77,7 +77,7 @@ fn advance(@builtin(global_invocation_id) c:vec3<u32>) {
   ${disintegrate?`var next=finiteConsumption(old,evolveLog(old,exposure,conducted,dt,hasMaterial(q)&&exposedCount(q)>0u));
   next.material.z=next.burn.z/(materialRate*dt);`:'let next=evolveLog(old,exposure,conducted,dt,surfaces[index].point.w>0.0);'}
   after[index]=next;
-  textureStore(stateTexture,vec3<i32>(c),vec4<f32>(clamp(next.material.x,0.0,1.0),next.material.yz,${disintegrate?'select(0.0,1.0,materialPresent(next.burn.y))':'next.material.w'}));
+  textureStore(stateTexture,vec3<i32>(c),vec4<f32>(next.material.xyz,${disintegrate?'select(0.0,1.0,materialPresent(next.burn.y))':'next.material.w'}));
 }
 @group(0) @binding(7) var<storage,read_write> gasSums:array<atomic<u32>>;
 fn addGasFloat(i:u32,value:f32){

@@ -11,3 +11,5 @@ for(const burnable of [{enabled:1,material:'wood'},{enabled:true,material:'metal
   assert.throws(()=>buildSceneDocument({objects:[{...wood,burnable}]}),/burnable/i);
 assert.throws(()=>buildSceneDocument({objects:[{...wood,type:'image'}]}),/burnable/i);
 assert.equal(buildSceneDocument({objects:[{...wood,burnable:undefined}]}).objects[0].burnable,undefined);
+
+const appearance={profile:'composed',glow:.75};const tuned={...wood,burnable:{...wood.burnable,appearance}};assert.deepEqual(planSceneRestore(buildSceneDocument({objects:[tuned]})).objects[0].burnable.appearance,appearance,'authored gain/profile survive scene round trip');

@@ -19,6 +19,13 @@ const expectedRendererControls = [
   ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
   ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
   ['volume-flame-priority', 'volume_flame_priority'],
+  ['volume-display-reconstruction', 'volume_display_reconstruction'],
+  ['volume-display-grid-scale', 'volume_display_grid_scale'],
+  ['volume-display-alignment', 'volume_display_alignment'],
+  ['volume-emission-interpolation', 'volume_emission_interpolation'],
+  ['volume-smoke-interpolation', 'volume_smoke_interpolation'],
+  ['volume-emission-smoothing', 'volume_emission_smoothing'],
+  ['volume-smoke-smoothing', 'volume_smoke_smoothing'],
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
   ['volume-flow-kernel-radius', 'volume_flow_kernel_radius'],
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],
@@ -114,5 +121,19 @@ assert.equal(target.searchParams.get('volume_flow_kernel_coherence'), '1');
 assert.equal(target.searchParams.get('volume_tone_mapping'), 'agx');
 assert.equal(receipt.rendererControlCount, expectedRendererControls.length);
 assert.equal(target.searchParams.get('volume_ray_start_noise'), 'true');
+
+for (const kernel of ['positive','interpolating','monotone']) {
+  for(const kind of ['emission','smoke']) {
+    const control=artifact.preset.rendererControls[`volume-${kind}-interpolation`];
+    control.value=kernel;
+    const route=new URL(artifact.preset.route);
+    route.searchParams.set(control.param,kernel);
+    artifact.preset.route=route.href;
+  }
+  const saved=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,contractSchema);
+  const reopened=buildVolumeSettingsPresetVisualTarget(saved,'http://127.0.0.1:18780','splat-only');
+  assert.equal(reopened.searchParams.get('volume_emission_interpolation'),kernel);
+  assert.equal(reopened.searchParams.get('volume_smoke_interpolation'),kernel);
+}
 
 console.log('volume settings renderer controls contracts passed');

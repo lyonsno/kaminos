@@ -50,6 +50,35 @@ with TemporaryDirectory() as directory:
     assert (other / "tuned-kiln.kaminos.json").read_text().startswith("{"), "reading never writes to another server's store"
 print("scene library contracts passed")
 
+# Observed revision-hub topology: retained authoring stores can be outside the
+# served checkout's sibling directory. A persistent root list must survive it.
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    prior = {key: os.environ.get(key) for key in ('HOME', 'KAMINOS_SCENE_LIBRARY_GLOBS', 'KAMINOS_SCENE_LIBRARY_CONFIG')}
+    defaults = serve.SCENE_LIBRARY_DEFAULT_GLOBS
+    serve.SCENE_LIBRARY_DEFAULT_GLOBS = tuple(pattern if pattern.startswith('~') else str(root / 'revisions/trees/*/scenes') for pattern in defaults)
+    os.environ['HOME'] = str(root)
+    os.environ.pop('KAMINOS_SCENE_LIBRARY_GLOBS', None)
+    serve.SCENES_DIR = root / '.local/state/kaminos/operator/scenes'
+    saved = root / 'retained-authoring/kaminos-session/scenes'
+    saved.mkdir(parents=True)
+    (saved / 'retained-kiln.kaminos.json').write_text('{"label":"Kiln study"}')
+    try:
+        for config in (root / '.config/kaminos/scene-library-globs', root / 'custom-library-globs'):
+            if config.name == 'custom-library-globs': os.environ['KAMINOS_SCENE_LIBRARY_CONFIG'] = str(config)
+            else: os.environ.pop('KAMINOS_SCENE_LIBRARY_CONFIG', None)
+            config.parent.mkdir(parents=True,exist_ok=True)
+            config.write_text('# Retained authoring stores\n'+str(root / 'retained-authoring/*/scenes')+'\n')
+            assert saved.resolve() in serve.scene_library_stores().values(), 'hub discovery must retain configured authoring stores outside its own revision tree'
+        os.environ['KAMINOS_SCENE_LIBRARY_CONFIG'] = str(root / 'missing-config')
+        reply, status = call('handle_scene_library', {})
+        assert status == 400 and 'configuration unavailable' in reply['error'], 'an explicitly requested missing config must not look like an empty library'
+    finally:
+        serve.SCENE_LIBRARY_DEFAULT_GLOBS = defaults
+        for key, value in prior.items():
+            if value is None: os.environ.pop(key, None)
+            else: os.environ[key] = value
+
 # Exercise the shop's actual nested consumer-store topology using defaults.
 with TemporaryDirectory() as directory:
     root = Path(directory)

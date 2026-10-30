@@ -89,12 +89,16 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     beauty.contextNode=context({
       sceneSurfaceLighting:surfaceLighting,
       ...builtinAOContext(ao).getFlowContextData(),
-      getOutput(node,{material}) {
-        const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
-        const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
-        return mix(vec4(node.rgb.add(received),node.a),vec4(received,node.a),float(viewMode.equal(2)));
-      },
     });
+    // Export the final receiving radiance as the MRT output itself. Three's
+    // material getOutput callback is superseded by MRT for ordinary materials.
+    // Keeping this node when an emission attachment is added preserves GI.
+    const receivingOutput=Fn(([],{material})=>{
+      const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
+      const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
+      return mix(vec4(output.rgb.add(received),output.a),vec4(received,output.a),float(viewMode.equal(2)));
+    })();
+    beauty.setMRT(mrt({output:receivingOutput}));
     const setup=beauty.setup;
     beauty.setup=function(builder) {
       // Building only the selected producers excludes filter dispatches in raw mode.
@@ -105,8 +109,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const surface=texture(depth.value,screenUV).r.lessThan(1);
     const receivedView=vec4(beauty.rgb.mul(surface),1);
     const incomingView=vec4(irradianceOverPi.mul(surface),1);
-    const output=mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
-    const displayed=comparison?mix(output,comparison.inputs.enabled.select(comparison.inputs.beauty,source.getTextureNode('output')),float(comparison.showSource)):output;
+    const displayedOutput=mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
+    const displayed=comparison?mix(displayedOutput,comparison.inputs.enabled.select(comparison.inputs.beauty,source.getTextureNode('output')),float(comparison.showSource)):displayedOutput;
     const result={beauty,output:displayed};routes.set(key,result);return result;
   }
   let frames = 0;
@@ -114,6 +118,14 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
     depth, source, surfaceLighting, sourceComparison:comparison,
+    dispose(){
+      for(const route of routes.values())route.beauty.dispose();
+      for(const pair of filters.values()){
+        if(pair.shared)pair.shared.dispose();
+        else for(const item of [pair.ao,pair.gi])item.filter.dispose();
+      }
+      routes.clear();filters.clear();history.dispose();effect.dispose();source.dispose();
+    },
     setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
     output() { return route().output; },

@@ -2,16 +2,16 @@
 import {createAuthoringAssets} from '../authoring-assets.mjs';
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';
 class Element{
- constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};}
+ constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};this.listeners={};this.classList={toggle(){},add(){},remove(){}};}
  set id(value){this._id=value;this.doc.ids.set(value,this);}get id(){return this._id;}
  set innerHTML(value){for(const match of value.matchAll(/id="([^"]+)"/g)){const e=new Element('div',this.doc);e.id=match[1];this.doc.ids.set(e.id,e);}this.modes=['browse','generate'].map(mode=>{const e=new Element('button',this.doc);e.dataset.assetsMode=mode;return e;});}
  append(...nodes){for(const e of nodes){e.connected=true;this.children.push(e);}}
  prepend(e){this.children.unshift(e);}
  replaceChildren(...nodes){for(const e of this.children)e.connected=false;this.children=[];this.append(...nodes);}
- querySelector(id){return this.doc.getElementById(id.replace('#',''));}
- querySelectorAll(){return this.modes||[];}
+ querySelector(id){if(id.startsWith('#'))return this.doc.getElementById(id.slice(1));return this.children.find(e=>e.tagName===id)||null;}
+ querySelectorAll(selector){if(selector==='[data-assets-mode]')return this.modes||[];const all=this.children.flatMap(e=>[e,...e.querySelectorAll(selector)]);return selector==='.asset-entry'?all.filter(e=>e.className==='asset-entry'):all;}
  setAttribute(key,value){this.attributes[key]=value;}getAttribute(key){return this.attributes[key]??null;}removeAttribute(key){delete this.attributes[key];}
- addEventListener(){}contains(){return false;}get isConnected(){return this.connected;}getBoundingClientRect(){return{height:300};}
+ addEventListener(type,fn){this.listeners[type]=fn;}dispatch(type){this.listeners[type]?.();}contains(){return false;}get isConnected(){return this.connected;}getBoundingClientRect(){return{height:300};}
 }
 function fixture(thumbnails,providedController=null){
  const ids=new Map();let observer;
@@ -92,4 +92,17 @@ test('for a self-preparing model the drawer reports the page cutout, even over a
  assert.equal(controller.read().preparation.error,'server preparation unavailable','the server error is retained');
  const ui=fixture(async()=>null,controller);await ui.ui.open('generate');await tick();ui.ui.render(controller.read());
  assert.match(ui.doc.getElementById('asset-preparation-status').textContent,/could not be saved.*disk full/,'the drawer must disclose the page cutout save failure');
+});
+
+test('expanding another agent uses the current canonical selected source',()=>{
+ const f=fixture(async()=>null);
+ const a={kind:'image',root:'agent-work',path:'output.png',label:'Output',name:'output.png',source:'/api/job-output?job_id=a&file=output.png',agent:{id:'a',label:'Agent A'},producedAt:2};
+ const b={...a,source:'/api/job-output?job_id=b&file=output.png',agent:{id:'b',label:'Agent B'},producedAt:1};
+ f.state.root='agent-work';f.state.entries=[a,b];f.state.listRevision++;f.state.selected=a;f.ui.render(f.state);
+ const group=f.doc.getElementById('asset-entries').children[1];group.open=true;group.dispatch('toggle');
+ const tile=group.children[1].children[0];assert.equal(tile.dataset.assetPath,b.source);assert.equal(tile.getAttribute('aria-pressed'),'false');
+ // Selection changes after the group is constructed must also be seen at expansion.
+ group.open=false;group.dispatch('toggle');f.state.listRevision++;f.state.selected=null;f.ui.render(structuredClone(f.state));f.state.selected=b;
+ const own=f.doc.getElementById('asset-entries').children[1];own.open=true;own.dispatch('toggle');
+ assert.equal(own.children[1].children[0].getAttribute('aria-pressed'),'true');
 });

@@ -1,3 +1,9 @@
+export function checkedBurnAppearance(value={}){
+ const next={profile:'composed',glow:1,...value};
+ if(!['composed','crust','incineration'].includes(next.profile))throw Error('Unknown burn surface response');
+ if(!Number.isFinite(next.glow)||next.glow<0||next.glow>10)throw Error('Emission gain must be between zero and ten');
+ return {profile:'composed',glow:next.glow};
+}
 export function checkedBurnable(record,value=record?.burnable){
   if(value==null)return null;
   if(!['glb','pbr','procedural-mesh'].includes(record?.type))throw Error('Burnable requires a mesh object');
@@ -5,5 +11,5 @@ export function checkedBurnable(record,value=record?.burnable){
   if(value.material!=='wood')throw Error('Burnable material must be wood');
   if(value.enabled&&record.repetition)throw Error('Burnable wood requires independent objects; make repeated copies editable first');
   if(value.structure!==undefined&&typeof value.structure!=='boolean')throw Error('Burnable structure must be Boolean');
-  return {enabled:value.enabled,material:'wood',...(value.structure!==undefined?{structure:value.structure}:{})};
+  return {enabled:value.enabled,material:'wood',...(value.structure!==undefined?{structure:value.structure}:{}),...(value.appearance!=null?{appearance:checkedBurnAppearance(value.appearance)}:{})};
 }

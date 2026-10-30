@@ -45,7 +45,7 @@ export function installRenderingNumberControls(root) {
   for(const input of root.querySelectorAll('input[type="number"],input[type="range"]')) {
     // GI already owns a scrub tied to its edit-history transaction. A second
     // drag listener would survive that owner's stop/cancel subscription.
-    if(input.closest?.('#scene-gi-controls'))continue;
+    if(input.closest?.('#scene-gi-controls, #scene-bloom-controls'))continue;
     installRenderingNumberControl(input);
   }
 }

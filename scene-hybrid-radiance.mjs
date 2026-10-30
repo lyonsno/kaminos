@@ -103,8 +103,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       let compiled;
       do {
         if(disposed)return;
-        compiled=rebuildRevision;replaceLighting();
-        await rebuild.compile();
+        compiled=rebuildRevision;
+        if(rebuild.prepare)await rebuild.prepare(()=>{if(!disposed)replaceLighting();});
+        else {replaceLighting();await rebuild.compile();}
       } while(!disposed&&compiled!==rebuildRevision);
       if(!disposed){rebuilding=false;status.status='awaiting-source';rebuild.hold(false);onStatus({...status});}
     }).catch(error=>{

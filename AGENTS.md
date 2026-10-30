@@ -44,6 +44,21 @@ tests. Contact the owner only when you change existing behavior they rely on,
 or need something from them you can't do yourself; a tested change that
 merges cleanly speaks for itself.
 
+## Physical Behavior And Fidelity
+
+[Τύραννος: Noah, 2026-10-25, Codex thread
+`01a166a3-d09d-74b0-8798-c59ff91ef6eb`.]
+
+For physical phenomena in Kaminos, simulate the behavior by default and first
+reuse existing simulation, material and transport machinery. Derive visible
+change from that state. A procedural or time-driven substitute for physical
+behavior is an explicit fidelity compromise to agree with the operator before
+implementation, rather than an automatic prototype stage. When a faithful route
+has appreciable computational cost, bring the concrete tradeoff and
+recommendation to the operator. Material detail and rendering approximations may
+express the physical state; they must not silently invent heating, combustion,
+motion or material loss.
+
 ## Feature Branch Ancestry
 
 Before editing on a feature branch, fetch `origin/main` and record the chosen
@@ -56,6 +71,16 @@ current main, or carry the named stack with its integration owner and next
 checkpoint. Recheck before adding another dependent slice. This catches a
 branch that is becoming a second product line while its dependency remains
 unintegrated.
+
+## Installed model packages
+
+Ordinary `python3 serve.py` resolves shared installations from
+`~/.config/kaminos/models.json`; do not copy weight-path environment lists into
+new worktree launchers. Register existing local packages with
+`python3 model_installations.py register <model> --root <package>`. Inspect
+`model_installations.py status` or `/api/runtime-config` for actual resolution
+and availability. Explicit per-run model environment overrides still apply.
+See [local model installations](docs/local-model-installations.md).
 
 ## Tests
 

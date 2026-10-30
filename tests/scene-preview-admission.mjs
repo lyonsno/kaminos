@@ -14,7 +14,7 @@ test('actual Add Water refuses preview before setup, construction, selection or 
  const workingScene=createWorkingScene(),scene=new THREE.Scene(),original=new THREE.Group();scene.add(original);workingScene.put({id:'original',type:'glb',object:original});workingScene.select(['original']);workingScene.suspendMembership();scene.remove(original);
  const edits=createSceneEdits({read:()=>null,write(){},admit:()=>{if(workingScene.isSuspended)throw Error('Preview editing is refused');}});
  const membership=createSceneMembershipOperations({scene:workingScene,records:{},roots:{}});membership.attachHistory(edits);
- const h=vm.createContext({THREE,structuredClone,workingScene,scene,createSceneObjectRecord,sceneMembership:membership,
+ const h=vm.createContext({sceneLightingPreparation:null,THREE,structuredClone,workingScene,scene,createSceneObjectRecord,sceneMembership:membership,
  LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,defaultLocalLiquidSetup,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,createLocalLiquidEmitterSceneRecord,createLocalLiquidEmitterObject,
  localLiquidSetup:null,authoringBusy:false,sceneSaveBlockedByFailedRestore:false,scenePlacementTools:{edits},controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[],selectedWaterSource:()=>null,makeSceneObjectId:()=> 'water',
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',FLAME_EMITTER_TYPE:'flame',sceneNavigation:null,sceneObjectDisplayLabel:row=>row.label,

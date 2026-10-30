@@ -1,8 +1,6 @@
 # @kaminos/webgpu-inference-kit
 
-Run image generation, image-to-3D, skeletal animation, hand tracking and material estimation with WebGPU in responsive browser applications.
-
-Kaminos WebGPU Inference Kit gives model ports a shared session and device lifecycle, persistent model routes, queued invocations, cooperative scheduling, progress and terminal state, resource residency, and runtime telemetry. Ports retain ownership of their weights, kernels, tensor semantics, execution order, and output construction.
+Generate images and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
@@ -10,7 +8,9 @@ npm install @kaminos/webgpu-inference-kit
 
 ## Start With A Model Application
 
-For image generation, material estimation and background removal, start with the model's application entry point. It owns loading, queued inference, pause/resume, cancellation and cleanup; your code supplies model inputs and uses the result. Install the [matching model packages](./docs/model-applications.md#install) for the examples below. Each package keeps its model-specific interface and lower-level exports.
+For image generation, material estimation and background removal, start with the model's application entry point. Your code supplies the input and uses the result; the application handles loading, queued inference, controls and cleanup. Install the [matching model packages](./docs/model-applications.md#install) for the examples below.
+
+**[Generate and display your first image](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application)** with the complete Klein browser page, including setup, progress, repeated runs and model release. The short version:
 
 ```js
 import { createKleinApp } from '@kaminos/flux2-klein';
@@ -21,11 +21,19 @@ try {
     prompt: 'a blue tank engine on a branch line', seed: 7,
     width: 512, height: 512,
   });
-  // image.rgba contains width * height * 4 RGBA bytes.
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  canvas.getContext('2d').putImageData(
+    new ImageData(image.rgba, image.width, image.height), 0, 0,
+  );
+  document.body.append(canvas);
 } finally {
   await klein.destroy();
 }
 ```
+
+Klein downloads 3.2 GB of weights on first use and caches them for later visits. Keep one app alive for repeated generations, then destroy it when leaving the feature. The [complete guide](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application) covers browser and memory requirements.
 
 The same lifecycle supports SuperMat's image-to-material workload:
 
@@ -92,6 +100,8 @@ The port is built on this kit: generation runs as a queued route invocation, its
 For a visual first run, [brighten a photo while a renderer stays active](./docs/getting-started.md#try-the-photo-walkthrough). The worked example walks through sharing a GPU device, queuing an operation, and displaying its result.
 
 ## Compose Routes Directly
+
+Kaminos WebGPU Inference Kit gives model ports a shared session and device lifecycle, persistent model routes, queued invocations, cooperative scheduling, progress and terminal state, resource residency, and runtime telemetry. Ports retain ownership of their weights, kernels, tensor semantics, execution order, and output construction.
 
 For a model port or a host that owns its invocation, create a session, register a route, and queue model-owned work directly:
 

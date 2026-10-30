@@ -1,3 +1,5 @@
+import {createSurfaceThermalRadiance} from './burn-thermal-radiance.mjs';
+import {LIVE_LOG_HEAT_TO_FLUID_HEAT} from './live-log-heat-core.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {LOG_RESIDUE} from './log-consumption.mjs';
 
@@ -50,7 +52,7 @@ function external(renderer,texture){
  return {wrapper,dispose(){delete renderer.backend.get(wrapper).texture;wrapper.dispose();}};
 }
 
-export async function createLogDebrisGpu({renderer,field,ground,onFrame=null}){
+export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,thermalControls=null}){
  const device=field.device,{mesh,bounds,dimensions,initial,surface}=field.residentState(),n=dimensions[0],count=n**3;
  if(!field.disintegrate||!surface)throw Error('Debris requires a filled consumable material field');
  if(!ground||![...ground.center,ground.height,ground.radius].every(Number.isFinite)||ground.radius<=0)throw Error('Debris requires a finite ground disc');
@@ -87,6 +89,12 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null}){
   for(const offset of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]])neighbours=neighbours.mul(field.sampleState(uv.add(vec3(...offset).div(n))).w);
   capMaterial.opacityNode=vertexStage(live.w.mul(inside).mul(neighbours.oneMinus()));
   capMaterial.emissiveNode=vec3(1,.04,.001).mul(vertexStage(live.x).sub(.5).max(0).pow(2).mul(2));
+  if(thermalControls){
+   for(const [target,heat]of [[material,vertexStage(position.w)],[capMaterial,vertexStage(live.x)]]){
+    const thermal=createSurfaceThermalRadiance(heat.mul(LIVE_LOG_HEAT_TO_FLUID_HEAT),thermalControls.kelvinPerHeat);owned.push(thermal);
+    target.emissiveNode=THREE.TSL.mix(target.emissiveNode,thermal.node.mul(thermalControls.gain),thermalControls.weight);
+   }
+  }
   const caps=new THREE.InstancedMesh(geometry,capMaterial,count);caps.name='Exposed char interior';caps.frustumCulled=false;caps.matrixAutoUpdate=false;
   const root=new THREE.Group();root.name='Consumed wood and char residue';root.add(caps,debris);
   mesh.updateWorldMatrix(true,false);const previous=mesh.matrixWorld.clone();

@@ -77,16 +77,10 @@ Then open `http://localhost:18709/index.html?weights=` (an empty base loads from
 
 Use `createKleinApp()` to load the model, generate an image and draw it to a canvas. Keep the app for more prompts, then release it when you’re finished. It creates its own WebGPU device and schedules generation cooperatively.
 
-The application interface is in this checkout. Its npm release, `@kaminos/flux2-klein@0.1.2`, is pending; the currently published `0.1.1` has only the direct pipeline interface. Until the new version is published, build the application package from source. From the Kaminos repository root:
+Install the browser application package in your own project. The inference kit is installed as its dependency:
 
 ```sh
-node models/flux2-klein/pack-klein.mjs --out /absolute/path/to/klein-package --version 0.1.2
-```
-
-In your own application directory, install the resulting tarball. This installs the published inference kit as its dependency:
-
-```sh
-npm install /absolute/path/to/klein-package/kaminos-flux2-klein-0.1.2.tgz
+npm install @kaminos/flux2-klein@^0.1.2
 ```
 
 Save the following as `index.html` beside your application's `node_modules`, serve that directory with `python3 -m http.server 8080`, and visit `http://localhost:8080`. Chrome with WebGPU and `shader-f16` is required. The first generation downloads about 3.2 GB of hosted Mint weights, cached for later visits; see [memory requirements](#memory) above.
@@ -175,6 +169,14 @@ The [package API guide](package-README.md) covers progress, previews, weights, l
 Pass `{ device }` to borrow an existing WebGPU device with `shader-f16`, or `{ session, foreground }` to use your host's inference session and foreground service. Destruction leaves borrowed resources open. With `load: false`, attach your renderer through `app.foreground` before `app.load()`, so the same attachment serves frames before, during and after generation. The package guide documents that callback contract.
 
 [`examples/external-app`](examples/external-app) exercises that composition, including load failure, progress, generation previews, pause/resume, repeat use and borrowed-device survival. `node run-external-app.mjs --chrome <exe> --weights-dir <dir> --out <dir>` installs the example from packed tarballs outside this checkout and runs it.
+
+### Build the package from source
+
+For local model changes, run this from the Kaminos repository root, then install the printed tarball in your application:
+
+```sh
+node models/flux2-klein/pack-klein.mjs --out /absolute/path/to/klein-package
+```
 
 ### Direct pipeline control
 

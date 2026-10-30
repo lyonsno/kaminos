@@ -6,7 +6,7 @@ class FakeWorker{
  constructor(){workers.push(this);this.terminated=false;}
  postMessage(request){this.request=request;}
  terminate(){this.terminated=true;}
- emit(data){this.onmessage?.({data});}
+ emit(data){this.onmessage?.({data:{requestId:this.request?.requestId,...data}});}
 }
 const helper=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker});
 const controller=new AbortController();const first=helper.expand({prompt:'train',signal:controller.signal});
@@ -28,3 +28,19 @@ const isolated=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWor
 const aborter=new AbortController(),stale=isolated.expand({prompt:'x',signal:aborter.signal,onText:t=>staleText=t});
 const old=workers.at(-1);aborter.abort(Error('cancel old request'));await assert.rejects(stale,/cancel old/);
 old.emit({type:'text',value:'stale output'});assert.equal(staleText,null,'late worker messages cannot mutate a cancelled request');
+
+const resident=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker,keepLoaded:true});
+const residentFirst=resident.expand({prompt:'first'}),residentWorker=workers.at(-1);
+residentWorker.emit({type:'complete',value:{text:'first'}});await residentFirst;
+assert.equal(residentWorker.terminated,false,'resident completion must retain its idle worker');
+assert.equal(resident.resident,true);
+const residentCount=workers.length,residentSecond=resident.expand({prompt:'different',images:['another']});
+assert.equal(workers.length,residentCount,'next request must reuse the loaded runtime');
+residentWorker.emit({type:'complete',value:{text:'different'}});assert.equal((await residentSecond).text,'different');
+await resident.dispose();assert.equal(residentWorker.terminated,true);assert.equal(resident.resident,false);
+const isolatedResident=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker,keepLoaded:true});
+const one=isolatedResident.expand({prompt:'one'}),kept=workers.at(-1),oldId=kept.request.requestId;kept.emit({type:'complete',value:{text:'one'}});await one;
+const two=isolatedResident.expand({prompt:'two'});let settled=false;two.then(()=>settled=true);kept.emit({type:'complete',requestId:oldId,value:{text:'stale'}});await Promise.resolve();assert.equal(settled,false,'a prior request cannot complete a resident successor');
+kept.emit({type:'complete',value:{text:'two'}});assert.equal((await two).text,'two');
+kept.emit({type:'error',requestId:null,value:'idle device loss'});assert.equal(kept.terminated,true);assert.equal(isolatedResident.resident,false);
+await isolatedResident.dispose();

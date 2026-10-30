@@ -2443,7 +2443,15 @@ def scene_library_import_basin(document, scene_store):
 
 def scene_library_stores():
     configured = os.environ.get("KAMINOS_SCENE_LIBRARY_GLOBS")
-    patterns = configured.split(os.pathsep) if configured else SCENE_LIBRARY_DEFAULT_GLOBS
+    patterns = configured.split(os.pathsep) if configured else list(SCENE_LIBRARY_DEFAULT_GLOBS)
+    if not configured:
+        # One glob per line, with optional # comments. A persistent root list
+        # survives revisions served from a different checkout or worktree.
+        config_setting = os.environ.get("KAMINOS_SCENE_LIBRARY_CONFIG")
+        config = Path(config_setting or "~/.config/kaminos/scene-library-globs").expanduser()
+        if config_setting or config.exists():
+            patterns.extend(line.strip() for line in config.read_text().splitlines()
+                            if line.strip() and not line.lstrip().startswith("#"))
     own = Path(SCENES_DIR).resolve()
     stores = {}
     for pattern in patterns:
@@ -2476,18 +2484,13 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
 )).expanduser()
 KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
     str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
-SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
-# A local FLUX.2 klein weight package (te/, dit/, vae/ with manifests), served at /klein-weights/.
-# The browser caches weights per origin, so serving the staged package locally spares each
-# Kaminos port a 3 GB download from the published repository.
-KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
-# FLUX.3 stays a local package; no hosted-weight fallback is configured.
-FLUX3_WEIGHTS_ROOT = Path(os.environ['KAMINOS_FLUX3_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_FLUX3_WEIGHTS_ROOT') else None
-PUP_WEIGHTS_ROOT = Path(os.environ['KAMINOS_PUP_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_PUP_WEIGHTS_ROOT') else None
-# A local TRELLIS 2 checkpoint package (manifest.json plus tensor files), served at
-# /trellis-checkpoints/ for TRELLIS in the page.
-TRELLIS_CHECKPOINT_ROOT = Path(os.environ['KAMINOS_TRELLIS_CHECKPOINT_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_TRELLIS_CHECKPOINT_ROOT') else None
-MOUNTED_PACKAGES = {'/pup-weights/': lambda: PUP_WEIGHTS_ROOT, '/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/flux3-weights/': lambda: FLUX3_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
+# The server owns model resolution. Installed packages live outside checkouts;
+# explicit invocation overrides remain scoped to this process.
+_model_spec = importlib.util.spec_from_file_location('kaminos_model_installations', ROOT / 'model_installations.py')
+_model_installations = importlib.util.module_from_spec(_model_spec)
+_model_spec.loader.exec_module(_model_installations)
+MODEL_INSTALLATIONS = _model_installations.ModelInstallations()
+MOUNTED_PACKAGES = {'/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2569,104 +2572,6 @@ PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
 PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 
-def flux3_weights_mounted():
-    """Availability is metadata-only: the loader's manifests and payloads must exist.
-
-    The browser loader keys its cache by declared digest and checks byte lengths;
-    it does not verify content digests. Reject absent/truncated payloads here before
-    model teardown without reading gigabytes during runtime-config requests.
-    """
-    if not FLUX3_WEIGHTS_ROOT:
-        return False
-    root = FLUX3_WEIGHTS_ROOT.resolve()
-
-    def component(part, schema):
-        manifest = json.loads((root / part / 'manifest.json').read_text())
-        if not isinstance(manifest, dict) or manifest.get('schema') != schema:
-            raise ValueError('wrong component schema')
-        if not isinstance(manifest.get('config'), dict) or not manifest['config']:
-            raise ValueError('missing component configuration')
-        return manifest
-
-    def payload(part, entry, expected_bytes=None):
-        if not isinstance(entry, dict) or not isinstance(entry.get('file'), str) or not entry['file']:
-            raise ValueError('missing payload descriptor')
-        target = (root / part / entry['file']).resolve()
-        if not target.is_relative_to(root / part) or not target.is_file():
-            raise ValueError('missing or inaccessible payload')
-        size = target.stat().st_size
-        required = entry.get('bytes', expected_bytes)
-        if size <= 0 or (required is not None and (type(required) is not int or required <= 0 or size != required)):
-            raise ValueError('empty or truncated payload')
-
-    def bundles(part, manifest, required_names):
-        entries = manifest.get('bundles')
-        if not isinstance(entries, dict) or not entries or not set(required_names).issubset(entries):
-            raise ValueError('missing required weight bundles')
-        for entry in entries.values():
-            if not isinstance(entry, dict) or not isinstance(entry.get('tensors'), list) or not entry['tensors']:
-                raise ValueError('missing tensor descriptions')
-            payload(part, entry)
-
-    try:
-        te = component('te', 'kaminos.flux3-klein.text-encoder-weights.v1')
-        dit = component('dit', 'kaminos.flux3-klein.transformer-weights.v1')
-        vae = component('vae', 'kaminos.flux2-klein.vae-decoder-weights.v0')
-        layers = te.get('layers')
-        if type(layers) is not int or layers <= 0 or not isinstance(te.get('taps'), list) or not te['taps']:
-            return False
-        bundles('te', te, (f'layer{i:02d}' for i in range(layers)))
-        embedding = te.get('embedding', {})
-        shape, row_bytes = embedding.get('shape'), embedding.get('row_bytes')
-        if not isinstance(shape, list) or len(shape) != 2 or not all(type(n) is int and n > 0 for n in shape) or type(row_bytes) is not int or row_bytes <= 0:
-            return False
-        payload('te', embedding, shape[0] * row_bytes)
-        payload('te', te.get('tokenizer'))
-        cfg = dit['config']
-        counts = [cfg.get('num_layers'), cfg.get('num_single_layers')]
-        if not all(type(n) is int and n >= 0 for n in counts) or not any(counts):
-            return False
-        names = ['globals'] + [f'{prefix}{i:02d}' for prefix, count in [('txt', counts[0]), ('img', counts[0]), ('single', counts[1])] for i in range(count)]
-        bundles('dit', dit, names)
-        bundle = vae.get('bundle')
-        if not isinstance(bundle, dict) or not isinstance(bundle.get('tensors'), list) or not bundle['tensors']:
-            return False
-        payload('vae', bundle)
-        return True
-    except (OSError, ValueError, TypeError, AttributeError):
-        return False
-
-
-def pup_weights_mounted():
-    """Metadata availability for the exercised exact-source ONNX package, not model validation."""
-    if not PUP_WEIGHTS_ROOT:
-        return False
-    root = PUP_WEIGHTS_ROOT.resolve()
-    external = {'decoder_model_merged_q4f16.onnx': 3, 'vision_encoder_fp16.onnx': 1, 'embed_tokens_q4f16.onnx': 1}
-    try:
-        provenance = json.loads((root / 'provenance.json').read_text())
-        if provenance.get('status') != 'complete' or not provenance.get('source', '').endswith('/3f3edb52b2c55de0d49feab28598b68f7f8e4830') or provenance.get('external_data') != external:
-            return False
-        sizes = {entry['path']: entry['bytes'] for entry in provenance['files']}
-        def payload(name, expected=None):
-            target = (root / name).resolve()
-            return (target.is_relative_to(root) and target.is_file() and target.stat().st_size > 0
-                    and (expected is None or (type(expected) is int and expected > 0 and target.stat().st_size == expected)))
-        for name in ('config.json', 'tokenizer.json', 'tokenizer_config.json', 'preprocessor_config.json', 'chat_template.jinja', 'system_prompts.json'):
-            if not payload(name):
-                return False
-        for graph, count in external.items():
-            if not payload('onnx/' + graph):
-                return False
-            for index in range(count):
-                name = 'onnx/' + graph + '_data' + (f'_{index}' if index else '')
-                if name not in sizes or type(sizes[name]) is not int or sizes[name] <= 0 or not payload(name, sizes[name]):
-                    return False
-        return True
-    except (OSError, ValueError, TypeError, AttributeError, KeyError):
-        return False
-
-
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -2677,29 +2582,7 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
-        "sam3": {
-            "manifestUrl": "/sam3-packet/tensor-manifest.json",
-            "modelRoot": str(SAM3_PACKET_ROOT),
-            "mounted": (SAM3_PACKET_ROOT / "tensor-manifest.json").is_file(),
-        } if SAM3_PACKET_ROOT else None,
-        "klein": {
-            "weightsUrl": "/klein-weights",
-            "modelRoot": str(KLEIN_WEIGHTS_ROOT),
-            "mounted": all((KLEIN_WEIGHTS_ROOT / part / "manifest.json").is_file() for part in ("te", "dit", "vae")),
-        } if KLEIN_WEIGHTS_ROOT else None,
-        "flux3": {
-            "weightsUrl": "/flux3-weights",
-            "modelRoot": str(FLUX3_WEIGHTS_ROOT),
-            "mounted": flux3_weights_mounted(),
-        } if FLUX3_WEIGHTS_ROOT else None,
-        "pup": {"modelUrl": "/pup-weights", "modelRoot": str(PUP_WEIGHTS_ROOT), "mounted": pup_weights_mounted()} if PUP_WEIGHTS_ROOT else None,
-        "trellisPage": {
-            "checkpointUrl": "/trellis-checkpoints",
-            "modelRoot": str(TRELLIS_CHECKPOINT_ROOT),
-            "mounted": (TRELLIS_CHECKPOINT_ROOT / "manifest.json").is_file(),
-            "manifestSha256": hashlib.sha256((TRELLIS_CHECKPOINT_ROOT / "manifest.json").read_bytes()).hexdigest()
-                if (TRELLIS_CHECKPOINT_ROOT / "manifest.json").is_file() else None,
-        } if TRELLIS_CHECKPOINT_ROOT else None,
+        **MODEL_INSTALLATIONS.browser_config(),
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
@@ -3153,6 +3036,29 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
     running = Path(queue_dir) / "running"
     def running_jobs():
         return sorted(p.name for p in running.iterdir() if p.is_dir()) if running.is_dir() else []
+    if action in ("queued-claim", "withdraw-queued"):
+        run_id = str(payload.get("runId") or "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
+            raise ValueError("queued admission needs the run id")
+        lease_id = f"kaminos-page-{run_id}"
+        args = [action, "--lease-id", lease_id]
+        if action == "queued-claim":
+            args += ["--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
+                     "--repo-root", str(repo_root), "--pid", str(server_pid),
+                     "--effective-route", str(payload.get("route") or "kaminos-page"),
+                     "--backend", "webgpu", "--device", "apple-gpu", "--profile", "interactive-generation",
+                     "--ttl-seconds", str(ttl_seconds)]
+        done = cli(*args)
+        if done.returncode != 0:
+            raise RuntimeError("Greenroom queued admission failed: " + (done.stderr or done.stdout).strip())
+        result = json.loads(done.stdout)
+        if not isinstance(result, dict) or result.get("jobId") != f"external-{lease_id}":
+            raise RuntimeError("Greenroom returned an unverified admission identity")
+        if result.get("status") == "held" and result.get("leaseId") != lease_id:
+            raise RuntimeError("Greenroom returned a different page lease")
+        if result.get("status") == "waiting" and result.get("queueHeld") is not True and (type(result.get("position")) is not int or result["position"] < 1):
+            raise RuntimeError("Greenroom did not report a verified queue position")
+        return result
     if action == "claim":
         run_id = str(payload.get("runId") or "")
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
@@ -3181,7 +3087,7 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
         if done.returncode != 0:
             raise RuntimeError((done.stderr or done.stdout).strip()[-300:] or "lease release failed")
         return {"status": "released", "leaseId": lease_id}
-    raise ValueError("lease action must be claim, renew or release")
+    raise ValueError("lease action must be queued-claim, withdraw-queued, claim, renew or release")
 
 
 def trellis_generation_availability():
@@ -4061,11 +3967,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def translate_path(self, path):
         parsed = urlparse(path)
-        if parsed.path.startswith('/sam3-packet/') and SAM3_PACKET_ROOT:
+        packet_root = MODEL_INSTALLATIONS.root('sam3')
+        if parsed.path.startswith('/sam3-packet/') and packet_root:
             from urllib.parse import unquote
             relative = unquote(parsed.path[len('/sam3-packet/'):])
-            target = (SAM3_PACKET_ROOT / relative).resolve()
-            if not target.is_relative_to(SAM3_PACKET_ROOT):
+            target = (packet_root / relative).resolve()
+            if not target.is_relative_to(packet_root):
                 return str(ROOT / '.sam3-path-rejected')
             return str(target)
         return super().translate_path(path)
@@ -4082,7 +3989,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         from urllib.parse import unquote
         target = None
         prefix = self.mounted_package(path)
-        root = MOUNTED_PACKAGES[prefix]() if prefix else None
+        root = MODEL_INSTALLATIONS.root(MOUNTED_PACKAGES[prefix]) if prefix else None
         if root:
             candidate = (root / unquote(path[len(prefix):])).resolve()
             if candidate.is_relative_to(root) and candidate.is_file():
@@ -5301,7 +5208,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         return False
 
     def _scene_library_scene_path(self, store_id, name):
-        store = scene_library_stores().get(store_id)
+        try:
+            store = scene_library_stores().get(store_id)
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene library configuration unavailable: {error}"}, 400)
+            return None, None
         if store is None:
             self.send_json({"error": "Unknown scene store"}, 404)
             return None, None
@@ -5347,8 +5258,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         """List scenes saved by other Kaminos servers on this machine (read-only)."""
         if not self._scene_library_local_client():
             return
+        try:
+            library_stores = scene_library_stores()
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene library configuration unavailable: {error}"}, 400)
+            return
         stores = []
-        for store_id, path in scene_library_stores().items():
+        for store_id, path in library_stores.items():
             scenes = []
             for scene_path in sorted(path.glob("*.kaminos.json")):
                 entry = {"name": scene_path.name, "label": "", "timestamp": ""}
