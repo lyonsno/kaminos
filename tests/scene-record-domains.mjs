@@ -33,12 +33,17 @@ test('feature-owned geometry survives ordinary scene record admission',()=>{
   assert.deepEqual(object.userData.kaminosSceneObject.promptRelief,entry.promptRelief);
 });
 
-test('the document builder and restoration planner preserve the same feature-owned source',()=>{
-  const raw=record(),document=buildSceneDocument({objects:[raw],activeObjectId:raw.id});
-  assert.deepEqual(document.objects[0].promptRelief,raw.promptRelief,'document normalization must retain reconstructible feature data');
-  const restored=planSceneRestore(JSON.parse(JSON.stringify(document)));
-  assert.deepEqual(restored.objects[0].promptRelief,raw.promptRelief);
-  assert.deepEqual(restored.objects[0].transform,raw.transform);
+test('the document builder and restoration planner preserve feature data and normalize legacy duration',()=>{
+  for(const seconds of [undefined,7.5]){
+    const raw=record();if(seconds!==undefined)raw.promptRelief.burnerSeconds=seconds;
+    const document=buildSceneDocument({objects:[raw],activeObjectId:raw.id});
+    const restored=planSceneRestore(JSON.parse(JSON.stringify(document)));
+    for(const row of [document.objects[0],restored.objects[0]]){
+      for(const key of ['schema','prompt','appearance','geometry'])assert.deepEqual(row.promptRelief[key],raw.promptRelief[key],`normalization preserves ${key}`);
+      assert.equal(row.promptRelief.burnerSeconds,seconds??5,'legacy defaults and authored duration both survive the document route');
+      assert.deepEqual(row.transform,raw.transform);
+    }
+  }
 });
 
 test('reloadability follows the feature decoder, including malformed geometry refusal',()=>{
