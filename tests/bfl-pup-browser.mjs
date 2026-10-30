@@ -28,3 +28,11 @@ const {referenceSize}=await import('../models/bfl-pup/reference-policy.mjs');
 const sizes=JSON.parse(fs.readFileSync(new URL('./fixtures/bfl-pup/reference-sizes.json',import.meta.url)));
 for(const c of sizes.cases)assert.deepEqual(referenceSize(c.width,c.height,c.references),c.size);
 assert.throws(()=>referenceSize(2010,10,1),/200/);
+
+const critique=helperMessages('Turn the kettle blue.',2,{i2i:'caption only'},'critique');
+assert.notEqual(critique[0].content,'caption only','critique must use an assessment task, not caption expansion');
+assert.match(critique[1].content.at(-1).text,/first image.*original/is);
+assert.match(critique[1].content.at(-1).text,/second image.*result/is);
+assert.match(critique[1].content.at(-1).text,/Turn the kettle blue\./);
+assert.throws(()=>helperMessages('blue',1,{},'critique'),/original.*result/i);
+assert.throws(()=>helperMessages('blue',2,{},'unknown'),/task/i);

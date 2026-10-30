@@ -1,0 +1,26 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as historyModule from '../authoring-image-history.mjs';
+assert.equal(typeof historyModule.createEditCritic,'function','history must provide an explicit original/request/result review operation');
+const {createEditCritic,createImageIterationHistory}=historyModule;
+const history=createImageIterationHistory();
+const original={kind:'image',source:'/original',name:'Original'};
+const result={kind:'image',source:'/result',name:'Result',provenance:{model:'FLUX.3',prompt:'expanded blue request',promptExpansion:{request:{prompt:'Turn it blue'}},reference:original}};
+history.record(original);history.record(result);history.useReference('/original');
+let input,resolve;const operation={busy:()=>false,expand:async x=>{input=x;return new Promise(r=>resolve=r);},read:()=>({status:'complete'})};
+const critic=createEditCritic({history,operation});
+const run=critic.review();assert.equal(input.reference.source,'/original');assert.equal(input.resultImage.source,'/result');assert.match(input.prompt,/Turn it blue/);assert.match(input.prompt,/expanded blue request/);
+resolve({task:'critique',text:'Still copper.\nNEXT EDIT:\nChange the body to blue.',stopReason:'eos',partial:false});await run;
+assert.equal(history.read().viewed.editReview.assessment,'Still copper.');assert.equal(history.read().viewed.editReview.correction,'Change the body to blue.');
+assert.equal(history.reference().source,'/original','review never changes conditioning');
+assert.equal(critic.adopt('/result','Make it blue').source,'/result');assert.equal(history.reference().source,'/result');
+history.view('/original');assert.throws(()=>critic.adopt('/result','Make it blue'),/viewed/);
+assert.throws(()=>critic.request(),/saved edit/);
+history.view('/result');const partial=critic.review();resolve({task:'critique',text:'Still copper.\nNEXT EDIT:\nChange',partial:true,stopReason:'output-limit'});await partial;
+assert.equal(history.read().viewed.editReview.status,'partial');assert.throws(()=>critic.adopt('/result','Change'),/complete/);
+const wrong=critic.review();resolve({task:'expand',text:'caption',partial:false,stopReason:'eos'});await assert.rejects(wrong,/review task/);
+const malformed=critic.review();resolve({task:'critique',text:'A scene caption',partial:false,stopReason:'eos'});await malformed;
+assert.equal(history.read().viewed.editReview.status,'unstructured');assert.equal(history.read().viewed.editReview.raw.text,'A scene caption');
+const passed=critic.review();resolve({task:'critique',text:'The body is blue.\nNEXT EDIT:\nNONE',partial:false,stopReason:'eos'});await passed;
+assert.equal(history.read().viewed.editReview.correction,'');assert.equal(history.read().viewed.editReview.status,'complete');
+console.log('Edit critic: image/request identity, explicit adoption, stale, partial, wrong-task and unstructured returns pass');

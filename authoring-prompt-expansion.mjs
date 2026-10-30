@@ -7,7 +7,7 @@ export function authoringPromptWeightRoot(config){
 
 const referenceSource=reference=>reference?.kind==='image'?(reference.source||assetSource(reference.root,reference.path)):null;
 export function promptExpansionMatches(request,current){
- return request?.model===current?.model&&referenceSource(request?.reference)===referenceSource(current?.reference);
+ return request?.task!=='critique'&&request?.model===current?.model&&referenceSource(request?.reference)===referenceSource(current?.reference);
 }
 
 // Application operation, independent of the provider's runtime/device ownership.
@@ -24,24 +24,26 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
   clear(){if(active)throw Error('Finish the prompt expansion first.');started=null;state={status:'idle',draft:'',request:null,result:null,error:null};changed();},
   stop(){if(!active)return false;abort.abort(Error('Prompt expansion cancelled.'));set({status:'stopping'});return true;},
   runOutsideQueue(){if(!active||state.status!=='waiting')return false;bypass.abort(Error('Run outside queue selected.'));set({status:'leaving-queue',progress:'Leaving the queue…'});return true;},
-  async expand({prompt,model='flux3',reference=null,admission='queue'}){
+  async expand({prompt,model='flux3',reference=null,resultImage=null,task='expand',admission='queue'}){
    if(active)throw Error('Prompt expansion is already running');
    const reason=blocked();if(reason)throw Error(reason);
    if(!String(prompt||'').trim())throw Error('Describe the image before expanding its prompt');
    if(reference&&(reference.kind!=='image'||assetWithheld(reference)))throw Error('Choose an available reference image');
    if(!['queue','outside'].includes(admission))throw Error('Choose queued or outside-queue execution');
-   const request={prompt:String(prompt),model,reference:reference?structuredClone(reference):null,admission};
+   if(!['expand','critique'].includes(task))throw Error('Unknown helper task');
+   if(task==='critique'&&(!referenceSource(reference)||!referenceSource(resultImage)||assetWithheld(resultImage)))throw Error('Review requires an available original and result image');
+   const request={prompt:String(prompt),model,task,reference:reference?structuredClone(reference):null,resultImage:resultImage?structuredClone(resultImage):null,admission};
    active=true;abort=new AbortController();bypass=new AbortController();started=clock();
    set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
    try{
     helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:event.phase==='outside-queue'?{coordination:'Running outside Greenroom by your choice.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
      onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.queueHeld?' · held by operator':''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
-    const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
-     onText:text=>set({status:'running',draft:text,progress:'Expanding your request…'})});
+    const result=await helper.expand({task,prompt:request.prompt,images:task==='critique'?[referenceSource(reference),referenceSource(resultImage)]:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
+     onText:text=>set({status:'running',draft:text,progress:task==='critique'?'Comparing the edit…':'Expanding your request…'})});
     if(typeof result?.text!=='string'||!result.text.trim())throw Error('The prompt helper returned an empty expansion');
     // Preserve the result before cleanup so a handback/disposal error cannot erase it.
     set({result,draft:result.text,...(result.gpuLease?.status==='bypassed'?{coordination:'Ran outside Greenroom by your choice.'}:{})});if(!keepLoaded){await helper.dispose();helper=null;}
-    set({status:result.partial?'partial':'complete',progress:result.partial?'Partial expansion retained. Review it before use.':'Prompt expanded. You can edit it before generating.'});
+    set({status:result.partial?'partial':'complete',progress:task==='critique'?'Edit review returned.':result.partial?'Partial expansion retained. Review it before use.':'Prompt expanded. You can edit it before generating.'});
     return result;
    }catch(error){
     try{await helper?.dispose();}catch(cleanup){error.cleanupError=String(cleanup.message||cleanup);}finally{helper=null;}
@@ -84,10 +86,10 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   byId('asset-prompt-skip-queue').hidden=!busy||state.status!=='waiting';
   byId('asset-prompt-keep-loaded').checked=state.keepLoaded;byId('asset-prompt-keep-loaded').disabled=busy;byId('asset-prompt-unload').hidden=!state.resident;byId('asset-prompt-unload').disabled=busy;byId('asset-prompt-residency-status').textContent=residencyError||(state.resident?'Loaded in this tab':state.keepLoaded?'Retains weights after the first expansion':'Unloads after each expansion');
   byId('asset-prompt-expand').disabled=busy||unavailable||!prompt.value.trim();
-  byId('asset-prompt-cancel').hidden=!busy;byId('asset-prompt-cancel').disabled=state.status==='stopping';
+  byId('asset-prompt-cancel').textContent=state.request?.task==='critique'?'Cancel review':'Cancel expansion';byId('asset-prompt-cancel').hidden=!busy;byId('asset-prompt-cancel').disabled=state.status==='stopping';
   prompt.readOnly=busy;
   const matches=promptExpansionMatches(state.request,current()),wasApplied=applied?.request===state.request&&prompt.value===applied.text;
-  const showDraft=!!state.draft&&!wasApplied;
+  const showDraft=state.request?.task!=='critique'&&!!state.draft&&!wasApplied;
   const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
   if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
   byId('asset-prompt-use').hidden=!showDraft||busy;byId('asset-prompt-use').disabled=!matches;

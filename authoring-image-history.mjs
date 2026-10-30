@@ -72,3 +72,39 @@ export function installImageIterationHistory({document,history,assets,layout,onE
  }
  render();return{render,show};
 }
+
+// Review belongs to a saved edit, independently of the next pinned reference.
+export function createEditCritic({history,operation}){
+ function request(){
+  const state=history.read(),entry=state.viewed,p=entry?.provenance;
+  if(!entry||assetWithheld(entry)||!p?.reference?.source||!p.prompt)throw Error('Choose a saved edit with its original input and instructions.');
+  const original=state.entries.find(e=>e.source===p.reference.source)||{...p.reference,kind:'image'};
+  if(assetWithheld(original))throw Error('The original image is unavailable.');
+  const user=p.promptExpansion?.request?.prompt||p.prompt;
+  return {task:'critique',model:/FLUX\.3/.test(p.model)?'flux3':'flux2',reference:copy(original),resultImage:copy(entry),
+   prompt:`User's intended edit: ${user}\nActual instruction sent to the image generator: ${p.prompt}\nJudge the result against the user's intended edit. If the actual instruction changed that intent, distinguish instruction drift from a missed image edit.`};
+ }
+ return{
+  request,
+  async review({admission='queue'}={}){
+   const input=request(),source=input.resultImage.source;
+   // Do not recursively copy previous reviews into the next operation's input.
+   delete input.resultImage.editReview;delete input.reference.editReview;
+   const raw=await operation.expand({...input,admission});if(!raw)return null;
+   if(raw.task!=='critique')throw Error('The provider did not return the requested review task.');
+   const marker=/^\s*NEXT EDIT:\s*/m.exec(raw.text),assessment=marker?raw.text.slice(0,marker.index).trim():raw.text;
+   let correction=marker?raw.text.slice(marker.index+marker[0].length).trim():'';
+   if(correction==='NONE')correction='';
+   const status=raw.partial||raw.stopReason!=='eos'?'partial':!marker||!assessment?'unstructured':'complete';
+   const review={schema:'kaminos.edit-review.v1',status,assessment,correction,raw,request:{...input,reference:{kind:'image',source:input.reference.source},resultImage:{kind:'image',source}},createdAt:Date.now()};
+   history.annotate(source,{editReview:review});return review;
+  },
+  adopt(source,text){
+   const entry=history.read().viewed;
+   if(entry?.source!==source)throw Error('Restore the reviewed image before using this correction; the viewed image changed.');
+   if(entry.editReview?.status!=='complete')throw Error('A complete structured review is required before adopting a correction.');
+   if(!String(text).trim())throw Error('Enter the next editing instruction.');
+   return history.useReference(source);
+  },
+ };
+}

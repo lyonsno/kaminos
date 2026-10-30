@@ -44,3 +44,7 @@ const two=isolatedResident.expand({prompt:'two'});let settled=false;two.then(()=
 kept.emit({type:'complete',value:{text:'two'}});assert.equal((await two).text,'two');
 kept.emit({type:'error',requestId:null,value:'idle device loss'});assert.equal(kept.terminated,true);assert.equal(isolatedResident.resident,false);
 await isolatedResident.dispose();
+const reviewHelper=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker});
+const review=reviewHelper.expand({task:'critique',prompt:'blue',images:['original','result']});
+assert.equal(workers.at(-1).request.task,'critique');assert.deepEqual(workers.at(-1).request.images,['original','result']);
+workers.at(-1).emit({type:'complete',value:{task:'critique',text:'comparison'}});assert.equal((await review).task,'critique');

@@ -17,7 +17,7 @@ export function createPagePromptHelper({modelUrl,post,providerFactory=createWork
    if(active)throw Error('Prompt page is already generating.');
    active=true;const started=performance.now();
    try{
-    const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'bfl-pup.prompt-expansion.webgpu.v0',signal:options.signal,
+    const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:options.task==='critique'?'bfl-pup.edit-critic.webgpu.v0':'bfl-pup.prompt-expansion.webgpu.v0',signal:options.signal,
      admission:options.admission??'queue',bypassSignal:options.bypassSignal,
      sleep:(ms,signal)=>sleep(ms,signal),onWait,
      // Resident weights are idle after request settlement. Only active work
