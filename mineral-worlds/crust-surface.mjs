@@ -1,5 +1,5 @@
 import {Group,Mesh,InstancedMesh,BoxGeometry,PlaneGeometry,BufferGeometry,Float32BufferAttribute,MeshStandardNodeMaterial,MeshBasicNodeMaterial,Matrix4,Quaternion,Vector3,Color,DoubleSide} from '../lib/three.webgpu.js';
-import {grainDimensions,grainCenter,trackGeometry,trackPoint,interfaceState} from './crust.mjs';
+import {grainDimensions,grainCenter,trackGeometry,trackPoint} from './crust.mjs';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function createCrustSurface(state){
  const root=new Group();root.name='Living salt crust';
@@ -36,18 +36,26 @@ export function createCrustSurface(state){
    }
    const from=p.owner===p.a?0:1,to=p.owner===p.a?fraction:1-fraction,segments=Math.max(2,g.points.length*3),normal=p.kind==='film'?[Math.cos(s.grains[p.carrier].angle),0,Math.sin(s.grains[p.carrier].angle)]:[0,1,0];
    if(g.profile){const lo=Math.min(from,to)*g.length,hi=Math.max(from,to)*g.length,[tx,tz]=g.profile.axis,[nx,nz]=g.profile.normal,origin=g.endpoints[0],point=(along,across)=>[origin[0]+tx*along+nx*across,.023,origin[2]+tz*along+nz*across];for(const segment of g.profile.segments){const a=Math.max(lo,segment.lo),b=Math.min(hi,segment.hi);if(b<=a)continue;for(const [left,right]of segment.open)quad(water,point(a,left),point(a,right),point(b,right),point(b,left));}}
-   else for(let j=0;j<segments;j++){const a=trackPoint(s,p,from+(to-from)*j/segments),b=trackPoint(s,p,from+(to-from)*(j+1)/segments);ribbon(water,a,b,g.width,Math.abs(b[1]-a[1])>.001?normal:[0,1,0]);}
-   if(p.maxWetFraction>fraction){const extent=p.owner===p.a?p.maxWetFraction:1-p.maxWetFraction;for(let j=0;j<segments;j++){const a=trackPoint(s,p,from+(extent-from)*j/segments),b=trackPoint(s,p,from+(extent-from)*(j+1)/segments);ribbon(water,a,b,(p.kind==='gap'?Math.min(g.gap,.28):g.width)*.12*Math.sqrt(fraction));}}
-   const at=trackPoint(s,p,to),before=trackPoint(s,p,clamp(to-.005,0,1)),tangent=new Vector3().fromArray(at).sub(new Vector3().fromArray(before));
+   else for(let j=0;j<segments;j++){const a=trackPoint(s,p,from+(to-from)*j/segments,g),b=trackPoint(s,p,from+(to-from)*(j+1)/segments,g);ribbon(water,a,b,g.width,Math.abs(b[1]-a[1])>.001?normal:[0,1,0]);}
+   if(p.maxWetFraction>fraction){const extent=p.owner===p.a?p.maxWetFraction:1-p.maxWetFraction;for(let j=0;j<segments;j++){const a=trackPoint(s,p,from+(extent-from)*j/segments,g),b=trackPoint(s,p,from+(extent-from)*(j+1)/segments,g);ribbon(water,a,b,(p.kind==='gap'?Math.min(g.gap,.28):g.width)*.12*Math.sqrt(fraction));}}
+   const at=trackPoint(s,p,to,g),before=trackPoint(s,p,clamp(to-.005,0,1),g),tangent=new Vector3().fromArray(at).sub(new Vector3().fromArray(before));
    let nx=-tangent.z,nz=tangent.x,length=Math.hypot(nx,nz);if(length<1e-9){nx=0;nz=1;length=1;}nx/=length;nz/=length;
    const width=p.kind==='gap'?Math.min(g.gap,.3):g.width,along=length>0?[tangent.x/length,0,tangent.z/length]:[1,0,0];
    const radius=width/(2*Math.cos(.35)),sag=radius-Math.sqrt(Math.max(0,radius*radius-width*width/4));
    let previous=null;
    for(let j=0;j<=12;j++){const across=(j/12-.5)*width,bend=Math.sqrt(Math.max(0,radius*radius-across*across))-(radius-sag),point=[at[0]+nx*across-along[0]*bend,at[1]+.004,at[2]+nz*across-along[2]*bend];if(previous)ribbon(lines,previous,point,.006);previous=point;}
   }
-  wetGeometry.dispose();frontGeometry.dispose();wetGeometry=new BufferGeometry();frontGeometry=new BufferGeometry();
-  wetGeometry.setAttribute('position',new Float32BufferAttribute(water,3));wetGeometry.computeVertexNormals();wetGeometry.computeBoundingSphere();
-  frontGeometry.setAttribute('position',new Float32BufferAttribute(lines,3));frontGeometry.computeVertexNormals();frontGeometry.computeBoundingSphere();liquid.geometry=wetGeometry;fronts.geometry=frontGeometry;fronts.visible=showInterfaces;last=s.tick;uploads++;
+  const stream=(geometry,data)=>{
+   const count=data.length/3;
+   if(!geometry.attributes.position||geometry.attributes.position.array.length<data.length){
+    geometry.dispose();geometry=new BufferGeometry();const capacity=3*2**Math.ceil(Math.log2(Math.max(1,count)));
+    geometry.setAttribute('position',new Float32BufferAttribute(new Float32Array(capacity),3));geometry.setAttribute('normal',new Float32BufferAttribute(new Float32Array(capacity),3));
+   }
+   for(const attribute of Object.values(geometry.attributes)){attribute.count=count;attribute.clearUpdateRanges();if(data.length)attribute.addUpdateRange(0,data.length);}
+   geometry.attributes.position.array.set(data);geometry.attributes.position.needsUpdate=true;geometry.setDrawRange(0,count);geometry.computeVertexNormals();geometry.computeBoundingSphere();return geometry;
+  };
+  wetGeometry=stream(wetGeometry,water);frontGeometry=stream(frontGeometry,lines);
+  liquid.geometry=wetGeometry;fronts.geometry=frontGeometry;fronts.visible=showInterfaces;last=s.tick;uploads++;
  }
  update(state);
  return {root,update,interfaces(value){showInterfaces=Boolean(value);fronts.visible=showInterfaces;},read:()=>({grains:crystals.count,triangles:crystals.count*12+wetGeometry.attributes.position.count/3+frontGeometry.attributes.position.count/3,interfaces:showInterfaces,uploads,tick:last,renderer:'instanced opaque facets + retained film strips; no raymarch'}),dispose(){crystalGeometry.dispose();crystalMaterial.dispose();bedGeometry.dispose();bedMaterial.dispose();wetGeometry.dispose();frontGeometry.dispose();liquidMaterial.dispose();frontMaterial.dispose();}};
