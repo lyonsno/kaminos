@@ -11,7 +11,8 @@ import {closeOwnedBrowser} from './cleanup.mjs';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const [planPath,mode,castId]=process.argv.slice(2),plan=JSON.parse(await fs.readFile(planPath)),root=path.dirname(planPath);
 const cast=mode==='cast'?plan.casts.find(c=>`${c.cell}-seed${c.seed}`===castId):null;
-const out=path.join(root,mode==='prep'?'prepared':castId??'invalid');await fs.mkdir(out,{recursive:true});
+const prepDir=plan.preparedDir??path.join(root,'prepared');
+const out=mode==='prep'?prepDir:path.join(root,mode==='probe'?'startup-probe':castId??'invalid');await fs.mkdir(out,{recursive:true});
 const report={receiver:plan.receiver,startedAt:new Date().toISOString(),phase:'preflight',ok:false,mode,requested:cast??plan.cells,source:sourceIdentity(plan.repoRoot),runnerSha256:sha(await fs.readFile(new URL(import.meta.url))),cells:[]};
 let browser;const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');await write();
 async function saveArray(expr,file){
@@ -21,8 +22,8 @@ async function saveArray(expr,file){
  const bytes=await fs.readFile(path.join(out,file));return {path:path.join(out,file),bytes:size,sha256:sha(bytes)};
 }
 try{
- assert.ok(['prep','cast'].includes(mode));assert.equal(report.source.rev,plan.revision,'source revision');
- for(const c of mode==='prep'?plan.cells:[plan.cells.find(c=>c.id===cast?.cell)]){assert.ok(c,'named cell');assert.equal(sha(await fs.readFile(c.sourcePath)),c.sourceSha256,'original image bytes');}
+ assert.ok(['prep','cast','probe'].includes(mode));assert.equal(report.source.rev,plan.revision,'source revision');
+ for(const c of mode==='cast'?[plan.cells.find(c=>c.id===cast?.cell)]:plan.cells){assert.ok(c,'named cell');assert.equal(sha(await fs.readFile(c.sourcePath)),c.sourceSha256,'original image bytes');}
  report.serving=await verifyAuthoringServer({origin:plan.origin,repoRoot:plan.repoRoot});
  report.runtime=await(await fetch(`${plan.origin}/api/runtime-config`)).json();
  assert.equal(report.runtime.trellisPage?.mounted,true);assert.equal(report.runtime.trellisPage?.checkpointRoot??report.runtime.trellisPage?.modelRoot,plan.checkpointRoot,'installed checkpoint root');
@@ -31,7 +32,7 @@ try{
  browser=await launchChrome(report.executable,['--disable-background-timer-throttling','--disable-renderer-backgrounding'],report);
  await browser.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
  await browser.navigate(`${plan.origin}/index.html?workspace=authoring`,'!!window.kaminosAppGpu');
- await browser.evaluate(`(async()=>{window.assayHost=await window.kaminosAppGpu();if(!window.assayHost?.device)throw Error('shared app GPU unavailable');window.assayPhases=[];window.assayErrors=[];window.assayHost.device.addEventListener('uncapturederror',e=>window.assayErrors.push(e.error.message));window.assayHash=async a=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',a)),x=>x.toString(16).padStart(2,'0')).join('');window.assayPng=async (rgba,w,h)=>{const canvas=new OffscreenCanvas(w,h);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),w,h),0,0);return(await canvas.convertToBlob({type:'image/png'})).arrayBuffer()};})()`);
+ await browser.evaluate(`(async()=>{const {awaitAppGpu}=await import('./tools/assays/official-rig-casts/startup.mjs');window.assayHost=await awaitAppGpu(()=>window.kaminosAppGpu());window.assayPhases=[];window.assayErrors=[];window.assayHost.device.addEventListener('uncapturederror',e=>window.assayErrors.push(e.error.message));window.assayHash=async a=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',a)),x=>x.toString(16).padStart(2,'0')).join('');window.assayPng=async (rgba,w,h)=>{const canvas=new OffscreenCanvas(w,h);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),w,h),0,0);return(await canvas.convertToBlob({type:'image/png'})).arrayBuffer()};})()`);
  if(mode==='prep'){
   for(const c of plan.cells){
    report.phase=`prepare:${c.id}`;await write();const bytes=await fs.readFile(c.sourcePath);
@@ -47,9 +48,9 @@ try{
    const preview=await saveArray('window.assayPreview',`${c.id}.prepared.png`);const cutout=await saveArray('window.assayCutout',`${c.id}.cutout.png`);
    report.cells.push({id:c.id,...prepared,pixels,preview,cutout});await write();
   }
- }else{
-  const c=plan.cells.find(c=>c.id===cast.cell),prep=JSON.parse(await fs.readFile(path.join(root,'prepared/report.json'))),p=prep.cells.find(c=>c.id===cast.cell);
-  assert.equal(prep.ok,true);assert.equal(p.sourceSha256,c.sourceSha256);const admission=JSON.parse(await fs.readFile(path.join(root,'prepared/visual-inspection.json')));assert.equal(admission.cells[cast.cell]?.admitted,true,'prepared image visually admitted');assert.equal(admission.cells[cast.cell]?.sha256,p.preparedSha256);
+ }else if(mode==='cast'){
+  const c=plan.cells.find(c=>c.id===cast.cell),prep=JSON.parse(await fs.readFile(path.join(prepDir,'report.json'))),p=prep.cells.find(c=>c.id===cast.cell);
+  assert.equal(prep.ok,true);assert.equal(p.sourceSha256,c.sourceSha256);const admission=JSON.parse(await fs.readFile(path.join(prepDir,'visual-inspection.json')));assert.equal(admission.cells[cast.cell]?.admitted,true,'prepared image visually admitted');assert.equal(admission.cells[cast.cell]?.sha256,p.preparedSha256);
   const pixels=await fs.readFile(p.pixels.path);assert.equal(sha(pixels),p.preparedSha256);assert.equal(pixels.length,512*512*3);
   report.phase='generation';report.input=p;await write();
   report.result=await browser.evaluate(`(async()=>{
@@ -69,6 +70,7 @@ try{
   if(await browser.evaluate('!!window.assayResult.levelInputs')){for(const name of ['coordinates','features'])await saveArray(`window.assayResult.levelInputs.materialFields.${name}`,`material-${name}.bin`);report.materialResolution=await browser.evaluate('window.assayResult.levelInputs.materialFields.resolution');}
   validateCast(report.result,{...c,preparedSha256:p.preparedSha256,seed:cast.seed});
  }
+ if(mode==='probe')report.host=await browser.evaluate('({deviceAvailable:!!assayHost.device,frameOwnerAvailable:!!assayHost.frameOwner(),features:Array.from(assayHost.device.features),frames:window.kaminosAppFrameSource()})');
  report.ok=true;report.phase='done';
 }catch(e){report.failurePhase=report.phase;report.error=String(e.stack??e);process.exitCode=1;}
 finally{
@@ -82,3 +84,7 @@ finally{
  }else if(report.ownedBrowserPid&&!report.browserExit){process.kill(report.ownedBrowserPid,'SIGTERM');report.startupCleanup=report.ownedBrowserPid;}
  report.finishedAt=new Date().toISOString();await write();if(!report.ok)await fs.writeFile(path.join(out,'failure.json'),JSON.stringify(report,null,2)+'\n');
 }
+
+// All artifacts are awaited and the exact browser has exited. Do not retain the
+// generic CDP launcher's startup deadline timer in this finite CLI process.
+process.exit(report.ok?0:1);

@@ -1,7 +1,7 @@
 from pathlib import Path
 import os,json,subprocess,sys,time,urllib.request,socket,traceback
 planpath=Path(sys.argv[1]);plan=json.loads(planpath.read_text());mode=sys.argv[2];cast=sys.argv[3:]
-out=planpath.parent/('prepared' if mode=='prep' else cast[0]);out.mkdir(parents=True,exist_ok=True)
+out=Path(plan.get('preparedDir',str(planpath.parent/'prepared'))) if mode=='prep' else planpath.parent/('startup-probe' if mode=='probe' else cast[0]);out.mkdir(parents=True,exist_ok=True)
 receipt={'receiver':plan['receiver'],'phase':'setup','ok':False,'plan':str(planpath),'argv':sys.argv,'repoRoot':plan['repoRoot']};server=None;log=None
 try:
  port=int(plan['origin'].rsplit(':',1)[1])
