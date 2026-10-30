@@ -99,7 +99,8 @@ export const GENERATION_FIELDS=Object.freeze(['conditioning','geometry.features'
 export function generationPhases(m){return generationPipelineType(m)==='512'
   ?GENERATION_PHASES.filter(phase=>!['learned-cascade-support','high-resolution-shape-sampling'].includes(phase)):GENERATION_PHASES;}
 export function generationFields(m){return generationPipelineType(m)==='512'
-  ?GENERATION_FIELDS.filter(field=>field!=='noise.highResolutionShape'):GENERATION_FIELDS;}
+  ?GENERATION_FIELDS.filter(field=>field!=='noise.highResolutionShape'):
+  m.image?.highResolution?[...GENERATION_FIELDS,'highResolutionConditioning']:GENERATION_FIELDS;}
 export function admitRetainedGenerationCompletion(n,m,{expectedNativeCommit,inputMode='completed-command'}={}){
   if(!['completed-command','completed-model-fields'].includes(inputMode))throw Error('explicit supported retained input mode required');
   if(!['succeeded','failed'].includes(n.status)||!Number.isFinite(Date.parse(n.finishedAt))||
@@ -145,6 +146,14 @@ export function validateGenerationResult(result,m){
       throw Error('complete finite retained generation field required '+name);
   }
   const out=result.outputs;
+  // Old captures retain their original evidence class. Newly prepared cascades
+  // must expose the high producer and the stage bindings actually consumed.
+  if(type==='1024_cascade'&&m.image?.highResolution){
+    const expected={sparseFlow:[1,1029,1024],lowResolutionShape:[1,1029,1024],highResolutionShape:[1,4101,1024],textureFlow:[1,4101,1024]};
+    if(c.highResolutionDinoBlocksExecuted!==24||Object.entries(expected).some(([role,shape])=>JSON.stringify(c.conditioningShapes?.[role])!==JSON.stringify(shape))||
+      JSON.stringify(out.highResolutionConditioning.shape)!=='[1,4101,1024]'||out.highResolutionConditioning.dtype!=='f32')
+      throw Error('complete stage-specific 1024 conditioning evidence required');
+  }
   for(const [name,shape]of Object.entries({conditioning:[1,1029,1024],shapeCodes:[c.highResolutionRows,32],textureCodes:[c.highResolutionRows,32],
     'noise.sparse':[1,8,16,16,16],'noise.lowResolutionShape':[c.lowResolutionRows,32],
     ...(type==='1024_cascade'?{'noise.highResolutionShape':[c.highResolutionRows,32]}:{}),'noise.texture':[c.highResolutionRows,32]}))

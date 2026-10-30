@@ -37,7 +37,7 @@ function browserNoise(seed){
 
 // The live consumer of DINO's exact output. Only normalized image pixels and
 // checkpoint weights enter from CPU; no learned context crosses an artifact.
-export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
+export function createTrellisImageGenerationAdapter({route,pixelValues,highResolutionPixelValues,prefixWeights,loadLayerWeights,
   dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput}={}){
   if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
   const staged=loadModel!==undefined||modelInputs!==undefined;
@@ -48,39 +48,52 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
     if(models!==undefined&&loadModels!==undefined)throw TypeError('one checkpoint input source required');
     if(models===undefined&&typeof loadModels!=='function')throw TypeError('complete generation checkpoint inputs or loader required');
   }
+  const cascade=pipelineType==='1024_cascade';
+  if(cascade&&(!(highResolutionPixelValues instanceof Float32Array)||highResolutionPixelValues.length!==1024*1024*3||!highResolutionPixelValues.every(Number.isFinite)))
+    throw TypeError('complete finite 1024x1024 highResolutionPixelValues required for cascade conditioning');
   let state='new',phase='new',result,disposed=false,generation;
   const enter=async e=>{phase=e.phase;await onPhase?.({...e,routeId:route.routeId});},
     producer=createTrellisDinoV3ConditioningAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
-      modelIdentity:dinoIdentity,onPhase:enter});
+      modelIdentity:dinoIdentity,onPhase:e=>enter({...e,imageResolution:512})}),
+    highProducer=cascade?createTrellisDinoV3ConditioningAdapter({route,pixelValues:highResolutionPixelValues,imageSize:1024,
+      prefixWeights,loadLayerWeights,modelIdentity:dinoIdentity,onPhase:e=>enter({...e,imageResolution:1024})}):null;
   return Object.freeze({runtime:route.runtime,routeId:route.routeId,
     get state(){return state;},get phase(){return phase;},get outputs(){return result;},
     get conditioning(){return producer.outputs?.conditioning;},
+    get highResolutionConditioning(){return highProducer?.outputs?.conditioning;},
     get noiseInputs(){return generation?.noiseInputs??Object.freeze({});},
     get decoderFailureContext(){return disposed?undefined:generation?.decoderFailureContext;},
     async run(invocation){
       if(disposed)throw Error('image generation adapter disposed');if(state!=='new')throw Error('image generation adapter is '+state);
       state='running';
       try{
-        const dino=await producer.run(invocation);
+        const dino=await producer.run(invocation),highDino=highProducer?await highProducer.run(invocation):null;
         if(loadModels)await enter({phase:'generation-checkpoint-input-loading'});
         const checkpointModels=staged?modelInputs:models??await loadModels();
         generation=createTrellisGenerationFromConditioningAdapter({route,conditioningTensor:dino.conditioning,
+          highResolutionConditioningTensor:highDino?.conditioning,
           models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,pipelineType,seed,initialNoise,onPhase:enter,onNoiseInput});
         const fields=await generation.run(invocation);
-        result=Object.freeze({...fields,conditioning:dino.conditioning,dino});state='completed';phase='completed';return result;
+        result=Object.freeze({...fields,conditioning:dino.conditioning,dino,
+          ...(highDino?{highResolutionConditioning:highDino.conditioning,highResolutionDino:highDino}:{})});state='completed';phase='completed';return result;
       }catch(error){state='failed';result=undefined;throw error;}
     },
     dispose(){if(state==='running')throw Error('image generation adapter in use');if(disposed)return;disposed=true;
-      generation?.dispose();producer.dispose();}
+      generation?.dispose();highProducer?.dispose();producer.dispose();}
   });
 }
 
-export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,models,loadModel,
+export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,highResolutionConditioningTensor,models,loadModel,
   meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput}={}){
   const runtime=route?.runtime,roles=generationRoles({pipelineType}),cascade=pipelineType==='1024_cascade';
   // Canonical source resolution is enforced by the input-package boundary;
   // this generic composition also supports smaller operation fixtures.
   if(!runtime?.runKernel||!conditioningTensor?.buffer)throw TypeError('registered runtime and resident image conditioning required');
+  if(cascade&&(!highResolutionConditioningTensor?.buffer||highResolutionConditioningTensor.buffer===conditioningTensor.buffer))
+    throw TypeError('separate resident highResolutionConditioningTensor required for cascade stages');
+  const stageConditioning=role=>cascade&&['highResolutionShape','textureFlow'].includes(role)?highResolutionConditioningTensor:conditioningTensor;
+  // Context length comes from the actual resident stage input, not old package defaults.
+  const stageConfig=(role,config)=>({...config,contextRows:stageConditioning(role).shape[1],contextChannels:stageConditioning(role).shape[2]});
   const staged=loadModel!==undefined;
   if(staged&&typeof loadModel!=='function')throw TypeError('per-role checkpoint loader required');
   for(const role of roles)if(staged?!models?.[role]?.config:!models?.[role]?.weights)throw TypeError('actual model weight role required: '+role);
@@ -125,18 +138,18 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   const shapeFlow=(role,coordinates,concatTensor)=>consume(role,
     role==='lowResolutionShape'?'low-resolution-shape-sampling':role==='highResolutionShape'?'high-resolution-shape-sampling':'shape-conditioned-texture-sampling',
     async model=>own(await(model.loadBlockWeights?createTrellisSLatFlowAdapterAsync:createTrellisSLatFlowAdapter)({route,
-      config:{...model.config,tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
-      weights:model.weights,loadBlockWeights:model.loadBlockWeights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
+      config:{...stageConfig(role,model.config),tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
+      weights:model.weights,loadBlockWeights:model.loadBlockWeights,conditioningTensor:stageConditioning(role),coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
   const releaseFlow=async flow=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();flow.releaseParameters();
   };
   const sampleShape=async(role,flow,stage,invocation)=>{
-    const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
-      tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
+    const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...stageConfig(role,models[role].config),
+      tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor:stageConditioning(role)}));
     await sampler.run({sample:await noise(stage,flow.plan.inputShape)},invocation);
     await releaseFlow(flow);return{sampler,sample:sampler.outputs.sample};
   };
-  return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor}),
+  return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor,highResolutionConditioning:highResolutionConditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
     get outputs(){return result;},
     // Final geometry/material decoder only; earlier cascade support and failures
@@ -198,6 +211,8 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         await runtime.device?.queue?.onSubmittedWorkDone?.();
         result=Object.freeze({geometry,material,shapeCodes:shapeScale.outputs.sample,textureCodes:textureScale.outputs.sample,
           lowResolutionRows:lrCoordinates.shape[0],highResolutionRows:rows,meshResolution,pipelineType,
+          conditioningShapes:Object.freeze(Object.fromEntries(['sparseFlow','lowResolutionShape',...(cascade?['highResolutionShape']:[]),'textureFlow']
+            .map(role=>[role,Object.freeze([...stageConditioning(role).shape])]))),
           modelIdentities:Object.freeze(Object.fromEntries(roles.map(role=>[role,models[role].identity??null]))),
           phases:Object.freeze(phases.map(Object.freeze)),initialNoise:Object.freeze({...noiseInputs}),
           featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,

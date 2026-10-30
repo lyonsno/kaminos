@@ -251,3 +251,29 @@ Tests live under [`tests/`](tests/). Numerical development uses the individual
 sparse, shape and decoder exporters plus their browser runners; the ordinary
 generation workflow above uses the complete model rather than those isolated
 stage tests.
+
+
+### Stage-specific image conditioning
+
+The `512` pipeline encodes its prepared 512 image once. The `1024_cascade`
+pipeline encodes two images from the same prepared foreground crop: 512 for
+sparse structure and low-resolution shape, and 1024 for high-resolution shape
+and texture flow. The resident context shapes are `[1,1029,1024]` and
+`[1,4101,1024]`. Both DINO passes run through the same cooperative route.
+
+Direct adapter callers provide `pixelValues` and, for a cascade,
+`highResolutionPixelValues`. Browser preparation accepts `highResolution:true`
+and returns the second RGB image under `highResolution`; normalize each with
+`normalizePreparedTrellisRgb`. Both resizes start from the foreground crop;
+upsampling the 512 image is not equivalent.
+
+`pack-prepared-generation.py --pipeline-type 1024_cascade` writes both pixel
+tensors. Old packages remain valid checkpoint stores, but their old 512-only
+image cannot run the corrected cascade: select the original image in Kaminos
+or prepare a new package from the original foreground. The weight files can
+be reused. Generation outputs and page asset provenance expose
+`conditioningShapes` for the actual stage bindings.
+
+This adds the second encoder pass and its larger context. It does not establish
+full reference parity: the existing base packager still selects the 512 texture
+flow checkpoint, whose separate 1024 checkpoint integration remains outstanding.

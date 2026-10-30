@@ -1,3 +1,5 @@
+import {fingerFluidAnalyticalSupportGeometry} from './finger-fluid-support-geometry.mjs';
+export {fingerFluidAnalyticalSupportGeometry} from './finger-fluid-support-geometry.mjs';
 import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT} from './finger-fluid-world-neighbors.mjs';
 import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
@@ -2936,19 +2938,15 @@ export const KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE = 3.2;
 const MIN_NORMAL_F32 = 2 ** -126;
 const GRID_DIMS = [32, 20, 32];
 const GRID_CELL_COUNT = GRID_DIMS[0] * GRID_DIMS[1] * GRID_DIMS[2];
-const BOUNDS_MIN = [-3.4, -1.2, -3.4];
-const BOUNDS_MAX = [3.4, 3.0, 3.4];
+const {boundsMin:BOUNDS_MIN,boundsMax:BOUNDS_MAX,obstacle:analyticalObstacle} = fingerFluidAnalyticalSupportGeometry();
 const TRUTH_OCCUPIED_CELL_VOLUME = GRID_DIMS.reduce(
   (volume, count, axis) => volume * ((BOUNDS_MAX[axis] - BOUNDS_MIN[axis]) / count),
   1,
 );
 const MIN_TRUTH_OCCUPIED_CELL_COUNT = 2;
 const MIN_TRUTH_OCCUPIED_VOLUME = MIN_TRUTH_OCCUPIED_CELL_COUNT * TRUTH_OCCUPIED_CELL_VOLUME;
-const OBSTACLE_CENTER = [0.85, -0.43, 0.02];
-const OBSTACLE_RADIUS = 0.52;
-export function fingerFluidAnalyticalSupportGeometry() {
-  return {boundsMin:[...BOUNDS_MIN],boundsMax:[...BOUNDS_MAX],obstacle:{center:[...OBSTACLE_CENTER],radius:OBSTACLE_RADIUS}};
-}
+const OBSTACLE_CENTER = analyticalObstacle.center;
+const OBSTACLE_RADIUS = analyticalObstacle.radius;
 const VORTICITY_UPDATE_INTERVAL = 3;
 const PLAYGROUND_TILE_COLUMNS = 22;
 const PLAYGROUND_TILE_ROWS = 22;

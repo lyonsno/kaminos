@@ -8,14 +8,33 @@ async function responseJSON(request,url,options){
 // Load and Generate browse the same local and other-server stores. Importing
 // retains the source and gives this server its own ordinary scene document.
 export async function chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request=fetch,browseFile}){
- const listing=await grFetchApi('browse',{root:'scenes',path:''});
- const names=(listing?.entries||[]).map(entry=>entry.name).filter(name=>name.endsWith('.kaminos.json'));
- const scenes=await Promise.all(names.map(async name=>{const data=await grFetchApi('read',{root:'scenes',path:name}).catch(()=>null);return {name,label:data?.label||data?.capture?.label||'',timestamp:data?.timestamp||''};}));
- const more=responseJSON(request,'/api/scene-library').then(library=>{if(!Array.isArray(library.stores))throw Error('Saved scene library response is incomplete');return library.stores.flatMap(store=>store.scenes.filter(scene=>!scene.error).map(scene=>({...scene,store:{id:store.id,label:store.label}})));});
+ const discovery = new AbortController();
+ const discover = (url, options) => request(url, {...options, signal: discovery.signal});
+ async function* localScenes(){
+  const initial=await responseJSON(discover,'/api/scene-catalogue');
+  if(!Array.isArray(initial.scenes))throw Error('Saved scene catalogue response is incomplete');
+  yield initial.scenes;
+  if(initial.scenes.some(scene=>scene.metadata==='pending')){
+   const refreshed=await responseJSON(discover,'/api/scene-catalogue?metadata=1');
+   if(!Array.isArray(refreshed.scenes))throw Error('Saved scene catalogue response is incomplete');
+   yield refreshed.scenes;
+  }
+ }
+ const libraryRows=library=>{
+  if(!Array.isArray(library.stores))throw Error('Saved scene library response is incomplete');
+  return library.stores.flatMap(store=>store.scenes.map(scene=>({...scene,store:{id:store.id,label:store.label}})));
+ };
+ const more=responseJSON(discover,'/api/scene-library').then(libraryRows);
+ const moreDetails=more.then(rows=>rows.some(scene=>scene.metadata==='pending')
+  ? responseJSON(discover,'/api/scene-library?metadata=1').then(libraryRows) : rows);
+ moreDetails.catch(()=>{});
  // A consumer may cancel before the catalog finishes. The picker still gets
  // the original promise and displays its error; cancellation leaves no orphan.
  more.catch(()=>{});
- const choice=await pickSavedScene({scenes,more});if(!choice)return null;
+ let choice;
+ try {choice=await pickSavedScene({scenes:[],local:localScenes(),more,moreDetails});}
+ finally {discovery.abort();}
+ if(!choice)return null;
  if(choice==='browse'){
   if(!browseFile)return choice;
   const file=await browseFile();if(!file)return null;
