@@ -165,6 +165,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   if(!lighting){lighting=mountDistributedSceneRadiance({renderer,scene,prototype:fire,device:sharedGpu.device,surfaceLighting:gi.surfaceLighting,getSourceGuide:()=>({position:[...plan.flameSources[0].transform.position],radius:settings.inputRadius,height:settings.plumeHeight,depth:settings.emitterSourceDepth}),...readFireShadowSceneSettings(new URLSearchParams(plan.composition.route))});lighting.setGain(2**plan.composition.lightGainStops);
      const value=(id,fallback)=>rendering[id]??fallback;
      lighting.setSurfaceGain(2**Number(value('rendering-surface-gain',0)));lighting.setSurfaceScattering(!!value('rendering-surface-scattering',true));lighting.setSourceSoftness(Number(value('rendering-source-softness',0)));lighting.setSmokeMode(value('rendering-smoke-solver','distributed'));lighting.setDirections(Number(value('rendering-angular-samples',24)));lighting.setAngularPattern(value('rendering-angular-pattern','fixed'));await lighting.whenRebuilt();lighting.setSurfaceEnabled(active);}
+   if(post.bloom?.composeFlame&&visible('flame-field'))await fire.prepareSceneTransport({lighting:lighting.debugState().smokeMode==='distributed'?'distributed':'native',emission:true});
    warmState='prepared';
   })().catch(error=>{warmState='failed';failure(error);throw error;});
   warmup.catch(()=>{});

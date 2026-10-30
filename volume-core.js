@@ -20435,6 +20435,16 @@ export function createKaminosVolumePrototype({
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }
 
+  function sceneTransportShader(lightingKind) {
+    const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
+    const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+    let code=WGSL;
+    if(lightingKind==='distributed')code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
+      .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
+    else if(lightingKind==='point')code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
+    return {code,optical,constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}};
+  }
+
   function renderSceneTransportHost() {
     if (!sceneTransportConsumer) return updateOrdinarySceneDepth();
     if (uniforms[368] !== 2 || appearanceDecompositionActive() || boundarySplatRequested() || browserResidualCanApply()) {
@@ -20449,13 +20459,10 @@ export function createKaminosVolumePrototype({
         encode(input) {
           if(!current||sourceFrame!==state.frameCount||sourceStep!==state.simStepCount)throw new Error('Native scene transport frame expired');
           if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
-          const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
-          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
-          let code=WGSL,lighting=null;
+          const {code,optical,constants}=sceneTransportShader(distributedGroup?'distributed':scenePointBindGroup?'point':'native');
+          let lighting=null;
           if(distributedGroup) {
             if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
-            code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
-              .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
             lighting={layout:distributedLayout,group:distributedGroup};
           } else {
             if(!sceneTransportLightEncoders.has(input.encoder)) {
@@ -20463,13 +20470,12 @@ export function createKaminosVolumePrototype({
             }
             if(scenePointBindGroup) {
               if(scenePointFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport point lighting is stale');
-              code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
               lighting={layout:scenePointBindings.layout,group:scenePointBindGroup};
             }
           }
           sceneTransport ||= createSceneVolumeTransport(device);
           const receipt=sceneTransport.encode({...input,width:state.width,height:state.height,code,mainLayout:bindGroupLayout,mainGroup:fluidBindGroup(),lighting,
-            forwardScale:[...forward,productTransform.scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
+            forwardScale:[...forward,productTransform.scale],constants});
           state.sceneTransport={...receipt,sourceFrame,sourceStep,sourceIndex:currentFluid,
             worldTransform:{translate:[...productTransform.translate],scale:productTransform.scale},renderScale:state.renderScale,
             material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'native-six-direction-plus-point':'native-six-direction',
@@ -28410,6 +28416,24 @@ export function createKaminosVolumePrototype({
       sceneTransportConsumer=consumer;
       if(!consumer)state.sceneTransport={requested:false,effective:false};
       return {requested:Boolean(consumer)};
+    },
+    async prepareSceneTransport({lighting='native',emission=false}={}) {
+      await ensureGpu();
+      if(!sceneTransportConsumer)throw Error('Native scene transport preparation requires its host consumer');
+      if(!['native','distributed'].includes(lighting))throw Error('Unsupported cold scene transport lighting');
+      // Select the same authored shader variant and backing extent as live
+      // presentation, without advancing combustion or publishing a light frame.
+      updateUniforms(performance.now());
+      if(lighting==='distributed'){
+        distributedBindings ||= createDistributedSmokeBindings(device);
+        distributedLayout=distributedBindings.layout;
+      }
+      const {code,constants}=sceneTransportShader(lighting);
+      sceneTransport ||= createSceneVolumeTransport(device);
+      await sceneTransport.prepare({code,constants,mainLayout:bindGroupLayout,
+        lighting:lighting==='distributed'?{layout:distributedLayout}:null,
+        width:state.width,height:state.height,emission});
+      return {prepared:true,lighting,width:state.width,height:state.height,simStepCount:state.simStepCount};
     },
     setScenePointLightFrame(input) {
       if (input === null) {scenePointBindGroup=null;scenePointFrame=null;return;}

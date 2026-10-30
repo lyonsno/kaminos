@@ -63,14 +63,49 @@ export function createSceneVolumeTransport(device) {
     {binding:1,visibility:GPUShaderStage.FRAGMENT,sampler:{type:'filtering'}},
   ]});
   const blend={color:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'}};
-  const composite=device.createRenderPipeline({label:SCENE_VOLUME_TRANSPORT+' composite',
+  const compositeDescriptor=emission=>({label:SCENE_VOLUME_TRANSPORT+(emission?' emission composite':' composite'),
     layout:device.createPipelineLayout({bindGroupLayouts:[compositeLayout]}),
-    vertex:{module:compositeModule,entryPoint:'vs'},fragment:{module:compositeModule,entryPoint:'fs',targets:[{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});
-  let emissionComposite=null;
+    vertex:{module:compositeModule,entryPoint:'vs'},fragment:{module:compositeModule,entryPoint:emission?'fsEmission':'fs',targets:Array.from({length:emission?2:1},()=>({format:'rgba16float',blend}))},primitive:{topology:'triangle-list'}});
+  let composite=null,emissionComposite=null,compositePending=null,emissionPending=null;
   const sampler=device.createSampler({minFilter:'linear',magFilter:'linear'});
   let texture=null,compositeGroup=null,extent='',source=null,sourceLayout=null,lightLayout=null,disposed=false;
-  const pipelines=new Map();
+  const pipelines=new Map(),pending=new Map();let generation=0;
+  function configure({code,mainLayout,lighting=null}) {
+    if(disposed)throw Error('Native scene transport disposed');
+    if(!code||!mainLayout||lighting&&!lighting.layout)throw Error('Native scene transport source is incomplete');
+    if(source!==code||sourceLayout!==mainLayout||lightLayout!==lighting?.layout){
+      pipelines.clear();pending.clear();generation++;source=code;sourceLayout=mainLayout;lightLayout=lighting?.layout;
+    }
+  }
+  function resize(width,height){
+    if(![width,height].every(v=>Number.isSafeInteger(v)&&v>0))throw Error('Native scene transport extent must be positive integers');
+    if(extent===`${width}x${height}`)return;
+    texture?.destroy();extent=`${width}x${height}`;
+    texture=device.createTexture({label:SCENE_VOLUME_TRANSPORT,size:[width,height],format:'rgba16float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
+    compositeGroup=device.createBindGroup({layout:compositeLayout,entries:[{binding:0,resource:texture.createView()},{binding:1,resource:sampler}]});
+  }
+  function segmentDescriptor(constants,foreground){
+    const module=device.createShaderModule({label:SCENE_VOLUME_TRANSPORT,code:source+SEGMENT_WGSL});
+    const layouts=[sourceLayout,segmentLayout];if(lightLayout)layouts.push(lightLayout);
+    return {label:SCENE_VOLUME_TRANSPORT,layout:device.createPipelineLayout({bindGroupLayouts:layouts}),vertex:{module,entryPoint:'vs'},
+      fragment:{module,entryPoint:'fsSceneTransport',constants:{...constants,TRANSPORT_FOREGROUND:foreground},targets:[{format:'rgba16float'}]},primitive:{topology:'triangle-list'}};
+  }
   return {
+    async prepare({code,mainLayout,lighting=null,constants={},foreground=false,emission=false,width,height}){
+      configure({code,mainLayout,lighting});resize(width,height);
+      const key=JSON.stringify({...constants,TRANSPORT_FOREGROUND:foreground}),current=generation;
+      if(!pipelines.has(key)&&!pending.has(key)){
+        const task=device.createRenderPipelineAsync(segmentDescriptor(constants,foreground)).then(value=>{
+          if(!disposed&&generation===current)pipelines.set(key,value);
+        }).finally(()=>{if(generation===current)pending.delete(key);});pending.set(key,task);
+      }
+      const tasks=[pending.get(key)];
+      if(!composite){compositePending ||= device.createRenderPipelineAsync(compositeDescriptor(false)).then(value=>{if(!disposed)composite=value;}).finally(()=>{compositePending=null;});tasks.push(compositePending);}
+      if(emission&&!emissionComposite){emissionPending ||= device.createRenderPipelineAsync(compositeDescriptor(true)).then(value=>{if(!disposed)emissionComposite=value;}).finally(()=>{emissionPending=null;});tasks.push(emissionPending);}
+      await Promise.all(tasks);
+      if(disposed)throw Error('Native scene transport disposed');
+      if(current!==generation)throw Error('Native scene transport preparation superseded');
+    },
     encode({encoder,targetView,frontDepthView,sceneDepthView,forwardScale,width,height,code,mainLayout,mainGroup,lighting=null,constants={},foreground=false,emissionTargetView=null}) {
       if(disposed)throw Error('Native scene transport disposed');
       if(!encoder||!targetView||!frontDepthView||!sceneDepthView)throw Error('Native scene transport needs current encoder and attachments');
@@ -79,29 +114,15 @@ export function createSceneVolumeTransport(device) {
       if(!code||!mainLayout||!mainGroup||lighting&&(!lighting.layout||!lighting.group))throw Error('Native scene transport source is incomplete');
       // Preserve the native renderer's chosen render scale. Only the final
       // premultiplied transport is expanded to the host's backing extent.
-      if(extent!==`${width}x${height}`) {
-        texture?.destroy();extent=`${width}x${height}`;
-        texture=device.createTexture({label:SCENE_VOLUME_TRANSPORT,size:[width,height],format:'rgba16float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
-        compositeGroup=device.createBindGroup({layout:compositeLayout,entries:[{binding:0,resource:texture.createView()},{binding:1,resource:sampler}]});
-      }
-      if(source!==code||sourceLayout!==mainLayout||lightLayout!==lighting?.layout) {
-        pipelines.clear();source=code;sourceLayout=mainLayout;lightLayout=lighting?.layout;
-      }
+      resize(width,height);configure({code,mainLayout,lighting});
       const variant={...constants,TRANSPORT_FOREGROUND:foreground},key=JSON.stringify(variant);
-      if(!pipelines.has(key)) {
-        const module=device.createShaderModule({label:SCENE_VOLUME_TRANSPORT,code:code+SEGMENT_WGSL});
-        const layouts=[mainLayout,segmentLayout];if(lighting)layouts.push(lighting.layout);
-        pipelines.set(key,device.createRenderPipeline({label:SCENE_VOLUME_TRANSPORT,
-          layout:device.createPipelineLayout({bindGroupLayouts:layouts}),vertex:{module,entryPoint:'vs'},
-          fragment:{module,entryPoint:'fsSceneTransport',constants:variant,targets:[{format:'rgba16float'}]},primitive:{topology:'triangle-list'}}));
-      }
+      if(!pipelines.has(key))pipelines.set(key,device.createRenderPipeline(segmentDescriptor(constants,foreground)));
       device.queue.writeBuffer(params,0,new Float32Array(forwardScale));
       const group=device.createBindGroup({layout:segmentLayout,entries:[{binding:2,resource:frontDepthView},{binding:3,resource:sceneDepthView},{binding:4,resource:{buffer:params}}]});
       const march=encoder.beginRenderPass({label:SCENE_VOLUME_TRANSPORT+(foreground?':foreground':':background'),colorAttachments:[{view:texture.createView(),loadOp:'clear',clearValue:{r:0,g:0,b:0,a:0},storeOp:'store'}]});
       march.setPipeline(pipelines.get(key));march.setBindGroup(0,mainGroup);march.setBindGroup(1,group);if(lighting)march.setBindGroup(2,lighting.group);march.draw(3);march.end();
-      if(emissionTargetView&&!emissionComposite)emissionComposite=device.createRenderPipeline({label:SCENE_VOLUME_TRANSPORT+' emission composite',
-        layout:device.createPipelineLayout({bindGroupLayouts:[compositeLayout]}),vertex:{module:compositeModule,entryPoint:'vs'},
-        fragment:{module:compositeModule,entryPoint:'fsEmission',targets:[{format:'rgba16float',blend},{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});
+      if(emissionTargetView&&!emissionComposite)emissionComposite=device.createRenderPipeline(compositeDescriptor(true));
+      if(!emissionTargetView&&!composite)composite=device.createRenderPipeline(compositeDescriptor(false));
       const compose=encoder.beginRenderPass({label:SCENE_VOLUME_TRANSPORT+':linear-over',colorAttachments:[targetView,...(emissionTargetView?[emissionTargetView]:[])].map(view=>({view,loadOp:'load',storeOp:'store'}))});
       compose.setPipeline(emissionTargetView?emissionComposite:composite);compose.setBindGroup(0,compositeGroup);compose.draw(3);compose.end();
       return {identity:SCENE_VOLUME_TRANSPORT,segment:foreground?'camera-to-water':'water-to-opaque',width,height,colorSpace:'linear_hdr',displayTransform:'none',privateSubmit:false};
