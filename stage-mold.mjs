@@ -44,7 +44,7 @@ export function stageMoldDistance(p,q){
 }
 export function stageMoldNormal(p,q){
  const e=p.pitch*.25,g=[0,1,2].map(k=>{const a=[...q],b=[...q];a[k]+=e;b[k]-=e;return stageMoldDistance(p,a)-stageMoldDistance(p,b);}),n=Math.hypot(...g);
- return n>1e-10?g.map(v=>v/n):[0,1,0];
+ return n>p.pitch*1e-5?g.map(v=>v/n):[0,1,0];
 }
 
 export function createStageMold(value){

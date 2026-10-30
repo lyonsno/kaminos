@@ -6,13 +6,13 @@ export default {
   const document=host.controls.document,app=document.defaultView,water=app.kaminosWaterSources;
   if(!water||!app.kaminosSceneAuthoring)throw Error('Open the authored scene before the pour study');
   if(water.read().sources.length)throw Error('The pour study needs a scene without existing water sources; save your scene and open an empty one first.');
-  let session,asset,emitterId,recipe,status,wordField,disposed=false;
+  let session,asset,emitterId,recipe,status,wordField,disposed=false,resumeFlow=.008;
   const read=()=>({label:recipe?.label,moldId:asset?.id,emitterId,water:water.read(),stage:'liquid mold study; solidification and ignition are not coupled'});
   async function reset(){water.reset();return read();}
   async function makeWord(label){
    const next=stageWordMold(document,label); // Validate before retiring the previous setup.
    water.reset();if(emitterId){app.removeSceneObject(emitterId);emitterId=null;}
-   await session?.dispose();session=await host.scene.open();recipe=next;
+   await session?.dispose();session=await host.scene.open();recipe=next;resumeFlow=.008;
    const root=createStageMold(recipe);root.position.y=.25;
    asset=await session.attach(root,{owned:true,metadata:{type:'pbr',source:STAGE_MOLD_SOURCE,label:root.name,stageMold:recipe}});
    try{
@@ -36,8 +36,17 @@ export default {
   return {
    read,
    operations:{makeWord,frame,reset,
-    async pour(){if(disposed)throw Error('Pour study is closed');const result=await water.release(emitterId);record({kind:'stage-pour.release',phase:'applied',effective:result});return read();},
-    stopPour(){water.edit(emitterId,{volumeRate:0});return read();},
+    async pour(){
+     if(disposed)throw Error('Pour study is closed');
+     const source=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId);if(!source)throw Error('The pour emitter was removed; build the word again.');
+     if(source.localLiquidEmitter.volumeRate===0)water.edit(emitterId,{volumeRate:resumeFlow});
+     if(water.read().runtime)app.kaminosPauseLocalLiquid(false);else await water.release(emitterId);
+     const result=read();record({kind:'stage-pour.release',phase:'applied',effective:result});return result;
+    },
+    stopPour(){
+     const source=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId);if(source?.localLiquidEmitter.volumeRate>0)resumeFlow=source.localLiquidEmitter.volumeRate;
+     water.edit(emitterId,{volumeRate:0});return read();
+    },
     selectEmitter(){app.selectSceneObject(emitterId);return read();},
    },
    mount({root,invoke}){
@@ -55,7 +64,7 @@ export default {
     const scope=document.createElement('p');scope.textContent='First study: liquid contact. Casting into a burnable solid is the next join.';
     root.append(heading,label,buttons,help,scope,status);
    },
-   async dispose(){disposed=true;water.reset();if(emitterId)app.removeSceneObject(emitterId);await session?.dispose();},
+   async dispose(){disposed=true;if(water.read().sources.every(r=>r.id===emitterId))water.reset();if(emitterId)app.removeSceneObject(emitterId);await session?.dispose();},
   };
  },
 };

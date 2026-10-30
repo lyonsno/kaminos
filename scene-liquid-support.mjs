@@ -94,15 +94,10 @@ fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let r=length(q);var n=vec3<f32>(0,1,0);if(r>1e-10){n=q/r;}
  var d=r-kind.y;
  if(kind.x>2.5){
-  let extent=abs(q-vec3<f32>(0,(kind.y-ax.w)*.5,0))-vec3<f32>(kind.z*.5,(kind.y+ax.w)*.5,kind.w*.5);
-  if(any(extent>vec3<f32>(azData.w))){
-   let delta=max(extent,vec3<f32>(0));d=length(delta);n=normalize(delta*sign(q-vec3<f32>(0,(kind.y-ax.w)*.5,0)));
-  }else{
    let e=azData.w*.25;let off=i32(ayData.w);d=moldDistance(q,kind,ax.w,off,azData.w);
    let ex=vec3<f32>(e,0,0);let ey=vec3<f32>(0,e,0);let ez=vec3<f32>(0,0,e);
    let g=vec3<f32>(moldDistance(q+ex,kind,ax.w,off,azData.w)-moldDistance(q-ex,kind,ax.w,off,azData.w),moldDistance(q+ey,kind,ax.w,off,azData.w)-moldDistance(q-ey,kind,ax.w,off,azData.w),moldDistance(q+ez,kind,ax.w,off,azData.w)-moldDistance(q-ez,kind,ax.w,off,azData.w));
-   n=vec3<f32>(0,1,0);if(length(g)>1e-10){n=normalize(g);}
-  }
+   n=vec3<f32>(0,1,0);if(length(g)>azData.w*1e-5){n=normalize(g);}
  }
  else if(kind.x>1.5){d=abs(r-kind.y)-ax.w*.5;n*=select(-1.0,1.0,r>=kind.y);if(q.y>d){d=q.y;n=vec3<f32>(0,1,0);}}
  else if(kind.x>.5){let outside=max(abs(q.xz)-kind.zw*.5,vec2<f32>(0));d=q.y;n=vec3<f32>(0,1,0);if(any(outside>vec2<f32>(0))){let delta=vec3<f32>(sign(q.x)*outside.x,q.y,sign(q.z)*outside.y);d=length(delta);n=delta/max(d,1e-10);}}
