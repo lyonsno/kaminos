@@ -2148,6 +2148,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row"><span class="slider-label">Fine velocity width (0 = material)</span><input type="number" id="volume-fine-velocity" data-volume-settings-param="volume_fine_velocity" min="0" step="1" value="0"></div>
     <div class="slider-row"><span class="slider-label">Fine pressure width (0 = velocity / legacy choice)</span><input type="number" id="volume-fine-pressure" data-volume-settings-param="volume_fine_pressure" min="0" step="1" value="0"></div>
     <span class="slider-help">Fine material uses Grid width. Independent velocity requires converged pressure and staggered face forces. Material, velocity and pressure widths are independent integer cell counts. Floor inflow and joined pressure are not supported by this mode.</span>
+    <div class="slider-row"><span class="slider-label">Adaptive material</span><input type="checkbox" id="volume-adaptive-material" data-volume-settings-param="volume_adaptive_material"></div>
+    <div class="slider-row"><span class="slider-label">Extra material budget</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-budget" data-volume-settings-param="volume_adaptive_budget"></div>
+    <div class="slider-row"><span class="slider-label">Spread</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-spread" data-volume-settings-param="volume_adaptive_spread"></div>
+    <div class="slider-row"><span class="slider-label">Maximum detail</span><input type="number" min="0" step="1" value="2" id="volume-adaptive-max-detail" data-volume-settings-param="volume_adaptive_max_detail"></div>
+    <div class="slider-row"><span class="slider-label">Persistence</span><input type="number" min="0" step="any" value="0.2" id="volume-adaptive-persistence" data-volume-settings-param="volume_adaptive_persistence"></div>
+    <div class="slider-row"><span class="slider-label">Motion lookahead</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-lookahead" data-volume-settings-param="volume_adaptive_lookahead"></div>
+    <div class="slider-row"><span class="slider-label">Reaction priority</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-reaction-weight" data-volume-settings-param="volume_adaptive_reaction_weight"></div>
+    <div class="slider-row"><span class="slider-label">Mixing priority</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-mixing-weight" data-volume-settings-param="volume_adaptive_mixing_weight"></div>
+    <div class="slider-row"><span class="slider-label">Thermal priority</span><input type="number" min="0" step="any" value="0.5" id="volume-adaptive-thermal-weight" data-volume-settings-param="volume_adaptive_thermal_weight"></div>
+    <div class="slider-row"><span class="slider-label">Smoke priority</span><input type="number" min="0" step="any" value="0.25" id="volume-adaptive-smoke-weight" data-volume-settings-param="volume_adaptive_smoke_weight"></div>
+    <span class="slider-help">Adaptive material refines burning and mixing regions within the world field. Allocation settings are saved with scenes and basins. Closing the refinement panel leaves the simulation running.</span>
     <div class="slider-row"><span class="slider-label">World smoke</span><select id="volume-world-smoke" class="select-input" data-volume-settings-param="volume_world_smoke"><option value="off" selected>Off</option><option value="on">One-way world field</option></select></div>
     <div class="slider-row"><span class="slider-label">World flow width</span><select id="volume-world-smoke-flow" class="select-input" data-volume-settings-param="volume_world_smoke_flow"><option>8</option><option selected>16</option><option>24</option><option>32</option></select></div>
     <div class="slider-row"><span class="slider-label">World material width</span><select id="volume-world-smoke-material" class="select-input" data-volume-settings-param="volume_world_smoke_material"><option>16</option><option selected>32</option><option>48</option><option>64</option></select></div>
@@ -2940,6 +2951,8 @@ import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToS
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
 import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
+import { ADAPTIVE_MATERIAL_FIELDS, readAdaptiveMaterialControls, patchAdaptiveMaterialControls, hasAuthoredAdaptiveMaterial } from './volume-adaptive-material-controls.mjs';
+let adaptiveMaterialSettingsAuthored=false;
 import { worldSmokeOverlayGeometry } from './volume-world-smoke-optics.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
@@ -12983,6 +12996,7 @@ async function installOwnerWorkbenchEntry() {
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries([...fireLightFieldRouteParams()].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))}),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
+    adaptiveMaterial:{read:readAdaptiveMaterialSettings,set:setAdaptiveMaterialSettings,adopt:adoptAdaptiveMaterialExperiment},
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
@@ -17306,6 +17320,37 @@ function readVolumeSettingsControls(role = 'basin') {
   return controls;
 }
 
+function readAdaptiveMaterialSettings() {
+  return readAdaptiveMaterialControls(Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(field=>{
+    const el=document.getElementById(field.id);return [field.id,{value:readVolumeDomControlValue(el)}];
+  })));
+}
+function adaptiveMaterialRuntimeControls() {
+  const {enabled,options}=readAdaptiveMaterialSettings();return enabled?options:null;
+}
+function setAdaptiveMaterialSettings(patch,{history=true}={}) {
+  if(window.kaminosFlameAuthoring&&volumePrototype?.debugState?.().active) {
+    const state=window.kaminosFlameAuthoring.read();
+    state.domControls=patchAdaptiveMaterialControls(state.domControls,patch);
+    if(history)window.kaminosFlameAuthoring.apply(state,'Edit adaptive material');
+    else writeFlameSettingsState(state);
+  } else {
+    const next=patchAdaptiveMaterialControls(readVolumeDomControls(),patch);
+    const {enabled,options}=readAdaptiveMaterialControls(next);
+    volumePrototype?.setControls({adaptiveMaterial:enabled?options:null});
+    for(const field of ADAPTIVE_MATERIAL_FIELDS)setVolumeControlValue(field.id,next[field.id].value);
+  }
+  adaptiveMaterialSettingsAuthored=true;
+  return readAdaptiveMaterialSettings();
+}
+function adoptAdaptiveMaterialExperiment(inputs) {
+  // An old experiment URL seeds an unconfigured domain once. Authored scene
+  // or basin settings, including explicit disabled/zero values, take priority.
+  if(adaptiveMaterialSettingsAuthored)return false;
+  setAdaptiveMaterialSettings({enabled:inputs.enabled??true,options:inputs.options},{history:false});
+  return true;
+}
+
 function readVolumeDomControls() {
   return readVolumeSettingsControls('basin');
 }
@@ -18872,6 +18917,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     worldSmokeTransition: Number(document.getElementById('volume-world-smoke-transition').value),
     worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
     ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(document.getElementById(field.id).value)])),
+    adaptiveMaterial: adaptiveMaterialRuntimeControls(),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -19583,6 +19629,7 @@ async function admitVolumeSettingsPresetRoute(params) {
   if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
   const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
   validateVolumeSettingsPresetTarget(receipt, params);
+  adaptiveMaterialSettingsAuthored=hasAuthoredAdaptiveMaterial(receipt);
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
   document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
@@ -19724,6 +19771,7 @@ async function initKaminosVolumeRoute() {
   // Fire asked for without a named recipe: the semantic flame basin (fire-boot.mjs).
   else { const semantic = fireAtBoot(params).basin; if (semantic) await applySemanticFlameBasin(params, semantic); }
   await admitVolumeSettingsPresetRoute(params);
+  if(!params.has('settings_preset')&&params.has('volume_adaptive_material'))adaptiveMaterialSettingsAuthored=true;
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
@@ -20167,6 +20215,7 @@ async function initKaminosVolumeRoute() {
     ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
     ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
     ...REGION_CONTROL_FIELDS.map(field=>[field.id,field.param]),
+    ...ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.param]),
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -20512,6 +20561,7 @@ async function initKaminosVolumeRoute() {
     } else {
       volumePrototype.setControls(controlsSnapshot);
     }
+    if(ADAPTIVE_MATERIAL_FIELDS.some(field=>field.id===event?.target?.id))adaptiveMaterialSettingsAuthored=true;
     refreshVolumeReadout();
     window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
   };
@@ -20585,6 +20635,7 @@ async function initKaminosVolumeRoute() {
     'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
     'volume-world-smoke-intermediate',
     ...REGION_CONTROL_FIELDS.map(field=>field.id),
+    ...ADAPTIVE_MATERIAL_FIELDS.map(field=>field.id),
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',
@@ -22021,12 +22072,14 @@ function clampedFlameSettingsState(state) {
   return next;
 }
 function checkFlameSettingsState(state) {
+  readAdaptiveMaterialControls(state.domControls);
   const problems=flameSettingsStateProblems(state);
   if(problems.length)throw Error(problems[0].message);
   if(state.sourcePose)normalizeFlameEmitterPose(state.sourcePose);
   return state;
 }
 function writeFlameSettingsState(state) {
+  readAdaptiveMaterialControls(state.domControls);
   const gridPatch={};
   for(const [key,id] of GRID_TUNING_FIELDS){const d=state.domControls[id];if(d)gridPatch[key]=['worldSmoke','worldSmokeIntermediate'].includes(key)?d.value:Number(d.rawValue??d.value);}
   for(const [key,id] of [['pressureSolver','volume-pressure-solver'],['velocityStaggering','volume-velocity-staggering'],['emitterSourceLaw','volume-emitter-source-law']]){if(state.domControls[id])gridPatch[key]=state.domControls[id].value;}
@@ -22049,6 +22102,7 @@ function writeFlameSettingsState(state) {
   if(!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),state))throw Error('Flame settings were substituted during application');
   activeVolumeSettingsPresetReceipt=state.source;
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
+  adaptiveMaterialSettingsAuthored=true;
   syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
   recordFlameSettingsProblems();
 }
@@ -26469,6 +26523,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     if(!schemaStage.current)return false;
     const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
     writeFlameSettingsState({...fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
+    adaptiveMaterialSettingsAuthored=Object.hasOwn(restorePlan.fireSettings.domControls,'volume-adaptive-material');
   }
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);

@@ -1,22 +1,24 @@
 import {Group,LineSegments,EdgesGeometry,BoxGeometry,LineBasicMaterial,BufferGeometry,Float32BufferAttribute} from '../lib/three.core.js';
-import {validateAllocation} from '../volume-material-hierarchy.mjs';
 export default {
  id:'material-hierarchy',title:'Adaptive fire material',
  async create({host,inputs={},record,updateInputs}){
   const session=await host.scene.open(),win=host.controls.document.defaultView;
-  let requested=validateAllocation(inputs.options),enabled=inputs.enabled??true,overlay=inputs.overlay??false,lastRuntime=null,lastRevision=-1,status,panel,controlError=null,disposed=false;
+  // Basin admission applies canonical controls asynchronously, even when no
+  // saved scene is opening. Adopt legacy link policy only after that write.
+  await host.volume?.ready;
+  const settings=host.fire.adaptiveMaterial;
+  settings.adopt(inputs);
+  let overlay=inputs.overlay??false,lastRevision=-1,status,panel,controlError=null,disposed=false;
   const root=new Group();root.name='Material refinement';root.userData.kaminosEditorHelper=true;
-  const asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:'simulation:adaptive-material-allocation'}});
+  const asset=await session.attach(root,{owned:true,presentation:true,metadata:{label:root.name,source:'simulation:adaptive-material-allocation'}});
   const box=new BoxGeometry(1,1,1),geometry=new EdgesGeometry(box),unitEdges=geometry.attributes.position.array.slice();box.dispose();geometry.dispose();const colors=[0x7799bb,0x36cc9a,0xe5b45b,0xed7b51,0xda57ac],materials=colors.map(color=>new LineBasicMaterial({color,transparent:true,opacity:.4}));
   const source=()=>win.__kaminosVolumePrototype;
-  const read=()=>({enabled,requested,overlay,objectId:asset.id,error:controlError??source()?.adaptiveMaterialState?.()?.error??null,effective:source()?.adaptiveMaterialState?.()?.effective??null,status:source()?.adaptiveMaterialState?'available':'awaiting-fire-runtime'});
-  const persist=()=>updateInputs({...inputs,enabled,options:requested,overlay});
+  const read=()=>{const {enabled,options}=settings.read();return {enabled,requested:options,overlay,objectId:asset.id,error:controlError??source()?.adaptiveMaterialState?.()?.error??null,effective:source()?.adaptiveMaterialState?.()?.effective??null,status:source()?.adaptiveMaterialState?'available':'awaiting-fire-runtime'};};
+  const persist=()=>updateInputs({overlay});
   const clear=()=>{for(const child of [...root.children]){root.remove(child);child.geometry.dispose();}};
-  const apply=()=>{lastRevision=-1;const runtime=source();if(runtime?.configureAdaptiveMaterial){runtime.configureAdaptiveMaterial(enabled?requested:null);lastRuntime=runtime;}else lastRuntime=null;};
   const sync=()=>{
    if(disposed)return;
-   try{if(source()!==lastRuntime)apply();}catch(e){if(status)status.textContent=e.message;return;}
-   const state=read(),effective=state.effective;
+   const state=read(),effective=state.effective,{enabled,requested}=state;
    if(status)status.textContent=state.error?`Allocation unchanged: ${state.error}`:effective?`${effective.leafBricks.toLocaleString()} leaf bricks · ${effective.allocatedBricks.toLocaleString()} / ${effective.capacity.toLocaleString()} resident bricks · ${(effective.materialBytes/1048576).toFixed(1)} MiB material · ${effective.estimatedCellWork.toLocaleString()} estimated cell updates/restrictions. ${effective.error??''}`:enabled?'Enable the world field in the fire Quality controls to allocate material.':'Adaptive material off; ordinary world transport active.';
    if(panel){for(const el of panel.querySelectorAll('[data-setting]')){if(host.controls.document.activeElement===el)continue;const k=el.dataset.setting;el.value=String(k.startsWith('weight.')?requested.weights[k.slice(7)]:requested[k]);}for(const el of panel.querySelectorAll('[data-toggle]'))el.checked=el.dataset.toggle==='setEnabled'?enabled:overlay;}
    root.visible=overlay&&!!effective;
@@ -32,16 +34,16 @@ export default {
   };
   const stop=session.onFrame(sync);
   const operations={
-   setOptions(patch){const next=validateAllocation({...requested,...patch,weights:{...requested.weights,...patch.weights}});source()?.configureAdaptiveMaterial?.(enabled?next:null);requested=next;controlError=null;persist();sync();record({kind:'material-allocation.policy',requested:patch,effective:read()});return read();},
-   setEnabled(value){if(typeof value!=='boolean')throw Error('Expected enabled boolean');source()?.configureAdaptiveMaterial?.(value?requested:null);enabled=value;lastRevision=-1;controlError=null;persist();sync();record({kind:'material-allocation.enabled',effective:read()});return read();},
+   setOptions(patch){settings.set({options:patch});controlError=null;persist();sync();record({kind:'material-allocation.policy',requested:patch,effective:read()});return read();},
+   setEnabled(value){settings.set({enabled:value});lastRevision=-1;controlError=null;persist();sync();record({kind:'material-allocation.enabled',effective:read()});return read();},
    setOverlay(value){overlay=!!value;lastRevision=-1;persist();sync();session.redraw();return read();},
   };
   const drags=[];
   return {read,operations,
    mount({root:target,document,invoke}){
     panel=target;
-    const heading=document.createElement('p');heading.textContent='Refinement follows reaction, mixing and material structure throughout the world field. The existing fine source and flow solvers continue to supply it.';target.append(heading);
-    for(const [label,key] of [['Adaptive material','setEnabled'],['Show refinement','setOverlay']]){const row=document.createElement('label'),el=document.createElement('input');el.type='checkbox';el.dataset.toggle=key;el.checked=key==='setEnabled'?enabled:overlay;el.addEventListener('change',()=>invoke(key,el.checked).catch(fail));row.style.cssText='display:block;margin:12px 0';row.append(el,document.createTextNode(' '+label));target.append(row);}
+    const heading=document.createElement('p');heading.textContent='Refinement follows reaction, mixing and material structure throughout the world field. Settings are saved with scenes and basins. Closing this panel keeps the simulation running.';target.append(heading);
+    for(const [label,key] of [['Adaptive material','setEnabled'],['Show refinement','setOverlay']]){const row=document.createElement('label'),el=document.createElement('input');el.type='checkbox';el.dataset.toggle=key;el.checked=key==='setEnabled'?read().enabled:overlay;el.addEventListener('change',()=>invoke(key,el.checked).catch(fail));row.style.cssText='display:block;margin:12px 0';row.append(el,document.createTextNode(' '+label));target.append(row);}
     const descriptions={budget:'Extra material work relative to the coarse world field. Includes resident parent bricks and restriction work; an estimate, not milliseconds.',spread:'Higher values favor covering more fire before spending another level on an already refined region.',maxDetail:'Maximum resolution doublings above the world material grid. Rendering currently uses the world material texture resolution.',lookahead:'Motion guard in multiples of the observed allocation feedback interval. An interpolation footprint is always retained.',persistence:'Additional priority for keeping an existing split. Zero reallocates solely from current demand.'};
     function fail(e){controlError=e.message;sync();}
     const control=(label,key,step,parent=target)=>{const row=document.createElement('label'),grip=document.createElement('span'),el=document.createElement('input');grip.textContent=label;el.type='number';el.min='0';el.step=key==='maxDetail'?'1':'any';el.className='transform-input';el.dataset.setting=key;el.setAttribute('aria-label',label);row.title=descriptions[key]??'Importance weight in the allocation objective; zero ignores this signal.';
@@ -51,7 +53,7 @@ export default {
     for(const k of ['reaction','mixing','thermal','smoke'])control(k[0].toUpperCase()+k.slice(1),'weight.'+k,.1,details);
     status=document.createElement('p');status.style.cssText='font-size:12px;line-height:1.6;color:#b2c6d2';status.setAttribute('role','status');target.append(status);sync();
    },
-   async dispose(){disposed=true;stop();source()?.configureAdaptiveMaterial?.(null);for(const d of drags)d?.dispose?.();clear();for(const m of materials)m.dispose();await session.dispose();},
+   async dispose(){disposed=true;stop();for(const d of drags)d?.dispose?.();clear();for(const m of materials)m.dispose();await session.dispose();},
   };
  },
 };

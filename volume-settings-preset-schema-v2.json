@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 150,
+  "controlCount": 160,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1104,6 +1104,96 @@
       "additiveDefault": 1,
       "additiveSinceControlCount": 1,
       "additiveLineage": "swirl-jostle"
+    },
+    {
+      "key": "volume-adaptive-material",
+      "param": "volume_adaptive_material",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": false,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 1
+    },
+    {
+      "key": "volume-adaptive-budget",
+      "param": "volume_adaptive_budget",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-adaptive-spread",
+      "param": "volume_adaptive_spread",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 3
+    },
+    {
+      "key": "volume-adaptive-max-detail",
+      "param": "volume_adaptive_max_detail",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 4
+    },
+    {
+      "key": "volume-adaptive-persistence",
+      "param": "volume_adaptive_persistence",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.2,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 5
+    },
+    {
+      "key": "volume-adaptive-lookahead",
+      "param": "volume_adaptive_lookahead",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 6
+    },
+    {
+      "key": "volume-adaptive-reaction-weight",
+      "param": "volume_adaptive_reaction_weight",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 7
+    },
+    {
+      "key": "volume-adaptive-mixing-weight",
+      "param": "volume_adaptive_mixing_weight",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 8
+    },
+    {
+      "key": "volume-adaptive-thermal-weight",
+      "param": "volume_adaptive_thermal_weight",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.5,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 9
+    },
+    {
+      "key": "volume-adaptive-smoke-weight",
+      "param": "volume_adaptive_smoke_weight",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.25,
+      "additiveLineage": "adaptive-material",
+      "additiveSinceControlCount": 10
     }
   ],
   "retiredControls": [

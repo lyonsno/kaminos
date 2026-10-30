@@ -34,23 +34,34 @@ test('world resize never destroys a texture referenced by the pending fine frame
   assert.ok(bound.every(texture=>!texture.destroyed),'pending command buffer must not reference destroyed world optical state');
   ctx.encodeSim(encoder);assert.equal(textures.length,2,'unchanged next frame reuses allocation');
 });
-test('separated pressure rebinds the current world optical allocation',()=>{
+test('separated pressure rebinds resized world optical and emitter collection textures',()=>{
   let optical={destroyed:false};const bound=[];
   const owner={key:'32:64:32:2:material',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
   const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
     separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
-    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,
-    createFluidRenderBindGroup:()=>({texture:ctx.worldSmoke.optical}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
+    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,immersedCollectionTexture:{destroyed:false},
+    createFluidRenderBindGroup:()=>({textures:[ctx.worldSmoke.optical,ctx.immersedCollectionTexture]}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
     beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};
   vm.createContext(ctx);vm.runInContext(grab('encodeSeparatedPressure'),ctx);
-  const encoder={beginComputePass:()=>({setPipeline(){},setBindGroup(i,g){if(i===0)bound.push(g.texture);},dispatchWorkgroups(){},end(){}})};
+  const encoder={beginComputePass:()=>({setPipeline(){},setBindGroup(i,g){if(i===0)bound.push(g);},dispatchWorkgroups(){},end(){}})};
   const solver={effective:{solver:'converged',iterations:1,openTop:true}};
   ctx.encodeSeparatedPressure(encoder,solver,{});bound.length=0;
   optical.destroyed=true;ctx.worldSmoke={optical:{destroyed:false}};
   ctx.encodeSeparatedPressure(encoder,solver,{});
   assert.equal(bound.length,4);
-  assert.ok(bound.every(texture=>texture===ctx.worldSmoke.optical&&!texture.destroyed),'pressure passes must not retain the replaced optical allocation');
+  assert.ok(bound.every(group=>group.textures[0]===ctx.worldSmoke.optical&&!group.textures[0].destroyed),'pressure passes must not retain the replaced optical allocation');
+  for(const count of [2,3,1,0]){
+    bound.length=0;
+    ctx.immersedCollectionTexture.destroyed=true;
+    ctx.immersedCollectionTexture={destroyed:false,count};
+    ctx.encodeSeparatedPressure(encoder,solver,{});
+    assert.equal(bound.length,4);
+    assert.ok(bound.every(group=>group.textures[1]===ctx.immersedCollectionTexture&&!group.textures[1].destroyed),`all pressure passes must use the live collection after changing to ${count} emitters`);
+    const currentGroup=owner.group;
+    ctx.encodeSeparatedPressure(encoder,solver,{});
+    assert.equal(owner.group,currentGroup,'unchanged texture identities keep the cached group');
+  }
 });
 
 test('world resize keeps ordinary transport available when adaptive capacity is no longer admitted',()=>{

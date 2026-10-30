@@ -11685,7 +11685,7 @@ export function createKaminosVolumePrototype({
   }
   let worldOpticalFallback = null, worldRenderUniform = null;
   let worldSmokeOverlay = 'off';
-  let adaptiveMaterialOptions = null, adaptiveMaterialError = null;
+  let adaptiveMaterialOptions = controlsSnapshot.adaptiveMaterial?validateAllocation(controlsSnapshot.adaptiveMaterial):null, adaptiveMaterialError = null;
   // All fluid bind groups include the optical texture, including compute passes
   // which do not sample it. Replace it before encoding any fine-grid commands.
   function prepareWorldSmoke() {
@@ -16628,7 +16628,10 @@ export function createKaminosVolumePrototype({
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
     if(immersedCollectionRecords!==null){
       immersedCollectionPrepared=compileCurrentImmersedCollection(sceneSolidCellsCpu);
-      if(prepareImmersedCollectionTexture(immersedCollectionPrepared))rebuildFluidBindGroups();
+      if(prepareImmersedCollectionTexture(immersedCollectionPrepared)){
+        rebuildFluidBindGroups();
+        rebuildSelectiveHeadLiveBindGroups();
+      }
       const sources=immersedCollectionPrepared.sources;
       if(sceneSolidGpu)for(const source of sources){source.config.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';source.config.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};}
       Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:structuredClone(sources),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
@@ -17824,7 +17827,7 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(owner.uniform, 0, coarseUniforms);
     const targetSolid=velocityOwner?.solid??sceneSolidTexture,targetBurn=velocityOwner?.burn??burnRateTexture,targetLower=velocityOwner?.lower??joinedLowerFaceTexture;
     const solidEnabled = targetSolid.width === targetDims[0];
-    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture,worldSmoke?.optical??worldOpticalFallback,intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback];
+    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture,worldSmoke?.optical??worldOpticalFallback,intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback,immersedCollectionTexture];
     if (!owner.group || !groupResources.every((value,i)=>value===owner.groupResources?.[i])) {
       owner.groupResources = groupResources;
       owner.solidEnabled = solidEnabled;
@@ -27899,6 +27902,10 @@ export function createKaminosVolumePrototype({
       resolveDisplayReconstruction({...controlsSnapshot,...next});
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
       this.validateGridControls(next);
+      if(Object.hasOwn(next,'adaptiveMaterial')) {
+        const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
+        if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);
+      }
       if(Object.hasOwn(next,'raymarchMode')||Object.hasOwn(next,'opticalTolerance')) {
         const config=opticalSteppingConfig({mode:next.raymarchMode??controlsSnapshot.raymarchMode??'numerical',
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
