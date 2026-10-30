@@ -5,7 +5,7 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {MLS_ROUTE,analyzeMlsParticles} from '../mls-juice-contract.mjs';
-import {bindMlsWitnessSource,validateServedMlsSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
+import {bindMlsWitnessSource,validateServedMlsSource,validateMlsGoinRequest,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
 
 export function validateMlsWitness(report){
   validateServedMlsSource(report);
@@ -19,12 +19,21 @@ export function validateMlsWitness(report){
   assert(report.video,'missing rendered motion recording');
   assert.deepEqual(report.pageErrors,[],'browser errors');
   assert.deepEqual(report.consoleErrors,[],'console or GPU validation errors');
+  if(report.requested?.goinPile){
+    const pile=report.state.runtime.solver.bodies;
+    validateMlsGoinRequest(pile,report.requested.goinPile);
+    assert(pile.contacts>0,'no liquid/pile contact');
+    assert(pile.timeSeconds>=(report.seconds??4),'pile clock stalled');
+    assert(pile.bodies.every(b=>[...b.position,...b.velocity,...b.angularVelocity,...b.quaternion].every(Number.isFinite)),'nonfinite pile state');
+    assert(report.goinDisplacement?.some(v=>v>.2),'pile not displaced');
+  }
 }
 if(process.argv.includes('--self-test')){
   const good={route:MLS_ROUTE,state:{runtime:{failure:null,frameCount:2,solver:{clock:{simulatedSeconds:4}}}},active:1,nonfinite:0,outside:0,video:'observed.webm',pageErrors:[],consoleErrors:[],
     source:{root:'/expected',head:'observed'},servedSource:{schema:'kaminos.runtime-config.v0',source:{repoRoot:'/expected',commit:'observed',dirty:false}},
     expectedFiles:{'/mls-juice-host.mjs':'sha'},servedFiles:{'/mls-juice-host.mjs':{status:200,sha256:'sha'}}};
   validateMlsWitness(good);
+  assert.throws(()=>validateMlsWitness({...good,requested:{goinPile:{count:24}}}),/pile/);
   assert.throws(()=>validateMlsWitness({...good,source:{root:'/expected',head:'observed'},servedSource:{source:{repoRoot:'/wrong',commit:'observed'}}}),/served source/);
   assert.throws(()=>validateMlsWitness({...good,servedSource:{...good.servedSource,source:{...good.servedSource.source,repoRoot:'/wrong'}}}),/root mismatch/);
   assert.throws(()=>validateMlsWitness({...good,servedSource:{...good.servedSource,source:{...good.servedSource.source,commit:'old'}}}),/revision mismatch/);

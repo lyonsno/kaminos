@@ -3,17 +3,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {MLS_ROUTE} from '../mls-juice-contract.mjs';
+import {MLS_ROUTE,mlsConfig} from '../mls-juice-contract.mjs';
 import {RUNWAY_INPUTS} from '../experiments/hand-jet-runway.experiment.mjs';
+import {GOIN_INPUTS} from '../experiments/hand-goin-pile.experiment.mjs';
 
 export function resolveMlsHandRequest(experiment,inputs){
-  assert(['hand-live','hand-browser-juice','hand-jet-runway'].includes(experiment),'unsupported hand experiment');
+  assert(['hand-live','hand-browser-juice','hand-jet-runway','hand-goin-pile'].includes(experiment),'unsupported hand experiment');
   return {particleCount:2400,fluidViscosity:.1,particleLifetimeSeconds:6,jetSpeed:1.15*1.7,sourceFlux:360,fluidGridSize:64,
-    ...(experiment==='hand-jet-runway'?RUNWAY_INPUTS:{}),...inputs};
+    ...(['hand-jet-runway','hand-goin-pile'].includes(experiment)?RUNWAY_INPUTS:{}),
+    ...(experiment==='hand-goin-pile'?GOIN_INPUTS:{}),...inputs};
+}
+
+export function validateMlsGoinRequest(pile,requested){
+  const p=mlsConfig({goinPile:requested}).goinPile;
+  assert.equal(pile?.route,'mls-particle-contact/cannon-es-0.20.0','missing or wrong pile route');
+  assert.equal(pile.bodies.length,p.count,'incomplete pile');
+  for(const [effective,key]of [['bodyMass','mass'],['particleMass','particleMass'],['couplingSteps','couplingSteps'],['collisionSides','collisionSides']])
+    assert.equal(pile[effective],p[key],`pile ${key} mismatch`);
+  for(const body of pile.bodies)for(const key of ['mass','radius','thickness'])assert.equal(body[key],p[key],`pile body ${key} mismatch`);
 }
 
 export function validateMlsHandRequest(state,requested){
   const solver=state.fingerJuice.runtime.solver;
+  if(requested.goinPile)validateMlsGoinRequest(solver.bodies,requested.goinPile);
   assert.equal(solver.particleCount,requested.particleCount,'capacity mismatch');
   assert.equal(solver.material.viscosity,requested.fluidViscosity,'viscosity mismatch');
   assert.equal(state.fingerJuice.packet.economics.lifetimeSeconds,requested.particleLifetimeSeconds,'packet lifetime mismatch');

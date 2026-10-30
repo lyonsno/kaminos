@@ -2,6 +2,8 @@
 
 `hand-goin-pile` composes the existing browser hand and finger-packet law with a physical pile. `mls-juice` accepts the same `goinPile` setup for deterministic nozzle diagnosis. This is a provisional flat-support interaction, not the Hill or Horde's possession rules.
 
+The hand fixture explicitly selects eight-substep buffered exchange and 12-sided body colliders. The generic solver defaults remain one-substep exchange and 32 sides for the reference. Both witnesses compare effective mass, geometry and coupling configuration against the requested settings.
+
 The pile uses Cannon ES 0.20.0, matching Horde's existing goin engine and Y-axis cylinder convention. Twenty-four coins begin in four six-coin stacks. Mass, radius, thickness, count, collision side count and coupling steps are explicit setup parameters. The solver reports their effective values and every body's pose, linear/angular velocity, contact count and accumulated liquid impulse. Gold beveled render meshes are visual proxies for the physical cylinders.
 
 After each MLS G2P step, particles encountering a moving cylinder receive a normal contact impulse using relative surface velocity and the particle/body effective mass. The opposite impulse and its moment about the body center are accumulated on the GPU. World particle mass is explicitly 0.001 by default; this is a gameplay mass scale, not a calibrated water-density claim. The fluid's APIC constitutive model is otherwise unchanged. Tangential liquid friction, buoyancy/pressure integration, arbitrary scene collision and dynamic Hill support are not implemented.

@@ -32,6 +32,10 @@ for(const mutate of [s=>s.fingerJuice.runtime.solver.particleCount=2400,s=>s.fin
 assert.equal(witness.resolveMlsHandRequest('hand-browser-juice',{}).particleCount,2400);
 assert.equal(witness.resolveMlsHandRequest('hand-jet-runway',{jetSpeed:3}).jetSpeed,3);
 assert.throws(()=>witness.resolveMlsHandRequest('unknown',{}),/experiment/);
+const pileRequest=witness.resolveMlsHandRequest('hand-goin-pile',{});
+assert.equal(pileRequest.goinPile.count,24);
+assert.equal(pileRequest.goinPile.couplingSteps,8);
+assert.equal(pileRequest.goinPile.collisionSides,12);
 
 assert.equal(typeof witness.validateMlsJetControl,'function','live jet control validation is absent');
 const before=structuredClone(effective),after=structuredClone(effective);
