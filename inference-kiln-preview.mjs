@@ -90,11 +90,11 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
      await sharedGpu.device.queue.onSubmittedWorkDone();if(disposed||revision!==prepareRevision){replacement?.dispose?.();return;}
      burning?.forget(target.object);target.object.geometry.dispose();target.object.geometry=built?built.geometry.clone():replacement.geometry;
      preparedMask=built?.surfaceMask??null;preparedHeight=built?.height??KILN_PROMPT_WINDOW_HEIGHT;preparedText=next;feedPixels=0;feedSteps=0;positionFeed();
-     target.object.userData.kaminosPromptRelief={...promptReliefMetadata(next,'composed'),burnerSeconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5};replacement?.material.dispose();
+     target.object.userData.kaminosPromptRelief={...promptReliefMetadata(next,'composed'),burnerSeconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5,burnerFlares:target.object.userData.kaminosPromptRelief.burnerFlares??3,burnerPauseSeconds:target.object.userData.kaminosPromptRelief.burnerPauseSeconds??1};replacement?.material.dispose();
      await burning?.prepare();
     }
     if(admitted&&request?.id!==admitted.id&&burning?.read(plan.promptObjectId).status==='resident'){burning.reset(plan.promptObjectId);feedPixels=0;feedSteps=0;positionFeed();}
-    if(admitted?.id!==request?.id||(admitted&&!burnWindow)){burnWindow=admitted?createKilnBurnWindow({seconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5}):null;}
+    if(admitted?.id!==request?.id||(admitted&&!burnWindow)){burnWindow=admitted?createKilnBurnWindow({seconds:target.object.userData.kaminosPromptRelief.burnerSeconds??5,flares:target.object.userData.kaminosPromptRelief.burnerFlares??3,pauseSeconds:target.object.userData.kaminosPromptRelief.burnerPauseSeconds??1}):null;}
     prompt=next;request=admitted;editor?.sync();
    });preparation=work;return work;
   }
@@ -146,7 +146,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
    if(!active||!burnWindow)return;const state=burnWindow.read();setEmission(state.emitting);
    feedPixels=Math.max(feedPixels,Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)*state.progress);positionFeed();
    clearTimeout(burnTimer);
-   if(state.emitting)burnTimer=setTimeout(advanceBurnWindow,Math.max(0,(state.seconds-state.elapsedSeconds)*1000));
+   if(!state.done)burnTimer=setTimeout(advanceBurnWindow,Math.max(1,state.nextChangeSeconds*1000));
    else if(finishing)queueMicrotask(()=>completeBurn().catch(failure));
   }
   async function completeBurn(){finishing=false;request=null;await setActive(false);finishResolve?.();finishResolve=null;}

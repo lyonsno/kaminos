@@ -30,3 +30,7 @@ try{
 assert.equal(pupRuntimeTest.disposed,3);
 assert.ok(pupRuntimeTest.options.every(options=>options.progress_callback===undefined),'local HTTP model loading must avoid the pinned runtime metadata preflight that leaves response bodies unread');
 console.log('BFL rejected-route retry and model ownership pass');
+const workingFetch=globalThis.fetch;
+globalThis.fetch=async()=>{throw new TypeError('Failed to fetch');};
+await assert.rejects(createBrowserPromptHelper({modelUrl:'http://localhost/model',runtimeUrl}),/Prompt helper.*provenance.*http:\/\/localhost\/model\/provenance.json.*Failed to fetch/s);
+globalThis.fetch=workingFetch;

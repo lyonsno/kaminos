@@ -5,7 +5,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
  const volume=document.createElement('div');volume.className='generation-flame-volume';
  const status=document.createElement('span');status.className='generation-flame-status';status.setAttribute('role','status');
  tile.append(volume,status);slot.append(tile);
- let renderer=null,startup=null,running=false,visible=false,disposed=false,lastError=null,request=null,epoch=0,lifecycle=Promise.resolve(),renderedKey=null,allowCold=true,refreshPending=false,finishPending=false,draining=false,lastStatus=null;
+ let renderer=null,startup=null,running=false,burning=false,visible=false,disposed=false,lastError=null,request=null,epoch=0,lifecycle=Promise.resolve(),renderedKey=null,allowCold=true,refreshPending=false,finishPending=false,draining=false,lastStatus=null;
  const draft=()=>document.getElementById('asset-prompt')?.value??'';
  const abort=()=>startup?.abort(new DOMException('Kiln view superseded','AbortError'));
  function sync({refresh=false}={}){
@@ -39,7 +39,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
    }
    if(generation!==epoch)return;
    if(!running&&['failed','stopped'].includes(lastStatus)&&renderer.cancel)await renderer.cancel();
-   else await renderer.setActive(running);
+   else await renderer.setActive(burning);
    status.textContent='';tile.dataset.state=running?'burning':'idle';
   }).catch(error=>{lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';});
   return lifecycle;
@@ -47,10 +47,11 @@ export function installGenerationFlame({document,slot,createRenderer}){
  function render(state){
   renderer?.syncEditor?.();
   const active=['loading','running','stopping'].includes(state?.status),next=state?.request??null;
+  const nextBurning=['running','stopping'].includes(state?.status);
   const interrupted=state?.status!==lastStatus&&['failed','stopped'].includes(state?.status);
-  const changed=active!==running||(active&&next?.id!==request?.id)||interrupted;
+  const changed=active!==running||nextBurning!==burning||(active&&next?.id!==request?.id)||interrupted;
   if(changed)finishPending=running&&!active&&['saving','complete'].includes(state?.status);
-  lastStatus=state?.status;request=next;running=active;
+  lastStatus=state?.status;request=next;running=active;burning=nextBurning;
   // An active request is visible in simple consumers without an observer. The
   // actual Generate pane explicitly supplies visibility, including when hidden.
   if(changed){if(!active){allowCold=refreshPending;epoch++;if(!renderer)abort();}sync();}

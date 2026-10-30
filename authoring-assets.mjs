@@ -163,7 +163,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     }
     armPreviews();
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry'))button.setAttribute('aria-pressed',String((state.selected?.source||state.selected?.path)===button.dataset.assetPath));
-    byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
+    byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length||mode==='generate'?'':`No assets in this collection`);
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
     const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=withheld||selected?.kind!=='mesh';byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}

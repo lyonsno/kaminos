@@ -15,5 +15,5 @@ for(const initial of [null,{id:'one'}])test(`admitted burner initializes and com
  const f=fixture(initial),s=f.state;await s.prepare({prompt:'words',request:{id:'one'}});assert.ok(s.burnWindow,'first admitted request must own a burner window');
  s.burnWindow.start();s.active=true;s.advance();assert.equal(s.emitting,true);
  const window=s.burnWindow;await s.prepare({prompt:'words',request:{id:'one'}}).catch(error=>{assert.match(error.message,/Pause combustion/);});s.active=false;await s.prepare({prompt:'words',request:{id:'one'}});assert.equal(s.burnWindow,window,'same admission retains its clock');
- s.active=true;f.setNow(6000);s.finishing=true;const done=new Promise(resolve=>s.finishResolve=resolve);s.advance();await done;assert.equal(s.emitting,false);assert.equal(s.active,false);assert.equal(s.request,null);assert.equal(s.feedPixels,480);
+ s.active=true;f.setNow(8000);s.finishing=true;const done=new Promise(resolve=>s.finishResolve=resolve);s.advance();await done;assert.equal(s.emitting,false);assert.equal(s.active,false);assert.equal(s.request,null);assert.equal(s.feedPixels,480);
 });

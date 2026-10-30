@@ -3,6 +3,9 @@
 import {prepareReference} from './reference-policy.mjs';
 import {installTextRopeCompatibility} from './text-rope-compat.mjs';
 export const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+async function helperStage(label,operation){
+ try{return await operation();}catch(cause){throw new Error(`Prompt helper ${label}: ${cause.message||cause}`,{cause});}
+}
 export const BFL_SOURCE_REVISION = '3f3edb52b2c55de0d49feab28598b68f7f8e4830';
 
 export function visionPositions(grid, side=48, merge=2) {
@@ -41,24 +44,24 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   // Transformers.js4.2 resolves same-origin packages as paths. Its hub loader
   // deliberately skips direct HTTP URLs, then rejects them as invalid HF IDs.
   const packagePath=new URL(base).pathname;
-  const response=await fetch(base+'/provenance.json');
+  const response=await helperStage(`provenance (${base}/provenance.json)`,()=>fetch(base+'/provenance.json'));
   if(!response.ok) throw Error(`Model provenance HTTP ${response.status}`);
   const provenance=await response.json();
   if(provenance.status!=='complete'||!provenance.source?.endsWith(BFL_SOURCE_REVISION)) throw Error('Package does not identify the exact completed BFL conversion.');
-  const systemsResponse=await fetch(base+'/system_prompts.json');
+  const systemsResponse=await helperStage(`system prompts (${base}/system_prompts.json)`,()=>fetch(base+'/system_prompts.json'));
   if(!systemsResponse.ok) throw Error(`BFL prompts HTTP ${systemsResponse.status}`);
   const systems=await systemsResponse.json();
   if(!systems.t2i||!systems.i2i) throw Error('BFL system prompts are incomplete.');
-  const tf=await import(runtimeUrl);
+  const tf=await helperStage(`runtime import (${runtimeUrl})`,()=>import(runtimeUrl));
   // The route explicitly requests WebGPU; do not turn an unsupported model into
   // a successful result from another backend. Disable duplicate browser disk cache
   // for the local conversion trial; deployment can opt into a published asset cache.
   tf.env.useBrowserCache=false;
   tf.env.allowLocalModels=true;
   onProgress({phase:'processor'});
-  const processor=await tf.AutoProcessor.from_pretrained(packagePath);
+  const processor=await helperStage(`processor (${packagePath})`,()=>tf.AutoProcessor.from_pretrained(packagePath));
   if(!processor.tokenizer)throw Error('The browser package must identify Qwen3VLProcessor, including its tokenizer.');
-  const templateResponse=await fetch(base+'/chat_template.jinja');
+  const templateResponse=await helperStage(`chat template (${base}/chat_template.jinja)`,()=>fetch(base+'/chat_template.jinja'));
   if(!templateResponse.ok)throw Error(`BFL chat template HTTP ${templateResponse.status}`);
   processor.chat_template=await templateResponse.text();
   if(!processor.chat_template.trim())throw Error('The BFL chat template is empty.');
@@ -68,14 +71,14 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
     onProgress({phase:'model'});
     let candidate;
     try{
-      candidate=await tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
+      candidate=await helperStage(`model weights and WebGPU sessions (${packagePath})`,()=>tf.Qwen3_5ForConditionalGeneration.from_pretrained(packagePath,{
       device:'webgpu',dtype:{embed_tokens:'q4f16',vision_encoder:'fp16',decoder_model_merged:'q4f16'},
       // Transformers.js4.2 aggregates progress by fetching local-file metadata
       // through whole GET responses whose bodies it never consumes or cancels.
       // With the authoring page's live streams this can exhaust the HTTP connection pool,
       // blocking model loading and the page lease renewals. Keep phase/elapsed
       // reporting; omit this optional preflight and let real loads read each body.
-    });
+    }));
     for(const [name,session] of Object.entries(candidate.sessions)){
       if(session.config?.device!=='webgpu')throw Error(`${name} did not select the WebGPU session.`);
     }
@@ -112,7 +115,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         const text=processor.apply_chat_template(messages,{add_generation_prompt:true,enable_thinking:false});
         const raw=await Promise.all(images.map(async image=>prepareReference(
-          image instanceof tf.RawImage?image:await tf.RawImage.read(image),images.length,tf.RawImage)));
+          image instanceof tf.RawImage?image:await helperStage('reference image',()=>tf.RawImage.read(image)),images.length,tf.RawImage)));
         // Original attachment order survives preparation and vision concatenation.
         inputs=await processor(text,raw.length?raw:undefined,{padding:false,truncation:false});
         const promptLength=inputs.input_ids.dims[1];

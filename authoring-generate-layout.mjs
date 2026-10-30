@@ -52,9 +52,14 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
   const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
   if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
-  if(createFlame){kilnPanel.classList.add('generation-kiln-editor');image.querySelector('h3').after(kilnPanel);kilnPanel.after(imageActions);const prompt=byId('asset-prompt');if(prompt)kilnView.append(prompt);}
+  if(createFlame){kilnPanel.classList.add('generation-kiln-editor');image.querySelector('h3').after(kilnPanel);kilnPanel.before(imageActions);const prompt=byId('asset-prompt');if(prompt)kilnView.append(prompt);}
+  // Keep model and the primary action beside the prompt instead of below a tall canvas.
+  const modelLabel=byId('asset-image-model')?.closest('label');if(modelLabel)imageActions.append(modelLabel);
+  const helper=image.querySelector('.asset-prompt-help');if(helper)kilnPanel.before(helper);
+  const reference=byId('asset-reference-control');if(reference)kilnPanel.before(reference);
+  if(imageOptions?.children.length){const options=document.createElement('details');options.className='asset-image-options';const summary=document.createElement('summary');summary.textContent='Image settings';options.append(summary);imageOptions.before(options);options.append(imageOptions);}
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
-  if(ceremony){const fit=document.createElement('button');fit.type='button';kilnTools.append(fit);installImageZoom({frame:kilnView,targets:[ceremony.element],resetButton:fit,label:'kiln'});kilnView.title='Type in the kiln · pinch to zoom · drag outside the lettering to pan';}
+  if(ceremony){const fit=document.createElement('button');fit.type='button';kilnTools.append(fit);installImageZoom({frame:kilnView,targets:[ceremony.element],resetButton:fit,label:'kiln'});kilnView.setAttribute('aria-label','Type in the kiln; pinch to zoom; drag outside the lettering to pan');}
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);

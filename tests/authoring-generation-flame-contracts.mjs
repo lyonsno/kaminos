@@ -38,3 +38,14 @@ test('temporarily hiding an in-progress kiln pauses and retains its physical sta
  let created=0,destroyed=0,active=false;const flame=fixture(async()=>{created++;return {async setActive(value){active=value;},dispose(){destroyed++;},debugState:()=>({active})};});
  flame.render({status:'running',request:{id:'same-burn',prompt:'RETAIN THIS BURN'}});await tick();await tick();await flame.setVisible(false);assert.equal(active,false);assert.equal(destroyed,0);await flame.setVisible(true);assert.equal(created,1);assert.equal(active,true);await flame.dispose();assert.equal(destroyed,1);
 });
+test('loading prepares the request without spending its burn; inference starts it once per run',async()=>{
+ let active=false,prepared=[],starts=0;
+ const flame=fixture(async()=>({prepare:async value=>prepared.push(value.request.id),async setActive(value){if(value&&!active)starts++;active=value;},finish:async()=>{active=false;},dispose(){},debugState:()=>({active})}));
+ await tick();
+ for(const id of ['first','second']){
+  const request={id,prompt:'same words'};flame.render({status:'loading',request});await tick();await tick();assert.equal(active,false,'model loading must not use the burner interval');assert.equal(prepared.at(-1),id);
+  flame.render({status:'running',request});await tick();await tick();assert.equal(active,true);
+  flame.render({status:'complete',request});await tick();await tick();
+ }
+ assert.equal(starts,2);await flame.dispose();
+});

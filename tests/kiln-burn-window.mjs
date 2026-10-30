@@ -14,8 +14,16 @@ test('authored duration accepts zero and finite positive values without a hidden
 const {BufferGeometry,Float32BufferAttribute,Mesh,MeshStandardMaterial}=await import('../lib/three.core.js');
 const {promptReliefMetadata,promptReliefRecord,restorePromptRelief}=await import('../inference-kiln-record.mjs');
 test('authored burner duration round-trips with the ordinary saved lettering record',()=>{
- const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute([0,0,0,1,0,0,0,1,0],3));const object=new Mesh(geometry,new MeshStandardMaterial());object.userData.kaminosPromptRelief={...promptReliefMetadata('words','composed'),burnerSeconds:7.5};
- const record=promptReliefRecord(object),restored=restorePromptRelief(record);assert.equal(restored.userData.kaminosPromptRelief.burnerSeconds,7.5);
+ const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute([0,0,0,1,0,0,0,1,0],3));const object=new Mesh(geometry,new MeshStandardMaterial());object.userData.kaminosPromptRelief={...promptReliefMetadata('words','composed'),burnerSeconds:7.5,burnerFlares:4,burnerPauseSeconds:.75};
+ const record=promptReliefRecord(object),restored=restorePromptRelief(record);assert.equal(restored.userData.kaminosPromptRelief.burnerSeconds,7.5);assert.equal(restored.userData.kaminosPromptRelief.burnerFlares,4);assert.equal(restored.userData.kaminosPromptRelief.burnerPauseSeconds,.75);
  delete record.promptRelief.burnerSeconds;const legacy=restorePromptRelief(record);assert.equal(legacy.userData.kaminosPromptRelief.burnerSeconds,5);
  for(const mesh of [object,restored,legacy]){mesh.geometry.dispose();mesh.material.dispose();}
+});
+test('authored flares share total on-time and finish only after their pauses',()=>{
+ let now=0;const window=createKilnBurnWindow({seconds:6,flares:3,pauseSeconds:1,clock:()=>now});window.start();
+ for(const [ms,emitting,done]of [[0,true,false],[1999,true,false],[2000,false,false],[3000,true,false],[5000,false,false],[6000,true,false],[8000,false,true]]){now=ms;assert.equal(window.read().emitting,emitting,`valve at ${ms}`);assert.equal(window.read().done,done,`completion at ${ms}`);}
+ assert.equal(window.read().elapsedSeconds,8);assert.equal(window.read().progress,1);
+});
+test('zero-duration flares complete without waiting through empty pauses',()=>{
+ const window=createKilnBurnWindow({seconds:0,flares:3,pauseSeconds:1});window.start();assert.equal(window.read().done,true);assert.equal(window.read().emitting,false);
 });
