@@ -84,6 +84,7 @@ export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySource
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,encounterContext=null,steering=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  if(steering!==null&&(typeof steering.update!=='function'||typeof steering.read!=='function'))throw Error('Game steering requires update and read');
+ if(steering?.attention!==undefined&&typeof steering.attention!=='function')throw Error('Game attention requires a reader');
  const choices=[...checkRecipeInputs(inputs)];
  const data=await loadCreatureFlesh(inputs.flesh,await loadSources(inputs)),document=host.controls.document;
  const restSetup=await prepareRestSetup(inputs,data,loadSources),restMotion=restSetup?.motion;
@@ -350,7 +351,15 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const props=sceneObjectInterests({THREE,root:sceneRoot,specs:inputs.attention.interests});
    // The scene's flame, when asked for, through the shared flame workbench.
    if(inputs.attention.flame)Promise.resolve(globalThis.window?.kaminosFlameWorkbench?.open?.()).then(workbench=>{if(workbench&&!disposed)flames=flameInterests({THREE,root:sceneRoot,workbench,interest:inputs.attention.flame.interest??1.5});}).catch(error=>record({kind:'attention.flame',phase:'unavailable',error:error.message}));
-   attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:()=>[...props(),...(flames?.read()??[])],
+   attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:()=>{
+    const taskAttention=steering?.attention?.();
+    if(taskAttention){
+     if((taskAttention.id!==null&&(typeof taskAttention.id!=='string'||!taskAttention.id))||!Array.isArray(taskAttention.interests))throw Error('Invalid game attention interest');
+     // Task priority sustains interest; existing sight and memory still own gaze.
+     attention.setEngagement(taskAttention.id);
+    }
+    return [...props(),...(taskAttention?.interests??[]),...(flames?.read()??[])];
+   },
     // Each creature's idle glances replay identically but differ from its neighbours'.
     options:{document,behavior:inputs.attention.behavior,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);

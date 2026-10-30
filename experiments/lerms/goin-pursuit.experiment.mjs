@@ -1,5 +1,6 @@
 import * as THREE from '../../lib/three.core.js';
 import {createWalkingCreature} from '../creature-motion/walking.experiment.mjs';
+import {sceneObjectInterests} from '../creature-motion/creature-attention.mjs';
 import {createGoinTask} from './goin-task.mjs';
 import {createWaterExposure} from './water-exposure.mjs';
 
@@ -24,7 +25,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  const goin=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,.16,32),new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}));
  goin.name='Goin';goin.rotation.x=Math.PI/2;goin.position.fromArray(position);goin.castShadow=true;
  if(physicsInput){const mark=new THREE.Mesh(new THREE.SphereGeometry(.055,12,8),new THREE.MeshStandardMaterial({color:0x553c14}));mark.position.set(.2,.09,0);goin.add(mark);}
- let asset,actor,seating,escapeAsset,stopCarry,stopPose,stopEdits,disposed=false,serial=0,revision=0,refresh=()=>{};
+ let asset,actor,seating,escapeAsset,stopCarry,stopPose,stopEdits,disposed=false,serial=0,revision=0,refresh=()=>{},goinInterests=()=>[];
  const edits=host.scene.edits;
  let held=false,editHeld=false,presentedPose=null;
  let physics,supportAsset,physicsFailure=null;
@@ -97,7 +98,9 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   // Undo/redo and ancestor transforms publish after writing, without begin.
   if(presentedPose!==JSON.stringify(worldPose())){setHeld(true,'shared-scene-history');setHeld(false,'shared-scene-history');}
  }
- const steering={read:task.read,update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
+ const steering={read:task.read,
+  attention(){const state=task.read(),interests=state.custody?.carrierId||!goin.parent?[]:goinInterests().filter(x=>x.active);return {id:interests.length?asset.id:null,interests};},
+  update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
  const invokeActor=(name,input)=>{
   active();if(name!=='pause')healthy();
   if(physics&&name==='floor'&&input?.visible)throw Error('Physical goin support replaces the decorative walking floor');
@@ -139,6 +142,8 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-liquid-volume-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
  try{
   asset=await session.attach(goin,{owned:true,metadata:{label:'Goin',source:'lerms:provisional-goin-geometry',type:'experiment'}});
+  goinInterests=sceneObjectInterests({THREE,root:()=>{let node=goin;while(node.parent)node=node.parent;return node;},
+   specs:[{object:asset.id,interest:1,anchor:'center',label:'Goin'}]});
   if(support){
    supportAsset=await session.attach(support,{owned:true,metadata:{label:'Goin support',source:'lerms:authored-box-support',type:'experiment'}});
    const {createGoinPhysics}=await import('./goin-physics.mjs');
@@ -151,7 +156,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
    }});
   }
   if(escape)escapeAsset=await session.attach(escape,{owned:true,metadata:{label:'Escape point',source:'lerms:authored-escape-target',type:'experiment'}});
-  const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false,interests:[...inputs.creature.attention.interests,...theft?[]:[{object:asset.id,interest:1,anchor:'center',label:'Goin'}]]}:undefined;
+  const attention=inputs.creature.attention?{...inputs.creature.attention,engage:false}:undefined;
   actor=await createWalkingCreature({host,record,inputs:{...inputs.creature,attention,actor_root:'live',action:'wander',play:false}},
    {...dependencies,publishInspector:false,steering});
   if(physics&&actor.read().referenceFloor)actor.operations.floor({visible:false});
