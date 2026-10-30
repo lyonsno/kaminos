@@ -10439,7 +10439,10 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   );
   let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, select(0.0, 1.0, exitValidity > 0.5));
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
-  let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
+  var refractedScene = vec4<f32>(0.0);
+  if (transmissionRayActive) {
+    refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
+  }
   let opticalThicknessPath = thickness * 0.12;
   let geometricSlabPath = mix(opticalThicknessPath, geometricPathLength, queryValidity);
   let denseBodyPathActivation = interfaceNormal.denseBodyConfidence

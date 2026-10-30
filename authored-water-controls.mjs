@@ -8,6 +8,8 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  .authored-water-controls .hint{font-size:12px;line-height:1.45;color:#a9b8be;margin:8px 0}
  .authored-water-controls [data-bounds] label{display:grid;grid-template-columns:4.5em repeat(3,minmax(0,1fr));align-items:center;gap:4px}
  .authored-water-controls [data-bounds] input{min-width:0;width:100%}
+ .authored-water-controls [data-optical-cutoff]{display:grid;grid-template-columns:minmax(0,1fr) 7em 4.5em;align-items:center;gap:6px}
+ .authored-water-controls [data-optical-cutoff] input[type=range]{min-width:0;width:100%;margin:0}
  .authored-water-controls [data-actions]{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
  </style>
  <h2>Water sources</h2><div data-actions><button class="btn" data-add>Add water volume</button><button class="btn" data-add-flow>Add water emitter</button></div>
@@ -24,7 +26,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
   <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
   <h3>Optical rendering</h3>
-  <label>Minimum transmission ray contribution<input class="transform-input" type="number" min="0" max="1" step="0.05" data-transmission-cutoff></label>
+  <label data-optical-cutoff>Minimum transmission ray contribution<input type="range" min="0" max="1" step="0.01" data-transmission-cutoff-range><input class="transform-input" type="number" min="0" max="1" step="0.05" data-transmission-cutoff></label>
   <p class="hint">Skips expensive refraction and exit-cone rays when transmitted weight (1 − Fresnel) × Beer-Lambert transmittance falls below this threshold (default 0.25). Applies immediately.</p>
   <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation.</p><p role="alert" data-simulation-error></p>
   <div data-compatibility><p class="hint" data-compatibility-status role="status"></p><p class="hint" data-match-plan></p><button class="btn" data-match>Match initial volumes to selected setup</button><p role="alert" data-match-error></p></div>
@@ -74,7 +76,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  const restorePreview=()=>{stopTimer('preview');previewInfo=null;api.preview?.(null);};
  function queuePreview(){
   if(!api.preview)return;stopTimer('preview');
-  timers.set('preview',schedule(()=>{timers.delete('preview');if(disposed)return;try{previewInfo=api.preview({id:selected?.id,source:dirty&&selected?proposal():null,waterSampling:simulationDirty?simulationProposal().waterSampling:null});showProposal();}catch(e){(simulationDirty?simulationError:sourceError).textContent=e.message;}},0));
+  timers.set('preview',schedule(()=>{timers.delete('preview');if(disposed)return;try{const sim=simulationDirty?simulationProposal():null;previewInfo=api.preview({id:selected?.id,source:dirty&&selected?proposal():null,waterSampling:sim?.waterSampling??null,transmissionMinContribution:sim?.transmissionMinContribution});showProposal();}catch(e){(simulationDirty?simulationError:sourceError).textContent=e.message;}},0));
  }
  async function flush(kind){
   stopTimer(kind);
@@ -121,10 +123,15 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  function preview(){revision++;dirty=true;showProposal();queuePreview();queue('source');}
  for(const input of node.querySelectorAll('input[type=number]')){
   const kind=input===$('[data-capacity]')||input===$('[data-target]')||input===$('[data-transmission-cutoff]')||input.dataset.bound?'simulation':'source';
-  input.addEventListener('input',kind==='simulation'?()=>{simulationRevision++;simulationDirty=true;showProposal();queuePreview();queue(kind);}:preview);
+  input.addEventListener('input',kind==='simulation'?()=>{if(input===$('[data-transmission-cutoff]'))$('[data-transmission-cutoff-range]').value=input.value;simulationRevision++;simulationDirty=true;showProposal();queuePreview();queue(kind);}:preview);
   const drag=controls.installNumberDrag({input,step:Number(input.step),onStart:()=>{gestures.add(kind);stopTimer(kind);},onEnd:()=>{gestures.delete(kind);if((kind==='source'?dirty:simulationDirty)&&!disposed)void flush(kind);}});scrubs.push(drag);
   input.addEventListener('pointercancel',()=>{restorePreview();stopTimer(kind);if(kind==='simulation'){simulationDirty=false;simulationRevision++;}else{dirty=false;revision++;sourceError.textContent='';}refresh();});
  }
+ const cutoffRange=$('[data-transmission-cutoff-range]');
+ cutoffRange.addEventListener('pointerdown',()=>{gestures.add('simulation');stopTimer('simulation');});
+ cutoffRange.addEventListener('input',()=>{$('[data-transmission-cutoff]').value=cutoffRange.value;simulationRevision++;simulationDirty=true;showProposal();queuePreview();queue('simulation');});
+ cutoffRange.addEventListener('change',()=>{gestures.delete('simulation');if(simulationDirty&&!disposed)void flush('simulation');});
+ cutoffRange.addEventListener('pointercancel',()=>{gestures.delete('simulation');restorePreview();stopTimer('simulation');simulationDirty=false;simulationRevision++;refresh();});
  $('[data-mode]').onchange=preview;$('[data-retire]').onchange=preview;$('[data-container]').onchange=()=>{simulationRevision++;simulationDirty=true;queuePreview();queue('simulation');};
  $('[data-add]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.add();});
  $('[data-add-flow]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.add({mode:'continuous'});});
@@ -146,7 +153,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   selected=s.selected;sourcePanel.hidden=!selected;
   const simulation=s.simulation;simulationPanel.hidden=!simulation?.present||simulation.selected===false;$('[data-select-simulation]').disabled=!simulation?.present;
   if(!simulation?.present){stopTimer('simulation');simulationDirty=false;simulationRevision++;}
-  if(simulation?.settings&&!simulationDirty){$('[data-capacity]').value=simulation.settings.particleCount??12000;$('[data-transmission-cutoff]').value=simulation.settings.transmissionMinContribution??.25;if(simulation.sampling){$('[data-target]').value=simulation.sampling.particleTarget??Math.round(simulation.requestedVolume/simulation.sampling.spacing**3);$('[data-container]').checked=simulation.sampling.container!==null;const b=simulation.sampling.container??simulation.sampling.worldBounds;$('[data-bounds]').hidden=false;for(const input of simulationPanel.querySelectorAll('[data-bound]'))input.value=b[input.dataset.bound][Number(input.dataset.axis)];}}
+  if(simulation?.settings&&!simulationDirty){$('[data-capacity]').value=simulation.settings.particleCount??12000;const cutoff=simulation.settings.transmissionMinContribution??.25;$('[data-transmission-cutoff]').value=cutoff;$('[data-transmission-cutoff-range]').value=cutoff;if(simulation.sampling){$('[data-target]').value=simulation.sampling.particleTarget??Math.round(simulation.requestedVolume/simulation.sampling.spacing**3);$('[data-container]').checked=simulation.sampling.container!==null;const b=simulation.sampling.container??simulation.sampling.worldBounds;$('[data-bounds]').hidden=false;for(const input of simulationPanel.querySelectorAll('[data-bound]'))input.value=b[input.dataset.bound][Number(input.dataset.axis)];}}
   $('[data-allocation-summary]').textContent=simulation?.present?`On Restart: ${(simulation.proposedParticleCount??0).toLocaleString()} initial + ${(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0).toLocaleString()} additional = ${((simulation.proposedParticleCount??0)+(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0)).toLocaleString()} total slots.`:'';
   showResolutionSummary(simulation);$('[data-initial-resolution]').hidden=!s.sources?.some(r=>r.mode==='finite_drop')&&selected?.settings?.mode!=='finite_drop';
   $('[data-release]').disabled=!(s.sources?.length||selected);

@@ -12677,7 +12677,15 @@ function replaceAuthoredWaterPreviewChildren(entry,replacement){
 }
 let authoredWaterDraftPreview=null;
 function previewAuthoredWaterSetup(draft=null){
- if(!draft&&!authoredWaterDraftPreview)return {initialOnly:true,draft:false};
+ if(!draft&&!authoredWaterDraftPreview){
+  if(localLiquidHost&&localLiquidSetup)localLiquidHost.setSetup?.(localLiquidSetup);
+  return {initialOnly:true,draft:false};
+ }
+ if(localLiquidHost&&localLiquidSetup){
+  const previewCutoff=draft?.transmissionMinContribution!==undefined?draft.transmissionMinContribution:localLiquidSetup.transmissionMinContribution;
+  localLiquidHost.setSetup?.({...localLiquidSetup,transmissionMinContribution:previewCutoff});
+  window._kaminosDirty?.();
+ }
  const records=localLiquidEmitterRecords().map(r=>draft?.source&&draft.id===r.id?{...r,localLiquidEmitter:{...r.localLiquidEmitter,...draft.source}}:r);
  const sampling=resolveAuthoredWaterSampling(records,{...localLiquidSetup,waterSampling:draft?.waterSampling??localLiquidSetup?.waterSampling});
  const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');

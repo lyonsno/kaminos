@@ -157,7 +157,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
         return true;
     };
-    return {config,particles,
+    return {config,particles,densities,
       setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
