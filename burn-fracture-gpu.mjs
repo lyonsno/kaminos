@@ -20,17 +20,17 @@ const FAILURE_WGSL=ARCH_GPU_KERNELS+BURN_STRESS_WGSL+`
 @compute @workgroup_size(64)
 fn burnFailure(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=params.counts.y){return;}let base=i*11u;
- var meta=bitcast<vec4u>(joints[base]);if(meta.w==0u){return;}
+ var jointMeta=bitcast<vec4u>(joints[base]);if(jointMeta.w==0u){return;}
  let shape=geometry[i*3u];if(shape.x<=0.0){return;}
  let force=linearForce(i);let arm=max(joints[base+1u].w,1.0);
- let delta=qmul(qmul(quaternions[meta.x],joints[base+3u]),qconj(quaternions[meta.y]));
+ let delta=qmul(qmul(quaternions[jointMeta.x],joints[base+3u]),qconj(quaternions[jointMeta.y]));
  let torque=(joints[base+10u].xyz*2.0*delta.xyz*arm+joints[base+8u].xyz)*arm;
- let stress=burnStress(shape.x,qrot(quaternions[meta.x],shape.yzw),force,torque);
+ let stress=burnStress(shape.x,qrot(quaternions[jointMeta.x],shape.yzw),force,torque);
  let char=clamp(materialDamage[i].x,0.0,1.0);let ratio=stress/(strength.xyz*(1.0-char*(1.0-strength.w)));
  let utilization=max(ratio.x,max(ratio.y,ratio.z));
  damage[i*3u]=vec4f(length(force),length(torque),utilization,0);
  damage[i*3u+1u]=vec4f(stress,0);damage[i*3u+2u]=vec4f(ratio,char);
- if(utilization>1.0){meta.w=0u;joints[base]=bitcast<vec4f>(meta);damage[i*3u].w=f32(params.counts.z);}
+ if(utilization>1.0){jointMeta.w=0u;joints[base]=bitcast<vec4f>(jointMeta);damage[i*3u].w=f32(params.counts.z);}
 }
 `;
 
