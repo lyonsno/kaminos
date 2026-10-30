@@ -7,7 +7,7 @@ globalThis.fetch=async url=>({ok:true,text:async()=> 'source template',json:asyn
 globalThis.pupRuntimeTest={loads:0,disposed:0,generated:0,acceptAfter:Infinity,options:[]};
 const runtime=`
 export const env={};
-export const AutoProcessor={from_pretrained:async()=>Object.assign(async()=>({input_ids:{dims:[1,1],dispose(){}}}),{apply_chat_template:()=>"prompt",tokenizer:{decode:()=>"A blue kettle"}})};
+export const AutoProcessor={from_pretrained:async()=>Object.assign(async()=>({input_ids:{dims:[1,1],dispose(){}}}),{components:{},image_processor:Object.assign(()=>{throw Error('Text-only lifecycle fixture must not prepare images');},{config:{}}),apply_chat_template:()=>"prompt",tokenizer:{decode:()=>"A blue kettle"}})};
 export class LogitsProcessor{};export class InterruptableStoppingCriteria{interrupt(){}};export class TextStreamer{};
 export const Qwen3_5ForConditionalGeneration={from_pretrained:async(model,options)=>{
  const state=globalThis.pupRuntimeTest;state.loads++;state.options.push(options);
