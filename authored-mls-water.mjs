@@ -19,7 +19,7 @@ export function authoredMlsInlets(records,epochMs=Date.now(),generation=1,cellSi
   if(r?.type!==LOCAL_LIQUID_EMITTER_TYPE||typeof r.id!=='string'||!r.id)throw Error('Invalid authored MLS water source');
   const pose=normalizeLocalLiquidEmitterPose(r.transform),s=normalizeLocalLiquidEmitter(r.localLiquidEmitter,pose);
   if(s.mode==='finite_drop')continue;
-  const rate=s.volumeRate==null?s.rate:s.volumeRate/authoredMlsParticleVolume(cellSize);
+  const rate=s.emissionEnabled===false?0:s.volumeRate==null?s.rate:s.volumeRate/authoredMlsParticleVolume(cellSize);
   emitters.push({id:r.id,active:rate>0,origin_world:pose.position,aim_world:new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).toArray(),
    radius:s.baseRadius*pose.scale[0],strength:s.strength,source_flux_particles_per_second:rate,lifetime_seconds:s.lifetimeSeconds??1e30});
  }
