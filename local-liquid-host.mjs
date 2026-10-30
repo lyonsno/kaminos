@@ -53,10 +53,11 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], readColliders = ()=>[], isCurrent = () => true}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], liveInletPacket = null, readColliders = ()=>[], isCurrent = () => true}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
-  const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
+  const externalInlets=liveInletPacket!==null;
+  const initialPacket=externalInlets?liveInletPacket:localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
   let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
@@ -224,6 +225,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         nativeType:pixels.constructor.name,nativeBytesPerRow,nativeValues,values};
     },
     setEmitters(records) {
+      if(externalInlets)throw Error('This host is owned by live inlet packets');
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
       // Gizmo selection/hover also reconciles sources. Republish only a real
@@ -235,7 +237,14 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       sourceGeneration++;
       return true;
     },
+    setLiveInletPacket(packet) {
+      if(!externalInlets||disposed)throw Error('Live inlet packet ownership unavailable');
+      const result=solver.setLiveInletPacket(packet);
+      sourceGeneration++;
+      return result;
+    },
     setSetup(nextSetup) {
+      if(externalInlets)throw Error('Live inlet setup changes require reopening the session');
       const next=normalizeLocalLiquidSetup(nextSetup);
       if (!next) throw Error('Local liquid setup cannot be cleared while its host is mounted');
       if(next.support!==authored.support)throw Error('Water collision mode changes require restarting the host');
