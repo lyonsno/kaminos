@@ -5,12 +5,18 @@ import {validateLightingReport, makeDiffuseEvaluator} from '../lib/inferred-ligh
 import * as THREE from '../lib/three.core.js';
 import definition from '../experiments/inferred-lighting.experiment.mjs';
 import * as lighting from '../lib/inferred-lighting.js';
+import {readFileSync} from 'node:fs';
 import {createWorkbenchSceneHost} from '../workbench-scene-host.mjs';
 
 const constant = () => [[Math.sqrt(4*Math.PI), Math.sqrt(4*Math.PI), Math.sqrt(4*Math.PI)], ...Array.from({length:8}, () => [0,0,0])];
 const report = () => ({schema:'kaminos.inferred-lighting.v1',status:'complete',checkpointSha256:'test-only',
   sourceRevision:'test-only',effectiveDevice:'fixture',environmentSha256:'test-only',input:{image:'data:image/png;base64,fixture'},
   lights:{estimated:{sh:constant()},reference:{sh:constant()}}});
+
+test('discovery metadata identifies the executable lighting experiment',()=>{
+  const metadata=JSON.parse(readFileSync(new URL('../experiments/inferred-lighting.experiment.json',import.meta.url),'utf8'));
+  assert.equal(metadata.id,definition.id);assert.equal(metadata.title,definition.title);
+});
 
 test('incomplete and nonfinite data cannot masquerade as estimated lighting', () => {
   assert.equal(validateLightingReport(report()).status, 'complete');
