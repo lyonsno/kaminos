@@ -30,4 +30,26 @@ try{
 const motionData={...data,frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:2,skeleton:{fps:30,jointNames:bones.map(b=>b.name),parents:[-1,0]},positions:[0,.2,0,0,.2,0,0,.2,1,0,.2,1,0,.2,2,0,.2,2],localRotations:Array.from({length:6},()=>[1,0,0,0]).flat()}};
 const g=fixture(),walking=await createWalkingCreature({host:g.host,inputs:{blend_frames:0,limb_attachment_reach:1}},{loadSources:async()=>motionData});
 try{assert.equal(walking.read().skin.binding.limbAttachmentReach,1);await walking.operations.limbAttachmentReach({value:2});assert.equal(walking.read().recipe.limb_attachment_reach,2);await g.edits.undo();assert.equal(walking.read().recipe.limb_attachment_reach,1);const h=fixture(),reopened=await createWalkingCreature({host:h.host,inputs:walking.read().recipe},{loadSources:async()=>motionData});try{assert.equal(reopened.read().skin.binding.limbAttachmentReach,1);}finally{await reopened.dispose();}}finally{await walking.dispose();}
+// A motion request holds old inputs while the author continues editing reach.
+// Serialization must always describe the effective binding, including undo.
+for(const duringLoad of ['edit','undo']){
+ const f=fixture(),nextDigest='d'.repeat(64),nextData={...motionData,source:{...motionData.source,motionSha256:nextDigest}};
+ let resolve;
+ const pending=new Promise(r=>{resolve=r;});
+ const walking=await createWalkingCreature({host:f.host,inputs:{blend_frames:0,limb_attachment_reach:1,motions:[{id:'next',label:'Next motion',motion:'next.json',motion_sha256:nextDigest}]}},{loadSources:async input=>input.motion==='next.json'?pending:motionData});
+ try{
+  if(duringLoad==='undo')await walking.operations.limbAttachmentReach({value:2});
+  const switching=walking.operations.motion({id:'next'});
+  if(duringLoad==='edit')await walking.operations.limbAttachmentReach({value:2});
+  else await f.edits.undo();
+  resolve(nextData);await switching;
+  const expected=duringLoad==='edit'?2:1;
+  const check=value=>{assert.equal(walking.read().skin.binding.limbAttachmentReach,value);assert.equal(walking.read().recipe.limb_attachment_reach,value,`${duringLoad}: motion completion must save the effective reach`);};
+  check(expected);
+  const reopened=await createWalkingCreature({host:fixture().host,inputs:walking.read().recipe},{loadSources:async()=>nextData});
+  try{assert.equal(reopened.read().skin.binding.limbAttachmentReach,expected);}finally{await reopened.dispose();}
+  if(duringLoad==='edit'){await f.edits.undo();check(1);await f.edits.redo();check(2);}
+  else{await f.edits.redo();check(2);await f.edits.undo();check(1);}
+ }finally{await walking.dispose();}
+}
 console.log('Reach is a native creature property, undoable, saved in pose/setup, legacy-safe and isolated per object');
