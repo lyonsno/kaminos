@@ -50,3 +50,18 @@ test('hidden domain outline cannot intercept viewport input',()=>{
  vm.createContext(ctx);vm.runInContext(grab('pickFlameDomainFromViewportPointer'),ctx);
  assert.equal(ctx.pickFlameDomainFromViewportPointer({clientX:0,clientY:0}),false);
 });
+
+test('selecting a field remounts its retained domain gizmo target after scene removal',()=>{
+ const pose={position:[.25,1.5,-.5],rotation:[0,0,0],scale:[2,2,2]};
+ const scene=new THREE.Scene();
+ const ctx={THREE,scene,flameDomainProxy:null,flameDomainDraft:null,acceptedFlameDomainPose:()=>pose,
+ applySceneObjectTransformState(object,value){object.position.fromArray(value.position);object.rotation.set(...value.rotation);object.scale.fromArray(value.scale);}};
+ vm.createContext(ctx);vm.runInContext(grab('flameDomainEditObject'),ctx);
+ const target=ctx.flameDomainEditObject();assert.equal(target.parent,scene);
+ scene.remove(target);assert.equal(target.parent,null,'scene replacement detaches the former selected helper');
+ const restored=ctx.flameDomainEditObject();
+ assert.equal(restored.parent,scene,'the gizmo must attach to a mounted target');
+ assert.deepEqual(restored.position.toArray(),pose.position);
+ assert.equal(scene.children.filter(child=>child===restored).length,1);
+ assert.equal(ctx.flameDomainEditObject(),restored,'repeat selection keeps one target');
+});

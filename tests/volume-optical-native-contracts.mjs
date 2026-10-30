@@ -32,7 +32,7 @@ test('one authored ray step survives the slider, gamut, route and GPU clamp', ()
 });
 test('native numerical stepping does not inherit sample-budget tail truncation', () => {
   assert.match(core, /setDebugOpticalStepping\(/, 'native camera must expose an explicit comparison switch');
-  assert.match(core, /!opticalStepping && \(expensiveSamples >= expensiveSampleBudget/);
+  assert.match(core, /!opticalStepping && \(\(!worldActive && expensiveSamples >= expensiveSampleBudget\)/);
   assert.match(core, /if \(opticalStepping\) \{[\s\S]*?opticalStepObserve/);
 });
 test('visual witness rejects wrong route, stale tolerance, changed state and absent pixels', () => {

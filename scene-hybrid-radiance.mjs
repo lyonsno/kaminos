@@ -15,6 +15,7 @@ import {createFireShadowCasters} from './fire-shadow-casters.mjs';
 import {createFireSmokeShadow,smokeShadowPlan} from './fire-smoke-shadow.mjs';
 import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
 import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
+import {createExteriorSmokeLight} from './scene-exterior-light.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
@@ -31,6 +32,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   };
   validateSmoke(smokeShadowSteps,smokeShadowResolution);
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
+  const exteriorLight=createExteriorSmokeLight(device,{beforeReplace:()=>prototype.setSceneDistributedLightFrame(null)});
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
   const surfaceOn=uniform(surfaceEnabled,'bool');
@@ -162,7 +164,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
         status.status='building-smoke-world-visibility';onStatus({...status});
-        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true});
+        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,exteriorMedium:true});
         prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;builtDomain=domainKey;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
@@ -177,13 +179,14 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights});
+      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,{geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights}):null;
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       if(surfaceEnabled){
         if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow),casterScene});
         else casterScene.withCapture(()=>{for(const light of lights)light.shadow.render();});
       }
-      frame={...frame,pointRegions:reduction,smokeShadow:medium,surfaceTransport:status.surfaceTransport,previewStale:false};
+      frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
     } catch(error){status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
@@ -259,7 +262,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
       }
-      originals.clear();releasePoints();gather?.destroy();casterScene.dispose();smokeEnvironment.dispose();
+      originals.clear();releasePoints();gather?.destroy();exteriorLight.destroy();casterScene.dispose();smokeEnvironment.dispose();
       };
       if(rebuildTask)rebuildTask.then(cleanup,cleanup);else {cleanup();rebuild?.hold(false);}
     },

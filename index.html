@@ -576,8 +576,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 .viewport-display-group .authoring-number-wrap { width:110px; margin-left:auto; }
 .viewport-display-group input[type="number"] { width:100%; }
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
+.flame-grid-summary { white-space: pre-line; font-size: 11px; line-height: 1.6; color: #bfcbd0; padding: 8px; background: #171a1d; border-radius: 4px; }
+.flame-grid-tuning h3 { font-size: 14px; margin: 12px 0 6px; }
+#grid-tuning-status[data-state="invalid"] { color: #ffb584; }
+#grid-tuning-status[data-state="draft"] { color: #f0d486; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./volume-grid-tuning.css">
 <link rel="stylesheet" href="./startup-veil.css">
 <script src="./startup-veil-guard.js"></script>
 <noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
@@ -1390,21 +1395,31 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
       <div class="volume-control-section-title">Wavelet turbulence</div>
-      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved eight-to-eleven-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
+      <span class="slider-help">Turbulence follows the resolved flow on coordinates that travel with the gas. The existing octaves span four and two velocity cells. With independent velocity detail, noise is evaluated at every material transport point without adding a fine velocity or pressure solve. Increasing material detail samples the same wavelengths more densely. With shared detail, turbulence fills the velocity field’s missing sub-grid motion. 0 = off.</span>
       <div class="slider-row">
         <span class="slider-label" title="Fraction of the sub-grid deficit filled per reference step. 0 = off (kernel unchanged); 1 = fill it every step.">Wavelet turbulence</span>
         <input type="range" id="volume-wavelet-turbulence" min="0" max="1" step="any" value="0">
         <span class="slider-val" id="volume-wavelet-turbulence-val">0.00</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label" title="Octaves synthesized below four cells: 1 = four-cell eddies only, 2 adds two-cell.">Wavelet octaves</span>
+        <span class="slider-label" title="Existing wavelengths in velocity cells: 1 = four-cell eddies only, 2 adds two-cell. Material evaluation does not shrink them.">Wavelet octaves</span>
         <input type="range" id="volume-wavelet-octaves" min="1" max="2" step="1" value="2">
         <span class="slider-val" id="volume-wavelet-octaves-val">2</span>
       </div>
       <div class="slider-row">
         <span class="slider-label" title="Multiplier on the Kolmogorov target amplitude. 1 = the cascade expectation from the resolved 8–11-cell motion; above 1 exaggerates the sub-grid detail on purpose.">Wavelet strength</span>
-        <input type="range" id="volume-wavelet-strength" min="0.25" max="4" step="any" value="1">
+        <input type="range" id="volume-wavelet-strength" min="0.25" max="16" step="any" value="1">
         <span class="slider-val" id="volume-wavelet-strength-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Relative weight of four-velocity-cell detail. 1 preserves the original spectral weight; 0 removes this octave.">Four-cell octave weight</span>
+        <input type="range" id="volume-wavelet-octave1-weight" min="0" max="1" step="any" value="1">
+        <span class="slider-val" id="volume-wavelet-octave1-weight-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Relative weight of two-velocity-cell detail, on top of the existing spectral falloff. Ignored when octave count is one.">Two-cell octave weight</span>
+        <input type="range" id="volume-wavelet-octave2-weight" min="0" max="1" step="any" value="1">
+        <span class="slider-val" id="volume-wavelet-octave2-weight-val">1.00</span>
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
@@ -2118,6 +2133,33 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Pressure grid (experimental)</span>
+      <select id="volume-pressure-resolution" class="select-input" data-volume-settings-param="volume_pressure_resolution">
+        <option value="off" selected>Original coupled grid</option>
+        <option value="equal">Separate · same resolution</option>
+        <option value="half">Separate · half each dimension</option>
+      </select>
+      <span class="slider-val" id="volume-pressure-resolution-val">original</span>
+    </div>
+    <div class="slider-row"><span class="slider-label">Fine velocity width (0 = material)</span><input type="number" id="volume-fine-velocity" data-volume-settings-param="volume_fine_velocity" min="0" step="1" value="0"></div>
+    <div class="slider-row"><span class="slider-label">Fine pressure width (0 = velocity / legacy choice)</span><input type="number" id="volume-fine-pressure" data-volume-settings-param="volume_fine_pressure" min="0" step="1" value="0"></div>
+    <span class="slider-help">Fine material uses Grid width. Independent velocity requires converged pressure and staggered face forces. Material, velocity and pressure widths are independent integer cell counts. Floor inflow and joined pressure are not supported by this mode.</span>
+    <div class="slider-row"><span class="slider-label">World smoke</span><select id="volume-world-smoke" class="select-input" data-volume-settings-param="volume_world_smoke"><option value="off" selected>Off</option><option value="on">One-way world field</option></select></div>
+    <div class="slider-row"><span class="slider-label">World flow width</span><select id="volume-world-smoke-flow" class="select-input" data-volume-settings-param="volume_world_smoke_flow"><option>8</option><option selected>16</option><option>24</option><option>32</option></select></div>
+    <div class="slider-row"><span class="slider-label">World material width</span><select id="volume-world-smoke-material" class="select-input" data-volume-settings-param="volume_world_smoke_material"><option>16</option><option selected>32</option><option>48</option><option>64</option></select></div>
+    <div class="slider-row"><span class="slider-label">World extent / fine width</span><select id="volume-world-smoke-extent" class="select-input" data-volume-settings-param="volume_world_smoke_extent"><option>2</option><option selected>3</option><option>4</option><option>6</option></select></div>
+    <div class="slider-row"><span class="slider-label" title="Experimental: continue outward fine-grid velocity into a narrow coarse collar before world pressure projection. No extra material or radial kick.">Momentum collar</span><select id="volume-world-smoke-transition" class="select-input" data-volume-settings-param="volume_world_smoke_transition"><option value="0" selected>Off (baseline)</option><option value="1">1 coarse cell</option><option value="2">2 coarse cells</option></select></div>
+    <div class="slider-row"><span class="slider-label">Intermediate region</span><select id="volume-world-smoke-intermediate" class="select-input" data-volume-settings-param="volume_world_smoke_intermediate"><option value="off" selected>Off (baseline)</option><option value="on">Legacy velocity only</option><option value="fields">Independent material + velocity</option></select></div>
+    <div class="slider-row"><span class="slider-label">World pressure width (0 = flow)</span><input type="number" id="volume-world-smoke-pressure" data-volume-settings-param="volume_world_smoke_pressure" min="0" step="1" value="0"></div>
+    <div class="slider-row"><span class="slider-label">World pressure iterations</span><input type="number" id="volume-world-smoke-iterations" data-volume-settings-param="volume_world_smoke_iterations" min="0" step="1" value="16"></div>
+    <div class="slider-row"><span class="slider-label">Intermediate velocity width</span><input type="number" id="volume-intermediate-flow" data-volume-settings-param="volume_intermediate_flow" min="2" step="1" value="24"></div>
+    <div class="slider-row"><span class="slider-label">Intermediate material width</span><input type="number" id="volume-intermediate-material" data-volume-settings-param="volume_intermediate_material" min="2" step="1" value="48"></div>
+    <div class="slider-row"><span class="slider-label">Intermediate pressure width</span><input type="number" id="volume-intermediate-pressure" data-volume-settings-param="volume_intermediate_pressure" min="2" step="1" value="12"></div>
+    <div class="slider-row"><span class="slider-label">Intermediate pressure iterations</span><input type="number" id="volume-intermediate-iterations" data-volume-settings-param="volume_intermediate_iterations" min="0" step="1" value="12"></div>
+    <div class="slider-row"><span class="slider-label">Intermediate extent / fine width</span><input type="number" id="volume-intermediate-extent" data-volume-settings-param="volume_intermediate_extent" min="1" step="any" value="1.5"></div>
+    <span class="slider-help">World and intermediate fields have independent material, velocity, and pressure widths and pressure iterations. Intermediate dimensions must tile its physical extent with cubic cells. Invalid combinations are reported without substituting another grid. Transfer is one-way outward. Dimension changes restart the affected field; bounds anchor when enabled.</span>
+    <span class="slider-help">First material/dynamics separation checkpoint: only pressure is cheaper. Material transport, reaction, forces, lighting and rendering keep their current resolution and cadence. Half dimensions gives 1/8 as many pressure cells, with coarser obstacle boundaries. Requires converged pressure; floor-inflow and joined routes retain original pressure with an explicit reason. Switch live without clearing the flame. Same resolution is the transfer parity control.</span>
     <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1.0 the divergence converges to the target S, and a partial projection leaves (1 − gain) × D(v_before) + gain × S. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
     <div class="slider-row">
       <span class="slider-label">Heat release</span>
@@ -2185,7 +2227,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
     </div>
-    <span class="slider-help">How the transport reads the stored velocity (a reading of the same stored field, not a different storage or solver). The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
+    <span class="slider-help">Staggered reconstructs motion from neighboring velocity faces and applies forces at those faces. It requires converged pressure and is required when Fine velocity differs from Fine material. Collocated remains available when those widths match. A rejected choice keeps the running setting and explains why.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
@@ -2893,6 +2935,9 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
+import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
+import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
+import { worldSmokeOverlayGeometry } from './volume-world-smoke-optics.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -2907,6 +2952,9 @@ import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
+import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
+import { fineGridPlan } from './volume-fine-grid.mjs';
+import { resolveGridHeight } from './volume-grid-shape.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
@@ -2918,6 +2966,29 @@ let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null, localLiquidDomainGuide = null;
+let worldSmokeGuide = null, intermediateSmokeGuide = null, worldSmokeOverlayMode = 'off';
+function refreshWorldSmokeOverlay() {
+  const state=volumePrototype?.debugState?.(),g=worldSmokeOverlayGeometry(state?.worldSmoke);
+  if(volumePrototype?.setWorldSmokeOverlay && state.worldSmokeOverlay!==worldSmokeOverlayMode)volumePrototype.setWorldSmokeOverlay(worldSmokeOverlayMode);
+  if(g&&worldSmokeOverlayMode!=='off'&&!worldSmokeGuide&&scene){
+    worldSmokeGuide=new THREE.Box3Helper(new THREE.Box3(),0x03a6ff);worldSmokeGuide.name='World smoke diagnostic bounds';
+    worldSmokeGuide.userData.kaminosEditorHelper=true;worldSmokeGuide.userData.kaminosEditorOnly=true;
+    worldSmokeGuide.material.depthTest=false;worldSmokeGuide.renderOrder=1000;scene.add(worldSmokeGuide);
+  }
+  if(worldSmokeGuide){worldSmokeGuide.visible=!!g&&worldSmokeOverlayMode!=='off'&&!!activeSceneComposition&&!selectionCaptureSuspended&&viewportHelpersVisible;
+    if(g)worldSmokeGuide.box.set(new THREE.Vector3(...g.worldMin),new THREE.Vector3(...g.worldMax));}
+  if(g?.middleMin&&worldSmokeOverlayMode!=='off'&&!intermediateSmokeGuide&&scene){
+    intermediateSmokeGuide=new THREE.Box3Helper(new THREE.Box3(),0x75e34f);intermediateSmokeGuide.name='Intermediate smoke diagnostic bounds';
+    intermediateSmokeGuide.userData.kaminosEditorHelper=true;intermediateSmokeGuide.userData.kaminosEditorOnly=true;
+    intermediateSmokeGuide.material.depthTest=false;intermediateSmokeGuide.renderOrder=1000;scene.add(intermediateSmokeGuide);
+  }
+  if(intermediateSmokeGuide){intermediateSmokeGuide.visible=!!g?.middleMin&&worldSmokeGuide?.visible===true;
+    if(g?.middleMin)intermediateSmokeGuide.box.set(new THREE.Vector3(...g.middleMin),new THREE.Vector3(...g.middleMax));}
+  if(flameDomainGuide)flameDomainGuide.material.color.set(worldSmokeOverlayMode==='off'?0x5bd8f5:0xff7e23);
+  const n=v=>Number(v.toPrecision(3));
+  const middle=g?.middleMin?` Green: intermediate ${state.worldSmoke.intermediate.effective}; velocity ${state.worldSmoke.intermediate.flowDims.join('×')}, material ${state.worldSmoke.intermediate.materialDims.join('×')}, pressure ${state.worldSmoke.intermediate.pressureDims.join('×')}; ${state.worldSmoke.intermediate.pressureIterations} pressure iterations.`:'';
+  return {mode:worldSmokeOverlayMode,summary:!g?`Awaiting active world field. ${state?.worldSmoke?.reason??''} Overlay is view-only; not saved with the scene.`:`Orange: fine ${state.worldSmoke.fineDims.join('×')} · blue: world material ${state.worldSmoke.materialDims.join('×')} / flow ${state.worldSmoke.flowDims.join('×')} / pressure ${state.worldSmoke.pressureDims.join('×')}, ${state.worldSmoke.pressureIterations} iterations. Cell widths: fine ${n(g.finePitch)}, material ${n(g.materialPitch)} (${n(g.materialPitch/g.finePitch)}×), flow ${n(g.flowPitch)} (${n(g.flowPitch/g.finePitch)}×).${middle} World volume ${n(g.volumeRatio)}× fine. Contribution view is false-color optical support, not physical lighting or a percentage. View-only; not saved.`};
+}
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
 let flameDomainDraft = null, flameDomainProxy = null;
@@ -5408,7 +5479,8 @@ function domainTransformForPose(value) {
   return {translation:[pose.position[0],pose.position[1]-scale,pose.position[2]],scale};
 }
 function flameDomainEditObject() {
-  if(!flameDomainProxy){flameDomainProxy=new THREE.Object3D();flameDomainProxy.userData.kaminosEditorHelper=true;flameDomainProxy.userData.kaminosSceneObject={label:'Fire & smoke domain'};scene.add(flameDomainProxy);}
+  if(!flameDomainProxy){flameDomainProxy=new THREE.Object3D();flameDomainProxy.userData.kaminosEditorHelper=true;flameDomainProxy.userData.kaminosSceneObject={label:'Fire & smoke domain'};}
+  if(flameDomainProxy.parent!==scene)scene.add(flameDomainProxy);
   applySceneObjectTransformState(flameDomainProxy,flameDomainDraft||acceptedFlameDomainPose());
   return flameDomainProxy;
 }
@@ -12253,6 +12325,7 @@ function clearSceneEditingState(){
   sceneMembership.clearHistoryTargets();
 }
 function clearSceneDomains(){
+  if(worldSmokeGuide){worldSmokeGuide.removeFromParent();disposeObjectTree(worldSmokeGuide);worldSmokeGuide=null;}
   localLiquidGeneration++;
   localLiquidHost?.dispose();
   localLiquidHost = null;
@@ -15537,7 +15610,7 @@ const FIRESIM_LOOK_FIELDS = [
   'volumeScene', 'density', 'fire', 'absorption', 'smoke', 'curl',
   'microdetail', 'interfaceShred', 'fireLicks', 'projection', 'speed', 'fireScale',
   'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
-  'flowRate', 'shellInspectMode', 
+  'flowRate', 'shellInspectMode',
   'flowKernelStrength', 'flowKernelRadius', 'flowKernelCoherence',
   'oracleActivityCue', 'oracleActivityDisplay', 'oracleActivityCurlNoise',
   'oracleActivityVorticity', 'oracleActivityMaterial',
@@ -16800,6 +16873,7 @@ function setVolumeControlValue(id, value) {
   }
   const el = document.getElementById(id);
   if (!el) return;
+  if(GRID_TUNING_FIELDS.some(([,key])=>key===id)&&el.tagName==='SELECT'&&Number.isFinite(Number(value))&&![...el.options].some(o=>o.value===String(value))){const option=document.createElement('option');option.value=String(value);option.textContent=String(value);el.append(option);}
   if(id==='volume-immersed-radius'&&Number.isFinite(Number(value)))el.max=String(Math.max(Number(el.max)||0,Number(value)));
   if (el.type === 'checkbox') {
     el.checked = value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -17038,7 +17112,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalSootBurnoutKelvin', id: 'volume-physical-soot-burnout-kelvin', param: 'volume_physical_soot_burnout_kelvin', min: 600, max: 3000, continuous: true, decimals: 0 },
   { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
-  { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
+  { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 16, continuous: true, decimals: 2 },
+  { key: 'waveletOctave1Weight', id: 'volume-wavelet-octave1-weight', param: 'volume_wavelet_octave1_weight', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'waveletOctave2Weight', id: 'volume-wavelet-octave2-weight', param: 'volume_wavelet_octave2_weight', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
   { key: 'physicalSmokeAlbedo', id: 'volume-physical-smoke-albedo', param: 'volume_physical_smoke_albedo', min: 0, max: 1, continuous: true, decimals: 2 },
@@ -17153,6 +17229,10 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['lookFreeze', 'volume_look_freeze'],
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
+  ['pressureResolution', 'volume_pressure_resolution'],
+  ['worldSmoke', 'volume_world_smoke'], ['worldSmokeFlow', 'volume_world_smoke_flow'], ['worldSmokeMaterial', 'volume_world_smoke_material'], ['worldSmokeExtent', 'volume_world_smoke_extent'], ['worldSmokeTransition', 'volume_world_smoke_transition'],
+  ['worldSmokeIntermediate', 'volume_world_smoke_intermediate'],
+  ...REGION_CONTROL_FIELDS.map(field=>[field.key,field.param]),
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
   ['confinement', 'volume_confinement'],
@@ -18781,6 +18861,14 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
+    pressureResolution: document.getElementById('volume-pressure-resolution').value,
+    worldSmoke: document.getElementById('volume-world-smoke').value,
+    worldSmokeFlow: Number(document.getElementById('volume-world-smoke-flow').value),
+    worldSmokeMaterial: Number(document.getElementById('volume-world-smoke-material').value),
+    worldSmokeExtent: Number(document.getElementById('volume-world-smoke-extent').value),
+    worldSmokeTransition: Number(document.getElementById('volume-world-smoke-transition').value),
+    worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
+    ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(document.getElementById(field.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -18990,6 +19078,17 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
   {
     const solverConfig = resolvePressureSolverConfig(c);
+    try {
+      const fine = fineGridPlan({materialDims:[c.resolution,resolveGridHeight(c,c.resolution).heightCells,c.resolution],velocity:c.fineVelocity,pressure:c.finePressure});
+      const pressureResolution = pressureResolutionPlan({dims:fine.velocityDims,mode:c.pressureResolution,
+        width:c.finePressure || (fine.materialPerVelocity>1?fine.velocityDims[0]:0),
+        solver:solverConfig.effective.solver,inflow:c.emitterSourceLaw==='inflow-boundary'});
+      document.getElementById('volume-pressure-resolution-val').textContent = pressureResolution.reason
+        ? `unavailable (${pressureResolution.reason})` : pressureResolution.effective==='off' ? 'original'
+        : `requested ${pressureResolution.pressureDims.join('×')} pressure · ${fine.velocityDims.join('×')} velocity · ${fine.materialDims.join('×')} material`;
+    } catch (error) {
+      document.getElementById('volume-pressure-resolution-val').textContent = `invalid dimensions: ${error.message}`;
+    }
     const solver = String(c.pressureSolver || 'legacy');
     const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
     const gain = solverConfig.effective.projectionGain;
@@ -19279,9 +19378,11 @@ function refreshVolumeReadout() {
   const waveletState = document.getElementById('volume-wavelet-turbulence-state');
   if (waveletState) {
     const wavelet = s.waveletTurbulence;
+    const materialNoise = s.fineGrid?.turbulence?.placement === 'material-characteristic';
+    const placement = materialNoise ? 'evaluated in material transport' : 'shared velocity/material grid';
     waveletState.textContent = !wavelet?.effective?.admitted
       ? 'Wavelet turbulence: off'
-      : `Wavelet turbulence: on · gain ${wavelet.gain.toFixed(2)} · ${wavelet.octaves} octave${wavelet.octaves === 1 ? '' : 's'} below ${wavelet.baseWavelengthCells} cells · strength ${wavelet.strength.toFixed(2)}× Kolmogorov${wavelet.strength > 1.001 ? ' (exaggerated)' : ''} · coordinates reset every ${wavelet.coherencePeriodSteps} steps`;
+      : `Wavelet turbulence: on · gain ${wavelet.gain.toFixed(2)} · ${placement} · wavelengths ${Array.from({length:wavelet.octaves}, (_,i) => wavelet.baseWavelengthCells / 2**i).join(' / ')} velocity cells · strength ${wavelet.strength.toFixed(2)}× Kolmogorov${wavelet.strength > 1.001 ? ' (exaggerated)' : ''} · coordinates reset every ${wavelet.coherencePeriodSteps} steps`;
   }
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
@@ -19684,8 +19785,8 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
-  if ([32, 48, 64, 96, 128, 136, 140, 160].includes(routeResolution)) {
-    document.getElementById('volume-resolution').value = String(routeResolution);
+  if (Number.isSafeInteger(routeResolution)&&routeResolution>=4) {
+    setVolumeControlValue('volume-resolution',routeResolution);
   }
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
   const routePressureMode = normalizeVolumePressureMode(params.get('volume_pressure_mode'));
@@ -20059,6 +20160,10 @@ async function initKaminosVolumeRoute() {
     ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-swirl-jostle', 'volume_swirl_jostle'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-resolution', 'volume_pressure_resolution'],
+    ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
+    ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
+    ...REGION_CONTROL_FIELDS.map(field=>[field.id,field.param]),
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -20078,6 +20183,11 @@ async function initKaminosVolumeRoute() {
     getControls: readVolumeControls,
     onStatus: status => {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      const p = status.pressureResolution;
+      if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
+        ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
+        : `original${p.reason ? ` (${p.reason})` : ''}`;
+      flameInspector?.sync();
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
@@ -20468,6 +20578,10 @@ async function initKaminosVolumeRoute() {
     'volume-wind-gust-veer',
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
+    'volume-pressure-resolution',
+    'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
+    'volume-world-smoke-intermediate',
+    ...REGION_CONTROL_FIELDS.map(field=>field.id),
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',
@@ -21710,7 +21824,7 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
-  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
+  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Subunit scales are supported. The emitter keeps its world size: reduce its Radius or source Scale first if a tighter box exceeds the source radius range.</p>';
   host.append(panel);
   const inputs=[...panel.querySelectorAll('input')];
   for(const input of inputs)input.addEventListener('input',()=>{
@@ -21721,6 +21835,9 @@ function installFlameDomainControls(host) {
     try{scenePlacementTools.edits.preview(pose);}catch(error){setInfo(error.message);}
   });
   authoringControlSessions.push(installSceneControlHistory({controls:inputs,edits:scenePlacementTools.edits,id:'@flame-domain',label:'Edit simulation box',onError:error=>setInfo(error.message)}));
+  // Settlement can reject a source that no longer fits its admitted radius
+  // range. Once typing ends, display the accepted box, not the refused draft.
+  for(const input of inputs)input.addEventListener('blur',()=>refreshFlameDomainPreview());
   for(const input of inputs){const scrub=installRelativeNumberDrag({input,grip:input,step:.01,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});scenePlacementTools.edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   refreshFlameDomainPreview();
 }
@@ -21733,11 +21850,31 @@ function createFlameQuickFields() {
   enabledRow.querySelector('input').addEventListener('change',event=>{try{editAuthoredFlameSource(workingScene.activeObjectId,{enabled:event.target.checked});}catch(error){setInfo(error.message);}});
   authoringControlSessions.push(installSceneControlHistory({controls:[enabledRow.querySelector('input')],edits:scenePlacementTools.edits,id:()=>ensureFlameSourceDataTarget(workingScene.activeObjectId),label:'Toggle flame source',onError:error=>setInfo(error.message)}));
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
+    gridTuning:{
+      read:()=>readVolumeControls(),
+      validate:c=>volumePrototype.validateGridControls(c),
+      bindLiveField:input=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label:'Tune pressure iterations',onError:error=>showFlameEditRefused(error)}),
+      live:(key,value)=>{
+        const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
+        const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
+        descriptor.value=value;if('rawValue' in descriptor)descriptor.rawValue=String(value);
+        window.kaminosFlameAuthoring.preview(next);
+      },
+      apply:patch=>{
+        const next=window.kaminosFlameAuthoring.read();
+        for(const [key,id] of GRID_TUNING_FIELDS){const d=next.domControls[id];if(!d)throw Error(`Missing grid setting ${id}`);d.value=d.tagName==='SELECT'?String(patch[key]):patch[key];if('rawValue' in d)d.rawValue=String(patch[key]);}
+        window.kaminosFlameAuthoring.apply(next,'Change simulation grids');
+      },
+    },
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:(id,options)=>window.kaminosFlameAuthoring.applyBasin(id,options),
     saveBasin:options=>saveVolumeSettingsPreset({label:options.label}),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]))} : null,
+    readPressureRuntime:()=>volumePrototype?.debugState?.().pressureResolution,
+    readWorldRuntime:()=>volumePrototype?.debugState?.().worldSmoke,
+    readWorldOverlay:refreshWorldSmokeOverlay,
+    setWorldOverlay:mode=>{if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown field overlay');worldSmokeOverlayMode=mode;refreshWorldSmokeOverlay();window._kaminosDirty?.();},
     readSourceControl:id=>fireControlOwner(id)==='source'&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE?authoredFlameSourceRecords().find(record=>record.id===workingScene.activeObjectId)?.emission.settings[id]:null,
     writeSourceControl:(id,value)=>{if(fireControlOwner(id)!=='source'||selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE)return false;editAuthoredFlameSource(workingScene.activeObjectId,{[id]:value});return true;},
     readSourceRuntime:()=>{const state=volumePrototype?.debugState?.();if(state?.immersedSources?.active)return state.immersedSources.sources?.find(source=>source.id===workingScene.activeObjectId)?.config??null;return primaryAuthoredFlameSource()?.id===workingScene.activeObjectId?state?.immersedSource:null;},
@@ -21806,7 +21943,8 @@ function flameSettingsStateProblems(state) {
       if(!source){problem(`Missing flame setting ${id}`);continue;}
       if(source.tagName==='SELECT') {
         const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
-        if(!retired&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
+        const gridNumber=GRID_TUNING_FIELDS.some(([,key])=>key===id)&&!['volume-world-smoke','volume-world-smoke-intermediate'].includes(id)&&Number.isFinite(Number(value));
+        if(!retired&&!gridNumber&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}
@@ -21885,6 +22023,10 @@ function checkFlameSettingsState(state) {
   return state;
 }
 function writeFlameSettingsState(state) {
+  const gridPatch={};
+  for(const [key,id] of GRID_TUNING_FIELDS){const d=state.domControls[id];if(d)gridPatch[key]=['worldSmoke','worldSmokeIntermediate'].includes(key)?d.value:Number(d.rawValue??d.value);}
+  for(const [key,id] of [['pressureSolver','volume-pressure-solver'],['velocityStaggering','volume-velocity-staggering'],['emitterSourceLaw','volume-emitter-source-law']]){if(state.domControls[id])gridPatch[key]=state.domControls[id].value;}
+  volumePrototype?.validateGridControls(gridPatch);
   supersedeVolumeRebuildHolds();
   setVolumeControlValue('volume-scene', state.volumeSceneRequested ?? state.source?.serverProjection?.sceneMigration?.requested ?? DEFAULT_VOLUME_SCENE);
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
@@ -22080,6 +22222,8 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
+      const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver'}[control.id];
+      if(gridKey)volumePrototype?.validateGridControls({[gridKey]:state.value});
       if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
         const next=flameSettingsState();
         const axis=Object.hasOwn(next.rendererControls,control.id)?'rendererControls':'domControls';
@@ -22093,6 +22237,24 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...(fireControlOwner(control.id)==='source'?[]:document.querySelectorAll(`[data-authoring-alias="${control.id}"]`))],label,onError:error=>showFlameEditRefused(error)}));
+    if(['volume-velocity-staggering','volume-pressure-solver'].includes(control.id)) {
+      // Refuse before live handlers: dispatchEvent does not return listener
+      // exceptions to the inspector alias. Restore even without a focus gesture.
+      const gridKey=control.id==='volume-velocity-staggering'?'velocityStaggering':'pressureSolver';
+      const validateGridPreview=event=>{
+        try{check(read());}
+        catch(error){
+          event.stopImmediatePropagation();
+          setVolumeControlValue(control.id,volumePrototype.debugState().controls[gridKey]);
+          if(edits.state().active?.id==='@flame-settings')edits.cancel();
+          updateVolumeControlLabels();
+          flameInspector?.sync(true);
+          showFlameEditRefused(error);
+        }
+      };
+      control.addEventListener('input',validateGridPreview,true);
+      control.addEventListener('change',validateGridPreview,true);
+    }
     if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
       // DOM listener exceptions cannot reject dispatchEvent in the caller.
       // Refuse an invalid aperture before the live runtime handlers see it.
@@ -25516,6 +25678,7 @@ function syncEditorHelperVisibility(){
   for(const [id,{marker,light}] of sceneSpotLights)marker.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
   if(flameDomainGuide){flameDomainGuide.visible= isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
   for(const entry of workingScene.objects)if(entry.type===CAMERA_TYPE)entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
+  refreshWorldSmokeOverlay();
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(workingScene.selection.ids,workingScene.groups);}
