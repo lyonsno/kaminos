@@ -68,7 +68,7 @@ export function trackGeometry(s,p){
   const g=s.grains[p.grain],[w,,d]=grainDimensions(g),area=w*d,capacity=area*(p.face==='base'?.06:.016);
   return {capacity,area,pressure:p.face==='base'?.14:2.2,point:poolPoint(s,p),gap:null,length:0,aperture:.016};
  }
- let a=poolPoint(s,s.pools[p.a]),b=poolPoint(s,s.pools[p.b]),gap=.016,width=.075,points,profile=null;
+ let a=p.anchor??poolPoint(s,s.pools[p.a]),b=poolPoint(s,s.pools[p.b]),gap=.016,width=.075,points,profile=null;
  if(p.kind==='gap'){
   const ga=s.grains[p.walls[0]],gb=s.grains[p.walls[1]],ca=grainCenter(ga),cb=grainCenter(gb),dist=Math.hypot(cb[0]-ca[0],cb[2]-ca[2]),nx=(cb[0]-ca[0])/dist,nz=(cb[2]-ca[2])/dist,ra=radius(ga,nx,nz),rb=radius(gb,-nx,-nz);
   gap=dist-ra-rb;width=.035;points=[a,b];profile=slotProfile(s,p,a,b,gap,width);

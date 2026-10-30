@@ -8,7 +8,8 @@ import experiment from '../experiments/mineral-crust.experiment.mjs';
 async function mount(rate,{ground=null,failAttach=false}={}){const scene=new Scene(),light=new AmbientLight(0xffffff,1);scene.add(light);let idleId=0;const idleQueue=new Map();const flush=()=>{while(idleQueue.size){const [id,callback]=idleQueue.entries().next().value;idleQueue.delete(id);callback({timeRemaining:()=>50});}};let frame,view={position:[2,2,2],target:[0,0,0],fov:40},root;
  const session={readView:()=>structuredClone(view),setView(value){if(value.position?.some(x=>!Number.isFinite(x)))throw Error('Invalid view');view={...view,...value};return structuredClone(view);},async attach(value){if(failAttach)throw Error('Attachment rejected');root=value;scene.add(root);return {id:'owned-crust',root,owned:true};},redraw(){},onFrame(callback){frame=callback;return ()=>{frame=null;};},async dispose(){if(root)scene.remove(root);}};
  const document={getElementById:id=>id==='composition-ground-visible'?ground:null,defaultView:{Event,requestIdleCallback:callback=>{idleQueue.set(++idleId,callback);return idleId;},cancelIdleCallback:id=>idleQueue.delete(id)}};
- const feature=await experiment.create({host:{scene:{open:async()=>session},controls:{document}},inputs:{rows:1,rate},record(){}});return {feature,frame:delta=>{frame({deltaSeconds:delta});flush();},tick:delta=>frame({deltaSeconds:delta}),flush,scene,light};
+ const element=()=>({children:[],style:{},attributes:{},append(...children){this.children.push(...children);},setAttribute(key,value){this.attributes[key]=value;}});document.createElement=element;document.createTextNode=text=>({textContent:text});
+ const feature=await experiment.create({host:{scene:{open:async()=>session},controls:{document}},inputs:{rows:1,rate},record(){}});return {feature,frame:delta=>{frame({deltaSeconds:delta});flush();},tick:delta=>frame({deltaSeconds:delta}),flush,scene,light,mountControls(){const root=element();feature.mount({root,document,invoke:async(name,...args)=>feature.operations[name](...args)});return root.children.find(x=>x.attributes?.role==='status');}};
 }
 test('live evolution keeps fixed physical steps across display cadences and stops at zero rate',async()=>{
  const a=await mount(8),b=await mount(8);a.feature.operations.play(true);b.feature.operations.play(true);for(let i=0;i<60;i++)a.frame(1/60);for(let i=0;i<120;i++)b.frame(1/120);
@@ -36,4 +37,11 @@ test('real host ground control is isolated and restored on close and failed acti
 test('actual experiment keeps requested model time through hold, checkpoint and yielded continuation',async()=>{
  const x=await mount(8);x.feature.operations.play(true);x.tick(1);assert.equal(x.feature.read().tick,0,'frame callback must leave physics to browser idle turns');assert.ok(Math.abs(x.feature.read().clock.pendingModelSeconds-8)<1e-10);
  const saved=x.feature.operations.checkpoint();x.feature.operations.play(false);x.flush();assert.equal(x.feature.read().tick,0);x.feature.operations.restore(saved);x.feature.operations.play(true);x.flush();assert.equal(x.feature.read().tick,80);assert.ok(x.feature.read().clock.pendingModelSeconds<.1);await x.feature.dispose();
+});
+
+test('idle evolution errors remain visible through frames until a successful restore',async()=>{
+ const x=await mount(8),status=x.mountControls(),good=x.feature.operations.checkpoint(),bad=structuredClone(good);bad.state.tick=Number.MAX_SAFE_INTEGER;
+ x.feature.operations.restore(bad);x.feature.operations.play(true);x.tick(1);x.flush();assert.equal(x.feature.read().playing,false);assert.match(status.textContent,/exact step indexing/);
+ x.tick(1/60);assert.match(status.textContent,/exact step indexing/,'next frame must retain the failure explanation');
+ x.feature.operations.restore(good);x.tick(1/60);assert.equal(x.feature.read().evolutionError,null);assert.doesNotMatch(status.textContent,/exact step indexing/);await x.feature.dispose();
 });
