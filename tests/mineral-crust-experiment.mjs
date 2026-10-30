@@ -51,3 +51,15 @@ test('neighbor restart and file restore retain the selected physical setup and l
  x.feature.operations.restart();assert.equal(x.feature.read().setup,'neighbors');assert.equal(x.feature.read().tick,0);assert.equal(x.feature.read().settings.evaporation,.01);
  x.feature.operations.restore(saved);assert.deepEqual(x.feature.operations.checkpoint().state,saved.state);await x.feature.dispose();
 });
+test('layout restart keeps chosen arc/spiral and lean through subsequent restart and checkpoint',async()=>{
+ const x=await mount(1,{inputs:{setup:'neighbors'}});
+ assert.equal(typeof x.feature.operations.seedLayout,'function','no operator path for choosing layouts');
+ x.feature.operations.seedLayout({arrangement:'spiral',tilt:.3});x.feature.operations.advance(.2);const saved=x.feature.operations.checkpoint();x.feature.operations.restart();
+ assert.equal(x.feature.read().arrangement,'spiral');assert.equal(x.feature.read().tilt,.3);
+ x.feature.operations.restore(saved);assert.deepEqual(x.feature.operations.checkpoint().state,saved.state);await x.feature.dispose();
+});
+test('fully tilted asymmetric solid and rendered corners share the retained 3D frame',()=>{
+ const state=createCrust({setup:'neighbors'}),g=state.grains[0];g.basis=[[1,0,0],[0,.6,.8],[0,-.8,.6]];g.origin=[1,2,3];g.faces=[.8,-.2,.1,-.4,.3,-.1];
+ const surface=createCrustSurface(state),instances=surface.root.children.find(x=>x.isInstancedMesh),matrix=new Matrix4();instances.getMatrixAt(0,matrix);
+ try{for(const x of [-.5,.5])for(const y of [-.5,.5])for(const z of [-.5,.5]){const lx=x>0?.8:-.2,ly=y>0?.3:-.1,lz=z>0?.1:-.4,expected=[1+lx,2+.6*ly-.8*lz,3+.8*ly+.6*lz],actual=new Vector3(x,y,z).applyMatrix4(matrix).toArray();actual.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-6));}}finally{surface.dispose();}
+});
