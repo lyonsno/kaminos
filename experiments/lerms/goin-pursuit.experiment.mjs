@@ -206,7 +206,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   if(inputs.view)session.setView(inputs.view);
   if(inputs.running!==false)invokeActor('play');
   return {read,operations,dispose,inspect:actor.inspect,
-   mount({root,document,invoke}){
+   mount({root,document,invoke,reopen=recipe=>globalThis.window.kaminosWorkbenchExperiments.open('lerms/goin-pursuit',recipe)}){
     const properties=document.createElement('div'),status=document.createElement('output');
     properties.append(status);
     if(water){
@@ -216,7 +216,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
     }
     refresh=()=>{status.textContent=task.read().phase;};refresh();
     if(host.controls.mountObject)seating=host.controls.mountObject({asset,properties});else root.append(properties);
-    actor.mount({root,invoke:invokeActor,reopen:recipe=>globalThis.window.kaminosWorkbenchExperiments.open('lerms/goin-pursuit',{
+    actor.mount({root,invoke:invokeActor,reopen:recipe=>reopen({
      ...inputs,creature:recipe,goin:{position:goin.position.toArray()},running:recipe.play})});
     return {dispose(){seating?.dispose();refresh=()=>{};}};
    }

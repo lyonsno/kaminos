@@ -19,7 +19,8 @@ try{
  const log=fs.openSync(out+'/server.log','w');
  server=spawn(a.python,['-u','tools/hand_browser_server.py','--port',a.port,'--models',a.models,'--joint-regressor',a['joint-regressor'],'--output',out+'/server'],{cwd:process.cwd(),stdio:['ignore',log,log]});fs.closeSync(log);
  report.serverPid=server.pid;report.phase='server';save();
- while(true){if(server.exitCode!==null)throw Error('Owned asset server exited');try{const r=await fetch(new URL('/api/runtime-config',url));if(r.ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+ while(true){if(server.exitCode!==null)throw Error('Owned asset server exited');let response;try{response=await fetch(new URL('/api/runtime-config',url));}catch{}
+   if(response?.ok){report.preflight=await response.json();assert.equal(report.preflight.source?.repoRoot,fs.realpathSync(process.cwd()),'Wrong served source root');break;}await new Promise(r=>setTimeout(r,100));}
  report.browserExecutable=fs.realpathSync(a.browser);assert(!report.browserExecutable.includes('/Google Chrome.app/'));
  const {chromium}=await import(pathToFileURL(a.playwright));
  context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport:{width:1280,height:900},recordVideo:{dir:out+'/video',size:{width:1280,height:900}},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
@@ -38,8 +39,12 @@ try{
  const captureState=async name=>{const state=await read();report.observations.push({name,state});await page.screenshot({path:out+'/'+name+'.png'});save();return state;};
  await invoke('setSourceFlux',0);await invoke('start');
  await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.hand.error||s.hand.fingerJuice.error)throw Error(s.hand.error??s.hand.fingerJuice.error);return s.hand.received>=2&&s.hand.visible;});
- report.phase='dry-theft';save();await invoke('advance',{seconds:4});
+ report.phase='dry-theft';save();await invoke('setRunning',{running:true});
+ await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
+ await invoke('setRunning',{running:false});
  let state=await captureState('carried-dry');assert.equal(state.task.custody.phase,'carried');const goinId=state.goin.id;
+ assert.equal(state.hand.identity.backend,'webgpu-local');assert.equal(state.hand.fingerJuice.backend,'mls-mpm');assert.equal(state.hand.acquisitionDetails.fallback,false);
+ assert.deepEqual(state.hand.fingerJuice.runtime.solver.domain.gridDimensions,report.setup.hand.fluidGridSize);
  await invoke('sampleWater');state=await read();assert.equal(state.water.overlap,0);assert.equal(state.task.custody.phase,'carried');
  const center=state.water.receiver.center,hand=state.hand,emitter=hand.fingerJuice.packet.emitters.find(e=>e.active);assert(emitter,'real retained hand must produce an active finger');
  const config=hand.playSpace.config,observation=hand.playSpace.observation;
@@ -63,13 +68,15 @@ try{
  const dry=await invoke('sampleLiquidSphere',{center:[100,100,100],radius:.1});assert.equal(dry.overlap,0);report.miss=dry;
  await invoke('setSourceFlux',0);await invoke('resetPile');await invoke('sampleWater');
  await invoke('advance',{seconds:.25});state=await captureState('physical-fall');assert.equal(state.goin.id,goinId);
- await invoke('advance',{seconds:4});state=await captureState('recovered');assert.equal(state.task.custody.phase,'carried');assert.equal(state.goin.id,goinId);
+ await invoke('setRunning',{running:true});
+ await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
+ await invoke('setRunning',{running:false});state=await captureState('recovered');assert.equal(state.task.custody.phase,'carried');assert.equal(state.goin.id,goinId);
  assert.deepEqual(report.pageErrors,[]);report.status='complete';report.phase='complete';
 }catch(error){report.error=String(error);report.stack=error.stack;process.exitCode=1;if(page){try{report.failure=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),text:document.body.innerText}));await page.screenshot({path:out+'/failure.png'});}catch{}}}
 finally{
  if(page)try{await page.evaluate(()=>window.kaminosWorkbenchExperiments?.close());}catch{}
- if(context){report.video=await page.video()?.path();await context.close();report.browserClosed=true;}
- if(server){if(server.exitCode===null){server.kill('SIGTERM');await once(server,'exit');}report.serverStopped=true;}
+ if(context){try{report.video=await page?.video()?.path();await context.close();report.browserClosed=true;}catch(error){report.cleanupError=String(error);report.status='failed';process.exitCode=1;}}
+ if(server){try{if(server.exitCode===null){server.kill('SIGTERM');await once(server,'exit');}report.serverStopped=true;}catch(error){report.serverCleanupError=String(error);report.status='failed';process.exitCode=1;}}
  save();
 }
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:out+'/report.json'}));

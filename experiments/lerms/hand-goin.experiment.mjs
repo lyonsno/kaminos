@@ -1,6 +1,6 @@
 import hand from '../hand-browser-juice.experiment.mjs';
 import {PLAY_SPACE_DEFAULTS} from '../hand-play-space.mjs';
-import {createGoinPursuit} from './goin-pursuit.experiment.mjs';
+import goin from './goin-pursuit.experiment.mjs';
 
 export default {id:'lerms/hand-goin',title:'Lerms - hand and goin',async create({host,inputs={},record}){
  let liveWater=null,handEntry,goinEntry,disposed=false;
@@ -15,7 +15,7 @@ export default {id:'lerms/hand-goin',title:'Lerms - hand and goin',async create(
      particleCount:12000,sourceFlux:1800,jetSpeed:4.5,particleLifetimeSeconds:6,
      fluidGridSize:[128,80,128],sceneLayout:'runway',...inputs.hand,
      playSpace:{...PLAY_SPACE_DEFAULTS,...inputs.hand?.playSpace},fluidBackend:'mls-mpm',goinPile:null}});
-   goinEntry=await createGoinPursuit({host,record,inputs:{...inputs,
+   goinEntry=await goin.create({host,record,inputs:{...inputs,
      water:{...inputs.water,route:'borrowed-mls'}}},{waterReceiver:{
        async sample(sphere){
          const water=liveWater;
@@ -29,7 +29,14 @@ export default {id:'lerms/hand-goin',title:'Lerms - hand and goin',async create(
    const read=()=>({...goinEntry.read(),hand:handEntry.read(),composition:'one-hand-one-creature-one-physical-goin'});
    return {read,inspect:goinEntry.inspect,operations:{...handEntry.operations,...goinEntry.operations,
      sampleLiquidSphere(sphere){if(!liveWater)throw Error('Water is not mounted');return liveWater.sampleSphere(sphere);}},
-     mount(context){handEntry.mount(context);return goinEntry.mount(context);},
+     mount(context){handEntry.mount(context);return goinEntry.mount({...context,reopen:recipe=>{
+       const current=handEntry.read(),juice=current.fingerJuice;
+       return globalThis.window.kaminosWorkbenchExperiments.open('lerms/hand-goin',{
+         ...recipe,hand:{...inputs.hand,playSpace:current.playSpace.config,handedness:current.handedness,
+           acquisitionMode:current.acquisitionMode,cropPadding:current.cropPadding,detectorThreshold:current.detectorThreshold,
+           particleCount:juice.load.requestedParticleCount,sourceFlux:juice.load.requestedRate,
+           jetSpeed:juice.jetSpeedWorldPerSecond,particleLifetimeSeconds:juice.particleLifetimeSeconds}});
+     }});},
      async dispose(){disposed=true;try{await goinEntry.dispose();}finally{await handEntry.dispose();}}
    };
  }catch(error){disposed=true;try{await goinEntry?.dispose();}finally{await handEntry?.dispose();}throw error;}

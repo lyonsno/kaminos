@@ -105,13 +105,12 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
     const api={config,particles,
       async sampleSphere(sphere){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
-        sphereQuery??=createMlsSphereQuery({device,particles,config});
+        sphereQuery??=createMlsSphereQuery({device,particles,config,readSource:()=>({route:MLS_ROUTE,source:MLS_SOURCE,step:clock.read().step,timeSeconds:time})});
         const query=await sphereQuery;
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
-        const observation={route:MLS_ROUTE,source:MLS_SOURCE,step:clock.read().step,timeSeconds:time};
         const result=await query.sample(sphere);
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
-        return {...result,...observation};
+        return result;
       },
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},

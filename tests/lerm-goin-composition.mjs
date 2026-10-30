@@ -142,9 +142,13 @@ assert.ok(Math.abs(previewHit.read().creature.action.motion.path.distance-before
 assert.equal(ticks.size,1);assert.equal(previewHit.read().creature.playback.status,'playing');
 await previewHit.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 console.log('Live goin composition moves, interrupts, reacquires current targets and releases every owned session');
-let overlap=0,receiverDisposed=false;
+let overlap=0,receiverDisposed=false,openBorrowed,outerRecipe;
 const borrowed=await createGoinPursuit({host,inputs:{...physicalInputs,water:{route:'borrowed-mls',receiver:{bone:'pelvis',offset:[0,0,0],radius:.5}}}},
- {loadSources:async()=>data,waterReceiver:{async sample(){return {status:'observed',source:'actual-mls-test-producer',overlap,active:10};},async dispose(){receiverDisposed=true;}}});
+ {loadSources:async()=>data,mountProperties:({open})=>{openBorrowed=open;return {properties:new Element(),update(){},dispose(){}};},waterReceiver:{async sample(){return {status:'observed',source:'actual-mls-test-producer',overlap,active:10};},async dispose(){receiverDisposed=true;}}});
+borrowed.mount({root:new Element(),document,invoke:(name,input)=>borrowed.operations[name](input),reopen:recipe=>{outerRecipe=recipe;}});
+const savedWindow=globalThis.window;globalThis.window={kaminosWorkbenchExperiments:{open(){throw Error('Native setup must delegate to the outer composition');}}};
+try{await openBorrowed(borrowed.read().creature.recipe);}finally{globalThis.window=savedWindow;}
+assert.equal(outerRecipe.water.route,'borrowed-mls');assert.deepEqual(outerRecipe.physics,physicalInputs.physics);
 borrowed.operations.advance({seconds:0});const borrowedId=borrowed.read().goin.id;
 await borrowed.operations.sampleWater();assert.equal(borrowed.read().task.custody.phase,'carried');
 overlap=2;await borrowed.operations.sampleWater();assert.equal(borrowed.read().task.custody.phase,'dropped');
