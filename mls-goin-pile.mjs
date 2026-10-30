@@ -7,6 +7,7 @@ export const GOIN_IMPULSE_SCALE=1048576;
 export function createMlsGoinPile(config){
   const p=config.goinPile;if(!p)throw Error('Goin pile configuration required');
   const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0),allowSleep:true});
+  world.broadphase=new CANNON.SAPBroadphase(world);world.broadphase.useBoundingBoxes=true;
   world.solver.iterations=30;world.solver.tolerance=1e-8;
   world.defaultContactMaterial.friction=.45;world.defaultContactMaterial.restitution=.02;
   const ground=new CANNON.Body({mass:0,shape:new CANNON.Plane()});
@@ -50,7 +51,7 @@ export function createMlsGoinPile(config){
       }
       world.step(config.dt);steps++;
       for(const b of bodies)if(![...b.position.toArray(),...b.velocity.toArray(),...b.angularVelocity.toArray(),...b.quaternion.toArray()].every(Number.isFinite))throw Error('Nonfinite goin body state');
-      return read();
+      return steps;
     },
     dispose(){disposed=true;for(const b of [...world.bodies])world.removeBody(b);}
   };

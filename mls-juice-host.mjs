@@ -24,7 +24,8 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
   const coins=[],coinMaterial=c.goinPile?new THREE.MeshStandardMaterial({color:0xe9b939,metalness:.65,roughness:.3}):null;
   if(c.goinPile){
     for(const body of solver.read().bodies.bodies){
-      const coin=new THREE.Mesh(new THREE.CylinderGeometry(body.radius,body.radius,body.thickness,32),coinMaterial);
+      const r=body.radius,h=body.thickness/2,bevel=.008;
+      const coin=new THREE.Mesh(new THREE.LatheGeometry([[0,-h],[r-bevel,-h],[r,-h+bevel],[r,h-bevel],[r-bevel,h],[0,h]].map(([x,y])=>new THREE.Vector2(x,y)),32),coinMaterial);
       coin.name=body.id;coin.position.fromArray(body.position);coin.quaternion.fromArray(body.quaternion);group.add(coin);coins.push(coin);
     }
   }else{
