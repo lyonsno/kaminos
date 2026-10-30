@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
-import {createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
+import {DEFAULT_WATER_EMITTER,createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
 import {FLAME_EMITTER_TYPE} from '../scene-flame-emitter.mjs';
 import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
 import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
@@ -12,7 +12,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const actual=name=>{const a=html.indexOf('async function '+name+'('),b=html.indexOf('\n}',a);return html.slice(a,b+2);};
 const first=createLocalLiquidEmitterSceneRecord({id:'first',label:'Water drop',transform:{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.6,samplesPerUnit:40}}});
 const created=[];
-const c={THREE,structuredClone,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,sceneObjects:[first],assertSceneConstructionAvailable(){},localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,makeSceneObjectId:()=> 'second',
+const c={DEFAULT_WATER_EMITTER,THREE,structuredClone,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,sceneObjects:[first],assertSceneConstructionAvailable(){},localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,makeSceneObjectId:()=> 'second',
  controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[first],selectedWaterSource:()=>first,sceneObjectDisplayLabel:r=>r.label,
  createLocalLiquidEmitterSceneRecord,createLocalLiquidEmitterObject:(T,r)=>({object:{},record:r}),scene:{add(){}},registerSceneObject:(o,r)=>created.push(r),recordSceneObjectInsertion:async()=>{},syncLocalLiquidHostEmitters(){},setActiveSceneObject(){},setActiveTab(){},authoredWaterControls:null,sharedWorkbench:null,window:{_kaminosDirty(){}}};
 sceneContext(c);vm.runInContext(actual('addAuthoredWaterDrop'),c);await c.addAuthoredWaterDrop();

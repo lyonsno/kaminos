@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import {runWaterSourceWitness,runWaterCadenceWitness} from './authored-water-source-witness.mjs';
 import {assertAuthoredWaterPopulation} from './authored-water-evidence.mjs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
@@ -7617,6 +7618,14 @@ try {
     await runLocalLiquidPerformanceScenario(ws);
   } else if (scenario === 'authored-water-objects') {
     await runAuthoredWaterObjectsScenario(ws);
+  } else if (scenario === 'authored-water-cadence') {
+    phase='water-completed-step-cadence';
+    lastEvidence.waterCadence=await runWaterCadenceWitness({evaluate,ws,capture:capturePngScreenshot,out:siblingPngPath('-cadence')});
+  } else if (scenario === 'authored-water-source') {
+    phase='water-moved-source-capacity';
+    lastEvidence.waterSource=await runWaterSourceWitness({evaluate,ws,capture:capturePngScreenshot,out:siblingPngPath('-source')});
+    for(const key of ['before','moved','full','fullMoved']){const row=lastEvidence.waterSource[key];assertAuthoredWaterPopulation(row.state,row.particles);}
+    assert.equal(lastEvidence.waterSource.defaults.volumeRate,.005);
   } else if (scenario === 'authored-water-product') {
     await runAuthoredWaterProductScenario(ws);
   } else if (scenario === 'authored-mls') {

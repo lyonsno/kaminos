@@ -13,6 +13,8 @@ import {
 
 const clone = value => structuredClone(value);
 
+export const DEFAULT_WATER_EMITTER = Object.freeze({schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'continuous',baseRadius:.08,strength:1.15,rate:120,volumeRate:.005,lifetimeSeconds:null});
+
 export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, patch = {}) {
   const pose = normalizeLocalLiquidEmitterPose({ ...currentPose, ...patch });
   normalizeLocalLiquidEmitter(settings, pose);
@@ -22,7 +24,7 @@ export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, pa
 export function createLocalLiquidEmitterSceneRecord({
   id,
   transform,
-  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
+  settings = DEFAULT_WATER_EMITTER,
   label = 'Water emitter',
   fileName = label,
   groupId = null,

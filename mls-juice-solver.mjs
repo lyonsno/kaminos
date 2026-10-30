@@ -1,5 +1,6 @@
 import {createSceneLiquidSupport,SCENE_LIQUID_COLLIDER_WGSL,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL} from './scene-liquid-support.mjs';
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
+import {createMlsStepScheduling} from './mls-step-scheduling.mjs';
 
 const boundaryFor=(config,sceneSupport)=>`
         ${sceneSupport?`var world=domain.xyz+particles[id.x].position*domain.w;
@@ -37,6 +38,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   if(gridY>dispatchLimit)throw Error('MLS grid exceeds effective two-dimensional dispatch capacity');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
+  const scheduling=setup?.cooperativeScheduling?createMlsStepScheduling(setup.cooperativeScheduling):null;
   let support=null;
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
   let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
@@ -124,7 +126,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         }`,'census',[[0,0],[1,8]]);
     }
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
-    const execute=(steps,epochMs)=>{
+    const execute=(steps,epochMs,scheduled=false)=>{
         const startedAt=now(),startTime=time,injections=[];
         for(let i=0;i<steps;i++){
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
@@ -142,7 +144,9 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
         }
         if(census){encoder.clearBuffer(census);dispatch(encoder,censusKernel,config.capacity);encoder.copyBufferToBuffer(census,0,censusReadback,0,censusWords*4);}
-        device.queue.submit([encoder.finish()]);pending=true;
+        const submittedAt=now();device.queue.submit([encoder.finish()]);pending=true;
+        // Capture the exact submitted prefix before presentation adds work.
+        const prefix=device.queue.onSubmittedWorkDone().then(()=>now()-submittedAt);
         const submittedStep=clock.read().step;
         const completion=censusReadback?censusReadback.mapAsync(GPUMapMode.READ).then(()=>{
           const words=new Uint32Array(censusReadback.getMappedRange()).slice();censusReadback.unmap();
@@ -150,8 +154,10 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           if(words[0]>config.capacity)throw Error('Invalid MLS population readback');
           plan.reconcileOccupancy(words.subarray(1));
           population={active:words[0],capacity:config.capacity,step:submittedStep,authority:'completed_gpu_occupancy'};
-        }):device.queue.onSubmittedWorkDone();
-        pendingCompletion=completion.then(()=>{
+        }):Promise.resolve();
+        pendingCompletion=Promise.all([prefix,completion]).then(([prefixMs])=>{
+          if(scheduled)scheduling.complete(prefixMs);
+          cadence.lastGpuPrefixMs=prefixMs;
           const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;
           cadence.lastBatchWallMs=completedAt-startedAt;cadence.lastCompletionIntervalMs=lastCompletedAt===null?null:completedAt-lastCompletedAt;lastCompletedAt=completedAt;
         }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
@@ -164,7 +170,9 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       advance(nowMs=now(),epochMs=Date.now()){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         clock.observe(nowMs,paused);if(pending||paused)return false;
-        const steps=clock.advance(nowMs,paused);return steps?execute(steps,epochMs):false;
+        const available=Math.floor((clock.read().backlogSeconds+1e-10)/config.dt);
+        if(!available)return false;
+        const steps=clock.advance(nowMs,paused,scheduling?scheduling.next(available):Infinity);return steps?execute(steps,epochMs,!!scheduling):false;
       },
       async advanceTo(target,epochMs){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
@@ -172,11 +180,12 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         clock.observe(now(),paused);paused=true;
         await pendingCompletion;
         if(failure)throw Error(failure);
+        scheduling?.reset();
         const steps=target-clock.read().step;if(steps)execute(clock.advanceSteps(steps),epochMs??Date.now());
         await pendingCompletion;if(failure)throw Error(failure);
         return clock.read();
       },
-      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,capacity:config.capacity,population:population?{...population}:null,cadence:{...cadence},gridCells:config.gridCells,
+      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,capacity:config.capacity,population:population?{...population}:null,cadence:{...cadence,scheduling:scheduling?.read()??{policy:'whole-backlog'}},gridCells:config.gridCells,
         gridDispatch:{x:gridX,y:gridY},deviceLimits:{maxStorageBufferBindingSize:device.limits?.maxStorageBufferBindingSize??null,maxBufferSize:device.limits?.maxBufferSize??null,maxComputeWorkgroupsPerDimension:dispatchLimit},
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
