@@ -60,3 +60,11 @@ only a recipe reconstructs its analytical bodies. The round-trip test establishe
 that geometry can return to authored motion; it does not establish generated
 shape correspondence. The next generation stage can consume these local bodies
 and their construction parameters without bespoke carrier scripting.
+
+## Reserved motion space
+
+Reserve motion space constructs a separate selectable snapshot object from the current analytical assembly over the entire authored interpolation. Its violet surface encloses per-mesh outer boxes continuously: node/angular speed bounds determine midpoint sampling and temporal padding, then conservative voxel coverage produces a surface. It fills bores and concavities and reserves extra space; it is a housing-design guide, not exact contact geometry or a moving-body collision certificate. It does not include replacement meshes. Coincident piston attachments reject because their orientation has no continuous bound.
+
+The snapshot uses ordinary selection and G/R/S. Editing the assembly leaves the retained snapshot unchanged and marks an earlier recipe; Reserve motion space replaces it explicitly. Export motion guide retains the source recipe, body dimensions, temporal bounds, occupied cells, original source transform, current guide transform, camera and semantic key. API operations are `motionSpace({cellSize:.12,tolerance:.04})` and `exportMotionSpace()`. Both numerical settings must be finite and positive; no bounds/position control bypasses native object editing. Closing the experiment removes its current derived guide. Geometry-package persistence and guide JSON are explicit exports; this does not add general scene reconstruction.
+
+This slice prepares the spatial input for a generator. It has not established that an image model preserves these spaces, and it does not run generation or subtract the guide from a generated mesh.
