@@ -22,3 +22,11 @@ export function edgePorts(g,a,b){
  const at=[g.x+c*local[0]-sn*local[2],local[1],g.z+sn*local[0]+c*local[2]];
  return [faceUV(g,a,at),faceUV(g,b,at)].map(uv=>uv.map(v=>clamp(v,0,1)));
 }
+// Return a point in the wet portion of a shared face edge, if any. An edge
+// is a segment, not a permanently privileged midpoint.
+export function wetEdgePort(s,p,midpoint){
+ const patch=facePatch(s,p);if(p.water<=0)return null;
+ const fixed=Math.abs(midpoint[0]-.5)>.25?0:1,along=1-fixed;
+ if(midpoint[fixed]<patch.lo[fixed]-1e-9||midpoint[fixed]>patch.hi[fixed]+1e-9)return null;
+ const port=[...midpoint];port[along]=(patch.lo[along]+patch.hi[along])/2;return port;
+}

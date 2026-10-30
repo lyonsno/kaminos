@@ -1,4 +1,4 @@
-import {faceFrame,facePoint,faceUV,facePatch,patchContains,edgePorts} from './crust-faces.mjs';
+import {faceFrame,facePoint,faceUV,facePatch,patchContains,edgePorts,wetEdgePort} from './crust-faces.mjs';
 import {createGrainIndex} from './crust-spatial.mjs';
 // Restricted, dimensionless capillary slots and surface-film strips. This is a
 // material sketch, not a calibrated pore-network or nucleation model.
@@ -48,12 +48,12 @@ function faceNetwork(s,g,supportFace=5){
  for(let face=0;face<6;face++)if(face!==supportFace&&!(face===5&&g.faces[5]<=1e-9))g.facePools[face]=addPool(s,g.id,face);
  g.topPool=g.facePools[4]??g.facePools.find(id=>id!==null);g.basePool=g.facePools.find(id=>id!==null);
  for(let a=0;a<6;a++)for(let b=a+1;b<6;b++)if(g.facePools[a]!==null&&g.facePools[b]!==null&&Math.floor(a/2)!==Math.floor(b/2)){
-  const id=addTrack(s,g.facePools[a],g.facePools[b],'edge'),p=s.pools[id];[p.portA,p.portB]=edgePorts(g,a,b);
+  const id=addTrack(s,g.facePools[a],g.facePools[b],'edge'),p=s.pools[id];[p.portA,p.portB]=edgePorts(g,a,b);p.surfaceEdge=true;
  }
 }
 function createNeighbors({seed,settings}){
  if(!Number.isSafeInteger(seed))throw Error('Invalid crust seed');
- const s={model:CRUST_MODEL,setup:'neighbors',faceModel:'exposed-contact-v1',seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
+ const s={model:CRUST_MODEL,setup:'neighbors',faceModel:'exposed-contact-v2',seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
  const source=addPool(s,null,'base');Object.assign(s.pools[source],{kind:'junction',walls:[],x:0,z:0});s.sources=[source];
  for(const [x,z,size,angle] of [[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]){
   const g=addGrain(s,x,z,0,[size,size,size],angle,true);faceNetwork(s,g);
@@ -225,7 +225,11 @@ function step(s,dt){
  const ids=Array.from({length:original},(_,i)=>i);if(s.tick%2)ids.reverse();
  // Freeze contact eligibility for this transport split: the first edge's
  // withdrawal must not erase another edge that was wet at the same instant.
- const contacts=new Map(s.pools.filter(p=>p.kind==='edge').map(e=>[e.id,[['a','portA','contactA'],['b','portB','contactB']].map(([end,port,extent])=>{const p=s.pools[e[end]];return p.kind!=='face'||patchContains(s,p,e[port],e[extent]);})]));
+ const contacts=new Map(s.pools.filter(p=>p.kind==='edge').map(e=>{
+  const a=s.pools[e.a],b=s.pools[e.b];
+  if(e.surfaceEdge){const fromA=wetEdgePort(s,a,e.portA),fromB=wetEdgePort(s,b,e.portB);return [e.id,{can:[fromA!==null,fromB!==null],fromA,fromB}];}
+  return [e.id,{can:[['a','portA','contactA'],['b','portB','contactB']].map(([end,port,extent])=>{const p=s.pools[e[end]];return p.kind!=='face'||patchContains(s,p,e[port],e[extent]);})}];
+ }));
  for(const id of ids){
   const e=s.pools[id];if(reservoir(e))continue;const g=geoms[id];
   if(g.closed){if(!e.wasClosed)s.events.closures++;e.wasClosed=true;continue;}e.wasClosed=false;
@@ -235,10 +239,12 @@ function step(s,dt){
    // Face-edge connections carry flux, not a second artificial wetting reservoir.
    // The receiving patch starts at the contact. Supply is shared, finite and
    // transported with its salt through the same pair relaxation as legacy slots.
-   const [canA,canB]=contacts.get(e.id),dryA=a.water===0,dryB=b.water===0;
+   const contact=contacts.get(e.id),[canA,canB]=contact.can,dryA=a.water===0,dryB=b.water===0;
+   let portA=e.portA,portB=e.portB;
+   if(e.surfaceEdge){if(contact.fromA)portB=faceUV(s.grains[a.grain],b.face,facePoint(s.grains[a.grain],a.face,contact.fromA)).map(v=>clamp(v,0,1));if(contact.fromB)portA=faceUV(s.grains[b.grain],a.face,facePoint(s.grains[b.grain],b.face,contact.fromB)).map(v=>clamp(v,0,1));}
    const conductance=s.settings.mobility*g.width*g.aperture**3/(12*g.length);
    exchange(a,b,geoms[a.id],geoms[b.id],conductance,dt,Infinity,canA,canB);
-   if(dryA&&a.water>0&&a.kind==='face')a.entry=[...e.portA];if(dryB&&b.water>0&&b.kind==='face')b.entry=[...e.portB];
+   if(dryA&&a.water>0&&a.kind==='face')a.entry=[...portA];if(dryB&&b.water>0&&b.kind==='face')b.entry=[...portB];
    e.connected=(canA&&a.water>0)||(canB&&b.water>0);continue;
   }
   const fraction=clamp(e.water/g.capacity,0,1),history=Math.max(fraction,e.maxWetFraction),wetLength=Math.max(g.aperture,g.length*history),retained=history>0?Math.min(1,fraction/history):1,conductance=s.settings.mobility*g.width*g.aperture**3/(12*wetLength)*retained**3;
@@ -269,7 +275,7 @@ export function saveCrust(s){return structuredClone(s);}
 export function restoreCrust(value){
  const s=structuredClone(value);if(s?.model!==CRUST_MODEL)throw Error('Unknown crust model');
  if(!Array.isArray(s.grains)||!Array.isArray(s.pools)||!Array.isArray(s.sources)||!s.sources.length)throw Error('Invalid crust arrays');
- if(s.setup==='neighbors'&&s.faceModel!=='exposed-contact-v1')throw Error('Unsupported face wetting model');
+ if(s.setup==='neighbors'&&s.faceModel!=='exposed-contact-v2')throw Error('Unsupported face wetting model');
  if(s.setup!=null&&s.setup!=='neighbors')throw Error('Invalid crust setup');
  positive(s.time,'time');if(!Number.isSafeInteger(s.tick)||s.tick<0||!Number.isSafeInteger(s.rows)||s.rows<1||!Number.isSafeInteger(s.seed))throw Error('Invalid crust clock or setup');
  if(!s.settings||Object.keys(s.settings).length!==Object.keys(DEFAULTS).length||Object.keys(DEFAULTS).some(k=>!(k in s.settings)))throw Error('Incomplete crust conditions');setCrustConditions(s,s.settings);
@@ -282,7 +288,7 @@ export function restoreCrust(value){
   if(p.kind==='junction'){if(![p.x,p.z].every(Number.isFinite)||!Array.isArray(p.walls)||p.walls.some(id=>!Number.isSafeInteger(id)||!s.grains[id]))throw Error('Invalid junction');}
   else if(p.kind==='face'){if(!s.grains[p.grain]||!(['base','top'].includes(p.face)||s.setup==='neighbors'&&Number.isInteger(p.face)&&p.face>=0&&p.face<6))throw Error('Invalid face');}
   else{if(!Number.isSafeInteger(p.a)||!Number.isSafeInteger(p.b)||!s.pools[p.a]||!s.pools[p.b]||p.a>=i||p.b>=i||p.a===p.b||![p.a,p.b].includes(p.owner)||typeof p.connected!=='boolean'||!Number.isFinite(p.maxWetFraction)||p.maxWetFraction<0||p.maxWetFraction>1)throw Error('Invalid track endpoints or wetting history');}
-  if(p.kind==='edge'){if(!['face','junction'].includes(s.pools[p.a].kind)||s.pools[p.b].kind!=='face'||typeof s.pools[p.b].face!=='number'||s.pools[p.a].kind==='face'&&typeof s.pools[p.a].face!=='number')throw Error('Invalid face connection endpoints');if(s.setup!=='neighbors'||p.water!==0||p.salt!==0||p.residue!==0)throw Error('Invalid face connection storage');for(const key of ['contactA','contactB'])if(p[key]!=null&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0)))throw Error('Invalid contact extent');for(const [key,id]of [['portA',p.a],['portB',p.b]])if(s.pools[id].kind==='face'&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid face port');}
+  if(p.kind==='edge'){if(p.surfaceEdge&&(s.pools[p.a].kind!=='face'||s.pools[p.a].grain!==s.pools[p.b].grain||Math.floor(s.pools[p.a].face/2)===Math.floor(s.pools[p.b].face/2)))throw Error('Invalid shared edge');if(!['face','junction'].includes(s.pools[p.a].kind)||s.pools[p.b].kind!=='face'||typeof s.pools[p.b].face!=='number'||s.pools[p.a].kind==='face'&&typeof s.pools[p.a].face!=='number')throw Error('Invalid face connection endpoints');if(s.setup!=='neighbors'||p.water!==0||p.salt!==0||p.residue!==0)throw Error('Invalid face connection storage');for(const key of ['contactA','contactB'])if(p[key]!=null&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0)))throw Error('Invalid contact extent');for(const [key,id]of [['portA',p.a],['portB',p.b]])if(s.pools[id].kind==='face'&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid face port');}
   if(p.entry!=null&&(!Array.isArray(p.entry)||p.entry.length!==2||p.entry.some(v=>!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid wet patch anchor');
   if(p.kind==='gap'&&(!Array.isArray(p.walls)||p.walls.length!==2||p.walls.some(id=>!s.grains[id])))throw Error('Invalid gap walls');if((p.kind==='film'||p.kind==='branch')&&!s.grains[p.carrier])throw Error('Invalid film carrier');
  }
