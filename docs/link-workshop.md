@@ -68,3 +68,9 @@ Reserve motion space constructs a separate selectable snapshot object from the c
 The snapshot uses ordinary selection and G/R/S. Editing the assembly leaves the retained snapshot unchanged and marks an earlier recipe; Reserve motion space replaces it explicitly. Export motion guide retains the source recipe, body dimensions, temporal bounds, occupied cells, original source transform, current guide transform, camera and semantic key. API operations are `motionSpace({cellSize:.12,tolerance:.04})` and `exportMotionSpace()`. Both numerical settings must be finite and positive; no bounds/position control bypasses native object editing. Closing the experiment removes its current derived guide. Geometry-package persistence and guide JSON are explicit exports; this does not add general scene reconstruction.
 
 This slice prepares the spatial input for a generator. It has not established that an image model preserves these spaces, and it does not run generation or subtract the guide from a generated mesh.
+
+### Construction guidance
+
+Choosing Draw links, Select / move or Connect piston enters native joint editing on the workshop. The viewport notice names the active mode. Draw links shows branch targets and a pending span on the construction plane. Connect piston highlights available joints in green, the first mount in amber, and unavailable mounts in red; hovering previews the connection. Click a valid second joint to complete and return to Select / move. Escape clears the first mount, then exits the tool; Tab leaves component editing. Pose changes, playback and component exit clear pending connections. These guides describe authoring eligibility, not mechanical collision clearance.
+
+Replacement history snapshots serialize only returned bodies. An empty replacement restore preserves an already analytical body view. Motion-space reservation remains an explicit operation; no periodic envelope reconstruction runs during playback.

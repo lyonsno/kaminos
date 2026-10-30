@@ -23,6 +23,7 @@ export function createMechanismView(root){
   bodies.update(m,t);root.updateMatrixWorld(true);
  }
  function setBodies(packet){
+  if(packet?.schema==='kaminos.assembly-geometry.v1'&&Array.isArray(packet.bodies)&&!packet.bodies.length&&!bodies.manifest().replacements)return bodies.manifest();
   const nextRoot=new T.Group(),next=createBodyView(nextRoot);
   try{if(packet?.schema!=='kaminos.assembly-geometry.v1'||!Array.isArray(packet.bodies))throw Error('Choose an assembly geometry package');next.update(lastModel,lastT);if(packet.bodies.length)next.importBodies(packet);}catch(e){next.dispose();throw e;}
   bodies.dispose();bodyRoot.removeFromParent();bodyRoot=nextRoot;bodies=next;root.add(bodyRoot);root.updateMatrixWorld(true);return bodies.manifest();
