@@ -115,11 +115,12 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   }
   total+=distance-remaining;return read();
  }
- function setDestination(value,{constrainToArea=true}={}) {
+ function setDestination(value,{constrainToArea=true,reverse=false}={}) {
   if(value!==null&&!finitePair(value))throw Error('Destination must be a finite pair or null');
   if(typeof constrainToArea!=='boolean')throw Error('Destination area constraint must be boolean');
-  if(JSON.stringify(value)===JSON.stringify(destination)&&constrainToArea===constrainDestination)return read();
+  if(!reverse&&JSON.stringify(value)===JSON.stringify(destination)&&constrainToArea===constrainDestination)return read();
   const current=sample();destination=value?pair(value):null;constrainDestination=constrainToArea;
+  if(reverse)current.direction=current.direction.map(v=>-v);
   initialize(current.position,current.direction);
   if(destination){
    const q=localPoint(destination,area),n=Math.max(1,length(q)),c=Math.cos(area.yaw),s=Math.sin(area.yaw);
@@ -160,5 +161,5 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
  }
  function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();const goal=destination;destination=null;initialize(current.position,current.direction);if(goal)setDestination(goal,{constrainToArea:constrainDestination});return read();}
  function save() {return {schema:'kaminos.creature-wander-path.v1',...(destination?{destination:pair(destination),constrainDestination}:{}),...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
- return Object.freeze({read,advance,redirect,contact,setArea,setAreas,setDestination,snapshot:save});
+ return Object.freeze({read,advance,redirect,contact,setArea,setAreas,setDestination,reverse:()=>setDestination(destination,{reverse:true,constrainToArea:constrainDestination}),snapshot:save});
 }

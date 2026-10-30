@@ -1,3 +1,4 @@
+import {behaviorSettings} from './behavior-settings.mjs';
 import {createWanderPath} from './wander-path.mjs';
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
@@ -26,6 +27,7 @@ function checkAuthoredTransform(t){
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.attention)behaviorSettings(inputs.attention.behavior);
  if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
@@ -104,7 +106,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
- const engagement=createEngagement();
+ const engagement=createEngagement({behavior:inputs.attention?.behavior});
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
@@ -176,6 +178,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function presentWander(delta,playing,from=clock/1000-delta,physicalSeconds=delta){
   if(!syncArea())return read();
+  const before=wander.snapshot(),yawOf=s=>s.facing??Math.atan2(s.path.direction[0],s.path.direction[1])+(s.reverse?Math.PI:0);
+  if(attention&&encounterContext&&!steering){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);
+   resolvedOverlay=poseOverlay.resolve(restingPose(wander.frame(wander.read().frame)),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
+  }
   let moving=delta,resting=false;
   if(steering){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);
@@ -194,16 +201,33 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
    const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
    const prior=engagement.read();
-   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
-   attention.setEngagement(['approaching','inspecting','cautious'].includes(intent.phase)?intent.id:null);
+   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,cessation:a.interruption,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
+   attention.setEngagement(['approaching','inspecting','cautious','withdrawing'].includes(intent.phase)?intent:null);
+   if(intent.watch){
+    const target=frame.worldToLocal(new THREE.Vector3(...intent.watch.point));
+    wander.face([target.x,target.z],delta);
+   }
+   else wander.face(null,delta);
+   const motion=wander.read(),backward=motion.reverse;
+   let retreatBackward=false;
+   if(intent.phase==='withdrawing'){
+    const target=frame.worldToLocal(new THREE.Vector3(...intent.point)),dx=target.x-path.position[0],dz=target.z-path.position[1],d=Math.hypot(dx,dz);
+    const heading=motion.facing??Math.atan2(path.direction[0],path.direction[1])+(backward?Math.PI:0);
+    const facing=d>0?(dx*Math.sin(heading)+dz*Math.cos(heading))/d:1;
+    retreatBackward=facing>(backward?-.2:.2);
+   }
+   // Select signed pose phase and travel while preserving the explicit facing.
+   // Forward escape is faster until body turning brings watchful backward
+   // stepping into reach. The head keeps its independent observation clock.
+   wander.setReverse(retreatBackward);
    if(intent.destination){
     const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
     if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
    }else if(intent.phase!=='inspecting')wander.setDestination(null);
-   if(intent.hold){moving=0;resting=true;}
-  }
+   if(intent.hold){moving=0;resting=true;}else moving*=(intent.pace??1)*(intent.phase==='withdrawing'&&!retreatBackward?1.5:1);
+  }else {wander.setReverse(false);wander.face(null,delta);}
   restMotion?.advance(clock/1000-from,resting);
-  if(attention&&encounterContext){
+  if(attention&&encounterContext&&steering){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);
    resolvedOverlay=poseOverlay.resolve(restingPose(wander.frame(wander.read().frame)),frame.matrixWorld,state=>attention.modify({...state,time:clock/1000,placement}));
   }
@@ -211,6 +235,14 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(encounterContext&&moving>0){const frame=authoredPlacement(),path=wander.read().path;frame.updateMatrixWorld(true);const direction=new THREE.Vector3(path.direction[0],0,path.direction[1]).transformDirection(frame.matrixWorld),scale=frame.getWorldScale(new THREE.Vector3()).x;
    constraint=encounterContext.steer({time:frameStamp,seconds:physicalSeconds,direction:[direction.x,direction.z],speed:wander.read().travel.unitsPerSecond*scale});
    const local=new THREE.Vector3(constraint.direction[0],0,constraint.direction[1]).transformDirection(frame.matrixWorld.clone().invert());constraint={...constraint,direction:[local.x,local.z]};
+  }
+  if(encounterContext&&encounterContext.response!=='physical'&&Math.abs(yawOf(wander.read())-yawOf(before))>1e-10){
+   const frame=authoredPlacement();frame.updateMatrixWorld(true);const from=createWanderPath({snapshot:before.path}).read(),oldYaw=yawOf(before),nextYaw=yawOf(wander.read()),angle=Math.atan2(Math.sin(oldYaw-nextYaw),Math.cos(oldYaw-nextYaw));
+   const pivot=new THREE.Vector3(from.position[0],0,from.position[1]).applyMatrix4(frame.matrixWorld),axis=new THREE.Vector3(0,-1,0).transformDirection(frame.matrixWorld).toArray();
+   const body=contactState(wander.frame(wander.read().frame,from,oldYaw)),nextBody=contactState(wander.frame(wander.read().frame));
+   const fraction=encounterContext.limit({time:frameStamp,body,nextBody,turnOnly:true,motion:{pivot:pivot.toArray(),translation:[0,0,0],angle,axis}}).fraction;
+   if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Motion admission must return a fraction in [0,1]');
+   wander.setFacing(oldYaw-angle*fraction);
   }
   if(encounterContext&&encounterContext.response!=='physical'){
    const body=contactState(),frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone();
@@ -221,17 +253,21 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     return encounterContext.limit({time:frameStamp,body,nextBody,turnOnly,motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis}}).fraction;}};
   }
   if(encounterContext?.response==='physical')constraint={...constraint,gaitScale:wander.read().contactRate};
-  const before=wander.snapshot();let state;
+  let state;
   try{state=wander.advance(moving,constraint);}catch(error){resolvedOverlay=null;wander=makeWander({snapshot:before});player.seek(wander.read().frame);throw error;}
   const present=()=>{try{cycle=state.cycle;source.presentation.cycle=cycle;player.seek(state.frame);attention?.positionReticle(placement);if(playing)player.play();}finally{resolvedOverlay=null;}};
   const after=()=>{stepFlesh(physicalSeconds);if(guideSegment!==state.path.segments)refreshGuide();refresh();};
   if(encounterContext?.response==='physical'&&physicalSeconds>0){
    const frame=authoredPlacement();frame.updateMatrixWorld(true);const matrix=frame.matrixWorld.clone(),inverse=matrix.clone().invert(),from=createWanderPath({snapshot:before.path}).read(),to=state.path;
    const point=p=>new THREE.Vector3(p[0],0,p[1]).applyMatrix4(matrix),pivot=point(from.position),end=point(to.position),axis=new THREE.Vector3(0,-1,0).transformDirection(matrix).toArray();
-   const a=from.direction,b=to.direction,angle=Math.atan2(a[0]*b[1]-a[1]*b[0],a[0]*b[0]+a[1]*b[1]);
+   const fromYaw=yawOf(before),toYaw=yawOf(wander.read()),angle=Math.atan2(Math.sin(fromYaw-toYaw),Math.cos(fromYaw-toYaw));
    encounterContext.stage({time:frameStamp,seconds:physicalSeconds,nextBody:contactState(wander.frame(state.frame)),motion:{pivot:pivot.toArray(),translation:end.sub(pivot).toArray(),angle,axis},accept:motion=>{
-    const position=pivot.clone().add(new THREE.Vector3(...motion.translation)).applyMatrix4(inverse),worldDirection=new THREE.Vector3(from.direction[0],0,from.direction[1]).transformDirection(matrix).applyAxisAngle(new THREE.Vector3(0,-1,0),motion.angle).transformDirection(inverse);
-    state=wander.contact(before,{position:[position.x,position.z],direction:[worldDirection.x,worldDirection.z]});present();
+    const position=pivot.clone().add(new THREE.Vector3(...motion.translation)).applyMatrix4(inverse);
+    const actualBody=new THREE.Vector3(Math.sin(fromYaw),0,Math.cos(fromYaw)).transformDirection(matrix).applyAxisAngle(new THREE.Vector3(0,-1,0),motion.angle).transformDirection(inverse),acceptedYaw=Math.atan2(actualBody.x,actualBody.z);
+    // Keep retreat travel distinct from body facing, applying the solver's
+    // residual rotation to the proposed route rather than restoring its old sign.
+    const direction=new THREE.Vector3(to.direction[0],0,to.direction[1]).applyAxisAngle(new THREE.Vector3(0,1,0),acceptedYaw-toYaw);
+    state=wander.contact(before,{position:[position.x,position.z],direction:[direction.x,direction.z],...(before.facing!==null||state.facing!==null?{facing:acceptedYaw}:{})});present();
    },after});return read();
   }
   present();encounterContext?.commit(frameStamp,contactState());after();return read();
@@ -316,7 +352,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(inputs.attention.flame)Promise.resolve(globalThis.window?.kaminosFlameWorkbench?.open?.()).then(workbench=>{if(workbench&&!disposed)flames=flameInterests({THREE,root:sceneRoot,workbench,interest:inputs.attention.flame.interest??1.5});}).catch(error=>record({kind:'attention.flame',phase:'unavailable',error:error.message}));
    attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:()=>[...props(),...(flames?.read()??[])],
     // Each creature's idle glances replay identically but differ from its neighbours'.
-    options:{document,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
+    options:{document,behavior:inputs.attention.behavior,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
    if(inputs.attention.enabled===false)attention.setEnabled(false);
    // Light sense: while moving, sample the fire's light at a ring of ground
@@ -338,7 +374,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      const result=await probe.sample(points);
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;
-     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+     // The probe measures this emitter's field, whose atlas may remain resident
+     // while disabled. A known disabled emitter contributes zero radiance even
+     // behind the observer; unavailable source state supplies no such evidence.
+     const off=flame?.sensed!==false&&flame?.active===false;
+     attention.sense({time:clock/1000,status:flame?.sensed===false?'unavailable':result.status,sourcePower:off?0:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:off?0:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
     }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
     finally{lightBusy=false;}
    };
@@ -427,8 +467,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
-     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
-     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
+     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path,pathReverse:prior.wander.read().reverse,pathFacing:prior.wander.read().facing});
+     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path,pathReverse:prior.heldWander.read().reverse,pathFacing:prior.heldWander.read().facing});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();
     }
     catch(error){
@@ -437,9 +477,16 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      throw error;
     }
    }),
+   behavior:operation('behavior',input=>{
+    if(!attention)throw Error('This creature has no attention setup');
+    const next=behaviorSettings({...attention.read().behavior,...input});
+    attention.setBehavior(next);engagement.setBehavior(next);
+    chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,behavior:next}};
+    host.scene.refreshPresentation?.(asset);return read();
+   }),
    engagement:operation('engagement',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Engagement enabled must be boolean');chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,engage:input.enabled}};
-    if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
-   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);if(!input.enabled){engagement.reset();wander?.setDestination(null);}chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
+    if(!input.enabled){engagement.reset();attention.setEngagement(null);wander?.setReverse(false);wander?.setDestination(null);refreshGuide();}host.scene.refreshPresentation?.(asset);return read();}),
+   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);if(!input.enabled){engagement.reset();wander?.setReverse(false);wander?.setDestination(null);}chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
     // While not playing no frame will come to clear or apply the turn: show
     // the displayed source frame again without moving time.
     if(player.read().status!=='playing'){player.represent();host.scene.refreshPresentation?.(asset);}
@@ -474,7 +521,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();
-   presentation=mountProperties({document,read,invoke,
+   presentation=mountProperties({document,read,invoke,installNumberDrag:host.controls.installNumberDrag,
     save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      await checkRecipeView(recipe.view,session.readView());await prepareWalkingSetup(recipe,{loadSources});
