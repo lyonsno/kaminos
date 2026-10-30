@@ -65,7 +65,7 @@ export default {
     validateExport(await admission(),catalog.generation);
     if(disposed||ticket!==token)return read();
     data=next;images=loaded;if(sequenceSelect)sequenceSelect.value=String(n);index=0;time=data.frames[0].timeMs;lastTick=null;draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
-   }catch(e){data=null;images=[];for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
+   }catch(e){if(disposed||ticket!==token)return;data=null;images=[];for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
    return read();
   };
   const seek=value=>{if(loading||!data)throw Error('sequence unavailable');const n=Number(value);if(!Number.isInteger(n)||n<0||n>=data.frames.length)throw Error('frame out of range');playing=false;index=n;time=data.frames[n].timeMs;draw();return read();};
