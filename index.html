@@ -13212,7 +13212,8 @@ document.getElementById('rendering-shared-gain').addEventListener('input', event
   refreshRenderingControls();
 });
 let sceneFireLightingHistory=null;
-const editFireLighting=(name,value,fallback)=>sceneFireLightingHistory
+// Restored controls apply document state; only user edits enter scene history.
+const editFireLighting=(name,value,fallback)=>sceneFireLightingHistory&&sceneDocument.state().phase!=='applying'
   ?sceneFireLightingHistory.run(name,value).catch(error=>{syncFireLightingControls();setInfo(error.message);})
   :fallback();
 function syncFireLightingControls(){
