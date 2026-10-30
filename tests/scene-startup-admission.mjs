@@ -14,19 +14,20 @@ const begin=oldStart>=0?oldStart:start;
 const end=html.indexOf('  startupSceneRestore.catch',start);
 const code=html.slice(begin,end)+';globalThis.result=startupSceneRestore;';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+const deferred=()=>{let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};};
 const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),label:'Saved tuning',stationary:true},route:{volume_light_field:'1',volume_light_field_scene_depth:'1'},lightGainStops:0};
 function fixture({matching=false,failed=false,ordinary=false}={}){
  const environment=deferred(),volume=deferred(),events=[];
- const c={URLSearchParams,Promise,Symbol,fireAtBoot,compositionRestoreUrl,readOwnerExperimentAddress,window:{},ownerVolumeReady:null,
+ const controls={disabled:false};const c={URLSearchParams,Promise,Symbol,fireAtBoot,compositionRestoreUrl,readOwnerExperimentAddress,window:{location:{search:'?settings_preset=vsp-test'}},ownerVolumeReady:null,activeVolumeSettingsPresetReceipt:{},volumeSettingsPresetStatus:message=>events.push(['preset-failure',message]),console:{error(){}},
  location:{origin:'http://localhost',hash:ordinary?'':'#workspace=workbench&scene=chosen.kaminos.json',search:matching?'?settings_preset='+composition.flame.presetId:'',replace:url=>events.push(['redirect',url])},
  environmentLoaded:environment.promise,initKaminosVolumeRoute(){events.push(['boot']);return volume.promise;},reportKaminosVolumeRouteInitFailure(){},
  fetch:async()=>{events.push(['fetch']);return {ok:!failed,json:async()=>({version:8})};},
  planSceneRestore:()=>({composition}),sceneDocument:{holdRestore(){events.push(['hold']);},state:()=>({blocked:false})},
- File:class{},loadSceneFile:async()=>events.push(['apply']),setInfo(){},setActiveTab(){},document:{body:{classList:{add(){}}}}
+ File:class{},loadSceneFile:async()=>events.push(['apply']),setInfo(){},setActiveTab(){},document:{getElementById:()=>controls,body:{classList:{add(){}}}}
  };
- vm.runInNewContext(code,c);c.result.catch(()=>{});
- return {c,events,environment,volume};
+ const handler=html.slice(html.indexOf('function reportKaminosVolumeRouteInitFailure('),html.indexOf('// The fluid boots once per page'));
+ vm.runInNewContext(handler+'\n'+code,c);c.result.catch(()=>{});
+ return {c,events,environment,volume,controls};
 }
 test('recipe recovery navigates before environment or fire preparation and never boots discarded fire',async()=>{
  const f=fixture();await flush();
@@ -44,4 +45,12 @@ test('unavailable saved document fails without initializing fire',async()=>{
 });
 test('ordinary startup does not fetch a saved document or initialize fire',async()=>{
  const f=fixture({ordinary:true});f.environment.resolve();await f.c.result;assert.deepEqual(f.events,[]);
+});
+
+test('scene admission rejection preserves preset controls; actual fire startup rejection faults them',async()=>{
+ const missing=fixture({matching:true,failed:true});await assert.rejects(missing.c.result,/Scene unavailable/);await flush();
+ assert.equal(missing.controls.disabled,false,'missing scene must not disable an unrelated preset');assert.equal(missing.events.some(e=>e[0]==='preset-failure'),false);
+ const broken=fixture({matching:true});broken.environment.resolve();await flush();broken.volume.reject(Error('device initialization failed'));
+ await assert.rejects(broken.c.result,/device initialization failed/);await flush();assert.equal(broken.controls.disabled,true);
+ assert.equal(broken.events.filter(e=>e[0]==='preset-failure').length,1);
 });
