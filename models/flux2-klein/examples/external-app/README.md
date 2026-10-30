@@ -21,4 +21,4 @@ Open the local URL printed by the server. The included sample appears immediatel
 
 Run `npm run build` and serve this folder over HTTPS or localhost for deployment, including `index.html` and `dist/`. Weight hosting can be changed with `pipelineOptions.weightsBase` in `app.js`, or `?weights=https://your-host/path` when opening the app.
 
-The [model API guide](../../package-README.md) covers model options and sharing an existing device or inference session.
+The [model API guide](https://www.npmjs.com/package/@kaminos/flux2-klein) covers model options and sharing an existing device or inference session.
