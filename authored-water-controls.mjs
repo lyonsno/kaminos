@@ -26,6 +26,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <label>Pressure wave speed · m/s<input class="transform-input" type="number" min="0" step="0.1" data-wave-speed></label>
   <label>Kinematic viscosity · m²/s<input class="transform-input" type="number" min="0" step="0.0001" data-kinematic-viscosity></label>
   <p class="hint">Enable to edit these values; enabling keeps their current values. With this off, the original grid coefficients stay fixed and these world values change with resolution. Numerical damping can still change. Restart applies material edits.</p>
+  <p role="alert" data-material-error></p>
   <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
   <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
   <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation.</p><p role="alert" data-simulation-error></p>
@@ -151,6 +152,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   if(!simulation?.present){stopTimer('simulation');simulationDirty=false;simulationRevision++;}
   if(simulation?.settings&&!simulationDirty){$('[data-capacity]').value=simulation.settings.particleCount??12000;if(simulation.sampling){$('[data-target]').value=simulation.sampling.particleTarget??Math.round(simulation.requestedVolume/simulation.sampling.spacing**3);$('[data-container]').checked=simulation.sampling.container!==null;const b=simulation.sampling.container??simulation.sampling.worldBounds;$('[data-bounds]').hidden=false;for(const input of simulationPanel.querySelectorAll('[data-bound]'))input.value=b[input.dataset.bound][Number(input.dataset.axis)];}}
   if(!simulationDirty){const m=simulation?.settings?.mlsMaterial??simulation?.material;$('[data-world-material]').checked=!!simulation?.settings?.mlsMaterial;for(const [selector,key]of [['wave-speed','pressureWaveSpeed'],['kinematic-viscosity','kinematicViscosity']]){$('[data-'+selector+']').value=m?.[key]??'';$('[data-'+selector+']').disabled=!$('[data-world-material]').checked;}}
+  $('[data-material-error]').textContent=simulation?.material?.error?`Cannot restart with this material at the current resolution: ${simulation.material.error}. Adjust material or resolution; the current water is unchanged.`:'';
   $('[data-allocation-summary]').textContent=simulation?.present?`On Restart: ${(simulation.proposedParticleCount??0).toLocaleString()} initial + ${(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0).toLocaleString()} additional = ${((simulation.proposedParticleCount??0)+(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0)).toLocaleString()} total slots.`:'';
   showResolutionSummary(simulation);$('[data-initial-resolution]').hidden=!s.sources?.some(r=>r.mode==='finite_drop')&&selected?.settings?.mode!=='finite_drop';
   $('[data-release]').disabled=!(s.sources?.length||selected);

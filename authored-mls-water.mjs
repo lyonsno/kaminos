@@ -12,6 +12,13 @@ export function authoredMlsCellSize(records,options={}){
 export function authoredMlsMaterial(records,options={}){
  return mlsConfig({cellSize:authoredMlsCellSize(records,options),mlsMaterial:options.mlsMaterial}).materialUnits;
 }
+// Scene membership and native transforms can change resolution outside the
+// material editor. Keep those scenes inspectable and repairable; construction
+// still uses the strict conversion above and never clamps requested values.
+export function inspectAuthoredMlsMaterial(records,options={}){
+ try{return {...authoredMlsMaterial(records,options),executable:true,error:null};}
+ catch(error){return {...options.mlsMaterial,parameterization:options.mlsMaterial?'world':'legacy_grid',executable:false,error:error.message};}
+}
 export function authoredMlsParticleVolume(cellSize=.05){return cellSize**3/3;}
 export function canonicalAuthoredWaterFlowRecords(records,setup={}){
  const particleVolume=authoredMlsParticleVolume(authoredMlsCellSize(records,setup));

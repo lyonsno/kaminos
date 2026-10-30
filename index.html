@@ -2831,7 +2831,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
-import {authoredMlsCellSize,authoredMlsParticleVolume,authoredMlsMaterial} from './authored-mls-water.mjs';
+import {authoredMlsCellSize,authoredMlsParticleVolume,authoredMlsMaterial,inspectAuthoredMlsMaterial} from './authored-mls-water.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
@@ -12633,7 +12633,7 @@ function authoredWaterSimulationState(){
  const sources=localLiquidEmitterRecords(),finite=sources.filter(r=>r.localLiquidEmitter.mode==='finite_drop');
  const sampling=resolveAuthoredWaterSampling(sources,localLiquidSetup??{}),descriptions=finite.map(r=>describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling));
  const proposed=descriptions.reduce((n,d)=>n+d.particleCount,0),requestedVolume=descriptions.reduce((n,d)=>n+d.requestedVolume,0),representedVolume=descriptions.reduce((n,d)=>n+d.worldVolume,0);
- return {present:!!localLiquidSetup,scope:'all_water',material:authoredMlsMaterial(sources,localLiquidSetup??{}),sampling,compatibility:inspectAuthoredWaterCompatibility(sources,sampling),boundsFit:planAuthoredWaterBounds(sources,sampling),selected:workingScene.activeFieldId==='water-field',sourceCount:sources.length,particleCount:localLiquidHost?.state().solver?.particleCount??proposed,proposedParticleCount:proposed,requestedVolume,representedVolume,relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0,settings:localLiquidSetup?structuredClone({...localLiquidSetup,waterSampling:sampling}):null};
+ return {present:!!localLiquidSetup,scope:'all_water',material:inspectAuthoredMlsMaterial(sources,localLiquidSetup??{}),sampling,compatibility:inspectAuthoredWaterCompatibility(sources,sampling),boundsFit:planAuthoredWaterBounds(sources,sampling),selected:workingScene.activeFieldId==='water-field',sourceCount:sources.length,particleCount:localLiquidHost?.state().solver?.particleCount??proposed,proposedParticleCount:proposed,requestedVolume,representedVolume,relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0,settings:localLiquidSetup?structuredClone({...localLiquidSetup,waterSampling:sampling}):null};
 }
 
 function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter),transform:sceneObjectTransformState(row.object),sampling:describeAuthoredWaterDrop(row.localLiquidEmitter.drop,sceneObjectTransformState(row.object),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{})),initialPreview:(()=>{const p=row.object?.children.find(c=>c.userData.kaminosWaterPreview);return p?.userData.initialStateOnly?{kind:'initial_particles',draft:!!authoredWaterDraftPreview,particleCount:p.count,visible:p.visible,spacing:p.userData.spacing*row.object.scale.x,glyphRadius:p.userData.glyphRadius*row.object.scale.x}:null;})()}:null,failure:localLiquidFailure,simulation:authoredWaterSimulationState(),sources:localLiquidEmitterRecords().map(r=>({id:r.id,mode:r.localLiquidEmitter.mode??'continuous'})),runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount,capacity:runtime.solver?.capacity??runtime.solver?.particleCount,population:runtime.solver?.population,clock:runtime.solver?.clock,cadence:runtime.solver?.cadence,liveInlets:runtime.solver?.liveInlets,pendingSourceChanges:runtime.pendingSourceChanges}:null};}
@@ -12648,10 +12648,13 @@ function applyAuthoredWaterSettings(id,patch){
  if(!waterSettingTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>structuredClone(workingScene.objects.find(r=>r.id===id).localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(workingScene.objects.find(r=>r.id===id).object)),write:value=>{
   replaceAuthoredWaterSettings(id,value);
  }});waterSettingTargets.add(target);}
- return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');
+ const next=normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object));
+ authoredMlsMaterial(localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:next}:r),localLiquidSetup??{});
+ return scenePlacementTools.edits.apply(target,next,'Edit initial water');
 }
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
   const entry=workingScene.objects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
+  if(!deferSync)authoredMlsMaterial(localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),localLiquidSetup??{});
   if(!deferSync&&localLiquidSetup?.waterSampling?.particleTarget!==undefined){
    const records=localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),sampling=resolveAuthoredWaterSampling(records,localLiquidSetup);
    const rows=workingScene.objects.filter(r=>r.id===id||(r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')),builds=[];
@@ -12722,13 +12725,17 @@ function matchAuthoredWaterSetup(referenceId){
  if(!waterMatchTargets.has(target)){
   scenePlacementTools.edits.register(target,{read:()=>({entries:Object.fromEntries(ids.map(id=>[id,structuredClone(workingScene.objects.find(r=>r.id===id)?.localLiquidEmitter)]))}),check:checked,write:value=>{
    checked(value);
+   authoredMlsMaterial(localLiquidEmitterRecords().map(r=>value.entries[r.id]?{...r,localLiquidEmitter:value.entries[r.id]}:r),localLiquidSetup??{});
    // Construct every preview before replacing any source; a construction error
    // leaves all existing source previews untouched.
    const replacements=ids.map(id=>{const row=workingScene.objects.find(r=>r.id===id);return createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object),localLiquidEmitter:value.entries[id]},{sampling:localLiquidSetup?.waterSampling}).object;});
-   ids.forEach((id,i)=>replaceAuthoredWaterSettings(id,value.entries[id],replacements[i]));
+   ids.forEach((id,i)=>replaceAuthoredWaterSettings(id,value.entries[id],replacements[i],{deferSync:true}));
+   syncLocalLiquidHostEmitters();
   }});waterMatchTargets.add(target);
  }
- scenePlacementTools.edits.apply(target,{entries:Object.fromEntries(plan.changes.map(c=>[c.id,c.settings]))},'Match water sampling and container');
+ const entries=Object.fromEntries(plan.changes.map(c=>[c.id,c.settings]));
+ authoredMlsMaterial(localLiquidEmitterRecords().map(r=>entries[r.id]?{...r,localLiquidEmitter:entries[r.id]}:r),localLiquidSetup??{});
+ scenePlacementTools.edits.apply(target,{entries},'Match water sampling and container');
  return authoredWaterState();
 }
 
@@ -12739,13 +12746,12 @@ function editAuthoredWaterSimulation(patch){
  const target='@authored-water-simulation';
  const checked=value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
-  // Resolve against the proposed sampling before history begins or state changes.
-  authoredMlsMaterial(localLiquidEmitterRecords(),next);
   // Keep deletion explicit through the history API's shallow patch merge.
   return {...next,mlsMaterial:next.mlsMaterial??null};
  };
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:checked,write:value=>{
   const next=normalizeLocalLiquidSetup(checked(value));
+  authoredMlsMaterial(localLiquidEmitterRecords(),next);
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);
@@ -12753,7 +12759,11 @@ function editAuthoredWaterSimulation(patch){
   syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();
  }});authoredWaterSimulationTarget=true;}
 
- return scenePlacementTools.edits.apply(target,{...localLiquidSetup,...patch},'Edit water simulation');
+ const proposed=checked({...localLiquidSetup,...patch});
+ // Reads must remain possible after native transforms/membership edits change
+ // resolution; validate the proposed write rather than the current read.
+ authoredMlsMaterial(localLiquidEmitterRecords(),proposed);
+ return scenePlacementTools.edits.apply(target,proposed,'Edit water simulation');
 }
 async function addAuthoredWaterDrop({mode='finite_drop'}={}){
  if(!['finite_drop','continuous'].includes(mode))throw Error('Unknown water source type');

@@ -17,4 +17,7 @@ f.input('[data-kinematic-viscosity]').value=0;f.input('[data-kinematic-viscosity
 assert.equal(edits.at(-1).mlsMaterial.kinematicViscosity,0);
 f.input('[data-world-material]').checked=false;f.input('[data-world-material]').onchange();await f.controls.flush();
 assert.equal(edits.at(-1).mlsMaterial,null,'disabling explicitly restores legacy material parameterization');
+state.simulation.material={...material,executable:false,error:'MLS material coefficient is outside GPU f32 capacity at this resolution'};
+f.controls.refresh();assert.match(f.input('[data-material-error]').textContent,/Cannot restart.*f32 capacity/);
+state.simulation.material=material;f.controls.refresh();assert.equal(f.input('[data-material-error]').textContent,'');
 f.controls.dispose();console.log('MLS inspector shares the simulation edit path and preserves material on opt-in');
