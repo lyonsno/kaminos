@@ -1,250 +1,58 @@
 # Kaminos
 
-> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench.
+Kaminos is a workbench for generating, assembling and playing with 3D worlds in the browser.
 
-Kaminos is the browser-based authoring workbench where several independently
-useful systems meet. It keeps a spatial scene alive while local models run,
-receives their outputs as editable world matter, and turns runtime machinery
-that survives the workbench into reusable packages and focused model ports.
+Build a creature around a skeleton. Put a burner on a moving arm. Pour water into a contraption, pull it apart, and keep working while the world runs.
 
-The repository spans four connected capabilities:
+![Flame illuminates the open chamber of a kiln in the Kaminos workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)
 
-- **Browser-native intelligence**. A published WebGPU inference runtime and a
-  growing family of spatial and generative model ports run as components of an
-  interactive browser application.
-- **Live materials**. Stateful fire, smoke, fluids, particles, and rendering
-  processes remain visible and authorable while compute continues.
-- **Generated beings**. Separate experiments connect authored morphology to
-  generated form, reconstructed casts to mechanical control, and generated
-  creatures to terrain-relative motion.
-- **A world kiln**. Images, meshes, splats, motion, material fields, simulation
-  state, and generated environments can be inspected, corrected, staged, and
-  composed in one WebGPU workbench.
+**[Run the workbench locally](#run-locally) · [Browser examples](https://lyonsno.github.io/kaminos/inference-kit/) · [Combustion films](https://lyonsno.github.io/kaminos/) · [Developer guide](docs/workbench-common-main.md)**
 
-## Turn A Photograph Into A Surface You Can Relight
+## In the World
 
-[![Four synchronized views of a metallic sculpture: the original photograph, recovered depth, the image under new lighting, and inferred materials with glow](demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)
+- **Fire and smoke.** Place and move burners, feed a reaction, and push objects through the plume. Fire catches, spreads and consumes fuel; smoke moves around the geometry.
+- **Fluids.** Pour, stir and redirect liquid. Change the container or move something through it while it flows.
+- **Fracture.** Grab a surface and pull. Material separates into pieces you can keep working with.
+- **Creatures.** Author a body and skeleton, generate its appearance, and set it moving. Proportions shape the motion; the rig remains yours to articulate.
+- **Machines.** Draw links, connect joints and pistons, and compose moving mechanisms. Give the structure a generated body without throwing away the articulation.
 
-**Material Photograph** combines MoGe geometry with SuperMat material estimation in the browser. Rotate all four views together, move the light, and switch HDR environments to see what depth and materials each contribute. Inspect the recovered albedo, roughness and metalness, or tune the optional inferred glow and bloom.
+These systems are being brought together in a shared, editable scene. The aim is to make worlds whose materials, inhabitants and machinery can affect one another, with generation as part of building the world.
 
-**[Explore the photograph in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)** with three included model results and no weight download. Both models and the interactive renderer share one WebGPU device through the inference kit. [Use your photograph locally](demos/material-photo/README.md#run-locally) or [explore the implementation](demos/material-photo/main.js).
+## Making Things
 
-[![Golden flames illuminate the chamber of an open kiln in the Kaminos browser workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)](https://lyonsno.github.io/kaminos/)
+Start from an image, a prompt, or an authored structure. Generate a mesh, bring it into the workbench, and give it a role in the scene.
 
-## Start Here
+For creatures and machines, structure can come first: a skeleton or linkage establishes how something moves, while generation supplies its appearance. The pipeline connects the generated geometry back to that structure.
 
-**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
-[relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
-[generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
-[animate a skeleton with UniMate](https://lyonsno.github.io/kaminos/inference-kit/unimate/),
-or [reconstruct your hand](https://lyonsno.github.io/kaminos/inference-kit/hand-mesh/).
-The generation demos run inference locally on your GPU.
+The **inference kiln** puts generation beside the running world. Browser inference shares the GPU with rendering and simulation through the **[WebGPU Inference Kit](webgpu-inference-kit/README.md)**. The kit also works independently: [generate your first image](models/flux2-klein/README.md#using-it-in-an-application) or choose a [model application](webgpu-inference-kit/docs/model-applications.md) for your own browser app.
 
-| Surface | What it demonstrates | Entry point |
-| --- | --- | --- |
-| Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Explore in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/) or [use your photograph locally](demos/material-photo/README.md) |
-| Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
-| WebGPU inference kit | Reusable browser model applications, with shared-device lifecycle and cooperative scheduling | [Generate your first image](models/flux2-klein/README.md#using-it-in-an-application), [read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
-| Generative and vision model ports | Image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
-| Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
+## Start With Something
 
-## Build An Experiment
+Open an example and change it. [Relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/) with included results before loading model weights. [Explore skeletal motion](https://lyonsno.github.io/kaminos/inference-kit/unimate/), [generate an image](https://lyonsno.github.io/kaminos/inference-kit/klein/) or [reconstruct your hand](https://lyonsno.github.io/kaminos/inference-kit/hand-mesh/) in the browser.
 
-Develop visual features inside the shared workbench: contribute your objects,
-domain operations and controls while reusing the scene, camera, lighting and
-inspector. Human controls and agent calls operate the same experiment. Start
-with the [runnable material study and contributor guide](docs/workbench-common-main.md),
-then compose the capture and recording tools your investigation needs.
-
-## One Browser, One GPU
-
-The architectural center of Kaminos is a simple product requirement: local AI
-should behave like part of an application, not replace the application with a
-modal wait.
-
-In one measured M4 Max Chrome run, **SHARP generated 1,179,648 Gaussian splats
-in 185.3 seconds while the full Kaminos fire volume continued to simulate on
-every frame in the same browser and on the same GPU**. Across 21,818 foreground
-frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded
-33.3ms.
-
-In a separate shared-device run, **Stable Fast 3D produced a complete textured
-GLB in 41.9 seconds while servicing 3,644 host frames**. Page frame intervals
-had a p99 of 9.7ms and a maximum of 92.4ms, and the output was byte-identical to
-the monolithic route's output.
-
-Kaminos is the authoring surface. The
-[`@kaminos/webgpu-inference-kit`](webgpu-inference-kit/README.md) is the reusable
-runtime extracted from the work required to keep that surface responsive while
-substantial models execute.
-
-## WebGPU Inference Kit
-
-Generate images and run vision models locally in the browser. Start with a
-model application; share its GPU device with your renderer when you need one.
-
-**[Generate and display your first image](models/flux2-klein/README.md#using-it-in-an-application)** with a complete Klein browser page: setup, progress, repeated runs and cleanup.
-
-```sh
-npm install @kaminos/webgpu-inference-kit
-```
-
-Choose a [model application](webgpu-inference-kit/docs/model-applications.md) to generate images with Klein, estimate materials with SuperMat, animate a skeleton with UniMate, or remove a background with U2Net. The applications handle loading, queued inference, controls and cleanup while preserving each model's options, complete output and lower-level pipeline. For a live renderer, the shared foreground service coordinates its GPU work with inference across runs.
-
-The same runtime supports several kinds of model:
-
-| Port | Browser-native result | Runtime integration |
-| --- | --- | --- |
-| [FLUX.2 [klein] 4B](models/flux2-klein/README.md) | Images from a text prompt ([try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | Text encoder, 4-step transformer and image decoder in the browser, with cached int4 weights and throughput-sized command duties that leave room for rendering |
-| [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
-| [UniMate](models/unimate/README.md) | Skeletal motion from a text prompt for different rigged skeletons | Browser text encoder, motion transformer, adaptive ODE sampling and joint-rotation decoding through the inference kit |
-| [Hand reconstruction](models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction with a shared application lifecycle and model setup command |
-| [SuperMat](demos/material-photo/README.md) | Albedo, roughness and metalness from one image | Shared-device material inference, reusable model resources and a relightable MoGe composition |
-| [U2Net](models/u2net/README.md) | RGBA foreground cutouts from opaque images | Background-removal application with queued execution, controls and a borrowed-device option |
-| [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth, normals, and point maps from one image | Embeddable feed-forward pipeline with reusable buffers and bounded submissions |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
-
-TRELLIS 2 turns an image into a textured 3D mesh. Its neural networks run on
-WebGPU, with 512-resolution previews and a higher-detail 1024-resolution mode.
-Local tools prepare the image, simplify the mesh and bake its materials.
-The [model guide](models/trellis2/README.md) explains the outputs, requirements
-and developer setup. TRELLIS is a developer port in this repository; its model
-weights and tools are separate from the npm inference runtime.
-
-SAM 3 finds object instances in an uploaded image from a text prompt. Its
-browser example exports full-size masks and transparent cutouts, and keeps
-image features in memory so subsequent prompts can reuse them. The
-[SAM image example](webgpu-inference-kit/docs/sam-image-example.md), included
-in kit 0.1.55, provides the upload/prompt interface and export controls.
-See its guide for model setup, usage and performance measurements.
-
-To embed SAM without the Kaminos application, use the
-[SAM application quickstart](webgpu-inference-kit/docs/sam-getting-started.md):
-prepare the pinned model with the Node-only `kaminos-sam-model` command, then
-call `createSam3Segmenter().segment(imageFile, prompt)` from the npm package.
-
-The package includes a complete minimal port, an executable render-plus-inference
-walkthrough, focused integration documentation, and runtime contracts for
-admission, scheduling, lifecycle, resources, and receipts.
-
-## Browser-Computed Combustion
-
-[![An orange WebGPU flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
-
-These films were captured directly from the browser while one stateful WebGPU
-combustion material was being computed and authored, not prerendered.
-
-The material carries its history through control changes. Existing momentum
-continues through contraction, acceleration, chromatic transition, changing
-source geometry, and renewed expansion. A broad burner can gather into a jet,
-retain the structure already in flight, and rebuild into another morphology
-without resetting the simulation.
-
-[Browser Combustion Films](https://lyonsno.github.io/kaminos/) presents one complete
-composition, four authored transitions, and seven compact studies of color,
-structure, width, and state history.
-
-The current multi-field simulation runs directly in the browser through
-WebGPU. Its boundary-fire renderer derives compact structural fields around the
-combustion front, then uses those fields to guide where the volumetric renderer
-spends work. The same material can run in the isolated screening room, inhabit
-arbitrary scene geometry, or remain active as the foreground workload around
-browser inference.
-
-The fire began as an answer to the question that produced the inference kit:
-what should a local AI application do while expensive inference occupies the
-machine? It should stay alive.
-
-## Generated Beings
-
-One matched-image assay showed an authored low-frequency morphology edit
-influencing generated mass, stance, and support organization. Separately, one
-reconstructed cast was registered to a control armature and posed through
-ordinary controls after manual skinning. A different textured reconstruction
-consumed terrain-relative motion in a browser world.
-
-These are three adjacent research lines, not one creature moving through a
-completed end-to-end pipeline. The continuing frontier is stronger editable
-control: returning distinctions authored before generation as durable controls
-that can survive later rounds of transformation.
-
-## Spatial Asset Kiln
-
-The workbench receives images, meshes, splats, motion, material fields,
-simulation state, and generated environments as things that can be handled,
-not merely viewed. Current substrate includes:
-
-- Three.js/WebGPU scene editing, cameras, lighting, and persistence;
-- splat import, correction, crop, orientation, and sidecars;
-- mesh/splat hybrid rendering and scene-context integration;
-- motion generation, transposition, preview, and export experiments;
-- browser-native fluid, particle, and volumetric material processes;
-- saved world scenes and preview workbenches for generated environments;
-- shareable asset previews and browser tools for inspecting generated output.
-
-The architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md).
-Splat correction and renderer-consumption contracts are documented in
-[Splat Assets](docs/splat-assets.md).
-
-The longer product loop is already visible in the repository:
-
-```text
-source -> model route -> live workbench -> generated matter -> authored world
-```
-
-## Repository Atlas
-
-| Path | Role |
-| --- | --- |
-| [`index.html`](index.html) | Main Three.js/WebGPU workbench, scene editor, rendering routes, and authoring controls |
-| [`serve.py`](serve.py) | Local server and asset-browse API for Kaminos and sibling model outputs |
-| [`webgpu-inference-kit/`](webgpu-inference-kit/) | Published runtime package, examples, integration guides, and contract tests |
-| [`docs/flame-atlas/`](docs/flame-atlas/) | Public browser-combustion film collection and capture manifest |
-| [`models/`](models/) and [`pipelines/`](pipelines/) | In-tree experimental models and generated-asset pipelines |
-| [`docs/`](docs/) | Kiln, splat, structural-control, and route architecture |
-| [`tests/`](tests/) | Browser, runtime, scene, simulation, pipeline, and public-surface contracts |
-| [`artifacts/`](artifacts/) | Retained visual investigations and renderer studies |
-
-Focused model ports live in their own repositories once their boundaries are
-strong enough to stand alone. Kaminos remains the place where those ports meet
-rendering, simulation, generated assets, and actual product behavior.
+The kiln workshop is one starting place. You can replace its objects, build a different cast, or assemble a world with a different set of materials and rules.
 
 ## Run Locally
 
-Serve the checkout:
+Serve the checkout with Python 3:
 
 ```sh
 python3 serve.py 8095
 ```
 
-Open the workbench in a WebGPU-capable Chromium browser:
+Open [the workbench](http://127.0.0.1:8095/?workspace=workbench) in a WebGPU-capable Chromium browser. Start with the [Flame experiment](http://127.0.0.1:8095/?workspace=workbench&experiment=flame): choose and apply a preset, then select the emitter and move it while the flame runs.
 
-```text
-http://127.0.0.1:8095/
-```
+Generation uses additional model packages; see [local model setup](docs/local-model-installations.md) and the [model guides](webgpu-inference-kit/README.md#one-runtime-different-models).
 
-The [experiment guide](docs/workbench-common-main.md) starts from a shared-scene
-material comparison. To explore the current volume route:
+## Development
 
-```text
-http://127.0.0.1:8095/?kaminos_volume_smoke=1&volume_scene=tall_plume
-```
+Kaminos is under active development. The workbench hosts both composed scenes and focused experiments in generation, motion, materials and interaction. Human controls and agent calls operate the same experiments.
 
-The strongest current routes are developed and measured on Apple Silicon.
-Other WebGPU devices may expose different performance and feature boundaries.
+- [Build a workbench experiment](docs/workbench-common-main.md)
+- [Edit and save scenes](docs/scene-authoring-operations.md)
+- [Workbench architecture](docs/spatial-asset-kiln.md)
+- [Image-to-mesh generation](models/trellis2/README.md)
+- [Splat assets](docs/splat-assets.md)
+- [Testing](docs/testing.md)
 
-## Status
-
-Kaminos is an active research workbench. The inference runtime is published as
-a reusable npm package; the combustion material, generated-world controls, and
-spatial authoring surfaces continue to evolve in the workbench. Model ports live
-either under `models/` here or in linked repositories. The
-[model catalog](webgpu-inference-kit/README.md#one-runtime-different-models)
-links to each current implementation and application guide; repository location
-does not indicate maturity or integration support.
-
-For technical or collaboration inquiries, contact
-[Noah Lyons](https://github.com/lyonsno).
+For technical or collaboration inquiries, contact [Noah Lyons](https://github.com/lyonsno).
