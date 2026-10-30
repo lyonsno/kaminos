@@ -92,10 +92,12 @@ export function createEditCritic({history,operation}){
    delete input.resultImage.editReview;delete input.reference.editReview;
    function retain(raw,limits={}){
     if(raw.task!=='critique')throw Error('The provider did not return the requested review task.');
-    const marker=/^\s*NEXT EDIT:\s*/m.exec(raw.text),assessment=marker?raw.text.slice(0,marker.index).trim():raw.text;
+    const markers=[...raw.text.matchAll(/\bNEXT EDIT:\s*/g)],marker=markers.length===1?markers[0]:null;
+    const assessment=marker?raw.text.slice(0,marker.index).trim():raw.text;
     let correction=marker?raw.text.slice(marker.index+marker[0].length).trim():'';
-    if(correction==='NONE')correction='';
-    const status=raw.partial||raw.stopReason!=='eos'?'partial':!marker||!assessment?'unstructured':'complete';
+    const hasCorrection=!!correction;
+    if(/^NONE[.!]?$/i.test(correction))correction='';
+    const status=raw.partial||raw.stopReason!=='eos'?'partial':!marker||!assessment||!hasCorrection?'unstructured':'complete';
     const review={schema:'kaminos.edit-review.v1',status,assessment,correction,raw,request:{...input,reference:{kind:'image',source:input.reference.source},resultImage:{kind:'image',source}},createdAt:Date.now(),...limits};
     history.annotate(source,{editReview:review});return review;
    }

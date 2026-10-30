@@ -1,0 +1,23 @@
+{
+  "source": {
+    "observation": "Browser critic successful-edit response, 2026-10-30",
+    "modelRevision": "3f3edb52b2c55de0d49feab28598b68f7f8e4830",
+    "backend": "transformers.js/onnx-webgpu",
+    "images": [
+      {
+        "name": "reference.png",
+        "sha256": "3a74605aeab80c6490a470b6d06dd145223f09ddf549a5caf877d020a997247c"
+      },
+      {
+        "name": "generated.png",
+        "sha256": "a3cdec08044d36524688a5fe85111c4298c53b4e3d67b7a03dd368ccd8d5667a"
+      }
+    ]
+  },
+  "response": {
+    "task": "critique",
+    "text": "The edit is successful. The copper kettle in the first image has been recolored the same deep metallic blue shown in the second image, covering the rounded body, lid, knob, spout, and arched handle while preserving the original kettle\u2019s exact shape, proportions, seams, hardware, highlights, and surface texture. Keep the white background and all other details unchanged. NEXT EDIT: NONE.",
+    "stopReason": "eos",
+    "partial": false
+  }
+}
