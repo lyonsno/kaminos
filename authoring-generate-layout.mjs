@@ -52,11 +52,13 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
   const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
   if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
+  if(createFlame){kilnPanel.classList.add('generation-kiln-editor');image.querySelector('h3').after(kilnPanel);kilnPanel.after(imageActions);const prompt=byId('asset-prompt');if(prompt)kilnView.append(prompt);}
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
+  if(ceremony){const fit=document.createElement('button');fit.type='button';kilnTools.append(fit);installImageZoom({frame:kilnView,targets:[ceremony.element],resetButton:fit,label:'kiln'});kilnView.title='Type in the kiln · pinch to zoom · drag outside the lettering to pan';}
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
-  image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
+
   document.defaultView.addEventListener('focus',async()=>{try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
   const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
   const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
@@ -75,7 +77,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const fit=document.createElement('button');fit.type='button';fit.id='asset-image-fit';fit.hidden=true;
   const zoom=installImageZoom({frame,targets:[preview,canvas,inputPreview,blink],resetButton:fit,peers:[inputFrame]});
   tools.append(toggleLabel,fit,expand);mesh.append(tools,compareTools,pair,caption);
-  const timing=image.querySelector('#asset-image-timing');if(timing)mesh.insertBefore(timing,pair);
+  const timing=image.querySelector('#asset-image-timing');if(timing)imageActions.after(timing);
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');

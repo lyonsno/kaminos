@@ -26947,7 +26947,7 @@ function setupAuthoringAssets(){
       if(missing.length)throw Error('Could not retain required kiln assets: '+missing.map(dependency=>new URLSearchParams(dependency.source.split('?')[1]||'').get('path')||dependency.source).join(', '));
       await kilnRecipes.chooseScene(choice.name);return true;
     },
-  },createFlame:async (viewport,{signal,prompt,request})=>{
+  },createFlame:async (viewport,{signal,prompt,request,input})=>{
     const schemaResponse=await fetch('./volume-settings-preset-schema-v2.json');if(!schemaResponse.ok)throw Error('Fire settings schema unavailable');const schema=await schemaResponse.json();
     let recipe=await kilnRecipes.load();signal.throwIfAborted();
     if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);const starter=structuredClone(receipt.preset),studyResponse=await fetch('./artifacts/inference-kiln/study.json');if(!studyResponse.ok)throw Error('Kiln study settings unavailable');const study=await studyResponse.json();
@@ -26968,7 +26968,7 @@ function setupAuthoringAssets(){
       raymarchSmokePresentation:authored.presentationControls['raymarch-smoke-presentation'].value,sceneMatchFlameCamera:checkedFireRendering(recipe.document.postprocessing?.fireLighting)['rendering-match-flame-camera']};
     const rendering=checkedFireRendering(recipe.document.postprocessing?.fireLighting);
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
-    return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
+    return createInferenceKilnPreview({viewport,document,recipe,prompt,request,input,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy(),
     onEdit:()=>{authoringPromptUI.reset();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},

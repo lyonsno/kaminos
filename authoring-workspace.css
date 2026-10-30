@@ -503,3 +503,18 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
 .asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
 .asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+/* The prompt is the kiln's native editing plane, not a second form beside it. */
+.kiln-prompt-plane{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden;}
+.kiln-prompt-plane #asset-prompt{pointer-events:auto;text-shadow:0 1px 2px #0008;}
+.kiln-prompt-plane #asset-prompt::placeholder{color:#b8b2a8;opacity:.7;}
+.kiln-prompt-plane #asset-prompt::selection{background:#547b9bbb;color:#fff;}
+.generation-kiln-editor{margin:0 0 8px;}
+#asset-generate:has(.generation-kiln-editor):not([hidden]){grid-template-columns:minmax(380px,1.5fr) minmax(280px,1fr) minmax(140px,.55fr);}
+@container asset-pane (max-width:900px){#asset-generate:has(.generation-kiln-editor):not([hidden]){grid-template-columns:1fr;overflow:auto;}.asset-step{overflow:visible;}}
+#asset-generate:has(.generation-kiln-editor):not([hidden]){overflow:auto;grid-template-rows:max-content auto;align-items:start;}
+#asset-generate:has(.generation-kiln-editor) .asset-step{overflow:visible;}
+#asset-image-history:has(#asset-history-strip:empty) #asset-history-strip{display:none;}
+#asset-image-history:has(#asset-history-strip:empty) .asset-history-actions{display:none;}
+body[data-workspace=authoring].has-assets-panel:has(#asset-generate:not([hidden])):has(.generation-kiln-editor){grid-template-rows:42px minmax(180px,1fr) min(max(var(--authoring-assets-height,0px),68vh),calc(100vh - 222px));}
+.generation-kiln-view{overflow:hidden;}
+.generation-kiln-view>.generation-flame{transform-origin:center;}
