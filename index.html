@@ -2883,6 +2883,7 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting, createLightingPreparation } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
+import {createFireLightingHistory} from './fire-lighting-history.mjs';
 import {createSceneAOState,bindSceneAOControls,AO_CONTROL_FIELDS} from './scene-ao-state.mjs';
 import { installRenderingNumberControls } from './rendering-number-controls.mjs';
 import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
@@ -3279,7 +3280,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { AssetKTX2Loader as KTX2Loader } from './asset-ktx2-loader.mjs';
 import {configureAssetTextures} from './asset-texture-support.mjs';
-import {isBrazierRoomRecord} from './brazier-room-record.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
@@ -13211,6 +13211,19 @@ document.getElementById('rendering-shared-gain').addEventListener('input', event
   document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
   refreshRenderingControls();
 });
+let sceneFireLightingHistory=null;
+const editFireLighting=(name,value,fallback)=>sceneFireLightingHistory
+  ?sceneFireLightingHistory.run(name,value).catch(error=>{syncFireLightingControls();setInfo(error.message);})
+  :fallback();
+function syncFireLightingControls(){
+  const state=window.__kaminosSceneRadiance?.debugState();if(!state)return;
+  if(state.directions!==currentAngularCount){previousAngularCount=currentAngularCount;currentAngularCount=state.directions;}
+  document.getElementById('rendering-angular-swap').disabled=previousAngularCount===null;
+  document.getElementById('rendering-angular-swap').textContent=previousAngularCount===null?'Swap previous direction count':`Swap to ${previousAngularCount} directions`;
+  document.getElementById('rendering-angular-samples').value=String(state.directions);
+  document.getElementById('rendering-angular-pattern').value=state.angularPattern;
+  window.kaminosFireLightingSettings?.sync(true);window._kaminosDirty?.();
+}
 let previousAngularCount=null,currentAngularCount=24;
 function selectAngularCount(value) {
   if(value!==currentAngularCount){previousAngularCount=currentAngularCount;currentAngularCount=value;}
@@ -13220,10 +13233,10 @@ function selectAngularCount(value) {
   window.__kaminosSceneRadiance?.setDirections?.(value);
   refreshRenderingControls();
 }
-document.getElementById('rendering-angular-samples').addEventListener('change',event=>selectAngularCount(Number(event.target.value)));
-document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
+document.getElementById('rendering-angular-samples').addEventListener('change',event=>editFireLighting('setDirections',Number(event.target.value),()=>selectAngularCount(Number(event.target.value))));
+document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)editFireLighting('setDirections',previousAngularCount,()=>selectAngularCount(previousAngularCount));});
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
-document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-angular-pattern').addEventListener('change',event=>editFireLighting('setAngularPattern',event.target.value,refreshRenderingControls));
 document.getElementById('rendering-receiver-spacing').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',()=>{refreshRenderingControls();flameInspector?.sync();});
 document.getElementById('rendering-surface-scattering').addEventListener('change',refreshRenderingControls);
@@ -19597,7 +19610,9 @@ async function mountSceneRadianceRoute(params) {
       if(hybrid){
         const settings=createFireShadowSettings({document,applyInitial:false,session:{onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),dispose(){}}});
         const panel=document.getElementById('rendering-fire-shadows');panel.hidden=false;
-        const invoke=async(name,value)=>{const result=await settings.operations[name](value);settings.sync();return result;};
+        sceneFireLightingHistory??=createFireLightingHistory({edits:scenePlacementTools.edits,getSource:()=>window.__kaminosSceneRadiance,sync:syncFireLightingControls});
+        scenePlacementTools.addHistoryScope(document.getElementById('rendering-fire-controls'));
+        const invoke=async(name,value)=>{const result=await (sceneFireLightingHistory.supports(name)?sceneFireLightingHistory.run(name,value):settings.operations[name](value));settings.sync();return result;};
         let statusKey='';
         window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
           const current=window.__kaminosSceneRadiance?.debugState();
