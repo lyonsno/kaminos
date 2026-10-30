@@ -12654,7 +12654,8 @@ function applyAuthoredWaterSettings(id,patch){
 }
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
   const entry=workingScene.objects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
-  if(!deferSync)authoredMlsMaterial(localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),localLiquidSetup??{});
+  // History may restore a non-executable authored proposal. New edits are
+  // validated before history begins; solver construction remains strict.
   if(!deferSync&&localLiquidSetup?.waterSampling?.particleTarget!==undefined){
    const records=localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),sampling=resolveAuthoredWaterSampling(records,localLiquidSetup);
    const rows=workingScene.objects.filter(r=>r.id===id||(r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')),builds=[];
@@ -12725,7 +12726,6 @@ function matchAuthoredWaterSetup(referenceId){
  if(!waterMatchTargets.has(target)){
   scenePlacementTools.edits.register(target,{read:()=>({entries:Object.fromEntries(ids.map(id=>[id,structuredClone(workingScene.objects.find(r=>r.id===id)?.localLiquidEmitter)]))}),check:checked,write:value=>{
    checked(value);
-   authoredMlsMaterial(localLiquidEmitterRecords().map(r=>value.entries[r.id]?{...r,localLiquidEmitter:value.entries[r.id]}:r),localLiquidSetup??{});
    // Construct every preview before replacing any source; a construction error
    // leaves all existing source previews untouched.
    const replacements=ids.map(id=>{const row=workingScene.objects.find(r=>r.id===id);return createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object),localLiquidEmitter:value.entries[id]},{sampling:localLiquidSetup?.waterSampling}).object;});
@@ -12751,7 +12751,8 @@ function editAuthoredWaterSimulation(patch){
  };
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:checked,write:value=>{
   const next=normalizeLocalLiquidSetup(checked(value));
-  authoredMlsMaterial(localLiquidEmitterRecords(),next);
+  // Restore authored proposals through Undo/Redo, even if their material is
+  // not executable. New edits are validated below before opening history.
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);

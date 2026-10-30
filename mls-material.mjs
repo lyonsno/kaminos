@@ -13,6 +13,7 @@ export function resolveMlsMaterial({cell,modelSecondsPerSecond,restDensity=3,vis
   const stiffness=requested?restDensity*(requested.pressureWaveSpeed/speedUnit)**2:50;
   const dynamicViscosity=requested?restDensity*requested.kinematicViscosity/diffusionUnit:(viscosity??.1);
   if(!Number.isFinite(dynamicViscosity)||dynamicViscosity<0)throw Error('Invalid MLS viscosity');
+  if(requested&&((requested.pressureWaveSpeed>0&&stiffness===0)||(requested.kinematicViscosity>0&&dynamicViscosity===0)))throw Error('MLS material coefficient is outside GPU f32 capacity at this resolution');
   for(const coefficient of [stiffness,dynamicViscosity])
     if(!Number.isFinite(Math.fround(coefficient))||(coefficient>0&&Math.fround(coefficient)===0))throw Error('MLS material coefficient is outside GPU f32 capacity at this resolution');
   return {stiffness,viscosity:dynamicViscosity,materialUnits:{
