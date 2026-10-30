@@ -43,15 +43,17 @@ export function createCrust({rows=4,seed=31,settings={},setup='blocks'}={}){
  s.ledger.initialWater=s.pools.reduce((a,p)=>a+p.water,0);s.ledger.initialSalt=s.pools.reduce((a,p)=>a+p.salt,0);
  setCrustConditions(s,settings);return s;
 }
-function faceNetwork(s,g){
- g.facePools=[];for(let face=0;face<5;face++)g.facePools.push(addPool(s,g.id,face));g.topPool=g.facePools[4];g.basePool=g.facePools[0];
- for(let a=0;a<5;a++)for(let b=a+1;b<5;b++)if(Math.floor(a/2)!==Math.floor(b/2)){
+function faceNetwork(s,g,supportFace=5){
+ g.supportFace=supportFace;g.facePools=Array(6).fill(null);
+ for(let face=0;face<6;face++)if(face!==supportFace&&!(face===5&&g.faces[5]<=1e-9))g.facePools[face]=addPool(s,g.id,face);
+ g.topPool=g.facePools[4]??g.facePools.find(id=>id!==null);g.basePool=g.facePools.find(id=>id!==null);
+ for(let a=0;a<6;a++)for(let b=a+1;b<6;b++)if(g.facePools[a]!==null&&g.facePools[b]!==null&&Math.floor(a/2)!==Math.floor(b/2)){
   const id=addTrack(s,g.facePools[a],g.facePools[b],'edge'),p=s.pools[id];[p.portA,p.portB]=edgePorts(g,a,b);
  }
 }
 function createNeighbors({seed,settings}){
  if(!Number.isSafeInteger(seed))throw Error('Invalid crust seed');
- const s={model:CRUST_MODEL,setup:'neighbors',seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
+ const s={model:CRUST_MODEL,setup:'neighbors',faceModel:'exposed-contact-v1',seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
  const source=addPool(s,null,'base');Object.assign(s.pools[source],{kind:'junction',walls:[],x:0,z:0});s.sources=[source];
  for(const [x,z,size,angle] of [[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]){
   const g=addGrain(s,x,z,0,[size,size,size],angle,true);faceNetwork(s,g);
@@ -202,10 +204,16 @@ function nucleate(s,p,geom,dt,neighbors){
   if([...neighbors(candidate)].some(other=>overlaps(candidate,other)))continue;
   const child=addGrain(s,site.x,site.z,site.y,[size,size,size],site.angle,false,site.carrier);
   if(s.setup==='neighbors'){
-   faceNetwork(s,child);
-   // A top-born grain enters through a side's lower edge (its bottom face is supported).
-   const entry=p.face===4?0:(p.face^1),portB=p.face===4?[.5,0]:[.5,.5],id=addTrack(s,p.id,child.facePools[entry],'edge');
-   s.pools[id].portA=faceUV(s.grains[p.grain],p.face,site.point).map(v=>clamp(v,0,1));s.pools[id].portB=portB;const parentFrame=faceFrame(s.grains[p.grain],p.face);s.pools[id].contactA=[size/(2*parentFrame.w),size/(2*parentFrame.h)];s.pools[id].contactB=[.5,.5];
+   const support=p.face^1;faceNetwork(s,child,support);
+   // The attachment face is buried. Brine meets exposed faces at the contact
+   // perimeter, rather than filling an inaccessible reservoir behind the child.
+   for(let face=0;face<6;face++)if(child.facePools[face]!==null&&Math.floor(face/2)!==Math.floor(support/2)){
+    const [,portB]=edgePorts(child,support,face),at=facePoint(child,face,portB),portA=faceUV(s.grains[p.grain],p.face,at);
+    if(portA.some(v=>v< -1e-8||v>1+1e-8))continue;
+    const id=addTrack(s,p.id,child.facePools[face],'edge'),frame=faceFrame(s.grains[p.grain],p.face);
+    s.pools[id].portA=portA.map(v=>clamp(v,0,1));s.pools[id].portB=portB;
+    s.pools[id].contactA=[size/(2*frame.w),size/(2*frame.h)];s.pools[id].contactB=[.5,.5];
+   }
   }else{child.topPool=addPool(s,child.id,'top');child.basePool=child.topPool;const branch=addTrack(s,p.id,child.topPool,'branch',child.id);s.pools[branch].anchor=[...site.point];}
   neighbors.add(child);p.salt-=mass;p.births++;s.events.nucleations++;s.ledger.deposited+=mass;
  }
@@ -261,6 +269,7 @@ export function saveCrust(s){return structuredClone(s);}
 export function restoreCrust(value){
  const s=structuredClone(value);if(s?.model!==CRUST_MODEL)throw Error('Unknown crust model');
  if(!Array.isArray(s.grains)||!Array.isArray(s.pools)||!Array.isArray(s.sources)||!s.sources.length)throw Error('Invalid crust arrays');
+ if(s.setup==='neighbors'&&s.faceModel!=='exposed-contact-v1')throw Error('Unsupported face wetting model');
  if(s.setup!=null&&s.setup!=='neighbors')throw Error('Invalid crust setup');
  positive(s.time,'time');if(!Number.isSafeInteger(s.tick)||s.tick<0||!Number.isSafeInteger(s.rows)||s.rows<1||!Number.isSafeInteger(s.seed))throw Error('Invalid crust clock or setup');
  if(!s.settings||Object.keys(s.settings).length!==Object.keys(DEFAULTS).length||Object.keys(DEFAULTS).some(k=>!(k in s.settings)))throw Error('Incomplete crust conditions');setCrustConditions(s,s.settings);
@@ -271,14 +280,14 @@ export function restoreCrust(value){
   if(p.id!==i||!['face','junction','gap','film','branch','edge'].includes(p.kind))throw Error('Invalid pool');for(const k of ['water','salt','residue','hazard','births','threshold'])positive(p[k],k);if(p.threshold===0||!Number.isSafeInteger(p.births))throw Error('Invalid nucleation clock');
   if(p.anchor!=null&&(!Array.isArray(p.anchor)||p.anchor.length!==3||!p.anchor.every(Number.isFinite)))throw Error('Invalid film anchor');
   if(p.kind==='junction'){if(![p.x,p.z].every(Number.isFinite)||!Array.isArray(p.walls)||p.walls.some(id=>!Number.isSafeInteger(id)||!s.grains[id]))throw Error('Invalid junction');}
-  else if(p.kind==='face'){if(!s.grains[p.grain]||!(['base','top'].includes(p.face)||s.setup==='neighbors'&&Number.isInteger(p.face)&&p.face>=0&&p.face<5))throw Error('Invalid face');}
+  else if(p.kind==='face'){if(!s.grains[p.grain]||!(['base','top'].includes(p.face)||s.setup==='neighbors'&&Number.isInteger(p.face)&&p.face>=0&&p.face<6))throw Error('Invalid face');}
   else{if(!Number.isSafeInteger(p.a)||!Number.isSafeInteger(p.b)||!s.pools[p.a]||!s.pools[p.b]||p.a>=i||p.b>=i||p.a===p.b||![p.a,p.b].includes(p.owner)||typeof p.connected!=='boolean'||!Number.isFinite(p.maxWetFraction)||p.maxWetFraction<0||p.maxWetFraction>1)throw Error('Invalid track endpoints or wetting history');}
   if(p.kind==='edge'){if(!['face','junction'].includes(s.pools[p.a].kind)||s.pools[p.b].kind!=='face'||typeof s.pools[p.b].face!=='number'||s.pools[p.a].kind==='face'&&typeof s.pools[p.a].face!=='number')throw Error('Invalid face connection endpoints');if(s.setup!=='neighbors'||p.water!==0||p.salt!==0||p.residue!==0)throw Error('Invalid face connection storage');for(const key of ['contactA','contactB'])if(p[key]!=null&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0)))throw Error('Invalid contact extent');for(const [key,id]of [['portA',p.a],['portB',p.b]])if(s.pools[id].kind==='face'&&(!Array.isArray(p[key])||p[key].length!==2||p[key].some(v=>!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid face port');}
   if(p.entry!=null&&(!Array.isArray(p.entry)||p.entry.length!==2||p.entry.some(v=>!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid wet patch anchor');
   if(p.kind==='gap'&&(!Array.isArray(p.walls)||p.walls.length!==2||p.walls.some(id=>!s.grains[id])))throw Error('Invalid gap walls');if((p.kind==='film'||p.kind==='branch')&&!s.grains[p.carrier])throw Error('Invalid film carrier');
  }
  if(s.sources.some(id=>!Number.isSafeInteger(id)||s.pools[id]?.kind!=='junction'))throw Error('Invalid brine source');
- for(const g of s.grains)if(s.setup==='neighbors'&&(!Array.isArray(g.facePools)||g.facePools.length!==5||g.facePools.some((id,f)=>s.pools[id]?.grain!==g.id||s.pools[id]?.face!==f)))throw Error('Missing exposed-face state');
+ for(const g of s.grains)if(s.setup==='neighbors'&&(!Number.isInteger(g.supportFace)||g.supportFace<0||g.supportFace>5||!Array.isArray(g.facePools)||g.facePools.length!==6||g.facePools[g.supportFace]!==null||g.facePools.some((id,f)=>id!==null&&(s.pools[id]?.grain!==g.id||s.pools[id]?.face!==f))))throw Error('Missing exposed-face state');
  for(const g of s.grains)if(s.pools[g.topPool]?.grain!==g.id||s.pools[g.topPool]?.kind!=='face')throw Error('Missing crystal liquid state');
  return s;
 }
