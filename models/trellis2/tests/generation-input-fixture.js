@@ -12,6 +12,7 @@ for(const [role,config]of Object.entries({sparseFlow:{...cfg,guidanceRescale:.7,
 const shapes=generationInputShapes(m),tensor=(key,shape)=>{
   m.tensors[key]={file:key+'.f32',dtype:'float32',shape,byteLength:shape.reduce((n,x)=>n*x,4),sha256:'c'.repeat(64)};return key;};
 tensor('image.pixels',shapes.image);
+m.image.highResolution={pixelTensor:tensor('image.high-pixels',[1,1024,1024,3])};
 for(const [key,shape]of Object.entries(shapes.dinoPrefix))m.dino.prefix[key]=tensor('dino.'+key,shape);
 for(const [i,layer]of m.dino.layers.entries())for(const [key,shape]of Object.entries(shapes.dinoLayer))layer[key]=tensor('dino.layer'+i+'.'+key,shape);
 for(const [role,weightShapes]of Object.entries(shapes.models))for(const [key,shape]of Object.entries(weightShapes))m.models[role].tensors[key]=tensor(role+'.'+key,shape);

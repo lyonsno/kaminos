@@ -26716,7 +26716,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -26724,6 +26724,11 @@ function setupAuthoringAssets(){
     // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
     // Generate step's prepared image) prepared here by the model's own browser kernel.
     let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null,imageSha256=pixels==='package'?pack.manifest.image.pixelValuesSha256:null;
+    const needsHighConditioning=(pack.manifest.pipelineType??'1024_cascade')==='1024_cascade';
+    if(pixels==='package'&&needsHighConditioning&&!pack.manifest.image.highResolution?.pixelTensor)
+      throw Error('This image package has only 512 pixels; select the original image or prepare the package again for 1024 conditioning');
+    let highResolutionPixelValues=pixels==='package'&&needsHighConditioning
+      ?await pack.fetchTensor(pack.manifest.image.highResolution?.pixelTensor):highResolutionPixels;
     const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
     if(image){
       // In the page, no server step: real alpha goes to the alpha preparation, an opaque photo
@@ -26733,7 +26738,7 @@ function setupAuthoringAssets(){
       const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`TRELLIS input image HTTP ${response.status}`);
       const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());
       imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-      const prepared=await prepareImageForTrellis({bytes,type:blob.type||undefined,signal,prepareTrellisAlphaRgba,
+      const prepared=await prepareImageForTrellis({bytes,type:blob.type||undefined,signal,prepareTrellisAlphaRgba,highResolution:needsHighConditioning,
         removeForegroundU2Net:async options=>{
           // One model at a time on the page device: U2Net holds the app run while it segments,
           // yielding scene frames and Stop between its GPU segments (foreground: the run).
@@ -26742,7 +26747,8 @@ function setupAuthoringAssets(){
         },
         runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
           return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
-      pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
+      pixelValues=normalizePreparedTrellisRgb(prepared);
+      highResolutionPixelValues=needsHighConditioning?normalizePreparedTrellisRgb(prepared.highResolution):undefined;preparation={source:image.source,...prepared.provenance};
       // What TRELLIS actually used, kept and shown: the image itself, or the saved U2Net cutout.
       const used=await describeTrellisInput({image,cutout:prepared.cutout,label,encode:async({rgba,width,height})=>{
         const canvas=new OffscreenCanvas(width,height);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
@@ -26754,13 +26760,13 @@ function setupAuthoringAssets(){
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
     try{
-      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
-        receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
+        receiptValidation:result.receiptValidation,conditioningShapes:result.conditioningShapes,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
       return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null,levelInputs:result.levelInputs??null};
     }catch(error){
@@ -26771,7 +26777,7 @@ function setupAuthoringAssets(){
           input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},
           decoderActivationStorage:'f16',meshFinishing:{status:'failed',error:error.message}}};
       if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
-        input:{pixels:pixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
+        input:{pixels:pixelValues,highResolutionPixels:highResolutionPixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
       throw error;
     }
   };
