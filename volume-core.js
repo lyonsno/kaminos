@@ -28005,10 +28005,17 @@ export function createKaminosVolumePrototype({
           throw err;
         }
       } else {
+        // Stop scheduling, but keep an admitted frame's renderer alive until
+        // its host callback settles. Retiring it first fails the model duty
+        // that services the frame (for example when the kiln leaves view).
+        cancelAnimationFrame(raf);
+        raf = 0;
+        if (foregroundPending) await foregroundDrain;
         state.active = false;
         invalidateRaymarchReadouts('inactive-renderer');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
+        raf = 0;
         emitStatus({ phase: 'inactive' });
       }
     },
@@ -28498,10 +28505,10 @@ export function createKaminosVolumePrototype({
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
-    dispose() {
+    async dispose() {
+      await this.setActive(false);
       sceneTransportConsumer=null;sceneTransport?.dispose();sceneTransport=null;
       rayStepTelemetry?.dispose();rayStepTelemetry=null;
-      this.setActive(false);
       scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;
