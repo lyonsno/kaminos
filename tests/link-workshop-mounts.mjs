@@ -61,3 +61,26 @@ follower.dispose();console.log('Mount persistence, scaled source alignment, live
  const fa=createAttachmentFollower(a,()=>entries),fb=createAttachmentFollower(b,()=>entries);const next={...model,attachments:[binding]};fa.update(next,.4);fb.update(b.userData.linkMechanism,.8);near(worlds.get('b').elements,b.matrixWorld.elements);near(worlds.get('p').elements,payload.matrixWorld.elements);
  const visual=createFasteningView(a);visual.update(next,.4,entries,'b');assert.ok(visual.connectionMeshes().length>0);assert.ok(visual.connectionMeshes().every(o=>o.userData.connection==='b'));visual.preview(entries,worlds);assert.ok(visual.group.children.some(o=>o.userData.kaminosEditorOnly));visual.update({...next,attachments:[]},.4,entries,null);assert.equal(visual.connectionMeshes().length,0);visual.dispose();fa.dispose();fb.dispose();payload.geometry.dispose();payload.material.dispose();
 }
+
+// Regressions from independent review: the displayed and pickable connection
+// must correspond to the live articulated state, not merely root placement.
+import test from 'node:test';
+async function connectionFixture({offset=[0,0,0]}={}){
+ const {createSceneEdits}=await import('../scene-edit-session.mjs'),{createMechanismController}=await import('../experiments/link-workshop.experiment.mjs');
+ const scene=new T.Scene(),a=new T.Group(),b=new T.Group();scene.add(a,b);b.position.set(8,1,0);
+ const base={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,Math.PI/2]}],pistons:[]};
+ a.userData.linkMechanism={...structuredClone(base),mounts:[{id:'dest',owner:{joint:1},position:[0,0,0],rotation:[0,0,0]},{id:'source',owner:{objectId:'b'},position:[0,0,0],rotation:[0,0,0]}]};b.userData.linkMechanism=structuredClone(base);
+ const entries=[{id:'a',object:a,type:'pbr'},{id:'b',object:b,type:'pbr'}],adapters=new Map(),edits=createSceneEdits({read(){throw Error('unexpected pose edit');},write(){}});
+ const host={scene:{objects:()=>entries,async open(){return {async attach(root){return {id:entries.find(e=>e.object===root).id,root};},redraw(){},readView(){return {};},onFrame(){return ()=>{};},async dispose(){}};}},controls:{document:{defaultView:{kaminosSceneEdits:edits}},components:{register(id,adapter){adapters.set(id,adapter);return {changed(fn){fn?.();},dispose(){}};}}}};
+ const ra=await createMechanismController({host,inputs:{root:a}}),rb=await createMechanismController({host,inputs:{root:b}});return {a,b,ra,rb,adapters,async dispose(){edits.clear();await ra.dispose();await rb.dispose();}};
+}
+test('seating invalidates on another mechanism pose, including at confirmation without a tick',async()=>{const f=await connectionFixture();try{
+ f.ra.operations.previewFasten({source:'source',target:'dest'});f.rb.operations.seek({cycle:.5});f.ra.tick();assert.equal(f.ra.read().seatingPreview,null,'changed articulated pose must invalidate the frozen ghost');
+ f.ra.operations.previewFasten({source:'source',target:'dest'});f.rb.operations.seek({cycle:0});assert.throws(()=>f.ra.operations.confirmFasten(),/changed|preview/i);assert.equal(f.ra.read().recipe.attachments?.length??0,0);
+ }finally{await f.dispose();}});
+test('hidden collar cannot be selected; visible plates still select the relationship',async()=>{const f=await connectionFixture();try{
+ const recipe=f.ra.read().recipe;recipe.attachments=[{objectId:'b',sourceMount:'source',targetMount:'dest',offset:{...structuredClone(frame),position:[3,0,0]}}];f.ra.operations.restore(recipe);f.ra.operations.tool({value:'select'});
+ const camera=new T.OrthographicCamera(-5,5,5,-5,.1,20);camera.position.set(0,0,10);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);const canvas={getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})};
+ f.adapters.get('a').pick({clientX:72.25,clientY:50},{camera,canvas});assert.equal(f.ra.read().selectedConnection,null,'ray through only hidden collar must miss');
+ f.adapters.get('a').pick({clientX:70,clientY:50},{camera,canvas});assert.equal(f.ra.read().selectedConnection,'b');f.ra.operations.deleteSelected();assert.equal(f.ra.read().recipe.attachments.length,0);
+ }finally{await f.dispose();}});
