@@ -25,7 +25,12 @@ try{
  await invoke('setOrigin','shared');await invoke('seek',65);await page.getByRole('button',{name:'Play',exact:true}).click();
  const waited=await page.waitForFunction(()=>Number(document.querySelector('[data-recorded-frame]')?.dataset.recordedFrame)>=75);report.waitValue=await waited.jsonValue();report.prePause=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());await invoke('pause');const played=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());report.played=played;assert(played.frame>=75);report.states.push(played);
  await invoke('load',1);await invoke('seek',200);report.states.push(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));await page.screenshot({path:out+'/long-frame-200.png'});
- await invoke('load',0);await invoke('seek',70);await page.screenshot({path:out+'/offer.png'});
+ assert.equal(await page.getByLabel('Recording',{exact:true}).inputValue(),'1');
+ await page.route('**/export-report.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({status:'failed',generation:'replacement'})}));
+ await assert.rejects(()=>invoke('load',0),/export unavailable or failed/);
+ const failedExport=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(failedExport.sequence,null);assert.equal(failedExport.displayed,undefined);report.failedExport=failedExport;
+ await page.screenshot({path:out+'/failed-replacement.png'});await page.unroute('**/export-report.json');
+ await invoke('load',0);await invoke('seek',70);assert.equal(await page.getByLabel('Recording',{exact:true}).inputValue(),'0');await page.screenshot({path:out+'/offer.png'});
  assert.deepEqual(report.errors,[]);report.status='exercised';report.phase=null;
 }catch(e){report.error=String(e);if(page){report.failedState=await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state()).catch(String);await page.screenshot({path:out+'/failure.png'}).catch(()=>{});}process.exitCode=1;}
 finally{await context?.close();report.browserClosed=true;save();}
