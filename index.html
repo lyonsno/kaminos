@@ -12737,8 +12737,15 @@ function editAuthoredWaterSimulation(patch){
  assertSceneConstructionAvailable();if(!localLiquidSetup)throw Error('Add water first');
  if(Object.keys(patch).some(key=>!['particleCount','waterSampling','mlsMaterial'].includes(key)))throw Error('Water simulation edits require shared capacity, sampling or MLS material settings');
  const target='@authored-water-simulation';
- if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
+ const checked=value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
+  // Resolve against the proposed sampling before history begins or state changes.
+  authoredMlsMaterial(localLiquidEmitterRecords(),next);
+  // Keep deletion explicit through the history API's shallow patch merge.
+  return {...next,mlsMaterial:next.mlsMaterial??null};
+ };
+ if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:checked,write:value=>{
+  const next=normalizeLocalLiquidSetup(checked(value));
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);
@@ -12746,7 +12753,7 @@ function editAuthoredWaterSimulation(patch){
   syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();
  }});authoredWaterSimulationTarget=true;}
 
- return scenePlacementTools.edits.apply(target,normalizeLocalLiquidSetup({...localLiquidSetup,...patch}),'Edit water simulation');
+ return scenePlacementTools.edits.apply(target,{...localLiquidSetup,...patch},'Edit water simulation');
 }
 async function addAuthoredWaterDrop({mode='finite_drop'}={}){
  if(!['finite_drop','continuous'].includes(mode))throw Error('Unknown water source type');
