@@ -100,7 +100,11 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  }
  const steering={read:task.read,
   attention(){const state=task.read(),interests=state.custody?.carrierId||!goin.parent?[]:goinInterests().filter(x=>x.active);return {id:interests.length?asset.id:null,interests};},
-  update(context){healthy();advancePhysics(context.time);const intent=task.update(context);receipt();return intent;}};
+  update(context){
+   healthy();advancePhysics(context.time);
+   const reachPosition=inputs.creature.attention&&actor?actor.pose({bones:['head']}).bones[0].matrix.slice(12,15):context.position;
+   const intent=task.update({...context,reachPosition});receipt();return intent;
+  }};
  const invokeActor=(name,input)=>{
   active();if(name!=='pause')healthy();
   if(physics&&name==='floor'&&input?.visible)throw Error('Physical goin support replaces the decorative walking floor');

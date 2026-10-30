@@ -60,3 +60,14 @@ assert.equal(theft.read().custody.carrierId,null,'Release does not bypass physic
 coin.claimable=true;theft.update({time:7,position:[-3,0,1]});
 assert.equal(theft.read().custody.phase,'carried','Release permits immediate reachable pickup without a cooldown');
 assert.throws(()=>theft.setHeld({held:true,time:6}),/monotonic/);
+const reached=createGoinTask({target:()=>({id:'near-head',position:[3,0,0]}),arrivalRadius:.6,
+ theft:{carrierId:'long-body',escape:()=>[10,0,0]}});
+reached.setHeld({held:true,time:0});
+assert.deepEqual(reached.update({time:0,position:[0,0,0],reachPosition:[1,0,0]}).destination,[2,0,0],'Root destination accounts for the actual reaching point');
+const near=reached.update({time:1,position:[1.5,0,0],reachPosition:[2.5,0,0]});
+assert.equal(near.hold,true);assert.equal(reached.read().distance,.5);
+reached.setHeld({held:false,time:1});
+const carry=reached.update({time:1,position:[1.5,0,0],reachPosition:[2.5,0,0]});
+assert.deepEqual(carry.destination,[10,0,0],'Escape must not inherit the head offset');
+assert.equal(reached.read().distance,8.5,'Escape arrival measures the body root');
+assert.throws(()=>reached.update({time:2,position:[0,0,0],reachPosition:[NaN,0,0]}),/finite world/);

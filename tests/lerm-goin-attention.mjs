@@ -54,4 +54,13 @@ try{
  assert.notEqual(item.read().creature.attention.focus?.id,id,'Detached geometry must not remain a live scene interest');
 }finally{await item.dispose();}
 assert.equal(ticks.size,0);assert.equal(scene.children.length,0);
+const approaching=await createGoinPursuit({host,inputs:{...inputs,arrivalRadius:.6}},{loadSources:async()=>data});
+try{
+ approaching.operations.beginGoinGrab();
+ for(let i=0;i<600;i++){scene.updateMatrixWorld(true);approaching.operations.advance({seconds:1/30});}
+ const s=approaching.read();
+ assert.equal(s.task.phase,'watching-held-goin');
+ assert.equal(s.creature.attention.focus?.id,s.goin.id,'Arrival must leave the desired goin ahead of the actual head, not behind it');
+ assert.equal(s.task.custody.carrierId,null);
+}finally{await approaching.dispose();}
 console.log('Goin possession composes with current attention without replacing game movement');

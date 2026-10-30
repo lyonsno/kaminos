@@ -36,10 +36,10 @@ export function createGoinTask({target,arrivalRadius=.35,theft=null}={}){
    }
    return read();
   },
-  update({time:next,from=time,position}){
-   if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position))throw Error('Goin task requires a monotonic interval and a world position');
+  update({time:next,from=time,position,reachPosition=position}){
+   if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position)||!point(reachPosition))throw Error('Goin task requires a monotonic interval and finite world positions');
    const motionStart=Math.min(next,Math.max(from,until));time=next;const observed=observe();
-   let destination=observed?.position??null,distance=destination?Math.hypot(position[0]-destination[0],position[2]-destination[2]):null;
+   let destination=observed?.position??null,distance=destination?Math.hypot(reachPosition[0]-destination[0],reachPosition[2]-destination[2]):null;
    let phase=time<until?'interrupted':wet?'water-exposed':!observed?'waiting-target':distance<=arrivalRadius?(held?'watching-held-goin':observed.claimable===false?'waiting-goin-support':'at-goin'):'approaching';
    if(theft&&observed&&time>=until&&!wet&&!held){
     const escape=theft.escape();if(!point(escape))throw Error('Theft requires a finite live escape point');
@@ -51,7 +51,10 @@ export function createGoinTask({target,arrivalRadius=.35,theft=null}={}){
     if(custody.carrierId){destination=escape;distance=Math.hypot(position[0]-escape[0],position[2]-escape[2]);phase=distance<=arrivalRadius?'holding-goin':'fleeing-with-goin';}
    }
    state={phase,target:observed?.id??null,destination:destination?[...destination]:null,distance};
-   return {source:'lerms.goin-task.v1',destination:state.destination,hold:!['approaching','fleeing-with-goin'].includes(phase),motionStart};
+   // The goal remains the goin; transport places the supplied reaching point,
+   // not the body's root, there. Escape continues to use the root itself.
+   const rootGoal=state.destination&&!custody.carrierId?state.destination.map((v,i)=>v+position[i]-reachPosition[i]):state.destination;
+   return {source:'lerms.goin-task.v1',destination:rootGoal,hold:!['approaching','fleeing-with-goin'].includes(phase),motionStart};
   }
  };
 }
