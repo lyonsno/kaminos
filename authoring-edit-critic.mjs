@@ -11,7 +11,7 @@ export function installEditCritic({document,history,operation,imageController,on
   let reason='';try{critic.request();}catch(e){reason=e.message;}
   by('asset-review-edit').disabled=busy||!!reason;
   by('asset-review-status').textContent=error||(state.request?.task==='critique'&&operation.busy()?(state.error||state.progress):review?.status==='partial'?'Review stopped before completion; full output retained below.':review?.status==='unstructured'?'The helper did not separate an assessment from a correction. Review the full response below.':review?.status==='complete'&&!review.correction?'The critic proposed no further edit.':reason||'');
-  by('asset-review-assessment').textContent=review?.assessment||'';
+  by('asset-review-assessment').textContent=(review?.status==='complete'?review.assessment:review?.raw?.text)||'';
   const key=JSON.stringify([entry?.source,review?.createdAt]);
   if(key!==painted){painted=key;reviewSource=entry?.source;by('asset-review-correction').value=review?.correction||'';}
   const editable=review?.status==='complete'&&!!review.correction;
