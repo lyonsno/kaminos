@@ -126,7 +126,6 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const renderingPanel=byId('rendering-panel-content');
   if(renderingPanel)move(renderingPanel,'authoring-render-slot');
   let workbenchRenderingHidden=renderingPanel?.hidden;
-  move(byId('local-liquid-performance'), 'authoring-type-slot');
   move(byId('composition-label').closest('.authoring-controls'), 'authoring-composition-slot');
   move(byId('scene-add-menu').closest('nav'), 'authoring-add-slot');
   move(byId('navigation-input-mode').closest('label'), 'authoring-navigation-slot');

@@ -28,7 +28,7 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
  function publishInlets(){solver.setPacket(makePacket(records,Date.now(),sourceGeneration));}
  const state=()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,registered:true,mounted:!disposed,mode:initial.mode,sourceIds:[...new Set([...initial.sourceIds,...records.filter(r=>r.localLiquidEmitter.mode!=='finite_drop').map(r=>r.id)])],sourceGeneration,
   frameCount,paused,presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
-  pendingSourceChanges:JSON.stringify(records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(({id,type,transform,localLiquidEmitter})=>({id,type,transform,localLiquidEmitter})))!==JSON.stringify(initial.sourceRecords.filter(r=>r.localLiquidEmitter.mode==='finite_drop'))||JSON.stringify(setup)!==JSON.stringify(pendingSetup),
+  pendingSourceChanges:(initial.mode==='finite_drop'&&records.some(r=>r.localLiquidEmitter.mode==='continuous'))||JSON.stringify(records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(({id,type,transform,localLiquidEmitter})=>({id,type,transform,localLiquidEmitter})))!==JSON.stringify(initial.sourceRecords.filter(r=>r.localLiquidEmitter.mode==='finite_drop'))||JSON.stringify(setup)!==JSON.stringify(pendingSetup),
   ...scenePasses.state(),...environment.state(),fallbackRoute:null});
  return {supportsVolumeTransport:true,get paused(){return paused;},get presentation(){return mode;},get proxyStepEvery(){return proxyStepEvery;},
   setPresentation(value){localLiquidPresentationPlan(value);mode=value;return mode;},

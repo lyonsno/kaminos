@@ -38,7 +38,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
   let support=null;
-  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0;
+  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
+  let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
   if(initialParticles&&(!(initialParticles instanceof Float32Array)||initialParticles.length%20||initialParticles.length>config.capacity*20||!initialParticles.every(Number.isFinite)))throw Error('Invalid native MLS initial population');
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
   if(initialParticles){
@@ -106,9 +107,25 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(world,i);let inward=dot(v,f.xyz);if(f.w<domain.w&&inward<0.){v-=f.xyz*inward;}}`:''}
         cells[id.x].vx=i32(v.x*65536.);cells[id.x].vy=i32(v.y*65536.);cells[id.x].vz=i32(v.z*65536.);
       }`,'grid',[[0,1],[1,2],[2,5],[3,6],...(support?[[7,7]]:[])]);
+    // A compact GPU occupancy result gives the UI a real population and returns
+    // domain-exited slots to the CPU admission plan. No particle-body readback.
+    let census=null,censusReadback=null,censusKernel=null;
+    const censusWords=1+Math.ceil(config.capacity/32);
+    if(setup?.trackPopulation){
+      census=buffer(censusWords*4,U.STORAGE|U.COPY_SRC|U.COPY_DST,'MLS live population and occupancy');
+      censusReadback=buffer(censusWords*4,U.COPY_DST|U.MAP_READ,'MLS completed population readback');
+      resources.push(census);
+      censusKernel=await make(`
+        @group(0) @binding(0) var<storage,read> particleWords:array<f32>;
+        @group(0) @binding(1) var<storage,read_write> occupancy:array<atomic<u32>>;
+        @compute @workgroup_size(64) fn census(@builtin(global_invocation_id) id:vec3u){
+          if(id.x*20u+3u>=arrayLength(&particleWords)||particleWords[id.x*20u+3u]<=0.){return;}
+          atomicAdd(&occupancy[0],1u);atomicOr(&occupancy[1u+id.x/32u],1u<<(id.x%32u));
+        }`,'census',[[0,0],[1,8]]);
+    }
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const execute=(steps,epochMs)=>{
-        const startTime=time,injections=[];
+        const startedAt=now(),startTime=time,injections=[];
         for(let i=0;i<steps;i++){
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
         }
@@ -124,8 +141,20 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           dispatch(encoder,kernels[0],config.capacity);dispatch(encoder,kernels[1],config.capacity);
           dispatch(encoder,update,config.gridCells);dispatch(encoder,kernels[2],config.capacity);
         }
+        if(census){encoder.clearBuffer(census);dispatch(encoder,censusKernel,config.capacity);encoder.copyBufferToBuffer(census,0,censusReadback,0,censusWords*4);}
         device.queue.submit([encoder.finish()]);pending=true;
-        device.queue.onSubmittedWorkDone().catch(e=>{failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
+        const submittedStep=clock.read().step;
+        const completion=censusReadback?censusReadback.mapAsync(GPUMapMode.READ).then(()=>{
+          const words=new Uint32Array(censusReadback.getMappedRange()).slice();censusReadback.unmap();
+          if(disposed)return;
+          if(words[0]>config.capacity)throw Error('Invalid MLS population readback');
+          plan.reconcileOccupancy(words.subarray(1));
+          population={active:words[0],capacity:config.capacity,step:submittedStep,authority:'completed_gpu_occupancy'};
+        }):device.queue.onSubmittedWorkDone();
+        pendingCompletion=completion.then(()=>{
+          const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;
+          cadence.lastBatchWallMs=completedAt-startedAt;cadence.lastCompletionIntervalMs=lastCompletedAt===null?null:completedAt-lastCompletedAt;lastCompletedAt=completedAt;
+        }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
         return true;
     };
     return {config,particles,
@@ -141,15 +170,16 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         if(!Number.isSafeInteger(target)||target<clock.read().step)throw Error('MLS target step must not precede current step');
         clock.observe(now(),paused);paused=true;
-        await device.queue.onSubmittedWorkDone();
+        await pendingCompletion;
+        if(failure)throw Error(failure);
         const steps=target-clock.read().step;if(steps)execute(clock.advanceSteps(steps),epochMs??Date.now());
-        await device.queue.onSubmittedWorkDone();if(failure)throw Error(failure);
+        await pendingCompletion;if(failure)throw Error(failure);
         return clock.read();
       },
-      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,gridCells:config.gridCells,
+      read:()=>({route:MLS_ROUTE,source:MLS_SOURCE,particleCount:config.capacity,capacity:config.capacity,population:population?{...population}:null,cadence:{...cadence},gridCells:config.gridCells,
         gridDispatch:{x:gridX,y:gridY},deviceLimits:{maxStorageBufferBindingSize:device.limits?.maxStorageBufferBindingSize??null,maxBufferSize:device.limits?.maxBufferSize??null,maxComputeWorkgroupsPerDimension:dispatchLimit},
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
-        modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
+        modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
         collision:support?support.read():{route:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'},initialParticleCount:initialParticles?.length/20||0}),

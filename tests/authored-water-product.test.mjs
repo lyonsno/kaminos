@@ -1,0 +1,22 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {waterControlsFixture} from './helpers/water-controls.mjs';
+import {authoredMlsInlets} from '../authored-mls-water.mjs';
+import {normalizeLocalLiquidEmitter,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
+import {createMlsEmissionPlan,mlsConfig} from '../mls-juice-contract.mjs';
+const f=waterControlsFixture(),read=f.api.read;
+let simulation={present:true,selected:false,sourceCount:1,settings:{particleCount:12000},sampling:{spacing:.05,particleTarget:1000,container:{min:[-2,-1,-2],max:[2,3,2]}}};
+f.api.read=()=>({...read(),simulation});f.controls.refresh();
+assert.equal(f.input('[data-simulation]').hidden,true,'Selecting a source must not expose a second copy of simulation properties');
+simulation.selected=true;f.controls.refresh();assert.equal(f.input('[data-simulation]').hidden,false);
+f.setRuntime({paused:false,step:120,particleCount:32000,capacity:32000,population:{active:90,step:116},clock:{dt:1/240,completedStep:116,backlogSeconds:.08},pendingSourceChanges:false});f.controls.refreshStatus();
+assert.match(f.input('[data-state]').textContent,/90 live/);assert.match(f.input('[data-state]').textContent,/32,000 capacity/);assert.doesNotMatch(f.input('[data-state]').textContent,/32,000 particles/);
+let edit;f.api.editSimulation=patch=>{edit=patch;};f.input('[data-capacity]').value=16000;f.input('[data-capacity]').listeners.input();await f.controls.flush();assert.equal(edit.particleCount,16000);
+const record={id:'stream',type:'local-liquid-emitter',transform:{position:[0,1,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]},localLiquidEmitter:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'continuous',baseRadius:.08,strength:1,rate:240}};
+const kept=authoredMlsInlets([record],0).emitters[0];assert(kept.lifetime_seconds>1e10,'Ordinary authored water must not silently disappear after six seconds');
+record.localLiquidEmitter.lifetimeSeconds=2;assert.equal(normalizeLocalLiquidEmitter(record.localLiquidEmitter).lifetimeSeconds,2);assert.equal(authoredMlsInlets([record],0).emitters[0].lifetime_seconds,2);
+assert.throws(()=>normalizeLocalLiquidEmitter({...record.localLiquidEmitter,lifetimeSeconds:-1}),/lifetime/i);
+const plan=createMlsEmissionPlan(mlsConfig({particleCount:2})),packet=authoredMlsInlets([{...record,localLiquidEmitter:{...record.localLiquidEmitter,lifetimeSeconds:null}}],0);
+plan.step(packet,0,0);plan.step(packet,1/240,0);assert.equal(plan.step(packet,2/240,0).length,0,'Full retained pool must stop births, not overwrite water');
+plan.reconcileOccupancy(new Uint32Array([2]));assert.equal(plan.step(packet,3/240,0)[0].slot,0,'A GPU-confirmed exited slot must admit new water');
+console.log('Water inspector ownership, truthful capacity, explicit retention and reusable exited slots');
