@@ -1,3 +1,4 @@
+import {createGroundedWalk} from './grounded-walk.mjs';
 import {createWanderPath} from './wander-path.mjs';
 import {deriveStanceTravel} from './stance-travel.mjs';
 import {createWanderLocomotion} from './wander-locomotion.mjs';
@@ -21,7 +22,7 @@ export function wanderAreaInPlacement({THREE,areaRoot,placement}) {
 
 // The owner supplies elapsed active time. This adapter creates no clock, makes
 // no new joint motion and leaves source vertical action/local Bone poses intact.
-export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source',locomotion=false}={}) {
+export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source',locomotion=false,grounded=false}={}) {
  if(typeof sourceKey!=='string'||!sourceKey)throw Error('Wander requires explicit motion/bind source identity');
  if(!Number.isInteger(adapter?.frames)||adapter.frames<2||!(adapter.fps>0))throw Error('Wander requires a retained multi-frame pose source');
  const poses=Array.from({length:adapter.frames},(_,i)=>adapter.frame(i));
@@ -57,11 +58,14 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   const cycle=Math.floor(stableFrames/(adapter.frames-1)),fractional=stableFrames-cycle*(adapter.frames-1),index=Math.floor(fractional),next=Math.min(adapter.frames-1,index+1);
   return {cycle,frame:Math.min(adapter.frames-2,index),distance:travel==='stance'?time*transport.unitsPerSecond:cycle*sourceDistance+distances[index]+(distances[next]-distances[index])*(fractional-index)};
  }
- function read(){const t=timing();return {elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,contactRate,travel:structuredClone(transport),path:path.read()};}
+ let feet=null;
+ if(grounded||snapshot?.grounding)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed,snapshot:snapshot?.grounding});
+ function read(){const t=timing();return {grounding:feet?.read()??null,elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,contactRate,travel:structuredClone(transport),path:path.read()};}
  function advance(delta,{distanceScale=1,direction=null,admit=null,gaitScale=1}={}) {
   if(!Number.isFinite(delta)||delta<0)throw Error('Wander time delta must be finite and nonnegative');
   if(!Number.isFinite(distanceScale)||distanceScale<0||distanceScale>1)throw Error('Travel scale must be in [0,1]');
   if(!Number.isFinite(gaitScale)||gaitScale<0||gaitScale>1)throw Error('Gait scale must be in [0,1]');
+  const footStart=feet?path.read():null;
   const prior=admit?{path:path.snapshot(),elapsed,heldFrame}:null,from=admit?path.read():null;
   if(direction)path.redirect(direction);
   heldFrame=null;
@@ -108,6 +112,7 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
     if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);}
    }
   }
+  if(feet)feet.advance(footStart,path.read(),elapsed);
   return read();
  }
  function contact(before,{position,direction}){
@@ -119,18 +124,21 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   // Never change the pose after contacts have been solved against it. A shove
   // does not accelerate the gait; lost progress slows the following step.
   contactRate=fraction;
-  path.contact(position,direction,start.distance+(proposed.distance-start.distance)*fraction);return read();
+  path.contact(position,direction,start.distance+(proposed.distance-start.distance)*fraction);
+  if(feet){feet.restore(before.grounding);feet.advance(prior,path.read(),elapsed);}
+  return read();
  }
- function frame(index,proposedPath=null) {
+ function rawFrame(index,proposedPath=null) {
   const pose=walking.frame(index,{mode:'cycle',cycle:0}),state=proposedPath??path.read(),point=roots[index];
   const yaw=Math.atan2(state.direction[0],state.direction[1])-Math.atan2(forward[0],forward[1]);
   const warp=new THREE.Matrix4().makeTranslation(state.position[0],0,state.position[1]).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeTranslation(-point[0],0,-point[2]));
   return {...pose,actorMatrix:warp.multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)).toArray(),derived:true};
  }
+ function frame(index,proposedPath=null){const pose=rawFrame(index,proposedPath);return feet?feet.frame(pose):pose;}
  function seek(index) {
   if(!Number.isInteger(index)||index<0||index>=adapter.frames)throw Error('Wander source frame is outside retained motion');
-  elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;return read();
+  elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;if(feet)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed});return read();
  }
- function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,contactRate,travel,path:path.snapshot()};}
+ function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,contactRate,travel,...(feet?{grounding:feet.snapshot()}:{}),path:path.snapshot()};}
  return Object.freeze({frame,read,advance,contact,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
 }
