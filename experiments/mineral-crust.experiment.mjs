@@ -1,8 +1,9 @@
 import {Group,Color,AmbientLight,DirectionalLight} from '../lib/three.webgpu.js';
 import {createCrust,advanceCrust,setCrustConditions,saveCrust,restoreCrust,readCrust,interfaceState} from '../mineral-worlds/crust.mjs';
 import {createCrustSurface} from '../mineral-worlds/crust-surface.mjs';
+import {createCrustClock} from '../mineral-worlds/crust-clock.mjs';
 export default {id:'mineral-crust',title:'Capillary salt crust',async create({host,inputs,record}){
- let state=inputs.state?restoreCrust(inputs.state):createCrust(inputs),surface=createCrustSurface(state),rate=inputs.rate??8,playing=false,closed=false,dirty=true,checkpoint=null,panel,status,play,fields=new Map(),interfaces=true,accumulator=0;
+ let state=inputs.state?restoreCrust(inputs.state):createCrust(inputs),surface=createCrustSurface(state),rate=inputs.rate??8,playing=false,closed=false,dirty=true,checkpoint=null,panel,status,play,fields=new Map(),interfaces=true,clock=null,evolutionError=null;
  if(!Number.isFinite(rate)||rate<0)throw Error('Invalid evolution rate');
  const session=await host.scene.open(),root=new Group();root.name='Capillary salt crust';root.add(surface.root);
  const ambient=new AmbientLight(0xe8f0ff,.25),sun=new DirectionalLight(0xffe6be,2);sun.position.set(3,6,2);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=sun.shadow.camera.bottom=-state.rows;sun.shadow.camera.right=sun.shadow.camera.top=state.rows;sun.shadow.bias=-.0005;root.add(ambient,sun);
@@ -11,24 +12,28 @@ export default {id:'mineral-crust',title:'Capillary salt crust',async create({ho
  const priorView=session.readView();let asset;
  try{session.setView(inputs.view??{position:[state.rows*1.1,state.rows*.9,state.rows*1.2],target:[0,.15,0],fov:40});asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'mineral-crust:'+state.model,type:'experiment'}});let parent=root;while(parent.parent)parent=parent.parent;if(parent.isScene){scene=parent;background={background:scene.background,backgroundNode:scene.backgroundNode,fog:scene.fog,environmentIntensity:scene.environmentIntensity};scene.background=new Color(0x293b43);scene.backgroundNode=null;scene.fog=null;scene.environmentIntensity=.2;for(const object of scene.children)if(object.isLight){borrowedLights.push([object,object.visible]);object.visible=false;}}}catch(e){surface.dispose();session.setView(priorView);if(ground&&hadGround){ground.checked=true;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}await session.dispose();throw e;}
  const active=()=>{if(closed)throw Error('Crust experiment is closed');};
- const read=()=>({objectId:asset.id,...readCrust(state),surface:surface.read(),playing,rate,view:session.readView()});
- const sync=()=>{if(play)play.textContent=playing?'Hold growth':'Continue growth';for(const [key,input]of fields)if(doc.activeElement!==input)input.value=key==='rate'?rate:state.settings[key];if(status)status.textContent=`${state.time.toFixed(1)} s · ${state.grains.length} crystals (${state.events.nucleations} new) · ${readCrust(state).connected} connected tracks`;};
+ const read=()=>({objectId:asset.id,...readCrust(state),surface:surface.read(),playing,rate,clock:clock?.read(),evolutionError,view:session.readView()});
+ const sync=()=>{if(play)play.textContent=playing?'Hold growth':'Continue growth';for(const [key,input]of fields)if(doc.activeElement!==input)input.value=key==='rate'?rate:state.settings[key];if(status)status.textContent=`${state.time.toFixed(1)} s · ${state.grains.length} crystals (${state.events.nucleations} new) · ${readCrust(state).connected} connected tracks${clock?.read().pendingModelSeconds>=.1?` · ${clock.read().pendingModelSeconds.toFixed(1)} model s queued`:""}`;};
  const present=()=>{if(dirty){surface.update(state);session.redraw();dirty=false;}sync();};
  const changed=(kind,requested)=>{dirty=true;present();const result=read();record({kind:'mineral-crust.'+kind,phase:'applied',requested,effective:result});return result;};
- const snapshot=()=>({schema:'kaminos.capillary-crust.v1',state:saveCrust(state),rate,view:session.readView(),interfaces});
- const replace=value=>{active();if(value?.schema!=='kaminos.capillary-crust.v1')throw Error('Unknown crust file');const next=restoreCrust(value.state),nextRate=value.rate??rate;if(!Number.isFinite(nextRate)||nextRate<0)throw Error('Invalid evolution rate');const candidate=createCrustSurface(next);try{if(value.view)session.setView(value.view);}catch(e){candidate.dispose();throw e;}root.remove(surface.root);surface.dispose();surface=candidate;root.add(surface.root);state=next;rate=nextRate;interfaces=value.interfaces??true;surface.interfaces(interfaces);playing=false;accumulator=0;return changed('restore',{time:state.time});};
- const stop=session.onFrame(({deltaSeconds})=>{if(closed||!playing||rate===0)return;accumulator+=deltaSeconds*rate;const steps=Math.floor((accumulator+1e-10)/.1);if(!steps)return;advanceCrust(state,steps*.1);accumulator-=steps*.1;dirty=true;present();});
+ const snapshot=()=>({schema:'kaminos.capillary-crust.v1',state:saveCrust(state),rate,view:session.readView(),interfaces,pendingModelSeconds:clock.read().pendingModelSeconds});
+ const replace=value=>{active();if(value?.schema!=='kaminos.capillary-crust.v1')throw Error('Unknown crust file');const next=restoreCrust(value.state),nextRate=value.rate??rate;if(!Number.isFinite(nextRate)||nextRate<0)throw Error('Invalid evolution rate');const nextPending=value.pendingModelSeconds??0;if(!Number.isFinite(nextPending)||nextPending<0)throw Error("Invalid pending model time");const candidate=createCrustSurface(next);try{if(value.view)session.setView(value.view);}catch(e){candidate.dispose();throw e;}root.remove(surface.root);surface.dispose();surface=candidate;root.add(surface.root);state=next;rate=nextRate;interfaces=value.interfaces??true;surface.interfaces(interfaces);playing=false;evolutionError=null;clock.configure(false,rate);clock.reset(nextPending);return changed('restore',{time:state.time});};
+ const idle=typeof win.requestIdleCallback==='function';
+ clock=createCrustClock({advance:seconds=>advanceCrust(state,seconds),onChange:()=>{dirty=true;},onError:error=>{playing=false;evolutionError=String(error.message||error);if(status)status.textContent=evolutionError;},
+  requestIdle:callback=>idle?win.requestIdleCallback(callback):(win.setTimeout??globalThis.setTimeout)(()=>{let first=true;callback({timeRemaining:()=>{const remaining=first?1:0;first=false;return remaining;}});},0),
+  cancelIdle:id=>idle?win.cancelIdleCallback(id):(win.clearTimeout??globalThis.clearTimeout)(id)});
+ const stop=session.onFrame(({deltaSeconds})=>{if(closed)return;clock.frame(deltaSeconds);present();});
  return {read,operations:{
   conditions(patch){active();setCrustConditions(state,patch);return changed('conditions',patch);},
   advance(seconds){active();advanceCrust(state,seconds);return changed('advance',{seconds});},
-  play(value=true){active();playing=Boolean(value);sync();return read();},
-  rate(value){active();if(!Number.isFinite(value)||value<0)throw Error('Invalid evolution rate');rate=value;sync();return read();},
+  play(value=true){active();playing=Boolean(value);clock.configure(playing,rate);sync();return read();},
+  rate(value){active();if(!Number.isFinite(value)||value<0)throw Error('Invalid evolution rate');rate=value;clock.configure(playing,rate);sync();return read();},
   interfaces(value){active();interfaces=Boolean(value);surface.interfaces(interfaces);session.redraw();return read();},
   trace(){active();return state.pools.map(p=>interfaceState(state,p));},
   checkpoint(){active();return snapshot();},restore:replace,
   remember(){active();checkpoint=snapshot();return {time:state.time};},
   returnToCheckpoint(){active();if(!checkpoint)throw Error('Store a checkpoint first');return replace(checkpoint);},
-  restart(){active();return replace({...snapshot(),state:createCrust({rows:state.rows,seed:state.seed,settings:state.settings})});},
+  restart(){active();return replace({...snapshot(),pendingModelSeconds:0,state:createCrust({rows:state.rows,seed:state.seed,settings:state.settings})});},
   view(value){active();session.setView(value);session.redraw();return read();},
  },mount({root:target,document,invoke}){
   panel=target;const title=document.createElement('h2');title.textContent='Capillary salt crust';
@@ -40,7 +45,7 @@ export default {id:'mineral-crust',title:'Capillary salt crust',async create({ho
   field('feed','Brine feed','Total incoming liquid per model second, shared by the inlet junctions. More feed also brings more salt at the selected salinity.',.001);
   field('salinity','Feed salinity','Incoming dissolved salt per liquid volume. Saturation is 1 in this sketch. Existing liquid and crystals retain their history.',.02);
   field('evaporation','Evaporation','Liquid removed per wetted exposed area per model second. Concentrates salt and can disconnect feeding films.',.0002);
-  field('rate','Evolution speed','Model seconds per real second. Changes viewing speed without changing physical feed, drying or reaction rates.',1,'rate');
+  field('rate','Evolution speed','Model seconds per real second. Requests model seconds per real second without changing physical feed, drying or reaction rates. Evolution yields to the browser; queued model time is shown when it cannot keep pace.',1,'rate');
   const advanced=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Growth and birth assumptions';const note=document.createElement('p');note.textContent='Restricted slit/film tracks with linearized capillary storage. Surface growth competes with a provisional concentration- and area-dependent birth law. This is an uncalibrated material sketch.';advanced.append(summary,note);target.append(advanced);
   const advancedField=(...args)=>{const previousChildren=target.children.length;field(...args);advanced.append(target.children[previousChildren]);};
   advancedField('growth','Face growth','Integration rate of excess dissolved salt onto the locally wetted crystal faces. Faster growth leaves less excess for new nuclei.',.005);
@@ -52,5 +57,5 @@ export default {id:'mineral-crust',title:'Capillary salt crust',async create({ho
   button('Save crust',async()=>{const data=await invoke('checkpoint'),url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=`salt-crust-${state.tick}.json`;a.click();win.setTimeout(()=>URL.revokeObjectURL(url),0);});
   const load=document.createElement('input');load.type='file';load.accept='application/json';load.setAttribute('aria-label','Load salt crust');load.onchange=async()=>{try{if(load.files[0])await invoke('restore',JSON.parse(await load.files[0].text()));}catch(e){failed(e);}};target.append(load);
   status=document.createElement('p');status.setAttribute('role','status');target.append(status);sync();
- },async dispose(){if(closed)return;closed=true;playing=false;stop();surface.dispose();sun.shadow.dispose();if(scene&&background)Object.assign(scene,background);for(const [light,visible]of borrowedLights)light.visible=visible;if(ground&&hadGround){ground.checked=true;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}await session.dispose();}};
+ },async dispose(){if(closed)return;closed=true;playing=false;clock.dispose();stop();surface.dispose();sun.shadow.dispose();if(scene&&background)Object.assign(scene,background);for(const [light,visible]of borrowedLights)light.visible=visible;if(ground&&hadGround){ground.checked=true;ground.dispatchEvent(new win.Event('change',{bubbles:true}));}await session.dispose();}};
 }};

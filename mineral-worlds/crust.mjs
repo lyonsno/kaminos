@@ -1,3 +1,4 @@
+import {createGrainIndex} from './crust-spatial.mjs';
 // Restricted, dimensionless capillary slots and surface-film strips. This is a
 // material sketch, not a calibrated pore-network or nucleation model.
 export const CRUST_MODEL = 'capillary-crust-strips-v1';
@@ -79,8 +80,8 @@ export function trackGeometry(s,p){
  const length=points.slice(1).reduce((n,x,i)=>n+Math.hypot(...x.map((v,j)=>v-points[i][j])),0),aperture=profile?profile.aperture:.016;
  return {capacity:Math.max(EPS,profile?profile.volume:Math.max(0,gap)*width*Math.max(EPS,length)),area:profile?profile.volume/width:width*length,pressure:p.kind==='gap'?(aperture>0?.24/aperture:0):2.4,length,aperture,width,gap,endpoints:[a,b],points,profile,closed:p.kind==='gap'&&aperture<=0};
 }
-export function trackPoint(s,p,fraction){const g=trackGeometry(s,p),points=g.points;let at=clamp(fraction,0,1)*g.length;for(let i=1;i<points.length;i++){const d=Math.hypot(...points[i].map((v,j)=>v-points[i-1][j]));if(at<=d||i===points.length-1){const f=d>0?clamp(at/d,0,1):0;return points[i].map((v,j)=>points[i-1][j]+(v-points[i-1][j])*f);}at-=d;}return points.at(-1);}
-export function interfaceState(s,p){if(typeof p==='number')p=s.pools[p];const g=trackGeometry(s,p),fraction=clamp(p.water/g.capacity,0,1);return {pool:p.id,kind:p.kind,fraction,water:p.water,concentration:p.water>0?p.salt/p.water:null,connected:p.connected??true,mode:g.closed?'closed':p.water<=0?'dry':p.connected&&fraction<1?'corner-film':fraction>=1?'filled':'advancing',...(reservoir(p)?{point:g.point}:{gap:g.gap,length:g.length,curvature:g.pressure/.12,point:trackPoint(s,p,p.owner===p.a?fraction:1-fraction),endpoints:g.endpoints})};}
+export function trackPoint(s,p,fraction,g=trackGeometry(s,p)){const points=g.points;let at=clamp(fraction,0,1)*g.length;for(let i=1;i<points.length;i++){const d=Math.hypot(...points[i].map((v,j)=>v-points[i-1][j]));if(at<=d||i===points.length-1){const f=d>0?clamp(at/d,0,1):0;return points[i].map((v,j)=>points[i-1][j]+(v-points[i-1][j])*f);}at-=d;}return points.at(-1);}
+export function interfaceState(s,p){if(typeof p==='number')p=s.pools[p];const g=trackGeometry(s,p),fraction=clamp(p.water/g.capacity,0,1);return {pool:p.id,kind:p.kind,fraction,water:p.water,concentration:p.water>0?p.salt/p.water:null,connected:p.connected??true,mode:g.closed?'closed':p.water<=0?'dry':p.connected&&fraction<1?'corner-film':fraction>=1?'filled':'advancing',...(reservoir(p)?{point:g.point}:{gap:g.gap,length:g.length,curvature:g.pressure/.12,point:trackPoint(s,p,p.owner===p.a?fraction:1-fraction,g),endpoints:g.endpoints})};}
 // Exact relaxation for a pair of linearized capillary storage laws
 // p=k(V/C-1). Stable for stiff thin films; carries salt with transferred liquid.
 // This is an overdamped pair-split approximation, not global capillary equilibrium.
@@ -102,7 +103,7 @@ function overlaps(a,b){
   if(Math.abs((cb[0]-ca[0])*nx+(cb[2]-ca[2])*nz)>=support(a,da)+support(b,db)-1e-10)return false;
  }return true;
 }
-function spatial(s){const cells=new Map(),cell=1.05;const add=g=>{const c=grainCenter(g),d=grainDimensions(g),r=(d[0]+d[2])/2;for(let z=Math.floor((c[2]-r)/cell);z<=Math.floor((c[2]+r)/cell);z++)for(let x=Math.floor((c[0]-r)/cell);x<=Math.floor((c[0]+r)/cell);x++){const key=x+','+z;let list=cells.get(key);if(!list)cells.set(key,list=[]);list.push(g);}};for(const g of s.grains)add(g);const query=g=>{const c=grainCenter(g),d=grainDimensions(g),r=(d[0]+d[2])/2,out=new Set();for(let z=Math.floor((c[2]-r)/cell);z<=Math.floor((c[2]+r)/cell);z++)for(let x=Math.floor((c[0]-r)/cell);x<=Math.floor((c[0]+r)/cell);x++)for(const other of cells.get(x+','+z)??[])if(other!==g)out.add(other);return out;};query.add=add;return query;}
+function spatial(s){const index=createGrainIndex(s.grains),query=g=>index.query(g);query.add=g=>index.update(g);return query;}
 function growFace(s,g,volume,face,neighbors){
  if(volume<=0)return 0;const d=grainDimensions(g),area=face<2?d[1]*d[2]:face<4?d[0]*d[1]:d[0]*d[2],sign=face%2===0?1:-1,old=g.faces[face],delta=volume/area;
  g.faces[face]=old+sign*delta;
@@ -124,8 +125,9 @@ function growFromPool(s,p,mass,neighbors){
   }
  }
  else if(p.kind==='gap'){
+  const geom=trackGeometry(s,p),to=trackPoint(s,p,.5,geom);
   for(const id of p.walls){
-   const g=s.grains[id],c=grainCenter(g),to=trackPoint(s,p,.5),angle=Math.atan2(to[2]-c[2],to[0]-c[0])-g.angle;
+   const g=s.grains[id],c=grainCenter(g),angle=Math.atan2(to[2]-c[2],to[0]-c[0])-g.angle;
    targets.push([g.id,Math.abs(Math.cos(angle))>=Math.abs(Math.sin(angle))?(Math.cos(angle)>0?0:1):(Math.sin(angle)>0?2:3)]);
   }
  }else{const q=s.pools[p.b];if(q.kind==='face')targets=[[q.grain,4],[q.grain,0],[q.grain,2]];}
@@ -140,10 +142,10 @@ function birthSite(s,p,size){
   if(p.face==='top'){const x=Math.cos(angle)*w*.42*Math.sqrt(sat),z=Math.sin(angle)*d*.42*Math.sqrt(sat);point=[c[0]+co*x-sn*z,g.faces[4],c[2]+sn*x+co*z];carrier=g.id;}
   else{const x=Math.cos(angle)*(w/2+size*.6),z=Math.sin(angle)*(d/2+size*.6);point=[c[0]+co*x-sn*z,0,c[2]+sn*x+co*z];}
  }else{
-  const geom=trackGeometry(s,p),f=clamp(p.water/geom.capacity,0,1);point=trackPoint(s,p,p.owner===p.a?f:1-f);
+  const geom=trackGeometry(s,p),f=clamp(p.water/geom.capacity,0,1);point=trackPoint(s,p,p.owner===p.a?f:1-f,geom);
   if(p.kind==='film'||p.kind==='branch'){
    const g=s.grains[p.carrier];carrier=g.id;orientation=g.angle;const top=g.faces[4];
-   const geom=trackGeometry(s,p),approach=Math.hypot(...geom.points[1].map((v,j)=>v-geom.points[0][j]));
+   const approach=Math.hypot(...geom.points[1].map((v,j)=>v-geom.points[0][j]));
    const at=(p.owner===p.a?f:1-f)*geom.length;
    if(at<approach){if(p.kind==='branch'&&point[1]>.03)return null;carrier=null;point[1]=0;}
    else if(point[1]<top-.002){const c=grainCenter(g),sign=Math.cos(g.angle)*(point[0]-c[0])+Math.sin(g.angle)*(point[2]-c[2])>=0?1:-1;normal=[Math.cos(g.angle)*sign,0,Math.sin(g.angle)*sign];point[0]+=normal[0]*(size/2+1e-9);point[2]+=normal[2]*(size/2+1e-9);point[1]=Math.max(size/2,point[1]);}
