@@ -42,6 +42,7 @@ pile.dispose();
 assert.throws(()=>mlsConfig({goinPile:{stackCenters:[]}}),/stack centers/);
 assert.throws(()=>mlsConfig({goinPile:{stackCenters:[[0,NaN]]}}),/stack centers/);
 assert.equal(resolveMlsHandRequest('hand-play-space',{}).playSpace.pitchDegrees,65,'witness must resolve the actual route');
+assert.deepEqual(resolveMlsHandRequest('hand-play-space',{goinPile:{mass:.5}}).goinPile.stackCenters,centers,'mass edit must retain the court layout');
 assert.throws(()=>validateMlsHandRequest({playSpace:null},{playSpace:{}}),/config mismatch/);
 assert.throws(()=>validateMlsHandRequest({playSpace:{config,observation:null}},{playSpace:{}}),/missing play space/);
 assert.throws(()=>validateMlsHandRequest({captureId:'new',playSpace:{config,observation:a}},{playSpace:{}}),/stale play space/);

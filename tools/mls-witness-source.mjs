@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {MLS_ROUTE,mlsConfig} from '../mls-juice-contract.mjs';
 import {RUNWAY_INPUTS} from '../experiments/hand-jet-runway.experiment.mjs';
 import {GOIN_INPUTS} from '../experiments/hand-goin-pile.experiment.mjs';
-import {PLAY_INPUTS} from '../experiments/hand-play-space.experiment.mjs';
+import {resolvePlayInputs} from '../experiments/hand-play-space.experiment.mjs';
 import {playSpaceConfig} from '../experiments/hand-play-space.mjs';
 
 export function resolveMlsHandRequest(experiment,inputs){
@@ -14,7 +14,7 @@ export function resolveMlsHandRequest(experiment,inputs){
   return {particleCount:2400,fluidViscosity:.1,particleLifetimeSeconds:6,jetSpeed:1.15*1.7,sourceFlux:360,fluidGridSize:64,
     ...(['hand-jet-runway','hand-goin-pile','hand-play-space'].includes(experiment)?RUNWAY_INPUTS:{}),
     ...(['hand-goin-pile','hand-play-space'].includes(experiment)?GOIN_INPUTS:{}),
-    ...(experiment==='hand-play-space'?PLAY_INPUTS:{}),...inputs};
+    ...inputs,...(experiment==='hand-play-space'?resolvePlayInputs(inputs):{})};
 }
 
 export function validateMlsGoinRequest(pile,requested){
