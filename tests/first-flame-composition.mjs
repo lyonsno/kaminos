@@ -1,4 +1,6 @@
 // kaminos-test: node
+import { createSceneEdits } from '../scene-edit-session.mjs';
+import { createFireLightingHistory } from '../fire-lighting-history.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +27,7 @@ test('missing saved reduced caster keeps original lighting and recovery controls
   const consumer={setShadowCasterLevel:v=>casters.setLevel(v),debugState:()=>({casters:casters.debugState()}),dispose(){throw Error('usable original consumer must not be disposed');}};
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{hidden:true,value:'1',replaceChildren(){},parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
   let mounted=false;
-  const context={URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
+  const context={sceneFireLightingHistory:null,createFireLightingHistory,syncFireLightingControls(){},scenePlacementTools:{edits:createSceneEdits({read:()=>null,write(){}}),addHistoryScope(){}},URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
     isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
     importedModule:{mountDistributedSceneRadiance(){return consumer;}},bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
     createFireShadowSettings:()=>({operations:{},sync(){},mount(){mounted=true;}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
@@ -40,7 +42,7 @@ test('missing saved reduced caster keeps original lighting and recovery controls
 test('late Add Flame passes the mounted opaque surface cache to the hybrid consumer',async()=>{
   const cache={},elements=new Map();let options;
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{value:'1',parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
-  const context={URLSearchParams,window:{__kaminosSurfaceLighting:cache},document,renderer:{},scene:{},volumePrototype:{},sharedGpu:{device:{}},
+  const context={sceneFireLightingHistory:null,createFireLightingHistory,syncFireLightingControls(){},scenePlacementTools:{edits:createSceneEdits({read:()=>null,write(){}}),addHistoryScope(){}},URLSearchParams,window:{__kaminosSurfaceLighting:cache},document,renderer:{},scene:{},volumePrototype:{},sharedGpu:{device:{}},
     isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({}),
     importedModule:{mountDistributedSceneRadiance(value){options=value;return {}; }},
     bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},

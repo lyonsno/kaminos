@@ -58,3 +58,27 @@ test('stored fitted surface fields appear and add through their exact native sou
  const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]}),addMesh:async e=>{added=e;return 'actual-room';}});
  assert.equal(await c.browse('generated-meshes'),true,'native surface asset must be admitted by the ordinary asset catalog');c.select(c.read().entries[0]);assert.equal(await c.add(),'actual-room');assert.equal(added.source,entry.source);assert.equal(added.kind,'surface');
 });
+
+// Exercise the page callback too: importing a stored surface must use the same
+// working-scene generation and membership as ordinary mesh arrivals.
+test('page surface arrival uses current scene generation and rolls back failed insertion',async()=>{
+ const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const begin=html.indexOf('addMesh:async entry=>{'),end=html.indexOf('      if(entry.file)',begin);
+ const code='('+html.slice(begin,end).replace('addMesh:','')+'})';
+ let disposed=0,recorded=0,pending;
+ const workingScene={generation:1,objects:[]},root={removeFromParent(){}},room={root,dispose(){disposed++;}};
+ const context={URL,location:{href:'http://localhost/'},workingScene,authoringBusy:false,
+  assertSceneConstructionAvailable(){},makeSceneObjectId:()=> 'room',ensureSceneObjectMembershipTarget:()=> 'membership',
+  scenePlacementTools:{edits:{assertCanRecordApplied(){},state:()=>({})}},
+  loadBrazierRoom:()=>pending??Promise.resolve(room),scene:{add(){}},
+  registerSceneObject(){workingScene.objects.push({id:'room'});},
+  async recordImportedSceneObject(){recorded++;},setActiveSceneObject(){},
+  removeSceneObjectInternal(){workingScene.objects=[];disposed++;}};
+ vm.createContext(context);const add=vm.runInContext(code,context),entry={kind:'surface',source:'/api/read?root=generated-meshes&path=room.surface.json'};
+ assert.equal(await add(entry),'room');assert.equal(recorded,1);
+ workingScene.objects=[];let resolve;pending=new Promise(r=>resolve=r);const arrival=add(entry);workingScene.generation++;resolve(room);
+ await assert.rejects(arrival,/Scene changed/);assert.equal(disposed,1);assert.equal(recorded,1);
+ pending=null;context.recordImportedSceneObject=async()=>{throw Error('history unavailable');};
+ await assert.rejects(add(entry),/history unavailable/);assert.equal(workingScene.objects.length,0);assert.equal(disposed,2);
+});

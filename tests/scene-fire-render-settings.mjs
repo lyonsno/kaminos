@@ -4,3 +4,11 @@ test('scene flame lighting preserves camera match, source softness and surface t
  const values={...FIRE_RENDER_DEFAULTS,'rendering-match-flame-camera':true,'rendering-source-softness':4,'rendering-surface-gain':-2.5,'rendering-angular-pattern':'guided','rendering-angular-samples':48};
  const document={getElementById:id=>({checked:values[id],value:String(values[id])})};assert.deepEqual(readFireRendering(document),values);assert.deepEqual(checkedFireRendering(values),values);assert.throws(()=>checkedFireRendering({'rendering-source-softness':NaN}),/Invalid/);assert.throws(()=>checkedFireRendering({'rendering-source-softness':.4}),/integer/);
 });
+test('scene documents retain every supported smoke angular pattern',()=>{
+ for(const pattern of ['fixed','spatial','blue','source','guided','regions','importance']){
+  const values={...FIRE_RENDER_DEFAULTS,'rendering-angular-pattern':pattern};
+  const document={getElementById:id=>({checked:values[id],value:String(values[id])})};
+  assert.deepEqual(checkedFireRendering(JSON.parse(JSON.stringify(readFireRendering(document)))) ,values);
+ }
+ assert.throws(()=>checkedFireRendering({'rendering-angular-pattern':'unknown'}),/Invalid/);
+});
