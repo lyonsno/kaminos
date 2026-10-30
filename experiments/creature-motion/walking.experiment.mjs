@@ -33,6 +33,7 @@ function checkRecipeInputs(inputs){
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
  if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.engage!==undefined&&typeof a.engage!=='boolean')throw Error('Attention engagement must be boolean');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
+ if(inputs.grounded_walk!==undefined&&typeof inputs.grounded_walk!=='boolean')throw Error('Grounded walk must be boolean');
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
  if(inputs.cycle!==undefined&&(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0))throw Error('Invalid authored repeat cycle');
@@ -61,7 +62,7 @@ export async function prepareWalkingSetup(recipe,{loadSources=loadFullBodySource
  checkRecipeInputs(recipe);
  const loaded=await loadCreatureFlesh(recipe.flesh,await loadSources(recipe)),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
  const walking=createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
- const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
+ const wander=recipe.wander?createWanderMotion({THREE,adapter:check,walking,grounded:recipe.grounded_walk===true,travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion}):null;
  validateCreatureFleshPoses(loaded,[check.frame(0),wander?wander.frame(wander.read().frame):walking.frame(recipe.sample??0,{mode:recipe.action==='wander'?'cycle':recipe.mode??'source',cycle:recipe.cycle??0})]);
  return loaded;
 }
@@ -83,12 +84,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,pathGuide,footGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
- const makeWander=options=>createWanderMotion({THREE,adapter,walking,locomotion:true,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ const makeWander=options=>createWanderMotion({THREE,adapter,walking,locomotion:true,grounded:chosenInputs.grounded_walk===true,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
  const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
@@ -110,7 +111,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
-  action:{engagement:{...engagement.read(),enabled:chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
+  action:{engagement:{...engagement.read(),enabled:chosenInputs.attention?.engage===true},kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:wander?.read().grounding?'clip-derived flat-ground foot targets':'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
 
 
@@ -129,6 +130,18 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   geometry.computeBoundingBox();
   if(!pathGuide){pathGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x55cbd7,depthTest:true}));pathGuide.name='Creature motion path';Object.assign(pathGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.visible=false;placement.add(pathGuide);}
   else{const old=pathGuide.geometry;pathGuide.geometry=geometry;old.dispose();}
+  if(wander?.read().grounding){
+   const state=wander.read(),pose=wander.frame(state.frame),vertices=[],colors=[];
+   for(const [name,foot] of Object.entries(state.grounding.feet)){
+    const solved=pose.grounding.feet[name],p=foot.target,color=solved.residual>.01?[1,.2,.12]:foot.stance?[.2,1,.4]:[.2,.7,1];
+    const mark=.05;vertices.push(p[0]-mark,p[1],p[2],p[0]+mark,p[1],p[2],p[0],p[1],p[2]-mark,p[0],p[1],p[2]+mark,...p,...solved.reached);
+    for(let i=0;i<6;i++)colors.push(...color);
+   }
+   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+   if(!footGuide){footGuide=new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true,depthTest:false}));footGuide.name='Foot contacts';Object.assign(footGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.add(footGuide);}
+   else{footGuide.geometry.dispose();footGuide.geometry=g;}
+   footGuide.visible=true;
+  }else if(footGuide)footGuide.visible=false;
   liveRoot?.guide();
  }
  async function ensureArea(transform){
