@@ -37,3 +37,19 @@ test('pages without a fire are within budget', () => {
  budget.check();
  assert.equal(budget.report().maxFireRaySteps, null);
 });
+
+
+test('inactive saved flame settings do not spend the live budget, and resuming does', () => {
+ const budget = createAgentLiveBudget();
+ budget.observe({fireRaySteps: 96}); budget.observe({fireRaySteps: 96});
+ assert.throws(() => budget.check(), /over-live-budget/);
+ budget.observe({fireRaySteps: 96, active: false}); budget.check();
+ budget.observe({fireRaySteps: 96, active: false}); budget.check();
+ assert.equal(budget.report().maxFireRaySteps, 96, 'retain earlier actual peak');
+ budget.observe({fireRaySteps: 96, active: true}); budget.check();
+ budget.observe({fireRaySteps: 96, active: true});
+ assert.throws(() => budget.check(), /over-live-budget/);
+ const empty = createAgentLiveBudget();
+ empty.observe({fireRaySteps: 96, active: false});
+ assert.equal(empty.report().maxFireRaySteps, null);
+});

@@ -1,3 +1,4 @@
+import {authoredMlsInlets,authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
 import {describeAuthoredWaterDrop} from './authored-water-drop.mjs';
 import {createFingerFluidBoxReference} from './finger-fluid-box-fixtures.mjs';
 import {
@@ -5,13 +6,14 @@ import {
   LOCAL_LIQUID_EMITTER_SOURCE,
   LOCAL_LIQUID_EMITTER_TYPE,
   defaultLocalLiquidSetup,
-  localLiquidInletPacket,
   normalizeLocalLiquidEmitter,
   normalizeLocalLiquidEmitterPose,
   normalizeLocalLiquidSetup,
 } from './local-liquid-setup.mjs';
 
 const clone = value => structuredClone(value);
+
+export const DEFAULT_WATER_EMITTER = Object.freeze({schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'continuous',baseRadius:.08,strength:1.15,rate:120,volumeRate:.005,lifetimeSeconds:null});
 
 export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, patch = {}) {
   const pose = normalizeLocalLiquidEmitterPose({ ...currentPose, ...patch });
@@ -22,7 +24,7 @@ export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, pa
 export function createLocalLiquidEmitterSceneRecord({
   id,
   transform,
-  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
+  settings = DEFAULT_WATER_EMITTER,
   label = 'Water emitter',
   fileName = label,
   groupId = null,
@@ -30,7 +32,10 @@ export function createLocalLiquidEmitterSceneRecord({
 } = {}) {
   if (typeof id !== 'string' || !id.trim()) throw new Error('Water emitter requires a stable scene object id');
   const pose = normalizeLocalLiquidEmitterPose(transform);
-  const emitter = normalizeLocalLiquidEmitter(settings, pose);
+  const checked = normalizeLocalLiquidEmitter(settings, pose);
+  // Newly authored sources carry a physical flow; saved legacy scenes resolve
+  // their former particles/s against the saved whole-scene sampling below.
+  const emitter = {...checked,volumeRate:checked.volumeRate??checked.rate*authoredMlsParticleVolume()};
   return {
     id,
     source: LOCAL_LIQUID_EMITTER_SOURCE,
@@ -136,10 +141,11 @@ export function normalizeLocalLiquidSceneDocument(document) {
       throw new Error(`Authored water emitter "${record.id}" is missing its saved settings`);
     }
   }
+  const legacyParticleVolume=authoredMlsParticleVolume(authoredMlsCellSize(claimedEmitters,setup??{}));
   const emitters = claimedEmitters.map(record => createLocalLiquidEmitterSceneRecord({
     id: record.id,
     transform: record.transform,
-    settings: record.localLiquidEmitter,
+    settings: {...record.localLiquidEmitter,volumeRate:record.localLiquidEmitter.volumeRate??(record.localLiquidEmitter.rate??1200)*legacyParticleVolume},
     label: record.label,
     fileName: record.fileName,
     groupId: record.groupId,
@@ -181,7 +187,7 @@ export function normalizeLocalLiquidSceneDocument(document) {
   const authoredDomain = setup?.legacySource
     ? (({ legacySource, ...domain }) => domain)(setup)
     : setup;
-  if (authoredDomain && emitters.length) localLiquidInletPacket(authoredDomain, emitters, 1);
+  if (authoredDomain && emitters.length) authoredMlsInlets(emitters,Date.now(),1,authoredMlsCellSize(emitters,authoredDomain));
   return { setup: authoredDomain, emitters };
 }
 
@@ -192,7 +198,7 @@ export function localLiquidRuntimeSourceState(document, generation = 1) {
     emitters: clone(emitters),
     // Empty authored membership is an explicit stop-injection update. Keeping
     // a null packet here would let the mounted host retain a deleted inlet.
-    inletPacket: setup ? localLiquidInletPacket(setup, emitters, generation) : null,
+    inletPacket: setup ? authoredMlsInlets(emitters,Date.now(),generation,authoredMlsCellSize(emitters,setup)) : null,
     participation: setup ? 'authored-domain-present' : 'no-authored-domain',
   };
 }

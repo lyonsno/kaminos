@@ -8,14 +8,14 @@ import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup} from '../local-liquid
 import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function actual(name){const a=source.indexOf('async function '+name+'(');assert.ok(a>=0);const b=source.indexOf('\n}',a);return source.slice(a,b+2);}
-test('ordinary Add uses the same finite default as the authored water operation',async()=>{
- let finite=0,legacy=0;
+test('ordinary Add Water emitter creates a continuous source',async()=>{
+ let request,legacy=0;
  const c={sceneObjects:[],LOCAL_LIQUID_EMITTER_CAPACITY:5,LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',LOCAL_LIQUID_EMITTER_SCHEMA:'schema',localLiquidSetup:null,
   assertSceneConstructionAvailable(){},defaultLocalLiquidSetup:()=>({}),makeSceneObjectId:()=> 'source',createLocalLiquidEmitterSceneRecord:x=>x,THREE:{},
   createLocalLiquidEmitterObject(){legacy++;return {object:{}};},scene:{add(){}},registerSceneObject(){},recordSceneObjectInsertion:async()=>true,mountLocalLiquidHost:async()=>true,
-  setInfo(){},window:{_kaminosDirty(){}},addAuthoredWaterDrop:async()=>{finite++;return 'source';}};
+  setInfo(){},window:{_kaminosDirty(){}},addAuthoredWaterDrop:async options=>{request=options;return 'source';}};
  sceneContext(c);vm.runInContext(actual('addLocalLiquidEmitter'),c);await c.addLocalLiquidEmitter();
- assert.equal(finite,1,'Normal Add must reach finite default');assert.equal(legacy,0,'Normal Add must not create a legacy nozzle');
+ assert.equal(request?.mode,'continuous','Add Water emitter must create continuing flow');assert.equal(legacy,0,'Normal Add must not create a legacy nozzle');
 });
 test('restored finite setup remains an editable preview until explicit release',async()=>{
  let allocations=0,preview=false;
