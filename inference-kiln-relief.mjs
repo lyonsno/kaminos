@@ -3,7 +3,9 @@ import {ShapePath,ExtrudeGeometry} from './lib/three.core.js';
 // Trace the rendered type, including counters, into a shallow solid. The thermal
 // and lighting consumers see glyph geometry rather than an alpha rectangle.
 export function createPromptRelief(canvas,{depth=.035}={}){
- const {width,height}=canvas,data=canvas.getContext('2d').getImageData(0,0,width,height).data;
+ const {width,height}=canvas;return createPromptReliefPixels({width,height,data:canvas.getContext('2d').getImageData(0,0,width,height).data},{depth});
+}
+export function createPromptReliefPixels({width,height,data},{depth=.035}={}){
  const ink=(x,y)=>x>=0&&y>=0&&x<width&&y<height&&data[(y*width+x)*4+3]>=128;
  const edges=new Map(),key=(x,y)=>x+','+y;
  function edge(x,y,nx,ny,direction){const k=key(x,y);if(!edges.has(k))edges.set(k,[]);edges.get(k).push({x:nx,y:ny,direction});}

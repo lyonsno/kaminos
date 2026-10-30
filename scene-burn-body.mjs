@@ -11,7 +11,7 @@ import {sceneRadianceSourceMaterial} from './scene-radiance.mjs';
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
 // An object's material owns its state; it never switches sources, clocks or domains.
-export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600}){
+export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600,surfaceMask=null}){
   resolveBurnableTarget([entry],entry.id);
   let mesh;entry.object.traverse(node=>{if(node.isMesh)mesh=node;});
   const appearance=()=>checkedBurnAppearance(entry.burnable?.appearance??{profile:mesh.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
@@ -26,7 +26,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
   }
   try{
     mesh.geometry.computeBoundingBox();const bounds=mesh.geometry.boundingBox;
-    field=await createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate:true});
+    field=await createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate:true,surfaceMask});
     const converted=(Array.isArray(original)?original:[original]).map(material=>{
       const binding=createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity:LIVE_LOG_HEAT_IDENTITY,presenceNode:field.stateNode.w});
       bindings.push(binding);return binding.material;
@@ -47,6 +47,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
     }));
     return {
       object:entry.object,
+      reset(){field.reset();debris.reset();elapsed=0;},
       setAppearance(value){if(bindings.some(binding=>!binding.read().appearanceSelectable))throw Error('No incineration appearance on this material');for(const binding of bindings)binding.setAppearance(value);},
       setMounted(value){debris.root.visible=value;},
       materialMask:()=>field.materialMask(entry.id),

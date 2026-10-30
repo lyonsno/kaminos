@@ -1,4 +1,4 @@
-import * as THREE from './lib/three.webgpu.js';
+import * as THREE from './lib/three.core.js';
 
 // Static geometry classification only; no simulation values leave the GPU.
 export function createLogSurfaceMask(geometry,bounds,grid,{filled=false}={}) {

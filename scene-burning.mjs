@@ -1,7 +1,7 @@
 // One fluid consumer gathers any number of independently owned material fields.
 export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,onError=()=>{},dirty=()=>{}}){
   const bodies=new Map(),failures=new Map(),generations=new WeakMap();
-  let binding=null,pending=null,disposed=false,fault=null,resync=false;
+  let binding=null,pending=null,disposed=false,fault=null,resync=false,preparing=false;
   const mounted=entry=>objects().some(row=>row.id===entry.id&&row.object===entry.object&&row.burnable?.enabled);
   function active(){return [...bodies.values()].filter(row=>mounted(row.entry));}
   function release(){binding?.detach();binding?.gas.dispose();binding=null;}
@@ -24,7 +24,7 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
       release();fault=null;return;
     }
     // Merely checking Burnable must not boot a cold volume or start a fire.
-    if(!host||!contextState?.active||fault)return;
+    if(!host||(!contextState?.active&&!preparing)||fault)return;
     if(!binding){
       const context=await host.borrowThermalGpuContext();
       if(disposed||host!==runtime())return;
@@ -58,6 +58,8 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     return pending;
   }
   return {sync,forget,
+    async prepare(){preparing=true;try{await sync();}finally{preparing=false;}},
+    reset(id){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);if(!row)throw Error('Burnable material is not resident');row.body.reset();},
     setAppearance(id,value){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);
       if(!row)throw Error('Burnable material is not resident');row.body.setAppearance(value);dirty();return row.body.read();},
     snapshot(id){

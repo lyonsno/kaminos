@@ -14,7 +14,7 @@ export function installGenerationFlame({document,slot,createRenderer}){
   const generation=epoch;
   lifecycle=lifecycle.catch(()=>{}).then(async()=>{
    if(generation!==epoch)return;
-   if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed||!running){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
+   if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
    if(renderer&&renderedKey!==key){await renderer.setActive(false);if(renderer.prepare&&renderedKey!==null){await renderer.prepare({prompt:running?(request?.prompt??draft()):draft(),request:running?request:null,input:document.getElementById('asset-prompt')});renderedKey=key;}else{await renderer.dispose();renderer=null;}}
    if(!renderer&&!running&&!allowCold)return;
    if(!renderer){

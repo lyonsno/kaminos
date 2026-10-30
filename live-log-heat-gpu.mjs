@@ -131,12 +131,12 @@ fn summarize() {
   textureStore(summary,vec2<i32>(0),peak);
 }`;
 
-export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=false}) {
+export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=false,surfaceMask:preparedMask=null}) {
   const device=renderer.backend.device;
   if(!device?.createComputePipelineAsync)throw Error('Live log requires WebGPU');
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
-  const surfaceMask=createLogSurfaceMask(mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
+  const surfaceMask=preparedMask??createLogSurfaceMask(mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
   const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
   const owned=[];let disposed=false;
   try {
