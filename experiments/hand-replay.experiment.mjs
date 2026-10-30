@@ -64,7 +64,7 @@ export default {
     const loaded=await Promise.all(next.frames.map(f=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error(`missing source image ${f.captureId}`));img.src=f.image;})));
     validateExport(await admission(),catalog.generation);
     if(disposed||ticket!==token)return read();
-    data=next;images=loaded;index=0;time=data.frames[0].timeMs;lastTick=null;draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
+    data=next;images=loaded;if(sequenceSelect)sequenceSelect.value=String(n);index=0;time=data.frames[0].timeMs;lastTick=null;draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
    }catch(e){data=null;images=[];for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
    return read();
   };
