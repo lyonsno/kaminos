@@ -21,7 +21,7 @@ export function wanderAreaInPlacement({THREE,areaRoot,placement}) {
 }
 
 // The owner supplies elapsed active time. This adapter creates no clock, makes
-// no new joint motion and leaves source vertical action/local Bone poses intact.
+// no wall clock. Optional grounding resamples limbs over the shared torso.
 export function createWanderMotion({THREE,adapter,walking,sourceKey,area,position,direction,seed=1,snapshot,pathSnapshot,travel='source',locomotion=false,grounded=false}={}) {
  if(typeof sourceKey!=='string'||!sourceKey)throw Error('Wander requires explicit motion/bind source identity');
  if(!Number.isInteger(adapter?.frames)||adapter.frames<2||!(adapter.fps>0))throw Error('Wander requires a retained multi-frame pose source');
@@ -42,7 +42,7 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
  const spans=axial<0?[]:poses.map((p,i)=>Math.hypot(p.bones[axial].worldMatrix[12]-roots[i][0],p.bones[axial].worldMatrix[14]-roots[i][2])).filter(x=>x>0).sort((a,b)=>a-b);
  const sourceLength=spans.length?spans[Math.floor(spans.length/2)]:transport.unitsPerSecond*period;
  const inherited=snapshot?.path??pathSnapshot;
- const navigation=Boolean(locomotion)||inherited?.schema==='kaminos.creature-wander-locomotion.v1';
+ const navigation=Boolean(locomotion)||Boolean(grounded)||Boolean(snapshot?.grounding)||inherited?.schema==='kaminos.creature-wander-locomotion.v1';
  const bodyLength=locomotion?.bodyLength??inherited?.bodyLength??sourceLength;
  const pathFrom=options=>navigation?createWanderLocomotion({...options,bodyLength,referenceSpeed:transport.unitsPerSecond}):createWanderPath(options);
  let elapsed=0,heldFrame=null,path,contactRate=1;
@@ -59,18 +59,18 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   return {cycle,frame:Math.min(adapter.frames-2,index),distance:travel==='stance'?time*transport.unitsPerSecond:cycle*sourceDistance+distances[index]+(distances[next]-distances[index])*(fractional-index)};
  }
  let feet=null;
- if(grounded||snapshot?.grounding)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed,snapshot:snapshot?.grounding});
+ if(grounded||snapshot?.grounding)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed,groundHeight:grounded?.groundHeight??snapshot?.grounding?.groundHeight,snapshot:snapshot?.grounding});
  function read(){const t=timing();return {grounding:feet?.read()??null,elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,contactRate,travel:structuredClone(transport),path:path.read()};}
  function advance(delta,{distanceScale=1,direction=null,admit=null,gaitScale=1}={}) {
   if(!Number.isFinite(delta)||delta<0)throw Error('Wander time delta must be finite and nonnegative');
   if(!Number.isFinite(distanceScale)||distanceScale<0||distanceScale>1)throw Error('Travel scale must be in [0,1]');
   if(!Number.isFinite(gaitScale)||gaitScale<0||gaitScale>1)throw Error('Gait scale must be in [0,1]');
   const footStart=feet?path.read():null;
-  const prior=admit?{path:path.snapshot(),elapsed,heldFrame}:null,from=admit?path.read():null;
+  const prior=admit?{path:path.snapshot(),elapsed,heldFrame,grounding:feet?.snapshot()}:null,from=admit?path.read():null;
   if(direction)path.redirect(direction);
   heldFrame=null;
   if(navigation){
-   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,drive:({seconds,walkingFraction})=>{
+   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,onStep:feet?({from,to})=>feet.advance(from,to,elapsed):null,drive:({seconds,walkingFraction})=>{
     const from=elapsed,to=from+seconds*walkingFraction*distanceScale,before=timing(from).distance;
     const distance=Math.max(0,timing(to).distance-before);
     return {distance,accept(consumed){
@@ -102,20 +102,20 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
    const to=path.read(),allowed=admit({from,to,turnOnly:false});
    if(!Number.isFinite(allowed)||allowed<0||allowed>1)throw Error('Motion admission must return a fraction in [0,1]');
    if(allowed<1){
-    path=pathFrom({snapshot:prior.path});elapsed=prior.elapsed;heldFrame=prior.heldFrame;
+    path=pathFrom({snapshot:prior.path});elapsed=prior.elapsed;heldFrame=prior.heldFrame;if(feet)feet.restore(prior.grounding);
     // A blocked journey may still turn out of contact. Keep its gait held and
     // admit that rotation separately; never apply a fraction of an unchecked
     // rebuilt curve or silently consume its random state.
     const angle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);
     const fraction=admit({from,to:{...from,direction:to.direction},turnOnly:true});
     if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Motion admission must return a fraction in [0,1]');
-    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);}
+    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);if(feet)feet.advance(from,path.read(),elapsed);}
    }
   }
-  if(feet)feet.advance(footStart,path.read(),elapsed);
+  if(feet&&!navigation)feet.advance(footStart,path.read(),elapsed);
   return read();
  }
- function contact(before,{position,direction}){
+ function contact(before,{position,direction,journey}){
   const start=before.path,prior=pathFrom({snapshot:start}).read(),proposed=path.read();
   const wanted=proposed.position.map((x,i)=>x-prior.position[i]),actual=position.map((x,i)=>x-prior.position[i]);
   const length2=wanted.reduce((n,x)=>n+x*x,0),fraction=length2>1e-16?Math.max(0,Math.min(1,actual.reduce((n,x,i)=>n+x*wanted[i],0)/length2)):1;
@@ -125,7 +125,16 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   // does not accelerate the gait; lost progress slows the following step.
   contactRate=fraction;
   path.contact(position,direction,start.distance+(proposed.distance-start.distance)*fraction);
-  if(feet){feet.restore(before.grounding);feet.advance(prior,path.read(),elapsed);}
+  if(feet){
+   const changed=Math.hypot(...position.map((x,i)=>x-proposed.position[i]),...direction.map((x,i)=>x-proposed.direction[i]))>64*Number.EPSILON*Math.max(1,...position.map(Math.abs));
+   if(journey!==undefined){
+    if(!Array.isArray(journey)||!journey.length||journey.some((p,i)=>!Number.isFinite(p.seconds)||p.seconds<=0||i&&p.seconds<=journey[i-1].seconds||!Array.isArray(p.position)||p.position.length!==2||!p.position.every(Number.isFinite)||!Array.isArray(p.direction)||p.direction.length!==2||!p.direction.every(Number.isFinite)||Math.abs(Math.hypot(...p.direction)-1)>1e-8))throw Error('Grounded physical contact needs a complete accepted journey');
+    const last=journey.at(-1);if(Math.hypot(...last.position.map((x,i)=>x-position[i]),...last.direction.map((x,i)=>x-direction[i]))>1e-8)throw Error('Accepted journey does not end at the physical pose');
+    feet.restore(before.grounding);let from=prior;
+    for(const point of journey){feet.advance(from,point,before.elapsed+(elapsed-before.elapsed)*point.seconds/last.seconds);from=point;}
+   }else if(changed)throw Error('Grounded physical contact requires accepted substeps');
+   // Identity feedback preserves the already integrated curved journey.
+  }
   return read();
  }
  function rawFrame(index,proposedPath=null) {
@@ -137,8 +146,8 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
  function frame(index,proposedPath=null){const pose=rawFrame(index,proposedPath);return feet?feet.frame(pose):pose;}
  function seek(index) {
   if(!Number.isInteger(index)||index<0||index>=adapter.frames)throw Error('Wander source frame is outside retained motion');
-  elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;if(feet)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed});return read();
+  elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;if(feet)feet=createGroundedWalk({THREE,walking,baseFrame:(time,state)=>rawFrame(timing(time).frame,state),forward,speed:transport.unitsPerSecond,initial:path.read(),time:elapsed,groundHeight:feet.read().groundHeight});return read();
  }
  function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,contactRate,travel,...(feet?{grounding:feet.snapshot()}:{}),path:path.snapshot()};}
- return Object.freeze({frame,read,advance,contact,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
+ return Object.freeze({frame,read,advance,contact,seek,setGroundHeight:height=>feet?.setGroundHeight(height),setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
 }

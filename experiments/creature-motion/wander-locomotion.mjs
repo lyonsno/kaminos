@@ -64,7 +64,7 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
   const delta=goal.map((x,i)=>x-position[i]),error=Math.hypot(...delta)?angle(direction,heading(delta)):0;
   return {position:[...position],direction:[...direction],area:clone(area),...(areas?{zoneId}:{}),target:[...goal],distance:total,segments,status:destination&&arrived()?'arrived':inside(position,area)?'wandering':'returning-to-area',navigation:{kind:'goal-steering',bodyLength,referenceSpeed,maxYawRate,arrivalRadius:arrivalRadius(),phase:destination&&arrived()?'arrived':Math.cos(error)<=0?'turning':'walking'}};
  }
- function advance(distance,{seconds=distance/referenceSpeed,drive=null,maxStepSeconds=stepSeconds}={}){
+ function advance(distance,{seconds=distance/referenceSpeed,drive=null,onStep=null,maxStepSeconds=stepSeconds}={}){
   if(!Number.isFinite(distance)||distance<0||!Number.isFinite(seconds)||seconds<0)throw Error('Locomotion needs finite nonnegative distance and time');
   if(!(maxStepSeconds>0)||!Number.isFinite(maxStepSeconds)||drive!==null&&typeof drive!=='function')throw Error('Invalid locomotion integration drive');
   if(!seconds){if(distance)throw Error('Positive locomotion distance requires elapsed time');intent=null;return read();}
@@ -78,6 +78,7 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
     // this integration interval without inventing travel or retrying forever.
     if(arrived())continue;
    }
+   const from=onStep?{position:[...position],direction:[...direction]}:null;
    const delta=goal.map((x,i)=>x-position[i]),desired=intent??heading(delta),error=angle(direction,desired);
    const omega=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength));
    const walkingFraction=Math.max(0,Math.cos(error))**2;
@@ -97,6 +98,7 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
    direction=heading([c*direction[0]-s*direction[1],s*direction[0]+c*direction[1]]);
    total+=travel*fraction;
    source?.accept(travel*fraction);
+   onStep?.({from,to:{position:[...position],direction:[...direction]},seconds:h});
   }
   intent=null;return read();
  }
