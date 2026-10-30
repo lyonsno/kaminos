@@ -1,3 +1,7 @@
+// MobRecon camera coordinates (+X right, +Y down, +Z away) to the scene.
+// This is a proper rotation (determinant +1), preserving anatomical chirality.
+export const HAND_SCENE_AXES=Object.freeze([1,-1,-1]);
+
 export function liveMeshFrame(result, capture, identity) {
   if (result.captureId !== capture.captureId || result.captureEpochMs !== capture.captureEpochMs) throw Error('capture mismatch');
   for (const key of ['model','backend','device','checkpointSha256','sourceRevision']) {

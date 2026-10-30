@@ -30,8 +30,9 @@ try{
   context=await chromium.launchPersistentContext(out+'/profile',{executablePath:a.browser,headless:true,viewport,deviceScaleFactor:scale,
     recordVideo:{dir:out+'/video',size:viewport},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
-  const hill=report.experiment==='hand-hill-juice';
-  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-live-fluid.mjs',...(['hand-jet-runway','hand-hill-juice'].includes(report.experiment)?['experiments/hand-jet-runway.experiment.mjs']:[]),...(hill?['experiments/hand-hill-juice.experiment.mjs','assets/hill-of-hills/frozen-initial-414.json']:[])],out,report});
+  const hillAsset={'hand-hill-juice':'assets/hill-of-hills/frozen-initial-414.json','hand-meadow-juice':'assets/hill-of-hills/meadow.json'}[report.experiment];
+  const hill=Boolean(hillAsset);
+  const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-live-fluid.mjs','experiments/hand-live-contract.mjs',...(['hand-jet-runway','hand-hill-juice','hand-meadow-juice'].includes(report.experiment)?['experiments/hand-jet-runway.experiment.mjs']:[]),...(hill?[`experiments/${report.experiment}.experiment.mjs`,hillAsset]:[])],out,report});
   await page.route('**/__mls-camera.png',route=>route.fulfill({contentType:'image/png',body:image}));
   await page.addInitScript(()=>{
     navigator.mediaDevices.getUserMedia=async()=>{
@@ -45,7 +46,7 @@ try{
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   if(hill){
     assert.equal(report.initial.fingerJuice.runtime?.solver.collision,'axis_aligned_domain_and_frozen_hill_triangles','Hill must mount before camera start');
-    assert.deepEqual(report.initial.fingerJuice.runtime.solver.terrain.source,JSON.parse(fs.readFileSync('assets/hill-of-hills/frozen-initial-414.json')).source,'wrong Hill source');
+    assert.deepEqual(report.initial.fingerJuice.runtime.solver.terrain.source,JSON.parse(fs.readFileSync(hillAsset)).source,'wrong Hill source');
     await page.screenshot({path:out+'/hill-before-camera.png'});
   }
   assert.equal(report.initial.identity.backend,'webgpu-local');

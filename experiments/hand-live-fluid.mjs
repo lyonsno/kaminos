@@ -1,4 +1,5 @@
 import {Vector3} from '../lib/three.core.js';
+import {HAND_SCENE_AXES} from './hand-live-contract.mjs';
 
 export const NATIVE_FINGER_ROUTE='mobrecon-native-mesh-finger-juice-v1';
 export const MAX_SAMPLE_AGE_MS=750;
@@ -20,7 +21,7 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
   if(!center?.every(Number.isFinite)||center.length!==3||!matrix?.elements?.every(Number.isFinite))throw Error('Invalid mesh placement');
   const age=nowMs-frame.captureEpochMs;
   const reason=!running?'camera_stopped':age<0?'future_sample':age>MAX_SAMPLE_AGE_MS?'stale_sample':frame.acquisitionDetails?.fallback?'no_detection_fallback':null;
-  const world=p=>new Vector3(p[0]-center[0],-(p[1]-center[1]),p[2]-center[2]).applyMatrix4(matrix);
+  const world=p=>new Vector3(...p.map((v,i)=>(v-center[i])*HAND_SCENE_AXES[i])).applyMatrix4(matrix);
   const emitters=names.map((id,f)=>{
     const chain=points.slice(1+4*f,5+4*f),segments=chain.slice(1).map((p,i)=>sub(p,chain[i]));
     const total=segments.reduce((n,s)=>n+length(s),0);

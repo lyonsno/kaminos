@@ -20,6 +20,7 @@ assert.equal(typeof witness.resolveMlsHandRequest,'function','experiment default
 assert.equal(typeof witness.validateMlsHandRequest,'function','effective configuration is not checked');
 const runway=witness.resolveMlsHandRequest('hand-jet-runway',{});
 assert.deepEqual(witness.resolveMlsHandRequest('hand-hill-juice',{}).fluidGridSize,[192,80,256]);
+assert.deepEqual(witness.resolveMlsHandRequest('hand-meadow-juice',{}).fluidGridSize,[192,80,256]);
 assert.equal(runway.particleCount,12000);assert.equal(runway.jetSpeed,4.5);
 assert.equal(runway.sourceFlux,1800);assert.deepEqual(runway.fluidGridSize,[192,80,256]);
 const effective=state(40,11,20);

@@ -31,7 +31,7 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
     geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
     geometry.setIndex(new THREE.BufferAttribute(data.indices,1));geometry.computeVertexNormals();
     hillMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.95});
-    const hill=new THREE.Mesh(geometry,hillMaterial);hill.name='Hill of Hills — frozen source';
+    const hill=new THREE.Mesh(geometry,hillMaterial);hill.name=c.terrain.title??'Hill of Hills — frozen source';
     hill.userData.source=c.terrain.source;hill.userData.transform=c.terrain.transform;group.add(hill);
     group.name='Finger Juice on Hill of Hills';
   }else{

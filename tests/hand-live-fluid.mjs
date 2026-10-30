@@ -82,3 +82,10 @@ test('jet speed changes launch magnitude without changing fingers or source econ
     original.emitters.map(e=>[e.extension,e.active,e.origin_world,e.aim_world,e.source_flux_particles_per_second,e.radius]));
   assert.throws(()=>module.nativeFingerPacket(frame(),{...options(),jetSpeed:-1}),/jet speed/);
 });
+test('camera depth is rotated with Y so distal jets preserve handedness',()=>{
+  const f=frame();
+  f.meshJointsMeters=f.meshJointsMeters.map(p=>[p[0],p[1],p[1]*.5]);
+  const p=module.nativeFingerPacket(f,options());
+  assert.ok(Math.abs(p.emitters[1].origin_world[2]+.15)<1e-12,'camera +Z must become scene -Z alongside the Y conversion');
+  assert.ok(p.emitters[1].aim_world[2]<0,'jet depth must follow the corrected visible finger');
+});

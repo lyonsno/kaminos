@@ -8,13 +8,13 @@ for(const present of [false,true])test(`scene expiry releases camera ${present?'
   const saved=new Map(['fetch','navigator','indexedDB'].map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
   t.after(()=>{for(const [key,descriptor] of saved)if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
   let trackStops=0,cancelled=0,closed=0,sceneDisposed=0,waterDisposed=0,callback,current=null,generation=0;
-  let presented;
+  let presented,visibleMesh;
   const presentation=new Promise(resolve=>presented=resolve);
   const video={style:{},videoWidth:640,videoHeight:480,play:async()=>{},
     requestVideoFrameCallback:fn=>{callback=fn;return 1;},cancelVideoFrameCallback:()=>cancelled++};
   const canvas={getContext:()=>({drawImage(){}}),toDataURL:()=> 'data:image/jpeg;base64,fixture'};
   const document={defaultView:{innerWidth:1000},location:{origin:'http://fixture'},createElement:tag=>tag==='video'?video:canvas};
-  const scene={attach:async()=>({}),setView(){},readView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>sceneDisposed++};
+  const scene={attach:async root=>{visibleMesh=root;return {}},setView(){},readView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>sceneDisposed++};
   const water={state:()=>({}),setLiveInletPacket(){},setPaused(){},dispose:()=>waterDisposed++};
   const host={controls:{document},scene:{open:async()=>scene},fluid:{openInlets:options=>openLiveFluidSession({
     getHost:()=>current,setHost:v=>current=v,getGeneration:()=>generation,createHost:async()=>water},options)}};
@@ -34,14 +34,20 @@ for(const present of [false,true])test(`scene expiry releases camera ${present?'
     if(path==='/session')value={sessionId:'fixture-session'};
     if(path==='/frame')value={...body,identity,available:true,interactionAuthority:false,authority:'live_native_diagnostic_not_interaction',
       source:identity.model,jointBasis:'upstream_j_reg_mano_to_mpii',handedness:'right',
-      verticesMeters:Array.from({length:778},(_,i)=>[i*.001,0,0]),
+      verticesMeters:Array.from({length:778},(_,i)=>i===1?[.04,0,0]:i===2?[0,.06,0]:i===3?[0,0,.03]:[0,0,0]),
       meshJointsMeters:[[0,0,0],...Array.from({length:5},(_,f)=>Array.from({length:4},(_,j)=>[f*.02,j*.02,0])).flat()]};
     if(path==='/event'&&body.kind==='presented')presented();
     return {ok:true,json:async()=>value};
   };
   const instance=await experiment.create({host,inputs:{fingerJuice:true},record(){}});
   await instance.operations.start();
-  if(present){callback(0,{});await presentation;await new Promise(resolve=>setImmediate(resolve));assert.equal(instance.read().received,1);}
+  if(present){callback(0,{});await presentation;await new Promise(resolve=>setImmediate(resolve));assert.equal(instance.read().received,1);
+    const p=visibleMesh.geometry.attributes.position.array;
+    const a=[0,1,2].map(i=>p[3+i]-p[i]),b=[0,1,2].map(i=>p[6+i]-p[i]),c=[0,1,2].map(i=>p[9+i]-p[i]);
+    const volume=a[0]*(b[1]*c[2]-b[2]*c[1])+a[1]*(b[2]*c[0]-b[0]*c[2])+a[2]*(b[0]*c[1]-b[1]*c[0]);
+    assert(volume>0,'visible mesh must preserve source chirality under camera-to-scene rotation');
+    assert(c[2]<0,'camera depth must point away from the scene camera');
+  }
   generation++;current.dispose();
   const replacement={};current=replacement;
   // Stop must release the actual resources even if the fluid guard rejects it.
