@@ -25,3 +25,11 @@ test('component deletion is owned by the active adapter and refreshes selection'
  edit.register('skeleton',{target:()=>null,enter(){},exit(){}});selected='skeleton';edit.toggle('skeleton');
  assert.equal(edit.remove(),false,'Owners without deletion keep their support boundary');
 });
+
+test('owner entry is idempotent and requires the native selected owner',()=>{
+ let selected='a',enters=0,exits=0;const edit=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){}});
+ const seat=edit.register('a',{target:()=>null,enter(){enters++;},exit(){exits++;}});
+ seat.enter();seat.enter();assert.equal(enters,1);assert.equal(edit.active(),true);
+ selected='b';assert.throws(()=>seat.enter(),/Select/);assert.equal(edit.active(),false);assert.equal(exits,1);
+ selected='a';seat.enter();seat.dispose();assert.throws(()=>seat.enter(),/disposed/);assert.equal(edit.active(),false);
+});

@@ -22,6 +22,7 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
    if(!id||owners.has(id)||!['target','enter','exit'].every(k=>typeof adapter?.[k]==='function'))throw Error('Component editing requires one adapter per scene object');
    owners.set(id,adapter);let disposed=false;
    return {
+    enter(){if(disposed)throw Error('Component adapter disposed');if(selected()!==id)throw Error('Select the component owner first');if(current?.id===id)return true;exit();cancel();adapter.enter();current={id,adapter};refresh();return true;},
     changed(change=()=>{}){if(disposed)throw Error('Component adapter disposed');cancel();change();refresh();},
     dispose(){if(disposed)return;if(current?.id===id)exit();owners.delete(id);disposed=true;},
    };
