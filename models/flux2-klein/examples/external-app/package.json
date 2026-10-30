@@ -1,0 +1,16 @@
+{
+  "name": "klein-image-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild app.js --bundle --format=esm --loader:.jpg=file --outfile=dist/app.js --servedir=. --serve=127.0.0.1:5173",
+    "build": "esbuild app.js --bundle --format=esm --loader:.jpg=file --outfile=dist/app.js"
+  },
+  "dependencies": {
+    "@kaminos/flux2-klein": "^0.1.2",
+    "lucide": "^0.468.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

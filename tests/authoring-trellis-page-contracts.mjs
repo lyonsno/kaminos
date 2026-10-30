@@ -245,3 +245,13 @@ test('a run hands back its raw decode and material fields for GI tiers, as copie
   assert.equal(decode.triangles.length,6);assert.equal(materialFields.resolution,8);
   assert.equal(materialFields.features.length,5*6);assert.equal(materialFields.coordinates.length,5*3);
 });
+
+test('the page forwards both caller pixel arrays and preserves the actual stage shapes in its asset and return',async()=>{
+  const f=fixture(),low=new Float32Array(512*512*3),high=new Float32Array(1024*1024*3);
+  const shapes={sparseFlow:[1,1029,1024],lowResolutionShape:[1,1029,1024],highResolutionShape:[1,4101,1024],textureFlow:[1,4101,1024]};
+  f.deps.loadGenerationInputs=async(m,fetch,input)=>{assert.equal(input.pixelValues,low);assert.equal(input.highResolutionPixelValues,high);return input;};
+  f.deps.createTrellisImageGenerationAdapter=options=>{assert.equal(options.highResolutionPixelValues,high);return {async run(){return {geometry:{},material:{},conditioningShapes:shapes};},dispose(){}};};
+  f.deps.createTrellisAssetAdapter=options=>{assert.deepEqual(options.provenance.conditioningShapes,shapes);return {async run(){return {glb};},dispose(){}};};
+  const result=await call(f,{pixelValues:low,highResolutionPixelValues:high});
+  assert.deepEqual(result.conditioningShapes,shapes);
+});

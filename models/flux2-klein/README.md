@@ -168,7 +168,15 @@ The [package API guide](package-README.md) covers progress, previews, weights, l
 
 Pass `{ device }` to borrow an existing WebGPU device with `shader-f16`, or `{ session, foreground }` to use your host's inference session and foreground service. Destruction leaves borrowed resources open. With `load: false`, attach your renderer through `app.foreground` before `app.load()`, so the same attachment serves frames before, during and after generation. The package guide documents that callback contract.
 
-[`examples/external-app`](examples/external-app) exercises that composition, including load failure, progress, generation previews, pause/resume, repeat use and borrowed-device survival. `node run-external-app.mjs --chrome <exe> --weights-dir <dir> --out <dir>` installs the example from packed tarballs outside this checkout and runs it.
+Start with [Klein Image Studio](examples/external-app), a standalone application using the published npm package. Generate images from your own prompts, pan and zoom the WebGPU image view during generation, and download the result as a PNG. The model stays loaded between requests.
+
+```sh
+cd models/flux2-klein/examples/external-app
+npm install
+npm run dev
+```
+
+Open the local URL printed by the server. This folder can also be used outside the Kaminos checkout; it has its own dependencies and build command. `app.js` connects the form to Klein; `image-view.js` renders on the same device through `app.foreground`.
 
 ### Build the package from source
 

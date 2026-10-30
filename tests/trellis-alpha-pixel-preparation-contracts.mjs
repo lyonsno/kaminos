@@ -48,7 +48,8 @@ test('encoded image keeps native alpha bytes, caller ownership and truthful prov
   for(const format of ['RGBA','BGRA']){
     const {Decoder,state,row}=decoderFixture({format});
     const bytes=Uint8Array.from([137,80,78,71,13,10,26,10]),before=sha(bytes);
-    const result=await module.prepareTrellisAlphaImage(bytes,{ImageDecoderClass:Decoder});
+    const result=await module.prepareTrellisAlphaImage(bytes,{ImageDecoderClass:Decoder,highResolution:true});
+    assert.equal(sha(result.highResolution.pixels),row.highResolutionRgbSha256);
     assert.equal(sha(result.pixels),row.preparedRgbSha256);
     assert.equal(sha(bytes),before);assert.notEqual(state.options.data.buffer,bytes.buffer);
     assert.equal(state.options.colorSpaceConversion,'none');assert.equal(state.options.type,'image/png');
@@ -79,7 +80,11 @@ test('decoder failure, partial output, unsupported layout and Stop release only 
 for(const row of fixture.cases)test('complete actual-source pixels: '+row.name,{skip:!module.prepareTrellisAlphaRgba},async()=>{
   const rgba=pattern(row),before=sha(rgba);
   assert.equal(before,row.inputRgbaSha256,'The complete source RGBA must match the observed fixture input.');
-  const result=await module.prepareTrellisAlphaRgba({pixels:rgba,width:row.width,height:row.height});
+  const result=await module.prepareTrellisAlphaRgba({pixels:rgba,width:row.width,height:row.height,highResolution:true});
+  assert.equal(sha(result.highResolution.pixels),row.highResolutionRgbSha256,'Direct crop-to1024 bytes must match Pillow; upsampling512 is not equivalent.');
+  assert.equal(result.highResolution.pixels.byteLength,row.highResolutionByteLength);
+  assert.deepEqual([result.highResolution.width,result.highResolution.height],[1024,1024]);
+  assert.equal(result.provenance.highResolutionOutput.sha256,row.highResolutionRgbSha256);
   assert.equal(result.width,512);assert.equal(result.height,512);
   assert.equal(result.pixels instanceof Uint8Array,true);
   assert.equal(result.pixels.byteLength,row.preparedByteLength);

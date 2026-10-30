@@ -119,14 +119,14 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       error.name=completed.failure?.name??'Error';throw error;
     }
     const out=completed.output;if(out!==implementation.outputs)throw Error('actual complete generation output identity required');
-    report.composition={dinoBlocksExecuted:out.dino.blocksExecuted,lowResolutionRows:out.lowResolutionRows,highResolutionRows:out.highResolutionRows,
+    report.composition={conditioningShapes:out.conditioningShapes,highResolutionDinoBlocksExecuted:out.highResolutionDino?.blocksExecuted,dinoBlocksExecuted:out.dino.blocksExecuted,lowResolutionRows:out.lowResolutionRows,highResolutionRows:out.highResolutionRows,
       phases:out.phases.map(p=>p.phase),sameInvocation:true,featureBytesToCPUDuringServing:out.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing:out.coordinateBytesToCPUDuringServing,stageCounts,sessionId:session.snapshot().sessionId,
       geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,pipelineType:out.pipelineType,
       geometryLevels:out.geometry.levels,materialLevels:out.material.levels,
       decoderActivationStorage:{shape:out.geometry.activationStorage,texture:out.material.activationStorage}};
     setPhase('post-model-observation-retention');
-    const fields={conditioning:out.conditioning,'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,
+    const fields={conditioning:out.conditioning,...(out.highResolutionConditioning?{highResolutionConditioning:out.highResolutionConditioning}:{}),'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,
       'material.features':out.material.features,'material.coordinates':out.material.coordinates,shapeCodes:out.shapeCodes,textureCodes:out.textureCodes};
     for(const [i,t]of out.geometry.subdivisions.entries())fields['geometry.subdivision'+i]=t;
     for(const [name,t]of Object.entries(fields)){const raw=await runtime.readTensor(t),data=t.dtype==='i32'?new Int32Array(raw):new Float32Array(raw);

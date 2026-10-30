@@ -1,4 +1,4 @@
-// Static geometry owns stencils and conservative boundary masks. Live source
+// Static geometry owns stencils and conservative clear support. Live source
 // values own the prepared incident texture. The camera receives neither BVH
 // nor triangles. Resources are scoped to the enclosing geometry gather handle.
 export function preparedSmokePlan(coarseDimensions, factor, limits) {
@@ -8,10 +8,10 @@ export function preparedSmokePlan(coarseDimensions, factor, limits) {
   const dimensions=coarseDimensions.map(n=>n*factor), bins=dimensions.map(n=>n+1);
   if(dimensions.some(n=>n>limits.maxTextureDimension3D)) throw new Error('prepared smoke exceeds 3D texture capacity');
   const sampleCount=dimensions.reduce((a,b)=>a*b,1),binCount=bins.reduce((a,b)=>a*b,1);
-  const weightBytes=sampleCount*32,maskBytes=(sampleCount+binCount)*4;
-  for(const [name,size] of [['weights',weightBytes],['masks',maskBytes]])
+  const weightBytes=sampleCount*32,maskBytes=sampleCount*4,planeBytes=sampleCount*16;
+  for(const [name,size] of [['weights',weightBytes],['masks',maskBytes],['planes',planeBytes]])
     if(!Number.isSafeInteger(size)||size>limits.maxStorageBufferBindingSize) throw new Error(`prepared smoke ${name} needs ${size} bytes; device supports ${limits.maxStorageBufferBindingSize}`);
-  return {dimensions,bins,sampleCount,binCount,weightBytes,maskBytes,factor,cameraTriangleTests:0};
+  return {dimensions,bins,sampleCount,binCount,weightBytes,maskBytes,planeBytes,factor,cameraTriangleTests:0};
 }
 
 export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coarseDimensions,factor=4}) {
@@ -19,7 +19,8 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
   try {
     const storage=(label,size)=>{const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});owned.push(b);return b;};
     const weights=storage('prepared smoke static receiver weights',plan.weightBytes);
-    const masks=storage('prepared smoke solid cells and interpolation boundaries',plan.maskBytes);
+    const masks=storage('prepared smoke packed clear support box extents',plan.maskBytes);
+    const planes=storage('certified planar smoke boundaries',plan.planeBytes);
     const texture=device.createTexture({label:'prepared geometry-aware smoke incident radiance',dimension:'3d',size:plan.dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});owned.push(texture);
     const grid=plan.dimensions[0],coarse=coarseDimensions[0],width=device.limits.maxComputeWorkgroupsPerDimension*64;
     const constants=`const FINE:vec3<u32>=vec3<u32>(${plan.dimensions.map(n=>n+'u').join(',')});
@@ -30,18 +31,18 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     const module=device.createShaderModule({label:'prepare and update smoke lighting',code:constants+PREPARED_SMOKE_WGSL});
     const prepare=device.createComputePipeline({label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}});
     const update=device.createComputePipeline({label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}});
-    const prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}}))});
+    const prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[... [nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}})),{binding:6,resource:{buffer:planes}}]});
     const updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
     const dispatch=count=>{const groups=Math.ceil(count/64),limit=device.limits.maxComputeWorkgroupsPerDimension;
       if(groups>limit*limit)throw new Error('prepared smoke dispatch exceeds device capacity');
       return [Math.min(groups,limit),Math.ceil(groups/limit)];};
     let prepared=false,updates=0;
-    const metadata={identity:'prepared-geometry-visible-v1',texture,masks,dimensions:plan.dimensions,
-      coarseDimensions:coarseDimensions.slice(),refinement:factor,weightBytes:plan.weightBytes,maskBytes:plan.maskBytes,
-      cameraTriangleTests:0,boundaryPolicy:'zero-solid-cell-nearest-clear-cell-trilinear-clear-stencil',
+    const metadata={identity:'prepared-planar-support-v4',texture,masks,planes,dimensions:plan.dimensions,
+      coarseDimensions:coarseDimensions.slice(),refinement:factor,weightBytes:plan.weightBytes,maskBytes:plan.maskBytes,planeBytes:plan.planeBytes,
+      cameraTriangleTests:0,boundaryPolicy:'certified-planar-halfspace-or-clear-box-fade',
       staticPreparations:0,updates:0};
     return {texture,metadata,encode(encoder){
-      if(!prepared){const pass=encoder.beginComputePass({label:'prepare static smoke interpolation'});pass.setPipeline(prepare);pass.setBindGroup(0,prepareGroup);pass.dispatchWorkgroups(...dispatch(Math.max(plan.sampleCount,plan.binCount)));pass.end();prepared=true;metadata.staticPreparations++;}
+      if(!prepared){const pass=encoder.beginComputePass({label:'prepare static smoke interpolation'});pass.setPipeline(prepare);pass.setBindGroup(0,prepareGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();prepared=true;metadata.staticPreparations++;}
       const pass=encoder.beginComputePass({label:'reconstruct live smoke illumination once per volume'});pass.setPipeline(update);pass.setBindGroup(0,updateGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();metadata.updates=++updates;
     },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};
   } catch(error){for(const r of owned)r.destroy();throw error;}
@@ -57,6 +58,7 @@ struct SmokeWeights {values:array<f32,8>}
 @group(0) @binding(3) var<storage,read_write> masks:array<u32>;
 @group(0) @binding(4) var incident:texture_3d<f32>;
 @group(0) @binding(5) var preparedIncident:texture_storage_3d<rgba32float,write>;
+@group(0) @binding(6) var<storage,read_write> supportPlanes:array<vec4<f32>>;
 fn smokeCell(id:u32,dims:vec3<u32>)->vec3<u32>{return vec3<u32>(id%dims.x,(id/dims.x)%dims.y,id/(dims.x*dims.y));}
 fn boxesOverlap(lo:vec3<f32>,hi:vec3<f32>,a:vec3<f32>,b:vec3<f32>)->bool{return all(hi>=a)&&all(lo<=b);}
 fn axisSeparates(axis:vec3<f32>,a:vec3<f32>,b:vec3<f32>,c:vec3<f32>,half:vec3<f32>)->bool {
@@ -87,6 +89,27 @@ fn occupiedBox(lo:vec3<f32>,hi:vec3<f32>)->bool {
   }
   return false;
 }
+// Admit full tent support clipped to a plane only when every triangle in its
+// entire influence box lies on that plane. Corners and multiple layers fall
+// back to the certified empty box; no per-camera triangle work is introduced.
+fn planarBoundary(p:vec3<f32>,extent:f32)->vec4<f32>{
+  var result=vec4<f32>(0);var found=false;var n=0u;
+  let lo=p-vec3<f32>(extent);let hi=p+vec3<f32>(extent);
+  loop{if(n>=NODE_COUNT){break;}let node=nodes[n];
+    if(!boxesOverlap(lo-vec3<f32>(0.000002),hi+vec3<f32>(0.000002),node.lo.xyz,node.hi.xyz)){n=node.range.x;continue;}
+    if(node.range.z==0u){n++;continue;}
+    for(var t=node.range.y;t<node.range.y+node.range.z;t++){
+      let tri=triangles[t];if(!triangleBox(tri,lo,hi)){continue;}
+      let raw=cross(tri.e1.xyz,tri.e2.xyz);let magnitude=length(raw);if(magnitude<1e-20){continue;}
+      var normal=raw/magnitude;let distance=dot(normal,p-tri.a.xyz);
+      if(abs(distance)<=0.000002){return vec4<f32>(0);}
+      if(distance<0.0){normal= -normal;}
+      let candidate=vec4<f32>(normal,dot(normal,tri.a.xyz));
+      if(found){if(dot(result.xyz,candidate.xyz)<0.999999||abs(result.w-candidate.w)>0.000002){return vec4<f32>(0);}}
+      else{result=candidate;found=true;}
+    }n=node.range.x;
+  }return result;
+}
 fn segmentBox(p:vec3<f32>,d:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>)->bool {
   var near=0.0;var far=1.0;
   for(var a=0u;a<3u;a++){
@@ -113,23 +136,52 @@ fn visibleReceiver(p:vec3<f32>,receiver:vec3<f32>)->bool {
 @compute @workgroup_size(64)
 fn prepareSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
   let id=gid.x+gid.y*DISPATCH_WIDTH;
-  if(id<BIN_COUNT){
-    let b=vec3<f32>(smokeCell(id,FINE+vec3<u32>(1)));
-    let lo=max(vec3<f32>(-1),vec3<f32>(-1)+(b-vec3<f32>(0.5))*FINE_PITCH);
-    let hi=min(vec3<f32>(-1)+vec3<f32>(FINE)*FINE_PITCH,vec3<f32>(-1)+(b+vec3<f32>(0.5))*FINE_PITCH);
-    masks[FINE_COUNT+id]=select(0u,1u,occupiedBox(lo,hi));
-  }
   if(id>=FINE_COUNT){return;}
   let cell=smokeCell(id,FINE);let lo=vec3<f32>(-1)+vec3<f32>(cell)*FINE_PITCH;
-  let blocked=occupiedBox(lo,lo+vec3<f32>(FINE_PITCH));masks[id]=select(0u,1u,blocked);
-  let p=lo+vec3<f32>(FINE_PITCH*0.5);let q=(p+vec3<f32>(1))/COARSE_PITCH-vec3<f32>(0.5);
+  let p=lo+vec3<f32>(FINE_PITCH*0.5);
+  // Each donor has a certified geometry-free support box. The camera's
+  // compact tent never extends outside that cube, including oblique walls.
+  // Common clear-space samples need one box query; only boundary samples
+  // refine the clearance. Search always retains the proven-clear lower bound.
+  var radius=FINE_PITCH;
+  if(occupiedBox(p-vec3<f32>(radius),p+vec3<f32>(radius))){
+    var low=0.0;var high=radius;
+    for(var j=0u;j<8u;j++){
+      let mid=(low+high)*0.5;
+      if(occupiedBox(p-vec3<f32>(mid),p+vec3<f32>(mid))){high=mid;}else{low=mid;}
+    }
+    radius=low;
+  }
+  // A flat wall constrains its normal extent, not the two tangents. Expand
+  // each axis while retaining an entirely clear box. Oblique corners remain
+  // conservative; no interpolation donor can reach across a triangle.
+  var support=vec3<f32>(radius);
+  if(radius>0.0&&radius<FINE_PITCH){
+    for(var axis=0u;axis<3u;axis++){
+      var trial=support;trial[axis]=FINE_PITCH;
+      if(!occupiedBox(p-trial,p+trial)){support=trial;continue;}
+      var low=support[axis];var high=FINE_PITCH;
+      for(var j=0u;j<8u;j++){
+        let mid=(low+high)*0.5;trial[axis]=mid;
+        if(occupiedBox(p-trial,p+trial)){high=mid;}else{low=mid;}
+      }
+      support[axis]=low;
+    }
+  }
+  var plane=vec4<f32>(0);
+  if(radius<FINE_PITCH){plane=planarBoundary(p,FINE_PITCH);}
+  let planar=dot(plane.xyz,plane.xyz)>0.5;supportPlanes[id]=plane;
+  // Quantize downward: unpacking must never enlarge the certified support.
+  let packed=vec3<u32>(floor(clamp(support/FINE_PITCH,vec3<f32>(0),vec3<f32>(1))*1023.0));
+  masks[id]=packed.x|(packed.y<<10u)|(packed.z<<20u)|select(0u,1u<<30u,planar);
+  let q=(p+vec3<f32>(1))/COARSE_PITCH-vec3<f32>(0.5);
   let base=vec3<i32>(floor(q));let w=fract(q);var total=0.0;
   for(var i=0u;i<8u;i++){
     let offset=vec3<u32>(i&1u,(i>>1u)&1u,(i>>2u)&1u);
     let c=clamp(base+vec3<i32>(offset),vec3<i32>(0),vec3<i32>(COARSE)-vec3<i32>(1));
     let receiver=vec3<f32>(-1)+(vec3<f32>(c)+vec3<f32>(0.5))*COARSE_PITCH;
     var weight=0.0;
-    if(!blocked&&visibleReceiver(p,receiver)){let v=select(vec3<f32>(1)-w,w,offset==vec3<u32>(1));weight=v.x*v.y*v.z;}
+    if((radius>0.0||planar)&&visibleReceiver(p,receiver)){let v=select(vec3<f32>(1)-w,w,offset==vec3<u32>(1));weight=v.x*v.y*v.z;}
     weights[id].values[i]=weight;total+=weight;
   }
   if(total>0.0){for(var i=0u;i<8u;i++){weights[id].values[i]/=total;}}

@@ -3,7 +3,7 @@ import test from 'node:test';
 import {m} from './generation-input-fixture.js';
 import {GENERATION_ROUTE,GENERATION_PHASES,GENERATION_FIELDS,generationModelCallCounts,generationPhases,validateGenerationResult} from '../sparse-generation-witness-checks.js';
 const row=(shape,dtype='f32')=>({shape,dtype,byteLength:shape.reduce((n,x)=>n*x,4),sha256:'d'.repeat(64),finite:true}),
-  c={dinoBlocksExecuted:24,lowResolutionRows:3,highResolutionRows:4,phases:[...GENERATION_PHASES],
+  c={conditioningShapes:{sparseFlow:[1,1029,1024],lowResolutionShape:[1,1029,1024],highResolutionShape:[1,4101,1024],textureFlow:[1,4101,1024]},highResolutionDinoBlocksExecuted:24,dinoBlocksExecuted:24,lowResolutionRows:3,highResolutionRows:4,phases:[...GENERATION_PHASES],
     featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,sameInvocation:true,stageCounts:{},
     geometryResolution:1024,materialResolution:1024,
     geometryLevels:[4,6,7,8,5].map((rows,i)=>({rows,resolution:64*2**i,channels:[1024,512,256,128,64][i],blocksExecuted:[4,16,8,4,0][i]}))},
@@ -14,7 +14,7 @@ for(const [phase,count]of Object.entries(generationModelCallCounts(m)))c.stageCo
 for(const name of GENERATION_FIELDS)result.outputs[name]=row([3,8]);
 c.materialLevels=structuredClone(c.geometryLevels);
 for(let i=0;i<4;i++)result.outputs['geometry.subdivision'+i]=row([c.geometryLevels[i].rows,8]);
-Object.assign(result.outputs,{conditioning:row([1,1029,1024]),shapeCodes:row([4,32]),textureCodes:row([4,32]),
+Object.assign(result.outputs,{highResolutionConditioning:row([1,4101,1024]),conditioning:row([1,1029,1024]),shapeCodes:row([4,32]),textureCodes:row([4,32]),
   'geometry.features':row([5,7]),'geometry.coordinates':row([5,3],'i32'),'material.features':row([5,6]),'material.coordinates':row([5,3],'i32'),
   'noise.sparse':row([1,8,16,16,16]),'noise.lowResolutionShape':row([3,32]),'noise.highResolutionShape':row([4,32]),'noise.texture':row([4,32])});
 assert.equal(validateGenerationResult(result,m),true,'This is a synthetic reporting fixture, not a native model claim.');
@@ -56,3 +56,12 @@ reject(r=>r.outputs['geometry.features'].byteLength-=4,/retained generation/);
 reject(r=>r.outputs['material.coordinates'].sha256='e'.repeat(64),/coordinate identity/);
 reject(r=>r.outputs.conditioning.shape=[0],/retained generation/);
 console.log('Generation evidence rejects fallback/cache, incomplete schedule/fields/noise, and invented matched-reference fidelity. These negative cases already reject; the synthetic reporting fixture does not establish an external backend contract.');
+
+reject(r=>delete r.outputs.highResolutionConditioning,/retained generation/);
+reject(r=>r.outputs.highResolutionConditioning=row([1,1029,1024]),/stage-specific/);
+reject(r=>r.composition.highResolutionDinoBlocksExecuted=0,/stage-specific/);
+reject(r=>r.composition.conditioningShapes.textureFlow=[1,1029,1024],/stage-specific/);
+const historical=structuredClone(m),historicalResult=structuredClone(result);
+delete historical.image.highResolution;delete historicalResult.outputs.highResolutionConditioning;
+delete historicalResult.composition.conditioningShapes;delete historicalResult.composition.highResolutionDinoBlocksExecuted;
+assert.equal(validateGenerationResult(historicalResult,historical),true,'Historical single-conditioning evidence retains its original identity.');

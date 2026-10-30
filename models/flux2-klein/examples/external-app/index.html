@@ -1,15 +1,80 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8">
-<title>Klein in an application</title>
-<!-- No bundler: an import map points the package names at the installed files. -->
-<script type="importmap">
-{ "imports": {
-  "@kaminos/flux2-klein": "./node_modules/@kaminos/flux2-klein/index.js",
-  "@kaminos/webgpu-inference-kit/core": "./node_modules/@kaminos/webgpu-inference-kit/src/core.js"
-} }
-</script>
-<p id="status">Starting…</p>
-<p>Shared GPU activity</p>
-<canvas id="activity" width="160" height="24"></canvas>
-<canvas id="image" width="256" height="256"></canvas>
-<script type="module" src="./app.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Klein Image Studio</title>
+<style>
+  * { box-sizing: border-box; letter-spacing: 0; }
+  body { margin: 0; color: #202627; background: #f5f6f5; font: 15px/1.5 system-ui, sans-serif; }
+  main { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 100dvh; }
+  aside { padding: 28px 24px; border-right: 1px solid #d9ddda; }
+  h1 { margin: 0 0 28px; font-size: 24px; line-height: 1.2; }
+  label { display: block; margin-bottom: 7px; font-weight: 600; }
+  textarea, input, select, button { font: inherit; }
+  textarea, input, select { width: 100%; border: 1px solid #b9c2bd; border-radius: 4px; padding: 8px; background: white; color: inherit; }
+  textarea { resize: vertical; min-height: 140px; }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; margin: 20px 0; }
+  .seed { grid-column: 1 / -1; }
+  button { min-height: 40px; border: 1px solid #bec7c2; border-radius: 4px; background: #fff; cursor: pointer; color: inherit; }
+  button:hover { background: #e7ede8; }
+  button:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 2px solid #16825e; outline-offset: 3px; }
+  .actions { display: flex; gap: 8px; }
+  #generate { flex: 1; background: #186b4c; color: #fff; border-color: #186b4c; font-weight: 650; }
+  #generate:hover { background: #12543c; }
+  .icon { display: inline-grid; place-items: center; width: 40px; padding: 8px; flex: 0 0 40px; }
+  .icon svg { width: 19px; height: 19px; }
+  #stop { color: #a13d49; }
+  #status, #error { overflow-wrap: anywhere; margin: 14px 0 0; font-size: 13px; }
+  #status { color: #596560; } #error { color: #a52d3e; }
+  .workspace { display: flex; min-width: 0; flex-direction: column; padding: 20px; gap: 12px; height: 100dvh; }
+  .toolbar { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+  .toolbar label { margin: 0; font-size: 13px; font-weight: 500; }
+  #zoom { width: 150px; padding: 0; accent-color: #186b4c; }
+  #download { margin-left: auto; }
+  #image { display: block; width: 100%; min-height: 0; flex: 1; background: #1f2121; touch-action: none; cursor: grab; }
+  #image:active { cursor: grabbing; }
+  #image-label { font-size: 13px; color: #596560; min-height: 20px; }
+  @media(max-width: 700px) {
+    main { display: flex; flex-direction: column; }
+    aside { border-right: 0; border-bottom: 1px solid #d9ddda; padding: 20px; }
+    h1 { margin-bottom: 16px; font-size: 22px; }
+    textarea { min-height: 85px; }
+    .settings { grid-template-columns: repeat(3,minmax(0,1fr)); margin: 12px 0; gap: 8px; }
+    .seed { grid-column: auto; }
+    .workspace { height: 65dvh; min-height: 320px; padding: 16px; }
+    .toolbar { gap: 8px; } #zoom { width: min(130px, 30vw); }
+  }
+</style>
+<main>
+  <aside>
+    <h1>Klein Image Studio</h1>
+    <form id="prompt-form">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" required>A blue steam engine on a sunny branch line, detailed miniature photography</textarea>
+      <div class="settings">
+        <div><label for="size">Size</label><select id="size"><option>512</option><option>768</option><option>1024</option></select></div>
+        <div><label for="steps">Steps</label><select id="steps"><option>1</option><option>2</option><option selected>3</option><option>4</option></select></div>
+        <div class="seed"><label for="seed">Seed</label><input id="seed" type="number" value="7" step="1" required></div>
+      </div>
+      <div class="actions">
+        <button id="generate" disabled>Generate</button>
+        <button id="stop" class="icon" type="button" data-icon="Square" title="Stop generation" aria-label="Stop generation" disabled></button>
+      </div>
+    </form>
+    <p id="status" role="status">Connecting to WebGPU</p>
+    <p id="error" role="alert"></p>
+  </aside>
+  <section class="workspace" aria-label="Image">
+    <div class="toolbar">
+      <label for="zoom">Zoom</label><input id="zoom" type="range" min="0.5" max="4" step="0.05" value="1">
+      <button id="fit" class="icon" data-icon="Maximize" title="Fit image" aria-label="Fit image"></button>
+      <button id="download" class="icon" data-icon="Download" title="Download PNG" aria-label="Download PNG" disabled></button>
+    </div>
+    <canvas id="image" aria-label="Image preview"></canvas>
+    <span id="image-label">Included sample</span>
+  </section>
+</main>
+<script type="module" src="./dist/app.js"></script>
+</html>

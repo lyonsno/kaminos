@@ -78,7 +78,7 @@ function tiesEven(value){
 const sha=async pixels=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',pixels)),
   value=>value.toString(16).padStart(2,'0')).join('');
 
-export async function prepareTrellisAlphaRgba({pixels,width,height,signal}={}){
+export async function prepareTrellisAlphaRgba({pixels,width,height,signal,highResolution=false}={}){
   stop(signal);dimensions(width,height);
   if(!(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==width*height*4)
     throw TypeError('complete U8 RGBA pixels required');
@@ -114,7 +114,9 @@ export async function prepareTrellisAlphaRgba({pixels,width,height,signal}={}){
   }
   const croppedRgbSha256=await sha(rgb);stop(signal);
   const prepared=resize(rgb,cropWidth,cropHeight,512,512,3);stop(signal);
-  return {pixels:prepared,width:512,height:512,provenance:{
+  const high=highResolution?resize(rgb,cropWidth,cropHeight,1024,1024,3):null;stop(signal);
+  return {pixels:prepared,width:512,height:512,
+    ...(high?{highResolution:{pixels:high,width:1024,height:1024}}:{}),provenance:{
     schema:'trellis2.browser-alpha-preparation.v0',route:'decoded-alpha/source-crop-F32-premultiply/Pillow-law-Lanczos512/JS',
     sourceCommit:'1201553c339008eb5e10ab6131acc11ab7cd0158',backgroundRemoval:'caller alpha; no segmentation',
     input:{format:'decoded RGBA8',size:originalSize},alphaThreshold:204,foregroundPixels,
@@ -122,6 +124,7 @@ export async function prepareTrellisAlphaRgba({pixels,width,height,signal}={}){
       center_xy:[centerX,centerY],source_extent:extent,bbox_xyxy:box},
     integerCropBox:integerBox,croppedSize:[cropWidth,cropHeight],croppedRgbSha256,
     resampling:'Pillow12.3 U8 Lanczos coefficient and two-pass rounding law; no Canvas resize',
+    ...(high?{highResolutionOutput:{format:'RGB8',size:[1024,1024],sha256:await sha(high)}}:{}),
     output:{format:'RGB8',size:[512,512],sha256:await sha(prepared)}}};
 }
 
@@ -131,7 +134,7 @@ export async function prepareTrellisAlphaRgba({pixels,width,height,signal}={}){
  * native RGBA/BGRA support and are not covered by the PNG parity witness.
  * ImageDecoderClass is an explicit injectable codec for local contract tests.
  */
-export async function prepareTrellisAlphaImage(imageBytes,{signal,type,ImageDecoderClass=globalThis.ImageDecoder}={}){
+export async function prepareTrellisAlphaImage(imageBytes,{signal,type,highResolution=false,ImageDecoderClass=globalThis.ImageDecoder}={}){
   stop(signal);
   let bytes;
   if(imageBytes instanceof Blob){
@@ -168,7 +171,7 @@ export async function prepareTrellisAlphaImage(imageBytes,{signal,type,ImageDeco
     const nativeFormat=frame.format,orientation={rotation:frame.rotation??0,flip:frame.flip??false};
     const decodedRgbaSha256=await sha(rgba);stop(signal);
     frame.close();frame=null;close();
-    const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});stop(signal);
+    const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal,highResolution});stop(signal);
     return {...prepared,provenance:{...prepared.provenance,
       encodedImage:{type,byteLength:bytes.length,sha256:encodedSha256},
       decoder:{route:ImageDecoderClass===globalThis.ImageDecoder?'browser ImageDecoder':'explicit injected ImageDecoderClass',

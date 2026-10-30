@@ -17,7 +17,7 @@ const MODEL_DEPS=async()=>{
 // activation memory); it needs shader-f16 on the shared device.
 // Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
 // mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,finishing,finishMesh=true,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
   if(finishMesh&&(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function'))
@@ -47,7 +47,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     await timed({phase:'checkpoint-loading'});
     // CPU/network spans open a foreground window so scene frames run while they wait;
     // GPU work and readbacks keep the run's boundary admission.
-    const inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,fetchTensor,{pixelValues}));
+    const inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,fetchTensor,{pixelValues,highResolutionPixelValues}));
     generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed});
     const job=run.route.enqueue({jobId:run.runId+':image-to-fields',execute:invocation=>generation.run(invocation)});
     const completed=await job.completion;
@@ -56,6 +56,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       error.name=completed.failure?.name??'Error';throw error;
     }
     const out=completed.output;
+    provenance={...provenance,conditioningShapes:out.conditioningShapes};
     // Surfels come from the raw dual-grid mesh plus the decoded material, before any cleanup, while the
     // run still holds its tensors. A surfel failure is recorded; it never costs the mesh.
     const surfelInputs={runtime:run.route.runtime,out,withForeground:(p,w)=>run.withForeground(p,w),
@@ -67,7 +68,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
         if(raw.status!=='surface')throw Error('learned geometry has no surface; no asset');
         const built=await buildRunSurfels({...surfelInputs,rawMesh:raw});
         if(built.surfels.status!=='built')throw Error(`surfels could not be built: ${built.surfels.error}`);
-        result={glb:null,...built,route:run.route.routeId};
+        result={glb:null,...built,route:run.route.routeId,conditioningShapes:out.conditioningShapes};
       }finally{meshConsumer.dispose?.();}
     }else{
     let surfels=null;
@@ -82,7 +83,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     let finished;
     try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels={...surfels,route:run.route.routeId};throw error;}
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
-    result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId,
+    result={glb:finished.glb,conditioningShapes:out.conditioningShapes,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId,
       ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
     }
   }catch(error){
@@ -234,7 +235,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
 // real alpha goes straight to the alpha preparation; an opaque photo is first segmented by
 // browser U2Net (models/u2net). Decoding copies native pixels, as the alpha preparation does.
 export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClass=globalThis.ImageDecoder,
-  prepareTrellisAlphaRgba,removeForegroundU2Net,runner}){
+  prepareTrellisAlphaRgba,removeForegroundU2Net,runner,highResolution=false}){
   if(typeof ImageDecoderClass!=='function')throw Error('ImageDecoder is unavailable; no Canvas pixel fallback');
   const data=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
   if(!type&&[137,80,78,71,13,10,26,10].every((v,i)=>data[i]===v))type='image/png';
@@ -266,7 +267,7 @@ export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClas
     const cut=await removeForegroundU2Net({pixels:rgba,width,height,channels:4,runner:await runner(),signal});
     segmentation=cut.provenance;rgba=cut.rgba;width=cut.width;height=cut.height;
   }
-  const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});
+  const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal,highResolution});
   // The cutout itself is returned so the caller can keep and show the input it actually used.
   return {...prepared,cutout:hasAlpha?null:{rgba,width,height},provenance:{route:hasAlpha?'input-alpha':'browser-u2net',decoder:{nativeFormat,converted:!['RGBA','BGRA','RGBX','BGRX'].includes(nativeFormat)},segmentation,preparation:prepared.provenance}};
 }

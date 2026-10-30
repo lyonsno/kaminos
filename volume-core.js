@@ -28388,6 +28388,8 @@ export function createKaminosVolumePrototype({
         frontStaging.destroy();
       }
     },
+    sceneLightSamplingTexture(){return rayStartNoiseTexture;},
+    sceneLightSamplingFrame(){return state.simStepCount;},
     fireIrradianceLightField,
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {

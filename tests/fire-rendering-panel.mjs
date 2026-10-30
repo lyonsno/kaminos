@@ -7,12 +7,13 @@ class Element {
   closest(){return this.parentElement;}
   setAttribute(){}
 }
-const ids=['rendering-fire-controls','rendering-light-study','rendering-shared-gain','rendering-surface-gain','rendering-source-softness','rendering-match-flame-camera','rendering-angular-samples','rendering-fire-shadows'];
+const ids=['rendering-fire-controls','rendering-light-study','rendering-shared-gain','rendering-surface-gain','rendering-source-softness','rendering-match-flame-camera','rendering-angular-samples','rendering-fire-shadows','rendering-angular-pattern'];
 const elements=Object.fromEntries(ids.map(id=>[id,new Element()]));
-const document={getElementById:id=>elements[id],createElement:()=>new Element(),querySelector:()=>label};
-const legacy=elements['rendering-light-study'],label=new Element();
+const labels=new Map(['rendering-angular-samples','rendering-angular-pattern'].map(id=>[`label[for="${id}"]`,new Element()]));
+const document={getElementById:id=>elements[id],createElement:()=>new Element(),querySelector:selector=>labels.get(selector)};
+const legacy=elements['rendering-light-study'];
 for(const id of ids.slice(2)){const row=new Element();row.append(elements[id]);legacy.append(row);}
-legacy.append(label);
+legacy.append(...labels.values());
 const gain=elements['rendering-shared-gain'];gain.value='3';gain.listener=()=>42;
 organizeFireRenderingPanel(document);
 assert.equal(legacy.hidden,true);

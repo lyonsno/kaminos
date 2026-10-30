@@ -5,6 +5,7 @@ import {sceneContext} from './helpers/scene-context.mjs';
 import {readFileSync} from 'node:fs';
 import {defaultLocalLiquidSetup, normalizeLocalLiquidSetup} from '../local-liquid-setup.mjs';
 import {buildSceneDocument, planSceneRestore} from '../scene-persistence-core.js';
+import {loadFingerFluidRuntime} from '../finger-fluid-feature.mjs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function harness() {
@@ -12,7 +13,7 @@ function harness() {
   const end=html.indexOf('\nfunction refreshLocalLiquidPerformance',start);
   assert.ok(start>=0 && end>start,'performance controls must rebuild the live host, not only change saved labels');
   const calls=[];
-  const context={structuredClone,normalizeLocalLiquidSetup,
+  const context={structuredClone,normalizeLocalLiquidSetup,loadFingerFluidRuntime,
     localLiquidSetup:defaultLocalLiquidSetup(),localLiquidGeneration:4,localLiquidFailure:null,
     localLiquidHost:{dispose:()=>calls.push('dispose')},localLiquidHostMount:{isLoading:()=>false},
     scenePlacementTools:{edits:{state:()=>({active:null,replaying:false})}},sceneSaveBlockedByFailedRestore:false,authoringBusy:false,
@@ -57,9 +58,11 @@ test('MLS accepts small populations and checks the native 80-byte layout against
 
 test('a superseded restart cannot publish success into a later scene',async()=>{
   const {context,calls}=harness();
-  let finish;
-  context.mountLocalLiquidHost=()=>new Promise(resolve=>{finish=resolve;});
+  let finish,started;
+  const mounting=new Promise(resolve=>{started=resolve;});
+  context.mountLocalLiquidHost=()=>new Promise(resolve=>{finish=resolve;started();});
   const applying=context.apply({particleCount:24576,densityIterations:2});
+  await mounting;
   context.localLiquidGeneration++;
   context.localLiquidSetup=null;
   finish(false);
@@ -93,4 +96,30 @@ test('performance evidence rejects fallback, unchanged solver work, false pause 
     const bad=structuredClone(valid); mutate(bad);
     assert.throws(()=>context.check(bad));
   }
+});
+
+
+test('water changes during runtime loading are checked before any restart',async()=>{
+  const {context,calls}=harness();
+  let release;context.loadFingerFluidRuntime=()=>new Promise(resolve=>{release=resolve;});
+  const applying=context.apply({particleCount:12288,densityIterations:1});
+  context.localLiquidSetup=null;release(await loadFingerFluidRuntime());
+  assert.equal(await applying,false);
+  assert.deepEqual(calls,[]);assert.equal(context.localLiquidGeneration,4);
+});
+
+test('runtime load failure leaves live water and saved settings untouched',async()=>{
+  const {context,calls}=harness();const before=context.localLiquidSetup;
+  context.loadFingerFluidRuntime=async()=>{throw Error('runtime unavailable');};
+  await assert.rejects(context.apply({particleCount:12288,densityIterations:1}),/runtime unavailable/);
+  assert.strictEqual(context.localLiquidSetup,before);assert.deepEqual(calls,[]);assert.equal(context.localLiquidGeneration,4);
+});
+
+test('a pending capacity load cannot apply settings to a replacement water scene',async()=>{
+  const {context,calls}=harness();
+  let release;context.loadFingerFluidRuntime=()=>new Promise(resolve=>{release=resolve;});
+  const applying=context.apply({particleCount:12288,densityIterations:1});
+  const replacement=defaultLocalLiquidSetup();context.localLiquidSetup=replacement;context.localLiquidGeneration++;
+  release(await loadFingerFluidRuntime());
+  assert.equal(await applying,false);assert.strictEqual(context.localLiquidSetup,replacement);assert.deepEqual(calls,[]);
 });

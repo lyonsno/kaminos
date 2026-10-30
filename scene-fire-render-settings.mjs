@@ -7,7 +7,7 @@ export function checkedFireRendering(value={}){
  for(const id of ['rendering-surface-gain','rendering-source-softness','rendering-angular-samples'])if(!Number.isFinite(next[id]))throw Error('Invalid flame rendering '+id);
  validateSourceSoftness(next['rendering-source-softness']);
  if(next['rendering-source-softness']<0||!Number.isInteger(next['rendering-angular-samples'])||next['rendering-angular-samples']<=0)throw Error('Invalid flame light sampling');
- if(!['distributed','legacy'].includes(next['rendering-smoke-solver'])||!['fixed','spatial','source','guided'].includes(next['rendering-angular-pattern']))throw Error('Invalid flame rendering mode');
+ if(!['distributed','legacy'].includes(next['rendering-smoke-solver'])||!['fixed','spatial','blue','source','guided','regions','importance'].includes(next['rendering-angular-pattern']))throw Error('Invalid flame rendering mode');
  return next;
 }
 export function readFireRendering(document){return checkedFireRendering(Object.fromEntries(Object.keys(FIRE_RENDER_DEFAULTS).map(id=>{const el=document.getElementById(id);return [id,typeof FIRE_RENDER_DEFAULTS[id]==='boolean'?el.checked:typeof FIRE_RENDER_DEFAULTS[id]==='number'?Number(el.value):el.value];})));}
