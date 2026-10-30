@@ -7,6 +7,38 @@ export function burnJointState(bond,section){
   linearStiffness:bond.linearStiffness*fraction,rotationalStiffness:bond.rotationalStiffness*fraction*fraction};
 }
 
+// Provisional isotropic material, not a calibrated wood species. Units are
+// meters, kilograms, seconds and pascals; elasticity remains in the source graph.
+export const BURN_MATERIAL=Object.freeze({tension:3e6,compression:12e6,shear:2.4e6,charStrength:.1,density:500});
+export function checkedBurnMaterial(material=BURN_MATERIAL){
+ if(!['tension','compression','shear','density'].every(k=>Number.isFinite(material[k])&&material[k]>0)
+  ||!Number.isFinite(material.charStrength)||material.charStrength<=0||material.charStrength>1)throw Error('Finite positive material strengths/density and residual char strength in (0,1] required');
+ return Object.fromEntries(Object.keys(BURN_MATERIAL).map(k=>[k,material[k]]));
+}
+const vector=(value,n)=>Array.isArray(value)&&value.length===n&&value.every(Number.isFinite);
+export function burnConnectionResponse({area,fraction,char,normal,force,torque},material=BURN_MATERIAL){
+ material=checkedBurnMaterial(material);
+ if(!Number.isFinite(area)||area<=0||!Number.isFinite(fraction)||fraction<0||fraction>1
+  ||!Number.isFinite(char)||char<0||char>1||![normal,force,torque].every(v=>vector(v,3))||Math.hypot(...normal)===0)throw Error('Finite material section, damage and load required');
+ const remainingArea=area*fraction,radius=Math.sqrt(remainingArea/Math.PI),sectionModulus=Math.PI*radius**3/4;
+ if(fraction===0)return {broken:true,reason:'consumed',utilization:null,remainingArea,sectionModulus};
+ const n=normal.map(v=>v/Math.hypot(...normal)),dot=v=>v.reduce((s,x,k)=>s+x*n[k],0);
+ const axial=dot(force),twist=dot(torque),bending=Math.hypot(...torque.map((v,k)=>v-twist*n[k]));
+ const transverse=Math.hypot(...force.map((v,k)=>v-axial*n[k]));
+ const stresses={tension:Math.max(0,-axial/remainingArea+bending/sectionModulus),
+  compression:Math.max(0,axial/remainingArea+bending/sectionModulus),
+  shear:4*transverse/(3*remainingArea)+Math.abs(twist)/(2*sectionModulus)};
+ const strengthFactor=1-char*(1-material.charStrength),ratios=Object.fromEntries(Object.entries(stresses).map(([k,v])=>[k,v/(material[k]*strengthFactor)]));
+ const mode=Object.keys(ratios).reduce((a,b)=>ratios[b]>ratios[a]?b:a),utilization=ratios[mode];
+ return {broken:utilization>1,reason:utilization>1?mode:null,utilization,ratios,stresses,remainingArea,sectionModulus,strengthFactor};
+}
+
+export function checkedBurnSupport(support){
+ if(!support||!vector(support.position,3)||!vector(support.halfExtents,3)||support.halfExtents.some(v=>v<=0)
+  ||!vector(support.quaternion,4)||Math.hypot(...support.quaternion)===0||!Number.isFinite(support.friction)||support.friction<0)throw Error('Finite support box, orientation and nonnegative friction required');
+ return {position:[...support.position],halfExtents:[...support.halfExtents],quaternion:support.quaternion.map(v=>v/Math.hypot(...support.quaternion)),friction:support.friction};
+}
+
 export const BURN_FRACTURE_IDENTITY='kaminos.burn-fracture.resident-cohesive.v1';
 export function checkBurnFractureInput(prepared,sections,supports){
  if(!prepared?.cells?.length||!prepared.bonds?.length)throw Error('Prepared whole-object material graph required');

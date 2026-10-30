@@ -1,0 +1,26 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as core from '../burn-fracture-core.mjs';
+assert.equal(typeof core.burnConnectionResponse,'function','Burn failure needs an explicit load/capacity law, independent of stiffness');
+const material={tension:100,compression:400,shear:80,charStrength:.1,density:500};
+const input={area:Math.PI, fraction:1, char:0, normal:[1,0,0], force:[-Math.PI*50,0,0], torque:[0,0,0]};
+const evaluate=patch=>core.burnConnectionResponse({...input,...patch},material);
+const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
+near(evaluate({}).utilization,.5);
+assert.equal(evaluate({}).broken,false);
+near(evaluate({force:[Math.PI*50,0,0]}).utilization,.125,'Compression uses its own capacity');
+assert.equal(evaluate({fraction:.25}).broken,true,'The same force overloads a consumed section');
+assert.equal(evaluate({char:1}).broken,true,'Char weakens strength without an invented motion trigger');
+assert.equal(evaluate({force:[0,0,0],torque:[0,0,Math.PI*30]}).broken,true,'Bending alone can fail a loaded section');
+near(evaluate({force:[0,0,0],torque:[0,0,Math.PI*10]}).utilization,.4);
+near(evaluate({force:[0,0,0],torque:[Math.PI*20,0,0]}).utilization,.5);
+near(evaluate({force:[0,Math.PI*30,0]}).utilization,.5);
+near(evaluate({force:[0,0,0],torque:[0,0,1],fraction:.25}).sectionModulus/evaluate({force:[0,0,0],torque:[0,0,1]}).sectionModulus,.125);
+assert.equal(evaluate({fraction:0}).reason,'consumed');
+assert.equal(evaluate({force:[0,0,0],torque:[0,0,0],char:1}).broken,false,'Heat damage is not a scripted fracture when no load exists');
+const rotated=evaluate({normal:[0,1,0],force:[0,-Math.PI*50,0]});near(rotated.utilization,.5);
+for(const patch of [{fraction:-1},{fraction:2},{char:NaN},{area:0},{normal:[0,0,0]},{force:[Infinity,0,0]}])assert.throws(()=>evaluate(patch));
+assert.equal(typeof core.checkedBurnSupport,'function','Real finite contact must be represented independently of pinned material');
+const support={position:[0,-.1,0],halfExtents:[1,.1,1],quaternion:[0,0,0,1],friction:.5};
+assert.deepEqual(core.checkedBurnSupport(support),support);
+for(const patch of [{halfExtents:[1,0,1]},{position:[0,NaN,0]},{quaternion:[0,0,0,0]},{friction:-1}])assert.throws(()=>core.checkedBurnSupport({...support,...patch}));

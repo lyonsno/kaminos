@@ -15,6 +15,7 @@ try{
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);context=await chromium.launchPersistentContext(path.join(out,'browser-profile'),{executablePath:report.executable,headless:true,viewport:{width:1280,height:900},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  const page=context.pages()[0];page.setDefaultTimeout(0);let reject;const failure=new Promise((_,fail)=>{reject=fail;});failure.catch(()=>{});const guard=p=>Promise.race([p,failure]);
  const fail=e=>{report.errors.push(String(e));reject(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
+ report.phase='material-kernel';await save();await guard(page.goto(origin));report.materialKernel=await guard(page.evaluate(async()=>{const {probeBurnStress}=await import('/tools/burn-material-kernel-probe.mjs');return probeBurnStress();}));await save();
  const asset=await fs.readFile(assetPath),sourceSha256=hash(asset),upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.ok(upload.ok());const receipt=await upload.json();assert.equal(receipt.sha256,sourceSha256);
  report.source={path:assetPath,sha256:sourceSha256,url:receipt.source};report.sources=[];
  for(const name of ['burn-fracture-core.mjs','burn-fracture-gpu.mjs','burn-fracture-replay.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','scene-burn-structure.mjs','burn-structure.worker.mjs','fracture-whole-prepare.mjs','fracture-material-sections.mjs','fracture-coarse-rest-frame.mjs','fracture-coarse-kernels.mjs','lib/fracture/rigid-engine.js','log-consumption.mjs','experiments/sinter/burn-fracture-replay.experiment.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
@@ -24,13 +25,13 @@ try{
   const inputs={source:receipt.source,sourceSha256,material:'/'+relative,materialSha256:sha256},url=origin+'/?workspace=workbench&experiment=sinter-burn-fracture-replay&experiment_inputs='+encodeURIComponent(JSON.stringify(inputs));
   await guard(page.goto(origin+'/?workspace=workbench'));await guard(page.waitForFunction(()=>window.kaminosWorkbenchExperiments));await guard(page.evaluate(inputs=>window.kaminosWorkbenchExperiments.open('sinter-burn-fracture-replay',inputs),inputs));
   assert.equal(new URL(page.url()).searchParams.get('experiment'),'sinter-burn-fracture-replay');report.effectiveUrl=page.url();
-  const read=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read())),before=await invoke('snapshot');checkBurnFractureObservation(read,before);
+  const read=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read())),before=await invoke('snapshot');checkBurnFractureObservation(read,before);assert.equal(read.sceneContact,'finite-editable-support');
   const observation={name,input:{path:file,sha256,url},read,before};report.observations.push(observation);await save();await page.screenshot({path:path.join(out,name+'-before.png')});
   report.phase='advance:'+name;await save();await invoke('advance',.5);observation.after=await invoke('snapshot');observation.verdict=checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.after);await save();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'-after.png')});
   const moves=before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.after.positions[Math.floor(i/3)*4+i%3]));observation.maximumMovement=Math.max(...moves);
   const rotations=before.quaternions.map((v,i)=>Math.abs(v-observation.after.quaternions[i]));observation.maximumRotationDelta=Math.max(...rotations);
-  if(name==='cold'){assert.equal(observation.verdict.broken,0,'Unloaded original material must not fracture');assert.ok(observation.maximumMovement<.01,'Original clamped object must remain stable');}
+  if(name==='cold'){assert.equal(observation.verdict.broken,0,'Unloaded original material must not fracture');assert.ok(observation.maximumMovement<.01,'Original contact-supported object must remain stable');}
   else {assert.ok(observation.verdict.broken>0,'Observed material loss must remove connections');assert.ok(observation.maximumMovement>.01,'Regions must actually move after support loss');}
   report.phase='playback:'+name;await save();
   await page.getByRole('button',{name:'Run',exact:true}).click();
@@ -40,6 +41,13 @@ try{
   await page.getByRole('button',{name:'Pause',exact:true}).click();
   observation.playback=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));assert.equal(observation.playback.running,false);assert.ok(observation.playback.mechanics.seconds>observation.after.state.seconds);
   observation.playbackSnapshot=await invoke('snapshot');checkBurnFractureObservation(observation.playback,observation.playbackSnapshot);
+  if(name==='cold'){
+   report.phase='remove-support';await save();const support=await page.evaluate(()=>window.kaminosSceneObjectDebugState().find(r=>r.label==='Mechanical support'));
+   observation.supportRecord=support;assert.ok(support,'Registered support is required');
+   await invoke('moveSupport',[0,-10,0]);await invoke('advance',.25);observation.unsupported=await invoke('snapshot');
+   const moved=Math.max(...before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.unsupported.positions[Math.floor(i/3)*4+i%3])));
+   assert.ok(moved>.1,'Removing contact must release gravity without unpinning a region');await page.screenshot({path:path.join(out,'cold-unsupported.png')});
+  }
   await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';

@@ -32,14 +32,25 @@ export function createBurnReplayField({renderer,mesh,raw}){
 }
 
 export function replayRegionMasses(prepared,field){
+ return replayRegionBodies(prepared,field,1).masses;
+}
+
+export function replayRegionBodies(prepared,field,density){
+ if(!Number.isFinite(density)||density<=0)throw Error('Positive material density required');
  const {bounds,dimensions,initial}=field.residentState(),n=dimensions[0],size=bounds.getSize(new THREE.Vector3()).toArray(),lo=bounds.min.toArray(),material=field.input.snapshot.material;
  const total=new Uint32Array(prepared.cells.length),remaining=new Float64Array(total.length);
+ const contact=prepared.cells.map(()=>({min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]}));
  for(let i=0;i<initial.length;i++)if(initial[i]){
   const point=[i%n,Math.floor(i/n)%n,Math.floor(i/(n*n))].map((v,k)=>lo[k]+(v+.5)*size[k]/n);
   let region=0,best=Infinity;for(const p of prepared.pieces){const d=point.reduce((sum,v,k)=>sum+Math.max(p.bounds.min[k]-v,0,v-p.bounds.max[k])**2,0);if(d<best){best=d;region=p.index;}}
-  total[region]++;const fuel=material[i*8+5];if(fuel>LOG_RESIDUE+1e-6)remaining[region]+=fuel;
+  total[region]++;const fuel=material[i*8+5];if(fuel>LOG_RESIDUE+1e-6){remaining[region]+=fuel;
+   for(let k=0;k<3;k++){contact[region].min[k]=Math.min(contact[region].min[k],point[k]-.5*size[k]/n);contact[region].max[k]=Math.max(contact[region].max[k],point[k]+.5*size[k]/n);}
+  }
  }
- return prepared.cells.map((c,i)=>c.volume*(total[i]?remaining[i]/total[i]:1));
+ const masses=prepared.cells.map((c,i)=>density*c.volume*(total[i]?remaining[i]/total[i]:1));
+ const cells=prepared.cells.map((c,i)=>remaining[i]>0?{...c,position:contact[i].min.map((v,k)=>(v+contact[i].max[k])/2),halfExtents:contact[i].min.map((v,k)=>(contact[i].max[k]-v)/2)}:c);
+ const bonds=prepared.bonds.map(b=>({...b,anchorA:b.anchorA.map((v,k)=>v+prepared.cells[b.a].position[k]-cells[b.a].position[k]),anchorB:b.anchorB.map((v,k)=>v+prepared.cells[b.b].position[k]-cells[b.b].position[k])}));
+ return {masses,prepared:{...prepared,cells,bonds},contactModel:'surviving-material-aabb-no-cavity-contact',massModel:'frozen-region-mean-fuel-density-box-inertia',unmapped:prepared.cells.filter((_,i)=>!total[i]).map(c=>c.index)};
 }
 
 export function createBurnFractureSurface({renderer,prepared,materials,field,dynamics}){

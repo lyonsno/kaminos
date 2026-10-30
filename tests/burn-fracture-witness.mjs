@@ -9,6 +9,7 @@ const read={identity:'kaminos.burn-fracture.replay.v1',effective:{backend:'WebGP
 const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const snapshot={matrices:[...identity,...identity],positions:new Array(8).fill(0),quaternions:[0,0,0,1,0,0,0,1],velocities:new Array(8).fill(0),angularVelocities:new Array(8).fill(0),alive:[true],geometry:new Array(12).fill(0),state:{seconds:0}};
 checkBurnFractureObservation(read,snapshot);
+assert.throws(()=>checkBurnFractureObservation({...read,sceneContact:'finite-editable-support',mechanics:{...read.mechanics,supports:[0],finiteSupports:[{}]}},snapshot),'A clamped piece must not masquerade as a contact-supported object');
 for(const effective of [{backend:'WebGL',adapter:{vendor:'apple'}},{backend:'WebGPU',adapter:{vendor:'google'}},{backend:'WebGPU',adapter:null}])assert.throws(()=>checkBurnFractureObservation({...read,effective},snapshot));
 for(const patch of [{matrices:[]},{matrices:new Array(32).fill(0)},{positions:[]},{alive:[]},{geometry:[]},{quaternions:new Array(8).fill(0)},{velocities:[NaN,...snapshot.velocities.slice(1)]}])assert.throws(()=>checkBurnFractureObservation(read,{...snapshot,...patch}));
 const out=fs.mkdtempSync(path.join(os.tmpdir(),'burn-fracture-failed-input-'));

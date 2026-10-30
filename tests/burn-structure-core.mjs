@@ -13,10 +13,12 @@ const state=new Float32Array(64*8);for(let i=0;i<64;i++)state[i*8+5]=1;
 assert.ok(sectionReference(mapping,state).every(s=>s.mapped&&Math.abs(s.fraction-1)<1e-7));
 for(let i=0;i<64;i++){state[i*8]=10;state[i*8+1]=1;state[i*8+2]=1;}
 assert.ok(sectionReference(mapping,state).every(s=>Math.abs(s.fraction-1)<1e-7),'Heat, visible char and flame do not counterfeit material loss');
+assert.ok(sectionReference(mapping,state).every(s=>s.char===1),'Remaining material carries char separately from consumed area');
 const cell=mapping.cells[0];state[cell*8+5]=LOG_RESIDUE;
 const reduced=sectionReference(mapping,state);assert.ok(reduced.some(s=>s.fraction<1));assert.ok(reduced.some(s=>Math.abs(s.fraction-1)<1e-7),'Local consumption leaves unrelated sections intact');
 for(let i=0;i<64;i++)state[i*8+5]=0;
 assert.ok(sectionReference(mapping,state).every(s=>s.fraction===0));
+assert.ok(sectionReference(mapping,state).every(s=>s.char===0),'Absent material does not contribute char to a surviving section');
 for(let i=0;i<64;i++)state[i*8+5]=LOG_RESIDUE+0.0000005;
 assert.ok(sectionReference(mapping,state).every(s=>s.fraction===0),'Material absent to the consumption law cannot retain a structural connection');
 const unmapped=mapBurnSections(prepared,{...material,initial:new Uint32Array(64)});
