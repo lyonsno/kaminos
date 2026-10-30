@@ -32,7 +32,13 @@ test('capacity changes remount water while the camera remains live and reads act
     return {read:()=>({setup,solver:{particleCount:setup.particleCount,liveInlets:{poolCapacity:setup.particleCount,expectedParticleReleaseRate:0,inlets:[]}}}),
       setPacket:p=>{row.packet=p;},setPaused:p=>row.paused=p,dispose:()=>{row.disposed=true;disposed++;}};
   }}};
-  instance=await experiment.create({host,inputs:{fingerJuice:true,fluidBackend:'mls-mpm',fluidGridSize:[192,80,256],jetSpeed:4.5,sceneLayout:'runway'},record:r=>records.push(r)});
+  instance=await experiment.create({host,inputs:{fingerJuice:true,fluidBackend:'mls-mpm',fluidGridSize:[192,80,256],jetSpeed:4.5,sceneLayout:'runway',playSpace:{}},record:r=>records.push(r)});
+  assert.equal(instance.read().playSpace?.mode,'camera_plane_authored_depth','play mapping is missing');
+  assert.equal(instance.read().playSpace.observation,null,'no hand must not invent a placement observation');
+  instance.operations.setPlaySpace({pitchDegrees:65,reachX:7});
+  assert.equal(instance.read().playSpace.config.pitchDegrees,65);
+  assert.equal(instance.read().playSpace.config.reachX,7);
+  assert.throws(()=>instance.operations.setPlaySpace({reachX:NaN}),/play space/);
   document.defaultView.innerWidth=390;
   instance.operations.frame();
   assert.equal(view.position[2],11,'narrow runway must keep the full flight arc in view');

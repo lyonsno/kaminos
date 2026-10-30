@@ -6,24 +6,34 @@ import {execFileSync} from 'node:child_process';
 import {MLS_ROUTE,mlsConfig} from '../mls-juice-contract.mjs';
 import {RUNWAY_INPUTS} from '../experiments/hand-jet-runway.experiment.mjs';
 import {GOIN_INPUTS} from '../experiments/hand-goin-pile.experiment.mjs';
+import {PLAY_INPUTS} from '../experiments/hand-play-space.experiment.mjs';
+import {playSpaceConfig} from '../experiments/hand-play-space.mjs';
 
 export function resolveMlsHandRequest(experiment,inputs){
-  assert(['hand-live','hand-browser-juice','hand-jet-runway','hand-goin-pile'].includes(experiment),'unsupported hand experiment');
+  assert(['hand-live','hand-browser-juice','hand-jet-runway','hand-goin-pile','hand-play-space'].includes(experiment),'unsupported hand experiment');
   return {particleCount:2400,fluidViscosity:.1,particleLifetimeSeconds:6,jetSpeed:1.15*1.7,sourceFlux:360,fluidGridSize:64,
-    ...(['hand-jet-runway','hand-goin-pile'].includes(experiment)?RUNWAY_INPUTS:{}),
-    ...(experiment==='hand-goin-pile'?GOIN_INPUTS:{}),...inputs};
+    ...(['hand-jet-runway','hand-goin-pile','hand-play-space'].includes(experiment)?RUNWAY_INPUTS:{}),
+    ...(['hand-goin-pile','hand-play-space'].includes(experiment)?GOIN_INPUTS:{}),
+    ...(experiment==='hand-play-space'?PLAY_INPUTS:{}),...inputs};
 }
 
 export function validateMlsGoinRequest(pile,requested){
   const p=mlsConfig({goinPile:requested}).goinPile;
   assert.equal(pile?.route,'mls-particle-contact/cannon-es-0.20.0','missing or wrong pile route');
   assert.equal(pile.bodies.length,p.count,'incomplete pile');
+  if(p.stackCenters)assert.deepEqual(pile.stackCenters,p.stackCenters,'pile layout mismatch');
   for(const [effective,key]of [['bodyMass','mass'],['particleMass','particleMass'],['couplingSteps','couplingSteps'],['collisionSides','collisionSides']])
     assert.equal(pile[effective],p[key],`pile ${key} mismatch`);
   for(const body of pile.bodies)for(const key of ['mass','radius','thickness'])assert.equal(body[key],p[key],`pile body ${key} mismatch`);
 }
 
 export function validateMlsHandRequest(state,requested){
+  if(requested.playSpace){
+    assert.deepEqual(state.playSpace?.config,playSpaceConfig(requested.playSpace),'play space config mismatch');
+    assert.equal(state.playSpace?.observation?.mode,'camera_plane_authored_depth','missing play space observation');
+    assert.equal(state.playSpace.observation.captureId,state.captureId,'stale play space observation');
+    assert.equal(state.playSpace.observation.authority,'authored_game_mapping_not_metric_camera_registration','wrong placement authority');
+  }
   const solver=state.fingerJuice.runtime.solver;
   if(requested.goinPile)validateMlsGoinRequest(solver.bodies,requested.goinPile);
   assert.equal(solver.particleCount,requested.particleCount,'capacity mismatch');

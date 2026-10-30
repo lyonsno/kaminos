@@ -31,8 +31,10 @@ try{
     recordVideo:{dir:out+'/video',size:viewport},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
   const verifySource=bindMlsWitnessSource({page,url:a.url,root:process.cwd(),files:[...MLS_WITNESS_FILES,'experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-live-fluid.mjs',
-    ...(['hand-jet-runway','hand-goin-pile'].includes(report.experiment)?['experiments/hand-jet-runway.experiment.mjs']:[]),
-    ...(report.experiment==='hand-goin-pile'?['experiments/hand-goin-pile.experiment.mjs']:[]),
+    'experiments/hand-play-space.mjs',
+    ...(['hand-jet-runway','hand-goin-pile','hand-play-space'].includes(report.experiment)?['experiments/hand-jet-runway.experiment.mjs']:[]),
+    ...(['hand-goin-pile','hand-play-space'].includes(report.experiment)?['experiments/hand-goin-pile.experiment.mjs']:[]),
+    ...(report.experiment==='hand-play-space'?['experiments/hand-play-space.experiment.mjs']:[]),
     ...(report.resolvedRequest.goinPile?['mls-goin-pile.mjs','mls-goin-contact.wgsl','node_modules/cannon-es/dist/cannon-es.js']:[])],out,report});
   await page.route('**/__mls-camera.png',route=>route.fulfill({contentType:'image/png',body:image}));
   await page.addInitScript(()=>{

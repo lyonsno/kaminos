@@ -31,6 +31,8 @@ export function mlsConfig(setup={}) {
   if(goinPile&&(!Number.isSafeInteger(goinPile.count)||goinPile.count<1||['mass','radius','thickness','particleMass'].some(k=>!Number.isFinite(goinPile[k])||goinPile[k]<=0)))throw Error('Invalid goin pile');
   if(goinPile&&(!Number.isSafeInteger(goinPile.couplingSteps)||goinPile.couplingSteps<1))throw Error('Invalid goin coupling interval');
   if(goinPile&&(!Number.isSafeInteger(goinPile.collisionSides)||goinPile.collisionSides<6))throw Error('Invalid goin collision geometry');
+  if(goinPile?.stackCenters!==undefined&&(!Array.isArray(goinPile.stackCenters)||!goinPile.stackCenters.length||
+    goinPile.stackCenters.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))))throw Error('Invalid goin stack centers');
   return {capacity,grid,dimensions,gridCells,cell,min,
     goinPile,
     bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,

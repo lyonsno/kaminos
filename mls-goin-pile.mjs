@@ -14,13 +14,15 @@ export function createMlsGoinPile(config){
   ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
   const bodies=[];let steps=0,totalContacts=0,totalImpulse=[0,0,0],disposed=false;
   for(let i=0;i<p.count;i++){
-    const column=i%4,level=Math.floor(i/4);
+    const columns=p.stackCenters?.length??4,column=i%columns,level=Math.floor(i/columns);
+    const [x,z]=p.stackCenters?.[column]??[(column-1.5)*p.radius*2.3,-1.65+(column%2)*.08];
     const body=new CANNON.Body({mass:p.mass,shape:new CANNON.Cylinder(p.radius,p.radius,p.thickness,p.collisionSides),linearDamping:.03,angularDamping:.03,
-      position:new CANNON.Vec3((column-1.5)*p.radius*2.3,p.thickness/2+.002+level*(p.thickness+.003),-1.65+(column%2)*.08)});
+      position:new CANNON.Vec3(x,p.thickness/2+.002+level*(p.thickness+.003),z)});
     body.sleepSpeedLimit=.03;body.sleepTimeLimit=.5;world.addBody(body);bodies.push(body);
   }
   const alive=()=>{if(disposed)throw Error('Goin pile disposed');};
   function read(){return {route:'mls-particle-contact/cannon-es-0.20.0',steps,timeSeconds:steps*config.dt,
+    stackCenters:p.stackCenters?structuredClone(p.stackCenters):null,
     particleMass:p.particleMass,bodyMass:p.mass,collisionSides:p.collisionSides,couplingSteps:p.couplingSteps,feedbackIntervalSeconds:p.couplingSteps*config.dt,contacts:totalContacts,impulse:[...totalImpulse],
     bodies:bodies.map((b,i)=>({id:`goin-${i}`,position:b.position.toArray(),quaternion:b.quaternion.toArray(),velocity:b.velocity.toArray(),
       angularVelocity:b.angularVelocity.toArray(),radius:p.radius,thickness:p.thickness,mass:b.mass,sleeping:b.sleepState===CANNON.Body.SLEEPING}))};}

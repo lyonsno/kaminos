@@ -3,11 +3,14 @@ import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
 import {openCaptureStore} from './hand-live-retention.mjs';
 import {openBrowserCaptureStore} from './hand-browser-retention.mjs';
 import {nativeFingerPacket,idleFingerPacket,fingerFluidLoad} from './hand-live-fluid.mjs';
+import {playSpaceConfig,handPlayPlacement,applyHandPlayPlacement} from './hand-play-space.mjs';
 
 export default {
   id: 'hand-live', title: 'Live MobRecon hand',
   async create({host, inputs, record}) {
     const document = host.controls.document;
+    let playConfig=inputs.playSpace==null?null:playSpaceConfig(inputs.playSpace),playObservation=null,sourceSize=null;
+    const playControls={};
     const fingerJuice=inputs.fingerJuice===true;
     const fluidBackend=inputs.fluidBackend??'legacy';
     if(!['legacy','mls-mpm'].includes(fluidBackend))throw Error('Unsupported fluid backend');
@@ -86,6 +89,7 @@ export default {
       retention:browser?captures?.read()??null:null,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
+      playSpace:playConfig?{mode:'camera_plane_authored_depth',config:{...playConfig},observation:playObservation}:null,
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
       sceneLayout,terrainSource:!fingerJuice?null:fluidBackend==='mls-mpm'?'prescribed_flat_receiver_not_hill':'retained_analytical_basin',
@@ -104,6 +108,7 @@ export default {
       if(sessionId)emit({kind:'finger_juice',epochMs:Date.now(),packet,meshMatrix:mesh.matrixWorld.toArray()}).catch(cause=>{error=String(cause);});
     };
     const sync = () => {
+      for(const [key,input]of Object.entries(playControls))if(document.activeElement!==input)input.value=playConfig[key];
       if(capacityInput&&document.activeElement!==capacityInput)capacityInput.value=particleCount;
       if(fluxInput&&document.activeElement!==fluxInput)fluxInput.value=sourceFlux;
       if(lifetimeInput&&document.activeElement!==lifetimeInput)lifetimeInput.value=particleLifetime;
@@ -193,9 +198,12 @@ export default {
         await emit({kind:'not_presented_after_stop',captureId:capture.captureId,epochMs:Date.now()});return;
       }
       const positions=liveMeshFrame(result,capture,health.identity);
-      // Display-only centering and fixed scale; native predictions stay untouched on disk.
-      const center=[0,0,0];
-      for(let i=0;i<positions.length;i++) center[i%3]+=positions[i]/778;
+      // The play route anchors at the wrist, so curling fingers cannot move the palm.
+      sourceSize={width:canvas.width,height:canvas.height};
+      const placement=playConfig?handPlayPlacement(result,sourceSize,playConfig):null;
+      const center=placement?[...placement.center]:[0,0,0];
+      if(!placement)for(let i=0;i<positions.length;i++) center[i%3]+=positions[i]/778;
+      if(placement){applyHandPlayPlacement(mesh,placement);playObservation=placement;}
       displayCenter=center;
       for(let i=0;i<positions.length;i++) positions[i]=(positions[i]-center[i%3])*(i%3===1?-1:1);
       geometry.setAttribute('position',new BufferAttribute(positions,3));
@@ -203,7 +211,7 @@ export default {
       geometry.computeVertexNormals();geometry.computeBoundingSphere();mesh.visible=true;
       last=result;received++;updateFluid();scene.redraw();sync();
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
-        displayTransform:{center,scale:5,invertY:true}});
+        displayTransform:{center,scale:5,scaleVector:mesh.scale.toArray(),position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray(),invertY:true,playSpace:playObservation}});
     };
     const frame = () => scene.setView(sceneLayout==='runway'?(document.defaultView.innerWidth<600?{position:[0,4.4,11],target:[0,1,-1.2]}:{position:[0,3.5,7.5],target:[0,.65,-1.2]}):fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     const setAcquisition = value => {
@@ -276,13 +284,21 @@ export default {
         if(disposed || ticket!==generation){stream?.getTracks().forEach(t=>t.stop());return read();}
         await browserBackend?.startRecording(sessionId);
         if(disposed || ticket!==generation){await browserBackend?.stopRecording();return read();}
-        running=true;last=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();useFluid(live=>live.setPaused(false));scene.redraw();schedule(ticket);
+        running=true;last=null;playObservation=null;sourceSize=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();useFluid(live=>live.setPaused(false));scene.redraw();schedule(ticket);
         record({kind:'hand-live.start',phase:'applied',effective:read()});return read();
       } catch(cause) {error=String(cause);stream?.getTracks().forEach(t=>t.stop());stream=null;await browserBackend?.stopRecording();throw cause;}
       finally {starting=false;sync();}
     };
     return {
       read,operations:{start,stop,frame,setAcquisition,setParticleCount,
+      setPlaySpace(value){
+        if(!playConfig)throw Error('Play space is not enabled');
+        const next=playSpaceConfig({...playConfig,...value});
+        const placement=last?handPlayPlacement(last,sourceSize,next):null;
+        playConfig=next;
+        if(placement){applyHandPlayPlacement(mesh,placement);playObservation=placement;updateFluid();scene.redraw();}
+        sync();record({kind:'hand-live.play-space',phase:'applied',effective:read()});return read();
+      },
       resetPile(){return queueWater(async()=>{await mountWater(particleCount);record({kind:'hand-live.reset-pile',phase:'applied',effective:read()});return read();});},
       snapshotWater(){if(!fluid)throw Error('Water is not mounted');return fluid.snapshot();},
       setJetSpeed(value){
@@ -308,6 +324,15 @@ export default {
         const frameButton=document.createElement('button');frameButton.textContent='Frame hand';frameButton.onclick=()=>invoke('frame');
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
+        if(playConfig){
+          for(const [key,title,step]of [['reachX','Horizontal reach',.1],['reachY','Vertical reach',.1],['pitchDegrees','Glove tilt',1],['height','Glove height',.1],['depth','Glove depth',.1]]){
+            const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
+            grip.textContent=title;input.type='number';input.step='any';input.value=playConfig[key];input.className='transform-input';input.setAttribute('aria-label',title);
+            playControls[key]=input;
+            input.oninput=()=>{if(input.value.trim())invoke('setPlaySpace',{[key]:Number(input.value)}).then(()=>input.setCustomValidity('')).catch(cause=>{input.setCustomValidity(cause.message);input.reportValidity();});};
+            label.append(grip,input);root.append(label);host.controls.installNumberDrag({input,grip,step});
+          }
+        }
         if(fingerJuice){
           if(inputs.goinPile){const reset=document.createElement('button');reset.textContent='Reset pile';reset.onclick=()=>invoke('resetPile').catch(cause=>{fluidError=String(cause);sync();});root.append(reset);}
           for(const [labelText,value,min,step,operation] of [['Particle capacity',particleCount,0,2400,'setParticleCount'],['Emission / second',sourceFlux,0,60,'setSourceFlux']]){
