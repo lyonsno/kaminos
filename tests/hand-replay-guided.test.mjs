@@ -1,0 +1,33 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import experiment from '../experiments/hand-replay.experiment.mjs';
+const hash=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t))),b=>b.toString(16).padStart(2,'0')).join('');
+const models=['original','trained','wilor','anyhand'].map(id=>({id,label:id,checkpointSha256:'a'.repeat(64),faces:[0,1,2]}));
+const hand=(scale=1)=>{const joints=Array.from({length:21},(_,i)=>[i*.01*scale,(i%4)*.01*scale,0]);return {status:'observed',joints,vertices:Array.from({length:778},(_,i)=>joints[i%21]),cropBox:[0,0,50,50]};};
+const data={schema:'hand-state.teacher-replay.v1',generation:'test',label:'sequence',models,frames:[0,100,300,450].map((timeMs,i)=>({captureId:'f'+i,timeMs,image:'/frame.jpg',hands:models.map((_,i)=>hand(i===1?.5:1))}))};
+const seq=JSON.stringify(data),catalog=JSON.stringify({generation:'test',models,sequences:[{url:'/sequence',sha256:await hash(seq)}]});
+const guide={schema:'hand-state.replay-guide.v1',generation:'test',catalogSha256:await hash(catalog),moments:[{id:'shape',title:'Shape',question:'Compare shape',sequence:0,start:0,end:3,frame:1,finger:2,loop:false,captures:{start:'f0',end:'f3',frame:'f1'}},{id:'motion',title:'Motion',question:'Compare motion',sequence:0,start:1,end:2,frame:1,finger:2,loop:true,captures:{start:'f1',end:'f2',frame:'f1'}}]};
+const receipt=JSON.stringify({status:'observed',generation:'test',catalogSha256:await hash(catalog)});
+globalThis.fetch=async url=>{const path=new URL(url,'http://fixture/').pathname;const text={'/catalog.json':catalog,'/guide.json':JSON.stringify(guide),'/sequence':seq,'/export-report.json':receipt}[path];return {ok:true,text:async()=>text};};
+globalThis.Image=class {width=100;height=100;set src(v){this._src=v;queueMicrotask(()=>this.onload());}get src(){return this._src;}};
+class Element{style={};dataset={};children=[];append(...xs){this.children.push(...xs);}setAttribute(k,v){this[k]=v;}removeAttribute(k){delete this[k];}getContext(){return {fillRect(){},fillText(){},clearRect(){},drawImage(){}};}}
+const document={baseURI:'http://fixture/',defaultView:{},createElement:()=>new Element()};
+let tick;const attached=[];const scene={attach:async r=>attached.push(r),readView:()=>({}),redraw(){},setView(){},onFrame:fn=>(tick=fn,()=>{}),async dispose(){}};
+const create=()=>experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{manifest:'/catalog.json',guide:'/guide.json'},record(){}});
+const instance=await create();
+assert.equal(instance.read().moment,'shape','guided entry must apply the selected saved moment');
+assert.equal(instance.read().frame,1);assert.equal(instance.read().scaleMode,'predicted');
+assert.deepEqual(instance.read().visibleModels,['original','trained']);
+instance.operations.setScaleMode('palm');
+assert.deepEqual(instance.read().displayScales.slice(0,2),[1,2]);
+assert(Math.abs(attached[1].children[0].geometry.attributes.position.array[3]-.01)<1e-8,'rendered vertices must use the declared scale');
+assert.deepEqual(data.frames[1].hands[1].joints,hand(.5).joints,'display scaling must preserve source geometry');
+const before=instance.read().trace;instance.operations.setScaleMode('predicted');assert.deepEqual(instance.read().trace,before);
+await instance.operations.setMoment('motion');assert.equal(instance.read().frame,1);
+instance.operations.toggle();tick({timestampMs:0});tick({timestampMs:400});assert.equal(instance.read().frame,1,'loop wraps inside selected interval');assert.equal(instance.read().playing,true);
+instance.operations.seek(2);assert.equal(instance.read().playing,false);assert.equal(instance.read().trace.cursorFrame,2);
+instance.operations.setTeachers(true);assert.equal(instance.read().visibleModels.length,4);
+instance.operations.seek(0);assert.equal(instance.read().moment,null,'seeking outside a moment returns to full recording');assert.equal(instance.read().trace.start,0);
+await instance.dispose();
+guide.moments[0].captures.frame='wrong';await assert.rejects(create,/moment capture/);
+console.log('guided replay behavior passed');
