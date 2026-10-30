@@ -43,3 +43,18 @@ test('startup Scenes sidebar lists metadata without fetching all saved documents
  vm.runInNewContext(source,c);await c.grBrowseScenes();
  assert.equal(reads.includes('read'),false,'startup sidebar must not hydrate scene payloads');
 });
+
+test('other-store names stay selectable while details are blocked and import keeps store identity',async()=>{
+ const calls=[];let imported;
+ const result=await chooseSavedSceneFromLibrary({
+  grFetchApi:()=>assert.fail('other-store choice is an import, never a local read'),
+  request:async(url,options)=>{
+   calls.push(url);
+   if(url==='/api/scene-library?metadata=1')return new Promise(()=>{});
+   if(url==='/api/scene-library')return {ok:true,json:async()=>({stores:[{id:'retained',label:'Retained store',scenes:[{name:'kiln.kaminos.json',metadata:'pending'}]}]})};
+   assert.equal(url,'/api/scene-library-import');imported=JSON.parse(options.body);return {ok:true,json:async()=>({saved:'copy.kaminos.json',document:{label:'Kiln'},dependencies:[]})};
+  },
+  pickSavedScene:async({more})=>{const rows=await more;assert.equal(rows[0].store.id,'retained');return rows[0];},
+ });
+ assert.deepEqual(imported,{store:'retained',name:'kiln.kaminos.json'});assert.equal(result.name,'copy.kaminos.json');assert.ok(calls.includes('/api/scene-library?metadata=1'));
+});

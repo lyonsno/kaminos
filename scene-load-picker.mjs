@@ -25,7 +25,7 @@ function savedWhen(timestamp) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function pickSavedScene({ scenes = [], local = null, more = null, host = document.body } = {}) {
+export function pickSavedScene({ scenes = [], local = null, more = null, moreDetails = null, host = document.body } = {}) {
   return new Promise(resolve => {
     let ordered = sortScenesNewestFirst(scenes);
     let pending = !!more;
@@ -78,10 +78,10 @@ export function pickSavedScene({ scenes = [], local = null, more = null, host = 
     const finish = value => { open = false; backdrop.remove(); resolve(value); };
     const applyFilter = () => { ordered.forEach((scene, index) => { rows[index].hidden = !sceneMatchesFilter(scene, input.value); }); };
     input.addEventListener('input', () => { applyFilter(); active = 0; highlight(); });
-    const refreshLocal = entries => {
+    const refresh = next => {
       const current = visible()[active];
       const activeName = current?.dataset.sceneFile, activeStore = current?.dataset.sceneStore;
-      ordered = sortScenesNewestFirst([...entries, ...ordered.filter(scene => scene.store)]);
+      ordered = sortScenesNewestFirst(next);
       rows = ordered.map(makeRow);
       list.replaceChildren(...rows);
       applyFilter();
@@ -90,7 +90,7 @@ export function pickSavedScene({ scenes = [], local = null, more = null, host = 
       highlight();
     };
     if (local) (async () => {
-      try { for await (const entries of local) { if (!open) break; refreshLocal(entries); } }
+      try { for await (const entries of local) { if (!open) break; refresh([...entries, ...ordered.filter(scene => scene.store)]); } }
       catch (error) { listingError = `Saved scenes could not be listed: ${error.message || error}`; }
       finally { localPending = false; if (open) highlight(); }
     })();
@@ -101,7 +101,10 @@ export function pickSavedScene({ scenes = [], local = null, more = null, host = 
       ordered = [...ordered, ...added];
       rows = [...rows, ...addedRows];
       list.append(...addedRows);
-    }).catch(error => { listingError = `Other saved scenes could not be listed: ${error.message || error}`; }).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
+    }).catch(error => { listingError = `Other saved scenes could not be listed: ${error.message || error}`; }).finally(() => { if (!open) return; pending = !!moreDetails; applyFilter(); highlight(); });
+    moreDetails?.then(entries => { if (open) refresh([...ordered.filter(scene => !scene.store), ...entries]); })
+      .catch(error => { listingError = `Other saved scene details could not be listed: ${error.message || error}`; })
+      .finally(() => { pending = false; if (open) highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); finish(null); }

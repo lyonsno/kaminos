@@ -76,3 +76,18 @@ with TemporaryDirectory() as directory:
     try: catalogue.thumbnail(scenes,path.name,row['capture']['imageSha256'])
     except FileNotFoundError: pass
     else: raise AssertionError('stale picture must not claim to describe a changed scene')
+
+# The other-store route must publish identities before parsing any document.
+with TemporaryDirectory() as directory:
+    root=Path(directory).resolve();serve.SCENES_DIR=root/'own';serve.SCENES_DIR.mkdir()
+    other=root/'other';other.mkdir();(other/'elsewhere.kaminos.json').write_text('{"label":"Elsewhere"}')
+    handler=serve.KaminosHandler.__new__(serve.KaminosHandler);handler.client_address=('127.0.0.1',1)
+    replies=[];handler.send_json=lambda value,*args:replies.append(value)
+    with patch.object(serve,'scene_library_stores',lambda:{'store-id':other}):
+        original=Path.read_text
+        def no_other_payload(self,*args,**kwargs):
+            assert self!=other/'elsewhere.kaminos.json','cold other-store listing must not hydrate payloads'
+            return original(self,*args,**kwargs)
+        with patch.object(Path,'read_text',no_other_payload): handler.handle_scene_library({})
+        row=replies[-1]['stores'][0];assert row['id']=='store-id';assert row['scenes'][0]['name']=='elsewhere.kaminos.json'
+        handler.handle_scene_library({'metadata':['1']});assert replies[-1]['stores'][0]['scenes'][0]['label']=='Elsewhere'

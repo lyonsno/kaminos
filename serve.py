@@ -18,7 +18,6 @@ import socket
 import socketserver
 import subprocess
 import sys
-from scene_catalogue import SceneCatalogue
 import tempfile
 import threading
 import time
@@ -29,6 +28,10 @@ from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
 PORT = 8090
 ROOT = Path(__file__).parent.resolve()
+_scene_catalogue_spec = importlib.util.spec_from_file_location("kaminos_scene_catalogue", ROOT / "scene_catalogue.py")
+_scene_catalogue_module = importlib.util.module_from_spec(_scene_catalogue_spec)
+_scene_catalogue_spec.loader.exec_module(_scene_catalogue_module)
+SceneCatalogue = _scene_catalogue_module.SceneCatalogue
 _VANTAGE = None
 _VANTAGE_LOCK = threading.Lock()
 
@@ -5297,7 +5300,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         stores = []
         for store_id, path in library_stores.items():
-            scenes = scene_catalogue().list(path, hydrate=True)
+            scenes = scene_catalogue().list(path, hydrate=(params.get("metadata") or [""])[0] == "1")
             if scenes:
                 stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name in ("consumer", "state", "native-consumer") else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})

@@ -20,12 +20,19 @@ export async function chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,req
    yield refreshed.scenes;
   }
  }
- const more=responseJSON(discover,'/api/scene-library').then(library=>{if(!Array.isArray(library.stores))throw Error('Saved scene library response is incomplete');return library.stores.flatMap(store=>store.scenes.filter(scene=>!scene.error).map(scene=>({...scene,store:{id:store.id,label:store.label}})));});
+ const libraryRows=library=>{
+  if(!Array.isArray(library.stores))throw Error('Saved scene library response is incomplete');
+  return library.stores.flatMap(store=>store.scenes.map(scene=>({...scene,store:{id:store.id,label:store.label}})));
+ };
+ const more=responseJSON(discover,'/api/scene-library').then(libraryRows);
+ const moreDetails=more.then(rows=>rows.some(scene=>scene.metadata==='pending')
+  ? responseJSON(discover,'/api/scene-library?metadata=1').then(libraryRows) : rows);
+ moreDetails.catch(()=>{});
  // A consumer may cancel before the catalog finishes. The picker still gets
  // the original promise and displays its error; cancellation leaves no orphan.
  more.catch(()=>{});
  let choice;
- try {choice=await pickSavedScene({scenes:[],local:localScenes(),more});}
+ try {choice=await pickSavedScene({scenes:[],local:localScenes(),more,moreDetails});}
  finally {discovery.abort();}
  if(!choice)return null;
  if(choice==='browse'){
