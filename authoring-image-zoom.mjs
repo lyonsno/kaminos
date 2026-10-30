@@ -44,6 +44,12 @@ export function installImageZoom({frame,targets,resetButton,peers=[],label='imag
   surface.addEventListener('dblclick',e=>{if(textTarget(e))return;e.preventDefault();reset();});
   }
   for(const t of targets)t.draggable=false;
+  paint();
   frame.title='Pinch to zoom · drag to pan · double-click to fit';
-  return {reset,read:()=>({scale,x,y})};
+  return {reset,reveal(rect,margin=8){
+    const bounds=frame.getBoundingClientRect();
+    x+=rect.left<bounds.left+margin?bounds.left+margin-rect.left:rect.right>bounds.right-margin?bounds.right-margin-rect.right:0;
+    y+=rect.top<bounds.top+margin?bounds.top+margin-rect.top:rect.bottom>bounds.bottom-margin?bounds.bottom-margin-rect.bottom:0;
+    paint();
+  },read:()=>({scale,x,y})};
 }

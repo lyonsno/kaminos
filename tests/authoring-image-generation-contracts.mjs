@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as module from '../authoring-image-generation.mjs';
+import {installGenerationFlame} from '../authoring-generation-flame.mjs';
 const {kleinDeviceRequirements,composeDeviceRequirements,createForegroundHandoff,createKleinAuthoringImageGeneration,kleinImageName}=module;
 const tick=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
@@ -68,7 +69,7 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null,changed=()=>{}}={}){
  let loadFailures=loadFails;
  let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
@@ -77,7 +78,7 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,m
  const device={features:new Set(features),queue:{submit(){}}};
  let loads=0,generations=[];const swaps=[];
  const service=createKleinAuthoringImageGeneration({
-  clock,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
+  changed,clock,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:modelWeights|| (async()=>'/klein-weights'),
   createPipeline:(givenDevice,urls,model='flux2')=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push({...urls,model});
@@ -427,4 +428,12 @@ test('the kiln gets the exact admitted prompt and model request before async loa
  const run=h.service.run({prompt:'  engraved bronze lantern  ',seed:42,size:256,model:'flux2'});await tick();
  const request=h.service.read().request;assert.equal(request.prompt,'engraved bronze lantern');assert.equal(request.width,256);assert.equal(request.seed,42);assert.match(request.id,/^kaminos-flux2-klein:/);
  gate.resolve();await run;assert.equal(h.generations[0].prompt,request.prompt);assert.equal(h.service.read().request.id,request.id);
+});
+
+test('Stop during real model loading never starts the kiln',async()=>{
+ const element=()=>({dataset:{},append(){},setAttribute(){},remove(){}});let active=false,starts=0;
+ const flame=installGenerationFlame({document:{createElement:element,getElementById:()=>({value:'words'})},slot:element(),createRenderer:async()=>({prepare:async()=>{},setActive:async value=>{if(value&&!active)starts++;active=value;},dispose(){}})});await flame.setVisible(true);
+ const loading=deferred(),entered=deferred();let h;h=harness({onLoad:()=>{entered.resolve();return loading.promise;},changed:()=>flame.render(h.service.read())});
+ const run=h.service.run({prompt:'words',seed:1,size:256});await entered.promise;await tick();h.service.stop();await tick();await tick();const duringStop={active,starts};loading.resolve();await run;await tick();await flame.dispose();
+ assert.deepEqual(duringStop,{active:false,starts:0});assert.equal(h.service.read().status,'stopped');
 });

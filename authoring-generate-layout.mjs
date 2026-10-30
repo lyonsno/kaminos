@@ -59,7 +59,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const reference=image.querySelector('#asset-reference-control');if(reference)kilnPanel.before(reference);
   if(imageOptions?.children.length){const options=document.createElement('details');options.className='asset-image-options';const summary=document.createElement('summary');summary.textContent='Image settings';options.append(summary);imageOptions.before(options);options.append(imageOptions);}
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
-  if(ceremony){const fit=document.createElement('button');fit.type='button';kilnTools.append(fit);installImageZoom({frame:kilnView,targets:[ceremony.element],resetButton:fit,label:'kiln'});kilnView.setAttribute('aria-label','Type in the kiln; pinch to zoom; drag outside the lettering to pan');}
+  if(ceremony){const fit=document.createElement('button');fit.type='button';kilnTools.append(fit);const navigation=installImageZoom({frame:kilnView,targets:[ceremony.element],resetButton:fit,label:'kiln'});kilnView.addEventListener('kiln-caret',event=>navigation.reveal(event.detail));kilnView.setAttribute('aria-label','Type in the kiln; pinch to zoom; drag outside the lettering to pan');}
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
