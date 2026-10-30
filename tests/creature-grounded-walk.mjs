@@ -60,3 +60,47 @@ physical.contact(pb,{...finish,journey:[{position:[.01,0],direction:[0,-1],secon
 const lifted=grounded.snapshot(),oldOffset=grounded.read().bodySeatingOffset;assert.equal(typeof grounded.setGroundHeight,'function');grounded.setGroundHeight(.5);
 assert.equal(grounded.read().groundHeight,.5);assert.equal(grounded.read().bodySeatingOffset,oldOffset+.5);for(const name of Object.keys(lifted.feet))assert.ok(Math.abs(grounded.read().feet[name].target[1]-lifted.feet[name].target[1]-.5)<1e-12);
 const roundoffBefore=grounded.snapshot();grounded.advance(next,{position:[next.position[0]+Number.EPSILON,next.position[1]],direction:next.direction},roundoffBefore.baseTime+Number.EPSILON);assert.deepEqual(grounded.snapshot(),roundoffBefore,'Roundoff-only remainder must not advance phases or trigger contact transitions');
+
+// Whole cycles are irrelevant to a cyclic limb's release trajectory. Replaying
+// identical contact state later must not turn a swing into a one-frame jump.
+const releasing=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial});
+let priorPath=initial,releaseChecks=0;
+for(let i=1;i<=180;i++){
+ const path={position:[0,i/30],direction:[0,1]};releasing.advance(priorPath,path,i/30);
+ const snap=releasing.snapshot();
+ if(Object.values(snap.feet).some(f=>!f.stance&&f.release)){
+  const later=structuredClone(snap),shift=14;later.frontTime+=shift;later.rearTime+=shift;
+  for(const name of Object.keys(later.feet)){later.legTimes[name]+=shift;later.feet[name].releaseTime+=shift;}
+  const makeCopy=snapshot=>feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial:path,snapshot});
+  const normal=makeCopy(snap),translated=makeCopy(later),end={position:[0,path.position[1]+.01],direction:[0,1]};
+  normal.advance(path,end,snap.baseTime+.01);translated.advance(path,end,snap.baseTime+.01);
+  for(const name of Object.keys(snap.feet)){
+   const a=normal.read().feet[name],b=translated.read().feet[name];
+   assert.equal(a.stance,b.stance,`Whole-cycle clock shift changed stance for ${name} at ${i}`);
+   assert.ok(Math.hypot(...a.target.map((v,k)=>v-b.target[k]))<1e-8,`Whole-cycle clock shift changed release target for ${name} at ${i}`);
+  }
+  releaseChecks++;
+ }
+ priorPath=path;
+}
+assert.ok(releaseChecks>20,'Exercise multiple real release transitions');
+// A nearly stationary attachment can reverse velocity during a turn. That is
+// not permission to rotate an already airborne foot across the whole body.
+const swingSnapshot=releasing.snapshot(),swingPath=priorPath;
+assert.ok(Object.values(swingSnapshot.feet).some(f=>!f.stance),'Exercise an airborne foot');
+const reverseCopies=[-1,1].map(sign=>{
+ const g=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial:swingPath,snapshot:swingSnapshot});
+ g.advance(swingPath,{position:[sign*1e-6,swingPath.position[1]],direction:swingPath.direction},swingSnapshot.baseTime+1e-6);return g.read();
+});
+for(const name of Object.keys(swingSnapshot.feet))assert.ok(Math.hypot(...reverseCopies[0].feet[name].target.map((v,i)=>v-reverseCopies[1].feet[name].target[i]))<1e-4,`Infinitesimal velocity reversal jumped ${name}'s target`);
+let touchdowns=0;
+for(let index=1;index<60;index++){
+ const time=index/30-1e-6;
+ const g=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial,time});
+ const before=g.read();g.advance(initial,{position:[0,4e-6],direction:[0,1]},time+4e-6);const after=g.read();
+ for(const name of Object.keys(before.feet))if(!before.feet[name].stance&&after.feet[name].stance){
+  touchdowns++;
+  assert.ok(Math.hypot(...before.feet[name].target.map((v,k)=>v-after.feet[name].target[k]))<1e-3,`Touchdown must approach the support plane continuously: ${name}, source frame ${index}`);
+ }
+}
+assert.ok(touchdowns>=4,'Exercise each leg landing');

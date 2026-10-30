@@ -92,7 +92,14 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
  }
  const sourceFloors=legs.map(l=>l.sourceGround).sort((a,b)=>a-b),sourceFloor=(sourceFloors[1]+sourceFloors[2])/2;
  let state={schema:'kaminos.grounded-walk.v1',groundHeight,frontTime:time,rearTime:time,baseTime:time,legTimes:Object.fromEntries(legs.map(l=>[l.name,time])),velocities:{},feet:{}};
- const phase=t=>((t%period)+period)%period*walking.fps;
+ const phase=t=>{
+  const raw=((t%period)+period)%period*walking.fps,nearest=Math.round(raw);
+  // Frame boundaries carry discrete contact meaning. Modulo of an accumulated
+  // clock may land one ulp below a boundary, including a release we just set.
+  // Snap only arithmetic roundoff, not a finite interval of the source motion.
+  const tolerance=16*Number.EPSILON*Math.max(1,Math.abs(t*walking.fps),walking.frames-1);
+  return Math.abs(raw-nearest)<=tolerance?nearest%(walking.frames-1):raw;
+ };
  const localPose=(base)=>sampleLegGroups({THREE,walking,base,front:state.frontTime,rear:state.rearTime,legTimes:state.legTimes});
  function update(path){
   load(localPose(baseFrame(state.baseTime,path)));
@@ -105,8 +112,13 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
     load(localPose(baseFrame(state.baseTime,path)));
    }
    const hip=at(leg.chain[0]),source=at(leg.chain[3]),axis=new THREE.Vector3(0,1,0),bodyYaw=Math.atan2(path.direction[0],path.direction[1])-Math.atan2(forward[0],forward[1]);
-   const mean=new THREE.Vector3(...leg.mean).applyAxisAngle(axis,bodyYaw),variation=source.clone().sub(hip).sub(mean),velocity=state.velocities[leg.name];
-   if(velocity&&Math.hypot(...velocity)>1e-12){const direction=Math.atan2(velocity[0],velocity[1]),bodyDirection=Math.atan2(path.direction[0],path.direction[1]);variation.applyAxisAngle(axis,direction-bodyDirection);source.copy(hip).add(mean).add(variation);}
+   // Keep the chosen swing direction through this step. Instantaneous
+   // attachment velocity can reverse at a turn pivot while displacement tends
+   // to zero; rotating an airborne trajectory by that direction causes a jump.
+   const velocity=state.velocities[leg.name];
+   const swingDirection=(!previous?.stance?previous?.swingDirection:null)??(velocity&&Math.hypot(...velocity)>1e-12?Math.atan2(velocity[0],velocity[1]):Math.atan2(path.direction[0],path.direction[1]));
+   const mean=new THREE.Vector3(...leg.mean).applyAxisAngle(axis,bodyYaw),variation=source.clone().sub(hip).sub(mean);
+   if(!stance||!previous?.stance){const bodyDirection=Math.atan2(path.direction[0],path.direction[1]);variation.applyAxisAngle(axis,swingDirection-bodyDirection);source.copy(hip).add(mean).add(variation);}
    source.y+=groundHeight-leg.sourceGround;
    const old=state.feet[leg.name];let anchor=old?.anchor??null,release=old?.release??null,releaseTime=old?.releaseTime??clock;
    if(stance&&!old?.stance){anchor=source.clone().setY(leg.ground).toArray();release=null;}
@@ -119,13 +131,23 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
     const duration=Math.max(1,frames)/walking.fps,u=Math.min(1,Math.max(0,(clock-releaseTime)/duration)),weight=1-u*u*(3-2*u);
     target.addScaledVector(new THREE.Vector3(...release),weight);
    }
+   if(!stance){
+    // Inferred source support can begin above the minimum source toe height.
+    // Bring the airborne height continuously to the shared plane at both ends
+    // of that swing interval instead of dropping it on the stance boundary.
+    let before=0,after=1;const count=leg.stance.length;
+    while(!leg.stance[(index-before+count)%count])before++;
+    while(!leg.stance[(index+after)%count])after++;
+    const u=(before-1+f-index)/(before-1+after);
+    target.y=leg.ground+Math.max(0,target.y-leg.ground)*Math.sin(Math.PI*u);
+   }
    if(target.y<leg.ground)target.y=leg.ground;
-   state.feet[leg.name]={stance,earlyLift,anchor,release,releaseTime,target:target.toArray(),phase:f/(walking.frames-1)};
+   state.feet[leg.name]={stance,earlyLift,anchor,release,releaseTime,target:target.toArray(),swingDirection,phase:f/(walking.frames-1)};
   }
  }
  function restore(value){
   if(value?.schema!=='kaminos.grounded-walk.v1'||value.groundHeight!==groundHeight||!Number.isFinite(value.baseTime)||!Number.isFinite(value.frontTime)||value.frontTime<0||!Number.isFinite(value.rearTime)||value.rearTime<0||legs.some(l=>{
-   const f=value.feet?.[l.name];return !f||typeof f.stance!=='boolean'||!Number.isFinite(value.legTimes?.[l.name])||!Number.isFinite(f.releaseTime)||!Number.isFinite(f.phase)||['target',...(f.stance?['anchor']:[]),...(f.release?['release']:[])].some(k=>!Array.isArray(f[k])||f[k].length!==3||!f[k].every(Number.isFinite));
+   const f=value.feet?.[l.name];return !f||typeof f.stance!=='boolean'||!Number.isFinite(value.legTimes?.[l.name])||!Number.isFinite(f.releaseTime)||!Number.isFinite(f.phase)||(f.swingDirection!==undefined&&!Number.isFinite(f.swingDirection))||['target',...(f.stance?['anchor']:[]),...(f.release?['release']:[])].some(k=>!Array.isArray(f[k])||f[k].length!==3||!f[k].every(Number.isFinite));
   }))throw Error('Invalid grounded walk snapshot');
   state=structuredClone(value);
  }
