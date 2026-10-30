@@ -26,6 +26,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   let focalRatio = positive(inputs.focalRatio ?? 1, 'Focal ratio');
   const interactionValue=value=>{if(!['physical-contact','pinch-attachment'].includes(value))throw Error('Invalid hand interaction');return value;};
   let interaction=interactionValue(inputs.interaction??'physical-contact'),physicsPaused=false,showProxies=inputs.showProxies??true;
+  let showRawHand=inputs.showRawHand??false;
   const fitValue=value=>{if(!['all-joints','palm'].includes(value))throw Error('Invalid placement fit');return value;};
   let fitPolicy=fitValue(inputs.fitPolicy??'all-joints');
   const packages = {mobrecon: inputs.mobreconPackage ?? '/scratch/mobrecon/package/', detector: inputs.detectorPackage ?? '/scratch/hand-detector/package/'};
@@ -38,6 +39,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   const loadRegistration = dependencies.loadRegistration ?? (async (...args) => (await import('../models/mobrecon/hand-camera-registration.js')).loadHandRegistration(...args));
   const createRegistration = dependencies.createRegistration ?? (async resource => (await import('../models/mobrecon/hand-camera-registration.js')).createHandRegistration(resource));
   const createRetention = dependencies.createRetention ?? (async options => (await import('../models/mobrecon/hand-reach-retention.js')).createHandReachRetention(options));
+  const listRetention = dependencies.listRetention ?? (async () => (await import('../models/mobrecon/hand-reach-retention.js')).listHandReachTrials());
+  const readRetention = dependencies.readRetention ?? (async id => (await import('../models/mobrecon/hand-reach-retention.js')).readHandReachTrial({id}));
   const captureInput = dependencies.captureInput ?? (source => {
     const canvas = document.createElement('canvas'); canvas.width = source.videoWidth; canvas.height = source.videoHeight;
     canvas.getContext('2d').drawImage(source,0,0);
@@ -67,8 +70,8 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   table.name='Contact table';table.receiveShadow=true;
   const proxies=new Group();proxies.name='Physical contact hand';
   const proxyGeometry=new SphereGeometry(1,10,8),proxyMeshes=new Map();
-  const proxyMaterial=new MeshStandardMaterial({color:0x6ed5d0,wireframe:true,transparent:true,opacity:.38});
-  const contactMaterial=new MeshStandardMaterial({color:0xffce65,emissive:0x725016,transparent:true,opacity:.85});
+  const proxyMaterial=new MeshStandardMaterial({color:0x6ed5d0,roughness:.6});
+  const contactMaterial=new MeshStandardMaterial({color:0xffce65,emissive:0x725016,roughness:.6});
   const indexMarker = new Mesh(new SphereGeometry(.004, 16, 12), new MeshStandardMaterial({color: 0x91f0c5, emissive: 0x174c33}));
   indexMarker.name = 'Index tip'; indexMarker.visible = false;
   const pinchMarker = new Mesh(new SphereGeometry(.005, 16, 12), new MeshStandardMaterial({color: 0xf7d16f, emissive: 0x593c0e}));
@@ -89,8 +92,9 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   let generation = 0, observationEpoch = 0, configRevision = 0, frameCallback, flight = null;
   let sourceFrame = null, sourceAt = null, lastRequestedFrame = null, lastCaptureAt = null;
   let frameIntervalMs = null, inferenceLatencyMs = null, blocked = false;
-  let presentation = 'camera-off', error = null, inputSource = null, placement = null, last = null, received = 0;
+  let presentation = 'camera-off', error = null, inputSource = null, placement = null, last = null, received = 0,hasPose=false;
   let status, cameraButton, fieldDocument;
+  let trialSelect,trialStatus,trialListGeneration=0;
   const fields = new Map(),checks=new Map(),scrubs = [], trackListeners = [];
   const assertOpen = () => {if (disposed) throw Error('Hand reach experiment is closed');};
   const current = ticket => !disposed && generation === ticket;
@@ -104,13 +108,22 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
   // Gaps already classified as loss do not train the source cadence estimator.
   const sourceBudget = () => Math.max(1000, 3 * (frameIntervalMs ?? 0));
   const predictionBudget = () => Math.max(sourceBudget(), 3 * (inferenceLatencyMs ?? 0));
+  const displayedTips=s=>{
+    const index=s.proxies?.find(p=>p.id==='index-3-4/4')?.position??s.indexTip;
+    const thumb=s.proxies?.find(p=>p.id==='thumb-3-4/4')?.position??s.thumbTip;
+    const midpoint=index&&thumb?index.map((v,k)=>(v+thumb[k])/2):s.pinchPoint;
+    const distance=index?Math.hypot(...index.map((v,k)=>v-s.target.position[k])):Infinity;
+    return {index,thumb,midpoint,contact:Boolean(s.tracking&&distance<=s.target.radius),proximity:Math.max(0,1-distance/(s.target.radius*5))};
+  };
   const track = () => stream?.getVideoTracks()[0];
   const sourceFresh = () => running && !blocked && track()?.readyState === 'live' && !track()?.muted
     && sourceAt !== null && now() - sourceAt <= sourceBudget();
   const read = () => ({
     authority: 'uncalibrated-hand-reach-experiment', interactionAuthority: 'local-target-and-cube-only',
-    running, starting, disposed, loading: Boolean(loading), progress, error, presentation, visible: hand.visible,
-    handedness, detectorThreshold, focalRatio, packages, registrationUrl,interaction,showProxies,fitPolicy,
+    running, starting, disposed, loading: Boolean(loading), progress, error, presentation,
+    visible:hasPose&&(interaction!=='physical-contact'||showRawHand||showProxies),
+    handedness, detectorThreshold, focalRatio, packages, registrationUrl,interaction,showProxies,showRawHand,fitPolicy,
+    handSurface:interaction==='physical-contact'?'contact-proxies':'inferred',
     physicsClock:{paused:physicsPaused,hidden:document.visibilityState==='hidden',source:'monotonic-presentation-time'},
     retainTrial, retention:{...retention},
     inputSource: inputSource ? structuredClone(inputSource) : null,
@@ -123,7 +136,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       sourceAgeMs: sourceAt === null ? null : now() - sourceAt, captureAgeMs: lastCaptureAt === null ? null : now() - lastCaptureAt},
     camera: track() ? {trackId: track().id, readyState: track().readyState, muted: track().muted, settings: track().getSettings()} : null,
     received, state: state.read(), objects: Object.fromEntries(Object.entries({root, hand, target, cube,table,proxies,indexMarker,pinchMarker})
-      .map(([key, value]) => [key, {id: asset.id, uuid: value.uuid, name: value.name, visible: value.visible}])),
+      .map(([key, value]) => [key, {id: asset.id, uuid: value.uuid, name: value.name, visible: value.visible&&value.material?.visible!==false}])),
     view: session.readView(),
   });
   const sync = (force = false) => {
@@ -132,21 +145,27 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (status) {
       const origin = inputSource?.kind === 'contact-fixture' ? `CONTACT FIXTURE: ${inputSource.label}` : inputSource?.kind === 'retained-prediction' ? `REPLAY: ${inputSource.label}` : running ? 'LIVE CAMERA' : starting ? 'STARTING CAMERA' : 'CAMERA OFF';
       const touching=s.contacts?.filter(c=>c.finger&&c.force>0)??[];
-      const condition = touching.length ? `${new Set(touching.map(c=>c.finger)).size} contacting fingers` : s.grabbed ? 'Cube grabbed' : s.contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
+      const condition = touching.length ? `${new Set(touching.map(c=>c.finger)).size} contacting fingers` : s.grabbed ? 'Cube grabbed' : displayedTips(s).contact ? 'Target contact' : s.tracking ? 'Tracking' : presentation.replaceAll('-', ' ');
       status.textContent = `${origin} | ${condition}${loading ? ' | Loading models' : ''}${error ? ` | ${error}` : ''}${retention.id ? ` | Local trial: ${retention.status}, ${retention.frames} frames` : ''}`;
     }
     const values = {handedness, detectorThreshold, focalRatio,interaction,fitPolicy,radius: s.target.radius, size: s.cubeSize,
       motorForce:s.motorForce,friction:s.friction,fingerRadius:s.fingerRadius};
     for (const [i, axis] of ['x', 'y', 'z'].entries()) {values[`target-${axis}`] = s.target.position[i]; values[`cube-${axis}`] = s.cubePosition[i];}
     for (const [key, field] of fields) if (force || fieldDocument.activeElement !== field || field.readOnly) field.value = String(values[key]);
-    for(const [key,field]of checks)field.checked=Boolean({showProxies,physicsPaused,retainTrial}[key]);
+    for(const [key,field]of checks)field.checked=Boolean({showProxies,showRawHand,physicsPaused,retainTrial}[key]);
   };
   const drawState = () => {
     const s = state.read();
+    const physical=interaction==='physical-contact';
+    hand.visible=hasPose&&(!physical||showRawHand);
+    if(hand.material.wireframe!==physical)hand.material.needsUpdate=true;
+    hand.material.wireframe=physical;hand.material.transparent=physical;
+    hand.material.opacity=physical ? .25 : 1;hand.material.depthWrite=!physical;
+    const {index,thumb,midpoint,contact,proximity}=displayedTips(s);
     target.position.fromArray(s.target.position); target.scale.setScalar(s.target.radius);
-    target.material.color.setHex(s.contact ? 0x46d39a : 0xe6c448);
-    target.material.emissive.setHex(s.contact?0x195c40:0x6b5010);
-    target.material.emissiveIntensity=.1+(s.targetProximity??0)*1.5;
+    target.material.color.setHex(contact ? 0x46d39a : 0xe6c448);
+    target.material.emissive.setHex(contact?0x195c40:0x6b5010);
+    target.material.emissiveIntensity=.1+proximity*1.5;
     cube.position.fromArray(s.cubePosition); cube.scale.setScalar(s.cubeSize);
     if(s.cubeQuaternion)cube.quaternion.fromArray(s.cubeQuaternion);else cube.quaternion.set(0,0,0,1);
     const touching=new Set((s.contacts??[]).filter(c=>c.finger&&c.force>0).map(c=>c.other));
@@ -160,19 +179,19 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     }
     for(const [id,mesh]of proxyMeshes)if(!live.has(id)){proxies.remove(mesh);proxyMeshes.delete(id);}
     proxies.visible=showProxies&&interaction==='physical-contact';
-    indexMarker.visible = hand.visible && s.tracking && Boolean(s.indexTip);
-    pinchMarker.visible = hand.visible && s.tracking && Boolean(s.pinchPoint);
-    if (indexMarker.visible) indexMarker.position.fromArray(s.indexTip);
-    if (pinchMarker.visible) pinchMarker.position.fromArray(s.pinchPoint);
-    pinchMarker.material.color.setHex(s.pinching ? 0xffe88c : 0xb4bfcc);
+    indexMarker.visible = hasPose && s.tracking && Boolean(index);
+    pinchMarker.visible = hasPose && s.tracking && Boolean(midpoint);
+    if (indexMarker.visible) indexMarker.position.fromArray(index);
+    if (pinchMarker.visible) pinchMarker.position.fromArray(midpoint);
+    pinchMarker.material.color.setHex(index&&thumb&&Math.hypot(...index.map((v,k)=>v-thumb[k]))<.025 ? 0xffe88c : 0xb4bfcc);
     session.redraw(); sync();
   };
   const lose = reason => {
-    if (presentation !== reason || hand.visible) observationEpoch++;
-    presentation = reason; hand.visible = false; state.lose(); drawState();
+    if (presentation !== reason || hasPose) observationEpoch++;
+    presentation = reason; hasPose=false;hand.visible = false;state.lose(); drawState();
   };
   const applied = kind => {sync(); const effective = read(); record({kind: `hand-reach.${kind}`, phase: 'applied', target: asset.id, effective}); return effective;};
-  const remember = () => {const s = state.read();capturePhysics(s);updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,interaction,showProxies,fitPolicy,
+  const remember = () => {const s = state.read();capturePhysics(s);updateInputs({...inputs, handedness, detectorThreshold, focalRatio, retainTrial,interaction,showProxies,showRawHand,fitPolicy,
     physics:{...physicsOptions},
     target: s.target, cube: {position: s.cubePosition, size: s.cubeSize}});};
   const finishTrial = () => {
@@ -181,7 +200,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     trialFinish=(async()=>{
       try {await owned.finish({error:retention.error??error,endedAt:new Date().toISOString(),state:state.read()}); retention.status=retention.error?'failed':'retained';}
       catch(cause){retention.status='failed';retention.error=message(cause);throw cause;}
-      finally{owned.close();sync();}
+      finally{owned.close();sync();refreshTrials();}
     })();
     return trialFinish;
   };
@@ -268,7 +287,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       }
     }
     geometry.computeVertexNormals(); geometry.computeBoundingSphere();
-    hand.visible = true; state.update({joints, valid: true}); received++;
+    hasPose = true; state.update({joints, valid: true}); received++;
     presentation = origin.kind === 'retained-prediction' ? 'replay-hand' : 'live-hand'; drawState();
   };
   const infer = ticket => {
@@ -355,7 +374,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       if(retainTrial){
         const created=await createRetention({source:{kind:'operator-camera-trial',packages,registration:registration.identity,view:session.readView(),initial:state.read()}});
         if(!current(ticket)){await created.finish({cancelled:true});created.close();return read();}
-        trial=created;retention={status:'recording',id:created.id,frames:0,error:null};
+        trial=created;retention={status:'recording',id:created.id,frames:0,error:null};if(trialSelect)trialSelect.value='';refreshTrials();
       } else retention={status:'disabled',id:null,frames:0,error:null};
       // No requested resolution/frame-rate caps: use the camera's actual route.
       const acquired = await getUserMedia({video: true, audio: false});
@@ -384,7 +403,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     if (running) {
       if (!video.requestVideoFrameCallback && video.readyState >= 2) observeFrame(generation, video.currentTime);
       if (!blocked && sourceAt !== null && now() - sourceAt > sourceBudget()) {blocked = true; lose('camera-stalled');}
-      else if (hand.visible && lastCaptureAt !== null && now() - lastCaptureAt > predictionBudget()) lose('prediction-stale');
+      else if (hasPose && lastCaptureAt !== null && now() - lastCaptureAt > predictionBudget()) lose('prediction-stale');
       infer(generation);
     }
     const at=now(),elapsed=(at-physicsAt)/1000;physicsAt=at;
@@ -406,6 +425,7 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     setPhysicsPaused(value){assertOpen();physicsPaused=Boolean(value);rebasePhysicsClock();return applied('physics-paused');},
     setFitPolicy(value){assertOpen();fitPolicy=fitValue(value);configRevision++;lose('awaiting-frame');remember();return applied('placement-fit');},
     setShowProxies(value){assertOpen();showProxies=Boolean(value);drawState();remember();return applied('contact-hand');},
+    setShowRawHand(value){assertOpen();showRawHand=Boolean(value);drawState();remember();return applied('raw-hand');},
     configurePhysics(value){assertOpen();if(!state.configure)throw Error('Select contact physics first');state.configure(value);remember();return applied('physics');},
     advancePhysics(seconds){assertOpen();if(!state.advance)throw Error('Select contact physics first');state.advance(seconds);drawState();return applied('physics-advance');},
     async presentContactFixture(value) {
@@ -419,12 +439,15 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
     setRetainTrial(value) {assertOpen();if(running||starting)throw Error('Stop camera before changing trial recording');retainTrial=Boolean(value);remember();return applied('retain-trial');},
     async readTrial(id=retention.id) {
       if(!id)throw Error('No recorded trial');
-      const {readHandReachTrial}=await import('../models/mobrecon/hand-reach-retention.js');
-      return readHandReachTrial({id});
+      const result=await readRetention(id);
+      if(!result)throw Error(`Recorded trial not found: ${id}`);
+      return result;
     },
-    async exportTrial() {
-      const id=retention.id;let stopError=null;
-      try {await stop();}catch(cause){stopError=message(cause);}
+    listTrials:()=>listRetention(),
+    async exportTrial(id=retention.id) {
+      if(!id)throw Error('No recorded trial');
+      let stopError=null;
+      if(id===retention.id)try {await stop();}catch(cause){stopError=message(cause);}
       const retained=await operations.readTrial(id);
       for(const row of retained.frames) if(row.image) row.image=await new Promise((resolve,reject)=>{
         const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(row.image);
@@ -454,6 +477,23 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       } catch (cause) {error = message(cause); lose('replay-error'); throw cause;}
     },
   };
+  async function refreshTrials(){
+    if(!trialSelect||disposed)return;
+    const ticket=++trialListGeneration,selected=trialSelect.value;
+    try{
+      const rows=await operations.listTrials();if(disposed||ticket!==trialListGeneration)return;
+      trialSelect.replaceChildren();
+      for(const row of rows){
+        const option=fieldDocument.createElement('option');option.value=row.id;
+        const when=row.createdAt??row.summary?.endedAt;
+        option.textContent=`${when?new Date(when).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):row.id} | ${row.status==='recording'&&row.id!==retention.id?'unfinished':row.status} | ${row.count} frames`;
+        option.title=row.id;
+        trialSelect.append(option);
+      }
+      trialSelect.value=rows.some(r=>r.id===selected)?selected:rows.some(r=>r.id===retention.id)?retention.id:rows[0]?.id??'';
+      trialStatus.textContent=rows.length?'':'No cached trials in this browser origin';
+    }catch(cause){if(!disposed&&ticket===trialListGeneration)trialStatus.textContent=`Trial recovery: ${message(cause)}`;}
+  }
   return {
     read, operations,
     mount({root: panel, document: doc, invoke}) {
@@ -480,6 +520,9 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       checks.set('showProxies',proxyToggle);
       const proxyText=doc.createElement('span');proxyText.textContent='Contact hand';
       proxyToggle.addEventListener('change',()=>call('setShowProxies',proxyToggle.checked));proxyLabel.append(proxyToggle,proxyText);panel.append(proxyLabel);
+      const rawLabel=doc.createElement('label'),rawToggle=doc.createElement('input');rawToggle.type='checkbox';
+      checks.set('showRawHand',rawToggle);const rawText=doc.createElement('span');rawText.textContent='Raw inference overlay';
+      rawToggle.addEventListener('change',()=>call('setShowRawHand',rawToggle.checked));rawLabel.append(rawToggle,rawText);panel.append(rawLabel);
       const pauseLabel=doc.createElement('label'),pauseToggle=doc.createElement('input');pauseToggle.type='checkbox';
       checks.set('physicsPaused',pauseToggle);
       const pauseText=doc.createElement('span');pauseText.textContent='Pause physics';
@@ -494,11 +537,15 @@ export async function createHandReachExperiment({host, inputs = {}, record = () 
       recordingInput.addEventListener('change',()=>call('setRetainTrial',recordingInput.checked).finally(()=>{recordingInput.checked=retainTrial;}));
       const recordingText=doc.createElement('span');recordingText.textContent='Record trial locally';
       recordingLabel.append(recordingInput,recordingText);panel.append(recordingLabel);
+      trialSelect=doc.createElement('select');trialSelect.setAttribute('aria-label','Cached trials');trialSelect.style.cssText='width:100%;min-width:0';
+      trialStatus=doc.createElement('div');trialStatus.setAttribute('role','status');
+      const refresh=doc.createElement('button');refresh.type='button';refresh.textContent='Refresh trials';refresh.addEventListener('click',()=>refreshTrials());
+      panel.append(trialSelect,refresh,trialStatus);refreshTrials();
       // Export is the same operation for human and agent; the UI only delivers its file.
       const download=doc.createElement('button');download.type='button';download.textContent='Save trial';
       download.addEventListener('click',async()=>{
         try{
-          const result=await invoke('exportTrial'),url=URL.createObjectURL(new Blob([result.text],{type:'application/json'}));
+          const result=await invoke('exportTrial',trialSelect.value||retention.id),url=URL.createObjectURL(new Blob([result.text],{type:'application/json'}));
           const link=doc.createElement('a');link.href=url;link.download=result.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
         }catch(cause){error=message(cause);sync();}
       });

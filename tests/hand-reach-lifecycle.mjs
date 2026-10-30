@@ -23,6 +23,38 @@ test('physical interaction is advanced by the shared scene clock and disposed wi
   await f.instance.dispose();assert.throws(()=>state.advance(.01),/disposed/);
 });
 
+test('solid physical hand and tip markers follow collision positions; raw inference is an optional overlay',async()=>{
+  let offset=.12;
+  const f=await fixture({createState:()=>{
+    const base=reachState();return {...base,read:()=>({...base.read(),backend:'cannon-es-cpu',proxies:[
+      {id:'index-3-4/4',finger:'index',radius:.007,target:[0,.2,-.1],position:[offset,.2,-.1],error:offset},
+    ]}),advance:()=>{offset=.04;}};
+  }});
+  await f.instance.operations.presentRetained(prediction({faces:[0,1,2]}));
+  const s=f.instance.read(),mesh=f.scene.getObjectByProperty('uuid',s.objects.hand.uuid);
+  const raw=f.registration.place(prediction()).worldVertices;
+  const contact=f.scene.getObjectByProperty('uuid',s.objects.proxies.uuid).children[0];
+  assert.equal(contact.material.wireframe,false,'physical hand must be solid, not a faint diagnostic behind an unrelated solid mesh');
+  assert.deepEqual(contact.position.toArray(),[.12,.2,-.1]);
+  assert.equal(mesh.visible,false);
+  assert.equal(s.handSurface,'contact-proxies');
+  f.tick(16);
+  assert.deepEqual(contact.position.toArray(),[.04,.2,-.1]);
+  const marker=f.scene.getObjectByProperty('uuid',s.objects.indexMarker.uuid);
+  assert.deepEqual(marker.position.toArray(),contact.position.toArray());
+  const target=f.scene.getObjectByProperty('uuid',s.objects.target.uuid);
+  f.instance.operations.setTarget({position:[0,0,0],radius:.01});
+  assert.notEqual(target.material.color.getHex(),0x46d39a,'raw inferred tip cannot light the physical contact target');
+  f.instance.operations.setTarget({position:contact.position.toArray(),radius:.01});
+  assert.equal(target.material.color.getHex(),0x46d39a);
+  f.instance.operations.setShowRawHand(true);
+  assert.equal(mesh.visible,true);assert.equal(mesh.material.wireframe,true);
+  assert.deepEqual([...mesh.geometry.attributes.position.array],[...raw]);
+  assert.equal(f.recipes.at(-1).showRawHand,true);
+  await f.instance.operations.stop();assert.equal(mesh.visible,false);
+  await f.instance.dispose();
+});
+
 test('a newer live start supersedes a contact-mode change waiting on an old inference',async()=>{
   const gate=deferred();
   const f=await fixture({infer:async options=>{await options.getFrame();await gate.promise;return prediction();}});
@@ -77,7 +109,7 @@ function reachState() {
   };
 }
 
-async function fixture({infer, acquire, play, createApp, loadRegistration, createState = reachState, inputs = {}, createRetention, captureInput} = {}) {
+async function fixture({infer, acquire, play, createApp, loadRegistration, createState = reachState, inputs = {}, createRetention, captureInput, listRetention=async()=>[], readRetention} = {}) {
   let time = 0, frame, nextCallback = 0, appOptions;
   const callbacks = new Map(), tracks = [], rows = new Map(), events = [], placements = [], captures = [], drags = [], recipes = [];
   const video = Object.assign(new EventTarget(), {videoWidth: 640, videoHeight: 480, currentTime: 0, readyState: 4,
@@ -120,7 +152,7 @@ async function fixture({infer, acquire, play, createApp, loadRegistration, creat
     createApp: async options => {appOptions = options; appCreates++; return createApp ? createApp(options, app) : app;},
     loadRegistration: async (...args) => {registrationLoads++; return loadRegistration ? loadRegistration(...args) : {};},
     createRegistration: () => registration,
-    createRetention, captureInput,
+    createRetention, captureInput, listRetention, readRetention,
   });
   return {instance, video, tracks, scene, borrowed, rows, placements, captures, events, callbacks, app, registration, acquireDefault, drags, recipes,hostDocument,
     get appOptions() {return appOptions;}, counts: () => ({loads, destroyed, appCreates, registrationLoads}),
@@ -526,12 +558,15 @@ test('controls invoke production operations, retain numeric choices, and label l
   const nodes = [];
   const document = {activeElement: null, createElement(tagName) {
     const node = Object.assign(new EventTarget(), {tagName, children: [], dataset: {}, style: {}, attributes: {},
-      append(...children) {this.children.push(...children);}, setAttribute(name, value) {this.attributes[name] = value;}});
+      append(...children) {this.children.push(...children);}, replaceChildren(...children){this.children=children;},setAttribute(name, value) {this.attributes[name] = value;}});
     nodes.push(node); return node;
   }};
-  const f = await fixture();
+  const f = await fixture({listRetention:async()=>[{id:'old-trial',status:'recording',count:3,createdAt:'2026-10-29T00:00:00Z'}]});
   f.instance.mount({root: document.createElement('section'), document,
     invoke: async (operation, value) => f.instance.operations[operation](value)});
+  await settle();
+  const recovered=nodes.find(node=>node.attributes['aria-label']==='Cached trials');
+  assert.equal(recovered.value,'old-trial');assert.match(recovered.children[0].textContent,/unfinished.*3 frames/);
   assert.equal(f.drags.length, 13, 'every numeric control installs the shared number drag');
   const threshold = nodes.find(node => node.attributes['aria-label'] === 'Threshold');
   threshold.value = '.91'; threshold.dispatchEvent(new Event('input')); await settle();
@@ -552,4 +587,17 @@ test('controls invoke production operations, retain numeric choices, and label l
   assert.match(status.textContent, /^REPLAY: Synthetic retained fixture/);
   assert.equal(button.textContent, 'Start camera');
   await f.instance.dispose(); assert.ok(f.drags.every(drag => drag.disposed));
+});
+
+test('historical export leaves the live camera running and preserves unfinished status',async()=>{
+  const saved={id:'past',status:'recording',source:{kind:'live-camera'},frames:[{prediction:{vertices:new Float32Array([1,2,3])},image:null,failure:'capture failed'}]};
+  const f=await fixture({readRetention:async id=>id==='past'?saved:null});
+  await f.instance.operations.start();
+  const result=await f.instance.operations.exportTrial('past');
+  assert.equal(result.filename,'hand-reach-past.json');
+  assert.equal(JSON.parse(result.text).status,'recording');
+  assert.deepEqual(JSON.parse(result.text).frames[0].prediction.vertices,[1,2,3]);
+  assert.equal(f.instance.read().running,true);assert.equal(f.tracks[0].stops,0);
+  await assert.rejects(f.instance.operations.exportTrial('missing'),/not found/);
+  assert.equal(f.instance.read().running,true);await f.instance.dispose();
 });

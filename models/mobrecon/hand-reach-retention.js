@@ -69,7 +69,7 @@ export async function createHandReachRetention({indexedDB = globalThis.indexedDB
   requireId(id);
   if (source === null || source === undefined || (typeof source !== 'object' && typeof source !== 'string')
     || (typeof source === 'string' && !source.trim())) throw new TypeError('Trial source is required');
-  const metadata = {id, source: structuredClone(source), status: 'recording', count: 0, summary: null};
+  const metadata = {id, source: structuredClone(source), status: 'recording', count: 0, summary: null, createdAt:new Date().toISOString()};
   const db = await openDatabase(indexedDB, name);
   try {
     await transact(db, ['trials'], 'readwrite', tx => {tx.objectStore('trials').add(metadata);});
@@ -121,4 +121,15 @@ export async function readHandReachTrial({indexedDB = globalThis.indexedDB, name
   requireId(id);
   const db = await openDatabase(indexedDB, name);
   try {return await readDatabase(db, id);} finally {db.close();}
+}
+
+export async function listHandReachTrials({indexedDB = globalThis.indexedDB, name = DEFAULT_NAME} = {}) {
+  const db=await openDatabase(indexedDB,name);
+  try {
+    return await transact(db,['trials'],'readonly',(tx,result,guard)=>{
+      const request=tx.objectStore('trials').getAll();
+      request.onsuccess=guard(()=>result(request.result.sort((a,b)=>
+        String(b.createdAt??b.summary?.endedAt??'').localeCompare(String(a.createdAt??a.summary?.endedAt??''))||a.id.localeCompare(b.id))));
+    });
+  } finally {db.close();}
 }

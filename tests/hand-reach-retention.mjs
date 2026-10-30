@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {createHandReachRetention, readHandReachTrial} from '../models/mobrecon/hand-reach-retention.js';
+import * as retentionModule from '../models/mobrecon/hand-reach-retention.js';
 
 // Injected subset, not browser conformance evidence. It models the IndexedDB
 // transaction/clone contract: https://w3c.github.io/IndexedDB/#transaction-lifecycle
@@ -75,6 +76,7 @@ function memoryIndexedDB() {
                 return {
                   add: value => write(value, false), put: value => write(value, true),
                   get: key => enqueue(() => structuredClone(snapshot.get(name).get(JSON.stringify(key)))),
+                  getAll: () => enqueue(() => structuredClone([...snapshot.get(name).values()])),
                   index(indexName) {
                     const path = schema.indexes.get(indexName); assert.ok(path);
                     return {getAll: key => enqueue(() => structuredClone([...snapshot.get(name).values()]
@@ -226,5 +228,14 @@ ordered.close();
 await other.finish({error: 'inference failed', endedAt: 5678, state: {tracking: false}});
 assert.equal((await other.read()).status, 'failed');
 other.close();
+assert.equal(typeof retentionModule.listHandReachTrials,'function','cached trials must be discoverable without knowing their IDs');
+const inventory=await retentionModule.listHandReachTrials(options);
+assert.deepEqual(new Set(inventory.map(t=>t.id)),new Set(['trial-a','trial-b','unfinished','ordered']));
+assert.equal(inventory.find(t=>t.id==='unfinished').status,'recording','interrupted trials are not relabeled complete');
+assert.equal(inventory.find(t=>t.id==='trial-a').count,4);
+assert.ok(inventory.every(t=>!Object.hasOwn(t,'frames')),'listing does not load image payloads');
+assert.ok(idb.transactions.at(-1).names.every(name=>name==='trials'));
+idb.failNextRequest(new DOMException('Listing failed','UnknownError'));
+await assert.rejects(retentionModule.listHandReachTrials(options),{name:'UnknownError'});
 assert.ok(idb.connections.every(connection => connection.closed), 'no retained test connections');
 console.log('hand reach retention: commit acknowledgement, clone fidelity, ordering, abort rollback and restart recovery pass (injected IDB only)');
