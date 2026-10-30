@@ -9,6 +9,7 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
  function target(){if(!active())return null;const value=current.adapter.target();return value?{...value,ownerId:current.id}:null;}
  return {
   active,target,exit,
+  context(){return active()?{ownerId:current.id}:null;},
   resolve(id){const value=target();return value?.id===id?value:null;},
   toggle(id){
    if(active()){exit();return true;}
