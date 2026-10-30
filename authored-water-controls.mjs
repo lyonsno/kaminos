@@ -176,7 +176,14 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   const fit=s.simulation?.boundsFit;$('[data-fit-bounds]').hidden=!fit?.changed||s.simulation?.sampling?.container===null;$('[data-fit-bounds]').disabled=dirty||simulationDirty;
   $('[data-fit-bounds]').title=fit?.changed?'Enlarge the shared box to include the placed water. Drop positions, sizes and particle target stay unchanged. Undo restores the previous box.':'';
   const status=text+(s.runtime?.pendingSourceChanges?' · Initial setup changed. Restart to apply it; displayed water is from the current run.':'');if($('[data-state]').textContent!==status)$('[data-state]').textContent=status;
-  if(!dirty)$('[data-source-status]').textContent=s.runtime?.pendingSourceChanges?'Initial setup changed. Select Water simulation and Restart to apply it.':'';
+  if(!dirty){
+   const inlet=runtime?.liveInlets?.inlets.find(row=>row.id===s.selected?.id);
+   const reason=inlet?.blockedReason;
+   const message=reason==='capacity'?'Particle capacity is full. New emission is blocked; existing water continues moving. Select Water simulation to increase capacity and Restart, or let water leave open bounds.':
+    reason==='outside_domain'||reason==='aperture_outside_domain'?'Emitter is outside the simulation bounds, or its aperture crosses them. Move it inside or enlarge the bounds and Restart.':
+    reason==='stale_input'?'Emitter input is stale; new emission is stopped.':reason==='stopped'?'Flow is stopped. Existing water continues moving.':'';
+   $('[data-source-status]').textContent=message+(runtime?.pendingSourceChanges?' Initial setup changed. Select Water simulation and Restart to apply it.':'');
+  }
   const hasSources=Boolean(s.sources?.length||s.selected);
   $('[data-reset]').disabled=!s.runtime&&!hasSources;$('[data-release]').disabled=!hasSources||s.simulation?.compatibility?.compatible===false;$('[data-release]').textContent='Restart';$('[data-pause]').disabled=!s.runtime&&(!hasSources||s.simulation?.compatibility?.compatible===false);$('[data-pause]').textContent=s.runtime&&!s.runtime.paused?'Pause':'Play';
  }
