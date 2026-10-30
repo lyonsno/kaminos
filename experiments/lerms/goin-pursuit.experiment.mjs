@@ -16,7 +16,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  if(physicsInput&&(!theft||!point(physicsInput.support?.size)||physicsInput.support.size.some(x=>x<=0)||!point(physicsInput.support.position)))throw Error('Goin physics requires theft and an explicit box support size and position');
  const waterInput=inputs.water??null;
  if(waterInput){
-  if(typeof host.fluid?.open!=='function')throw Error('Requested water requires the shared fluid capability');
+  if(waterInput.route==='borrowed-mls'?!dependencies.waterReceiver:typeof host.fluid?.open!=='function')throw Error('Requested water requires the shared fluid capability');
   const r=waterInput.receiver;
   if(!r||typeof r.bone!=='string'||!point(r.offset)||!Number.isFinite(r.radius)||r.radius<=0)throw Error('Water receiver requires an explicit Bone sphere');
   if(waterInput.interruptionSeconds!==undefined&&(!Number.isFinite(waterInput.interruptionSeconds)||waterInput.interruptionSeconds<=0))throw Error('Water interruption duration must be positive');
@@ -30,7 +30,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
  let held=false,editHeld=false,presentedPose=null;
  let physics,supportAsset,physicsFailure=null;
  const support=physicsInput?new THREE.Mesh(new THREE.BoxGeometry(...physicsInput.support.size),new THREE.MeshStandardMaterial({color:0x547b72,roughness:.9})):null;
- if(support){support.name='Goin support';support.position.fromArray(physicsInput.support.position);support.receiveShadow=true;}
+ if(support){support.name='Goin support';support.position.fromArray(physicsInput.support.position);support.receiveShadow=true;support.material.visible=physicsInput.support.presentation!==false;}
  let water,receiver,stopWater,waterPending=null,waterFailure=null,wet=false,waterState={status:waterInput?'opening':'not-requested'};
  const escape=theft?new THREE.Mesh(new THREE.ConeGeometry(.2,.5,12),new THREE.MeshStandardMaterial({color:0x41b99a})):null;
  if(escape){escape.name='Escape point';escape.position.fromArray(theft.escape);}
@@ -143,7 +143,7 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   physics:physics?{...physics.read(),failure:physicsFailure?.message??null}:null,
   interaction:{held,nativePlacement:Boolean(edits),pickupWhileHeld:false},
   theft:theft?{socket:structuredClone(theft.socket),attachment:'provisional-source-bone-offset',escape:{id:escapeAsset.id,position:escape.getWorldPosition(new THREE.Vector3()).toArray()},release:physics?'rigid-body fall and contact on authored box support':'world-position detach; no fall or rolling solver'}:null,
-  water:structuredClone(waterState),interruptionRoute:waterInput?'gpu-liquid-volume-sphere-overlap; finite water':'explicit-test-operation; no fluid receiver attached'});
+  water:structuredClone(waterState),interruptionRoute:waterInput?(waterInput.route==='borrowed-mls'?'gpu-active-mls-particle-sphere-overlap':'gpu-liquid-volume-sphere-overlap; finite water'):'explicit-test-operation; no fluid receiver attached'});
  try{
   asset=await session.attach(goin,{owned:true,metadata:{label:'Goin',source:'lerms:provisional-goin-geometry',type:'experiment'}});
   goinInterests=sceneObjectInterests({THREE,root:()=>{let node=goin;while(node.parent)node=node.parent;return node;},
@@ -168,13 +168,18 @@ export async function createGoinPursuit({host,inputs={},record=()=>{}},dependenc
   rememberPose();if(edits)stopEdits=edits.subscribe(observeEdit);
   if(waterInput){
    actor.pose({bones:[waterInput.receiver.bone]});
+   if(waterInput.route==='borrowed-mls'){
+    receiver=dependencies.waterReceiver;
+    waterState={status:'awaiting-sample',route:'borrowed-mls',receiver:structuredClone(waterInput.receiver)};
+   }else{
    const {lazarusFiniteSetup}=await import('../lazarus-fluid/contributions.mjs');
    const setup=lazarusFiniteSetup(waterInput.finite);setup.solver.liquidFireContactCoverage='active-liquid-particles';
    water=await host.fluid.open(setup);
    receiver=await createWaterExposure({descriptor:()=>water.getContactRecordDescriptor()});
    waterState={status:'awaiting-sample',route:'shared-finite-fluid',receiver:structuredClone(waterInput.receiver)};
+   }
    stopWater=session.onFrame(()=>{if(!waterPending)sampleWater().catch(()=>{});});
-   if(waterInput.running===true)water.setPaused(false);
+   if(waterInput.running===true&&water)water.setPaused(false);
   }
   const operations={
    moveGoin(input){active();if(!point(input?.position))throw Error('Goin position must be a finite world point');

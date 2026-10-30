@@ -142,6 +142,15 @@ assert.ok(Math.abs(previewHit.read().creature.action.motion.path.distance-before
 assert.equal(ticks.size,1);assert.equal(previewHit.read().creature.playback.status,'playing');
 await previewHit.dispose();assert.equal(scene.children.length,0);assert.equal(ticks.size,0);assert.equal(opens,closes);
 console.log('Live goin composition moves, interrupts, reacquires current targets and releases every owned session');
+let overlap=0,receiverDisposed=false;
+const borrowed=await createGoinPursuit({host,inputs:{...physicalInputs,water:{route:'borrowed-mls',receiver:{bone:'pelvis',offset:[0,0,0],radius:.5}}}},
+ {loadSources:async()=>data,waterReceiver:{async sample(){return {status:'observed',source:'actual-mls-test-producer',overlap,active:10};},async dispose(){receiverDisposed=true;}}});
+borrowed.operations.advance({seconds:0});const borrowedId=borrowed.read().goin.id;
+await borrowed.operations.sampleWater();assert.equal(borrowed.read().task.custody.phase,'carried');
+overlap=2;await borrowed.operations.sampleWater();assert.equal(borrowed.read().task.custody.phase,'dropped');
+borrowed.operations.advance({seconds:.1});assert.equal(borrowed.read().goin.id,borrowedId);
+assert.ok(borrowed.read().physics.active,'Actual sampled hit releases the same physical object');
+await borrowed.dispose();assert.ok(receiverDisposed);assert.equal(scene.children.length,0);
 const thief=await createGoinPursuit({host,inputs:{...inputs,goin:{position:[0,0,0]},theft:{escape:[0,0,20],socket:{bone:'pelvis',offset:[0,1,0]}}}},{loadSources:async()=>data});
 thief.operations.advance({seconds:0});
 assert.equal(thief.read().task.custody.phase,'carried');

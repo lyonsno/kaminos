@@ -2,6 +2,17 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 const module=await import('../owner-live-fluid-session.mjs').catch(e=>{if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;return {};});
+test('sphere sampling is borrowed from the current producer and rejects a late replaced result',async()=>{
+ let current=null,generation=1,finish;
+ const candidate={dispose(){},sampleSphere:()=>new Promise(resolve=>finish=resolve)};
+ const live=await module.openLiveFluidSession({getHost:()=>current,setHost:v=>current=v,getGeneration:()=>generation,createMlsHost:async()=>candidate},{backend:'mls-mpm'});
+ assert.equal(typeof live.sampleSphere,'function','Live MLS must expose its actual particle sphere query');
+ const first=live.sampleSphere({center:[0,0,0],radius:1});finish({status:'observed',overlap:3});
+ assert.equal((await first).overlap,3);
+ const late=live.sampleSphere({center:[0,0,0],radius:1});generation++;finish({status:'observed',overlap:3});
+ await assert.rejects(late,/expired/);
+ await live.dispose();
+});
 test('live inlet capability owns only its mounted host and rejects stale publication',async()=>{
  assert.equal(typeof module.openLiveFluidSession,'function','live inlet capability missing');
  let current=null,generation=1,disposed=0,packet=null;

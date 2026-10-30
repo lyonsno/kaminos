@@ -52,6 +52,7 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
     setLiveInletPacket:packet=>solver.setPacket(packet),
     interfaceRecordDescriptor:()=>null,
     async snapshot(){return solver.snapshot();},
+    async sampleSphere(sphere){if(disposed||failure)throw Error(failure||'MLS host disposed');const result=await solver.sampleSphere(sphere);if(disposed||failure)throw Error(failure||'MLS host disposed');return result;},
     render({advance=true,volumeTransport=null}={}){
       if(disposed||failure)throw Error(failure||'MLS host disposed');
       if(volumeTransport)throw Error('MLS volume transport is not implemented');

@@ -16,5 +16,6 @@ export async function openLiveFluidSession({getHost,setHost,getGeneration,create
     setPacket:value=>{assertCurrent();return candidate.setLiveInletPacket(value);},
     setPaused:value=>{assertCurrent();return candidate.setPaused(value);},
     snapshot:async()=>{assertCurrent();if(!candidate.snapshot)throw Error('Fluid particle snapshot unavailable');return candidate.snapshot();},
+    sampleSphere:async sphere=>{assertCurrent();if(!candidate.sampleSphere)throw Error('Fluid sphere query unavailable');const result=await candidate.sampleSphere(sphere);assertCurrent();return result;},
     dispose:()=>candidate.dispose()};
 }

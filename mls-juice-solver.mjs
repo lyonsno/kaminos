@@ -1,4 +1,5 @@
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
+import {createMlsSphereQuery} from './mls-sphere-query.mjs';
 
 const boundary=`
         particles[id.x].position=clamp(particles[id.x].position,vec3f(2.),realBoxSize-vec3f(3.));
@@ -28,7 +29,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
   if(Math.ceil(config.gridCells/64)>(device.limits?.maxComputeWorkgroupsPerDimension??Infinity))throw Error('MLS grid exceeds effective one-dimensional dispatch limit');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
-  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,inFlight=Promise.resolve();
+  let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,inFlight=Promise.resolve(),sphereQuery;
   const couplingTiming={batches:0,queueAndReadbackMs:0,bodyStepMs:0};
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
   const cells=buffer(config.gridCells*16,U.STORAGE|U.COPY_DST,'MLS grid');
@@ -102,6 +103,16 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
       }`,'grid',[[0,1],[1,2],[2,5],[3,6]]);
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const api={config,particles,
+      async sampleSphere(sphere){
+        if(disposed||failure)throw Error(failure||'MLS solver disposed');
+        sphereQuery??=createMlsSphereQuery({device,particles,config});
+        const query=await sphereQuery;
+        if(disposed||failure)throw Error(failure||'MLS solver disposed');
+        const observation={route:MLS_ROUTE,source:MLS_SOURCE,step:clock.read().step,timeSeconds:time};
+        const result=await query.sample(sphere);
+        if(disposed||failure)throw Error(failure||'MLS solver disposed');
+        return {...result,...observation};
+      },
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
       advance(nowMs=now(),epochMs=Date.now()){
@@ -163,7 +174,7 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
           await readback.mapAsync(GPUMapMode.READ);return new Float32Array(readback.getMappedRange()).slice();
         }finally{readback.destroy();}
       },
-      dispose(){if(disposed)return;disposed=true;pile?.dispose();for(const b of owned)b.destroy();}
+      dispose(){if(disposed)return;disposed=true;sphereQuery?.then(query=>query.dispose()).catch(()=>{});pile?.dispose();for(const b of owned)b.destroy();}
     };
     return api;
   }catch(error){pile?.dispose();for(const b of owned)b.destroy();throw error;}
