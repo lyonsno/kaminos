@@ -45,7 +45,8 @@ export async function startServer(roots, port = 0, { cors = false } = {}) {
 
 // profileDir: a caller-owned Chrome profile to use and keep (for example to resume a partly cached
 // download). Without it the profile is a fresh temporary directory, removed by close().
-export async function launchChrome(chrome, extraFlags = [], report = {}, { profileDir = null } = {}) {
+export async function launchChrome(chrome, extraFlags = [], report = {}, { profileDir = null, onSpawn = null } = {}) {
+  if (onSpawn !== null && typeof onSpawn !== 'function') throw new TypeError('onSpawn must be a function');
   const profile = profileDir ? path.resolve(profileDir) : await fsp.mkdtemp(path.join(os.tmpdir(), 'klein-cdp-'));
   if (profileDir) await fsp.mkdir(profile, { recursive: true });
   report.profile = { dir: profile, temporary: !profileDir };
@@ -53,6 +54,7 @@ export async function launchChrome(chrome, extraFlags = [], report = {}, { profi
   const child = spawn(chrome, [...flags, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   report.chromeFlags = flags; report.ownedBrowserPid = child.pid;
   child.once('exit', (c, s) => { report.browserExit = { code: c, signal: s }; });
+  onSpawn?.(child);
   // A cold browser on a busy machine can take well over 20 s to open its debugging port.
   const launchStarted = Date.now();
   const wsUrl = await new Promise((resolve, reject) => {

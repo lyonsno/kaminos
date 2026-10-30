@@ -14,7 +14,7 @@ const cast=mode==='cast'?plan.casts.find(c=>`${c.cell}-seed${c.seed}`===castId):
 const prepDir=plan.preparedDir??path.join(root,'prepared');
 const out=mode==='prep'?prepDir:path.join(root,mode==='probe'?'startup-probe':castId??'invalid');await fs.mkdir(out,{recursive:true});
 const report={receiver:plan.receiver,startedAt:new Date().toISOString(),phase:'preflight',ok:false,mode,requested:cast??plan.cells,source:sourceIdentity(plan.repoRoot),runnerSha256:sha(await fs.readFile(new URL(import.meta.url))),cells:[]};
-let browser;const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');await write();
+let browser,ownedChild;const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');await write();
 async function saveArray(expr,file){
  const size=await browser.evaluate(`(${expr}).byteLength`);assert.ok(Number.isInteger(size)&&size>0,`missing ${file}`);
  const handle=await fs.open(path.join(out,file),'w');let offset=0;
@@ -29,7 +29,7 @@ try{
  assert.equal(report.runtime.trellisPage?.mounted,true);assert.equal(report.runtime.trellisPage?.checkpointRoot??report.runtime.trellisPage?.modelRoot,plan.checkpointRoot,'installed checkpoint root');
  report.phase='browser';await write();
  report.executable=await fs.realpath(plan.chrome);assert.ok(!report.executable.includes('/Google Chrome.app/'));
- browser=await launchChrome(report.executable,['--disable-background-timer-throttling','--disable-renderer-backgrounding'],report);
+ browser=await launchChrome(report.executable,['--disable-background-timer-throttling','--disable-renderer-backgrounding'],report,{onSpawn:child=>{ownedChild=child}});
  await browser.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
  await browser.navigate(`${plan.origin}/index.html?workspace=authoring`,'!!window.kaminosAppGpu');
  await browser.evaluate(`(async()=>{const {awaitAppGpu}=await import('./tools/assays/official-rig-casts/startup.mjs');window.assayHost=await awaitAppGpu(()=>window.kaminosAppGpu());window.assayPhases=[];window.assayErrors=[];window.assayHost.device.addEventListener('uncapturederror',e=>window.assayErrors.push(e.error.message));window.assayHash=async a=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',a)),x=>x.toString(16).padStart(2,'0')).join('');window.assayPng=async (rgba,w,h)=>{const canvas=new OffscreenCanvas(w,h);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),w,h),0,0);return(await canvas.convertToBlob({type:'image/png'})).arrayBuffer()};})()`);
@@ -81,7 +81,7 @@ finally{
   if(await browser.evaluate('!!window.assayFailure')){const capture=await browser.evaluate(`(()=>{const c=assayFailure;return {...c,tensors:Object.fromEntries(Object.entries(c.tensors??{}).map(([k,v])=>[k,{...v,bytes:undefined}])),noise:Object.fromEntries(Object.entries(c.noise??{}).map(([k,v])=>[k,{...v,values:undefined}]))}})()`);for(const [k,v] of Object.entries(capture.tensors??{}))v.file=await saveArray(`window.assayFailure.tensors[${JSON.stringify(k)}].bytes`,`failure-${k}.bin`);for(const [k,v] of Object.entries(capture.noise??{}))v.file=await saveArray(`window.assayFailure.noise[${JSON.stringify(k)}].values`,`failure-noise-${k}.bin`);report.failureCapture=capture;}
  }catch(e){report.captureError=String(e);}
  try{await closeOwnedBrowser(browser,report);}catch(e){report.cleanupError=String(e);report.ok=false;process.exitCode=1;}
- }else if(report.ownedBrowserPid&&!report.browserExit){process.kill(report.ownedBrowserPid,'SIGTERM');report.startupCleanup=report.ownedBrowserPid;}
+ }else if(ownedChild){try{await closeOwnedBrowser({child:ownedChild,close:async()=>{if(report.profile?.temporary)await fs.rm(report.profile.dir,{recursive:true,force:true})}},report)}catch(e){report.cleanupError=String(e);report.remainingBrowserPid=ownedChild.pid;report.ok=false;process.exitCode=1;}}
  report.finishedAt=new Date().toISOString();await write();if(!report.ok)await fs.writeFile(path.join(out,'failure.json'),JSON.stringify(report,null,2)+'\n');
 }
 
