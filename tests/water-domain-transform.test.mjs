@@ -27,7 +27,7 @@ import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
 import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup} from '../local-liquid-setup.mjs';
 import {authoredMlsCellSize,authoredMlsSetup} from '../authored-mls-water.mjs';
 import {mlsConfig} from '../mls-juice-contract.mjs';
-import {createSceneEdits} from '../scene-edit-session.mjs';
+import {createSceneEdits,transformPose} from '../scene-edit-session.mjs';
 const source={id:'inlet',type:'local-liquid-emitter',transform:{position:[.25,.5,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]},localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'continuous',baseRadius:.04,strength:1,rate:240}};
 test('native pose history edits only bounds, preserving sources, sampling and evolved run',()=>{
  const sampling={spacing:1/48,particleTarget:1234,container:{min:[-.5,0,-.5],max:[.5,1,.5]}};
@@ -54,4 +54,11 @@ test('open bounds preserve wall policy and sampling; scaling has no authored upp
  assert.equal(resized.container,null);assert.equal(resized.particleTarget,321);assert.equal(resized.spacing,.02);
  assert.deepEqual(waterDomainPose(resized).scale,[123,3*.05,3*.05]);
  assert.throws(()=>waterDomainSampling(sampling,{...pose,scale:[Infinity,1,1]},.05),/finite/);
+});
+test('native world-axis scaling can reach and cross zero before the water minimum clamps',()=>{
+ const base={position:[.25,.5,0],rotation:[0,0,0],scale:[2,1,1]};
+ for(const amount of [0,-.25]){
+  const pose=transformPose(base,{operation:'scale',axis:'x',frame:'world',amount});
+  assert.deepEqual(checkedWaterDomainPose(pose,.05).scale,[3*.05,1,1]);
+ }
 });
