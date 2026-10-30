@@ -13027,6 +13027,9 @@ export function createKaminosVolumePrototype({
 
   function rebuildFluidBindGroups() {
     if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || quenchBuffers.length !== 2 || !boundarySidecarBuffer) return;
+    // Pressure shares this layout, including the display field. Its cached
+    // group must retire with the other groups when any shared resource changes.
+    if (separatedPressure) separatedPressure.group = null;
     bindGroups = [];
     for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
       for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {

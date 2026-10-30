@@ -68,3 +68,27 @@ test('world resize keeps ordinary transport available when adaptive capacity is 
   assert.ok(ctx.worldSmoke,'Ordinary world field remains available after adaptive admission fails');
   assert.equal(ctx.adaptiveMaterialOptions.budget,100,'Requested policy remains visible for correction');
 });
+
+test('separated pressure follows display allocation rebuilds without rebuilding unchanged frames',()=>{
+  let optical={destroyed:false};const bound=[];
+  const owner={key:'32:64:32:2:material',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
+  const ctx={displayReconstruction:{texture:optical},bindGroupLayout:{},uniformBuffer:{},externalEmitterBuffer:{},oracleActivityCueBuffer:{},nonRidgeOpticalCaptureHeaderBuffer:{},quenchBuffers:[{},{}],boundarySidecarBuffer:{},bindGroups:[],boundarySplatLiveCompleteFlameCoefficientBuffer:null,liveCompleteFlameCoefficientWriteBindGroups:[],gridShapeLabel:()=>'32x64x32',waveletTextures:[{},{}],pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
+    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
+    sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
+    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{},{}],currentFluid:0,
+    createFluidRenderBindGroup:()=>({texture:ctx.displayReconstruction.texture}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
+    beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};
+  vm.createContext(ctx);vm.runInContext([grab('rebuildFluidBindGroups'),grab('encodeSeparatedPressure')].join('\n'),ctx);
+  const encoder={beginComputePass:()=>({setPipeline(){},setBindGroup(i,g){if(i===0)bound.push(g.texture);},dispatchWorkgroups(){},end(){}})};
+  const solver={effective:{solver:'converged',iterations:1,openTop:true}};
+  ctx.encodeSeparatedPressure(encoder,solver,{});bound.length=0;
+  const firstGroup=owner.group;
+  ctx.encodeSeparatedPressure(encoder,solver,{});
+  assert.equal(owner.group,firstGroup,'stable allocation reuses its cached pressure binding');
+  bound.length=0;
+  optical.destroyed=true;ctx.displayReconstruction.texture={destroyed:false};
+  ctx.rebuildFluidBindGroups();
+  ctx.encodeSeparatedPressure(encoder,solver,{});
+  assert.equal(bound.length,4);
+  assert.ok(bound.every(texture=>texture===ctx.displayReconstruction.texture&&!texture.destroyed),'pressure passes must not retain the replaced display allocation');
+});
