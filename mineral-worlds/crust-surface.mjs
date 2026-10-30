@@ -1,3 +1,4 @@
+import {grainBasis} from './crust-frame.mjs';
 import {facePoint,facePatch,faceFrame} from './crust-faces.mjs';
 import {Group,Mesh,InstancedMesh,BoxGeometry,PlaneGeometry,BufferGeometry,Float32BufferAttribute,MeshStandardNodeMaterial,MeshBasicNodeMaterial,Matrix4,Quaternion,Vector3,Color,DoubleSide} from '../lib/three.webgpu.js';
 import {grainDimensions,grainCenter,trackGeometry,trackPoint} from './crust.mjs';
@@ -17,7 +18,7 @@ export function createCrustSurface(state){
   if(last===s.tick&&crystals)return;
   if(s.grains.length>capacity){if(crystals){root.remove(crystals);crystals.dispose();}capacity=2**Math.ceil(Math.log2(Math.max(1,s.grains.length)));crystals=new InstancedMesh(crystalGeometry,crystalMaterial,capacity);crystals.name='Retained crystal faces';crystals.castShadow=true;crystals.receiveShadow=true;root.add(crystals);}
   crystals.count=s.grains.length;
-  s.grains.forEach((g,i)=>{const d=grainDimensions(g),c=grainCenter(g),wet=s.pools[g.topPool]?.water??0,cap=d[0]*d[2]*.016,f=clamp(wet/Math.max(cap,1e-12),0,1);position.fromArray(c);scale.fromArray(d);rotation.setFromAxisAngle(up,-g.angle);matrix.compose(position,rotation,scale);crystals.setMatrixAt(i,matrix);color.setRGB(.88-.15*f,.86-.12*f,.77-.06*f);if(!g.authored)color.multiplyScalar(1.04);crystals.setColorAt(i,color);});
+  s.grains.forEach((g,i)=>{const d=grainDimensions(g),c=grainCenter(g),wet=s.pools[g.topPool]?.water??0,cap=d[0]*d[2]*.016,f=clamp(wet/Math.max(cap,1e-12),0,1);position.fromArray(c);scale.fromArray(d);if(g.basis){const [x,y,z]=grainBasis(g);matrix.makeBasis(new Vector3(...x),new Vector3(...y),new Vector3(...z));rotation.setFromRotationMatrix(matrix);}else rotation.setFromAxisAngle(up,-g.angle);matrix.compose(position,rotation,scale);crystals.setMatrixAt(i,matrix);color.setRGB(.88-.15*f,.86-.12*f,.77-.06*f);if(!g.authored)color.multiplyScalar(1.04);crystals.setColorAt(i,color);});
   crystals.instanceMatrix.needsUpdate=true;crystals.instanceColor.needsUpdate=true;crystals.computeBoundingSphere();
   const water=[],lines=[];
   const triangle=(arr,a,b,c)=>arr.push(...a,...b,...c);

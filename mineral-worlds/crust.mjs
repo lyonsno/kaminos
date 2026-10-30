@@ -1,3 +1,4 @@
+import {grainBasis,grainPoint,frameCenter,frameBounds,frameOverlap,seedBasis,dot,cross} from './crust-frame.mjs';
 import {faceFrame,facePoint,faceUV,facePatch,patchContains,edgePorts,wetEdgePort} from './crust-faces.mjs';
 import {createGrainIndex} from './crust-spatial.mjs';
 // Restricted, dimensionless capillary slots and surface-film strips. This is a
@@ -11,13 +12,13 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const reservoir=p=>p.kind==='face'||p.kind==='junction';
 export function grainDimensions(g){return [g.faces[0]-g.faces[1],g.faces[4]-g.faces[5],g.faces[2]-g.faces[3]];}
 export function grainVolume(g){return grainDimensions(g).reduce((a,b)=>a*b,1);}
-export function grainCenter(g){const c=Math.cos(g.angle),sn=Math.sin(g.angle),x=(g.faces[0]+g.faces[1])/2,z=(g.faces[2]+g.faces[3])/2;return [g.x+c*x-sn*z,(g.faces[4]+g.faces[5])/2,g.z+sn*x+c*z];}
+export function grainCenter(g){if(g.basis)return frameCenter(g);const c=Math.cos(g.angle),sn=Math.sin(g.angle),x=(g.faces[0]+g.faces[1])/2,z=(g.faces[2]+g.faces[3])/2;return [g.x+c*x-sn*z,(g.faces[4]+g.faces[5])/2,g.z+sn*x+c*z];}
 function radius(g,dx,dz){const c=Math.cos(g.angle),sn=Math.sin(g.angle),x=c*dx+sn*dz,z=-sn*dx+c*dz;const [w,,d]=grainDimensions(g);return Math.min(Math.abs(x)>EPS?w/2/Math.abs(x):Infinity,Math.abs(z)>EPS?d/2/Math.abs(z):Infinity);}
 function addPool(s,grain,face){const p={id:s.pools.length,kind:'face',grain,face,water:0,salt:0,residue:0,hazard:0,births:0,threshold:-Math.log(Math.max(EPS,random(s.seed,s.pools.length+507)))};s.pools.push(p);return p.id;}
 function addTrack(s,a,b,kind,carrier=null){const p={id:s.pools.length,kind,a,b,carrier,water:0,salt:0,residue:0,hazard:0,births:0,threshold:-Math.log(Math.max(EPS,random(s.seed,s.pools.length+507))),owner:a,connected:false,maxWetFraction:0,anchor:null};s.pools.push(p);return p.id;}
 function addGrain(s,x,z,y,size,angle,authored,parent=null){const g={id:s.grains.length,x,z,angle,faces:[size[0]/2,-size[0]/2,size[2]/2,-size[2]/2,y+size[1],y],authored,parent,born:s.time,basePool:null,topPool:null};s.grains.push(g);return g;}
-export function createCrust({rows=4,seed=31,settings={},setup='blocks'}={}){
- if(setup==='neighbors')return createNeighbors({seed,settings});
+export function createCrust({rows=4,seed=31,settings={},setup='blocks',arrangement='neighbors',tilt=0}={}){
+ if(setup==='neighbors')return createNeighbors({seed,settings,arrangement,tilt});
  if(setup!=='blocks')throw Error('Unknown crust setup');
  if(!Number.isInteger(rows)||rows<1||!Number.isSafeInteger(seed))throw Error('Invalid crust setup');
  const s={model:CRUST_MODEL,seed,rows,time:0,tick:0,settings:{...DEFAULTS},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
@@ -45,20 +46,32 @@ export function createCrust({rows=4,seed=31,settings={},setup='blocks'}={}){
 }
 function faceNetwork(s,g,supportFace=5){
  g.supportFace=supportFace;g.facePools=Array(6).fill(null);
- for(let face=0;face<6;face++)if(face!==supportFace&&!(face===5&&g.faces[5]<=1e-9))g.facePools[face]=addPool(s,g.id,face);
+ for(let face=0;face<6;face++)if(face!==supportFace&&!(face===5&&!g.basis&&g.faces[5]<=1e-9))g.facePools[face]=addPool(s,g.id,face);
  g.topPool=g.facePools[4]??g.facePools.find(id=>id!==null);g.basePool=g.facePools.find(id=>id!==null);
  for(let a=0;a<6;a++)for(let b=a+1;b<6;b++)if(g.facePools[a]!==null&&g.facePools[b]!==null&&Math.floor(a/2)!==Math.floor(b/2)){
   const id=addTrack(s,g.facePools[a],g.facePools[b],'edge'),p=s.pools[id];[p.portA,p.portB]=edgePorts(g,a,b);p.surfaceEdge=true;
  }
 }
-function createNeighbors({seed,settings}){
+function createNeighbors({seed,settings,arrangement,tilt}){
+ if(!['neighbors','arcs','spiral'].includes(arrangement))throw Error('Unknown seed arrangement');positive(tilt,'seed tilt');
  if(!Number.isSafeInteger(seed))throw Error('Invalid crust seed');
- const s={model:CRUST_MODEL,setup:'neighbors',faceModel:'exposed-contact-v2',seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
+ const s={model:CRUST_MODEL,setup:'neighbors',faceModel:arrangement!=='neighbors'||tilt>0?'oriented-contact-v3':'exposed-contact-v2',arrangement,tilt,seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
  const source=addPool(s,null,'base');Object.assign(s.pools[source],{kind:'junction',walls:[],x:0,z:0});s.sources=[source];
- for(const [x,z,size,angle] of [[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]){
-  const g=addGrain(s,x,z,0,[size,size,size],angle,true);faceNetwork(s,g);
-  for(let face=0;face<4;face++){const id=addTrack(s,source,g.facePools[face],'edge');s.pools[id].portB=[.5,0];}
+ const seeds=arrangement==='neighbors'?[[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]:[];
+ if(arrangement==='arcs')for(let ring=0;ring<3;ring++){const radius=.43+ring*.43,count=5+ring*3;for(let i=0;i<count;i++){const angle=-2.25+4.5*i/(count-1);seeds.push([Math.cos(angle)*radius,Math.sin(angle)*radius,.24,angle+PI/2]);}}
+ if(arrangement==='spiral'){let angle=0;for(let i=0;i<26;i++){const radius=.32+.10*angle;seeds.push([Math.cos(angle)*radius,Math.sin(angle)*radius,.23,angle+PI/2]);angle+=.43/radius;}}
+ for(const [x,z,size,angle] of seeds){
+  const g=addGrain(s,x,z,0,[size,size,size],angle,true);
+  if(arrangement!=='neighbors'||tilt>0){g.basis=seedBasis(angle,tilt*(.4+.6*random(seed,g.id+1200)));g.origin=[x,0,z];g.faces=[size/2,-size/2,size/2,-size/2,size/2,-size/2];g.origin[1]=-frameBounds(g)[2]+1e-9;}
+  faceNetwork(s,g,g.basis?-1:5);
+  // Authored basal supply contacts the lowest corner, not an invented mid-face inlet.
+  if(g.basis){const axes=grainBasis(g),local=axes.map((axis,i)=>(axis[1]>0?-1:1)*size/2),point=grainPoint(g,local);
+   for(let face=0;face<6;face++){const uv=faceUV(g,face,point),frame=faceFrame(g,face),onPlane=Math.abs(dot(point.map((v,i)=>v-frame.origin[i]),frame.normal))<1e-8;
+    if(!onPlane)continue;const id=addTrack(s,source,g.facePools[face],'edge');s.pools[id].portB=uv.map(v=>clamp(v,0,1));}
+  }else for(let face=0;face<4;face++){const id=addTrack(s,source,g.facePools[face],'edge');s.pools[id].portB=[.5,0];}
  }
+ if(arrangement!=='neighbors')s.rows=4;
+
  setCrustConditions(s,settings);s.pools[source].water=.08;s.pools[source].salt=.08*s.settings.salinity;s.ledger.initialWater=.08;s.ledger.initialSalt=s.pools[source].salt;return s;
 }
 export function setCrustConditions(s,patch){const next={...s.settings};for(const [k,v]of Object.entries(patch)){if(!(k in DEFAULTS))throw Error('Unknown crust condition '+k);next[k]=positive(v,k);}if(next.barrier<1)throw Error('Nucleation barrier must be at least saturation');if(!Number.isFinite(next.feed*next.salinity))throw Error('Incoming salt rate overflows the numeric representation');s.settings=next;return {...next};}
@@ -121,6 +134,7 @@ function exchange(a,b,ga,gb,conductance,dt,limit=Infinity,permitA=true,permitB=t
  donor.water=Math.max(0,donor.water-v);receiver.water+=v;donor.salt=Math.max(0,donor.salt-salt);receiver.salt+=salt;
 }
 function overlaps(a,b){
+ if(a.basis||b.basis)return frameOverlap(a,b);
  if(a.faces[4]<=b.faces[5]+1e-10||b.faces[4]<=a.faces[5]+1e-10)return false;
  const ca=grainCenter(a),cb=grainCenter(b),da=grainDimensions(a),db=grainDimensions(b);
  for(const angle of [a.angle,a.angle+PI/2,b.angle,b.angle+PI/2]){
@@ -134,8 +148,8 @@ function growFace(s,g,volume,face,neighbors){
  if(volume<=0)return 0;const d=grainDimensions(g),area=face<2?d[1]*d[2]:face<4?d[0]*d[1]:d[0]*d[2],sign=face%2===0?1:-1,old=g.faces[face],delta=volume/area;
  g.faces[face]=old+sign*delta;
  const candidates=neighbors(g);let fraction=1;
- if([...candidates].some(other=>overlaps(g,other))){
-  let lo=0,hi=1;while(hi-lo>1e-8){const f=(lo+hi)/2;g.faces[face]=old+sign*delta*f;if([...candidates].some(other=>overlaps(g,other)))hi=f;else lo=f;}fraction=lo;
+ if((g.basis&&frameBounds(g)[2]<-1e-8)||[...candidates].some(other=>overlaps(g,other))){
+  let lo=0,hi=1;while(hi-lo>1e-8){const f=(lo+hi)/2;g.faces[face]=old+sign*delta*f;if((g.basis&&frameBounds(g)[2]<-1e-8)||[...candidates].some(other=>overlaps(g,other)))hi=f;else lo=f;}fraction=lo;
  }
  g.faces[face]=old+sign*delta*fraction;neighbors.add(g);return volume*fraction;
 }
@@ -169,6 +183,7 @@ function birthSite(s,p,size){
   const g=s.grains[p.grain],patch=facePatch(s,p),t=random(s.seed,key+72),edge=Math.floor(random(s.seed,key+73)*4),uv=[patch.lo[0]+t*(patch.hi[0]-patch.lo[0]),patch.lo[1]+t*(patch.hi[1]-patch.lo[1])];
   uv[edge<2?0:1]=edge%2?patch.hi[edge<2?0:1]:patch.lo[edge<2?0:1];
   const frame=faceFrame(g,p.face);normal=frame.normal;point=facePoint(g,p.face,uv,size/2+1e-9);orientation=g.angle;carrier=g.id;
+  if(g.basis)return {x:point[0],z:point[2],y:point[1]-size/2,angle:g.angle,carrier:g.id,point:facePoint(g,p.face,uv),basis:structuredClone(g.basis),origin:point};
   if(p.face===4)point[1]-=size/2; // addGrain takes the bottom, not the center, on a top face.
  }else if(p.kind==='face'){
   const g=s.grains[p.grain],c=grainCenter(g),[w,,d]=grainDimensions(g),co=Math.cos(g.angle),sn=Math.sin(g.angle),sat=clamp(p.water/trackGeometry(s,p).capacity,0,1);
@@ -201,8 +216,10 @@ function nucleate(s,p,geom,dt,neighbors){
   const size=.016/Math.log(current),mass=8*size**3;if(mass>Math.max(0,p.salt-p.water))break;
   const site=birthSite(s,p,size);if(!site)break;const candidate={id:s.grains.length,x:site.x,z:site.z,angle:site.angle,faces:[size/2,-size/2,size/2,-size/2,site.y+size,site.y]};
   p.hazard-=p.threshold;p.attempts=(p.attempts??0)+1;p.threshold=-Math.log(Math.max(EPS,random(s.seed,p.id*101+(p.attempts??0)*997+720)));
+  if(site.basis){candidate.basis=site.basis;candidate.origin=site.origin;candidate.faces=[size/2,-size/2,size/2,-size/2,size/2,-size/2];if(frameBounds(candidate)[2]<-1e-8)continue;}
   if([...neighbors(candidate)].some(other=>overlaps(candidate,other)))continue;
   const child=addGrain(s,site.x,site.z,site.y,[size,size,size],site.angle,false,site.carrier);
+  if(site.basis){child.basis=site.basis;child.origin=site.origin;child.faces=[...candidate.faces];}
   if(s.setup==='neighbors'){
    const support=p.face^1;faceNetwork(s,child,support);
    // The attachment face is buried. Brine meets exposed faces at the contact
@@ -212,7 +229,8 @@ function nucleate(s,p,geom,dt,neighbors){
     if(portA.some(v=>v< -1e-8||v>1+1e-8))continue;
     const id=addTrack(s,p.id,child.facePools[face],'edge'),frame=faceFrame(s.grains[p.grain],p.face);
     s.pools[id].portA=portA.map(v=>clamp(v,0,1));s.pools[id].portB=portB;
-    s.pools[id].contactA=[size/(2*frame.w),size/(2*frame.h)];s.pools[id].contactB=[.5,.5];
+    const along=Math.abs(portB[0]-.5)<.25?0:1,ends=[0,1].map(t=>{const uv=[...portB];uv[along]=t;return faceUV(s.grains[p.grain],p.face,facePoint(child,face,uv));});
+    s.pools[id].contactA=ends[0].map((v,i)=>Math.abs(ends[1][i]-v)/2);s.pools[id].contactB=portB.map((_,i)=>i===along?.5:0);
    }
   }else{child.topPool=addPool(s,child.id,'top');child.basePool=child.topPool;const branch=addTrack(s,p.id,child.topPool,'branch',child.id);s.pools[branch].anchor=[...site.point];}
   neighbors.add(child);p.salt-=mass;p.births++;s.events.nucleations++;s.ledger.deposited+=mass;
@@ -275,13 +293,15 @@ export function saveCrust(s){return structuredClone(s);}
 export function restoreCrust(value){
  const s=structuredClone(value);if(s?.model!==CRUST_MODEL)throw Error('Unknown crust model');
  if(!Array.isArray(s.grains)||!Array.isArray(s.pools)||!Array.isArray(s.sources)||!s.sources.length)throw Error('Invalid crust arrays');
- if(s.setup==='neighbors'&&s.faceModel!=='exposed-contact-v2')throw Error('Unsupported face wetting model');
+ if(s.setup==='neighbors'&&!['exposed-contact-v2','oriented-contact-v3'].includes(s.faceModel))throw Error('Unsupported face wetting model');
  if(s.setup!=null&&s.setup!=='neighbors')throw Error('Invalid crust setup');
  positive(s.time,'time');if(!Number.isSafeInteger(s.tick)||s.tick<0||!Number.isSafeInteger(s.rows)||s.rows<1||!Number.isSafeInteger(s.seed))throw Error('Invalid crust clock or setup');
  if(!s.settings||Object.keys(s.settings).length!==Object.keys(DEFAULTS).length||Object.keys(DEFAULTS).some(k=>!(k in s.settings)))throw Error('Incomplete crust conditions');setCrustConditions(s,s.settings);
  for(const k of ['initialWater','initialSalt','incomingWater','incomingSalt','evaporated','deposited'])positive(s.ledger?.[k],'ledger '+k);
  for(const k of ['nucleations','dryouts','closures'])if(!Number.isSafeInteger(s.events?.[k])||s.events[k]<0)throw Error('Invalid event counter');
  for(const [i,g]of s.grains.entries())if(g.id!==i||g.faces?.length!==6||![g.x,g.z,g.angle,...g.faces].every(Number.isFinite)||grainDimensions(g).some(x=>x<=0)||typeof g.authored!=='boolean'||g.parent!=null&&(!s.grains[g.parent]||g.parent>=i))throw Error('Invalid grain');
+ for(const g of s.grains)if(g.basis){if(s.setup!=='neighbors'||s.faceModel!=='oriented-contact-v3')throw Error('Oriented grain requires oriented face model');if(g.origin?.length!==3||!g.origin.every(Number.isFinite)||g.basis.length!==3||g.basis.some(a=>a?.length!==3||!a.every(Number.isFinite))||g.basis.some((a,i)=>g.basis.some((b,j)=>Math.abs(dot(a,b)-(i===j?1:0))>1e-8))||dot(cross(g.basis[0],g.basis[1]),g.basis[2])<.99999999)throw Error('Invalid grain frame');}
+ if(s.arrangement!=null&&!['neighbors','arcs','spiral'].includes(s.arrangement))throw Error('Invalid seed arrangement');if(s.tilt!=null)positive(s.tilt,'seed tilt');
  for(const [i,p]of s.pools.entries()){
   if(p.id!==i||!['face','junction','gap','film','branch','edge'].includes(p.kind))throw Error('Invalid pool');for(const k of ['water','salt','residue','hazard','births','threshold'])positive(p[k],k);if(p.threshold===0||!Number.isSafeInteger(p.births))throw Error('Invalid nucleation clock');
   if(p.anchor!=null&&(!Array.isArray(p.anchor)||p.anchor.length!==3||!p.anchor.every(Number.isFinite)))throw Error('Invalid film anchor');
@@ -293,8 +313,8 @@ export function restoreCrust(value){
   if(p.kind==='gap'&&(!Array.isArray(p.walls)||p.walls.length!==2||p.walls.some(id=>!s.grains[id])))throw Error('Invalid gap walls');if((p.kind==='film'||p.kind==='branch')&&!s.grains[p.carrier])throw Error('Invalid film carrier');
  }
  if(s.sources.some(id=>!Number.isSafeInteger(id)||s.pools[id]?.kind!=='junction'))throw Error('Invalid brine source');
- for(const g of s.grains)if(s.setup==='neighbors'&&(!Number.isInteger(g.supportFace)||g.supportFace<0||g.supportFace>5||!Array.isArray(g.facePools)||g.facePools.length!==6||g.facePools[g.supportFace]!==null||g.facePools.some((id,f)=>id!==null&&(s.pools[id]?.grain!==g.id||s.pools[id]?.face!==f))))throw Error('Missing exposed-face state');
+ for(const g of s.grains)if(s.setup==='neighbors'&&(!Number.isInteger(g.supportFace)||g.supportFace< -1||g.supportFace>5||!Array.isArray(g.facePools)||g.facePools.length!==6||(g.supportFace>=0&&g.facePools[g.supportFace]!==null)||g.facePools.some((id,f)=>id!==null&&(s.pools[id]?.grain!==g.id||s.pools[id]?.face!==f))))throw Error('Missing exposed-face state');
  for(const g of s.grains)if(s.pools[g.topPool]?.grain!==g.id||s.pools[g.topPool]?.kind!=='face')throw Error('Missing crystal liquid state');
  return s;
 }
-export function readCrust(s){const water=s.pools.reduce((a,p)=>a+p.water,0),solute=s.pools.reduce((a,p)=>a+p.salt,0),residue=s.pools.reduce((a,p)=>a+p.residue,0);return {model:s.model,setup:s.setup??'blocks',time:s.time,tick:s.tick,settings:{...s.settings},grains:s.grains.length,authored:s.grains.filter(g=>g.authored).length,nuclei:s.events.nucleations,tracks:s.pools.filter(p=>!reservoir(p)).length,wet:s.pools.filter(p=>p.water>0).length,connected:s.pools.filter(p=>p.connected).length,water,solute,unresolvedDrySalt:residue,deposited:s.ledger.deposited,waterError:water+s.ledger.evaporated-s.ledger.initialWater-s.ledger.incomingWater,saltError:solute+residue+s.ledger.deposited-s.ledger.initialSalt-s.ledger.incomingSalt,events:{...s.events},provenance:s.setup==='neighbors'?'Authored five-grain neighborhood; face-local films and edge ports; finite shared basal supply; phenomenological nucleation; no reconstructed pore network':'Authored seed grains; reduced capillary slots and one-sided surface-film strips; phenomenological interfacial nucleation; dimensionless, uncalibrated'};}
+export function readCrust(s){const water=s.pools.reduce((a,p)=>a+p.water,0),solute=s.pools.reduce((a,p)=>a+p.salt,0),residue=s.pools.reduce((a,p)=>a+p.residue,0);return {model:s.model,setup:s.setup??'blocks',arrangement:s.arrangement??'neighbors',tilt:s.tilt??0,time:s.time,tick:s.tick,settings:{...s.settings},grains:s.grains.length,authored:s.grains.filter(g=>g.authored).length,nuclei:s.events.nucleations,tracks:s.pools.filter(p=>!reservoir(p)).length,wet:s.pools.filter(p=>p.water>0).length,connected:s.pools.filter(p=>p.connected).length,water,solute,unresolvedDrySalt:residue,deposited:s.ledger.deposited,waterError:water+s.ledger.evaporated-s.ledger.initialWater-s.ledger.incomingWater,saltError:solute+residue+s.ledger.deposited-s.ledger.initialSalt-s.ledger.incomingSalt,events:{...s.events},provenance:s.setup==='neighbors'?`Authored ${s.arrangement??'neighbors'} seed layout; face-local films and edge ports; shared basal supply; phenomenological nucleation; no reconstructed pore network`:'Authored seed grains; reduced capillary slots and one-sided surface-film strips; phenomenological interfacial nucleation; dimensionless, uncalibrated'};}

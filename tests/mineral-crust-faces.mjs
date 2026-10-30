@@ -54,3 +54,22 @@ test('wetting reaches a shared edge away from its midpoint',()=>{
  advanceCrust(s,.1);assert.ok(s.pools[g.facePools[3]].water>0,'wet corner was blocked by a midpoint-only edge port');
  assert.equal(s.pools[g.facePools[4]].water,0,'the dry upper edge must remain disconnected');
 });
+test('arc and spiral seeds retain full spatial frames and exact evolving continuation',()=>{
+ for(const arrangement of ['arcs','spiral']){
+  const s=createCrust({setup:'neighbors',arrangement,tilt:.25,settings:{nucleation:0}});
+  assert.equal(s.arrangement,arrangement,'requested seed arrangement was ignored');
+  assert.ok(s.grains.every(g=>g.basis?.length===3&&g.origin?.length===3));
+  assert.ok(s.grains.some(g=>Math.abs(g.basis[1][0])+Math.abs(g.basis[1][2])>.01));
+  advanceCrust(s,.3);const b=restoreCrust(saveCrust(s));advanceCrust(s,.3);advanceCrust(b,.3);assert.deepEqual(s,b);
+  assert.ok(Math.abs(readCrust(s).saltError)<1e-10);assert.ok(Math.abs(readCrust(s).waterError)<1e-10);
+ }
+});
+test('an interior child patch cannot drain across a dry attachment perimeter',async()=>{
+ const {trackGeometry}=await import('../mineral-worlds/crust.mjs');const s=createCrust({setup:'neighbors'});advanceCrust(s,8);
+ const e=s.pools.find(e=>e.kind==='edge'&&!e.surfaceEdge&&s.pools[e.a].kind==='face');assert.ok(e);empty(s);Object.assign(s.settings,{feed:0,evaporation:0,growth:0,nucleation:0});
+ const b=s.pools[e.b];b.entry=[.5,.5];b.water=trackGeometry(s,b).capacity*.01;b.salt=b.water;advanceCrust(s,.1);assert.equal(s.pools[e.a].water,0);
+});
+test('authored curved layouts have no initial intersecting seeds across lean settings',async()=>{
+ const {frameOverlap}=await import('../mineral-worlds/crust-frame.mjs');
+ for(const arrangement of ['arcs','spiral'])for(const tilt of [0,.24,.8,1.6,3]){const s=createCrust({setup:'neighbors',arrangement,tilt});for(let i=0;i<s.grains.length;i++)for(let j=0;j<i;j++)assert.equal(frameOverlap(s.grains[i],s.grains[j]),false,`${arrangement} ${tilt} seeds ${i}/${j}`);}
+});
