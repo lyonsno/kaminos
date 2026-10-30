@@ -99,10 +99,12 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
           if(p[axis]<2.&&v[axis]<0.){v[axis]=0.;}
           if(p[axis]>box[axis]-3.&&v[axis]>0.){v[axis]=0.;}
         }
-        let delta=p+vec3f(.5)-obstacle.xyz;
+        // P2G/G2P locate each physical grid sample at cellX + 0.5.
+        let center=p+vec3f(.5);
+        let delta=center-obstacle.xyz;
         if(length(delta)<obstacle.w+1.){let normal=normalize(delta);v-=normal*min(0.,dot(v,normal));}
-        let ground=hillSample(p.xz);
-        if(ground.w>0.&&p.y<ground.x+1.){let normal=normalize(vec3f(-ground.y,1.,-ground.z));v-=normal*min(0.,dot(v,normal));}
+        let ground=hillSample(center.xz);
+        if(ground.w>0.&&center.y<ground.x+1.){let normal=normalize(vec3f(-ground.y,1.,-ground.z));v-=normal*min(0.,dot(v,normal));}
         cells[id.x].vx=i32(v.x*65536.);cells[id.x].vy=i32(v.y*65536.);cells[id.x].vz=i32(v.z*65536.);
       }`,'grid',[[0,1],[1,2],[2,5],[3,6],[4,7],[5,8]]);
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};

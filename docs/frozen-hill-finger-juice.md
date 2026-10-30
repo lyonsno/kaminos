@@ -42,3 +42,5 @@ and `gridSize: [192,80,256]` in `experiment_inputs`. The existing
 zero runtime map-for-read calls and paused native-particle contact against the
 source triangles. `tools/mls-hand-witness.mjs` exercises the exact hand route
 using a retained camera input; that replay does not assess live hand feel.
+
+The grid-contact regression dispatches the production grid pipeline on a tiny 8³ grid, with one occupied node. An asymmetric two-triangle surface checks the normal, and a flat surface checks the vertical margin. Its explicit readback occurs after the isolated test dispatch; it is not frame-loop transport. Run `node tools/mls-hill-grid-contact.mjs --url <owned-server> --output <evidence-directory> --browser <independent-browser> --playwright <playwright-module>`. The report preserves served source bytes, exact requested route, per-case expected/observed velocities and failure phase.
