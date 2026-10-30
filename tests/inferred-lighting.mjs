@@ -19,6 +19,25 @@ test('incomplete and nonfinite data cannot masquerade as estimated lighting', ()
   const bad = report(); bad.lights.estimated.sh[2][1] = NaN;
   assert.throws(() => validateLightingReport(bad), /finite/);
 });
+test('a camera-only estimate has no invented reference and restores the three-way comparison on a reference case', async () => {
+  let root;
+  const session={attach:async value=>{root=value;return {id:'fixture'};},readView:()=>({}),setView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>{}};
+  const instance=await definition.create({host:{scene:{open:async()=>session}},inputs:{},record(){}});
+  const estimate=report(); delete estimate.lights.reference;
+  assert.equal(validateLightingReport(estimate),estimate);
+  instance.operations.loadReport(estimate);
+  assert.equal(instance.read().hasReference,false);
+  assert.deepEqual(root.children.filter(mesh=>mesh.visible).map(mesh=>mesh.name),['Uniform neutral','Estimated light']);
+  assert.deepEqual(root.children.filter(mesh=>mesh.visible).map(mesh=>mesh.position.x),[-.85,.85]);
+  instance.operations.setYaw(90);
+  instance.operations.loadReport(report());
+  assert.equal(instance.read().hasReference,true);
+  assert.equal(root.children.filter(mesh=>mesh.visible).length,3);
+  assert.deepEqual(root.children.map(mesh=>mesh.position.x),[-1.7,0,1.7]);
+  assert.throws(()=>validateLightingReport({...estimate,lights:{...estimate.lights,reference:{sh:[]}}}),/reference/);
+  assert.throws(()=>validateLightingReport({...estimate,lights:{}}),/estimated/);
+  await instance.dispose();
+});
 test('estimator labels distinguish Turbo from the legacy EMLight report', async () => {
   const session={attach:async()=>({id:'fixture'}),readView:()=>({}),setView:()=>({}),redraw(){},onFrame:()=>()=>{},dispose:async()=>{}};
   const instance=await definition.create({host:{scene:{open:async()=>session}},inputs:{},record(){}});

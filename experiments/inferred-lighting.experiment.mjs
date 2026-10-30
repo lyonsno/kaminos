@@ -44,12 +44,14 @@ export default {
       checkpointSha256:report?.checkpointSha256 ?? null, effectiveDevice:report?.effectiveDevice ?? null,
       sourceRevision:report?.sourceRevision ?? null, environmentSha256:report?.environmentSha256 ?? null,
       caseId,cases:suite?.cases.map(({id,label})=>({id,label})) ?? [],surface,surfaceIdentity,metrics:report?.metrics ?? null,
+      hasReference:!!report?.lights.reference,
       comparison:'degree-2 diffuse SH; independent mean-luminance normalization', view:session.readView()});
     function update(force = false) {
       if (!report) return;
       root.updateMatrixWorld(true);
       let changed = false;
       for (const probe of probes) {
+        if (!probe.mesh.visible) continue;
         const {mesh} = probe, elements = mesh.matrixWorld.elements;
         if (!force && probe.matrix?.every((v,i) => v === elements[i])) continue;
         matrix.getNormalMatrix(mesh.matrixWorld);
@@ -69,8 +71,10 @@ export default {
       if (report) panel.image.src = report.input.image;
       if (panel.cases) panel.cases.value = caseId ?? '';
       panel.surface.value = surface;
-      panel.reference.hidden = !report; panel.estimated.hidden = !report;
-      if (report?.lights.reference.preview) panel.reference.src = report.lights.reference.preview;
+      panel.reference.hidden = !report?.lights.reference?.preview; panel.estimated.hidden = !report;
+      panel.referenceCaption.hidden = panel.reference.hidden;
+      panel.labels.textContent = report?.lights.reference ? 'Uniform neutral / Reference HDR / Estimated light' : 'Uniform neutral / Estimated light · No reference HDR';
+      if (report?.lights.reference?.preview) panel.reference.src = report.lights.reference.preview;
       if (report?.lights.estimated.preview) panel.estimated.src = report.lights.estimated.preview;
       panel.metrics.textContent = report?.metrics ? `Diffuse error: estimate ${report.metrics.estimatedRmse.toFixed(3)} / neutral ${report.metrics.neutralRmse.toFixed(3)}` : '';
       panel.exposure.value = String(exposure); panel.yaw.value = String(yaw);
@@ -78,8 +82,11 @@ export default {
     function load(value) {
       const next = validateLightingReport(value);
       const uniform = [[...Array(3).fill(Math.sqrt(4*Math.PI))], ...Array.from({length:8},()=>[0,0,0])];
-      const evaluators = probes.map(p => makeDiffuseEvaluator(p.name === 'neutral' ? uniform : next.lights[p.name].sh, surface === 'probes' ? .5 : 1));
-      report = next; probes.forEach((p,i) => {p.evaluate = evaluators[i];});
+      const evaluators = probes.map(p => p.name === 'reference' && !next.lights.reference ? null : makeDiffuseEvaluator(p.name === 'neutral' ? uniform : next.lights[p.name].sh, surface === 'probes' ? .5 : 1));
+      report = next; probes.forEach((p,i) => {
+        p.evaluate = evaluators[i]; p.mesh.visible = !!p.evaluate;
+        p.mesh.position.x = next.lights.reference ? (i-1)*1.7 : (p.name === 'neutral' ? -.85 : .85);
+      });
       root.visible = true; update(true); sync();
       const effective = read(); record({kind:'inferred-lighting.load',phase:'applied',target:asset.id,effective});
       return effective;
@@ -162,13 +169,15 @@ export default {
         };
         const reference=document.createElement('img'),estimated=document.createElement('img'),metrics=document.createElement('p');
         const maps=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Environment maps';maps.append(summary);
+        let referenceCaption;
         for (const [preview,title] of [[reference,'Reference HDR panorama'],[estimated,'Estimated environment']]) {
           preview.alt=title;preview.style.cssText='width:100%;aspect-ratio:2/1;object-fit:contain';
           const caption=document.createElement('p');caption.textContent=title;maps.append(caption,preview);
+          if (preview === reference) referenceCaption = caption;
         }
         metrics.style.fontSize='12px';container.append(metrics);
-        panel={status,image,cases,surface:surfaceSelect,reference,estimated,metrics,exposure:field('Exposure (EV)','setExposure',.1),yaw:field('Light yaw (degrees)','setYaw',1)};
         const labels=document.createElement('p'); labels.textContent='Uniform neutral / Reference HDR / Estimated light'; container.append(labels);
+        panel={status,image,cases,surface:surfaceSelect,reference,referenceCaption,estimated,metrics,labels,exposure:field('Exposure (EV)','setExposure',.1),yaw:field('Light yaw (degrees)','setYaw',1)};
         const frame=document.createElement('button');frame.type='button';frame.textContent='Frame comparison';
         frame.addEventListener('click',()=>invoke('frame').catch(failed));container.append(frame,maps,file);sync();
       },
