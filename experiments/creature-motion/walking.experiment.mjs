@@ -197,6 +197,14 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const local=intent.destination===null?null:frame.worldToLocal(new THREE.Vector3(...intent.destination));
    const next=local?[local.x,local.z]:null,prior=wander.snapshot().path,old=prior.destination??null;
    if(next===null?old!==null:!old||prior.constrainDestination!==false||next.some((v,i)=>Math.abs(v-old[i])>1e-8))wander.setDestination(next,{constrainToArea:false});
+   if(intent.watch!==undefined&&intent.watch!==null&&(!Array.isArray(intent.watch)||intent.watch.length!==3||!intent.watch.every(Number.isFinite)))throw Error('Invalid game steering watch point');
+   if(intent.watch){
+    const watch=frame.worldToLocal(new THREE.Vector3(...intent.watch));
+    wander.face([watch.x,watch.z],delta);
+    const m=wander.read(),yaw=m.facing??Math.atan2(path.direction[0],path.direction[1])+(m.reverse?Math.PI:0);
+    const dx=local?local.x-path.position[0]:0,dz=local?local.z-path.position[1]:0,d=Math.hypot(dx,dz);
+    wander.setReverse(d>1e-9&&(dx*Math.sin(yaw)+dz*Math.cos(yaw))/d<(m.reverse?.2:-.2));
+   }else {wander.setReverse(false);wander.face(null,delta);}
    if(intent.hold){moving=0;resting=true;}
   }else if(attention&&chosenInputs.attention.engage===true){
    const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);

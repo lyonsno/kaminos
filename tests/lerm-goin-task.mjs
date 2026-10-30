@@ -63,9 +63,12 @@ assert.throws(()=>theft.setHeld({held:true,time:6}),/monotonic/);
 const reached=createGoinTask({target:()=>({id:'near-head',position:[3,0,0]}),arrivalRadius:.6,
  theft:{carrierId:'long-body',escape:()=>[10,0,0]}});
 reached.setHeld({held:true,time:0});
-assert.deepEqual(reached.update({time:0,position:[0,0,0],reachPosition:[1,0,0]}).destination,[2,0,0],'Root destination accounts for the actual reaching point');
+assert.deepEqual(reached.update({time:0,position:[0,0,0],reachPosition:[1,0,0]}).destination,[1.7,0,0],'Root destination leaves the actual reaching point in front of the target at half the arrival radius');
 const near=reached.update({time:1,position:[1.5,0,0],reachPosition:[2.5,0,0]});
 assert.equal(near.hold,true);assert.equal(reached.read().distance,.5);
+const beside=reached.update({time:1,position:[2,0,0],reachPosition:[3.2,0,0]});
+assert.equal(beside.hold,false,'Near but behind the head requires repositioning');
+assert.deepEqual(beside.watch,[3,0,0],'Body orientation follows the task object while transport backs away');
 reached.setHeld({held:false,time:1});
 const carry=reached.update({time:1,position:[1.5,0,0],reachPosition:[2.5,0,0]});
 assert.deepEqual(carry.destination,[10,0,0],'Escape must not inherit the head offset');

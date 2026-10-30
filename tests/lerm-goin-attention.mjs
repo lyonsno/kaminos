@@ -62,5 +62,11 @@ try{
  assert.equal(s.task.phase,'watching-held-goin');
  assert.equal(s.creature.attention.focus?.id,s.goin.id,'Arrival must leave the desired goin ahead of the actual head, not behind it');
  assert.equal(s.task.custody.carrierId,null);
+ const goin=scene.getObjectByProperty('uuid',s.goin.id);
+ goin.position.set(.4,.3,-1.5);
+ for(let i=0;i<600;i++){scene.updateMatrixWorld(true);approaching.operations.advance({seconds:1/30});}
+ const turned=approaching.read();
+ assert.equal(turned.task.phase,'watching-held-goin');
+ assert.equal(turned.creature.attention.focus?.id,s.goin.id,'Pulling the held goin back beside the head must provoke body reorientation, not blind waiting');
 }finally{await approaching.dispose();}
 console.log('Goin possession composes with current attention without replacing game movement');

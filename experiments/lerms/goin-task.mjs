@@ -40,7 +40,11 @@ export function createGoinTask({target,arrivalRadius=.35,theft=null}={}){
    if(!Number.isFinite(next)||next<time||!Number.isFinite(from)||from<time||from>next||!point(position)||!point(reachPosition))throw Error('Goin task requires a monotonic interval and finite world positions');
    const motionStart=Math.min(next,Math.max(from,until));time=next;const observed=observe();
    let destination=observed?.position??null,distance=destination?Math.hypot(reachPosition[0]-destination[0],reachPosition[2]-destination[2]):null;
-   let phase=time<until?'interrupted':wet?'water-exposed':!observed?'waiting-target':distance<=arrivalRadius?(held?'watching-held-goin':observed.claimable===false?'waiting-goin-support':'at-goin'):'approaching';
+   const reach=[reachPosition[0]-position[0],reachPosition[2]-position[2]],length=Math.hypot(...reach);
+   // Close is not arrived when the object is beside or behind the reaching end.
+   // Keep it within a forward 45-degree approach cone before resting/claiming.
+   const ahead=!destination||reach[0]*(destination[0]-reachPosition[0])+reach[1]*(destination[2]-reachPosition[2])>=length*distance*Math.SQRT1_2;
+   let phase=time<until?'interrupted':wet?'water-exposed':!observed?'waiting-target':distance<=arrivalRadius&&ahead?(held?'watching-held-goin':observed.claimable===false?'waiting-goin-support':'at-goin'):'approaching';
    if(theft&&observed&&time>=until&&!wet&&!held){
     const escape=theft.escape();if(!point(escape))throw Error('Theft requires a finite live escape point');
     if(custody.carrierId&&custody.goinId!==observed.id)throw Error('Carried goin identity changed');
@@ -53,8 +57,14 @@ export function createGoinTask({target,arrivalRadius=.35,theft=null}={}){
    state={phase,target:observed?.id??null,destination:destination?[...destination]:null,distance};
    // The goal remains the goin; transport places the supplied reaching point,
    // not the body's root, there. Escape continues to use the root itself.
-   const rootGoal=state.destination&&!custody.carrierId?state.destination.map((v,i)=>v+position[i]-reachPosition[i]):state.destination;
-   return {source:'lerms.goin-task.v1',destination:rootGoal,hold:!['approaching','fleeing-with-goin'].includes(phase),motionStart};
+   let rootGoal=state.destination;
+   if(rootGoal&&!custody.carrierId){
+    const dx=rootGoal[0]-position[0],dz=rootGoal[2]-position[2],d=Math.hypot(dx,dz);
+    const direction=d>0?[dx/d,dz/d]:length>0?[reach[0]/length,reach[1]/length]:[0,0];
+    const standOff=length>0?arrivalRadius*.5:0;
+    rootGoal=[rootGoal[0]-reach[0]-direction[0]*standOff,rootGoal[1],rootGoal[2]-reach[1]-direction[1]*standOff];
+   }
+   return {source:'lerms.goin-task.v1',destination:rootGoal,...!custody.carrierId&&length>0?{watch:state.destination}:{},hold:!['approaching','fleeing-with-goin'].includes(phase),motionStart};
   }
  };
 }
