@@ -250,11 +250,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 // y[r] = weight * x[r] / sqrt(mean(x[r]^2) + eps), one workgroup per row (Qwen3RMSNorm).
-export function rmsNormShader() {
-  return `enable f16;
+export function rmsNormShader({ weightType = 'f16' } = {}) {
+  if (!['f16', 'f32'].includes(weightType)) throw new RangeError('RMS norm weightType must be f16 or f32');
+  return `${weightType === 'f16' ? 'enable f16;' : ''}
 struct P { rows: u32, D: u32, w_off: u32, eps: f32 };
 @group(0) @binding(0) var<storage, read> x: array<f32>;
-@group(0) @binding(1) var<storage, read> w: array<f16>;
+@group(0) @binding(1) var<storage, read> w: array<${weightType}>;
 @group(0) @binding(2) var<storage, read_write> y: array<f32>;
 @group(0) @binding(3) var<uniform> p: P;
 var<workgroup> red: array<f32, 256>;

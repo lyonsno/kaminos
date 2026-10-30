@@ -1,0 +1,148 @@
+<!doctype html><meta charset="utf-8"><title>Qwen text-model numerical witness</title>
+<body>Qwen text-model numerical witness</body>
+<script type="module">
+import { Qwen35TextModel } from './text-model.js';
+import { createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/inference-control.js';
+import { generateTokens } from '../../webgpu-inference-kit/src/autoregressive-generation.js';
+import { sampleToken } from '../../webgpu-inference-kit/src/token-sampling.js';
+import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
+import { createPupTextInput } from './pup-input.js';
+import { expandPupText } from './pup-text.js';
+import { withModelProfile } from './serving-profile.js';
+
+window.qwenModelReady = true;
+const result = window.qwenModelPartial = { backend: 'webgpu', errors: [], rows: [], lengths: {}, cleanup: {} };
+window.qwenModelResult = (async () => {
+  let device, model, control, stage = 'source-admission';
+  function capture(name, data) {
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength); let text = '';
+    for (const b of bytes) text += String.fromCharCode(b);
+    result.rows.push({ name, elements: data.length, data: btoa(text) });
+  }
+  try {
+    const meta = await (await fetch('/fixture/meta.json')).json(), rawManifest = await (await fetch('/fixture/weights.json')).arrayBuffer();
+    result.weightsManifestSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', rawManifest))].map(b => b.toString(16).padStart(2, '0')).join('');
+    if (result.weightsManifestSha256 !== meta.weightsManifestSha256) throw new Error('wrong weight manifest');
+    const manifest = JSON.parse(new TextDecoder().decode(rawManifest));
+    stage = 'adapter'; const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('WebGPU unavailable');
+    result.adapter = Object.fromEntries(['vendor', 'architecture', 'device', 'description'].map(k => [k, adapter.info?.[k] ?? '']));
+    result.adapter.isFallbackAdapter = adapter.isFallbackAdapter ?? adapter.info?.isFallbackAdapter ?? null;
+    device = await adapter.requestDevice(); result.limits = { maxBufferSize: device.limits.maxBufferSize, maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize };
+    device.addEventListener('uncapturederror', e => result.errors.push(String(e.error?.message ?? e.error)));
+    device.lost.then(info => { if (info.reason !== 'destroyed') result.errors.push(`device lost: ${info.message}`); });
+    control = createWebGpuInferenceControl({ queue: device.queue });
+    const comparisonMode = window.qwenWitnessMode === 'serving-comparison';
+    const compareBatching = comparisonMode && window.qwenComparisonAxis === 'batchDecode';
+    const servingProfile = window.qwenWitnessMode === 'serving-profile' || comparisonMode;
+    let current = null, layerRows = [];
+    model = new Qwen35TextModel(device, manifest, { control, singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', batchDecode: window.qwenBatchDecode ?? false, ...(servingProfile ? {} : {
+      onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
+      onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
+    }) });
+    result.singleTokenKernel = model.singleTokenKernel;
+    const affineDispatches = result.affineDispatches = { 'affine': 0, 'affine-quad': 0, 'affine-tiled': 0 };
+    const dispatch = model.dispatch.bind(model);
+    model.dispatch = async (name, ...args) => {
+      if (Object.hasOwn(affineDispatches, name)) affineDispatches[name]++;
+      return dispatch(name, ...args);
+    };
+    const layerBatchDuty = result.layerBatchDuty = { count: 0, totalMs: 0, maxMs: 0, failures: 0 };
+    const layerBatch = model.layerBatch.bind(model);
+    model.layerBatch = async (...args) => {
+      const started = performance.now(); let passed = false;
+      try { const value = await layerBatch(...args); passed = true; return value; }
+      finally { const ms = performance.now() - started; layerBatchDuty.count++; layerBatchDuty.totalMs += ms;
+        layerBatchDuty.maxMs = Math.max(layerBatchDuty.maxMs, ms); layerBatchDuty.failures += Number(!passed); }
+    };
+    stage = 'weights'; window.qwenModelProgress = { stage };
+    const loadStarted = performance.now();
+    await model.load(new URL('/model/', location.href), { onProgress: progress => { window.qwenModelProgress = { stage, ...progress }; } });
+    const loadMs = performance.now() - loadStarted;
+    result.residentWeightBytes = [...model.owned].reduce((s, b) => s + b.size, 0);
+    const capacity = meta.inputIds.length + 1;
+    async function run(label, ids, state, operation) {
+      stage = label; window.qwenModelProgress = { stage }; current = label; layerRows = [];
+      const logits = await model[operation](operation === 'decode' ? ids[0] : ids, state);
+      capture(label + '.logits', logits);
+      const joined = new Float32Array(model.config.numLayers * model.config.hiddenSize);
+      layerRows.forEach((data, index) => joined.set(data, index * model.config.hiddenSize));
+      if (layerRows.length !== model.config.numLayers) throw new Error('partial decoder trace');
+      capture(label + '.layers', joined); result.lengths[label] = state.length; current = null;
+    }
+    if (!servingProfile) {
+    let state = await model.createState({ capacity });
+    try { await run('prefill', meta.inputIds, state, 'prefill'); await run('decode', meta.continuationIds, state, 'decode'); } finally { await model.disposeState(state); }
+    state = await model.createState({ capacity });
+    try { await run('full-prefix', [...meta.inputIds, ...meta.continuationIds], state, 'prefill'); } finally { await model.disposeState(state); }
+    state = await model.createState({ capacity });
+    try {
+      stage = 'chunked-prefill'; current = null;
+      const split = Math.floor(meta.inputIds.length / 2);
+      await model.prefill(meta.inputIds.slice(0, split), state);
+      await run('chunked-prefill', meta.inputIds.slice(split), state, 'append');
+    } finally { await model.disposeState(state); }
+    stage = 'autoregressive-generation'; window.qwenModelProgress = { stage }; current = null;
+    result.generation = await generateTokens({ model, inputIds: meta.inputIds, capacity, maxNewTokens: 2, control, sample: logits => sampleToken(logits, { temperature: 0 }) });
+    }
+    if (window.qwenPupRequest) {
+      stage = 'pup-expansion'; window.qwenModelProgress = { stage };
+      const request = window.qwenPupRequest;
+      const inputStarted = performance.now();
+      const tokenizerBytes = await (await fetch('/model/tokenizer.json')).arrayBuffer(), promptsBytes = await (await fetch('/model/system_prompts.json')).arrayBuffer();
+      const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+      const tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes))), systemPrompt = JSON.parse(new TextDecoder().decode(promptsBytes)).t2i;
+      const input = createPupTextInput(tokenizer, { prompt: request.prompt, systemPrompt });
+      const tokenizerSha256 = await hash(tokenizerBytes), systemPromptsSha256 = await hash(promptsBytes);
+      const inputPreparationMs = performance.now() - inputStarted;
+      const modes = comparisonMode ? (compareBatching
+        ? [{kernel:'oracle',batch:false},{kernel:'oracle',batch:true},{kernel:'oracle',batch:false}]
+        : [{kernel:'oracle',batch:false},{kernel:'quad',batch:false},{kernel:'oracle',batch:false}])
+        : [{kernel:model.singleTokenKernel,batch:model.batchDecode}];
+      if (comparisonMode) result.comparison = { schema: 'kaminos.qwen35-serving-comparison.v1', axis: compareBatching ? 'batchDecode' : 'kernel', sharedLoadMs: loadMs,
+        sharedInputPreparationMs: inputPreparationMs, runs: [] };
+      for (const [index, {kernel,batch}] of modes.entries()) {
+        stage = comparisonMode ? `pup-expansion-${index}-${kernel}-${batch ? 'batched' : 'leaf'}` : 'pup-expansion';
+        window.qwenModelProgress = { stage };
+        if (model.states.size) throw new Error('previous request state was not retired');
+        model.singleTokenKernel = kernel; model.batchDecode = batch;
+        const entry = comparisonMode ? { index, singleTokenKernel: model.singleTokenKernel, batchDecode: model.batchDecode } : result;
+        if (comparisonMode) result.comparison.runs.push(entry);
+        const before = { ...affineDispatches }, beforeBatches = model.layerBatchSubmissions;
+        const expansion = entry.expansion = { prompt: request.prompt, inputIds: null, settings: { ...input.generation },
+          tokenizerSha256, systemPromptsSha256, stream: [] };
+        if (request.maxNewTokens !== undefined) expansion.settings.maxNewTokens = request.maxNewTokens;
+        const prefill = model.prefill;
+        model.prefill = async (ids, ...rest) => { expansion.inputIds = [...ids]; return prefill.call(model, ids, ...rest); };
+        try {
+          const profile = entry.profile = { loadMs: comparisonMode ? 0 : loadMs,
+            inputPreparationMs: comparisonMode ? 0 : inputPreparationMs, firstTextMs: null };
+          const expand = () => expandPupText({ model, tokenizer, prompt: request.prompt, systemPrompt, control,
+            maxNewTokens: request.maxNewTokens, onText: (delta, text) => {
+              if (servingProfile && profile.firstTextMs === null) profile.firstTextMs = performance.now() - profile.startedMs;
+              expansion.stream.push(delta); window.qwenModelProgress = { stage, text };
+            } });
+          expansion.output = servingProfile ? await withModelProfile(model, expand, { profile }) : await expand();
+        } finally {
+          model.prefill = prefill;
+          if (comparisonMode) {
+            entry.affineDispatches = Object.fromEntries(Object.entries(affineDispatches).map(([name, count]) => [name, count - before[name]]));
+            entry.statesAfter = model.states.size; entry.layerBatchSubmissions = model.layerBatchSubmissions - beforeBatches;
+          }
+        }
+        if (model.states.size) throw new Error('completed request state was not retired');
+      }
+      result.singleTokenKernel = model.singleTokenKernel;
+    }
+  } catch (error) { result.errors.push(`${stage}: ${error.stack ?? error}`); }
+  finally {
+    result.batchDecode = model?.batchDecode; result.layerBatchSubmissions = model?.layerBatchSubmissions;
+    result.singleTokenKernel = model?.singleTokenKernel;
+    try { await model?.destroy(); result.cleanup.states = model?.states.size; result.cleanup.weights = model?.owned.size; } catch (error) { result.errors.push(`model cleanup: ${error}`); }
+    result.cleanup.borrowedControl = control?.snapshot().status;
+    try { await control?.close(); } catch (error) { result.errors.push(`control cleanup: ${error}`); }
+    device?.destroy(); result.lastPhase = stage;
+  }
+  return result;
+})();
+</script>

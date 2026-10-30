@@ -1,6 +1,6 @@
 # @kaminos/webgpu-inference-kit
 
-Generate images and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
+Generate images and text and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
@@ -58,6 +58,14 @@ Pass `{ device }` to share your renderer's GPU, or `{ session, foreground }` to 
 UniMate uses the same runner through its existing host-injected `createUniMateConsumer(host)`: provide a skeleton and prompt, receive an animated GLB, and retain solver controls and partial motion. Its `run/read/togglePause/stop/destroy` interface borrows your rendering host. [Animate a skeleton](./docs/model-applications.md#animate-a-skeleton-with-unimate) shows the host integration.
 
 [U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) uses `createU2NetApp().removeForeground(...)` for RGBA cutouts. It shares the application controls and preserves the loaded low-level runner at `app.model`.
+
+## Generate Text With A Language Model
+
+The kit's `./generation` entry point provides autoregressive token generation, greedy or seeded sampling, penalties, EOS stopping and incremental output callbacks. A model adapter supplies prefill, cached decode and request-state cleanup; the token loop works with the host's existing inference control. Build the kit from this checkout to use this entry point; model implementations and weights are separate from the runtime package. [Generation API and adapter contract](./docs/autoregressive-generation.md).
+
+The [Qwen3.5-9B text adapter](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) exercises that machinery with Black Forest Labs' FLUX 3 Image Klein prompt upsampler. It runs all 32 language layers in native WebGPU, loads packed four-bit language weights, and maintains both attention KV caches and DeltaNet recurrent state. The adapter borrows the application's device and control; BFL framing and generation settings live in a separate prompt-expansion entry point.
+
+A browser run consumed 743 framed input tokens and streamed a complete 302-token expansion through EOS. Prefill, cached continuation and a prefix split across calls were checked against native FP32 computation over the same quantized weights, including all layer outputs and full-vocabulary logits. This is a source-level text integration; vision/reference-image processing and the Generate UI integration are subsequent work. See the [model guide](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) for source packaging and an invocation example.
 
 ## Segment Images With SAM 3
 
@@ -181,7 +189,7 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-The kit connects a growing family of browser model ports: generate an image from a text prompt, recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
+The kit connects a growing family of browser model ports: expand a text prompt, generate an image, recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
@@ -189,6 +197,7 @@ The kit connects a growing family of browser model ports: generate an image from
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 | [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
 | [Hand reconstruction](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction use the shared application runner. The hand guide supplies checkout integration and model setup. |
+| [Qwen3.5-9B / BFL prompt upsampler](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) | Stream expanded image prompts from a browser language model | Source adapter with packed four-bit language weights, attention KV and DeltaNet state, using the kit's reusable generation loop, sampling and borrowed inference control. Text expansion has been exercised through EOS; image/reference and application integration follow. |
 | [SuperMat](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo) · [Application guide](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md) | Albedo, roughness and metalness for relighting a photograph | Shared-device material inference with reusable resources and queued invocations, composed with MoGe geometry and a live renderer. |
 | [U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) | Foreground cutouts from opaque images | A background-removal application with loading, queued inference, controls and cleanup; lower-level runner and complete output provenance remain available. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |

@@ -30,6 +30,7 @@ export class QwenTokenizer {
     this.ranks = new Map();
     m.merges.forEach((merge, i) => this.ranks.set(Array.isArray(merge) ? merge.join(' ') : merge, i));
     this.added = new Map(tokenizerJson.added_tokens.map(a => [a.content, a.id]));
+    this.specialIds = new Set(tokenizerJson.added_tokens.filter(a => a.special).map(a => a.id));
     const escaped = [...this.added.keys()].sort((a, b) => b.length - a.length).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     this.addedRegex = new RegExp(`(${escaped.join('|')})`);
     this.byteMap = bytesToUnicode();
@@ -72,6 +73,50 @@ export class QwenTokenizer {
       }
     }
     return ids;
+  }
+
+  // Decode data is lazy: existing embedding-only consumers retain their
+  // current vocabulary/storage cost until they request text generation.
+  tokenBytes(id, skipSpecialTokens) {
+    if (!this.decodeVocab) {
+      this.decodeVocab = new Map([...this.vocab].map(([piece, index]) => [index, piece]));
+      this.decodeAdded = new Map([...this.added].map(([piece, index]) => [index, piece]));
+      this.decodeByteMap = new Map(this.byteMap.map((piece, byte) => [piece, byte]));
+    }
+    if (!Number.isSafeInteger(id) || id < 0) throw new RangeError('unknown token ID');
+    if (this.decodeAdded.has(id)) {
+      if (skipSpecialTokens && this.specialIds.has(id)) return new Uint8Array(0);
+      return this.encoder.encode(this.decodeAdded.get(id));
+    }
+    const piece = this.decodeVocab.get(id);
+    if (piece === undefined) throw new RangeError(`unknown token ID ${id}`);
+    return Uint8Array.from([...piece].map(char => {
+      const byte = this.decodeByteMap.get(char);
+      if (byte === undefined) throw new Error('token is not byte-level BPE');
+      return byte;
+    }));
+  }
+
+  createDecoder({ skipSpecialTokens = true } = {}) {
+    const decoder = new TextDecoder('utf-8', { ignoreBOM: true }), tokenizer = this;
+    let ended = false;
+    return {
+      push(id) {
+        if (ended) throw new Error('token decoder has ended');
+        return decoder.decode(tokenizer.tokenBytes(id, skipSpecialTokens), { stream: true });
+      },
+      end() {
+        if (ended) throw new Error('token decoder has ended');
+        ended = true; return decoder.decode();
+      },
+    };
+  }
+
+  decode(ids, options) {
+    const decoder = this.createDecoder(options), chunks = [];
+    for (const id of ids) chunks.push(decoder.push(id));
+    chunks.push(decoder.end());
+    return chunks.join('');
   }
 
   // Flux2KleinPipeline._get_qwen3_prompt_embeds framing.
