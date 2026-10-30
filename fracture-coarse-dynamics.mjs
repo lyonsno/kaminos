@@ -1,4 +1,5 @@
 import {batchCoarseCompute} from './fracture-compute-batch.mjs';
+import {createContactTopologyReset} from './fracture-contact-cache.mjs';
 import * as THREE from './lib/three.core.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
@@ -18,11 +19,12 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   const degree=cells.map(()=>0);for(const b of bonds){degree[b.a]++;degree[b.b]++;}
   const jointCapacity=Math.max(8,...degree.map(n=>n+1));
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
-  let engine,disposed=false;
+  let engine,contactReset,disposed=false;
   const ownedBuffers=[];
   const acquire=descriptor=>{const buffer=device.createBuffer(descriptor);ownedBuffers.push(buffer);return buffer;};
   function dispose(){if(disposed)return;disposed=true;const errors=[];
     for(const buffer of ownedBuffers)try{buffer.destroy();}catch(error){errors.push(error);}
+    try{contactReset?.dispose();}catch(error){errors.push(error);}
     try{engine?.dispose(renderer);}catch(error){errors.push(error);}
     if(errors.length)throw new AggregateError(errors,'GPU arch resource cleanup failed');
   }
@@ -59,6 +61,8 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   const pipelines={};for(const entryPoint of ['commands','fracture','pack'])pipelines[entryPoint]=await device.createComputePipelineAsync({label:`Arch ${entryPoint}`,layout:pipelineLayout,compute:{module:shader,entryPoint}});
   const resources=[resident('positions'),resident('quaternions'),resident('velocities'),resident('angularVelocities'),resident('joints'),buffers.geometry,buffers.damage,buffers.grip,buffers.parameters,buffers.output];
   const group=device.createBindGroup({layout,entries:resources.map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const contactState=engine.getContactRenderBuffers();
+  contactReset=await createContactTopologyReset(device,{joints:resident('joints'),damage:buffers.damage,contacts:renderer.backend.get(contactState.pairContacts).buffer,parameters:buffers.parameters,bodies:cells.length,bonds:bonds.length,contactCount:contactState.maxPairContacts});
   let stepIndex=1,observedStep=0,epoch=0,hand=null,gripGeneration=0,bindRequest=null;
   const events=[],samples=[];
   const state={bodies:cells.map(cell=>({...cell,position:xyz(cell.position),rest:xyz(cell.position),quaternion:{x:0,y:0,z:0,w:1},velocity:{x:0,y:0,z:0},angularVelocity:{x:0,y:0,z:0}})),
@@ -68,7 +72,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
     f.set([hand?hand.target.x-origin[0]:0,hand?hand.target.y-origin[1]:0,hand?hand.target.z-origin[2]:0,Math.min(dx,dy,dz)*.15]);u.set([cells.length,bonds.length,stepIndex,0],4);f[7]=config.initialJointPenalty;
     f.set([config.strength,config.timeStep,config.gripStiffness,bindRequest?.radius??Math.max(dx,dy)*2],8);
     u.set([bindRequest?1:0,bindRequest?.index??0,hand?1:0,0],12);device.queue.writeBuffer(buffers.parameters,0,buffer);}
-  function dispatch(name){const encoder=device.createCommandEncoder({label:`Arch ${name}`}),pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(Math.max(cells.length,bonds.length)/64));pass.end();device.queue.submit([encoder.finish()]);}
+  function dispatch(name){const encoder=device.createCommandEncoder({label:`Arch ${name}`}),pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(Math.max(cells.length,bonds.length)/64));pass.end();if(name==='commands')contactReset.encode(encoder);device.queue.submit([encoder.finish()]);}
   async function read(){const capturedStep=stepIndex;const readback=device.createBuffer({label:'Explicit fracture diagnostic snapshot',size:buffers.output.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{dispatch('pack');const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffers.output,0,readback,0,buffers.output.size);device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
     const data=new Float32Array(readback.getMappedRange()).slice();readback.unmap();
     if(!data.every(Number.isFinite))throw new Error('Non-finite GPU physical state');
