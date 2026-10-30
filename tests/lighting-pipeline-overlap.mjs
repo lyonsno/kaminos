@@ -58,3 +58,12 @@ releases[1]();const results=await shared[0];
 assert.equal(results.length,2);assert.equal(results[0].status,'rejected');assert.match(results[0].reason.message,/shared native rejection/);
 assert.equal(results[1].status,'fulfilled');
 console.log('PASS shared native barrier preserves complete results and rejection');
+
+// Geometry attribute discovery consults the compiled graph. It must see the
+// completed asynchronous build, rather than triggering the synchronous fallback.
+let graphResolved=false;
+renderer._nodes.getForRenderAsync=async()=>{await new Promise(r=>setImmediate(r));graphResolved=true;};
+renderer._geometries.updateForRender=()=>assert.equal(graphResolved,true,'geometry preparation must follow the asynchronous graph build');
+renderer._pipelines.getForRender=()=>{graphResolved=false;};
+await WebGPURenderer.prototype.compileAsync.call(renderer,new Scene(),new PerspectiveCamera());
+console.log('PASS geometry attributes consume the completed asynchronous graph');
