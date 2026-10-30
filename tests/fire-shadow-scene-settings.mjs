@@ -34,3 +34,6 @@ const angularRoute=fireShadowSceneRoute({...state,smokeShadowFilter:true,smokeSh
 const angularReload=readFireShadowSceneSettings(new URLSearchParams(angularRoute));
 assert.equal(angularReload.smokeShadowFilterAngle,8.5,'angular blur width must survive scene roundtrip');
 assert.equal(angularReload.smokeShadowFilterTaps,5,'filter work must survive scene roundtrip');
+
+const budgetRoute=new URLSearchParams({volume_light_field_hybrid_points:'8',volume_light_field_hybrid_point_evaluation_budget:'4'});
+assert.equal(readFireShadowSceneSettings(budgetRoute).pointEvaluationBudget,4,'saved receiver budget must be distinct from captured point count');

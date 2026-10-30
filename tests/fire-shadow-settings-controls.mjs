@@ -71,3 +71,10 @@ await nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow steps').liste
 
 document.defaultView.__kaminosSceneRadiance.setSmokeShadowQuality=value=>{state={...state,smokeShadowSteps:value.steps};};
 const stepControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow steps');stepControl.value='2';await stepControl.listeners.change();assert.equal(alert.hidden,true,'a successful correction clears the error');
+
+const budgetControl=nativeControls.find(v=>v.attrs['aria-label']==='Surface source budget (0 = automatic)');
+assert(budgetControl,'ordinary inspector must expose a source evaluation budget independent of captures');
+document.defaultView.__kaminosSceneRadiance.setPointEvaluationBudget=value=>{state={...state,pointEvaluationBudget:value,evaluatedPointCount:value||state.pointCount};};
+budgetControl.value='2';await budgetControl.listeners.change();
+assert.equal(state.pointEvaluationBudget,2);assert.equal(nativeSettings.read().pointEvaluationBudget,2);assert.equal(budgetControl.value,'2');
+budgetControl.value='0';await budgetControl.listeners.change();assert.equal(state.pointEvaluationBudget,0);
