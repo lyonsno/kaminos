@@ -78,9 +78,13 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   if(tool==='connect'){
    try{
     const marker=ray.intersectObjects(mountView.markers().filter(m=>m.parent.visible),false)[0];if(marker){operations.connectEnd({mount:marker.object.userData.mount});return;}
-    const joint=ray.intersectObjects(view.markers(),false)[0];if(joint){operations.connectEnd({joint:joint.object.userData.joint});return;}
+    const visible=o=>{while(o){if(!o.visible)return false;o=o.parent;}return true;};
+    const joint=ray.intersectObjects(view.markers().filter(visible),false)[0];
     const entries=objects(),hits=ray.intersectObjects([...entries.filter(e=>e.object!==root&&['glb','pbr','procedural-mesh'].includes(e.type)).map(e=>e.object),visual],true);
-    const hit=hits.find(h=>{let o=h.object;while(o){if(!o.visible||o.userData.mechanismOverlay||o.userData.kaminosEditorOnly)return false;o=o.parent;}return h.object.isMesh;});if(!hit)return;
+    const hit=hits.find(h=>{let o=h.object;while(o){if(!o.visible||o.userData.mechanismOverlay||o.userData.kaminosEditorOnly)return false;o=o.parent;}return h.object.isMesh;});
+    // Mount markers are deliberately visible overlays; physical joints obey surface depth.
+    if(joint&&(!hit||joint.distance<=hit.distance)){operations.connectEnd({joint:joint.object.userData.joint});return;}
+    if(!hit)return;
     const owner=entries.find(e=>{let o=hit.object;while(o){if(o===e.object)return true;o=o.parent;}return false;});
     const normal=hit.face?.normal.clone().applyNormalMatrix(new T.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize()??new T.Vector3(0,0,1);let descriptor;
     if(owner?.object!==root){if(owner?.object.userData.linkMechanism)throw Error('Use an existing point on this mechanism, or select it to connect its moving links.');if(!owner)return;descriptor={objectId:owner.id};}
@@ -168,7 +172,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const alternatives=document.createElement('div');draftBar.append(alternatives);
   const fastenChoice=button(alternatives,'Fasten together',()=>invoke('previewConnection',{kind:'fasten'}),()=>connectionDraft?.kind==='fasten');
   const pistonChoice=button(alternatives,'Add piston',()=>invoke('previewConnection',{kind:'piston'}),()=>connectionDraft?.kind==='piston');
-  for(const [b,kind]of [[fastenChoice,'fasten'],[pistonChoice,'piston']])b.onmouseenter=()=>{if(!b.disabled&&connectionDraft?.kind!==kind)invoke('previewConnection',{kind}).catch(()=>{});};
+  for(const [b,kind]of [[fastenChoice,'fasten'],[pistonChoice,'piston']])b.onmouseenter=b.onfocus=()=>{if(!b.disabled&&connectionDraft?.kind!==kind)invoke('previewConnection',{kind}).catch(()=>{});};
   const commitDraft=button(draftBar,'Connect',()=>invoke('commitConnection'));
   button(draftBar,'Start over',()=>{operations.cancelConnection();return invoke('tool',{value:'connect'});});
   button(draftBar,'Cancel',()=>invoke('tool',{value:'select'}));

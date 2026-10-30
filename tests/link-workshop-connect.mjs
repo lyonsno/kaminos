@@ -6,9 +6,9 @@ import {createMechanismController} from '../experiments/link-workshop.experiment
 import {createSceneComponentEdit} from '../scene-component-edit.mjs';
 const scene=new T.Scene(),root=new T.Group(),cube=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());scene.add(root,cube);cube.position.set(5,3,0);
 root.userData.linkMechanism={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,1]}],pistons:[]};
-const entries=[{id:'mechanism',object:root,type:'pbr',label:'Mechanism'},{id:'cube',object:cube,type:'procedural-mesh',label:'Cube'}];let selected='mechanism';
+const entries=[{id:'mechanism',object:root,type:'pbr',label:'Mechanism'},{id:'cube',object:cube,type:'procedural-mesh',label:'Cube'}];let selected='mechanism',adapter;
 const edits=createSceneEdits({read(){throw Error('unexpected ordinary edit');},write(){}}),components=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){}});
-const host={scene:{objects:()=>entries,select(id){selected=id;},async open(){return {async attach(){return {id:'mechanism',root};},redraw(){},readView(){return {};},async dispose(){}};}},controls:{components:{register:(...args)=>components.register(...args)},document:{defaultView:{kaminosSceneEdits:edits}}}};
+const host={scene:{objects:()=>entries,select(id){selected=id;},async open(){return {async attach(){return {id:'mechanism',root};},redraw(){},readView(){return {};},async dispose(){}};}},controls:{components:{register:(id,value)=>{adapter=value;return components.register(id,value);}},document:{defaultView:{kaminosSceneEdits:edits}}}};
 const c=await createMechanismController({host,inputs:{root}}),original=JSON.stringify(c.read().recipe),position=cube.position.toArray();
 try {
  c.operations.tool({value:'connect'});assert.equal(components.active(),true,'Connect must enter native component editing');
@@ -22,5 +22,15 @@ try {
  assert.equal(c.read().recipe.attachments.length,1);assert.equal(c.read().recipe.mounts.length,2);edits.undo();assert.deepEqual(cube.position.toArray(),position);assert.equal(JSON.stringify(c.read().recipe),original,'one undo removes connection and new mounting points');edits.redo();assert.equal(c.read().recipe.attachments.length,1);edits.undo();
  c.operations.tool({value:'connect'});c.operations.connectEnd({joint:0});c.operations.connectEnd({joint:1});assert.throws(()=>c.operations.previewConnection({kind:'fasten'}),/object|link/i);c.operations.previewConnection({kind:'piston'});c.operations.commitConnection();assert.equal(c.read().recipe.mountPistons.length,1);edits.undo();assert.equal(JSON.stringify(c.read().recipe),original);
  c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cube'});c.operations.connectEnd({joint:1});c.operations.previewConnection({kind:'fasten'});cube.position.x+=1;assert.throws(()=>c.operations.commitConnection(),/changed|preview/i);assert.equal(JSON.stringify(c.read().recipe),original);
+ // A physical joint behind an opaque object must not steal the visible surface pick.
+ c.operations.tool({value:'connect'});cube.position.set(2,0,2);scene.updateMatrixWorld(true);
+ const camera=new T.OrthographicCamera(-5,5,5,-5,.1,100);camera.position.set(0,0,10);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+ const canvas={getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})};
+ adapter.pick({clientX:70,clientY:50},{camera,canvas});
+ assert.equal(c.read().connectionDraft.ends[0].owner.objectId,'cube','visible cube must win over the occluded joint');
+ assert.ok(Math.abs(c.read().connectionDraft.ends[0].position[2]-.5)<1e-6,'pick lies on the visible front surface');
+ c.operations.tool({value:'connect'});cube.position.x=3;scene.updateMatrixWorld(true);
+ adapter.pick({clientX:70,clientY:50},{camera,canvas});
+ assert.equal(c.read().connectionDraft.ends[0].owner.joint,1,'unobstructed joint remains directly pickable');
  console.log('Connect enters native editing; endpoints, alternatives, cancellation, atomic history and stale preview rejection passed');
 }finally{edits.clear();await c.dispose();cube.geometry.dispose();cube.material.dispose();}
