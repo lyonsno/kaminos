@@ -1,7 +1,7 @@
 import {validateSmokeEnvironmentBlur} from './scene-smoke-environment.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {validateShadowComparison,validateShadowSampling} from './fire-shadow-sampling.mjs';
-import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
+import {validateSourceQuadrature,validateSourceEvaluationBudget} from './fire-source-quadrature.mjs';
 import {validateCasterLevel} from './fire-shadow-casters.mjs';
 import {lightingDirections} from './scene-volume-gather.mjs';
 import {smokeShadowPlan,validateSmokeAngularFilter} from './fire-smoke-shadow.mjs';
@@ -16,6 +16,7 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  if(params.has(prefix+'point_evaluation_budget'))smoke.pointEvaluationBudget=validateSourceEvaluationBudget(number('point_evaluation_budget',0));
   if(params.has(prefix+'smoke_environment_blur'))smoke.smokeEnvironmentBlur=validateSmokeEnvironmentBlur(number('smoke_environment_blur',0));
   if(params.has(prefix+'light_grid')){const value=number('light_grid',16);if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');smoke.volumeGrid=value;}
   if(params.has(prefix+'light_pattern')){const value=params.get(prefix+'light_pattern');if(!['fixed','spatial','blue','source','guided','regions'].includes(value))throw Error('valid light angular pattern required');smoke.angularPattern=value;}
@@ -47,6 +48,7 @@ export function fireShadowSceneRoute(state) {
     shadow_softness:state.shadowSoftness,shadow_implementation:state.shadowImplementation,
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
   if(state.shadowEdgeFilter!==undefined){if(typeof state.shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');values.shadow_edge_filter=state.shadowEdgeFilter?'1':'0';}
+  if(state.pointEvaluationBudget!==undefined)values.point_evaluation_budget=validateSourceEvaluationBudget(state.pointEvaluationBudget);
   if(state.smokeShadowFilterAngle!==undefined)values.smoke_shadow_filter_angle=state.smokeShadowFilterAngle;
   if(state.smokeShadowFilterTaps!==undefined)values.smoke_shadow_filter_taps=state.smokeShadowFilterTaps;
   if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;

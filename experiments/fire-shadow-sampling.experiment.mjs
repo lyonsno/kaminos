@@ -1,5 +1,5 @@
 import {validateShadowSampling,validateShadowComparison} from '../fire-shadow-sampling.mjs';
-import {validateSourceQuadrature} from '../fire-source-quadrature.mjs';
+import {validateSourceQuadrature,validateSourceEvaluationBudget} from '../fire-source-quadrature.mjs';
 import {DEFAULT_SHADOW_QUALITY,validateShadowQuality} from '../fire-shadow-quality.mjs';
 import {installRenderingNumberControl} from '../rendering-number-controls.mjs';
 
@@ -21,16 +21,18 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     const qualityControls=[],lightControls=[],mediumControls=[],numberScrubs=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
+    let requestedBudget=inputs.pointEvaluationBudget??null;
+    if(requestedBudget!==null)validateSourceEvaluationBudget(requestedBudget);
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
-    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality}),...(requestedComparison===null?{}:{shadowComparison:requestedComparison})});
+    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedBudget===null?{}:{pointEvaluationBudget:requestedBudget}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality}),...(requestedComparison===null?{}:{shadowComparison:requestedComparison})});
     const source=()=>{const value=win.__kaminosSceneRadiance;if(!value?.setShadowSampling)throw Error('This scene has no hybrid fire shadow consumer');return value;};
-    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,status:state?.status,error:state?.error,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,shadowComparison:state?.shadowImplementation===undefined?null:{implementation:state.shadowImplementation,grain:state.shadowGrain,worldCellSize:state.shadowWorldCellSize},shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
+    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,status:state?.status,error:state?.error,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,pointEvaluationBudget:state?.pointEvaluationBudget??0,shadowComparison:state?.shadowImplementation===undefined?null:{implementation:state.shadowImplementation,grain:state.shadowGrain,worldCellSize:state.shadowWorldCellSize},shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
     const shown=new WeakMap();
     const sync=(force=false)=>{
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
-      for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='smokeEnvironmentBlur'?0:16));
+      for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='smokeEnvironmentBlur'||key==='pointEvaluationBudget'?0:16));
       if(edgeSwitch)edgeSwitch.checked=medium?.shadowEdgeFilter===true;
       if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
       for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:key==='smokeShadowFilterTaps'?3:key==='smokeShadowFilterAngle'?7.125:16));
@@ -52,7 +54,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       }
       const quality=state.shadowQuality;
       if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.shadowComparison?`${comparison.implementation} / ${comparison.grain} grain`:'comparison unavailable'} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
-      if(status&&!diagnostics&&state.available)status.textContent=`${state.evaluatedPoints??'?'} of ${state.points} sources per pixel · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + ${quality?.filterSamples??'?'} shadow samples${state.effective!=='complementary'||comparison.implementation!=='shared'?` · Saved diagnostic mode: ${state.effective} / ${comparison.implementation}`:''}`;
+      if(status&&!diagnostics&&state.available)status.textContent=`${state.evaluatedPoints??'?'} of ${state.points} sources per pixel · ${state.capturedPoints??'?'} cube captures · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + ${quality?.filterSamples??'?'} shadow samples${state.effective!=='complementary'||comparison.implementation!=='shared'?` · Saved diagnostic mode: ${state.effective} / ${comparison.implementation}`:''}`;
       if(status&&state.status==='compiling-lighting')status.textContent='Compiling lighting asynchronously; holding the last image. Additional changes are queued.';
       if(status&&state.status==='lighting-compile-failed')status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
       if(status&&win.__kaminosSceneRadiance?.debugState().surfaceEnabled===false)status.textContent='Fire surface lighting off: no point reduction, shadow captures or direct surface-light contribution. Visible flame and distributed smoke lighting unchanged.';
@@ -80,10 +82,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       applyComparison(next);requestedComparison=next;persist();sync();session.redraw();
       const effective=read();record({kind:'fire-shadow.comparison',phase:'applied',requested:next,effective});return effective;
     };
-    const stop=applyInitial?session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);if(requestedQuality!==null)applyQuality(requestedQuality);if(requestedComparison!==null)applyComparison(requestedComparison);sync();stop();}}):()=>{};
+    const stop=applyInitial?session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);if(requestedQuality!==null)applyQuality(requestedQuality);if(requestedComparison!==null)applyComparison(requestedComparison);if(requestedBudget!==null)source().setPointEvaluationBudget(requestedBudget);sync();stop();}}):()=>{};
     return {
       read,sync,
       operations:{
+        setPointEvaluationBudget(value){validateSourceEvaluationBudget(value);source().setPointEvaluationBudget(value);requestedBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.source-budget',requested:value,effective});return effective;},
         setLightGrid(value){source().setLightGrid(value);sync();session.redraw();record({kind:'fire-shadow.light-grid',effective:value});return read();},
         setSmokeEnvironmentBlur(value){source().setSmokeEnvironmentBlur(value);sync();session.redraw();record({kind:'fire-shadow.smoke-environment-blur',effective:value});return source().debugState();},
         setShadowEdgeFilter(value){source().setShadowEdgeFilter(value);sync();session.redraw();record({kind:'fire-shadow.edge-filter',effective:value});return read();},
@@ -116,11 +119,14 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         selector.addEventListener('change',()=>invoke('setSampling',selector.value).catch(failed));
         const surfaceLabel=document.createElement('label');surfaceLabel.textContent='Fire surface lighting';
         surfaceSwitch=document.createElement('input');surfaceSwitch.type='checkbox';surfaceSwitch.setAttribute('aria-label','Fire surface lighting');surfaceSwitch.addEventListener('change',()=>invoke('setSurfaceEnabled',surfaceSwitch.checked).catch(failed));surfaceLabel.append(surfaceSwitch);panel.append(surfaceLabel);
-        const pointLabel=document.createElement('label');pointLabel.textContent='Flame lighting sources ';
+        const pointLabel=document.createElement('label');pointLabel.textContent='Flame lighting sources (captures) ';
         pointSelector=document.createElement('select');pointSelector.setAttribute('aria-label','Flame lighting sources');
-        for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],[6,'Six sources — evaluate all'],[8,'Eight sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
+        for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — capture both'],[4,'Four sources — capture all'],[6,'Six sources — capture all'],[8,'Eight sources — capture all'],['4-paired','Four sources — legacy complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
         pointSelector.addEventListener('change',()=>invoke('setQuadrature',{points:pointSelector.value==='4-paired'?4:Number(pointSelector.value),pointSampling:pointSelector.value==='4-paired'?'paired':'all'}).catch(failed));
         pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel);if(diagnostics)panel.append(label);
+        const budgetRow=document.createElement('label');budgetRow.textContent='Surface source budget (0 = automatic)';budgetRow.title='At most this many source shadows are evaluated per receiver. All source cubes are still captured each frame. Complementary subsets use count/sample weighting. Zero preserves the source selector’s all/pair mode.';
+        const budgetNumber=document.createElement('input');budgetNumber.type='number';budgetNumber.min='0';budgetNumber.step='1';budgetNumber.setAttribute('aria-label','Surface source budget (0 = automatic)');
+        budgetNumber.addEventListener('change',()=>invoke('setPointEvaluationBudget',Number(budgetNumber.value)).catch(failed));budgetRow.append(budgetNumber);panel.append(budgetRow);lightControls.push({key:'pointEvaluationBudget',number:budgetNumber});numberScrubs.push(installRenderingNumberControl(budgetNumber,installNumberDrag));
         const comparisonControl=(text,choices,key)=>{
           const row=document.createElement('label');row.textContent=text;
           const select=document.createElement('select');select.setAttribute('aria-label',text);

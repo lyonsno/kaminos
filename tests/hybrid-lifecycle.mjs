@@ -73,7 +73,22 @@ assert.equal(mount.debugState().pointCount,4,'rejected mode must preserve curren
 mount.setPointSampling('all');assert.equal(mount.debugState().evaluatedPointCount,4);
 mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointSampling,'all');
 for(const count of [6,8]){mount.setPointCount(count);consume(field);assert.equal(mount.debugState().capturedPointCount,count);assert.equal(mount.debugState().evaluatedPointCount,count);assert.equal(mount.debugState().shadows.length,count);}
-mount.setPointCount(2);consume(field);
+mount.setPointCount(8);consume(field);
+const budgetKey=mesh.material.customProgramCacheKey(),budgetPipelines=pipelines.length;
+for(const budget of [2,4,6,8,0]){
+ mount.setPointEvaluationBudget(budget);consume(field);
+ assert.equal(mount.debugState().pointEvaluationBudget,budget);
+ assert.equal(mount.debugState().capturedPointCount,8,'receiver budget must retain all eight current captures');
+ assert.equal(mount.debugState().evaluatedPointCount,budget||8);
+ assert.equal(mesh.material.customProgramCacheKey(),budgetKey,'receiver budget is a live uniform edit');
+ assert.equal(pipelines.length,budgetPipelines,'receiver budget must not compile another lighting graph');
+ assert.equal(fireShadowSceneRoute(mount.debugState()).volume_light_field_hybrid_point_evaluation_budget,String(budget));
+}
+mount.setPointEvaluationBudget(6);mount.setPointCount(4);consume(field);
+assert.equal(mount.debugState().pointEvaluationBudget,6,'retain requested budget when fewer sources exist');
+assert.equal(mount.debugState().evaluatedPointCount,4,'effective receiver budget cannot exceed available sources');
+assert.throws(()=>mount.setPointEvaluationBudget(-1),/budget/);assert.equal(mount.debugState().pointEvaluationBudget,6);
+mount.setPointEvaluationBudget(0);mount.setPointCount(2);consume(field);
 
 assert.throws(()=>mount.setPointCount(0),/point count/);assert.equal(mount.canRender(),true);
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
