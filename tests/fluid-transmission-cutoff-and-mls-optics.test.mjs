@@ -79,18 +79,20 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
 {
   const webgpuSource = fs.readFileSync(new URL('../finger-fluid-webgpu-core.js', import.meta.url), 'utf8');
   const start = webgpuSource.indexOf('  var queryValidity = select(0.0, 1.0, exitValidity > 0.5);');
-  const end = webgpuSource.indexOf('  let geometricPathKnown =', start);
+  const end = webgpuSource.indexOf('  if (!submergedSurface && queryValidity > 0.5)', start);
   assert.ok(start > 0 && end > start, 'fs_refraction queryValidity block must exist');
   const snippet = webgpuSource.slice(start, end);
   assert.match(snippet, /transmissionMinContribution/, 'fs_refraction must read transmissionMinContribution');
-  assert.match(snippet, /transmissionContribution/, 'fs_refraction must evaluate transmissionContribution before ray marching');
-  assert.match(snippet, /transmissionRayActive/, 'fs_refraction must gate ray evaluation on transmissionRayActive');
+  assert.match(snippet, /transmissionContribution/, 'fs_refraction must evaluate transmissionContribution before outgoing ray marching');
+  assert.match(snippet, /transmissionRayActive/, 'fs_refraction must gate outgoing ray evaluation on transmissionRayActive');
 
   const jsSnippet = snippet
     .replace(/\bvar\s+/g, 'let ')
+    .replace(/\blet\s+(queryValidity|waterPath|queryOrigin|queryDirection|submergedSurface|refractionQuery)\b/g, 'var $1')
     .replace(/vec3<f32>/g, 'vec3')
     .replace('params.cameraPosition.xyz - prelimWorldPos', 'subVec(params.cameraPosition.xyz, prelimWorldPos)')
     .replace('-liquidCameraDirection(pixel)', 'negVec(liquidCameraDirection(pixel))')
+    .replace('exitWorldPosition + outgoingWorldRay * 0.035', '[0, 0, 0]')
     .replace('-select(', 'scaleVec(select(')
     .replace(') * prelimSlabPath', '), -prelimSlabPath)')
     .replace(/: f32/g, '') + '\n({ queryValidity, transmissionContribution, transmissionRayActive, prelimSlabPath });';
@@ -98,7 +100,11 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
   function evalCutoff({ exitValidity = 1, fresnel = 0.04, maxAbs = 0.8, cutoff = 0.25, debugMode = 0 }) {
     const ndv = Math.max(0, Math.min(1, 1 - Math.pow((fresnel - 0.02037) / (1 - 0.02037), 1 / 5)));
     return vm.runInNewContext(jsSnippet, {
+      slab: { exitValidity },
+      insideRayValid: true,
+      metricRaySupported: true,
       exitValidity,
+      metricExitPath: 0.4,
       thickness: 0.5,
       geometricPathLength: 0.4,
       opticalLightingMode: 0,
@@ -106,10 +112,17 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
       shadingDepth: 1.0,
       hostTransport: true,
       opticalDebugMode: debugMode,
+      entryWorldPosition: [0, 0, -1],
+      insideWorldRay: [0, 0, -1],
+      exitWorldPosition: [0, 0, -1.4],
+      outgoingWorldRay: [0, 0, -1],
+      OPTICAL_PROVIDER_DEFERRED: 2,
       params: {
         hostFrameControls: { w: cutoff },
         cameraPosition: { xyz: [0, 0, 0] },
       },
+      makeNoOpticalQuerySample: () => ({ providerKind: 0, distance: 60 }),
+      sampleHostWaterSegment: () => ({ providerKind: 0, distance: 60 }),
       select: (a, b, cond) => (cond ? b : a),
       clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
       mix: (a, b, t) => a * (1 - t) + b * t,
@@ -148,6 +161,108 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
   const debugOverride = evalCutoff({ fresnel: 0.8, maxAbs: 0.2, cutoff: 0.25, debugMode: 19 });
   assert.equal(debugOverride.transmissionRayActive, true, 'hit-kind debug mode must preserve ray evaluation');
   assert.equal(debugOverride.queryValidity, 1.0);
+
+  // BL-1 regression: an opaque submerged surface inside a long water slab must preserve its short absorption path
+  // even when the full water slab would fall below transmissionMinContribution.
+  const subStart = webgpuSource.indexOf('  let geometricPathKnown =');
+  const subEnd = webgpuSource.indexOf('  let calibratedAbsorptionCoefficient =', subStart);
+  assert.ok(subStart > 0 && subEnd > subStart, 'fs_refraction submerged-surface and absorptionPath block must exist');
+  const fullCutoffBlock = webgpuSource.slice(start, subEnd);
+  const fullJsBlock = fullCutoffBlock
+    .replace(/\bvar\s+/g, 'let ')
+    .replace(/vec3<f32>/g, 'vec3')
+    .replace(/vec2<f32>/g, 'vec2')
+    .replace('params.cameraPosition.xyz - prelimWorldPos', 'subVec(params.cameraPosition.xyz, prelimWorldPos)')
+    .replace('-liquidCameraDirection(pixel)', 'negVec(liquidCameraDirection(pixel))')
+    .replace('-select(', 'scaleVec(select(')
+    .replace(') * prelimSlabPath', '), -prelimSlabPath)')
+    .replace('exitWorldPosition + outgoingWorldRay * 0.035', '[0, 0, 0]')
+    .replace('refractSceneOffset', '0')
+    .replace('sceneUv + offsetPixels / dimsFloat', '[0.5, 0.5]')
+    .replace(/: f32/g, '') + '\n({ waterPath, absorptionPath, submergedSurface, queryValidity, transmissionRayActive });';
+
+  function evalSubmergedSlab({ cutoff = 0.25, fullSlabPath = 10.0, submergedDistance = 0.1 }) {
+    let mutableVars = {};
+    // Convert let declarations that get reassigned (`queryValidity`, `waterPath`, `queryOrigin`, `queryDirection`, `submergedSurface`, `refractionQuery`, `absorptionPath`, `transmissionContribution`, `transmissionRayActive`) back to `var`
+    const runnable = fullJsBlock.replace(
+      /\blet\s+(queryValidity|waterPath|queryOrigin|queryDirection|submergedSurface|refractionQuery|absorptionPath|prelimSlabPath|prelimAbsorption|transmissionContribution|transmissionRayActive)\b/g,
+      'var $1',
+    );
+    return vm.runInNewContext(runnable, {
+      slab: { exitValidity: 1.0 },
+      insideRayValid: true,
+      metricRaySupported: true,
+      exitValidity: 1.0,
+      metricExitPath: fullSlabPath,
+      geometricPathLength: fullSlabPath,
+      thickness: fullSlabPath,
+      opticalLightingMode: 0,
+      pixel: [0, 0],
+      shadingDepth: 1.0,
+      hostTransport: true,
+      opticalDebugMode: 0,
+      entryWorldPosition: [0, 0, -1],
+      insideWorldRay: [0, 0, -1],
+      exitWorldPosition: [0, 0, -11],
+      outgoingWorldRay: [0, 0, -1],
+      OPTICAL_PROVIDER_DEFERRED: 2,
+      interfaceNormal: { denseBodyConfidence: 1.0 },
+      exitRayAngularVariance: 0.2,
+      transmissionFootprintMode: 1,
+      entryOnlyOffset: [0, 0],
+      twoInterfaceOffset: [0, 0],
+      dimsFloat: [100, 100],
+      sceneUv: [0.5, 0.5],
+      refractionSceneColor: {},
+      refractionSceneSampler: {},
+      bodyTransportMode: 1,
+      params: {
+        hostFrameControls: { w: cutoff },
+        cameraPosition: { xyz: [0, 0, 0] },
+      },
+      makeNoOpticalQuerySample: () => ({ providerKind: 0, distance: 60 }),
+      sampleHostWaterSegment: () => ({
+        providerKind: 2,
+        distance: submergedDistance,
+        radiance: [0.9, 0.8, 0.7],
+      }),
+      sampleHybridOpticalQuery: () => {
+        throw new Error('outgoing query must not run on submerged hit');
+      },
+      textureSampleLevel: () => ({ rgb: [0.1, 0.1, 0.1] }),
+      select: (a, b, cond) => (cond ? b : a),
+      clamp: (v, lo, hi) => (Array.isArray(v) ? v : Math.max(lo, Math.min(hi, v))),
+      mix: (a, b, t) => (Array.isArray(a) ? a : a * (1 - t) + b * t),
+      smoothstep: (e0, e1, x) => {
+        const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+        return t * t * (3 - 2 * t);
+      },
+      max: Math.max,
+      pow: Math.pow,
+      dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+      exp: v => ({
+        r: Math.exp(v[0]),
+        g: Math.exp(v[1]),
+        b: Math.exp(v[2]),
+      }),
+      vec2: (x, y = x) => [x, y],
+      vec3: (x, y = x, z = x) => [x, y, z],
+      subVec: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+      negVec: a => [-a[0], -a[1], -a[2]],
+      scaleVec: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+      coherentSlabDepth: () => 1.0,
+      reconstructWorldPosition: () => [0, 0, -1],
+      liquidCameraDirection: () => [0, 0, -1],
+      normalize: v => v,
+      reconstructWorldReflectionNormal: () => [0, 0, 1],
+    });
+  }
+
+  const submergedWithCutoff = evalSubmergedSlab({ cutoff: 0.25, fullSlabPath: 10.0, submergedDistance: 0.1 });
+  const submergedNoCutoff = evalSubmergedSlab({ cutoff: 0.0, fullSlabPath: 10.0, submergedDistance: 0.1 });
+  assert.equal(submergedWithCutoff.submergedSurface, true, 'BL-1: shallow submerged surface inside thick water slab must still be detected');
+  assert.ok(Math.abs(submergedWithCutoff.waterPath - 0.1) < 1e-6, 'BL-1: waterPath must shorten to submerged surface distance (0.1)');
+  assert.ok(Math.abs(submergedWithCutoff.absorptionPath - submergedNoCutoff.absorptionPath) < 1e-6, 'BL-1: cutoff must preserve short absorptionPath for strongly contributing submerged surface');
 }
 
 // 4. Water simulation inspector UI, undo/redo, and live MLS host update without Restart
@@ -288,6 +403,153 @@ assert.throws(() => resolveFingerFluidTransmissionMinContribution(1.5), /transmi
   const lastUniform = uniformWrites.at(-1);
   assert.ok(Math.abs(lastUniform[72] - 0.4) < 1e-6, 'uniform buffer must receive updated transmissionMinContribution (0.4)');
   renderer.dispose();
+
+  // BL-2 regression: moving an opaque surface toward the front water interface must make attenuation and scatter
+  // approach the zero-path limit even when thick water exists behind the opaque surface.
+  const mlsSource = fs.readFileSync(new URL('../mls-juice-renderer.mjs', import.meta.url), 'utf8');
+  const mlsSlabStart = mlsSource.indexOf('  let rawExitDepth=textureLoad(backTex,p,0).x;');
+  const mlsSlabEnd = mlsSource.indexOf('  let viewDir=normalize(eye(uv,depth));', mlsSlabStart);
+  assert.ok(mlsSlabStart > 0 && mlsSlabEnd > mlsSlabStart, 'MLS compose slab-path block must exist');
+  const mlsSlabBlock = mlsSource
+    .slice(mlsSlabStart, mlsSlabEnd)
+    .replace('let rawExitDepth=textureLoad(backTex,p,0).x;', '') + '\n({ geometricPathLength, absorptionPath });';
+
+  function evalMlsSlabPath({ depth = 1.0, sceneD = 1.001, rawExitDepth = 5.0, amount = 1.0, denseBodyConfidence = 1.0 }) {
+    const out = vm.runInNewContext(mlsSlabBlock, {
+      depth,
+      sceneD,
+      rawExitDepth,
+      amount,
+      denseBodyConfidence,
+      max: Math.max,
+      min: Math.min,
+      mix: (a, b, t) => a * (1 - t) + b * t,
+      select: (a, b, cond) => (cond ? b : a),
+    });
+    const absorption = [1.10, 0.42, 0.18].map(k => Math.exp(-k * out.absorptionPath));
+    const scatter = [0.055, 0.30, 0.42].map((c, i) => c * (1 - absorption[i]));
+    return { ...out, absorption, scatter };
+  }
+
+  const nearOpaque = evalMlsSlabPath({ depth: 1.0, sceneD: 1.0001, rawExitDepth: 5.0, amount: 1.0, denseBodyConfidence: 1.0 });
+  assert.ok(
+    nearOpaque.absorptionPath <= 0.0001 + 1e-9,
+    `BL-2: absorptionPath (${nearOpaque.absorptionPath}) must remain bounded by visible water segment before opaque sceneD`,
+  );
+  assert.ok(
+    nearOpaque.absorption.every(c => c > 0.9998),
+    `BL-2: absorption (${nearOpaque.absorption.join(', ')}) must approach 1 as opaque surface approaches front interface`,
+  );
+  assert.ok(
+    nearOpaque.scatter.every(s => s < 1e-4),
+    `BL-2: scatter (${nearOpaque.scatter.join(', ')}) must approach 0 as opaque surface approaches front interface`,
+  );
+
+  // BL-3 regression: parallel entry and exit interfaces must preserve nonzero lateral displacement at oblique incidence
+  // and zero displacement at normal incidence.
+  const mlsRefractStart = mlsSource.indexOf('  if(transmissionContribution >= transmissionMinContribution){');
+  const mlsRefractEnd = mlsSource.indexOf('    let coneRadius=', mlsRefractStart);
+  assert.ok(mlsRefractStart > 0 && mlsRefractEnd > mlsRefractStart, 'MLS compose two-interface refraction block must exist');
+  const mlsRefractBlock = mlsSource.slice(
+    mlsRefractStart + '  if(transmissionContribution >= transmissionMinContribution){\n'.length,
+    mlsRefractEnd,
+  );
+
+  function evalParallelInterfaceShift({ viewDir, depth = 1.0, geometricPathLength = 0.4 }) {
+    const refractVec = (I, N, eta) => {
+      const cosi = -(I[0] * N[0] + I[1] * N[1] + I[2] * N[2]);
+      const k = 1 - eta * eta * (1 - cosi * cosi);
+      if (k < 0) return [0, 0, 0];
+      const f = eta * cosi - Math.sqrt(k);
+      return [eta * I[0] + f * N[0], eta * I[1] + f * N[1], eta * I[2] + f * N[2]];
+    };
+    const transportN = [0, 0, 1];
+    const insideRay = refractVec(viewDir, transportN, 1.0 / 1.333);
+    const colorSize = [320, 200];
+    const size = [320, 200];
+    const entryEye = [viewDir[0] / -viewDir[2] * depth, viewDir[1] / -viewDir[2] * depth, -depth];
+    const projectPoint = v => {
+      const w = -v[2];
+      return [v[0], v[1], v[2], w];
+    };
+    const entryClip = projectPoint(entryEye);
+    const uv = [entryClip[0] / entryClip[3] * 0.5 + 0.5, 0.5 - entryClip[1] / entryClip[3] * 0.5];
+    const pixel = [uv[0] * colorSize[0], uv[1] * colorSize[1]];
+
+    const jsRefract = mlsRefractBlock
+      .replace(/vec2f\(([^()]+),([^()]+)\)/g, '[$1, $2]')
+      .replace(/vec2f\(([^()]+)\)/g, 'toVec2($1)')
+      .replace(/vec2i\(([^()]+),([^()]+)\)/g, '[$1, $2]')
+      .replace(/vec2i\(([^()]+)\)/g, 'toVec2i($1)')
+      .replace('eye(uv,depth)+insideRay*max(geometricPathLength,amount*.4)', 'addVec(eye(uv,depth), scaleVec(insideRay, Math.max(geometricPathLength, amount * 0.4)))')
+      .replace('eye(uv,depth)+insideRay*(geometricPathLength/max(abs(insideRay.z),.25))', 'addVec(eye(uv,depth), scaleVec(insideRay, geometricPathLength / Math.max(Math.abs(insideRay[2]), 0.25)))')
+      .replace('camera.projection*vec4f(exitPosView,1.)', 'projectPoint(exitPosView)')
+      .replace(/exitClip\.x/g, 'exitClip[0]')
+      .replace(/exitClip\.y/g, 'exitClip[1]')
+      .replace(/exitClip\.w/g, 'exitClip[3]')
+      .replace('exitUv*toVec2(size)', '[exitUv[0]*size[0], exitUv[1]*size[1]]')
+      .replace('exitUv*toVec2(colorSize)-toVec2(pixel)', '[exitUv[0]*colorSize[0]-pixel[0], exitUv[1]*colorSize[1]-pixel[1]]')
+      .replace('backPoint(exitP+[1, 0],exitCenter)-backPoint(exitP-[-1, 0],exitCenter)', '[1, 0, 0]')
+      .replace('backPoint(exitP+[0, 1],exitCenter)-backPoint(exitP-[0, -1],exitCenter)', '[0, 1, 0]')
+      .replace('backPoint(exitP+[1, 0],exitCenter)-backPoint(exitP-[1, 0],exitCenter)', '[1, 0, 0]')
+      .replace('backPoint(exitP+[0, 1],exitCenter)-backPoint(exitP-[0, 1],exitCenter)', '[0, 1, 0]')
+      .replace('if(exitN.z>0.){exitN=-exitN;}', 'exitN = [0, 0, -1];')
+      .replace('refract(insideRay,-exitN,1.333)', 'refractVec(insideRay, [0, 0, 1], 1.333)')
+      .replace('(outgoingRay.xy/max(abs(outgoingRay.z),.25)-insideRay.xy/max(abs(insideRay.z),.25))*[1., -1.]*clamp(absorptionPath*85.,0.,28.)', 'scaleVec(mulVec2(subVec2(divVec2([outgoingRay[0], outgoingRay[1]], Math.max(Math.abs(outgoingRay[2]), 0.25)), divVec2([insideRay[0], insideRay[1]], Math.max(Math.abs(insideRay[2]), 0.25))), [1, -1]), clamp(absorptionPath * 85, 0, 28))')
+      .replace('insidePixelOffset+exitDeflection', 'addVec2(insidePixelOffset, exitDeflection)')
+      .replace('toVec2(pixel)+mix(entryOffset,twoInterfaceDelta,select(0.,1.,rawExitDepth>depth))', 'addVec2(pixel, mixVec2(entryOffset, twoInterfaceDelta, rawExitDepth > depth ? 1 : 0))');
+
+    return vm.runInNewContext(jsRefract + '\n({ baseRefractPixel, pixel });', {
+      uv,
+      depth,
+      geometricPathLength,
+      amount: geometricPathLength,
+      absorptionPath: geometricPathLength,
+      rawExitDepth: depth + geometricPathLength,
+      insideRay,
+      viewDir,
+      pixel,
+      size,
+      colorSize,
+      entryOffset: [0, 0],
+      backTex: {},
+      eye: () => entryEye,
+      projectPoint,
+      refractVec,
+      textureLoad: () => ({ x: depth + geometricPathLength }),
+      normalize: v => v,
+      cross: () => [0, 0, -1],
+      length: v => Math.hypot(...v),
+      abs: Math.abs,
+      max: Math.max,
+      min: Math.min,
+      clamp: (v, lo, hi) => (Array.isArray(v) ? v.map((x, i) => Math.max(lo[i], Math.min(hi[i], x))) : Math.max(lo, Math.min(hi, v))),
+      select: (a, b, c) => (c ? b : a),
+      mix: (a, b, t) => (Array.isArray(a) ? a.map((x, i) => x * (1 - t) + b[i] * t) : a * (1 - t) + b * t),
+      mixVec2: (a, b, t) => [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t],
+      toVec2: v => (Array.isArray(v) ? [v[0], v[1]] : [v, v]),
+      toVec2i: v => (Array.isArray(v) ? [Math.trunc(v[0]), Math.trunc(v[1])] : [Math.trunc(v), Math.trunc(v)]),
+      vec2i: (x, y = x) => (Array.isArray(x) ? [Math.trunc(x[0]), Math.trunc(x[1])] : [Math.trunc(x), Math.trunc(y)]),
+      vec2f: (x, y = x) => (Array.isArray(x) ? [x[0], x[1]] : [x, y]),
+      addVec: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+      addVec2: (a, b) => [a[0] + b[0], a[1] + b[1]],
+      subVec2: (a, b) => [a[0] - b[0], a[1] - b[1]],
+      mulVec2: (a, b) => [a[0] * b[0], a[1] * b[1]],
+      divVec2: (a, s) => [a[0] / s, a[1] / s],
+      scaleVec: (a, s) => a.map(x => x * s),
+    });
+  }
+
+  const obliqueShift = evalParallelInterfaceShift({ viewDir: [0.6, 0, -0.8], depth: 1.0, geometricPathLength: 0.4 });
+  const normalShift = evalParallelInterfaceShift({ viewDir: [0, 0, -1.0], depth: 1.0, geometricPathLength: 0.4 });
+  assert.ok(
+    Math.abs(obliqueShift.baseRefractPixel[0] - obliqueShift.pixel[0]) > 1.0,
+    `BL-3: oblique ray through parallel slab interfaces must produce nonzero lateral pixel displacement (got delta ${obliqueShift.baseRefractPixel[0] - obliqueShift.pixel[0]})`,
+  );
+  assert.ok(
+    Math.hypot(normalShift.baseRefractPixel[0] - normalShift.pixel[0], normalShift.baseRefractPixel[1] - normalShift.pixel[1]) < 1e-5,
+    'BL-3: normal-incidence ray through parallel slab interfaces must produce zero lateral displacement',
+  );
 }
 
 console.log('All transmission cutoff, persistence, inspector, and MLS optical slab renderer tests passed');

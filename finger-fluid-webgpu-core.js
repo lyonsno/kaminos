@@ -10394,23 +10394,19 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid && (!hostTransport || metricRaySupported));
   var queryValidity = select(0.0, 1.0, exitValidity > 0.5);
   let transmissionMinContribution = clamp(params.hostFrameControls.w, 0.0, 1.0);
-  let prelimSlabPath = mix(thickness * 0.12, geometricPathLength, queryValidity);
-  let prelimAbsorption = exp(-select(vec3<f32>(1.10, 0.42, 0.18), vec3<f32>(0.46, 0.15, 0.055), opticalLightingMode == 2) * prelimSlabPath);
   let prelimWorldPos = reconstructWorldPosition(pixel, coherentSlabDepth(pixel, shadingDepth, false));
   let prelimViewToCamera = select(normalize(params.cameraPosition.xyz - prelimWorldPos), -liquidCameraDirection(pixel), hostTransport);
   let prelimNdv = clamp(dot(reconstructWorldReflectionNormal(pixel), prelimViewToCamera), 0.0, 1.0);
   let prelimFresnel = 0.02037 + (1.0 - 0.02037) * pow(1.0 - prelimNdv, 5.0);
-  let transmissionContribution = (1.0 - prelimFresnel) * max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b));
-  let transmissionRayActive = transmissionContribution >= transmissionMinContribution
+  let insideSegmentActive = (1.0 - prelimFresnel) >= transmissionMinContribution
     || opticalDebugMode == 8 || opticalDebugMode == 19 || opticalDebugMode == 20 || opticalDebugMode == 21;
-  queryValidity = select(0.0, queryValidity, transmissionRayActive);
   let geometricPathKnown = (slab.exitValidity > 0.5) && insideRayValid && (!hostTransport || metricRaySupported);
   var waterPath = metricExitPath;
   var queryOrigin = select(exitWorldPosition + outgoingWorldRay * 0.035, exitWorldPosition, hostTransport);
   var queryDirection = outgoingWorldRay;
   var submergedSurface = false;
   var refractionQuery = makeNoOpticalQuerySample();
-  if (hostTransport && geometricPathKnown && transmissionRayActive) {
+  if (hostTransport && geometricPathKnown && insideSegmentActive) {
     let insideHit = sampleHostWaterSegment(entryWorldPosition, insideWorldRay, waterPath);
     if (insideHit.providerKind == OPTICAL_PROVIDER_DEFERRED && insideHit.distance >= 0.0 && insideHit.distance <= waterPath) {
       refractionQuery = insideHit;
@@ -10421,6 +10417,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
       queryDirection = insideWorldRay;
     }
   }
+  let prelimSlabPath = select(mix(thickness * 0.12, geometricPathLength, queryValidity), waterPath, hostTransport && geometricPathKnown);
+  let prelimAbsorption = exp(-select(vec3<f32>(1.10, 0.42, 0.18), vec3<f32>(0.46, 0.15, 0.055), opticalLightingMode == 2) * prelimSlabPath);
+  let transmissionContribution = (1.0 - prelimFresnel) * max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b));
+  let transmissionRayActive = transmissionContribution >= transmissionMinContribution
+    || opticalDebugMode == 8 || opticalDebugMode == 19 || opticalDebugMode == 20 || opticalDebugMode == 21;
+  queryValidity = select(0.0, queryValidity, transmissionRayActive);
   if (!submergedSurface && queryValidity > 0.5) { refractionQuery = sampleHybridOpticalQuery(queryOrigin, queryDirection); }
   let transmissionFootprintActivation = interfaceNormal.denseBodyConfidence
     * smoothstep(0.04, 0.34, exitRayAngularVariance)
