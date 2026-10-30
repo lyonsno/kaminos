@@ -1938,7 +1938,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <label class="slider-label" for="volume-emission-interpolation">Emission kernel</label>
       <select id="volume-emission-interpolation" data-volume-settings-role="renderer">
-        <option value="positive">Smoothing</option><option value="interpolating">Interpolating</option>
+        <option value="positive">Smoothing</option><option value="interpolating">Interpolating</option><option value="monotone">Local cubic</option>
       </select>
     </div>
     <div class="slider-row">
@@ -1948,7 +1948,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <label class="slider-label" for="volume-smoke-interpolation">Smoke kernel</label>
       <select id="volume-smoke-interpolation" data-volume-settings-role="renderer">
-        <option value="positive">Smoothing</option><option value="interpolating">Interpolating</option>
+        <option value="positive">Smoothing</option><option value="interpolating">Interpolating</option><option value="monotone">Local cubic</option>
       </select>
     </div>
     <div class="slider-row">
@@ -24304,34 +24304,29 @@ function grOpenFile(name) {
   window.open(url, '_blank');
 }
 
+let sceneBrowseGeneration = 0;
 async function grBrowseScenes() {
+  const generation = ++sceneBrowseGeneration;
   const listEl = document.getElementById('scenes-list');
-  const data = await grFetchApi('browse', { root: 'scenes', path: '' });
+  const data = await grFetchApi('scene-catalogue');
+  if (generation !== sceneBrowseGeneration) return;
   if (data.error) {
-    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${escapeHtml(data.error)}</div>`;
+    listEl.textContent = data.error;
     return;
   }
-  const sceneFiles = (data.entries || []).filter(e => e.name.endsWith('.json'));
-  if (sceneFiles.length === 0) {
-    listEl.innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">No saved scenes yet. Cmd+S to save.</div>';
+  renderSavedSceneCatalogue(data.scenes || [], listEl);
+  if ((data.scenes || []).some(scene => scene.metadata === 'pending')) {
+    const hydrated = await grFetchApi('scene-catalogue', { metadata: '1' });
+    if (generation !== sceneBrowseGeneration) return;
+    if (hydrated.error) { const error = document.createElement('div'); error.textContent = hydrated.error; listEl.append(error); return; }
+    renderSavedSceneCatalogue(hydrated.scenes || [], listEl);
+  }
+}
+function renderSavedSceneCatalogue(scenes, listEl) {
+  if (!scenes.length) {
+    listEl.textContent = 'No saved scenes yet. Cmd+S to save.';
     return;
   }
-
-  // Load provenance from each scene file to group by source
-  const scenes = [];
-  for (const entry of sceneFiles) {
-    const sceneData = await grFetchApi('read', { root: 'scenes', path: entry.name });
-    scenes.push({
-      ...entry,
-      provenance: sceneData?.provenance || null,
-      modelFileName: sceneData?.model?.fileName || entry.name,
-      timestamp: sceneData?.timestamp || '',
-      label: sceneData?.label || sceneData?.capture?.label || '',
-      capture: sceneData?.capture || null,
-      composition: sceneData?.composition || null,
-    });
-  }
-
   // Group by source_group
   const groups = {};
   for (const s of scenes) {
@@ -24345,7 +24340,7 @@ async function grBrowseScenes() {
     g.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
-  const groupOrder = ['greenroom', 'scratch', 'demo', 'local', 'other'];
+  const groupOrder = [...new Set(['greenroom', 'scratch', 'demo', 'local', 'other', ...Object.keys(groups)])];
   const groupLabels = { greenroom: 'Greenroom', scratch: 'Scratch', demo: 'Demo', local: 'Local Files', other: 'Other' };
 
   listEl.innerHTML = '';
@@ -24410,11 +24405,11 @@ async function grBrowseScenes() {
       };
       div.appendChild(btn);
       div.appendChild(delBtn);
-      if (entry.capture?.image?.startsWith('data:image/png;base64,')) {
+      if (entry.capture?.imageSha256) {
         const shot = document.createElement('div');
         shot.className = 'saved-scene-shot';
         const thumbnail = document.createElement('img');
-        thumbnail.src = entry.capture.image;
+        thumbnail.src = `/api/scene-thumbnail?name=${encodeURIComponent(entry.name)}&version=${encodeURIComponent(entry.capture.imageSha256)}`;
         thumbnail.alt = entry.capture.label || entry.label;
         thumbnail.loading = 'lazy';
         const pictureButton = document.createElement('button');
@@ -26490,7 +26485,16 @@ sceneInitialization.then(async () => {
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
   const startupRestoreRequested = !!startupSceneHash.get('scene');
-  const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
+  // Fetch bytes while independent environment/fire preparation runs. Applying
+  // the document still waits for those owners, preserving their lifetime order.
+  const startupSceneFile = startupSceneHash.get('scene');
+  const startupSceneData = startupSceneFile
+    ? fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}`).then(async response => {
+        if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
+        return response.json();
+      })
+    : Promise.resolve(null);
+  const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded, startupSceneData]).then(async ([, , data]) => {
     const hash = startupSceneHash;
     if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
     if(hash.get('authoring')==='1'){
@@ -26500,9 +26504,6 @@ sceneInitialization.then(async () => {
     const sceneFile = hash.get('scene');
     if (!sceneFile) return;
     sceneDocument.holdRestore();
-    const response = await fetch(`/api/read?root=scenes&path=${encodeURIComponent(sceneFile)}`);
-    if (!response.ok) throw new Error(`Scene unavailable: ${sceneFile}`);
-    const data = await response.json();
     const plan = planSceneRestore(data);
     if (plan.composition) {
       const preset = new URLSearchParams(location.search).get('settings_preset');

@@ -122,4 +122,18 @@ assert.equal(target.searchParams.get('volume_tone_mapping'), 'agx');
 assert.equal(receipt.rendererControlCount, expectedRendererControls.length);
 assert.equal(target.searchParams.get('volume_ray_start_noise'), 'true');
 
+for (const kernel of ['positive','interpolating','monotone']) {
+  for(const kind of ['emission','smoke']) {
+    const control=artifact.preset.rendererControls[`volume-${kind}-interpolation`];
+    control.value=kernel;
+    const route=new URL(artifact.preset.route);
+    route.searchParams.set(control.param,kernel);
+    artifact.preset.route=route.href;
+  }
+  const saved=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,contractSchema);
+  const reopened=buildVolumeSettingsPresetVisualTarget(saved,'http://127.0.0.1:18780','splat-only');
+  assert.equal(reopened.searchParams.get('volume_emission_interpolation'),kernel);
+  assert.equal(reopened.searchParams.get('volume_smoke_interpolation'),kernel);
+}
+
 console.log('volume settings renderer controls contracts passed');
