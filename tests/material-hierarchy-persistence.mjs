@@ -2,6 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import * as THREE from '../lib/three.core.js';
+import {createWorkbenchSceneHost} from '../workbench-scene-host.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import {projectFireSettingsToSchema} from '../scene-fire-domain.mjs';
 import experiment from '../experiments/material-hierarchy.experiment.mjs';
@@ -63,4 +66,47 @@ test('the experiment edits domain state, respects saved disabled state and leave
  state={...state,enabled:true,options:{...state.options,budget:0}};
  assert.equal(instance.read().enabled,true);assert.equal(instance.read().requested.budget,0);
  await instance.dispose();assert.equal(directRuntimeWrites,0,'the panel never owns the runtime lifetime');assert.equal(state.enabled,true);
+});
+test('legacy adoption waits for basin admission and preserves authored disabled policy',async()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const source=html.slice(html.indexOf('function readAdaptiveMaterialSettings()'),html.indexOf('function readVolumeDomControls()'));
+ for(const authored of [false,true]){
+  const controls=Object.fromEntries(schema.controls.filter(f=>f.key.startsWith('volume-adaptive-')).map(f=>[f.key,descriptor(f.key,f.additiveDefault)]));
+  const context=vm.createContext({window:{},volumePrototype:null,adaptiveMaterialSettingsAuthored:false,
+   ADAPTIVE_MATERIAL_FIELDS:(await import('../volume-adaptive-material-controls.mjs')).ADAPTIVE_MATERIAL_FIELDS,
+   readAdaptiveMaterialControls,patchAdaptiveMaterialControls,
+   document:{getElementById:id=>controls[id]},readVolumeDomControlValue:el=>el.value,
+   readVolumeDomControls:()=>controls,setVolumeControlValue:(id,value)=>{controls[id].value=value;}});
+  vm.runInContext(source,context);
+  let initialized;const ready=new Promise(resolve=>{initialized=resolve;});
+  const host={volume:{ready},controls:{document:{defaultView:{}}},
+   fire:{adaptiveMaterial:{read:context.readAdaptiveMaterialSettings,set:context.setAdaptiveMaterialSettings,adopt:context.adoptAdaptiveMaterialExperiment}},
+   scene:{open:async()=>({attach:async()=>({id:'overlay'}),onFrame:()=>()=>{},dispose:async()=>{},redraw(){}})}};
+  const pending=experiment.create({host,inputs:{enabled:true,options:{budget:.75}},record(){},updateInputs(){}});
+  await new Promise(resolve=>setImmediate(resolve));
+  // Finish the delayed basin's canonical control application, as startup does.
+  for(const f of schema.controls.filter(f=>f.key.startsWith('volume-adaptive-')))controls[f.key].value=f.additiveDefault;
+  if(authored)controls['volume-adaptive-budget'].value=0;
+  context.adaptiveMaterialSettingsAuthored=authored;initialized();
+  const instance=await pending,state=instance.read();
+  assert.equal(state.enabled,!authored);assert.equal(state.requested.budget,authored?0:.75);
+  await instance.dispose();
+ }
+});
+test('saving with the allocation panel open does not serialize its temporary refinement boxes',async()=>{
+ const scene=new THREE.Scene(),rows=[],camera=new THREE.PerspectiveCamera(),controls={target:new THREE.Vector3(),update(){}};
+ const sceneHost=createWorkbenchSceneHost({scene,camera,controls,
+  registerObject:(object,metadata)=>{const row={...metadata,id:'refinement-overlay',object};rows.push(row);return row;},
+  findObject:object=>rows.find(row=>row.object===object),removeObject:()=>{},
+  redraw(){},onFrame:()=>()=>{},loadAsset:()=>{throw Error('No assets required');}});
+ const policy=readAdaptiveMaterialControls(Object.fromEntries(Object.entries(values).map(([id,value])=>[id,descriptor(id,value)])));
+ const host={scene:sceneHost,volume:{ready:Promise.resolve()},controls:{document:{defaultView:{}}},
+  fire:{adaptiveMaterial:{read:()=>policy,adopt(){},set(){}}}};
+ const instance=await experiment.create({host,inputs:{overlay:true},record(){},updateInputs(){}});
+ try {
+  assert.equal(scene.children.length,1,'refinement guides are attached for display');
+  const saved=buildSceneDocument({objects:rows.map(({object,...record})=>record)});
+  assert.deepEqual(saved.objects,[],'display-only refinement guides must not become reloadable scene assets');
+ } finally {await instance.dispose();}
+ assert.equal(scene.children.length,0,'closing the editor removes its display-only guides');
 });

@@ -3,11 +3,14 @@ export default {
  id:'material-hierarchy',title:'Adaptive fire material',
  async create({host,inputs={},record,updateInputs}){
   const session=await host.scene.open(),win=host.controls.document.defaultView;
+  // Basin admission applies canonical controls asynchronously, even when no
+  // saved scene is opening. Adopt legacy link policy only after that write.
+  await host.volume?.ready;
   const settings=host.fire.adaptiveMaterial;
   settings.adopt(inputs);
   let overlay=inputs.overlay??false,lastRevision=-1,status,panel,controlError=null,disposed=false;
   const root=new Group();root.name='Material refinement';root.userData.kaminosEditorHelper=true;
-  const asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:'simulation:adaptive-material-allocation'}});
+  const asset=await session.attach(root,{owned:true,presentation:true,metadata:{label:root.name,source:'simulation:adaptive-material-allocation'}});
   const box=new BoxGeometry(1,1,1),geometry=new EdgesGeometry(box),unitEdges=geometry.attributes.position.array.slice();box.dispose();geometry.dispose();const colors=[0x7799bb,0x36cc9a,0xe5b45b,0xed7b51,0xda57ac],materials=colors.map(color=>new LineBasicMaterial({color,transparent:true,opacity:.4}));
   const source=()=>win.__kaminosVolumePrototype;
   const read=()=>{const {enabled,options}=settings.read();return {enabled,requested:options,overlay,objectId:asset.id,error:controlError??source()?.adaptiveMaterialState?.()?.error??null,effective:source()?.adaptiveMaterialState?.()?.effective??null,status:source()?.adaptiveMaterialState?'available':'awaiting-fire-runtime'};};
