@@ -23,7 +23,8 @@ export async function runWaterSourceWitness({evaluate,ws,capture,out}) {
   window.kaminosSetSceneObjectTransform(id,{position:[-.25,.6,0]});await api.advanceTo(120);const fullMoved=await take();
   if(full.state.solver.liveInlets.totalAdmitted!==64||fullMoved.state.solver.liveInlets.totalAdmitted!==64)throw Error('Full pool silently added or replaced retained water');
   window.selectSceneObject(id);window.kaminosSetCameraDebugPose({position:[1.1,.9,1.2],target:[0,.3,0]});await wait(150);
-  const ui=document.querySelector('[data-source-status]').textContent;
+  const status=document.querySelector('[data-source-status]');status.scrollIntoView({block:'center'});
+  const ui=status.textContent;
   const inlet=fullMoved.state.solver.liveInlets.inlets.find(e=>e.id===id);
   if(inlet.blockedReason!=='capacity'||Math.abs(inlet.originWorld[0]+.25)>1e-8||!ui.includes('capacity is full'))throw Error('Full moved source is not explained: '+JSON.stringify({inlet,ui}));
   return {id,bowl,defaults,before,moved,newPositions,full,fullMoved,ui,source:await(await fetch('/api/runtime-config')).json()};

@@ -47,10 +47,9 @@ export function createMlsClock(dt) {
   return {observe,advanceSteps(count){
     if(!Number.isSafeInteger(count)||count<0)throw Error('Invalid MLS step count');
     steps+=count;elapsed+=count*dt;return count;
-  },advance(now,paused=false,maxSteps=Infinity){
-    if(maxSteps!==Infinity&&(!Number.isSafeInteger(maxSteps)||maxSteps<1))throw Error('Invalid MLS batch step count');
+  },advance(now,paused=false){
     observe(now,paused);
-    const count=paused?0:Math.min(maxSteps,Math.floor((accumulator+1e-10)/dt));
+    const count=paused?0:Math.floor((accumulator+1e-10)/dt);
     accumulator-=count*dt;steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
     simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};
