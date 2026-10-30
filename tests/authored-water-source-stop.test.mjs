@@ -4,6 +4,39 @@ import test from 'node:test';
 import {createMlsEmissionPlan,mlsConfig} from '../mls-juice-contract.mjs';
 import {createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
 import {waterControlsFixture} from './helpers/water-controls.mjs';
+import {authoredMlsInlets} from '../authored-mls-water.mjs';
+import {normalizeLocalLiquidSceneDocument} from '../local-liquid-scene-object.mjs';
+import {defaultLocalLiquidSetup,localLiquidInletPacket} from '../local-liquid-setup.mjs';
+test('emission switch retains authored flow through save/reopen and both inlet adapters',()=>{
+ const source=createLocalLiquidEmitterSceneRecord({id:'pour',transform:{position:[0,1,0],rotation:[Math.PI/2,0,0],scale:[1,1,1]}});
+ source.localLiquidEmitter.volumeRate=.0023;
+ source.localLiquidEmitter.emissionEnabled=false;
+ const saved=JSON.parse(JSON.stringify({objects:[source],localLiquid:defaultLocalLiquidSetup()}));
+ const {emitters,setup}=normalizeLocalLiquidSceneDocument(saved);
+ assert.equal(emitters[0].localLiquidEmitter.emissionEnabled,false,'stopped is authored state');
+ assert.equal(emitters[0].localLiquidEmitter.volumeRate,.0023);
+ for(const packet of [authoredMlsInlets(emitters),localLiquidInletPacket(setup,emitters)]){
+  assert.equal(packet.emitters[0].active,false);
+  assert.equal(packet.emitters[0].source_flux_particles_per_second,0);
+ }
+ emitters[0].localLiquidEmitter.emissionEnabled=true;
+ assert.equal(authoredMlsInlets(emitters).emitters[0].active,true);
+ assert.equal(authoredMlsInlets(emitters).emitters[0].source_flux_particles_per_second,.0023/(.05**3/3));
+ emitters[0].localLiquidEmitter.volumeRate=0;
+ assert.equal(authoredMlsInlets(emitters).emitters[0].active,false,'zero is a deliberate rate, not a request for defaults');
+ assert.throws(()=>createLocalLiquidEmitterSceneRecord({...source,settings:{...source.localLiquidEmitter,emissionEnabled:'false'}}),/emission.*Boolean/i);
+});
+test('native emitter switch edits only activation and flushes a pending rate first',async()=>{
+ const f=waterControlsFixture();const selected={id:'A',settings:{mode:'continuous',volumeRate:.0023,baseRadius:.075,strength:.25,emissionEnabled:true}};
+ f.api.read=()=>({selected});f.api.edit=(id,patch)=>{f.edits.push({id,settings:patch});Object.assign(selected.settings,patch);};f.controls.refresh();
+ assert.equal(f.input('[data-emission]').checked,true);
+ f.input('[data-rate]').value='3.1';f.input('[data-rate]').listeners.input();
+ f.input('[data-emission]').checked=false;await f.input('[data-emission]').onchange();
+ assert.equal(selected.settings.volumeRate,.0031);assert.equal(selected.settings.emissionEnabled,false);
+ assert.deepEqual(f.edits.at(-1).settings,{emissionEnabled:false});
+ f.input('[data-emission]').checked=true;await f.input('[data-emission]').onchange();
+ assert.equal(selected.settings.volumeRate,.0031);assert.equal(selected.settings.emissionEnabled,true);
+});
 test('new flow and saved legacy flow',()=>{
 const fresh=createLocalLiquidEmitterSceneRecord({id:'new',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}});
 assert(Math.abs(fresh.localLiquidEmitter.volumeRate-.005)<1e-12,'New emitter must start at 5 litres/s, one tenth of the old 50');
