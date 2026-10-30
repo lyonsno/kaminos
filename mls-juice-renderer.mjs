@@ -66,8 +66,8 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   let restDensity = max(params.mlsMaterial.x, 0.25);
   let densityRatio = rawDensity / restDensity;
   let surface = select(0.55, clamp(1.15 - densityRatio * 0.72, 0.16, 1.0), rawDensity > 0.001);
-  let densityRadius = select(1.0, clamp(densityRatio, 0.78, 1.35), rawDensity > 0.001);
-  let radius = params.viewport.z * mix(1.22, 1.78, surface) * densityRadius;
+  let densityRadius = select(1.0, clamp(densityRatio, 0.85, 1.15), rawDensity > 0.001);
+  let radius = params.viewport.z * mix(0.88, 1.15, surface) * densityRadius;
   let worldCenter = params.mlsDomain.xyz + particle.position * params.mlsDomain.w;
   let worldPosition = worldCenter
     + params.cameraRight.xyz * radius * corner.x
@@ -105,14 +105,13 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
   let opticalThickness = thickness * 0.22 * (0.55 + 0.45 * smoothstep(0.0, 3.6, input.speed));
   let depthWeight = edge * surfaceWeight;
-  let smoothCap = (1.0 - r2) * (1.0 - r2);
   let supportSafeViewDepth = input.viewDepth;
-  let frontSurfaceViewDepth = max(0.001, input.viewDepth - (0.65 + 0.35 * smoothCap) * input.radius * 0.22);
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth + (-0.55 + 1.45 * r2) * input.radius);
   let smoothFrontViewDepth = frontSurfaceViewDepth;
   var output: AccumFragmentOutput;
   output.accumulation = vec4<f32>(opticalThickness, input.speed * opticalThickness, depthWeight, smoothFrontViewDepth * depthWeight);
   output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
-  output.backDepth = vec4<f32>(input.viewDepth + (0.65 + 0.35 * smoothCap) * input.radius * 0.22);
+  output.backDepth = vec4<f32>(max(0.001, input.viewDepth + (0.55 - 1.45 * r2) * input.radius));
   return output;
 }
 
@@ -202,28 +201,40 @@ fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
   return depthSum / max(weightSum, 0.0001);
 }
 
-// Strided screen-space bilateral filter on the min-blended front surface
-// (opticalSlabFrontDepth.x) so adjacent 25-35px particle billboards fuse into
-// a continuous glassy sheet without mixing in deep interior lattice layers.
+// Multi-scale screen-space slab filter on the min-blended front surface
+// (opticalSlabFrontDepth.x) so adjacent MLS particle paraboloids fuse into
+// a continuous glossy sheet without mixing detached background water layers.
 fn readFrontDepth(pixel: vec2<i32>) -> f32 {
   let centerDepth = readRawFrontDepth(pixel);
   if (centerDepth >= 29.5) {
     return centerDepth;
   }
   let radius = max(params.viewport.z, 0.016);
-  var depthSum = centerDepth * 2.0;
-  var weightSum = 2.0;
-  for (var y = -3; y <= 3; y = y + 1) {
-    for (var x = -3; x <= 3; x = x + 1) {
+  let slabRange = radius * 5.0;
+  var depthSum = centerDepth * 1.5;
+  var weightSum = 1.5;
+  for (var y = -2; y <= 2; y = y + 1) {
+    for (var x = -2; x <= 2; x = x + 1) {
       if (x == 0 && y == 0) { continue; }
-      let samplePixel = pixel + vec2<i32>(x * 4, y * 4);
-      let sampleDepth = readRawFrontDepth(samplePixel);
-      if (sampleDepth >= 29.5) { continue; }
-      let depthDelta = (sampleDepth - centerDepth) / (radius * 3.2);
-      if (abs(depthDelta) > 2.5) { continue; }
-      let weight = exp(-f32(x * x + y * y) / 5.5 - depthDelta * depthDelta);
-      depthSum = depthSum + sampleDepth * weight;
-      weightSum = weightSum + weight;
+      let r2 = f32(x * x + y * y);
+      let nearDepth = readRawFrontDepth(pixel + vec2<i32>(x * 2, y * 2));
+      if (nearDepth < 29.5) {
+        let nearDelta = (nearDepth - centerDepth) / slabRange;
+        if (abs(nearDelta) <= 2.2) {
+          let nearWeight = exp(-r2 / 4.5 - nearDelta * nearDelta * 0.5);
+          depthSum = depthSum + nearDepth * nearWeight;
+          weightSum = weightSum + nearWeight;
+        }
+      }
+      let farDepth = readRawFrontDepth(pixel + vec2<i32>(x * 5, y * 5));
+      if (farDepth < 29.5) {
+        let farDelta = (farDepth - centerDepth) / slabRange;
+        if (abs(farDelta) <= 2.2) {
+          let farWeight = 0.65 * exp(-r2 / 4.5 - farDelta * farDelta * 0.5);
+          depthSum = depthSum + farDepth * farWeight;
+          weightSum = weightSum + farWeight;
+        }
+      }
     }
   }
   return depthSum / max(weightSum, 0.0001);
@@ -365,8 +376,7 @@ fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
   let blend = fract(texelPosition);
   let top = mix(loadEnvironmentTexel(base), loadEnvironmentTexel(base + vec2<i32>(1, 0)), blend.x);
   let bottom = mix(loadEnvironmentTexel(base + vec2<i32>(0, 1)), loadEnvironmentTexel(base + vec2<i32>(1, 1)), blend.x);
-  let hostEnv = mix(top, bottom, blend.y) * 0.72;
-  return max(hostEnv, analyticSky * 0.22);
+  return mix(top, bottom, blend.y) * 0.72;
 }
 
 struct ReflectionSample {
@@ -574,11 +584,11 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
 }
 
 fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
-  return liquidWorldNormalAtRadius(pixel, 8, false);
+  return liquidWorldNormalAtRadius(pixel, 12, false);
 }
 
 fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
-  return liquidWorldNormalAtRadius(pixel, 4, false);
+  return liquidWorldNormalAtRadius(pixel, 6, false);
 }
 
 fn reconstructEntryNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
@@ -601,8 +611,8 @@ fn estimateInterfaceNormal(
   centerAccum: vec4<f32>,
   coverageContinuity: f32,
 ) -> InterfaceNormalEstimate {
-  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 4);
-  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 8);
+  let detailNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 6);
+  let macroNormal = reconstructEntryNormalAtRadius(pixel, centerDepth, 12);
   let variance = sqrt(max(1.0 - dot(detailNormal, macroNormal), 0.0));
   let denseBodyConfidence = smoothstep(0.68, 0.94, coverageContinuity)
     * smoothstep(2.35, 4.60, centerAccum.x)
@@ -638,7 +648,9 @@ struct OpticalSlab {
 fn evaluateOpticalSlab(pixel: vec2<i32>, centerAccum: vec4<f32>) -> OpticalSlab {
   let entryDepth = readFrontDepth(pixel);
   let exitDepth = readBackDepth(pixel);
-  let geometricPathLength = max(0.0, exitDepth - entryDepth);
+  let rawSpan = max(0.0, exitDepth - entryDepth);
+  let integratedWaterSpan = max(centerAccum.x * 0.065, params.viewport.z * 0.85);
+  let geometricPathLength = min(rawSpan, integratedWaterSpan * 1.35);
   let spanInParticleDiameters = geometricPathLength / max(params.viewport.z * 2.0, 0.001);
   let supportPerSpan = centerAccum.z / max(spanInParticleDiameters, 1.0);
   let supportPerSpanConfidence = smoothstep(0.10, 0.72, supportPerSpan);
@@ -791,7 +803,11 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   var exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
   var metricExitPath = geometricPathLength;
   if (metricRaySupported && exitDepthValid && exitInFrame) {
-    metricExitPath = liquidMetricPath(sampledExitDepth - slab.entryDepth, forwardDepthRate);
+    let boundedExitSpan = min(
+      max(0.0, sampledExitDepth - slab.entryDepth),
+      max(centerAccum.x * 0.065, params.viewport.z * 0.85) * 1.35,
+    );
+    metricExitPath = liquidMetricPath(boundedExitSpan, forwardDepthRate);
     exitWorldPosition = entryWorldPosition + insideWorldRay * metricExitPath;
   }
   let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
@@ -814,7 +830,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   var waterPath = min(metricExitPath, metricSceneBoundedPath);
   var queryOrigin = exitWorldPosition;
   var queryDirection = outgoingWorldRay;
-  var submergedSurface = hostSceneDepth < sampledExitDepth;
+  var submergedSurface = false;
   var refractionQuery = makeNoOpticalQuerySample();
   if (geometricPathKnown && insideSegmentActive) {
     let insideHit = sampleHostWaterSegment(entryWorldPosition, insideWorldRay, waterPath);
@@ -838,7 +854,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   );
   let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
   let prelimAbsorption = exp(-calibratedAbsorptionCoefficient * prelimSlabPath);
-  let prelimTransmittance = exp(-3.2 * prelimSlabPath);
+  let prelimTransmittance = exp(-1.8 * prelimSlabPath);
   let transmissionContribution = (1.0 - prelimFresnel)
     * min(max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b)), prelimTransmittance);
   let transmissionRayActive = transmissionContribution >= transmissionMinContribution;
@@ -961,7 +977,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0)
   let reflectionRadiance = reflectionQuadrature.radiance;
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
-  let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * absorptionLoss;
+  let ambientScale = select(
+    1.0,
+    clamp(length(sampleEnvironment(vec3<f32>(0.0, 1.0, 0.0))) * 2.2, 0.10, 1.0),
+    params.hostFrameControls.x > 0.5,
+  );
+  let waterScatter = vec3<f32>(0.035, 0.18, 0.26) * absorptionLoss * ambientScale;
   let directRoughness = clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48);
   let directRoughnessWeight = smoothstep(0.025, 0.34, directRoughness);
   let broadSpecularExponent = mix(38.0, 12.0, directRoughnessWeight);
@@ -1164,7 +1185,7 @@ export async function createMlsJuiceRenderer({
         const up = [inverseView[4], inverseView[5], inverseView[6]];
         const forward = [-inverseView[8], -inverseView[9], -inverseView[10]];
         const eye = [inverseView[12], inverseView[13], inverseView[14]];
-        const baseParticleRadius = (c.cell ?? 0.05) * 0.92;
+        const baseParticleRadius = c.particleRadius ?? (c.cell ?? 0.05) * 0.65;
         const near = hostCamera.near ?? 0.1;
         const far = hostCamera.far ?? 100;
 
