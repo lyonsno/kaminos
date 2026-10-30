@@ -26563,34 +26563,23 @@ sceneInitialization.then(async () => {
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
   environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
-  // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
-  // ordinary scene starts without it; the app is then the frame owner models borrow.
-  const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
-  window.__kaminosFireBoot = fireBoot;
-  const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
-  ownerVolumeReady=volumeLoaded;
-  volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
   const startupRestoreRequested = !!startupSceneHash.get('scene');
-  // Fetch bytes while independent environment/fire preparation runs. Applying
-  // the document still waits for those owners, preserving their lifetime order.
   const startupSceneFile = startupSceneHash.get('scene');
+  // Acquire and admit the saved recipe before allocating its fluid runtime.
+  // Environment loading may overlap, but recovery must not wait for a runtime
+  // that the navigation will immediately discard.
   const startupSceneData = startupSceneFile
     ? fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}`).then(async response => {
         if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
         return response.json();
       })
     : Promise.resolve(null);
-  const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded, startupSceneData]).then(async ([, , data]) => {
+  const startupSceneAdmission = startupSceneData.then(data => {
     const hash = startupSceneHash;
-    if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
-    if(hash.get('authoring')==='1'){
-      document.body.classList.add('composition-authoring');
-      setActiveTab('assets', { reveal: false });
-    }
-    const sceneFile = hash.get('scene');
-    if (!sceneFile) return;
+    const sceneFile = startupSceneFile;
+    if (!sceneFile) return {data, plan: null};
     sceneDocument.holdRestore();
     const plan = planSceneRestore(data);
     if (plan.composition) {
@@ -26602,7 +26591,28 @@ sceneInitialization.then(async () => {
         return startupSceneRedirect;
       }
     }
-    await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+    return {data, plan};
+  });
+  const volumeLoaded = startupSceneAdmission.then(admission => {
+    if (admission === startupSceneRedirect) return null;
+    const fireBoot = fireAtBoot(new URLSearchParams(location.search), startupSceneHash);
+    window.__kaminosFireBoot = fireBoot;
+    return fireBoot.boot ? initKaminosVolumeRoute() : null;
+  });
+  ownerVolumeReady=volumeLoaded;
+  volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  const startupSceneRestore = startupSceneAdmission.then(async admission => {
+    if (admission === startupSceneRedirect) return startupSceneRedirect;
+    await Promise.all([environmentLoaded, volumeLoaded]);
+    const hash = startupSceneHash;
+    if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
+    if(hash.get('authoring')==='1'){
+      document.body.classList.add('composition-authoring');
+      setActiveTab('assets', { reveal: false });
+    }
+    const sceneFile = startupSceneFile;
+    if (!sceneFile) return;
+    await loadSceneFile(new File([JSON.stringify(admission.data)], sceneFile), { sceneFile, mounted: true });
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.
     if (sceneDocument.state().blocked) throw new Error('Starting scene restoration did not complete');
