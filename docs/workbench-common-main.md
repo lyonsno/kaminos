@@ -59,6 +59,9 @@ re-enabling uses the current settings. A zero flow stays zero. Saved scenes
 retain the switch; older sources with no switch keep their existing behavior.
 The stage-word pour study consumes these controls and resumes an existing water
 run. Reset water clears the simulation while preserving authored source edits.
+Before an experiment action consumes water properties entered in the inspector,
+`await kaminosWaterSources.commitEdits()` accepts and validates pending native
+drafts. Invalid drafts reject the action and remain available for correction.
 
 ## Run The Small Example
 

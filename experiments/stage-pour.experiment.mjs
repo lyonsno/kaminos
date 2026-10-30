@@ -13,7 +13,7 @@ export default {
    pending=task.catch(()=>{});return task;
   };
   const read=()=>({label:recipe?.label,moldId:asset?.id,emitterId,water:water.read(),stage:'liquid contact study; ignition is not coupled'});
-  async function reset(){water.reset();return read();}
+  async function reset(){await water.commitEdits();water.reset();return read();}
   async function retire(replace=false){
    const oldSession=session,oldAsset=asset,oldEmitter=emitterId,wasBorrowed=borrowed;
    session=asset=emitterId=null;borrowed=false;
@@ -61,12 +61,14 @@ export default {
    operations:Object.fromEntries(Object.entries({makeWord,frame,reset,
     async pour(){
      if(disposed)throw Error('Pour study is closed');
+     await water.commitEdits();
      const source=app.kaminosLocalLiquidState().emitters.find(r=>r.id===emitterId);if(!source)throw Error('The pour emitter was removed; build the word again.');
      water.edit(emitterId,{emissionEnabled:true});
      if(water.read().runtime)app.kaminosPauseLocalLiquid(false);else await water.release(emitterId);
      const result=read();record({kind:'stage-pour.release',phase:'applied',effective:result});return result;
     },
-    stopPour(){
+    async stopPour(){
+     await water.commitEdits();
      water.edit(emitterId,{emissionEnabled:false});return read();
     },
     selectEmitter(){app.selectSceneObject(emitterId);return read();},

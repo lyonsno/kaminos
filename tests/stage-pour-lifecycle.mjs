@@ -3,6 +3,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import definition from '../experiments/stage-pour.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
 import {createOwnerSceneSession} from '../owner-scene-session.mjs';
+import {waterControlsFixture} from './helpers/water-controls.mjs';
 class Element{children=[];events={};style={};value='';append(...items){this.children.push(...items);}setAttribute(){}addEventListener(k,f){this.events[k]=f;}}
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 function fixture(){
@@ -10,6 +11,7 @@ function fixture(){
  const document={createElement(tag){if(tag!=='canvas')return new Element();const c={width:0,height:0};c.getContext=()=>({measureText:t=>({width:t.length*12}),fillText(){},getImageData(){const data=new Uint8ClampedArray(c.width*c.height*4);for(let z=28;z<58;z++)for(let x=16;x<c.width-16;x++)data[(z*c.width+x)*4+3]=255;return {data};}});return c;}};
  const app=document.defaultView={kaminosWaterSources:{read:()=>({sources:source().map(o=>({id:o.id})),runtime:null}),reset(){},edit(id,p){Object.assign(entries.get(id).localLiquidEmitter,p);},editSimulation(){}},kaminosLocalLiquidState:()=>({emitters:source()}),kaminosSceneAuthoring:{async addWaterEmitter(){if(hold?.kind==='emitter'){const h=hold;hold=null;h.started.resolve();await h.release.promise;}const id='water-'+(++count);entries.set(id,{id,type:'local-liquid-emitter',localLiquidEmitter:{volumeRate:.008}});return id;}},removeSceneObject:id=>entries.delete(id),kaminosSetSceneObjectTransform(){},renameSceneObject(id,label){entries.get(id).label=label;},selectSceneObject(){}};
  const hooks={async attach(root,{owned,metadata}){if(hold?.kind==='attach'){const h=hold;hold=null;h.started.resolve();await h.release.promise;}let row=[...entries.values()].find(o=>o.object===root);if(!row){const id='mold-'+(++count);row={id,object:root,...metadata};entries.set(id,row);}return {id:row.id,root,owned};},remove:h=>entries.delete(h.id),loadAsset(){throw Error('unused');},readView:()=>({}),setView:v=>v,redraw(){},onFrame:()=>()=>{}};
+ app.kaminosWaterSources.commitEdits=async()=>{};
  const host={controls:{document},scene:{open:async()=>createOwnerSceneSession(hooks),objects:()=>[...entries.values()]}};
  return {entries,host,document,hold(kind){const h={kind,started:deferred(),release:deferred()};hold=h;return h;},open:()=>openExperiment(definition,{host,record(){}})};
 }
@@ -41,4 +43,23 @@ test('pour consumes native source settings across stop, edit, resume and reset',
  water.edit(id,{emissionEnabled:false,volumeRate:0});await e.invoke('pour');assert.equal(settings.volumeRate,0,'explicit zero survives');
  await e.invoke('reset');assert.equal(settings.volumeRate,0);await e.invoke('pour');assert.equal(releases,2);
  await e.dispose();
+});
+for(const live of [false,true])test('Pour commits the pending native flow before '+(live?'resuming':'releasing'),async()=>{
+ const f=fixture(),app=f.document.defaultView,water=app.kaminosWaterSources,e=await f.open(),id=(await e.read()).emitterId;
+ const native=waterControlsFixture(),row=f.entries.get(id),rawEdit=water.edit;
+ let runtime=live?{paused:true,step:17}:null,releases=0;
+ water.edit=(id,patch)=>{rawEdit(id,patch);native.controls.refresh();};
+ water.read=()=>({sources:[{id}],runtime});
+ water.release=async()=>{releases++;assert.equal(row.localLiquidEmitter.volumeRate,.0031);runtime={paused:false,step:0};};
+ app.kaminosPauseLocalLiquid=paused=>{assert.equal(row.localLiquidEmitter.volumeRate,.0031);runtime.paused=paused;};
+ native.api.read=()=>({selected:{id,settings:{mode:'continuous',...row.localLiquidEmitter}},runtime});
+ native.api.edit=water.edit;
+ water.commitEdits=async()=>{if(!await native.controls.flush())throw Error('Complete the pending water edits');};
+ water.edit(id,{volumeRate:.0023,emissionEnabled:false});
+ const field=native.input('[data-rate]');field.value='3.1';field.listeners.input();
+ await e.invoke('pour');assert.equal(field.value,3.1);assert.equal(row.localLiquidEmitter.volumeRate,.0031);assert.equal(row.localLiquidEmitter.emissionEnabled,true);
+ assert.equal(releases,live?0:1);if(live)assert.equal(runtime.step,17);
+ field.value='';field.listeners.input();
+ await assert.rejects(e.invoke('pour'),/pending water edits/);assert.equal(row.localLiquidEmitter.volumeRate,.0031);assert.equal(releases,live?0:1);
+ native.controls.dispose();await e.dispose();
 });
