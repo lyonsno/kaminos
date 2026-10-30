@@ -58,7 +58,7 @@ export default {id:'sinter-burn-fracture-replay',title:'Burned material mechanic
     contacts(value){if(resetting)throw Error('Reset is in progress');dynamics.setContactsEnabled(value);platform.material.color.setHex(value?0x6b7779:0x303536);session.redraw();sync();record({kind:'burn-fracture.contact',enabled:value});return read();},
     reset(){if(disposed||resetting)throw Error('Replay is unavailable');running=false;resetting=true;sync();
      resetTask=(async()=>{await playback.settled();const enabled=dynamics.read().contactsEnabled;let next;
-      try{next=await createDynamics();next.setContactsEnabled(enabled);if(disposed){next.dispose();return;}surface.dispose();dynamics.dispose();dynamics=next;surface=createBurnFractureSurface({renderer,prepared,materials:structure.resident().sourceMaterials,field,dynamics});asset.root.add(surface.mesh);supportMatrix.copy(platform.matrixWorld);playback=createPlayback();error=null;record({kind:'burn-fracture.reset',contactsEnabled:enabled});session.redraw();return read();}
+      try{next=await createDynamics();next.setContactsEnabled(enabled);if(disposed){next.dispose();return;}next.setSupport(0,support());surface.dispose();dynamics.dispose();dynamics=next;surface=createBurnFractureSurface({renderer,prepared,materials:structure.resident().sourceMaterials,field,dynamics});asset.root.add(surface.mesh);supportMatrix.copy(platform.matrixWorld);playback=createPlayback();error=null;record({kind:'burn-fracture.reset',contactsEnabled:enabled});session.redraw();return read();}
       catch(cause){if(next&&next!==dynamics)next.dispose();fail(cause);throw cause;}finally{resetting=false;sync();}
      })();return resetTask;
     },
