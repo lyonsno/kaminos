@@ -34,3 +34,6 @@ console.log('travel and atomic return pass');
 const v3=createMechanismView(new T.Group());v3.update(m,.3,0,false);
 assert.equal(typeof v3.replacementState,'function','geometry replacement must be restorable independently of the recipe');
 const analytic=v3.replacementState(),returned=v3.exportBodies();v3.importBodies(returned);const skins=v3.replacementState();v3.setBodies(analytic);assert.equal(v3.bodyManifest().replacements,0);v3.setBodies(skins);assert.equal(v3.bodyManifest().replacements,skins.bodies.length);v3.dispose();
+const frozenView=createMechanismView(new T.Group());frozenView.update(m,0,0,false);
+for(const translation of [0,100]){const p=frozenView.exportBodies();p.bodies=p.bodies.filter(b=>b.id==='link:1');p.bodies[0].object.object.matrixAutoUpdate=false;p.bodies[0].object.object.matrix[12]=translation;assert.throws(()=>frozenView.importBodies(p),/matrix|frame/i,'Frozen roots must not bypass effective pose');assert.equal(frozenView.bodyManifest().replacements,0);}
+frozenView.dispose();
