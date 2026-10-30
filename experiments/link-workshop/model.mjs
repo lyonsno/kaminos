@@ -10,6 +10,12 @@ export function checkedMechanism(m){
   else if(!Number.isFinite(n.length)||n.length<=1e-6||!point(n.angles))throw Error('Positive link length and finite angles required');
  }
  const pairs=new Set();for(const p of m.pistons){if(![p.a,p.b].every(i=>Number.isInteger(i)&&i>=0&&i<m.nodes.length)||p.a===p.b)throw Error('Piston needs distinct existing joints');const key=[p.a,p.b].sort((a,b)=>a-b).join(':');if(pairs.has(key))throw Error('Piston already connected');pairs.add(key);}
+ if(m.phase!==undefined&&!Number.isFinite(m.phase))throw Error('Finite cycle phase required');
+ const ids=new Set();for(const a of m.attachments??[]){
+  if(typeof a.objectId!=='string'||!a.objectId||ids.has(a.objectId)||!Number.isInteger(a.joint)||!m.nodes[a.joint])throw Error('Attachment requires a unique object and existing joint');
+  for(const key of ['position','rotation','scale'])if(!Array.isArray(a.offset?.[key])||a.offset[key].length!==3||!a.offset[key].every(Number.isFinite))throw Error('Attachment requires a finite frame');
+  if(a.offset.scale.some(x=>x===0))throw Error('Attachment scale must be nonzero');ids.add(a.objectId);
+ }
  return copy(m);
 }
 export function frames(m,t=0){
@@ -32,3 +38,12 @@ export function moveJoint(value,id,p,mode){
  return m;
 }
 export function connectPiston(value,a,b){const m=checkedMechanism(value);m.pistons.push({a,b});return checkedMechanism(m);}
+
+export function removeBranch(value,id){
+ const m=checkedMechanism(value);if(!m.nodes[id])throw Error('Unknown joint');
+ const removed=new Set([id]);m.nodes.forEach((n,i)=>{if(removed.has(n.parent))removed.add(i);});
+ const ids=new Map();m.nodes.forEach((n,i)=>{if(!removed.has(i))ids.set(i,ids.size);});
+ m.nodes=m.nodes.filter((_,i)=>!removed.has(i)).map(n=>({...n,parent:n.parent===null?null:ids.get(n.parent)}));
+ m.pistons=m.pistons.filter(p=>!removed.has(p.a)&&!removed.has(p.b)).map(p=>({a:ids.get(p.a),b:ids.get(p.b)}));
+ if(m.attachments)m.attachments=m.attachments.filter(a=>!removed.has(a.joint)).map(a=>({...a,joint:ids.get(a.joint)}));return m;
+}
