@@ -34,8 +34,11 @@ when these controls are visible. Space remains command search. Delete branch
 removes descendants and releases their attachments through Undo. Add another
 mechanism creates an independent construction. Command search also has Add Mechanism.
 
-Attachments retain a scene object ID, joint and local TRS frame. Assembly roots
-remain movable. Parent-null nodes are fixed relative to the assembly. Current
+Attachments retain a scene object ID, joint and a rigid local mounting frame.
+Scaling the assembly moves its joints while payload dimensions stay independently
+authored; scale the payload itself to resize it. Native Undo/Redo restores offsets
+at the current playback position. Construction history survives deletion and
+reconstruction of the mechanism. Assembly roots remain movable. Parent-null nodes are fixed relative to the assembly. Current
 playback directly places objects; contact, forces and propulsion are future work.
 
 The first handoff tests construction usability. It does not establish physical

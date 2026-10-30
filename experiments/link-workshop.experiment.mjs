@@ -1,5 +1,6 @@
 import * as T from '../lib/three.core.js';
 import {emptyMechanism,checkedMechanism,appendJoint,moveJoint,connectPiston,evaluate,frames,removeBranch} from './link-workshop/model.mjs';
+import {mechanismHistory} from './link-workshop/history.mjs';
 import {MECHANISM_SOURCE} from './link-workshop/record.mjs';
 import {attachmentFrame,createAttachmentFollower} from './link-workshop/attachments.mjs';
 import {createMechanismView} from './link-workshop/view.mjs';
@@ -9,12 +10,12 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  if(!edits||!host.controls.components)throw Error('Native component editing is required');
  const session=await host.scene.open(),root=inputs.root??new T.Group(),proxy=new T.Object3D();root.name='Link workshop';
  let model=checkedMechanism(inputs.root?.userData.linkMechanism??inputs.recipe??emptyMechanism()),selected=model.nodes.length-1,mode='build',tool='draw',editing=false,playing=false,time=0,t=0,disposed=false,refresh=()=>{},seat,controls;
- const target='@link-joint:'+root.uuid,whole='@link-recipe:'+root.uuid;
+ let target,whole;
  const grid=new T.GridHelper(30,60,0x637d88,0x344851);grid.rotation.x=Math.PI/2;grid.position.z=-.28;grid.material.transparent=true;grid.material.opacity=.35;grid.raycast=()=>{};root.add(grid);
  const origin=new T.Mesh(new T.SphereGeometry(.1,12,8),new T.MeshBasicMaterial({color:0x59dee2}));root.add(origin);
  root.userData.linkMechanism=model;
  const visual=new T.Group();root.add(visual);const view=createMechanismView(visual),asset=await session.attach(root,{owned:!inputs.root,metadata:{label:root.name,type:'pbr',source:MECHANISM_SOURCE,mechanism:model}});root.parent.add(proxy);
- const objects=()=>host.scene.objects?.()??[],follower=createAttachmentFollower(root,objects);let cycle=0,removeKeys=()=>{};
+ const objects=()=>host.scene.objects?.()??[{id:asset.id,object:root}],history=mechanismHistory(edits,asset.id,objects),follower=createAttachmentFollower(root,objects);let cycle=0,removeKeys=()=>{};
  let pistonStart=null,snap=true,status,fields=[],stop=()=>{},unsubscribe=()=>{};
  const ensure=()=>{if(disposed||!root.parent)throw Error('Workshop removed; Undo or reopen it');};
  const read=()=>({objectId:asset.id,recipe:structuredClone(model),mode,tool,selected,editing,playing,cycle,fraction:t,points:evaluate(model,t),pistonStart,view:session.readView(),motion:'authored joint kinematics; pistons follow attachment distance'});
@@ -24,13 +25,13 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  function resetPose(){pause();cycle=mode==='B'?.5:0;t=mode==='B'?1:0;update();}
  function apply(next,label,{reset=true}={}){ensure();if(reset)resetPose();else pause();edits.apply(whole,{recipe:checkedMechanism(next)},label);record({kind:'links.edit',phase:'applied',effective:read()});return read();}
  const snapshot=()=>({recipe:structuredClone(model)});
- edits.register(whole,{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe)}),write:v=>{model=checkedMechanism(v.recipe);selected=model.nodes.length?Math.max(0,Math.min(selected,model.nodes.length-1)):-1;pistonStart=null;follower.reset();update();}});
+ whole=history.register('recipe',{read:snapshot,check:v=>({recipe:checkedMechanism(v.recipe)}),write:v=>{model=checkedMechanism(v.recipe);selected=model.nodes.length?Math.max(0,Math.min(selected,model.nodes.length-1)):-1;pistonStart=null;follower.reset();update();}});
  function handleRead(joint=selected,requestedMode=mode){
   const f=frames(model,requestedMode==='B'?1:0)[joint];if(!f)throw Error('Choose an existing joint');
   root.updateWorldMatrix(true,false);const position=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),q=root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle)),e=new T.Euler().setFromQuaternion(q);
   return {recipe:structuredClone(model),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
  }
- edits.register(target,{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
+ target=history.register('joint',{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
   resetPose();selected=v.joint;const base=v.recipe,n=base.nodes[selected],f=frames(base,v.mode==='B'?1:0)[selected];root.updateWorldMatrix(true,false);const p=new T.Vector3(...v.position).applyMatrix4(root.matrixWorld.clone().invert());
   model=checkedMechanism(base);
   if(!edits.state().active){update();return;}
@@ -107,7 +108,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const keys=event=>{if(playback.hidden||event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||edits.state().active)return;if(event.code==='Space'&&event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();invoke(playing?'pause':'play').catch(e=>status.textContent=e.message);}else if(event.key==='Escape'&&editing){pistonStart=null;tool='select';refresh();}};
   document.addEventListener('keydown',keys);removeKeys=()=>document.removeEventListener('keydown',keys);refresh();
 
- },async dispose(){if(disposed)return;playing=false;stop();seat.dispose();unsubscribe();edits.discard(e=>[target,whole].includes(e.id));edits.unregister(target);edits.unregister(whole);controls?.dispose();for(const f of fields)f.dispose();proxy.removeFromParent();disposed=true;removeKeys();await session.dispose();view.dispose();root.remove(grid,origin,visual);grid.geometry.dispose();grid.material.dispose();origin.geometry.dispose();origin.material.dispose();}};
+ },async dispose(){if(disposed)return;playing=false;stop();seat.dispose();unsubscribe();history.dispose();follower.dispose();controls?.dispose();for(const f of fields)f.dispose();proxy.removeFromParent();disposed=true;removeKeys();await session.dispose();view.dispose();root.remove(grid,origin,visual);grid.geometry.dispose();grid.material.dispose();origin.geometry.dispose();origin.material.dispose();}};
 }
 export default {id:'link-workshop',title:'Link workshop',async create(context){
  const service=context.host.controls.document.defaultView.kaminosMechanisms;
