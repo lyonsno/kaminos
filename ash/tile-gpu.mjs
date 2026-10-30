@@ -1,5 +1,5 @@
 import * as THREE from '../lib/three.webgpu.js';
-import {patchLayout,seedPatch,ASH_SURFACE_MIN_FILL,ashDispatchGrid} from './gpu-plan.mjs';
+import {patchLayout,seedPatch,ASH_SURFACE_MIN_FILL,ashDispatchGrid,validateAshRunEncoding} from './gpu-plan.mjs';
 import {seededTiles,cellCoord,tileIndex} from './tile-plan.mjs';
 import {createGpuAshFall} from './fall-gpu.mjs';
 import {createAshSceneSolids} from './scene-gpu.mjs';
@@ -126,6 +126,7 @@ const faceNormal=THREE.TSL.wgslFn(`fn ash_face_normal(f:u32)->vec3<f32>{var n=ve
 export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize=16,sceneRecords=null,surfaceMode='cells'}){
  if(!renderer?.backend?.isWebGPUBackend)throw Error('Tiled ash requires shared WebGPU renderer');
  if(!['cells','runs'].includes(surfaceMode))throw Error('Unknown ash surface mode');
+ if(surfaceMode==='runs')validateAshRunEncoding(tileSize);
  const device=renderer.backend.device,p=patchLayout({cellSize,bounds,tileSize}),t=p.tiles;
  if(solid.length!==p.count)throw Error('Collision mask shape differs from tiled ash');
  const faceWords=t.count*t.cellsPerTile*6;
