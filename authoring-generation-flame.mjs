@@ -5,16 +5,18 @@ export function installGenerationFlame({document,slot,createRenderer}){
  const volume=document.createElement('div');volume.className='generation-flame-volume';
  const status=document.createElement('span');status.className='generation-flame-status';status.setAttribute('role','status');
  tile.append(volume,status);slot.append(tile);
- let renderer=null,startup=null,running=false,visible=false,disposed=false,lastError=null,request=null,epoch=0,lifecycle=Promise.resolve(),renderedKey=null,allowCold=true,refreshPending=false;
+ let renderer=null,startup=null,running=false,visible=false,disposed=false,lastError=null,request=null,epoch=0,lifecycle=Promise.resolve(),renderedKey=null,allowCold=true,refreshPending=false,finishPending=false;
  const draft=()=>document.getElementById('asset-prompt')?.value??'';
  const abort=()=>startup?.abort(new DOMException('Kiln view superseded','AbortError'));
  function sync({refresh=false}={}){
   const key=request?.id??draft();
-  if(refresh||key!==renderedKey||!visible){epoch++;abort();}
+  if(refresh||key!==renderedKey||!visible){epoch++;if(!renderer||disposed||refresh)abort();}
   const generation=epoch;
   lifecycle=lifecycle.catch(()=>{}).then(async()=>{
    if(generation!==epoch)return;
    if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
+   if(finishPending&&renderer?.finish){finishPending=false;renderer.finish();return;}
+   finishPending=false;
    if(renderer&&renderedKey!==key){await renderer.setActive(false);if(renderer.prepare&&renderedKey!==null){await renderer.prepare({prompt:running?(request?.prompt??draft()):draft(),request:running?request:null,input:document.getElementById('asset-prompt')});renderedKey=key;}else{await renderer.dispose();renderer=null;}}
    if(!renderer&&!running&&!allowCold)return;
    if(!renderer){
@@ -34,10 +36,10 @@ export function installGenerationFlame({document,slot,createRenderer}){
  function render(state){
   renderer?.syncEditor?.();
   const active=['loading','running','stopping'].includes(state?.status),next=state?.request??null;
-  const changed=active!==running||(active&&next?.id!==request?.id);request=next;running=active;
+  const changed=active!==running||(active&&next?.id!==request?.id);if(changed)finishPending=running&&!active&&state?.status==='complete';request=next;running=active;
   // An active request is visible in simple consumers without an observer. The
   // actual Generate pane explicitly supplies visibility, including when hidden.
-  if(changed){if(!active){allowCold=refreshPending;if(refreshPending)renderedKey=null;refreshPending=false;epoch++;abort();}sync();}
+  if(changed){if(!active){allowCold=refreshPending;if(refreshPending)renderedKey=null;refreshPending=false;epoch++;if(!renderer)abort();}sync();}
  }
  return {render,element:tile,
   setVisible(value){if(visible===!!value)return lifecycle;visible=!!value;if(visible)allowCold=true;tile.hidden=!visible;return sync();},
