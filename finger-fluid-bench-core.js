@@ -202,6 +202,7 @@ export function createFingerFluidBenchState(options = {}) {
       effectiveInterfaceFrequencyRoute,
       interfaceFrequencyFallbackReason: options.interfaceFrequencyFallbackReason || null,
       opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
+      transmissionMinContribution: ratio(options.transmissionMinContribution, 0.25),
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
     },

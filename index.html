@@ -6907,7 +6907,7 @@ async function applyLocalLiquidPerformance(values) {
     throw Error('Finish the current scene action before restarting water');
   }
   const next = normalizeLocalLiquidSetup({...localLiquidSetup,
-    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support});
+    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support,transmissionMinContribution:values.transmissionMinContribution??localLiquidSetup.transmissionMinContribution});
   const bytes=next.particleCount*80;
   if(bytes>sharedGpu.device.limits.maxStorageBufferBindingSize||bytes>sharedGpu.device.limits.maxBufferSize)throw Error('Requested MLS water allocation exceeds the device buffer limits');
   const generation = ++localLiquidGeneration;
@@ -12735,7 +12735,7 @@ function matchAuthoredWaterSetup(referenceId){
 let authoredWaterSimulationTarget=false;
 function editAuthoredWaterSimulation(patch){
  assertSceneConstructionAvailable();if(!localLiquidSetup)throw Error('Add water first');
- if(Object.keys(patch).some(key=>!['particleCount','waterSampling'].includes(key)))throw Error('Water simulation edits require shared capacity or sampling settings');
+ if(Object.keys(patch).some(key=>!['particleCount','waterSampling','transmissionMinContribution'].includes(key)))throw Error('Water simulation edits require shared capacity, sampling or optical settings');
  const target='@authored-water-simulation';
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});

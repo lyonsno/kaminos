@@ -11,11 +11,12 @@ export const localLiquidRecordDomain={type:LOCAL_LIQUID_EMITTER_TYPE,
  reloadable:r=>r.source===LOCAL_LIQUID_EMITTER_SOURCE,load:(r,loaders,options)=>loaders.water(r,options),
  capture(entry,{metadata}){const value=metadata.localLiquidEmitter??entry.localLiquidEmitter;return value?.mode==='finite_drop'?{materials:null}:{};}};
 export const LOCAL_LIQUID_EMITTER_CAPACITY = 5;
+export const DEFAULT_TRANSMISSION_MIN_CONTRIBUTION = 0.25;
 
 const clone = value => structuredClone(value);
 
 export function defaultLocalLiquidSetup() {
-  return {schema:LOCAL_LIQUID_SCHEMA,support:'scene_primitives',particleCount:12000,densityIterations:3,showSupportGeometry:false};
+  return {schema:LOCAL_LIQUID_SCHEMA,support:'scene_primitives',particleCount:12000,densityIterations:3,showSupportGeometry:false,transmissionMinContribution:DEFAULT_TRANSMISSION_MIN_CONTRIBUTION};
 }
 
 function checkedTriplet(value, name) {
@@ -77,13 +78,17 @@ function normalizeLegacySetup(value) {
 }
 
 function normalizeLocalLiquidSetupCore(value) {
+  const transmissionMinContribution=value.transmissionMinContribution??DEFAULT_TRANSMISSION_MIN_CONTRIBUTION;
   if(!['retained_analytical_basin','scene_primitives'].includes(value.support))throw Error('Unsupported local liquid support');
   if(Object.hasOwn(value,'showSupportGeometry') && typeof value.showSupportGeometry!=='boolean')throw Error('Local liquid support visibility must be Boolean');
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
+  if(typeof transmissionMinContribution!=='number'||!Number.isFinite(transmissionMinContribution)||transmissionMinContribution<0||transmissionMinContribution>1) {
+    throw Error('Local liquid transmissionMinContribution must be a finite number in [0, 1]');
+  }
   return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
-    showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
+    showSupportGeometry:value.showSupportGeometry??true,transmissionMinContribution,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
 }
 
 export function normalizeLocalLiquidSetup(value) {

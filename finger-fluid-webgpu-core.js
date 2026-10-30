@@ -6,7 +6,16 @@ import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-
 import {readIPBFDampingRecordWords} from './finger-fluid-ipbf-damping-evidence.mjs';
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
-import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
+import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE, DEFAULT_TRANSMISSION_MIN_CONTRIBUTION, normalizeTransmissionMinContribution } from './local-liquid-optical-query.mjs';
+
+export const KAMINOS_FINGER_FLUID_DEFAULT_TRANSMISSION_MIN_CONTRIBUTION = DEFAULT_TRANSMISSION_MIN_CONTRIBUTION;
+export function resolveFingerFluidTransmissionMinContribution(value = KAMINOS_FINGER_FLUID_DEFAULT_TRANSMISSION_MIN_CONTRIBUTION) {
+  const cutoff = value ?? KAMINOS_FINGER_FLUID_DEFAULT_TRANSMISSION_MIN_CONTRIBUTION;
+  if (typeof cutoff !== 'number' || !Number.isFinite(cutoff) || cutoff < 0 || cutoff > 1) {
+    throw new RangeError(`Finger Fluid transmissionMinContribution must be a finite number in [0, 1]: ${String(value)}`);
+  }
+  return cutoff;
+}
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
 export {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
@@ -10384,13 +10393,24 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     * select(0.0, 1.0, exitInFrame)
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid && (!hostTransport || metricRaySupported));
   var queryValidity = select(0.0, 1.0, exitValidity > 0.5);
+  let transmissionMinContribution = clamp(params.hostFrameControls.w, 0.0, 1.0);
+  let prelimSlabPath = mix(thickness * 0.12, geometricPathLength, queryValidity);
+  let prelimAbsorption = exp(-select(vec3<f32>(1.10, 0.42, 0.18), vec3<f32>(0.46, 0.15, 0.055), opticalLightingMode == 2) * prelimSlabPath);
+  let prelimWorldPos = reconstructWorldPosition(pixel, coherentSlabDepth(pixel, shadingDepth, false));
+  let prelimViewToCamera = select(normalize(params.cameraPosition.xyz - prelimWorldPos), -liquidCameraDirection(pixel), hostTransport);
+  let prelimNdv = clamp(dot(reconstructWorldReflectionNormal(pixel), prelimViewToCamera), 0.0, 1.0);
+  let prelimFresnel = 0.02037 + (1.0 - 0.02037) * pow(1.0 - prelimNdv, 5.0);
+  let transmissionContribution = (1.0 - prelimFresnel) * max(prelimAbsorption.r, max(prelimAbsorption.g, prelimAbsorption.b));
+  let transmissionRayActive = transmissionContribution >= transmissionMinContribution
+    || opticalDebugMode == 8 || opticalDebugMode == 19 || opticalDebugMode == 20 || opticalDebugMode == 21;
+  queryValidity = select(0.0, queryValidity, transmissionRayActive);
   let geometricPathKnown = (slab.exitValidity > 0.5) && insideRayValid && (!hostTransport || metricRaySupported);
   var waterPath = metricExitPath;
   var queryOrigin = select(exitWorldPosition + outgoingWorldRay * 0.035, exitWorldPosition, hostTransport);
   var queryDirection = outgoingWorldRay;
   var submergedSurface = false;
   var refractionQuery = makeNoOpticalQuerySample();
-  if (hostTransport && geometricPathKnown) {
+  if (hostTransport && geometricPathKnown && transmissionRayActive) {
     let insideHit = sampleHostWaterSegment(entryWorldPosition, insideWorldRay, waterPath);
     if (insideHit.providerKind == OPTICAL_PROVIDER_DEFERRED && insideHit.distance >= 0.0 && insideHit.distance <= waterPath) {
       refractionQuery = insideHit;
@@ -10430,6 +10450,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   );
   let robustBodyPathWithFallback = mix(opticalThicknessPath, robustBodyPath, queryValidity);
   var absorptionPath = select(geometricSlabPath, robustBodyPathWithFallback, bodyTransportMode == 1);
+  if (exitValidity > 0.5 && !transmissionRayActive) { absorptionPath = prelimSlabPath; }
   if (hostTransport && geometricPathKnown) { absorptionPath = waterPath; }
   let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
   let legacyAbsorptionCoefficient = vec3<f32>(0.46, 0.15, 0.055);
@@ -13378,6 +13399,7 @@ export async function createWebGPUFingerFluidSolver({
   transmissionFootprintMode = 'resolved_exit',
   bodyTransportMode = 'geometric_slab',
   interfaceFrequencyMode = 'coupled_detail',
+  transmissionMinContribution = KAMINOS_FINGER_FLUID_DEFAULT_TRANSMISSION_MIN_CONTRIBUTION,
   particleShiftStrength = 0,
   supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
@@ -13400,6 +13422,13 @@ export async function createWebGPUFingerFluidSolver({
   composedRevision = null,
 } = {}) {
   if(!Number.isFinite(simulationStepSeconds)||simulationStepSeconds<1/240||simulationStepSeconds>1/30)throw new RangeError('Initial simulation timestep must match the solver step contract');
+  let activeTransmissionMinContribution = resolveFingerFluidTransmissionMinContribution(transmissionMinContribution);
+  function setOpticalSettings(next = {}) {
+    if (Object.hasOwn(next, 'transmissionMinContribution')) {
+      activeTransmissionMinContribution = resolveFingerFluidTransmissionMinContribution(next.transmissionMinContribution);
+    }
+    return { transmissionMinContribution: activeTransmissionMinContribution };
+  }
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
   const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
@@ -15510,7 +15539,7 @@ export async function createWebGPUFingerFluidSolver({
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
       56,
     );
-    renderData.set(localLiquidOpticalQueryControls(cameraSnapshot,Boolean(validatedHostFrame)), 60);
+    renderData.set(localLiquidOpticalQueryControls(cameraSnapshot,Boolean(validatedHostFrame),activeTransmissionMinContribution), 60);
     lastExternalCamera = externalCameraSnapshot;
     lastCameraSnapshot = cameraSnapshot;
     lastParticleVisibility = particleVisibility;
@@ -17287,6 +17316,7 @@ export async function createWebGPUFingerFluidSolver({
         compositePassCount: screenSpaceRefractionCompositePassCount,
         refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_then_hybrid_exit_ray_query_v0',
         fresnel: 'schlick_f0_0.02037_v0',
+        transmissionMinContribution: activeTransmissionMinContribution,
         absorption: 'beer_lambert_from_particle_optical_thickness_v0',
         absorptionCoefficients: lastEffectiveOpticalLightingMode === 'not_executed'
           ? null
@@ -17386,6 +17416,7 @@ export async function createWebGPUFingerFluidSolver({
     readMaterialInputs,
     setPressureControls,
     getPressureControls,
+    setOpticalSettings,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,

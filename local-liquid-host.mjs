@@ -62,6 +62,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
+    transmissionMinContribution:authored.transmissionMinContribution,
     liveInletPacket:initialPacket,
     supportContactRoute:authored.support==='scene_primitives'?SCENE_LIQUID_SUPPORT_ROUTE:SUPPORT,
     sceneColliders:authored.support==='scene_primitives'?readColliders():[]});
@@ -247,6 +248,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sourceGeneration++;
       }
       group.visible=authored.support!=='scene_primitives'&&next.showSupportGeometry;
+      solver.setOpticalSettings?.({transmissionMinContribution:next.transmissionMinContribution});
       authored=next;
     },
     setPaused(value){paused=Boolean(value);return paused;},
