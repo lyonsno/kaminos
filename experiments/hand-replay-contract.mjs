@@ -1,5 +1,10 @@
 const vector=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
-export function validateReplay(data){
+export function validateExport(receipt,generation){
+  if(receipt?.status!=='observed')throw Error('export unavailable or failed');
+  if(!generation||receipt.generation!==generation)throw Error('export generation mismatch');
+}
+export function validateReplay(data,receipt,generation){
+  if(receipt!==undefined){validateExport(receipt,generation);if(data.generation!==generation)throw Error('sequence generation mismatch');}
   if(data.schema!=='hand-state.teacher-replay.v1'||!data.models?.length||!data.frames?.length)throw Error('invalid replay');
   if(data.models.some(m=>!m.id||!/^[a-f0-9]{64}$/.test(m.checkpointSha256)))throw Error('model identity missing');
   if(new Set(data.models.map(m=>m.id)).size!==data.models.length)throw Error('duplicate model');

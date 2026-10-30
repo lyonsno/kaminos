@@ -12,3 +12,6 @@ const arc=ballisticArc([0,0,0],[1,0,0],1,-.25);
 assert(Math.abs(arc.at(-1)[1]+.25)<1e-8);assert(Math.abs(arc.at(-1)[0]-Math.sqrt(.5/9.81))<1e-8);
 assert.throws(()=>ballisticArc([0,0,0],[0,0,0],1,-.25),/direction/);
 console.log('hand replay contract passed');
+// A prior successful payload must not survive a failed replacement admission.
+assert.throws(()=>validateReplay(data,{status:'failed',generation:'replacement'},'previous'),/export/);
+assert.throws(()=>validateReplay(data,{status:'observed',generation:'replacement'},'previous'),/generation/);
