@@ -8,7 +8,7 @@ async function setup(){
  const session={async attach(root){scene.add(root);return {id:'workshop',root};},redraw(){},readView(){return {};},setView(){},onFrame(){return ()=>{};},async dispose(){scene.clear();}};
  const win={kaminosSceneEdits:edits,kaminosSelection:{set(){}}},host={scene:{async open(){return session;}},controls:{document:{defaultView:win},components:{register(id,a){adapter=a;return {changed(fn){edits.cancel();fn?.();},dispose(){}};}}}};
  const runtime=await workshop.create({host});const op=runtime.operations;op.append({parent:null,point:[0,0]});op.append({parent:0,point:[2,0]});
- return {runtime,op,edits,target:()=>adapter.target()};
+ return {runtime,op,edits,target:()=>adapter.target(),adapter:()=>adapter};
 }
 {
  const {runtime,op,edits,target}=await setup(),h=target(),base=h.read();
@@ -32,5 +32,25 @@ console.log('Native workshop history through empty state and numeric preview/com
  assert.equal(typeof op.seek,'function','Transport can hold an intermediate cycle position');
  op.seek({cycle:.25});assert.ok(Math.abs(runtime.read().fraction-.5)<1e-9);
  op.play();op.pause();assert.ok(Math.abs(runtime.read().fraction-.5)<1e-9,'Pause holds the displayed position');
+ await runtime.dispose();
+}
+
+{
+ const {runtime,op,edits,adapter}=await setup();
+ op.append({parent:1,point:[3,1]});op.piston({a:0,b:2});
+ op.mount({joint:2});const tip=runtime.read().selectedMount;op.mount({joint:0});const base=runtime.read().selectedMount;
+ op.mountPiston({source:base,target:tip});
+ const before=op.snapshot();op.select({joint:1});adapter().remove();
+ assert.equal(op.snapshot().nodes.length,1);assert.equal(op.snapshot().pistons.length,0);assert.equal(op.snapshot().mountPistons.length,0);
+ edits.undo();assert.deepEqual(op.snapshot(),before);edits.redo();assert.equal(op.snapshot().nodes.length,1);edits.undo();
+ op.selectMount({id:tip});adapter().remove();assert.equal(op.snapshot().mounts.length,1);assert.equal(op.snapshot().mountPistons.length,0);
+ edits.undo();assert.deepEqual(op.snapshot(),before);
+ for(const kind of ['pistons','mountPistons']){
+  op.selectPiston({kind,index:0});adapter().remove();assert.equal(op.snapshot()[kind].length,0);assert.equal(op.snapshot().nodes.length,3);
+  edits.undo();assert.deepEqual(op.snapshot(),before);edits.redo();assert.equal(op.snapshot()[kind].length,0);edits.undo();
+ }
+ op.select({joint:0});adapter().remove();assert.equal(op.snapshot().nodes.length,0);
+ edits.undo();assert.deepEqual(op.snapshot(),before);edits.redo();assert.equal(op.snapshot().nodes.length,0);
+ assert.doesNotThrow(()=>adapter().remove(),'Delete on an empty construction is harmless');
  await runtime.dispose();
 }

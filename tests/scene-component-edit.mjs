@@ -26,3 +26,14 @@ test('an assembly scope keeps native member selection and exits to its owner wit
  selected='outlet';assert.equal(edit.active(),true);edit.toggle(selected);
  assert.equal(edit.active(),false);assert.equal(selected,'@group:burner');
 });
+
+test('component deletion is owned by the active adapter and refreshes selection',()=>{
+ let selected='mechanism',removed=0,refreshed=0;
+ const edit=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh:()=>refreshed++});
+ edit.register('mechanism',{target:()=>null,enter(){},exit(){},remove(){removed++;return true;}});
+ assert.equal(edit.remove(),false);edit.toggle('mechanism');const before=refreshed;
+ assert.equal(edit.remove(),true);assert.equal(removed,1);assert.equal(refreshed,before+1);
+ selected='elsewhere';assert.equal(edit.remove(),false);assert.equal(removed,1);
+ edit.register('skeleton',{target:()=>null,enter(){},exit(){}});selected='skeleton';edit.toggle('skeleton');
+ assert.equal(edit.remove(),false,'Owners without deletion keep their support boundary');
+});
