@@ -21946,33 +21946,31 @@ function checkFirstFlameFieldState(value) {
 }
 function writeFirstFlameFieldState(value) {
   const before=firstFlameFieldState();
-  const apply=next=>{
-    const wasWriting=burnerGraphWriting;burnerGraphWriting=true;
-    try{return writeFirstFlameFieldStateUnchecked(next);}finally{burnerGraphWriting=wasWriting;}
-  };
-  try {
-    const mounting=apply(value);
-    return mounting?.then ? mounting.catch(async error=>{await apply(before);throw error;}) : mounting;
-  } catch(error){apply(before);throw error;}
+  return writeFirstFlameFieldStateUnchecked(value).catch(async error=>{
+    await writeFirstFlameFieldStateUnchecked(before);throw error;
+  });
 }
-function writeFirstFlameFieldStateUnchecked(value) {
-  volumePrototype.setActive(false);
-  const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
-  for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
-  for(const [key,entry] of Object.entries(value.route))hash.set(key,entry);
-  url.hash=hash.toString();history.replaceState(history.state,'',url);
-  activeSceneComposition=value.composition?structuredClone(value.composition):null;
-  authoredFlamePresent=value.sourcePresent;
-  writeFlameSettingsState(value.settings);
-  volumePrototype.setSceneCompositionPresentation(Boolean(value.composition));
-  window.kaminosOrdinaryDepthSetEnabled?.(value.route.volume_light_field_scene_depth==='1');
-  ensureAuthoredFlameEmitter();
-  window.kaminosRefreshSceneGIOutput?.();
-  if(!value.composition&&workingScene.activeFieldId==='flame-field')workingScene.clearSelection();
-  renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
+async function writeFirstFlameFieldStateUnchecked(value) {
+  await volumePrototype.setActive(false);
+  const wasWriting=burnerGraphWriting;burnerGraphWriting=true;
+  try {
+    const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+    for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
+    for(const [key,entry] of Object.entries(value.route))hash.set(key,entry);
+    url.hash=hash.toString();history.replaceState(history.state,'',url);
+    activeSceneComposition=value.composition?structuredClone(value.composition):null;
+    authoredFlamePresent=value.sourcePresent;
+    writeFlameSettingsState(value.settings);
+    volumePrototype.setSceneCompositionPresentation(Boolean(value.composition));
+    window.kaminosOrdinaryDepthSetEnabled?.(value.route.volume_light_field_scene_depth==='1');
+    ensureAuthoredFlameEmitter();
+    window.kaminosRefreshSceneGIOutput?.();
+    if(!value.composition&&workingScene.activeFieldId==='flame-field')workingScene.clearSelection();
+    renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
+  } finally {burnerGraphWriting=wasWriting;}
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
     if(value.composition&&activeSceneComposition){await volumePrototype.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
-    if(!activeSceneComposition)volumePrototype.setActive(false);
+    if(!activeSceneComposition)await volumePrototype.setActive(false);
   });
   window.__kaminosFirstFlameMount=mounting;
   return mounting;

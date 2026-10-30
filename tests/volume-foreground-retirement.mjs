@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createSceneSimulationActivity} from '../scene-simulation-activity.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
+import {createWorkingScene} from '../working-scene.mjs';
 import {createWebGpuForegroundService} from '../webgpu-inference-kit/src/foreground-opportunity.js';
 
 // Execute the production renderer lifecycle against the exact kit service used
@@ -36,7 +39,7 @@ async function fixture({gate=null,failure=null}={}){
   return {status:'submitted'};
  };
  vm.createContext(scope);
- vm.runInContext(scheduling+'\nglobalThis.api={'+activation+disposal+'setForegroundOpportunityRequester,render,drain:()=>foregroundDrain};',scope);
+ vm.runInContext(scheduling+'\nglobalThis.api={'+activation+disposal+'isActive:()=>state.active,setForegroundOpportunityRequester,render,drain:()=>foregroundDrain};',scope);
  scope.api.setForegroundOpportunityRequester(request=>service.request({...request,async run(ctx){
   if(gate){gate.entered.resolve();await gate.release.promise;}
   return request.run(ctx);
@@ -91,5 +94,78 @@ test('dispose keeps GPU resources alive until queued foreground work settles',as
   assert.deepEqual(f.submissions,['frame']);assert.equal(f.scope.state.active,false);
   assert.deepEqual(f.destroyed,['frameTexture','liquidContact','fluid','canvas']);
   assert.equal(f.scheduled.size,0);
+ }finally{await f.close();}
+});
+
+for(const changes of [[false,true],[true,false,true],[false,true,false]])test('visibility reconciles '+changes.join(' → ')+' while a frame is queued',async()=>{
+ const f=await fixture();try{
+  let wanted=true;
+  const sync=createSceneSimulationActivity({prototype:()=>f.api,wanted:()=>wanted});
+  f.api.render(0);await turn();
+  const requests=[];
+  for(const active of changes){wanted=active;requests.push(sync());await turn();}
+  assert.deepEqual((await f.boundary()).failures,[]);
+  await Promise.all(requests);
+  assert.equal(f.api.isActive(),wanted,'the latest visibility request must survive the earlier retirement');
+  assert.equal(f.scope.state.error,null);
+  if(wanted){
+   const [id,callback]=f.scheduled.entries().next().value;f.scheduled.delete(id);callback(1);await turn();
+   await f.boundary();await f.api.drain();assert.equal(f.submissions.length,2,'visible frames continue');
+  }else assert.equal(f.scheduled.size,0);
+ }finally{await f.close();}
+});
+
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+function authoredField(f){
+ const initial={composition:{schema:'test'},sourcePresent:true,settings:{id:'old'},route:{volume_light_field:'1'}};
+ const context={URL,URLSearchParams,structuredClone,burnerGraphWriting:false,
+  location:{href:'http://localhost/#volume_light_field=1'},history:{state:null,replaceState(_,__,url){context.location.href=String(url);}},
+  writes:[],activeSceneComposition:initial.composition,authoredFlamePresent:true,settings:initial.settings,workingScene:createWorkingScene(),
+  volumePrototype:{...f.api,setSceneCompositionPresentation(){assert.equal(f.api.isActive(),false,'pause before changing scene presentation');}},
+  firstFlameFieldState:()=>({composition:context.activeSceneComposition,sourcePresent:context.authoredFlamePresent,settings:context.settings,
+   route:Object.fromEntries(new URL(context.location.href).hash.slice(1)?new URLSearchParams(new URL(context.location.href).hash.slice(1)):[])}),
+  writeFlameSettingsState(value){context.writes.push(value.id);assert.equal(context.burnerGraphWriting,true,'selection changes remain inside their edit');if(value.id==='bad')throw Error('settings rejected');context.settings=value;},
+  isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},
+  ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
+  fireLightFieldRouteParams:()=>new URLSearchParams(),window:{},syncSceneRadianceRoute:async()=>{}};
+ const start=html.indexOf('function writeFirstFlameFieldState('),end=html.indexOf('async function addFirstFlameField',start);
+ vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+ const edits=createSceneEdits({read(){},write(){}});
+ edits.register('@first-flame-field',{read:context.firstFlameFieldState,write:context.writeFirstFlameFieldState,check:value=>value});
+ return {context,edits,initial};
+}
+
+test('registered flame edits and undo retain queued inputs until retirement settles',async()=>{
+ const f=await fixture();try{
+  const {context,edits,initial}=authoredField(f);
+  const next={composition:{schema:'test',name:'next'},sourcePresent:true,settings:{id:'next'},route:{volume_light_field:'1',volume_collision:'off'}};
+  for(const action of ['apply','undo']){
+   const before=structuredClone(context.firstFlameFieldState()),writeCount=context.writes.length;
+   f.api.render(0);await turn();
+   const operation=Promise.resolve().then(()=>action==='apply'?edits.applySettled('@first-flame-field',next):edits.undo());
+   const settled=operation.then(()=>null,error=>error);await turn();
+   assert.deepEqual(context.firstFlameFieldState(),before,'pending frame inputs cannot be rewritten');
+   assert.equal(context.writes.length,writeCount,'no temporary mutation while the admitted frame owns the inputs');
+   assert.equal(context.burnerGraphWriting,false,'waiting must not block unrelated selection');
+   assert.deepEqual((await f.boundary()).failures,[]);
+   assert.equal(await settled,null,'the registered writer and history operation must complete');
+   assert.deepEqual(structuredClone(context.firstFlameFieldState()),action==='apply'?next:initial);
+   assert.equal(f.api.isActive(),true);assert.equal(context.burnerGraphWriting,false);
+  }
+  assert.equal(edits.state().undoCount,0);assert.equal(edits.state().redoCount,1);
+ }finally{await f.close();}
+});
+
+test('failed flame edit restores authored state and releases its selection guard',async()=>{
+ const f=await fixture();try{
+  const {context,edits,initial}=authoredField(f);
+  f.api.render(0);await turn();
+  const operation=edits.applySettled('@first-flame-field',{...initial,settings:{id:'bad'}});
+  const settled=operation.then(()=>null,error=>error);await turn();
+  assert.deepEqual((await f.boundary()).failures,[]);
+  assert.match((await settled).message,/settings rejected/);
+  assert.deepEqual(structuredClone(context.firstFlameFieldState()),initial);
+  assert.equal(context.burnerGraphWriting,false);assert.equal(f.api.isActive(),true);
+  assert.equal(edits.state().undoCount,0);assert.equal(edits.state().active,null);
  }finally{await f.close();}
 });
