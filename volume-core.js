@@ -20948,6 +20948,7 @@ export function createKaminosVolumePrototype({
   let foregroundRequester = null;
   let foregroundPending = null;
   let foregroundSequence = 0;
+  let activitySequence = 0;
   let sceneLightingRebuildPending = false;
   let foregroundDrain = Promise.resolve();
   let stillPresentationHeld = false;
@@ -27982,6 +27983,7 @@ export function createKaminosVolumePrototype({
       return {...state.sceneCompositionPresentation};
     },
     async setActive(active) {
+      const activity = ++activitySequence;
       if (active) {
         if (state.fullFieldImportReceipt?.status === 'applied'
           && state.fullFieldImportReceipt?.renderLoopPaused === true) {
@@ -27990,13 +27992,15 @@ export function createKaminosVolumePrototype({
         try {
           await ensureGpu();
           await ensureBrowserResidualModel();
+          if (activity !== activitySequence) return;
           state.active = true;
           state.error = null;
           canvas.classList.add('active');
           cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(render);
+          raf = foregroundPending ? 0 : requestAnimationFrame(render);
           emitStatus({ phase: 'active' });
         } catch (err) {
+          if (activity !== activitySequence) throw err;
           state.active = false;
           state.error = err?.message || String(err);
           state.backend = 'unavailable';
@@ -28005,10 +28009,19 @@ export function createKaminosVolumePrototype({
           throw err;
         }
       } else {
+        // Stop scheduling, but keep an admitted frame's renderer alive until
+        // its host callback settles. Retiring it first fails the model duty
+        // that services the frame (for example when the kiln leaves view).
+        cancelAnimationFrame(raf);
+        raf = 0;
+        if (foregroundPending) await foregroundDrain;
+        // A visibility change during the drain owns the newer activity state.
+        if (activity !== activitySequence) return;
         state.active = false;
         invalidateRaymarchReadouts('inactive-renderer');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
+        raf = 0;
         emitStatus({ phase: 'inactive' });
       }
     },
@@ -28498,10 +28511,10 @@ export function createKaminosVolumePrototype({
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
-    dispose() {
+    async dispose() {
+      await this.setActive(false);
       sceneTransportConsumer=null;sceneTransport?.dispose();sceneTransport=null;
       rayStepTelemetry?.dispose();rayStepTelemetry=null;
-      this.setActive(false);
       scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;
