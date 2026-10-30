@@ -13,15 +13,30 @@ Mode. This first build constructs rooted forests, not closed loops.
 Connect piston takes two joint clicks. The piston follows their distance during
 posed motion; it does not drive a force or constraint solver. Pose A/B ghosts
 show the endpoints of the cycle. Play interpolates relative joint angles with
-cosine timing; Stop returns to the selected authored pose for further editing. All numeric tuning uses Kaminos number-drag controls.
+cosine timing; Pause holds; Return to pose restores the selected authored endpoint. All numeric tuning uses Kaminos number-drag controls.
 
-Save mechanism / Open mechanism retain the construction, both poses and piston
-connections in a `kaminos.links.v1` JSON recipe. The experiment accepts that same
-recipe as `inputs.recipe`. It is an experiment-owned setup; this slice does not
-install a reconstructible whole-scene source domain. Keep the recipe to continue
-editing after closing the experiment. Agent operations are the same domain
-operations as the controls: append, select, move, piston, mode, tool, play,
-pause, period, restore, snapshot and frame. There is no fixed link-count limit.
+Mechanisms are ordinary authored scene objects with source `kaminos:link-mechanism`.
+Save / Load use the existing server scene library. Recipes, poses, phase, root
+transforms and attachment frames reconstruct on reopen, without an experiment.
+Closing the workshop leaves the construction in the scene. JSON import/export
+remains available under the inspector's Recipe section.
+
+Select a joint, choose a mesh in Object to attach, and Attach object. Placement
+is preserved. Select the payload and use native G/R/S to edit its offset.
+Detach releases it at its displayed pose. GLB, PBR and procedural meshes are
+supported; simulation emitters and nested mechanisms require another binding.
+Missing payloads remain visible as unresolved references.
+
+Construction/pose tools occupy the viewport header. Play/Pause holds and resumes;
+Return to pose restores the authored endpoint. Cycle position and phase offset
+use native number-drag fields; one unit is one cycle. Shift-Space toggles playback
+when these controls are visible. Space remains command search. Delete branch
+removes descendants and releases their attachments through Undo. Add another
+mechanism creates an independent construction. Command search also has Add Mechanism.
+
+Attachments retain a scene object ID, joint and local TRS frame. Assembly roots
+remain movable. Parent-null nodes are fixed relative to the assembly. Current
+playback directly places objects; contact, forces and propulsion are future work.
 
 The first handoff tests construction usability. It does not establish physical
 collision, actuator stroke clearance, closed-loop constraint solution or a

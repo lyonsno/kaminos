@@ -26,3 +26,11 @@ async function setup(){
  await runtime.dispose();
 }
 console.log('Native workshop history through empty state and numeric preview/commit/cancel/replay passed');
+{
+ const {runtime,op}=await setup();
+ assert.equal(typeof op.attach,'function','Mechanism exposes ordinary scene-object attachment');
+ assert.equal(typeof op.seek,'function','Transport can hold an intermediate cycle position');
+ op.seek({cycle:.25});assert.ok(Math.abs(runtime.read().fraction-.5)<1e-9);
+ op.play();op.pause();assert.ok(Math.abs(runtime.read().fraction-.5)<1e-9,'Pause holds the displayed position');
+ await runtime.dispose();
+}
