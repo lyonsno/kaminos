@@ -10,6 +10,12 @@ const observed=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.
 // claim that this generated preset is an observed operator preset artifact.
 function historicalPreset(){
  const settings=structuredClone(observed);
+ // This fixture tests DOM addition history against the current renderer axis.
+ // Retain observed renderer choices and fill only later additive defaults.
+ for(const entry of schema.rendererControls)if(!settings.rendererControls[entry.key]){
+  assert.ok(Object.hasOwn(entry,'additiveDefault'),`No declared renderer default for ${entry.key}`);
+  settings.rendererControls[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:structuredClone(entry.additiveDefault)};
+ }
  for(const entry of schema.controls)if(entry.additiveLineage||entry.additiveSinceControlCount>=260)delete settings.domControls[entry.key];
  const route=new URL('http://kaminos.invalid/');
  route.searchParams.set(schema.activationParam.key,schema.activationParam.value);
