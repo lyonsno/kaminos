@@ -29,7 +29,7 @@ const {pass,mrt,output,emissive,uniform,convertToTexture,vec4}=THREE.TSL;
 // Workbench. This surface owns only its scene and borrowed-device resources.
 export async function createInferenceKilnPreview({viewport,document=globalThis.document,recipe,prompt,request=null,input:promptInput=null,settings,sharedGpu,app,signal,rendering={},loadGlb,environment=null}){
  const saved=recipe.document,plan=recipe.plan,scene=new THREE.Scene(),entries=[],lightEntries=[],owned=[],frames=new Set();
- let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false;
+ let disposed=false,active=false,fire=null,lighting=null,burning=null,gi=null,hdr=null,sceneBloom=null,pipeline=null,transport=null,lastError=null,frameCount=0,editor=null,promptPreparation=null,draftTimer=null,preparation=Promise.resolve(),preparedText=null,preparedHeight=224,preparedMask=null,prepareRevision=0,feedPixels=0,feedSteps=0,warmup=null,warmState='cold',finishing=false,finishResolve=null;
  const aspect=plan.sceneCamera.aspect[0]/plan.sceneCamera.aspect[1],width=320,height=Math.round(width/aspect);
  viewport.style.aspectRatio=String(aspect);
  const record=plan.objects.find(r=>r.id===plan.sceneCamera.activeId),view=record?cameraViewFromRecord(record,aspect):saved.camera;
@@ -53,7 +53,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
  }});
  function failure(error){lastError=error.message;viewport.dataset.error=lastError;}
  async function dispose(){
-  if(disposed)return;disposed=true;active=false;clearTimeout(draftTimer);promptPreparation?.dispose();await warmup?.catch(()=>{});await preparation.catch(()=>{});editor?.dispose();
+  if(disposed)return;disposed=true;active=false;finishResolve?.();finishResolve=null;clearTimeout(draftTimer);promptPreparation?.dispose();await warmup?.catch(()=>{});await preparation.catch(()=>{});editor?.dispose();
   if(fire){await fire.setActive(false);await sharedGpu.device.queue.onSubmittedWorkDone();}
   lighting?.dispose();await lighting?.whenRebuilt?.().catch(()=>{});await burning?.dispose();fire?.setSceneTransportConsumer(null);fire?.dispose();
   hdr?.dispose();pipeline?.dispose();sceneBloom?.dispose();gi?.dispose();colliders.clear();frames.clear();
@@ -154,10 +154,10 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
   async function setActive(value){if(disposed)return;finishing=false;const wanted=!!value&&visible('flame-field');if(active===wanted)return;active=wanted;editor?.setBurning(active);fire.canvasElement().hidden=!active;
     if(active){clearTimeout(draftTimer);await warmup;await preparation;await burning.prepare();await fire.setActive(true);if(entries.some(entry=>burning.read(entry.id).status==='failed'))throw Error(lastError||'Kiln material failed');
 
-    }else{await fire.setActive(false);scheduleDraft();const still=app.foreground.request({requestId:`kiln-stopped-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-stopped'},run(){draw();return {status:'submitted'};}});await still.completion;}
+    }else{await fire.setActive(false);scheduleDraft();const still=app.foreground.request({requestId:`kiln-stopped-${crypto.randomUUID()}`,metadata:{renderer:'inference-kiln-stopped'},run(){draw();return {status:'submitted'};}});await still.completion;finishResolve?.();finishResolve=null;}
    }
   return {
-   prepare,setActive,finish(){if(!active)return;finishing=true;if(feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;setActive(false).catch(failure);}},syncEditor:()=>editor?.sync(),
+   prepare,setActive,finish(){if(!active)return Promise.resolve();finishing=true;const completion=new Promise(resolve=>{finishResolve=resolve;});if(feedPixels>=Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT)){finishing=false;setActive(false).catch(failure);}return completion;},syncEditor:()=>editor?.sync(),
    debugState:()=>({identity:'kaminos.inference-kiln-preview.v1',sceneFile:recipe.selection?.sceneFile??null,sceneLabel:saved.label,promptObjectId:plan.promptObjectId,prompt,requestSource:request?'admitted-generation-prompt':'editor-draft',active,error:lastError,frameCount,
     effective:{device:'app-shared-device',width,height,settings,objects:entries.map(row=>({id:row.id,visible:visible(row.id),transform:row.transform,burnable:row.burnable})),camera:view,bloom:sceneBloom.read()},
     preparation:{worker:promptPreparation?.read()??null,runtime:warmState,text:preparedText,height:preparedHeight,route:promptPreparation?'worker-solid-and-thermal-mask':'authored-solid'},feed:{finishing,pixels:feedPixels,steps:feedSteps,distance:Math.max(0,preparedHeight-KILN_PROMPT_WINDOW_HEIGHT),pixelsPerSimulationSecond:46},editor:editor?.read()??null,runtime:fire.debugState(),burning:burning.read(plan.promptObjectId),lighting:lighting?.debugState()??null,hdr:hdr.read(),gi:gi.debugState()}),
