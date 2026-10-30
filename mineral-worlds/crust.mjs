@@ -60,6 +60,9 @@ function createNeighbors({seed,settings,arrangement,tilt}){
  const seeds=arrangement==='neighbors'?[[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]:[];
  if(arrangement==='arcs')for(let ring=0;ring<3;ring++){const radius=.43+ring*.43,count=5+ring*3;for(let i=0;i<count;i++){const angle=-2.25+4.5*i/(count-1);seeds.push([Math.cos(angle)*radius,Math.sin(angle)*radius,.24,angle+PI/2]);}}
  if(arrangement==='spiral'){let angle=0;for(let i=0;i<26;i++){const radius=.32+.10*angle;seeds.push([Math.cos(angle)*radius,Math.sin(angle)*radius,.23,angle+PI/2]);angle+=.43/radius;}}
+ // Keep the five-seed comparison valid for every lean: pairwise bounding
+ // spheres give orientation-independent clearance without clipping input angles.
+ if(arrangement==='neighbors'&&tilt>0){let spread=1;for(let i=0;i<seeds.length;i++)for(let j=0;j<i;j++){const a=seeds[i],b=seeds[j];spread=Math.max(spread,(Math.sqrt(3)*(a[2]+b[2])/2+.01)/Math.hypot(a[0]-b[0],a[1]-b[1]));}for(const seed of seeds){seed[0]*=spread;seed[1]*=spread;}}
  for(const [x,z,size,angle] of seeds){
   const g=addGrain(s,x,z,0,[size,size,size],angle,true);
   if(arrangement!=='neighbors'||tilt>0){g.basis=seedBasis(angle,tilt*(.4+.6*random(seed,g.id+1200)));g.origin=[x,0,z];g.faces=[size/2,-size/2,size/2,-size/2,size/2,-size/2];g.origin[1]=-frameBounds(g)[2]+1e-9;}

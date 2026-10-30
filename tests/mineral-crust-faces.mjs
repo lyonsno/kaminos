@@ -71,5 +71,9 @@ test('an interior child patch cannot drain across a dry attachment perimeter',as
 });
 test('authored curved layouts have no initial intersecting seeds across lean settings',async()=>{
  const {frameOverlap}=await import('../mineral-worlds/crust-frame.mjs');
- for(const arrangement of ['arcs','spiral'])for(const tilt of [0,.24,.8,1.6,3]){const s=createCrust({setup:'neighbors',arrangement,tilt});for(let i=0;i<s.grains.length;i++)for(let j=0;j<i;j++)assert.equal(frameOverlap(s.grains[i],s.grains[j]),false,`${arrangement} ${tilt} seeds ${i}/${j}`);}
+ for(const arrangement of ['neighbors','arcs','spiral'])for(const seed of [1,31])for(const tilt of [0,.24,.8,Math.PI/2,1.6,3]){const s=createCrust({setup:'neighbors',arrangement,tilt,seed});for(let i=0;i<s.grains.length;i++)for(let j=0;j<i;j++)assert.equal(frameOverlap(s.grains[i],s.grains[j]),false,`${arrangement} ${tilt} seeds ${i}/${j}`);}
+});
+test('a tilted neighbor with clear space can advance a supplied face',async()=>{
+ const {trackGeometry}=await import('../mineral-worlds/crust.mjs');
+ const s=createCrust({setup:'neighbors',arrangement:'neighbors',tilt:Math.PI/2,settings:{feed:0,evaporation:0,mobility:0,nucleation:0,growth:.1}});empty(s);const g=s.grains[0],p=s.pools[g.facePools[0]],before=g.faces[0];p.water=trackGeometry(s,p).capacity;p.salt=2*p.water;advanceCrust(s,.1);assert.ok(g.faces[0]>before);
 });
