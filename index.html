@@ -3219,11 +3219,7 @@ import {
   KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
   createFingerFluidBenchState,
 } from './finger-fluid-bench-core.js';
-import {
-  createFingerFluidAnalyticJetDescriptor,
-  measureFingerFluidAnalyticJetFirstImpact,
-  createFingerFluidAnalyticImpactHandoffReceipt,
-} from './finger-fluid-analytic-impact-handoff.js';
+
 import {
   FINGER_FLUID_ORACLE_COCKPIT_ADAPTER,
   clearFingerFluidOracleRestartRequired,
@@ -3233,7 +3229,12 @@ import {
   isFingerFluidOracleCockpitRoute,
   updateFingerFluidOracleCockpitUrl,
 } from './finger-fluid-oracle-cockpit.js';
-import {
+import {loadFingerFluidBenchFeature,loadFingerFluidRuntime} from './finger-fluid-feature.mjs';
+import {fingerFluidAnalyticalSupportGeometry} from './finger-fluid-support-geometry.mjs';
+const {
+  createFingerFluidAnalyticJetDescriptor,
+  measureFingerFluidAnalyticJetFirstImpact,
+  createFingerFluidAnalyticImpactHandoffReceipt,
   KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
   KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
   KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
@@ -3271,11 +3272,8 @@ import {
   resolveFingerFluidUnsupportedSheetStrength,
   resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
-  measureFingerFluidParticleAllocationCapacity,
-  evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
-  fingerFluidAnalyticalSupportGeometry,
-} from './finger-fluid-webgpu-core.js';
+} = await loadFingerFluidBenchFeature(new URLSearchParams(window.location.search));
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -6924,6 +6922,10 @@ async function mountLocalLiquidHost() {
 
 async function applyLocalLiquidPerformance(values) {
   if (!localLiquidSetup) throw Error('Add a Water Emitter first');
+  const requestedGeneration = localLiquidGeneration;
+  const requestedSetup = localLiquidSetup;
+  const {measureFingerFluidParticleAllocationCapacity,evaluateFingerFluidParticleAllocationRequest} = await loadFingerFluidRuntime();
+  if (requestedGeneration !== localLiquidGeneration || requestedSetup !== localLiquidSetup) return false;
   const edit = scenePlacementTools?.edits.state();
   if (authoringBusy || sceneDocument.state().blocked || edit?.active || edit?.replaying || localLiquidHostMount.isLoading()) {
     throw Error('Finish the current scene action before restarting water');
