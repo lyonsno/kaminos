@@ -7,9 +7,9 @@ import {MLS_ROUTE} from '../mls-juice-contract.mjs';
 import {RUNWAY_INPUTS} from '../experiments/hand-jet-runway.experiment.mjs';
 
 export function resolveMlsHandRequest(experiment,inputs){
-  assert(['hand-live','hand-browser-juice','hand-jet-runway'].includes(experiment),'unsupported hand experiment');
+  assert(['hand-live','hand-browser-juice','hand-jet-runway','hand-hill-juice'].includes(experiment),'unsupported hand experiment');
   return {particleCount:2400,fluidViscosity:.1,particleLifetimeSeconds:6,jetSpeed:1.15*1.7,sourceFlux:360,fluidGridSize:64,
-    ...(experiment==='hand-jet-runway'?RUNWAY_INPUTS:{}),...inputs};
+    ...(['hand-jet-runway','hand-hill-juice'].includes(experiment)?RUNWAY_INPUTS:{}),...inputs};
 }
 
 export function validateMlsHandRequest(state,requested){
@@ -90,5 +90,5 @@ export function bindMlsWitnessSource({page,url,root,files,out,report}){
   };
 }
 
-export const MLS_WITNESS_FILES=['index.html','owner-live-fluid-session.mjs','mls-juice-contract.mjs','mls-juice-solver.mjs','mls-juice-renderer.mjs','mls-juice-host.mjs',
+export const MLS_WITNESS_FILES=['index.html','owner-live-fluid-session.mjs','mls-juice-contract.mjs','mls-hill-terrain.mjs','mls-juice-solver.mjs','mls-juice-renderer.mjs','mls-juice-host.mjs',
   'vendor/splash-mls-mpm/p2g_1.wgsl','vendor/splash-mls-mpm/p2g_2.wgsl','vendor/splash-mls-mpm/g2p.wgsl'];

@@ -1,4 +1,5 @@
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
+import {hillContactWGSL} from './mls-hill-terrain.mjs';
 
 const boundary=`
         particles[id.x].position=clamp(particles[id.x].position,vec3f(2.),realBoxSize-vec3f(3.));
@@ -11,6 +12,13 @@ const boundary=`
         }
         // Sphere padding overlaps the floor; preserve the domain contact after projection.
         particles[id.x].position=clamp(particles[id.x].position,vec3f(2.),realBoxSize-vec3f(3.));
+        let ground=hillSample(particles[id.x].position.xz);
+        let hillNormal=normalize(vec3f(-ground.y,1.,-ground.z));
+        let surfaceY=ground.x+hillRadius/hillNormal.y;
+        if(ground.w>0.&&particles[id.x].position.y<surfaceY){
+          particles[id.x].position.y=surfaceY;
+          particles[id.x].v-=hillNormal*min(0.,dot(hillNormal,particles[id.x].v));
+        }
         for(var axis=0;axis<3;axis++){
           if(particles[id.x].position[axis]<=2.){particles[id.x].v[axis]=max(0.,particles[id.x].v[axis]);}
           if(particles[id.x].position[axis]>=realBoxSize[axis]-3.){particles[id.x].v[axis]=min(0.,particles[id.x].v[axis]);}
@@ -35,8 +43,18 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
   const box=uniform(new Float32Array([...config.dimensions,0]),'MLS grid extent');
   const count=uniform(new Uint32Array([config.capacity,0,0,0]),'MLS allocated slots');
   const dt=uniform(new Float32Array([config.dt*config.modelSecondsPerSecond,0,0,0]),'MLS model dt');
-  const obstacle=uniform(new Float32Array([...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),config.obstacle.radius/config.cell]),'MLS prescribed sphere');
-  const resources=[particles,cells,box,count,densities,dt,obstacle];
+  const obstacle=uniform(new Float32Array([...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),config.terrain?-2:config.obstacle.radius/config.cell]),'MLS prescribed sphere');
+  const hillHeights=buffer(Math.max(4,(config.terrain?.heights.length??1)*4),U.STORAGE|U.COPY_DST,'Frozen Hill heights');
+  const hillParams=buffer(32,U.UNIFORM|U.COPY_DST,'Frozen Hill grid');
+  const hillWords=new ArrayBuffer(32);
+  if(config.terrain){
+    const g=config.terrain.grid;
+    device.queue.writeBuffer(hillHeights,0,Float32Array.from(config.terrain.heights,y=>(y-config.min[1])/config.cell));
+    new Float32Array(hillWords,0,4).set([(g.min[0]-config.min[0])/config.cell,(g.min[1]-config.min[2])/config.cell,g.step[0]/config.cell,g.step[1]/config.cell]);
+    new Uint32Array(hillWords,16,4).set([g.x,g.z,1,0]);
+  }
+  device.queue.writeBuffer(hillParams,0,hillWords);
+  const resources=[particles,cells,box,count,densities,dt,obstacle,hillHeights,hillParams];
   const make=async(code,entry,bindings,constants={})=>{
     const module=device.createShaderModule({label:`MLS ${entry}`,code});
     const messages=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');
@@ -58,14 +76,14 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         const end=code.indexOf('        particles[id.x].position = vec3f(');
         if(end<0)throw Error('MLS pinned G2P boundary changed');
         code=code.slice(0,end)+boundary;
-        code=`override physicalDt:f32; @group(0) @binding(6) var<uniform> obstacle:vec4f;\n`+code;
+        code=`override physicalDt:f32; override hillRadius:f32; @group(0) @binding(6) var<uniform> obstacle:vec4f;\n`+hillContactWGSL(7,8)+code;
       }
       const common={fixedPointMultiplierInverse:1/65536};
       kernels.push(await make(code,name,name==='p2g_1'?[[0,0],[1,1],[2,2],[3,3]]:
-        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6]],
-      name==='p2g_1'?{fixedPointMultiplier:65536}:name==='p2g_2'?{...common,fixedPointMultiplier:65536,stiffness:config.stiffness,restDensity:config.restDensity,dynamicViscosity:config.viscosity}:{...common,physicalDt:config.dt}));
+        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6],[7,7],[8,8]],
+      name==='p2g_1'?{fixedPointMultiplier:65536}:name==='p2g_2'?{...common,fixedPointMultiplier:65536,stiffness:config.stiffness,restDensity:config.restDensity,dynamicViscosity:config.viscosity}:{...common,physicalDt:config.dt,hillRadius:config.particleRadius/config.cell}));
     }
-    const update=await make(`
+    const update=await make(hillContactWGSL(4,5)+`
       struct Cell{vx:i32,vy:i32,vz:i32,mass:i32}
       @group(0) @binding(0) var<storage,read_write> cells:array<Cell>;
       @group(0) @binding(1) var<uniform> box:vec3f;
@@ -83,8 +101,10 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         }
         let delta=p+vec3f(.5)-obstacle.xyz;
         if(length(delta)<obstacle.w+1.){let normal=normalize(delta);v-=normal*min(0.,dot(v,normal));}
+        let ground=hillSample(p.xz);
+        if(ground.w>0.&&p.y<ground.x+1.){let normal=normalize(vec3f(-ground.y,1.,-ground.z));v-=normal*min(0.,dot(v,normal));}
         cells[id.x].vx=i32(v.x*65536.);cells[id.x].vy=i32(v.y*65536.);cells[id.x].vz=i32(v.z*65536.);
-      }`,'grid',[[0,1],[1,2],[2,5],[3,6]]);
+      }`,'grid',[[0,1],[1,2],[2,5],[3,6],[4,7],[5,8]]);
     const dispatch=(encoder,kernel,n)=>{const pass=encoder.beginComputePass();pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     return {config,particles,
       setPacket(packet){live=validateMlsPacket(packet);},
@@ -119,7 +139,9 @@ export async function createMlsJuiceSolver({device,setup,packet,now=()=>performa
         modelTimeScale:config.modelSecondsPerSecond,clock:clock.read(),pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
         material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
-        collision:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
+        terrain:config.terrain?{source:config.terrain.source,transform:config.terrain.transform,grid:config.terrain.grid,
+          storage:'gpu_resident_frozen_heightfield',interpolation:'mesh_triangles_00_01_10_and_10_01_11',transferPolicy:'initial_upload_only'}:null,
+        collision:config.terrain?'axis_aligned_domain_and_frozen_hill_triangles':'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'}),
       async snapshot(){
         if(disposed)throw Error('MLS solver disposed');
         const readback=device.createBuffer({size:config.capacity*80,usage:U.COPY_DST|U.MAP_READ});

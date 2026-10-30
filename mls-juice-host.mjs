@@ -4,6 +4,7 @@ import {createSceneEmissiveCamera,applySceneEmissiveCamera} from './scene-emissi
 import {createMlsJuiceSolver} from './mls-juice-solver.mjs';
 import {createMlsJuiceRenderer} from './mls-juice-renderer.mjs';
 import {MLS_ROUTE,MLS_SOURCE} from './mls-juice-contract.mjs';
+import {buildFrozenHillGeometry} from './mls-hill-terrain.mjs';
 
 export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,setup,liveInletPacket,isCurrent=()=>true}){
   if(!device||renderer.backend.device!==device)throw Error('MLS requires the actual host WebGPU device');
@@ -21,8 +22,23 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
   for(const [x,z,sx,sz] of [[c.bounds.min[0],centerZ,.06,extentZ],[c.bounds.max[0],centerZ,.06,extentZ],[centerX,c.bounds.min[2],extentX,.06],[centerX,c.bounds.max[2],extentX,.06]]){
     const wall=new THREE.Mesh(new THREE.BoxGeometry(sx,.18,sz),material);wall.position.set(x,.09,z);group.add(wall);
   }
-  const sphere=new THREE.Mesh(new THREE.SphereGeometry(c.obstacle.radius,24,16),material);
-  sphere.position.fromArray(c.obstacle.center);group.add(sphere);scene.add(group);
+  let hillMaterial;
+  if(c.terrain){
+    const data=buildFrozenHillGeometry(c.terrain),geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.BufferAttribute(data.positions,3));
+    const colors=new Float32Array(data.colors.length),color=new THREE.Color();
+    for(let i=0;i<colors.length;i+=3)color.setRGB(data.colors[i],data.colors[i+1],data.colors[i+2],THREE.SRGBColorSpace).toArray(colors,i);
+    geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+    geometry.setIndex(new THREE.BufferAttribute(data.indices,1));geometry.computeVertexNormals();
+    hillMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.95});
+    const hill=new THREE.Mesh(geometry,hillMaterial);hill.name='Hill of Hills — frozen source';
+    hill.userData.source=c.terrain.source;hill.userData.transform=c.terrain.transform;group.add(hill);
+    group.name='Finger Juice on Hill of Hills';
+  }else{
+    const sphere=new THREE.Mesh(new THREE.SphereGeometry(c.obstacle.radius,24,16),material);
+    sphere.position.fromArray(c.obstacle.center);group.add(sphere);
+  }
+  scene.add(group);
   const options={type:THREE.HalfFloatType,depthBuffer:false,minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter};
   const color=new THREE.RenderTarget(1,1,options),output=new THREE.RenderTarget(1,1,options);
   const depth=new THREE.RenderTarget(1,1,{type:THREE.FloatType,format:THREE.RedFormat,depthBuffer:true,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter});
@@ -71,9 +87,9 @@ export async function createMlsJuiceHost({renderer,scene,camera,pipeline,device,
     state:()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,
       registered:true,mounted:!disposed,frameCount,paused,presentation:'full',failure,lastFrame,
       clock:{...solver.read().clock,paused},setup:structuredClone(setup),solver:solver.read(),surface:surface.read(),
-      scope:'provisional_finger_juice; prescribed_tray_sphere; no_two_way_or_fire_transport'}),
+      scope:c.terrain?'frozen_source_hill_contact; no_terrain_evolution_or_two_way_response':'provisional_finger_juice; prescribed_tray_sphere; no_two_way_or_fire_transport'}),
     dispose(){if(disposed)return;disposed=true;device.removeEventListener('uncapturederror',gpuError);surface.dispose();solver.dispose();scene.remove(group);
-      group.traverse(o=>o.geometry?.dispose());material.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();presentation.dispose();
+      group.traverse(o=>o.geometry?.dispose());material.dispose();hillMaterial?.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();presentation.dispose();
       pipeline.outputColorTransform=originalOutputTransform;pipeline.needsUpdate=true;}
   };
 }

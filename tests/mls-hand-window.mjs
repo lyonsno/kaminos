@@ -19,6 +19,7 @@ console.log('MLS populated-window requires hand, presentation and simulation pro
 assert.equal(typeof witness.resolveMlsHandRequest,'function','experiment defaults are not resolved');
 assert.equal(typeof witness.validateMlsHandRequest,'function','effective configuration is not checked');
 const runway=witness.resolveMlsHandRequest('hand-jet-runway',{});
+assert.deepEqual(witness.resolveMlsHandRequest('hand-hill-juice',{}).fluidGridSize,[192,80,256]);
 assert.equal(runway.particleCount,12000);assert.equal(runway.jetSpeed,4.5);
 assert.equal(runway.sourceFlux,1800);assert.deepEqual(runway.fluidGridSize,[192,80,256]);
 const effective=state(40,11,20);

@@ -1,3 +1,4 @@
+import {validateFrozenHill} from './mls-hill-terrain.mjs';
 export const MLS_ROUTE='kaminos/mls-mpm-finger-juice-v1';
 export const MLS_SOURCE='matsuoka-601/Splash@3df5d621e6f153d7269037cbd8606bd83796f3fd';
 function gridDimensions(size){
@@ -27,8 +28,10 @@ export function mlsConfig(setup={}) {
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
   const min=[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
+  const bounds={min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)};
+  const terrain=setup.terrain===undefined?null:validateFrozenHill(setup.terrain,bounds);
   return {capacity,grid,dimensions,gridCells,cell,min,
-    bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,
+    bounds,terrain,dt:1/240,
     modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
     particleRadius:cell*.65,obstacle:{center:[-.35,.24,0],radius:.24}};
 }

@@ -11,7 +11,9 @@ export default {
     if(!emitter.origin?.every(Number.isFinite)||emitter.origin.length!==3||!emitter.direction?.every(Number.isFinite)||emitter.direction.length!==3||Math.hypot(...emitter.direction)<1e-8)throw Error('Invalid nozzle pose');
     const scene=await host.scene.open();let fluid,unsubscribe;
     try{
-    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000,viscosity:inputs.viscosity??.1,gridSize:inputs.gridSize??64},packet:idleFingerPacket()});
+    let terrain;
+    if(inputs.terrainUrl){const response=await fetch(inputs.terrainUrl);if(!response.ok)throw Error('Hill source export unavailable');terrain=await response.json();}
+    fluid=await host.fluid.openInlets({backend:'mls-mpm',setup:{particleCount:inputs.particleCount??12000,viscosity:inputs.viscosity??.1,gridSize:inputs.gridSize??64,...(terrain?{terrain}:{})},packet:idleFingerPacket()});
     let running=false,moving=inputs.moving??true,flux=inputs.sourceFlux??1800,time=0,origin=[...emitter.origin],direction=[...emitter.direction],status;
     const read=()=>({source:'explicit_synthetic_nozzle_not_camera',running,moving,flux,jetSpeed,origin,direction,runtime:fluid.read()});
     const publish=()=>{
@@ -20,7 +22,7 @@ export default {
           origin_world:origin,aim_world:direction,radius:.0704,strength:jetSpeed,lifetime_seconds:6,source_flux_particles_per_second:flux}]});
       fluid.setPaused(!running);
     };
-    const frame=()=>scene.setView(inputs.sceneLayout==='runway'?{position:[5,4,8],target:[0,.65,-1.2]}:{position:[3,2.7,4],target:[0,.65,0]});frame();publish();
+    const frame=()=>scene.setView(terrain?{position:[8,9,12],target:[0,1,0]}:inputs.sceneLayout==='runway'?{position:[5,4,8],target:[0,.65,-1.2]}:{position:[3,2.7,4],target:[0,.65,0]});frame();publish();
     unsubscribe=scene.onFrame(({deltaSeconds})=>{
       if(running){time+=deltaSeconds;if(moving){origin=[Math.sin(time*1.7)*.6,1.35,Math.cos(time*1.1)*.25];direction=[Math.sin(time)*.35,-.6,-.8];}publish();}
       if(status){const s=fluid.read();status.textContent=`${s.effectiveRoute??s.requestedRoute} | ${s.solver.liveInlets.activePlanned} particles | ${s.solver.clock.simulatedSeconds.toFixed(2)} s simulated${s.failure?' | '+s.failure:''}`;}
