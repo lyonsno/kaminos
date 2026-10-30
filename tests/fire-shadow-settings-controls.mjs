@@ -78,3 +78,7 @@ document.defaultView.__kaminosSceneRadiance.setPointEvaluationBudget=value=>{sta
 budgetControl.value='2';await budgetControl.listeners.change();
 assert.equal(state.pointEvaluationBudget,2);assert.equal(nativeSettings.read().pointEvaluationBudget,2);assert.equal(budgetControl.value,'2');
 budgetControl.value='0';await budgetControl.listeners.change();assert.equal(state.pointEvaluationBudget,0);
+
+const densityControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke-shadow density grid (0 = raw)');assert(densityControl);
+document.defaultView.__kaminosSceneRadiance.setSmokeShadowQuality=value=>{state={...state,smokeShadowMediumResolution:value.mediumResolution};};
+densityControl.value='16';await densityControl.listeners.change();assert.equal(state.smokeShadowMediumResolution,16);assert.equal(densityControl.value,'16');
