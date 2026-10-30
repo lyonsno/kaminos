@@ -42,3 +42,35 @@ assert.equal(app.history.state().active,null);
 app.edit({mlsMaterial:null});assert.equal(app.history.undo(),true);
 assert.deepEqual(app.read().mlsMaterial,before.mlsMaterial);
 console.log('Rejected MLS coefficients preserve shared setup, inspector reads, next edit and Undo');
+
+// Source width changes the cell size at a fixed particle target. Validate before
+// the source transaction starts, including the shared sampling it will install.
+const {normalizeLocalLiquidEmitter}=await import('../local-liquid-setup.mjs');
+const sourceEdits=html.slice(html.indexOf('const waterSettingTargets=new Set();'),html.indexOf('function replaceAuthoredWaterPreviewChildren('));
+const makeSources=new Function('setup','records','createSceneEdits','normalizeLocalLiquidSetup','normalizeLocalLiquidEmitter','resolveAuthoredWaterSampling','authoredMlsMaterial',`
+ let localLiquidSetup=structuredClone(setup);
+ const workingScene={objects:structuredClone(records).map(r=>({...r,object:{pose:r.transform,userData:{kaminosSceneObject:{}}}}))};
+ const LOCAL_LIQUID_EMITTER_TYPE='local-liquid-emitter',THREE={},window={};
+ const localLiquidEmitterRecords=()=>workingScene.objects.map(({object,...r})=>r),sceneObjectTransformState=o=>o.pose;
+ const assertSceneConstructionAvailable=()=>{},serializeSceneObject=r=>r,replaceAuthoredWaterPreviewChildren=()=>{};
+ const createLocalLiquidEmitterObject=()=>({object:{}}),syncLocalLiquidHostEmitters=()=>{},updateAuthoringPropertySelection=()=>{};
+ const authoredWaterControls={refresh:()=>authoredMlsMaterial(localLiquidEmitterRecords(),localLiquidSetup)};
+ const scenePlacementTools={edits:createSceneEdits({read:()=>{},write:()=>{}})};
+ ${sourceEdits}
+ return {edit:applyAuthoredWaterSettings,read:()=>({setup:structuredClone(localLiquidSetup),records:localLiquidEmitterRecords()}),history:scenePlacementTools.edits};
+`);
+const sourceSetup=normalizeLocalLiquidSetup({...setup,waterSampling:{spacing:.05,particleTarget:1000,container:null},mlsMaterial:{pressureWaveSpeed:2,kinematicViscosity:1e37}});
+const sources=makeSources(sourceSetup,records,createSceneEdits,normalizeLocalLiquidSetup,normalizeLocalLiquidEmitter,resolveAuthoredWaterSampling,authoredMlsMaterial);
+const original=structuredClone(sources.read());
+assert.throws(()=>sources.edit('drop',{drop:{...records[0].localLiquidEmitter.drop,width:.1}}),/f32 capacity/);
+assert.deepEqual(sources.read(),original,'Rejected source width must preserve source and shared sampling');
+assert.equal(sources.history.state().active,null);
+assert.doesNotThrow(()=>authoredMlsMaterial(sources.read().records,sources.read().setup));
+sources.edit('drop',{drop:{...records[0].localLiquidEmitter.drop,width:.6}});
+assert.equal(sources.history.undo(),true);
+assert.equal(sources.read().records[0].localLiquidEmitter.drop.width,.5);
+// Membership and native transforms can change resolution independently of this
+// inspector. An already unrepresentable scene must still allow material repair.
+const invalid=make({...sourceSetup,waterSampling:{...sourceSetup.waterSampling,particleTarget:1000000}},records,createSceneEdits,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsMaterial);
+assert.doesNotThrow(()=>invalid.edit({mlsMaterial:null}));
+assert.equal(invalid.read().mlsMaterial,undefined);
