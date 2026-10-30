@@ -1,9 +1,9 @@
 import {Matrix4} from './lib/three.core.js';
 // One browser text layout for editing and for the glyph mask consumed by the
 // existing solid/thermal constructor. No per-character picking or custom undo.
-export const KILN_PROMPT_WINDOW_HEIGHT=224;
+export const KILN_PROMPT_WINDOW_HEIGHT=520;
 const width=1024;
-const typography='box-sizing:border-box;width:1024px;margin:0;border:0;padding:20px 60px;font:500 76px Georgia;line-height:92px;letter-spacing:normal;text-align:center;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8;';
+const typography='box-sizing:border-box;width:1024px;margin:0;border:0;padding:20px 60px;font:500 64px Georgia;line-height:80px;letter-spacing:normal;text-align:center;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8;';
 const escape=value=>value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 export function promptPlaneTransform({camera,object,width:vw,height:vh,textHeight}){
  camera.updateMatrixWorld();object.updateWorldMatrix(true,false);

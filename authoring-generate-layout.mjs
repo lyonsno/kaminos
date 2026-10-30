@@ -129,7 +129,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
     masks.hidden=!openMasks||selected()?.kind!=='image'||selected()?.visibility?.status==='withheld';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
-    empty.hidden=resultList.children.length>0;
+    empty.hidden=resultList.children.length>0;results.hidden=resultList.children.length===0;
   }
   render();
   return {render,ceremony,comparing:()=>comparing,compare(value=true){comparing=!!value;if(comparing){expanded=true;pane.dataset.imageExpanded='true';expand.textContent='Collapse image';expand.setAttribute('aria-expanded','true');if(!history?.comparison()&&history?.reference())history.compare(history.reference().source);}render();}};

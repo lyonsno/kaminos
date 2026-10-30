@@ -6,8 +6,9 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
  const target=()=>{const id=doc.defaultView.kaminosSelection?.read().activeId;return host.scene.objects().find(row=>row.id===id);};
  const lettering=()=>{const row=target();if(!row?.object?.userData?.kaminosPromptRelief)throw Error('Select prompt lettering in the scene');return row;};
  const active=()=>{if(closed)throw Error('Material tool is closed');};
- const read=()=>{const row=target();return {objectId:row?.id??null,prompt:row?.object?.userData?.kaminosPromptRelief?.prompt??null,burnAuthority:'scene-owned-thermal',combustion:row?app.burningState(row.id):null,bloom:doc.defaultView.kaminosSceneBloom?.read(),scope:'authored-scene-material-tool'};};
+ const read=()=>{const row=target();return {objectId:row?.id??null,prompt:row?.object?.userData?.kaminosPromptRelief?.prompt??null,burnerSeconds:row?.object?.userData?.kaminosPromptRelief?.burnerSeconds??5,burnAuthority:'scene-owned-thermal',combustion:row?app.burningState(row.id):null,bloom:doc.defaultView.kaminosSceneBloom?.read(),scope:'authored-scene-material-tool'};};
  const operations={read,
+  setBurnerSeconds(value){active();const row=lettering();app.setPrompt(row.id,row.object.userData.kaminosPromptRelief.prompt,{burnerSeconds:value});record({kind:'kiln.burner.duration',target:row.id,seconds:value});sync();return read();},
   async saveForGenerate(){active();const selected=target(),prompts=host.scene.objects().filter(row=>row.object?.userData?.kaminosPromptRelief),row=selected?.object?.userData?.kaminosPromptRelief?selected:prompts.length===1?prompts[0]:null;
    if(!row)throw Error('Select the prompt lettering to use in Generate');
    const result=await doc.defaultView.saveScene({result:true});const recipe=await doc.defaultView.kaminosInferenceKiln.useSaved(result,row.id);record({kind:'kiln.generate.select',sceneFile:recipe.selection.sceneFile,promptObjectId:row.id});return recipe.selection;
@@ -42,9 +43,10 @@ export default {id:'inference-kiln-material',title:'Inference Kiln · material',
    const add=document.createElement('button');add.className='btn';add.textContent='Add lettering';add.onclick=()=>invoke('addPrompt',field.value||inputs.prompt).catch(fail);
    const help=document.createElement('p');help.textContent='Select a mesh to tune its Combustion properties in the inspector. Position and enable the flame source using its native controls. Shared playback runs the simulation. Bloom is in Rendering.';
    sync=(force=false)=>{const row=target(),value=row?.object?.userData?.kaminosPromptRelief?.prompt,changed=field.dataset.target!==(row?.id??'');field.disabled=!value;if(force||changed||document.activeElement!==field){field.value=value??inputs.prompt??'';field.dataset.target=row?.id??'';}};
+   const durationLabel=document.createElement('label');durationLabel.textContent='Burner duration (seconds) ';const duration=document.createElement('input');duration.type='number';duration.min='0';duration.step='0.5';duration.setAttribute('aria-label','Burner duration in seconds');durationLabel.append(duration);duration.onchange=()=>{if(duration.value!==''&&duration.validity.valid)invoke('setBurnerSeconds',Number(duration.value)).catch(fail);};const syncPrompt=sync;sync=(force=false)=>{syncPrompt(force);duration.disabled=!target()?.object?.userData?.kaminosPromptRelief;if(force||document.activeElement!==duration)duration.value=String(read().burnerSeconds);};
    const save=document.createElement('button');save.className='btn';save.textContent='Save kiln for Generate';save.onclick=()=>invoke('saveForGenerate').then(result=>{status.textContent=`Generate now uses ${result.sceneFile}`;}).catch(fail);
    help.textContent='Edit the kiln scene, camera, flame and material here. This is sample text for designing the burn; Generate burns your actual image prompt. Bloom is under Rendering → Flame. Save kiln for Generate keeps this scene and its settings.';
-   root.append(field,add,save,help,status);sync();
+   root.append(field,add,durationLabel,save,help,status);sync();
   },async dispose(){if(closed)return;closed=true;stop();await session.dispose();}};
  }catch(error){await session.dispose();throw error;}
 }};
