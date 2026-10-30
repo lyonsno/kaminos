@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {BURN_FRACTURE_IDENTITY} from '../burn-fracture-core.mjs';
+export async function waitForBurnReset(read,nextFrame){
+ for(;;){const state=await read();assert.equal(typeof state?.resetting,'boolean','Reset state must be observed');if(state.error)throw Error(state.error);if(!state.resetting)return state;await nextFrame();}
+}
 export function burnMassMotion(before,after){
  const masses=before.state.regionMasses,gravity=before.state.gravity,seconds=after.state.seconds-before.state.seconds;
  assert.deepEqual(after.state.regionMasses,masses,'Release comparison must retain mass');

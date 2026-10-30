@@ -3,7 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {checkBurnFractureObservation,checkBurnMaterialContrast,burnMassMotion} from './burn-fracture-contract.mjs';
+import {checkBurnFractureObservation,checkBurnMaterialContrast,burnMassMotion,waitForBurnReset} from './burn-fracture-contract.mjs';
 import {readBurnReplay} from '../burn-fracture-replay.mjs';
 const [origin,out,assetPath,coldPath,hotPath]=process.argv.slice(2);
 const releaseComparison=process.env.BURN_RELEASE_COMPARE==='1';
@@ -27,6 +27,7 @@ try{
  for(const name of ['tools/burn-material-load-probe.mjs','tools/burn-material-kernel-probe.mjs','tools/burn-fracture-contract.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
  for(const name of ['burn-fracture-core.mjs','burn-fracture-gpu.mjs','burn-fracture-replay.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','scene-burn-structure.mjs','burn-structure.worker.mjs','fracture-whole-prepare.mjs','fracture-material-sections.mjs','fracture-coarse-rest-frame.mjs','fracture-coarse-kernels.mjs','lib/fracture/rigid-engine.js','log-consumption.mjs','experiments/sinter/burn-fracture-replay.experiment.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
  const invoke=(op,value)=>guard(page.evaluate(({op,value})=>window.kaminosWorkbenchExperiments.invoke(op,value),{op,value}));
+ const waitForReset=()=>guard(waitForBurnReset(()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),()=>page.evaluate(()=>new Promise(requestAnimationFrame))));
  const replayMatrix=readBurnReplay(JSON.parse(await fs.readFile(coldPath,'utf8'))).recordedMatrix;
  report.comparison={poseSource:coldPath,replayMatrix,meaning:'Identical placement, gravity and support orientation; recorded burn transforms preserved separately'};
  for(const [name,file]of [['cold',coldPath],['burned',hotPath]]){
@@ -64,7 +65,7 @@ try{
    await invoke('moveSupport',observation.supportRecord.transform.position);
    await page.getByLabel('Support contact',{exact:true}).uncheck();
    await page.getByRole('button',{name:'Reset',exact:true}).click();
-   await guard(page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).resetting));
+   await waitForReset();
    observation.releaseBefore=await invoke('snapshot');assert.equal(observation.releaseBefore.state.steps,0);assert.equal(observation.releaseBefore.state.contactsEnabled,false);
    assert.ok(observation.releaseBefore.positions.every((v,i)=>Math.abs(v-before.positions[i])<1e-5),'Reset must restore every original region, not just the visible root');
    await invoke('advance',.25);observation.releaseAfter=await invoke('snapshot');
@@ -72,7 +73,7 @@ try{
    checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.releaseAfter);
    observation.releaseMotion=burnMassMotion(observation.releaseBefore,observation.releaseAfter);await save();
    await page.screenshot({path:path.join(out,name+'-contact-off.png')});
-   await page.getByLabel('Support contact',{exact:true}).check();await page.getByRole('button',{name:'Reset',exact:true}).click();await guard(page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).resetting));await invoke('advance',1/60);
+   await page.getByLabel('Support contact',{exact:true}).check();await page.getByRole('button',{name:'Reset',exact:true}).click();await waitForReset();await invoke('advance',1/60);
    observation.contactRestored=await invoke('snapshot');assert.deepEqual(observation.contactRestored.supportCollisionMasks,[1]);
    if(name==='burned'){await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'mobile-controls.png')});await page.setViewportSize({width:1280,height:900});}
   }
