@@ -373,6 +373,8 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const pipelines=Object.fromEntries(['transportFlow','restrictPressure','pressure','project','transportMaterial'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'world smoke '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
   let adaptive=null;
+  const adaptiveViews=new WeakMap();
+  const adaptiveView=texture=>{if(!adaptiveViews.has(texture))adaptiveViews.set(texture,texture.createView());return adaptiveViews.get(texture);};
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid,lastBridge,lastBridgeGas,lastBridgeOptical;
   const values=new Float32Array(80);
   return {optical,flowTexture,gasTexture,exportFields,plan,anchor,
@@ -415,7 +417,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       run('project',plan.flowDims);v=1-v;
       if(!flowOnly){
         if(adaptive){
-          adaptive.encode(encoder,{0:{buffer:uniform},1:{buffer:fineBuffer},2:{buffer:flows[v]},4:{buffer:materials[m]},5:{buffer:materials[1-m]},8:reactionTexture.createView(),9:solids.createView(),10:optical.createView(),11:bridge.createView(),14:bridgeGas.createView(),15:bridgeOptical.createView(),16:gasTexture.createView()},time.backtraceScale);
+          adaptive.encode(encoder,{0:{buffer:uniform},1:{buffer:fineBuffer},2:{buffer:flows[v]},4:{buffer:materials[m]},5:{buffer:materials[1-m]},8:adaptiveView(reactionTexture),9:adaptiveView(solids),10:adaptiveView(optical),11:adaptiveView(bridge),14:adaptiveView(bridgeGas),15:adaptiveView(bridgeOptical),16:adaptiveView(gasTexture)},time.backtraceScale);
         }else run('transportMaterial',plan.materialDims);
         m=1-m;
       }steps++;

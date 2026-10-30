@@ -1,6 +1,6 @@
 import {MaterialHierarchy,validateAllocation,predictDemand} from './volume-material-hierarchy.mjs';
 
-// Material remains resident. Only one compact demand record per allocated brick
+// Material remains resident. Only one compact demand record per leaf brick
 // crosses to the CPU, asynchronously, for the replaceable allocation policy.
 export function hierarchyWGSL(worldCode){return worldCode+/* wgsl */`
 struct Brick {loPitch:vec4<f32>, children0:vec4<u32>, children1:vec4<u32>, info:vec4<u32>}
@@ -36,7 +36,14 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
  let n=bricks[slot];let q=(p-n.loPitch.xyz)/n.loPitch.w-.5;let base=floor(q);let f=fract(q);var a=vec4<f32>(0);var b=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let pos=n.loPitch.xyz+(base+vec3<f32>(f32(x),f32(y),f32(z))+.5)*n.loPitch.w;
-  let value=nearestGas(pos);let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;b+=value.b*w.x*w.y*w.z;
+  // Most corners stay inside the leaf we already located. Recompute the cell
+  // from the rounded position exactly as nearestGas does; partial domain-edge
+  // bricks must still use ambient outside the physical field.
+  let cell=(pos-n.loPitch.xyz)/n.loPitch.w;var value:Gas;
+  if(all(cell>=vec3<f32>(0))&&all(cell<vec3<f32>(4))&&all(pos>=u.materialLo.xyz)&&all(pos<u.materialLo.xyz+u.material.xyz*u.material.w)){
+   value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))];
+  }else{value=nearestGas(pos);}
+  let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;b+=value.b*w.x*w.y*w.z;
  }}}return Gas(a,b);
 }
 @compute @workgroup_size(64) fn migrateBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
@@ -94,7 +101,8 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
  if(u.pressureControl.z>.5){textureStore(exportedGas,c,r.a);}
 }
 var<workgroup> signal:array<vec4<f32>,64>;
-var<workgroup> motion:array<vec4<f32>,64>;
+var<workgroup> motionMin:array<vec4<f32>,64>;
+var<workgroup> motionMax:array<vec4<f32>,64>;
 @compute @workgroup_size(64) fn measureBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;let r=hin[slot*64u+l];
  var grad=vec4<f32>(0);var opportunity=0.0;
@@ -105,9 +113,10 @@ var<workgroup> motion:array<vec4<f32>,64>;
  }
  // Fixed material/physical units; no frame-maximum normalization.
  signal[l]=vec4<f32>(r.b.x/.04,opportunity,grad.y,grad.x);
- motion[l]=vec4<f32>(abs(velocity(p)),0);workgroupBarrier();
- for(var stride=32u;stride>0u;stride/=2u){if(l<stride){signal[l]+=signal[l+stride];motion[l]=max(motion[l],motion[l+stride]);}workgroupBarrier();}
- if(l==0u){demand[slot*2u]=signal[0]/64.0;demand[slot*2u+1u]=motion[0];}
+ motionMin[l]=vec4<f32>(velocity(p),0);motionMax[l]=motionMin[l];workgroupBarrier();
+ for(var stride=32u;stride>0u;stride/=2u){if(l<stride){signal[l]+=signal[l+stride];motionMin[l]=min(motionMin[l],motionMin[l+stride]);motionMax[l]=max(motionMax[l],motionMax[l+stride]);}workgroupBarrier();}
+ // Compact work order omits parents and unused pool slots from readback.
+ if(l==0u){demand[index*3u]=signal[0]/64.0;demand[index*3u+1u]=motionMin[0];demand[index*3u+2u]=motionMax[0];}
 }
 `;}
 
@@ -117,22 +126,35 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  const S=GPUBufferUsage.STORAGE,D=GPUBufferUsage.COPY_DST,C=GPUBufferUsage.COPY_SRC;
  const module=device.createShaderModule({label:'adaptive material hierarchy',code:hierarchyWGSL(worldCode)});
  const pipelines=Object.fromEntries(['migrateBricks','advanceBricks','restrictBricks','exportBricks','measureBricks'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:entryPoint,layout:'auto',compute:{module,entryPoint}})]));
- let current=0,storage=null,pending=true,initialized=false,destroyed=false,reading=false,error=null,revision=0,steps=0,latestSignals=new Map(),lastPlan=null,transportClock=0,demandLag=0,diagnostics={levels:[],bricks:[]};
+ let current=0,storage=null,pending=true,initialized=false,destroyed=false,reading=false,readback=null,error=null,revision=0,steps=0,latestSignals=new Map(),lastPlan=null,transportClock=0,demandLag=0,diagnostics={levels:[],bricks:[]};
  const buffer=(label,size,usage=S|D|C)=>device.createBuffer({label,size:Math.max(4,size),usage});
  const params=buffer('hierarchy parameters',48,GPUBufferUsage.UNIFORM|D);
  function admission(capacity,options=topology.options){const magnitude=Math.max(1,...plan.min.map(Math.abs),...plan.max.map(Math.abs));if(plan.materialPitch/2**options.maxDetail<magnitude*2**-22)throw Error('Maximum detail exceeds f32 position precision for this world field');const bytes=capacity*64*32;if(!Number.isSafeInteger(bytes)||bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Material pool exceeds GPU storage limits');}
- function makeStorage(capacity){admission(capacity);return {capacity,fields:[buffer('material pool A',capacity*64*32),buffer('material pool B',capacity*64*32)],meta:buffer('material brick topology',capacity*64),remap:buffer('material remapping',capacity*32),demand:buffer('material refinement demand',capacity*32)};}
+ function makeStorage(capacity){admission(capacity);return {capacity,fields:[buffer('material pool A',capacity*64*32),buffer('material pool B',capacity*64*32)],meta:buffer('material brick topology',capacity*64),remap:buffer('material remapping',capacity*32),demand:buffer('material refinement demand',capacity*48)};}
  function release(s){if(s)for(const b of [...s.fields,s.meta,s.remap,s.demand])b.destroy();}
  const ownedLists=[];
  function list(nodes){const b=buffer('material brick work',nodes.length*4);device.queue.writeBuffer(b,0,new Uint32Array(nodes.map(n=>n.slot)));ownedLists.push(b);return b;}
  let lists=null;
+ // Each pipeline's auto layout is distinct. Resource keys are weak so retired
+ // world resources and old work lists cannot accumulate in a history cache.
+ const groups=new Map();
+ function bindGroup(name,index,entries){
+  const key=`${name}:${index}`;if(!groups.has(key))groups.set(key,{next:new WeakMap()});let node=groups.get(key);
+  for(const {resource} of entries){
+   const object=resource.buffer??resource;
+   if(!node.next.has(object))node.next.set(object,new Map());
+   const variants=node.next.get(object),range=resource.buffer?`${resource.offset??0}:${resource.size??'all'}`:'';
+   if(!variants.has(range))variants.set(range,{next:new WeakMap()});node=variants.get(range);
+  }
+  return node.group??=device.createBindGroup({layout:pipelines[name].getBindGroupLayout(index),entries});
+ }
  function dispatch(encoder,name,count,world,items){
   if(!count)return;
   const pipeline=pipelines[name];
   const bindings={migrateBricks:[0,4,9],advanceBricks:[0,1,2,8,9,11,14,15],restrictBricks:[],exportBricks:[0,5,10,16],measureBricks:[0,2,9,11]}[name];
   const pass=encoder.beginComputePass({label:name});pass.setPipeline(pipeline);
-  pass.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(binding=>({binding,resource:world[binding]}))}));
-  pass.setBindGroup(1,device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:items.map(([binding,b])=>({binding,resource:{buffer:b}}))}));
+  pass.setBindGroup(0,bindGroup(name,0,bindings.map(binding=>({binding,resource:world[binding]}))));
+  pass.setBindGroup(1,bindGroup(name,1,items.map(([binding,b])=>({binding,resource:{buffer:b}}))));
   if(name==='exportBricks')pass.dispatchWorkgroups(...plan.materialDims.map(n=>Math.ceil(n/4)));else {const width=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(width,Math.ceil(count/width));}
   pass.end();
  }
@@ -175,12 +197,20 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
    dispatch(encoder,'exportBricks',1,world,[[1,storage.fields[current]],[6,params]]);
    steps++;
    if(!reading){
-    dispatch(encoder,'measureBricks',lastPlan.nodes.length,world,[[0,storage.meta],[1,storage.fields[current]],[3,lists.all],[5,storage.demand],[6,params]]);
-    const bytes=storage.capacity*32,staging=buffer('material demand readback',bytes,D|GPUBufferUsage.MAP_READ),snapshot=lastPlan.nodes.map(n=>({key:n.key,slot:n.slot})),epoch=revision,sampleClock=transportClock,sampleStep=Math.abs(backtraceScale);
+    dispatch(encoder,'measureBricks',lastPlan.leaves.length,world,[[0,storage.meta],[1,storage.fields[current]],[3,lists.leaves],[5,storage.demand],[6,params]]);
+    if(readback?.size!==storage.capacity*48){readback?.destroy();readback=buffer('material demand readback',storage.capacity*48,D|GPUBufferUsage.MAP_READ);}
+    const bytes=lastPlan.leaves.length*48,staging=readback,snapshot=lastPlan.leaves.map(n=>n.key),epoch=revision,sampleClock=transportClock,sampleStep=Math.abs(backtraceScale);
     encoder.copyBufferToBuffer(storage.demand,0,staging,0,bytes);reading=true;
     // mapAsync must follow submission; a microtask is sufficient for the normal
     // synchronous encode/submit caller and does not block the simulation loop.
-    queueMicrotask(async()=>{try{await staging.mapAsync(GPUMapMode.READ);const data=new Float32Array(staging.getMappedRange());if(!destroyed&&epoch===revision){latestSignals=new Map(snapshot.map(n=>[n.key,{reaction:data[n.slot*8],mixing:data[n.slot*8+1],thermal:data[n.slot*8+2],smoke:data[n.slot*8+3],motion:Array.from(data.subarray(n.slot*8+4,n.slot*8+7))}]));for(const signal of latestSignals.values())if(Object.values(signal).flat().some(v=>!Number.isFinite(v)))throw Error('Non-finite GPU allocation demand');demandLag=Math.max(sampleStep,transportClock-sampleClock+sampleStep);pending=true;}staging.unmap();}catch(e){if(!destroyed)error=e.message;}finally{staging.destroy();reading=false;}});
+    queueMicrotask(async()=>{let mapped=false;try{
+     await staging.mapAsync(GPUMapMode.READ);mapped=true;const data=new Float32Array(staging.getMappedRange());
+     if(!destroyed&&epoch===revision){
+      const measured=new Map(snapshot.map((key,i)=>[key,{reaction:data[i*12],mixing:data[i*12+1],thermal:data[i*12+2],smoke:data[i*12+3],motionMin:Array.from(data.subarray(i*12+4,i*12+7)),motionMax:Array.from(data.subarray(i*12+8,i*12+11))}]));
+      for(const signal of measured.values())if(Object.values(signal).flat().some(v=>!Number.isFinite(v)))throw Error('Non-finite GPU allocation demand');
+      latestSignals=measured;demandLag=Math.max(sampleStep,transportClock-sampleClock+sampleStep);pending=true;
+     }
+    }catch(e){if(!destroyed)error=e.message;if(readback===staging)readback=null;}finally{if(mapped)staging.unmap();if(destroyed||readback!==staging)staging.destroy();reading=false;}});
    }
   },
   async snapshot(){
@@ -189,6 +219,6 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
    try{await b.mapAsync(GPUMapMode.READ);return {nodes:lastPlan.nodes.map(n=>({...n})),values:Array.from(new Float32Array(b.getMappedRange())),dims:plan.materialDims,pitch:plan.materialPitch};}finally{b.destroy();}
   },
   read(){return {identity:'pooled-material-hierarchy-v1',options:structuredClone(topology.options),baseDims:plan.materialDims,steps,revision,allocatedBricks:lastPlan?.nodes.length??0,leafBricks:lastPlan?.leaves.length??0,capacity:storage?.capacity??topology.capacity,estimatedCellWork:lastPlan?.cost??0,materialBytes:(storage?.capacity??topology.capacity)*64*32*2,demandRoute:'asynchronous-per-brick-GPU-reduction',predictionTransportInterval:demandLag,renderMaterialDims:plan.materialDims,error,...diagnostics};},
-  destroy(){destroyed=true;release(storage);params.destroy();for(const b of ownedLists)b.destroy();},
+  destroy(){destroyed=true;release(storage);params.destroy();for(const b of ownedLists)b.destroy();groups.clear();if(!reading)readback?.destroy();readback=null;},
  };
 }

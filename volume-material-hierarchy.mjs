@@ -93,8 +93,12 @@ export function predictDemand(nodes,signals,{dims,basePitch,horizon}){
  const box=n=>{const width=4/2**n.level;return {lo:n.c.map(c=>c*width),hi:n.c.map((c,a)=>Math.min((c+1)*width,dims[a]))};};
  for(const source of nodes.filter(n=>!n.children)){
   const signal=signals.get(source.key);if(!signal||!fields.some(k=>signal[k]>0))continue;
-  const b=box(source),reach=(signal.motion??[0,0,0]).map(v=>Math.abs(v)*horizon/basePitch+1/2**source.level);
-  const lo=b.lo.map((v,a)=>v-reach[a]),hi=b.hi.map((v,a)=>v+reach[a]);
+  // Keep the starting support as well as its swept extent. Legacy absolute
+  // motion records retain their conservative two-sided interpretation.
+  const b=box(source),halo=1/2**source.level,scale=horizon/basePitch;
+  const min=signal.motionMin??(signal.motion??[0,0,0]).map(v=>-Math.abs(v));
+  const max=signal.motionMax??(signal.motion??[0,0,0]).map(Math.abs);
+  const lo=b.lo.map((v,a)=>v+Math.min(0,min[a])*scale-halo),hi=b.hi.map((v,a)=>v+Math.max(0,max[a])*scale+halo);
   const visit=n=>{
    const nb=box(n);if(nb.lo.some((v,a)=>v>=hi[a]||nb.hi[a]<=lo[a]))return;
    if(n.children){for(const child of n.children)visit(byKey.get(child));return;}

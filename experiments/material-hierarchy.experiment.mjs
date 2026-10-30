@@ -1,4 +1,4 @@
-import {Group,LineSegments,EdgesGeometry,BoxGeometry,LineBasicMaterial} from '../lib/three.core.js';
+import {Group,LineSegments,EdgesGeometry,BoxGeometry,LineBasicMaterial,BufferGeometry,Float32BufferAttribute} from '../lib/three.core.js';
 import {validateAllocation} from '../volume-material-hierarchy.mjs';
 export default {
  id:'material-hierarchy',title:'Adaptive fire material',
@@ -7,12 +7,12 @@ export default {
   let requested=validateAllocation(inputs.options),enabled=inputs.enabled??true,overlay=inputs.overlay??false,lastRuntime=null,lastRevision=-1,status,panel,controlError=null,disposed=false;
   const root=new Group();root.name='Material refinement';root.userData.kaminosEditorHelper=true;
   const asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:'simulation:adaptive-material-allocation'}});
-  const box=new BoxGeometry(1,1,1),geometry=new EdgesGeometry(box);box.dispose();const colors=[0x7799bb,0x36cc9a,0xe5b45b,0xed7b51,0xda57ac],materials=colors.map(color=>new LineBasicMaterial({color,transparent:true,opacity:.4}));
+  const box=new BoxGeometry(1,1,1),geometry=new EdgesGeometry(box),unitEdges=geometry.attributes.position.array.slice();box.dispose();geometry.dispose();const colors=[0x7799bb,0x36cc9a,0xe5b45b,0xed7b51,0xda57ac],materials=colors.map(color=>new LineBasicMaterial({color,transparent:true,opacity:.4}));
   const source=()=>win.__kaminosVolumePrototype;
   const read=()=>({enabled,requested,overlay,objectId:asset.id,error:controlError??source()?.adaptiveMaterialState?.()?.error??null,effective:source()?.adaptiveMaterialState?.()?.effective??null,status:source()?.adaptiveMaterialState?'available':'awaiting-fire-runtime'});
   const persist=()=>updateInputs({...inputs,enabled,options:requested,overlay});
-  const clear=()=>{while(root.children.length)root.remove(root.children[0]);};
-  const apply=()=>{const runtime=source();if(runtime?.configureAdaptiveMaterial){runtime.configureAdaptiveMaterial(enabled?requested:null);lastRuntime=runtime;}else lastRuntime=null;};
+  const clear=()=>{for(const child of [...root.children]){root.remove(child);child.geometry.dispose();}};
+  const apply=()=>{lastRevision=-1;const runtime=source();if(runtime?.configureAdaptiveMaterial){runtime.configureAdaptiveMaterial(enabled?requested:null);lastRuntime=runtime;}else lastRuntime=null;};
   const sync=()=>{
    if(disposed)return;
    try{if(source()!==lastRuntime)apply();}catch(e){if(status)status.textContent=e.message;return;}
@@ -20,13 +20,20 @@ export default {
    if(status)status.textContent=state.error?`Allocation unchanged: ${state.error}`:effective?`${effective.leafBricks.toLocaleString()} leaf bricks · ${effective.allocatedBricks.toLocaleString()} / ${effective.capacity.toLocaleString()} resident bricks · ${(effective.materialBytes/1048576).toFixed(1)} MiB material · ${effective.estimatedCellWork.toLocaleString()} estimated cell updates/restrictions. ${effective.error??''}`:enabled?'Enable the world field in the fire Quality controls to allocate material.':'Adaptive material off; ordinary world transport active.';
    if(panel){for(const el of panel.querySelectorAll('[data-setting]')){if(host.controls.document.activeElement===el)continue;const k=el.dataset.setting;el.value=String(k.startsWith('weight.')?requested.weights[k.slice(7)]:requested[k]);}for(const el of panel.querySelectorAll('[data-toggle]'))el.checked=el.dataset.toggle==='setEnabled'?enabled:overlay;}
    root.visible=overlay&&!!effective;
-   if(overlay&&effective&&lastRevision!==effective.revision){clear();for(const b of effective.bricks.filter(b=>b.level>0)){const line=new LineSegments(geometry,materials[b.level%materials.length]);line.position.fromArray(b.min.map(v=>v+b.width/2));line.scale.setScalar(b.width);root.add(line);}lastRevision=effective.revision;}
+   if(overlay&&effective&&lastRevision!==effective.revision){
+    clear();const levels=new Map();for(const b of effective.bricks)if(b.level>0){if(!levels.has(b.level))levels.set(b.level,[]);levels.get(b.level).push(b);}
+    for(const [level,bricks] of levels){
+     const positions=new Float32Array(bricks.length*unitEdges.length);
+     for(let i=0;i<bricks.length;i++)for(let j=0;j<unitEdges.length;j++)positions[i*unitEdges.length+j]=bricks[i].min[j%3]+(unitEdges[j]+.5)*bricks[i].width;
+     const batch=new BufferGeometry();batch.setAttribute('position',new Float32BufferAttribute(positions,3));root.add(new LineSegments(batch,materials[level%materials.length]));
+    }lastRevision=effective.revision;
+   }
    if(effective?.anchor){root.position.fromArray(effective.anchor.translate);root.scale.setScalar(effective.anchor.scale);}
   };
   const stop=session.onFrame(sync);
   const operations={
    setOptions(patch){const next=validateAllocation({...requested,...patch,weights:{...requested.weights,...patch.weights}});source()?.configureAdaptiveMaterial?.(enabled?next:null);requested=next;controlError=null;persist();sync();record({kind:'material-allocation.policy',requested:patch,effective:read()});return read();},
-   setEnabled(value){if(typeof value!=='boolean')throw Error('Expected enabled boolean');source()?.configureAdaptiveMaterial?.(value?requested:null);enabled=value;controlError=null;persist();sync();record({kind:'material-allocation.enabled',effective:read()});return read();},
+   setEnabled(value){if(typeof value!=='boolean')throw Error('Expected enabled boolean');source()?.configureAdaptiveMaterial?.(value?requested:null);enabled=value;lastRevision=-1;controlError=null;persist();sync();record({kind:'material-allocation.enabled',effective:read()});return read();},
    setOverlay(value){overlay=!!value;lastRevision=-1;persist();sync();session.redraw();return read();},
   };
   const drags=[];
@@ -44,7 +51,7 @@ export default {
     for(const k of ['reaction','mixing','thermal','smoke'])control(k[0].toUpperCase()+k.slice(1),'weight.'+k,.1,details);
     status=document.createElement('p');status.style.cssText='font-size:12px;line-height:1.6;color:#b2c6d2';status.setAttribute('role','status');target.append(status);sync();
    },
-   async dispose(){disposed=true;stop();source()?.configureAdaptiveMaterial?.(null);for(const d of drags)d?.dispose?.();clear();geometry.dispose();for(const m of materials)m.dispose();await session.dispose();},
+   async dispose(){disposed=true;stop();source()?.configureAdaptiveMaterial?.(null);for(const d of drags)d?.dispose?.();clear();for(const m of materials)m.dispose();await session.dispose();},
   };
  },
 };

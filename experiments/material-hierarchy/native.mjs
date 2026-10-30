@@ -3,12 +3,14 @@ import {resolveReactantCombustionConfig} from '../../volume-reactant-combustion.
 import {validateNativeEvidence} from './acceptance.mjs';
 import {movingPocket} from './moving.mjs';
 import {validateMovingEvidence} from './moving-acceptance.mjs';
+import {samplingParity,validateSamplingEvidence} from './sampling.mjs';
 export async function run(){
  const adapter=await navigator.gpu.requestAdapter();if(!adapter||adapter.isFallbackAdapter||adapter.info.vendor!=='apple')throw Error('Native Apple WebGPU required');
  const device=await adapter.requestDevice({requiredLimits:{maxStorageBuffersPerShaderStage:8}});const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));device.pushErrorScope('validation');
  let world;const owned=[];
  const result={adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},steps:[]};
  try{
+  result.sampling=await samplingParity(device);result.samplingSummary=validateSamplingEvidence(result.sampling);
   const plan=worldSmokePlan({flow:4,material:8,pressure:2,extent:3,fineHeightRatio:1});
   world=createWorldSmoke(device,plan,{translate:[0,0,0],scale:1});
   const fine=device.createBuffer({size:4**3*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(fine);

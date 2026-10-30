@@ -48,3 +48,23 @@ assert.throws(()=>materialImportance({reaction:NaN}),/finite/);
 const partial=new MaterialHierarchy({dims:[7,5,3],options:{budget:2}}).allocate(new Map([['0:1:1:0',{reaction:1}]]));
 const covered=partial.leaves.reduce((s,n)=>s+n.c.reduce((v,c,a)=>v*Math.max(0,Math.min(4/2**n.level,[7,5,3][a]-c*4/2**n.level)),1),0);
 assert.equal(covered,7*5*3);
+
+// Signed lookahead keeps the swept support and interpolation halo, without
+// spending the same guard distance behind a one-way plume.
+const directional=new MaterialHierarchy({dims:[20,4,4],options:{budget:0}}).allocate();
+const guard=(motionMin,motionMax,horizon=1)=>predictDemand(directional.nodes,new Map([['0:2:0:0',{reaction:1,motionMin,motionMax}]]),{dims:[20,4,4],basePitch:1,horizon});
+const forward=guard([5,0,0],[5,0,0]),backward=guard([-5,0,0],[-5,0,0]),opposing=guard([-5,0,0],[5,0,0]);
+assert.ok(forward.get('0:4:0:0').reaction>0,'forward motion reaches downstream brick');
+assert.equal(forward.get('0:0:0:0').reaction??0,0,'one-way motion does not expand upstream beyond interpolation');
+assert.equal(forward.get('0:1:0:0').reaction,.25,'upstream interpolation halo is retained');
+for(let x=0;x<5;x++)assert.equal(forward.get(`0:${x}:0:0`).reaction??0,backward.get(`0:${4-x}:0:0`).reaction??0,'signed prediction mirrors');
+assert.ok(opposing.get('0:0:0:0').reaction>0&&opposing.get('0:4:0:0').reaction>0,'opposing velocities retain both guards');
+const noLookahead=guard([-5,0,0],[5,0,0],0),stationary=guard([0,0,0],[0,0,0],0);
+for(const n of directional.nodes)assert.equal(noLookahead.get(n.key).reaction,stationary.get(n.key).reaction,'zero lookahead keeps only the interpolation halo');
+// Parent inputs cannot affect policy: the leaf measurements fully determine it.
+const parentPlan=new MaterialHierarchy({dims:[8,4,4],options:{budget:8,maxDetail:2}}).allocate(signals),leafSignals=new Map(parentPlan.leaves.map(n=>[n.key,{reaction:n.slot+1}]));
+assert.ok(parentPlan.nodes.some(n=>n.children));
+const allSignals=new Map([...leafSignals,...parentPlan.nodes.filter(n=>n.children).map(n=>[n.key,{reaction:1e9}])]);
+const opts={dims:[8,4,4],basePitch:1,horizon:0};
+const fromLeaves=predictDemand(parentPlan.nodes,leafSignals,opts),fromAll=predictDemand(parentPlan.nodes,allSignals,opts);
+for(const n of parentPlan.nodes)for(const field of ['reaction','mixing','thermal','smoke'])assert.equal(fromLeaves.get(n.key)[field],fromAll.get(n.key)[field]);
