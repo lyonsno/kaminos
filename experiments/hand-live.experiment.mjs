@@ -325,7 +325,7 @@ export default {
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
         if(playConfig){
-          for(const [key,title,step]of [['reachX','Horizontal reach',.1],['reachY','Vertical reach',.1],['pitchDegrees','Glove tilt',1],['height','Glove height',.1],['depth','Glove depth',.1]]){
+          for(const [key,title,step]of [['reachX','Horizontal reach',.1],['reachY','Vertical reach',.1],['pitchDegrees','Angle offset (deg)',1],['height','Glove height',.1],['depth','Glove depth',.1]]){
             const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
             grip.textContent=title;input.type='number';input.step='any';input.value=playConfig[key];input.className='transform-input';input.setAttribute('aria-label',title);
             playControls[key]=input;

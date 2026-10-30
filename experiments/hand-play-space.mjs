@@ -1,4 +1,4 @@
-export const PLAY_SPACE_DEFAULTS=Object.freeze({reachX:7,reachY:3,height:1.2,depth:1.8,pitchDegrees:65,mirror:true});
+export const PLAY_SPACE_DEFAULTS=Object.freeze({reachX:7,reachY:3,height:1.2,depth:1.8,pitchDegrees:0,mirror:true});
 
 export function playSpaceConfig(input={}){
   const config={...PLAY_SPACE_DEFAULTS,...input};

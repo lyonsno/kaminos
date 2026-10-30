@@ -12,6 +12,7 @@ import pileExperiment from '../experiments/hand-goin-pile.experiment.mjs';
 // Local mapping policy fixture. Browser contract conformance is separately replayed.
 const source={captureId:'mapping-fixture',pixelBasis:'unmirrored_camera',cropBox:[100,80,300,280],cropUV:Array(42).fill(.5),meshJointsMeters:[[.02,.03,.04]]};
 const config=playSpaceConfig(),size={width:640,height:480};
+assert.equal(config.pitchDegrees,0,'default must not impose an authored angle offset');
 const a=handPlayPlacement(source,size,config);
 assert.deepEqual(a.imageWrist,[200/640,180/480]);
 assert.deepEqual(a.center,source.meshJointsMeters[0]);
@@ -23,7 +24,7 @@ const curled=structuredClone(source);curled.cropUV[10]=.1;
 assert.deepEqual(handPlayPlacement(curled,size,config).position,a.position,'finger articulation must not recenter the glove');
 const mesh=new Mesh();applyHandPlayPlacement(mesh,a);
 const up=new Vector3(0,1,0).transformDirection(mesh.matrixWorld);
-assert(up.z<-.9&&up.y>0,'upright fingers should aim into the world, not require foreshortening');
+assert(up.distanceTo(new Vector3(0,1,0))<1e-10,'zero offset must preserve the observed upright direction');
 assert.equal(mesh.scale.x,-5,'translation and articulation must share mirror parity');
 const joints=[source.meshJointsMeters[0],...Array.from({length:20},(_,i)=>[.02,.03-(i%4+1)*.02,.04])];
 const packet=nativeFingerPacket({...source,meshJointsMeters:joints,source:'mobrecon_densestack_spiralconv',jointBasis:'upstream_j_reg_mano_to_mpii',captureEpochMs:100},
@@ -32,6 +33,15 @@ assert(packet.emitters.every(e=>e.active),'placement must preserve extension');
 const meshTip=new Vector3(0,.08,0).applyMatrix4(mesh.matrixWorld);
 assert(meshTip.distanceTo(new Vector3(...packet.emitters[0].origin_world))<1e-10,'jet must leave the displayed fingertip');
 assert(new Vector3(...packet.emitters[0].aim_world).distanceTo(up)<1e-10,'jet must follow the displayed finger');
+const tilted=handPlayPlacement(source,size,playSpaceConfig({pitchDegrees:30}));
+applyHandPlayPlacement(mesh,tilted);
+const tiltedUp=new Vector3(0,1,0).transformDirection(mesh.matrixWorld);
+assert(tiltedUp.distanceTo(new Vector3(0,Math.cos(Math.PI/6),-.5))<1e-10,'explicit angle offset remains tunable');
+const tiltedPacket=nativeFingerPacket({...source,meshJointsMeters:joints,source:'mobrecon_densestack_spiralconv',jointBasis:'upstream_j_reg_mano_to_mpii',captureEpochMs:100},
+  {nowMs:100,running:true,center:tilted.center,matrix:mesh.matrixWorld});
+assert(new Vector3(...tiltedPacket.emitters[0].aim_world).distanceTo(tiltedUp)<1e-10,'optional offset must rotate glove and jets together');
+applyHandPlayPlacement(mesh,handPlayPlacement(source,size,playSpaceConfig({pitchDegrees:0})));
+assert(new Vector3(0,1,0).transformDirection(mesh.matrixWorld).distanceTo(up)<1e-10,'returning to zero removes the offset');
 assert.throws(()=>handPlayPlacement({...source,cropUV:[]},size,config),/observation/);
 assert.throws(()=>handPlayPlacement({...source,pixelBasis:'mirrored'},size,config),/pixel basis/);
 assert.throws(()=>playSpaceConfig({depth:NaN}),/play space/);
@@ -43,7 +53,8 @@ assert.deepEqual(pile.read().bodies.slice(0,4).map(b=>[b.position[0],b.position[
 pile.dispose();
 assert.throws(()=>mlsConfig({goinPile:{stackCenters:[]}}),/stack centers/);
 assert.throws(()=>mlsConfig({goinPile:{stackCenters:[[0,NaN]]}}),/stack centers/);
-assert.equal(resolveMlsHandRequest('hand-play-space',{}).playSpace.pitchDegrees,65,'witness must resolve the actual route');
+assert.equal(resolveMlsHandRequest('hand-play-space',{}).playSpace.pitchDegrees,0,'witness must resolve the neutral default route');
+assert.equal(resolveMlsHandRequest('hand-play-space',{playSpace:{pitchDegrees:30}}).playSpace.pitchDegrees,30,'explicit requested offset must survive route resolution');
 assert.deepEqual(resolveMlsHandRequest('hand-play-space',{goinPile:{mass:.5}}).goinPile.stackCenters,centers,'mass edit must retain the court layout');
 assert.throws(()=>validateMlsHandRequest({playSpace:null},{playSpace:{}}),/config mismatch/);
 assert.throws(()=>validateMlsHandRequest({playSpace:{config,observation:null}},{playSpace:{}}),/missing play space/);

@@ -14,7 +14,9 @@ at its wrist rather than the mean of its vertices, so curling cannot shift
 the whole glove by changing its centroid. Native inference remains untouched.
 
 Defaults: horizontal reach 7, vertical reach 3, height 1.2, depth 1.8,
-whole-glove tilt 65 degrees, mirrored camera control. `setPlaySpace` changes
+angle offset 0 degrees, mirrored camera control. The optional **Angle offset (deg)**
+control rotates the whole glove and its jets together; zero adds no pitch rotation.
+Drag the value or click to type; changes apply live. `setPlaySpace` changes
 these values without restarting camera or water. Numeric controls call the
 same operation. Effective values, image-wrist coordinates, source capture,
 fallback and full display transform are retained with the experiment events.
