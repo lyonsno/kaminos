@@ -1,3 +1,6 @@
+// Surface-only resolution: below 1/10000 of a cell height, a full-cell cap
+// exaggerates the residual. Keep all material in simulation and checkpoints.
+export const ASH_SURFACE_MIN_FILL=1e-4;
 // Setup/checkpoint work only. Live evolution and surface compaction stay on GPU.
 export function patchLayout({cellSize,bounds,tileSize}){
  if(!Number.isFinite(cellSize)||cellSize<=0)throw Error('Invalid cell width');
@@ -46,7 +49,13 @@ export function seedPatch(p,solid,{volume,radius,center,blanketDepth,groundOnly=
 }
 // Positive transfers lower coordinate -> upper; negative reverse. Mirrors WGSL.
 export function pairTransfer({a,b,axis,solidA,solidB,penetrationA,penetrationB}){
- if(solidA||solidB)return 0;
+ // 1 is immovable authored support; 2 is a moving scene occupancy.
+ // A moved solid may overlap existing material. Retain that mass and evacuate
+ // it conservatively instead of clearing it or trapping it permanently.
+ if(solidA===1||solidB===1||solidA===true||solidB===true)return 0;
+ if(solidA===2&&solidB===2)return (a-b)*.5;
+ if(solidA===2)return Math.min(a,1-b);
+ if(solidB===2)return -Math.min(b,1-a);
  if(penetrationA>penetrationB+1e-5)return Math.min(a,1-b);
  if(penetrationB>penetrationA+1e-5)return -Math.min(b,1-a);
  if(penetrationA>0||penetrationB>0)return 0;
