@@ -1,0 +1,22 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {mlsConfig} from '../mls-juice-contract.mjs';
+const module=await import('../hill-meadow.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;});
+assert.equal(typeof module.buildMeadowHill,'function','the curated terrain must have an independent, deterministic source');
+const recipe=JSON.parse(readFileSync(new URL('../assets/hill-of-hills/meadow.recipe.json',import.meta.url)));
+const hill=module.buildMeadowHill(recipe,{commit:'fixture',recipeSha256:'fixture',generatorSha256:'fixture'});
+assert.deepEqual(hill,module.buildMeadowHill(recipe,{commit:'fixture',recipeSha256:'fixture',generatorSha256:'fixture'}));
+assert.equal(hill.heights.length,recipe.grid[0]*recipe.grid[1]);
+assert.equal(hill.colors.length,hill.heights.length*3);
+assert(hill.heights.every(Number.isFinite));
+assert(hill.colors.every(v=>Number.isFinite(v)&&v>=0&&v<=1));
+assert.equal(mlsConfig({gridSize:[192,80,256],terrain:hill}).terrain.source.recipeSha256,'fixture');
+assert.equal(hill.source.repo,'kaminos');
+assert.equal(hill.source.phase,'frozen');
+const g=hill.grid;
+for(let z=0;z<g.z;z++)for(let x=0;x<g.x;x++)if(!x||!z||x===g.x-1||z===g.z-1)assert(Math.abs(hill.heights[z*g.x+x]-recipe.edgeHeight)<1e-6,'perimeter must meet its authored low rim without a ragged skirt');
+assert.throws(()=>module.buildMeadowHill({...recipe,hills:[{...recipe.hills[0],height:NaN}]}),/hill/i);
+assert.throws(()=>module.buildMeadowHill({...recipe,grid:[2.5,9]}),/grid/i);
+assert.throws(()=>module.buildMeadowHill({...recipe,basin:{...recipe.basin,width:0}}),/basin/i);
+console.log('Curated Hill source is deterministic, admitted to the real contact domain, and has a continuous low perimeter');
