@@ -47,9 +47,10 @@ export function createMlsClock(dt) {
   return {observe,advanceSteps(count){
     if(!Number.isSafeInteger(count)||count<0)throw Error('Invalid MLS step count');
     steps+=count;elapsed+=count*dt;return count;
-  },advance(now,paused=false){
+  },advance(now,paused=false,maxSteps=Infinity){
+    if(maxSteps!==Infinity&&(!Number.isSafeInteger(maxSteps)||maxSteps<1))throw Error('Invalid MLS batch step count');
     observe(now,paused);
-    const count=paused?0:Math.floor((accumulator+1e-10)/dt);
+    const count=paused?0:Math.min(maxSteps,Math.floor((accumulator+1e-10)/dt));
     accumulator-=count*dt;steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
     simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};
@@ -72,7 +73,7 @@ export function validateMlsPacket(packet) {
 
 export function createMlsEmissionPlan(config) {
   const expiry=new Float64Array(config.capacity),fractions=new Map();
-  let cursor=0,serial=0,totalAdmitted=0,totalRejected=0,last=[];
+  let cursor=0,serial=0,totalAdmitted=0,totalRejected=0,last=[],slotSearches=0;
   return {reserveInitial(count){
     if(!Number.isSafeInteger(count)||count<0||count>config.capacity)throw Error('Initial MLS population exceeds capacity');
     for(let i=0;i<count;i++)expiry[i]=Infinity;
@@ -82,23 +83,28 @@ export function createMlsEmissionPlan(config) {
     for(let i=0;i<config.capacity;i++)if(!(words[i>>>5]&(1<<(i&31))))expiry[i]=0;
   },step(packet,time,epochMs){
     const valid=packet.authority.simulation_safe&&epochMs>=packet.timestamp_ms&&epochMs-packet.timestamp_ms<=750;
-    const births=[];last=[];
+    const births=[];last=[];slotSearches=0;
+    // Expiry cannot change while this step is planning births. Once a full
+    // scan finds no slot, later births/sources cannot make one available.
+    let poolFull=false;
     for(const e of packet.emitters){
       const rate=valid&&e.active?e.source_flux_particles_per_second:0;
       const credit=rate*config.dt+(fractions.get(e.id)??0),requested=Math.floor(credit+1e-10);
       fractions.set(e.id,credit-requested);
-      let admitted=0,outside=0;
+      let admitted=0,outside=0,capacityBlocked=0;
       const direction=e.aim_world.map(v=>v/Math.hypot(...e.aim_world));
       const origin=e.origin_world.map((v,i)=>(v-config.min[i])/config.cell);
       const inDomain=origin.every((v,i)=>v>=2&&v<=config.dimensions[i]-3);
       for(let j=0;j<requested;j++){
-        if(!inDomain){outside++;continue;}
+        if(!inDomain){outside+=requested-j;break;}
+        if(poolFull){capacityBlocked+=requested-j;break;}
         let slot=-1;
         for(let n=0;n<config.capacity;n++){
           const index=(cursor+n)%config.capacity;
+          slotSearches++;
           if(expiry[index]<=time+1e-10){slot=index;cursor=(index+1)%config.capacity;break;}
         }
-        if(slot<0)continue;
+        if(slot<0){poolFull=true;capacityBlocked+=requested-j;break;}
         expiry[slot]=time+e.lifetime_seconds;
         const axis=Math.abs(direction[1])<.9?[0,1,0]:[1,0,0];
         const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -109,10 +115,11 @@ export function createMlsEmissionPlan(config) {
         births.push({slot,position,velocity:direction.map(d=>d*e.strength/config.cell/config.modelSecondsPerSecond),life:e.lifetime_seconds});admitted++;
       }
       totalAdmitted+=admitted;totalRejected+=requested-admitted;
-      last.push({id:e.id,requested,admitted,outside,effective:{releaseSaturated:admitted<requested},rate});
+      const blockedReason=!valid?'stale_input':!e.active||rate===0?'stopped':!inDomain?'outside_domain':capacityBlocked?'capacity':outside?'aperture_outside_domain':null;
+      last.push({id:e.id,requested,admitted,outside,capacityBlocked,blockedReason,originWorld:[...e.origin_world],effective:{releaseSaturated:admitted<requested},rate});
     }
     return births;
-  },read(time){return {poolCapacity:config.capacity,activePlanned:expiry.reduce((n,t)=>n+(t>time+1e-10),0),
+  },read(time){const activePlanned=expiry.reduce((n,t)=>n+(t>time+1e-10),0);return {poolCapacity:config.capacity,activePlanned,
     expectedParticleReleaseRate:last.reduce((n,e)=>n+(e.requested?e.rate*e.admitted/e.requested:e.rate),0),
-    totalAdmitted,totalRejected,inlets:structuredClone(last),authority:'cpu_admission_plan_not_gpu_particle_count'};}};
+    totalAdmitted,totalRejected,slotSearches,inlets:structuredClone(last).map(e=>({...e,blockedReason:e.blockedReason??(e.rate>0&&activePlanned===config.capacity?'capacity':null)})),authority:'cpu_admission_plan_not_gpu_particle_count'};}};
 }

@@ -11,7 +11,7 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
  if(!device||renderer.backend.device!==device)throw Error('Authored MLS requires the actual shared WebGPU device');
  let solver,surface,proxy;
  try{
-  solver=await createMlsJuiceSolver({device,setup:initial.solver,packet:makePacket(emitters),initialParticles:initial.initialParticles,sceneColliders:readColliders()});
+  solver=await createMlsJuiceSolver({device,setup:{...initial.solver,cooperativeScheduling:{targetDurationMs:8}},packet:makePacket(emitters),initialParticles:initial.initialParticles,sceneColliders:readColliders()});
   surface=await createMlsJuiceRenderer({device,solver,hostEnvironment:true});proxy=await createMlsWaterProxy(device,solver);
  }catch(error){proxy?.dispose();surface?.dispose();solver?.dispose();throw error;}
  if(!isCurrent()){proxy.dispose();surface.dispose();solver.dispose();return null;}
