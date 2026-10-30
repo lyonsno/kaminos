@@ -81,7 +81,9 @@ export class Qwen35TextModel {
   upload(data, target = this.owned) { const b = this.buffer(data.byteLength, target); this.device.queue.writeBuffer(b, 0, data); return b; }
   async pipeline(name, code) {
     if (!this.pipelines.has(name)) this.pipelines.set(name, (async () => {
-      const module = this.device.createShaderModule({ code }), info = await module.getCompilationInfo();
+      // Source generation can be substantial; evaluate it only on a cache miss.
+      const source = typeof code === 'function' ? code() : code;
+      const module = this.device.createShaderModule({ code: source }), info = await module.getCompilationInfo();
       if (info.messages.some(x => x.type === 'error')) throw new Error(`${name}: ${info.messages.map(x => x.message).join('; ')}`);
       return this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'main' } });
     })());
@@ -158,7 +160,7 @@ export class Qwen35TextModel {
     signal = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])]);
     try {
       // Compile arithmetic before acquiring gigabytes of weights.
-      await this.pipeline('rms', rmsNormShader({ weightType: 'f32' }));
+      await this.pipeline('rms', () => rmsNormShader({ weightType: 'f32' }));
       let count = 0;
       for (const [name, entry] of this.layout.projections) {
         checkAbort(signal);
@@ -219,7 +221,7 @@ export class Qwen35TextModel {
     const tiled = tokens > 1, single = ctx.singleTokenKernel ?? this.singleTokenKernel;
     if (single !== 'oracle' && single !== 'quad') throw new RangeError('unsupported single-token kernel');
     const quad = !tiled && single === 'quad';
-    for (const part of entry.slices) await this.dispatch(tiled ? 'affine-tiled' : quad ? 'affine-quad' : 'affine', tiled ? kernels.affineTiledShader() : quad ? kernels.affineQuadShader() : kernels.affineShader(), [input, part.weight, part.scales, part.biases, output],
+    for (const part of entry.slices) await this.dispatch(tiled ? 'affine-tiled' : quad ? 'affine-quad' : 'affine', tiled ? kernels.affineTiledShader : quad ? kernels.affineQuadShader : kernels.affineShader, [input, part.weight, part.scales, part.biases, output],
       affineParams({ tokens, rows: part.rows, columns: entry.columns, group: entry.group, outputStride, outputOffset: outputOffset + part.rowStart, inputOffset }),
       tiled ? affineTiledDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension)
         : affineDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension, { rowsPerGroup: quad ? 4 : 1 }), ctx);
@@ -248,8 +250,8 @@ export class Qwen35TextModel {
   }
   async forward(ids, state, ctx, predict = true) {
     const c = this.config, tokens = ids.length, scratch = new Set(), f = n => this.buffer(n * 4, scratch);
-    const norm = (input, weight, output, width = c.hiddenSize, context = ctx) => this.dispatch('rms', rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], context);
-    const add = (hidden, update, context = ctx) => this.dispatch('axpy', axpyShader(), [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], context);
+    const norm = (input, weight, output, width = c.hiddenSize, context = ctx) => this.dispatch('rms', () => rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], context);
+    const add = (hidden, update, context = ctx) => this.dispatch('axpy', axpyShader, [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], context);
     try {
       checkAbort(ctx.signal);
       const input = await admit(ctx.control, ctx.signal, async () => {
@@ -261,7 +263,7 @@ export class Qwen35TextModel {
       const mixed = f(tokens * deltaWidth), z = f(tokens * valueWidth), gates = f(tokens * 2 * c.linearValueHeads), convolved = f(tokens * deltaWidth), prepared = f(tokens * (deltaWidth + 2 * c.linearValueHeads)), recurrent = f(tokens * valueWidth), gatedDelta = f(tokens * valueWidth);
       const qw = c.queryHeads * c.headDim, kw = c.kvHeads * c.headDim;
       const qp = f(tokens * 2 * qw), kp = f(tokens * kw), vp = f(tokens * kw), q = f(tokens * qw), attention = f(tokens * qw), gatedAttention = f(tokens * qw);
-      for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader(), [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, c.hiddenSize, part.rowStart, part.rows]), [Math.ceil(c.hiddenSize / 256), tokens, 1], ctx);
+      for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader, [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, c.hiddenSize, part.rowStart, part.rows]), [Math.ceil(c.hiddenSize / 256), tokens, 1], ctx);
       for (let index = 0; index < c.numLayers; index++) {
         const layerWork = async ctx => {
         const root = `model.layers.${index}`, layer = state.layers[index];
@@ -272,24 +274,24 @@ export class Qwen35TextModel {
           await this.linear(root + '.linear_attn.in_proj_z', normalized, z, tokens, ctx);
           await this.linear(root + '.linear_attn.in_proj_a', normalized, gates, tokens, ctx, { outputStride: 2 * c.linearValueHeads });
           await this.linear(root + '.linear_attn.in_proj_b', normalized, gates, tokens, ctx, { outputStride: 2 * c.linearValueHeads, outputOffset: c.linearValueHeads });
-          await this.dispatch('delta-conv', kernels.deltaConvShader(), [mixed, this.vectors.get(root + '.linear_attn.conv1d.weight'), layer.history, convolved, layer.nextHistory], p, [Math.ceil(Math.max(tokens, c.convKernel - 1) * deltaWidth / 256), 1, 1], ctx);
+          await this.dispatch('delta-conv', kernels.deltaConvShader, [mixed, this.vectors.get(root + '.linear_attn.conv1d.weight'), layer.history, convolved, layer.nextHistory], p, [Math.ceil(Math.max(tokens, c.convKernel - 1) * deltaWidth / 256), 1, 1], ctx);
           [layer.history, layer.nextHistory] = [layer.nextHistory, layer.history];
-          await this.dispatch('delta-prepare', kernels.deltaPrepareShader(), [convolved, gates, this.vectors.get(root + '.linear_attn.joined'), prepared], p, [c.linearKeyHeads, tokens, 1], ctx);
-          await this.dispatch('delta-recurrent', kernels.deltaRecurrentShader(), [prepared, layer.recurrent, recurrent], p, [c.linearValueHeads, 1, 1], ctx);
-          await this.dispatch('delta-norm', kernels.deltaNormShader(), [recurrent, z, this.vectors.get(root + '.linear_attn.norm.weight'), gatedDelta], p, [c.linearValueHeads, tokens, 1], ctx);
+          await this.dispatch('delta-prepare', kernels.deltaPrepareShader, [convolved, gates, this.vectors.get(root + '.linear_attn.joined'), prepared], p, [c.linearKeyHeads, tokens, 1], ctx);
+          await this.dispatch('delta-recurrent', kernels.deltaRecurrentShader, [prepared, layer.recurrent, recurrent], p, [c.linearValueHeads, 1, 1], ctx);
+          await this.dispatch('delta-norm', kernels.deltaNormShader, [recurrent, z, this.vectors.get(root + '.linear_attn.norm.weight'), gatedDelta], p, [c.linearValueHeads, tokens, 1], ctx);
           await this.linear(root + '.linear_attn.out_proj', gatedDelta, update, tokens, ctx);
         } else {
           const p = attentionParams({ tokens, queryHeads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, rotaryDim: c.rotaryDim, pastTokens: state.length, capacity: state.capacity, ropeTheta: c.ropeTheta, epsilon: this.layout.epsilon });
           await this.linear(root + '.self_attn.q_proj', normalized, qp, tokens, ctx); await this.linear(root + '.self_attn.k_proj', normalized, kp, tokens, ctx); await this.linear(root + '.self_attn.v_proj', normalized, vp, tokens, ctx);
-          await this.dispatch('attention-prepare', kernels.attentionPrepareShader({ headDim: c.headDim }), [qp, kp, vp, this.vectors.get(root + '.self_attn.joined'), q, layer.keys, layer.values], p, [c.queryHeads, tokens, 1], ctx);
-          await this.dispatch('attention', createWebGpuTiledFlashAttentionShader({ headDim: c.headDim, causal: true }), [q, layer.keys, layer.values, attention], flashAttentionParams({ queryTokens: tokens, keyTokens: state.length + tokens, heads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, causalOffset: state.length }), [Math.ceil(tokens / 64), c.queryHeads, 1], ctx);
-          await this.dispatch('attention-gate', kernels.attentionGateShader(), [attention, qp, gatedAttention], p, [Math.ceil(tokens * qw / 256), 1, 1], ctx);
+          await this.dispatch('attention-prepare', () => kernels.attentionPrepareShader({ headDim: c.headDim }), [qp, kp, vp, this.vectors.get(root + '.self_attn.joined'), q, layer.keys, layer.values], p, [c.queryHeads, tokens, 1], ctx);
+          await this.dispatch('attention', () => createWebGpuTiledFlashAttentionShader({ headDim: c.headDim, causal: true }), [q, layer.keys, layer.values, attention], flashAttentionParams({ queryTokens: tokens, keyTokens: state.length + tokens, heads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, causalOffset: state.length }), [Math.ceil(tokens / 64), c.queryHeads, 1], ctx);
+          await this.dispatch('attention-gate', kernels.attentionGateShader, [attention, qp, gatedAttention], p, [Math.ceil(tokens * qw / 256), 1, 1], ctx);
           await this.linear(root + '.self_attn.o_proj', gatedAttention, update, tokens, ctx);
         }
         await add(hidden, update, ctx); await norm(hidden, root + '.post_attention_layernorm.weight', normalized, c.hiddenSize, ctx);
         await this.linear(root + '.mlp.gate_proj', normalized, gateUp, tokens, ctx, { outputStride: 2 * c.intermediateSize });
         await this.linear(root + '.mlp.up_proj', normalized, gateUp, tokens, ctx, { outputStride: 2 * c.intermediateSize, outputOffset: c.intermediateSize });
-        await this.dispatch('swiglu', swigluShader(), [gateUp, activation], new Uint32Array([tokens, c.intermediateSize, 2 * c.intermediateSize, 0, c.intermediateSize, 0, 0, 0]), [Math.ceil(c.intermediateSize / 256), tokens, 1], ctx);
+        await this.dispatch('swiglu', swigluShader, [gateUp, activation], new Uint32Array([tokens, c.intermediateSize, 2 * c.intermediateSize, 0, c.intermediateSize, 0, 0, 0]), [Math.ceil(c.intermediateSize / 256), tokens, 1], ctx);
         await this.linear(root + '.mlp.down_proj', activation, update, tokens, ctx); await add(hidden, update, ctx);
         };
         if (ctx.batchDecode && tokens === 1 && state.length > 0) await this.layerBatch(ctx, layerWork);

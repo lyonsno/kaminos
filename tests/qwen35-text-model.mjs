@@ -214,3 +214,45 @@ test('closed encoding contexts and nested layer batches cannot enqueue additiona
  await assert.rejects(model.layerBatch({control},ctx=>model.layerBatch(ctx,async()=>{})),/nested/);
  }finally{await model.destroy();await control.close();}
 });
+
+test('pipeline cache evaluates shader factories once across concurrent and later uses', async () => {
+  const { manifest } = fixture(), { device } = deviceFixture();
+  const model = new Qwen35TextModel(device, manifest, { control: { runDuty: work => work() } });
+  const source = '@compute @workgroup_size(1) fn main() {}';
+  let built = 0, modules = 0, compiled = 0;
+  device.createShaderModule = ({ code }) => { assert.equal(code, source); modules++; return { getCompilationInfo: async () => ({ messages: [] }) }; };
+  const pipeline = { getBindGroupLayout() {} };
+  device.createComputePipelineAsync = async () => { compiled++; return pipeline; };
+  const factory = () => { built++; return source; };
+  const values = await Promise.all([model.pipeline('probe', factory), model.pipeline('probe', factory)]);
+  assert.deepEqual(values, [pipeline, pipeline]);
+  assert.equal(await model.pipeline('probe', () => { throw new Error('cache hit rebuilt source'); }), pipeline);
+  assert.deepEqual({ built, modules, compiled }, { built: 1, modules: 1, compiled: 1 });
+  assert.equal(await model.pipeline('literal', source), pipeline, 'existing literal callers remain supported');
+  const failed = () => { built++; throw new Error('source construction failed'); };
+  await assert.rejects(model.pipeline('failed', failed), /source construction failed/);
+  await assert.rejects(model.pipeline('failed', failed), /source construction failed/);
+  assert.equal(built, 2, 'failed pipeline promises retain the same failure without rebuilding');
+  await model.destroy();
+});
+
+test('prefill and both decode routes defer sources and compile each named shader once', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture();
+  const model = new Qwen35TextModel(device, manifest, { control: { runDuty: work => work() } });
+  const original = model.pipeline.bind(model), builds = new Map(), supplied = new Set();
+  model.pipeline = (name, factory) => {
+    assert.equal(typeof factory, 'function', `${name} source must be deferred until a cache miss`);
+    supplied.add(name);
+    return original(name, () => { builds.set(name, (builds.get(name) ?? 0) + 1); const source = factory(); assert.equal(typeof source, 'string'); return source; });
+  };
+  try {
+    await model.load('http://localhost/model/', { fetchImpl });
+    const state = await model.createState({ capacity: 6 });
+    await model.prefill([1, 2], state); await model.decode(3, state);
+    model.singleTokenKernel = 'quad'; model.batchDecode = true;
+    await model.decode(4, state); await model.decode(5, state);
+    assert.ok(supplied.has('affine') && supplied.has('affine-quad') && supplied.has('affine-tiled') && supplied.has('attention'));
+    assert.equal(builds.size, supplied.size); assert.ok([...builds.values()].every(n => n === 1));
+    assert.equal(state.length, 5); await model.disposeState(state);
+  } finally { await model.destroy(); }
+});
