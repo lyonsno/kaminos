@@ -36,14 +36,17 @@ window.qwenModelResult = (async () => {
     const compareBatching = comparisonMode && window.qwenComparisonAxis === 'batchDecode';
     const servingProfile = window.qwenWitnessMode === 'serving-profile' || comparisonMode;
     let current = null, layerRows = [];
-    model = new Qwen35TextModel(device, manifest, { control, singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', batchDecode: window.qwenBatchDecode ?? false, ...(servingProfile ? {} : {
+    model = new Qwen35TextModel(device, manifest, { control, decodeAttention: window.qwenDecodeAttention ?? 'tiled', singleTokenKernel: window.qwenSingleTokenKernel ?? 'oracle', batchDecode: window.qwenBatchDecode ?? false, ...(servingProfile ? {} : {
       onLayer: async ({ buffer, tokens, context }) => { if (current) layerRows.push(await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
       onNorm: async ({ buffer, tokens, context }) => { if (current) capture(current + '.norm', await model.read(buffer, model.config.hiddenSize, (tokens - 1) * model.config.hiddenSize * 4, context)); },
     }) });
     result.singleTokenKernel = model.singleTokenKernel;
+    result.decodeAttention = model.decodeAttention;
+    const attentionDispatches = result.attentionDispatches = { attention: 0, 'attention-single-query': 0 };
     const affineDispatches = result.affineDispatches = { 'affine': 0, 'affine-quad': 0, 'affine-tiled': 0 };
     const dispatch = model.dispatch.bind(model);
     model.dispatch = async (name, ...args) => {
+      if (Object.hasOwn(attentionDispatches, name)) attentionDispatches[name]++;
       if (Object.hasOwn(affineDispatches, name)) affineDispatches[name]++;
       return dispatch(name, ...args);
     };

@@ -428,3 +428,80 @@ export function flashAttentionParams({ queryTokens, keyTokens, heads, kvHeads = 
 export function flashAttentionDispatch({ queryCount, heads, domains = 1 }) {
   return [Math.ceil(queryCount / FLASH_ATTENTION_BLOCK_QUERIES), heads, domains];
 }
+
+// Decode attention: one query per workgroup, 64 keys per online-softmax tile.
+// Uses the packed flashAttentionParams binding contract and [queryCount, heads,
+// domains] dispatch. Each lane computes one key score; lanes then own output
+// vec4s. No padded query rows are evaluated. Storage and accumulation are F32.
+export function createWebGpuSingleQueryAttentionShader({ headDim, causal = false } = {}) {
+  if (!Number.isInteger(headDim) || headDim < 16 || headDim > 256 || headDim % 16 !== 0) {
+    throw new Error('single-query attention needs a head dim that is a multiple of 16 from 16 to 256');
+  }
+  const vectors = headDim / 4;
+  return `struct Params {
+  query_tokens:u32, key_tokens:u32, q_channels:u32, kv_channels:u32,
+  heads:u32, kv_heads:u32, query_offset:u32, query_count:u32,
+  scale:f32, causal_offset:u32, _pad1:u32, _pad2:u32,
+};
+@group(0) @binding(0) var<storage,read> q_values:array<vec4<f32>>;
+@group(0) @binding(1) var<storage,read> k_values:array<vec4<f32>>;
+@group(0) @binding(2) var<storage,read> v_values:array<vec4<f32>>;
+@group(0) @binding(3) var<storage,read_write> out_values:array<vec4<f32>>;
+@group(0) @binding(4) var<uniform> params:Params;
+var<workgroup> scores:array<f32,64>;
+var<workgroup> correction:f32;
+var<workgroup> denominator:f32;
+@compute @workgroup_size(64)
+fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) group:vec3<u32>) {
+  let query = params.query_offset + group.x;
+  let head = group.y;
+  let domain = group.z;
+  let kv_head = head / (params.heads / params.kv_heads);
+  let q_base = ((domain * params.query_tokens + query) * params.q_channels + head * ${headDim}u) / 4u;
+  let kv_base = (domain * params.key_tokens * params.kv_channels + kv_head * ${headDim}u) / 4u;
+  var output = vec4<f32>(0.0);
+  var running_max = -3.402823e38;
+  var running_sum = 0.0;
+  for (var start = 0u; start < params.key_tokens; start += 64u) {
+    let key = start + lane;
+    var score = -3.402823e38;
+    if (key < params.key_tokens${causal ? ' && key <= query + params.causal_offset' : ''}) {
+      let k_base = kv_base + key * (params.kv_channels / 4u);
+      var product = 0.0;
+      for (var d = 0u; d < ${vectors}u; d++) {
+        product += dot(q_values[q_base + d], k_values[k_base + d]);
+      }
+      score = product * params.scale;
+    }
+    scores[lane] = score;
+    workgroupBarrier();
+    if (lane == 0u) {
+      var tile_max = running_max;
+      for (var i = 0u; i < 64u; i++) { tile_max = max(tile_max, scores[i]); }
+      correction = exp(running_max - tile_max);
+      running_sum *= correction;
+      for (var i = 0u; i < 64u; i++) {
+        let probability = select(exp(scores[i] - tile_max), 0.0, scores[i] <= -3.0e38);
+        scores[i] = probability;
+        running_sum += probability;
+      }
+      running_max = tile_max;
+      denominator = running_sum;
+    }
+    workgroupBarrier();
+    if (lane < ${vectors}u) {
+      output *= correction;
+      for (var i = 0u; i < min(64u, params.key_tokens - start); i++) {
+        let v_base = kv_base + (start + i) * (params.kv_channels / 4u);
+        output += scores[i] * v_values[v_base + lane];
+      }
+    }
+    workgroupBarrier();
+  }
+  if (lane < ${vectors}u) {
+    let inverse = select(0.0, 1.0 / denominator, denominator > 0.0);
+    out_values[q_base + lane] = output * inverse;
+  }
+}
+`;
+}

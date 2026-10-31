@@ -128,3 +128,12 @@ export function adjudicateServingComparison(result, expected) {
   return { comparisonAxis: axis, runs, identicalCompleteOutput: true, decodeSpeedupVsBaselines: [runs[0].decodeMs / runs[1].decodeMs, runs[2].decodeMs / runs[1].decodeMs],
     baselineDriftRatio: runs[2].decodeMs / runs[0].decodeMs };
 }
+
+export function adjudicateAttentionSelection(result, expected) {
+  const counts = result?.attentionDispatches;
+  if (!['tiled', 'single-query'].includes(expected) || result?.decodeAttention !== expected || !counts
+    || ['attention', 'attention-single-query'].some(name => !Number.isSafeInteger(counts[name]) || counts[name] < 0)
+    || (expected === 'single-query' ? counts['attention-single-query'] < 1 : counts['attention-single-query'] !== 0 || counts.attention < 1)) {
+    throw new Error('wrong or incomplete attention selection/dispatch evidence');
+  }
+}

@@ -256,3 +256,23 @@ test('prefill and both decode routes defer sources and compile each named shader
     assert.equal(state.length, 5); await model.disposeState(state);
   } finally { await model.destroy(); }
 });
+
+test('single-query attention is explicit and only selected for one-token work', async () => {
+  const { manifest, fetchImpl } = fixture(), { device } = deviceFixture();
+  const model = new Qwen35TextModel(device, manifest, { control: { runDuty: work => work() }, decodeAttention: 'single-query' });
+  const names = [], dispatch = model.dispatch.bind(model);
+  model.dispatch = (name, ...args) => { names.push(name); return dispatch(name, ...args); };
+  try {
+    assert.equal(model.decodeAttention, 'single-query');
+    await model.load('http://localhost/model/', { fetchImpl });
+    const state = await model.createState({ capacity: 4 });
+    await model.prefill([1, 2], state);
+    assert.ok(names.includes('attention')); assert.ok(!names.includes('attention-single-query'));
+    names.length = 0; await model.decode(3, state);
+    assert.ok(names.includes('attention-single-query')); assert.ok(!names.includes('attention'));
+    model.decodeAttention = 'tiled'; names.length = 0; await model.decode(4, state);
+    assert.ok(names.includes('attention')); assert.ok(!names.includes('attention-single-query'));
+    assert.throws(() => { model.decodeAttention = 'unknown'; }, /attention/);
+    model.active = Promise.resolve(); assert.throws(() => { model.decodeAttention = 'single-query'; }, /active/); model.active = null;
+  } finally { await model.destroy(); }
+});

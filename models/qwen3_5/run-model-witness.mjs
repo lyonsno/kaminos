@@ -7,17 +7,17 @@ import { startServer, launchChrome, sourceIdentity } from '../flux2-klein/cdp-ha
 import { qwen35ModelLayout } from './model-layout.js';
 import { adjudicateModelReadbacks } from './model-witness-contract.js';
 import { adjudicatePupExpansion } from './pup-witness-contract.js';
-import { adjudicateServingProfile, adjudicateServingComparison, adjudicateAffineSelection, adjudicateBatchSelection } from './serving-profile.js';
+import { adjudicateServingProfile, adjudicateServingComparison, adjudicateAffineSelection, adjudicateBatchSelection, adjudicateAttentionSelection } from './serving-profile.js';
 import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
 import { createPupTextInput } from './pup-input.js';
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 
 export async function runModelWitness({ fixture, modelRoot, chrome, out, request = null, servingProfile = false,
-  singleTokenKernel = 'oracle', compareKernels = false, batchDecode = false, compareBatching = false, cliArgs = null }) {
+  singleTokenKernel = 'oracle', compareKernels = false, batchDecode = false, compareBatching = false, decodeAttention = 'tiled', cliArgs = null }) {
   if (!out) throw new Error('explicit report path required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const report = { schema: 'kaminos.qwen35-model-witness.v2', mode: compareKernels ? 'serving-comparison' : servingProfile ? 'serving-profile' : 'numerical-parity', status: 'failed', phase: 'setup', source: sourceIdentity(repo),
-    requested: { fixture, modelRoot, chrome, request, servingProfile, singleTokenKernel, compareKernels, batchDecode, compareBatching, cliArgs }, rows: [] };
+    requested: { fixture, modelRoot, chrome, request, servingProfile, singleTokenKernel, compareKernels, batchDecode, compareBatching, decodeAttention, cliArgs }, rows: [] };
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   let browser, server;
   try {
@@ -25,12 +25,15 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     if (cliArgs !== null) {
       if (!Array.isArray(cliArgs) || cliArgs.some(x => typeof x !== 'string')) throw new Error('unsupported witness CLI arguments');
       const files = cliArgs.filter(x => !x.startsWith('--'));
-      if (files.length > 1 || cliArgs.some(x => x.startsWith('--') && !['--serving-profile', '--quad-affine', '--compare-affine', '--batch-decode', '--compare-batching'].includes(x))) throw new Error('unsupported witness CLI arguments');
+      if (files.length > 1 || cliArgs.some(x => x.startsWith('--') && !['--serving-profile', '--quad-affine', '--compare-affine', '--batch-decode', '--compare-batching', '--single-query-attention'].includes(x))) throw new Error('unsupported witness CLI arguments');
       request = files[0] ?? null; servingProfile = cliArgs.includes('--serving-profile');
       compareKernels = cliArgs.includes('--compare-affine'); singleTokenKernel = cliArgs.includes('--quad-affine') ? 'quad' : 'oracle';
+      decodeAttention = cliArgs.includes('--single-query-attention') ? 'single-query' : 'tiled';
       batchDecode = cliArgs.includes('--batch-decode'); compareBatching = cliArgs.includes('--compare-batching');
-      Object.assign(report.requested, { request, servingProfile, compareKernels, singleTokenKernel, batchDecode, compareBatching });
+      Object.assign(report.requested, { request, servingProfile, compareKernels, singleTokenKernel, batchDecode, compareBatching, decodeAttention });
     }
+    if (!['tiled', 'single-query'].includes(decodeAttention)) throw new Error('unsupported decode attention');
+    if ((compareKernels || compareBatching) && decodeAttention !== 'tiled') throw new Error('attention selection cannot alter a different comparison');
     if ([servingProfile, compareKernels, batchDecode, compareBatching].some(x => typeof x !== 'boolean')) throw new Error('unknown witness mode');
     if (singleTokenKernel !== 'oracle' && singleTokenKernel !== 'quad') throw new Error('unsupported single-token kernel');
     if ((compareKernels || compareBatching) && (singleTokenKernel !== 'oracle' || batchDecode || (compareKernels && compareBatching))) throw new Error('ambiguous comparison/kernel request');
@@ -69,12 +72,12 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     report.effectiveExecutable = executable;
     const serving = await startServer({ '/fixture/': root, '/model/': model, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report); report.browserProfile = report.profile;
-    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenSingleTokenKernel = '+JSON.stringify(singleTokenKernel)+'; window.qwenBatchDecode = '+JSON.stringify(batchDecode)+'; window.qwenComparisonAxis = '+JSON.stringify(comparisonAxis)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
+    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenSingleTokenKernel = '+JSON.stringify(singleTokenKernel)+'; window.qwenDecodeAttention = '+JSON.stringify(decodeAttention)+'; window.qwenBatchDecode = '+JSON.stringify(batchDecode)+'; window.qwenComparisonAxis = '+JSON.stringify(comparisonAxis)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
     report.phase = 'gpu-execution'; report.url = serving.origin + '/models/qwen3_5/model-witness.html'; await save();
     await browser.navigate(report.url, 'window.qwenModelReady === true');
     const result = await browser.evaluate('window.qwenModelResult.then(r => ({ ...r, rows: r.rows.map(({data,...row})=>row) }))');
     report.adapter = result.adapter; report.errors = result.errors; report.effective = { backend: result.backend, weightsManifestSha256: result.weightsManifestSha256, limits: result.limits, residentWeightBytes: result.residentWeightBytes,
-      singleTokenKernel: result.singleTokenKernel, affineDispatches: result.affineDispatches, batchDecode: result.batchDecode, layerBatchSubmissions: result.layerBatchSubmissions, layerBatchDuty: result.layerBatchDuty };
+      decodeAttention: result.decodeAttention, attentionDispatches: result.attentionDispatches, singleTokenKernel: result.singleTokenKernel, affineDispatches: result.affineDispatches, batchDecode: result.batchDecode, layerBatchSubmissions: result.layerBatchSubmissions, layerBatchDuty: result.layerBatchDuty };
     report.lengths = result.lengths; report.generation = result.generation; report.cleanup = result.cleanup; report.lastPhase = result.lastPhase;
     if (result.expansion) report.expansion = result.expansion;
     if (result.profile) report.profile = result.profile;
@@ -89,6 +92,7 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     try {
       if (comparisonMode) report.verdict = adjudicateServingComparison(result, { ...pupExpected, weightsManifestSha256: sha(weightsBytes), comparisonAxis, batchDecode, singleTokenKernel });
       else {
+        adjudicateAttentionSelection(result, decodeAttention);
         adjudicateAffineSelection(result, singleTokenKernel);
         adjudicateBatchSelection(result, batchDecode);
         report.verdict = servingProfile

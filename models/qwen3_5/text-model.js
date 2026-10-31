@@ -3,7 +3,7 @@ import { fetchTensor, projectionSlices } from './model-source.js';
 import * as kernels from './kernels.js';
 import { affineParams, affineDispatch, affineTiledDispatch, deltaParams, attentionParams } from './kernel-params.js';
 import { rmsNormShader, swigluShader, axpyShader } from '../flux2-klein/klein-kernels.js';
-import { createWebGpuTiledFlashAttentionShader, flashAttentionParams } from '../../webgpu-inference-kit/src/flash-attention-kernel.js';
+import { createWebGpuTiledFlashAttentionShader, createWebGpuSingleQueryAttentionShader, flashAttentionParams } from '../../webgpu-inference-kit/src/flash-attention-kernel.js';
 
 function checkAbort(signal) { if (signal?.aborted) throw Object.assign(new Error(String(signal.reason ?? 'generation aborted')), { name: 'AbortError' }); }
 function positive(n, name) { if (!Number.isSafeInteger(n) || n < 1) throw new RangeError(`${name} must be positive`); }
@@ -46,13 +46,13 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>){
  * intermediates/KV are f32 here. Model weights remain packed affine4/group64.
  */
 export class Qwen35TextModel {
-  constructor(device, manifest, { control, onLayer = null, onNorm = null, singleTokenKernel = 'oracle', batchDecode = false } = {}) {
+  constructor(device, manifest, { control, onLayer = null, onNorm = null, singleTokenKernel = 'oracle', batchDecode = false, decodeAttention = 'tiled' } = {}) {
     if (typeof control?.runDuty !== 'function') throw new TypeError('borrowed inference control is required');
     this.layout = qwen35ModelLayout(manifest); this.config = this.layout.config;
     this.device = device; this.manifest = manifest; this.control = control; this.onLayer = onLayer; this.onNorm = onNorm;
     this.weights = new Map(); this.vectors = new Map(); this.pipelines = new Map();
     this.owned = new Set(); this.states = new Set(); this.loaded = false; this.closed = false; this.active = null;
-    this.singleTokenKernel = singleTokenKernel;
+    this.singleTokenKernel = singleTokenKernel; this.decodeAttention = decodeAttention;
     this.batchDecode = batchDecode; this.layerBatchSubmissions = 0;
     this.lifetime = new AbortController();
     this.bindingBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
@@ -67,6 +67,12 @@ export class Qwen35TextModel {
     if (value !== 'oracle' && value !== 'quad') throw new RangeError('unsupported single-token kernel');
     if (this.active || this.loading) throw new Error('cannot change kernel during active model work');
     this._singleTokenKernel = value;
+  }
+  get decodeAttention() { return this._decodeAttention ?? 'tiled'; }
+  set decodeAttention(value) {
+    if (value !== 'tiled' && value !== 'single-query') throw new RangeError('unsupported decode attention');
+    if (this.active || this.loading) throw new Error('cannot change attention during active model work');
+    this._decodeAttention = value;
   }
   get batchDecode() { return this._batchDecode ?? false; }
   set batchDecode(value) {
@@ -284,7 +290,8 @@ export class Qwen35TextModel {
           const p = attentionParams({ tokens, queryHeads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, rotaryDim: c.rotaryDim, pastTokens: state.length, capacity: state.capacity, ropeTheta: c.ropeTheta, epsilon: this.layout.epsilon });
           await this.linear(root + '.self_attn.q_proj', normalized, qp, tokens, ctx); await this.linear(root + '.self_attn.k_proj', normalized, kp, tokens, ctx); await this.linear(root + '.self_attn.v_proj', normalized, vp, tokens, ctx);
           await this.dispatch('attention-prepare', () => kernels.attentionPrepareShader({ headDim: c.headDim }), [qp, kp, vp, this.vectors.get(root + '.self_attn.joined'), q, layer.keys, layer.values], p, [c.queryHeads, tokens, 1], ctx);
-          await this.dispatch('attention', () => createWebGpuTiledFlashAttentionShader({ headDim: c.headDim, causal: true }), [q, layer.keys, layer.values, attention], flashAttentionParams({ queryTokens: tokens, keyTokens: state.length + tokens, heads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, causalOffset: state.length }), [Math.ceil(tokens / 64), c.queryHeads, 1], ctx);
+          const singleQuery = tokens === 1 && this.decodeAttention === 'single-query';
+          await this.dispatch(singleQuery ? 'attention-single-query' : 'attention', () => (singleQuery ? createWebGpuSingleQueryAttentionShader : createWebGpuTiledFlashAttentionShader)({ headDim: c.headDim, causal: true }), [q, layer.keys, layer.values, attention], flashAttentionParams({ queryTokens: tokens, keyTokens: state.length + tokens, heads: c.queryHeads, kvHeads: c.kvHeads, headDim: c.headDim, causalOffset: state.length }), [Math.ceil(tokens / 64), c.queryHeads, 1], ctx);
           await this.dispatch('attention-gate', kernels.attentionGateShader, [attention, qp, gatedAttention], p, [Math.ceil(tokens * qw / 256), 1, 1], ctx);
           await this.linear(root + '.self_attn.o_proj', gatedAttention, update, tokens, ctx);
         }
