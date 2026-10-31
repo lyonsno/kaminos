@@ -27,13 +27,13 @@ fn leafAt(p:vec3<f32>)->u32{
   slot=childSlot(n,oct.x+2u*(oct.y+2u*oct.z));
  }
 }
-fn nearestGas(p:vec3<f32>)->Gas{
- let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));}
+fn nearestPlane(p:vec3<f32>,history:bool)->Gas{
+ let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,select(u.reactant_combustion_c.z,0.0,history)),vec4<f32>(0));}
  let n=bricks[slot];let c=vec3<u32>(clamp(floor((p-n.loPitch.xyz)/n.loPitch.w),vec3<f32>(0),vec3<f32>(3)));
- return hin[slot*64u+localIndex(c)];
+ return hin[slot*64u+localIndex(c)+select(0u,arrayLength(&hin)/2u,history)];
 }
-fn hierarchyGas(p:vec3<f32>)->Gas{
- let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));}
+fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
+ let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,select(u.reactant_combustion_c.z,0.0,history)),vec4<f32>(0));}
  let n=bricks[slot];let q=(p-n.loPitch.xyz)/n.loPitch.w-.5;let base=floor(q);let f=fract(q);var a=vec4<f32>(0);var b=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let pos=n.loPitch.xyz+(base+vec3<f32>(f32(x),f32(y),f32(z))+.5)*n.loPitch.w;
@@ -42,25 +42,41 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
   // bricks must still use ambient outside the physical field.
   let cell=(pos-n.loPitch.xyz)/n.loPitch.w;var value:Gas;
   if(all(cell>=vec3<f32>(0))&&all(cell<vec3<f32>(4))&&all(pos>=u.materialLo.xyz)&&all(pos<u.materialLo.xyz+u.material.xyz*u.material.w)){
-   value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))];
-  }else{value=nearestGas(pos);}
+   value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))+select(0u,arrayLength(&hin)/2u,history)];
+  }else{value=nearestPlane(pos,history);}
   let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;b+=value.b*w.x*w.y*w.z;
  }}}return Gas(a,b);
 }
+fn hierarchyGas(p:vec3<f32>)->Gas{return hierarchyPlane(p,false);}
+fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 @compute @workgroup_size(64) fn migrateBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let r=remaps[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
+ if(any(p<u.materialLo.xyz)||any(p>=u.materialLo.xyz+u.material.xyz*u.material.w)||blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){
+  hout[slot*64u+l]=Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(vec4<f32>(0),vec4<f32>(0));return;
+ }
  if(r.source.x==0xffffffffu){
   // First activation imports the existing evolved world material.
-  hout[slot*64u+l]=gas(p);return;
+  let c=clamp(vec3<i32>(floor((p-u.materialLo.xyz)/u.material.w)),vec3<i32>(0),vec3<i32>(u.material.xyz)-1);
+  let source=u.materialLo.xyz+(vec3<f32>(c)+.5)*u.material.w;
+  let old=gin[idx(c,u.material.xyz)];let history=gin[u32(u.material.x*u.material.y*u.material.z)+idx(c,u.material.xyz)];
+  let remapped=remapMaterial(old,history,source,u.material.w,p,n.loPitch.w);
+  hout[slot*64u+l]=remapped[0];hout[arrayLength(&hout)/2u+slot*64u+l]=remapped[1];return;
  }
  let c=vec3<u32>(clamp(floor((p-r.loPitch.xyz)/r.loPitch.w),vec3<f32>(0),vec3<f32>(3)));
- hout[slot*64u+l]=hin[r.source.x*64u+localIndex(c)];
+ let source=r.loPitch.xyz+(vec3<f32>(c)+.5)*r.loPitch.w;
+ let old=hin[r.source.x*64u+localIndex(c)];let history=hin[arrayLength(&hin)/2u+r.source.x*64u+localIndex(c)];
+ let remapped=remapMaterial(old,history,source,r.loPitch.w,p,n.loPitch.w);
+ hout[slot*64u+l]=remapped[0];hout[arrayLength(&hout)/2u+slot*64u+l]=remapped[1];
 }
 @compute @workgroup_size(64) fn advanceBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
- var r=Gas(vec4<f32>(0),vec4<f32>(0));
- if(materialDonor(p,n.loPitch.w)){r=fineGasAt(p,n.loPitch.w);}else{
-  r=suppliedGas(hierarchyGas(clipped(p,p-velocity(p)*u.time.y)),supplyTexel(materialSupply,2u*(slot*64u+l)));
+ let fraction=fineFraction(p,n.loPitch.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
+ if(fraction>0.0){owned=gasScale(fineGasAt(p,n.loPitch.w),fraction);}
+ var r=owned;
+ if(fraction<1.0){
+  let back=clipped(p,p-velocity(p)*u.time.y);var history=hierarchyGas(back);
+  if(fraction>0.0){history=exteriorHistory(history,hierarchyHistory(back),p,back,n.loPitch.w);}
+  r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
   if(reactantLawOn()){
    let dt=u.time.x;
    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
@@ -78,17 +94,19 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
    let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;
    r.b=vec4<f32>(burned.w/max(dt,1e-6),moments*burnout);
   }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival);r.a.x*=survival;r.a.y*=cooling;}
+  r=gasAdd(gasScale(r,1.0-fraction),owned);
  }
- if(u.bridgeMaterial.w>0.0){let weight=bridgeWeight(p);if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),mix(r.b,upstream.b,weight));}}
+ if(u.bridgeMaterial.w>0.0){let weight=bridgeWeight(p);if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),mix(r.b,upstream.b,weight));owned=Gas(mix(owned.a,upstream.a*fraction,weight),mix(owned.b,upstream.b*fraction,weight));}}
  if(blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){r=Gas(vec4<f32>(0),vec4<f32>(0));}
- hout[slot*64u+l]=r;
+ hout[slot*64u+l]=r;hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(min(owned.a,r.a),min(owned.b,r.b));
 }
 @compute @workgroup_size(64) fn restrictBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
- let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);
+ let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);var ownedA=vec4<f32>(0);var ownedB=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let q=2u*c+vec3<u32>(x,y,z);let oct=q/4u;let child=childSlot(n,oct.x+2u*(oct.y+2u*oct.z));
   let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;b+=r.b*.125;
- }}}hout[slot*64u+l]=Gas(a,b);
+  let owned=hout[arrayLength(&hout)/2u+child*64u+localIndex(q%4u)];ownedA+=owned.a*.125;ownedB+=owned.b*.125;
+ }}}hout[slot*64u+l]=Gas(a,b);hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(ownedA,ownedB);
 }
 @compute @workgroup_size(4,4,4) fn exportBricks(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}
@@ -97,6 +115,7 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
  let root=gid/4u;let slot=root.x+u32(h.base.x)*(root.y+u32(h.base.y)*root.z);
  let r=hin[slot*64u+localIndex(gid%4u)];
  gout[idx(c,u.material.xyz)]=r;
+ gout[u32(u.material.x*u.material.y*u.material.z)+idx(c,u.material.xyz)]=hin[arrayLength(&hin)/2u+slot*64u+localIndex(gid%4u)];
  textureStore(optical,c,vec4<f32>(r.a.xyz,r.b.x));
  textureStore(optical,c+vec3<i32>(0,0,i32(u.material.z)),vec4<f32>(r.b.yzw,0));
  if(u.pressureControl.z>.5){textureStore(exportedGas,c,r.a);}
@@ -132,8 +151,8 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  let current=0,storage=null,pending=true,initialized=false,destroyed=false,reading=false,readback=null,error=null,revision=0,steps=0,latestSignals=new Map(),lastPlan=null,transportClock=0,demandLag=0,diagnostics={levels:[],bricks:[]};
  const buffer=(label,size,usage=S|D|C)=>device.createBuffer({label,size:Math.max(4,size),usage});
  const params=buffer('hierarchy parameters',48,GPUBufferUsage.UNIFORM|D);
- function admission(capacity,options=topology.options){const magnitude=Math.max(1,...plan.min.map(Math.abs),...plan.max.map(Math.abs));if(plan.materialPitch/2**options.maxDetail<magnitude*2**-22)throw Error('Maximum detail exceeds f32 position precision for this world field');const bytes=capacity*64*32;if(!Number.isSafeInteger(bytes)||bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Material pool exceeds GPU storage limits');}
- function makeStorage(capacity){admission(capacity);return {capacity,fields:[buffer('material pool A',capacity*64*32),buffer('material pool B',capacity*64*32)],meta:buffer('material brick topology',capacity*64),remap:buffer('material remapping',capacity*32),demand:buffer('material refinement demand',capacity*48)};}
+ function admission(capacity,options=topology.options){const magnitude=Math.max(1,...plan.min.map(Math.abs),...plan.max.map(Math.abs));if(plan.materialPitch/2**options.maxDetail<magnitude*2**-22)throw Error('Maximum detail exceeds f32 position precision for this world field');const bytes=capacity*64*64;if(!Number.isSafeInteger(bytes)||bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Material pool exceeds GPU storage limits');}
+ function makeStorage(capacity){admission(capacity);return {capacity,fields:[buffer('material pool A',capacity*64*64),buffer('material pool B',capacity*64*64)],meta:buffer('material brick topology',capacity*64),remap:buffer('material remapping',capacity*32),demand:buffer('material refinement demand',capacity*48)};}
  function release(s){if(s)for(const b of [...s.fields,s.meta,s.remap,s.demand])b.destroy();}
  const ownedLists=[];
  function list(nodes){const b=buffer('material brick work',nodes.length*4);device.queue.writeBuffer(b,0,new Uint32Array(nodes.map(n=>n.slot)));ownedLists.push(b);return b;}
@@ -223,10 +242,10 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
   async snapshot(){
    if(!storage)return null;
    const identity={nodes:structuredClone(lastPlan.nodes),steps,revision,dims:[...plan.materialDims],pitch:plan.materialPitch};
-   const b=buffer('material hierarchy diagnostic',storage.fields[current].size,D|GPUBufferUsage.MAP_READ);const e=device.createCommandEncoder();e.copyBufferToBuffer(storage.fields[current],0,b,0,b.size);device.queue.submit([e.finish()]);
+   const b=buffer('material hierarchy diagnostic',storage.fields[current].size/2,D|GPUBufferUsage.MAP_READ);const e=device.createCommandEncoder();e.copyBufferToBuffer(storage.fields[current],0,b,0,b.size);device.queue.submit([e.finish()]);
    try{await b.mapAsync(GPUMapMode.READ);return {...identity,values:Array.from(new Float32Array(b.getMappedRange()))};}finally{b.destroy();}
   },
-  read(){return {identity:'pooled-material-hierarchy-v1',options:structuredClone(topology.options),baseDims:plan.materialDims,steps,revision,allocatedBricks:lastPlan?.nodes.length??0,leafBricks:lastPlan?.leaves.length??0,capacity:storage?.capacity??topology.capacity,estimatedCellWork:lastPlan?.cost??0,materialBytes:(storage?.capacity??topology.capacity)*64*32*2,demandRoute:'asynchronous-per-brick-GPU-reduction',predictionTransportInterval:demandLag,renderMaterialDims:plan.materialDims,error,...diagnostics};},
+  read(){return {identity:'pooled-material-hierarchy-v1',options:structuredClone(topology.options),baseDims:plan.materialDims,steps,revision,allocatedBricks:lastPlan?.nodes.length??0,leafBricks:lastPlan?.leaves.length??0,capacity:storage?.capacity??topology.capacity,estimatedCellWork:lastPlan?.cost??0,materialBytes:(storage?.capacity??topology.capacity)*64*64*2,demandRoute:'asynchronous-per-brick-GPU-reduction',predictionTransportInterval:demandLag,renderMaterialDims:plan.materialDims,error,...diagnostics};},
   destroy(){sourceAtlas.destroy();destroyed=true;release(storage);params.destroy();for(const b of ownedLists)b.destroy();groups.clear();if(!reading)readback?.destroy();readback=null;},
  };
 }

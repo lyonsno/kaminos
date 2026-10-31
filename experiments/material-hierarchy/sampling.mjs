@@ -64,12 +64,12 @@ export async function samplingParity(device){
   const buffer=(data,usage)=>{const b=device.createBuffer({size:typeof data==='number'?data:data.byteLength,usage});owned.push(b);if(typeof data!=='number')device.queue.writeBuffer(b,0,data);return b;};
   const S=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST,U=GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST;
   for(const {capacity,...spec} of samplingFixtures()){
-   const meta=new ArrayBuffer(capacity*64),mf=new Float32Array(meta),mi=new Uint32Array(meta),pool=Float32Array.from({length:capacity*64*8},(_,i)=>((i*37)%101)/31),points=spec.points;
+   const meta=new ArrayBuffer(capacity*64),mf=new Float32Array(meta),mi=new Uint32Array(meta),pool=Float32Array.from({length:capacity*64*16},(_,i)=>i<capacity*64*8?((i*37)%101)/31:0),points=spec.points;
    for(const n of spec.nodes){
     const pitch=spec.pitch/2**n.level,lo=n.c.map((v,a)=>spec.min[a]+v*4*pitch);
     mf.set([...lo,pitch],n.slot*16);mi.set(n.childSlots??Array(8).fill(0xffffffff),n.slot*16+4);
    }
-   const params=new Float32Array(80);params.set([...spec.dims,spec.pitch],4);params.set([...spec.min,0],44);params[34]=1;
+   const params=new Float32Array(88);params.set([...spec.dims,spec.pitch],4);params.set([...spec.min,0],44);params[34]=1;
    const h=new Float32Array([...spec.dims.map(n=>Math.ceil(n/4)),spec.pitch,...spec.min,0,0,0,0,0]);
    const inputs=[buffer(params,U),buffer(meta,S),buffer(pool,S),buffer(h,U),buffer(new Float32Array(points.flatMap(p=>[...p,0])),S)],bytes=points.length*64;
    const output=buffer(bytes,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),readback=buffer(bytes,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST);

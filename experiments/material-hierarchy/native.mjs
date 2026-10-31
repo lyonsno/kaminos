@@ -42,7 +42,7 @@ export async function run(){
    await device.queue.onSubmittedWorkDone();await new Promise(r=>setTimeout(r,0));
   }
   result.reference=[];
-  for(const field of pair){const resources=field.materialResources(),buffer=resources.buffers[resources.index];const copy=device.createBuffer({size:buffer.size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,copy,0,buffer.size);device.queue.submit([encoder.finish()]);await copy.mapAsync(GPUMapMode.READ);result.reference.push(Array.from(new Float32Array(copy.getMappedRange())));copy.destroy();}
+  for(const field of pair){const resources=field.materialResources(),buffer=resources.buffers[resources.index],size=resources.gasByteLength;const copy=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,copy,0,size);device.queue.submit([encoder.finish()]);await copy.mapAsync(GPUMapMode.READ);result.reference.push(Array.from(new Float32Array(copy.getMappedRange())));copy.destroy();}
   result.moving=await movingPocket(device,fine,reaction);
   result.movingSummary=validateMovingEvidence(result.moving);
   const validation=await device.popErrorScope();if(validation)errors.push(validation.message);

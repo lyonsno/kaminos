@@ -58,9 +58,9 @@ export async function run(){
     const encoder=device.createCommandEncoder();
     c.receipt=world.encode(encoder,{fineBuffer:fine,reactionTexture:reaction,fineDims:f.dims,transform:f.transform,
      time:{dtScale:0,backtraceScale:1},iterations:0,buoyancy:0,sources:step?{count:0,parcels:[],supports:[]}:f.sources});
-    const r=world.materialResources(),buffer=r.buffers[r.index];
-    const copy=device.createBuffer({size:buffer.size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
-    encoder.copyBufferToBuffer(buffer,0,copy,0,buffer.size);device.queue.submit([encoder.finish()]);
+    const r=world.materialResources(),buffer=r.buffers[r.index],size=f.plan.materialCells*32;
+    const copy=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
+    encoder.copyBufferToBuffer(buffer,0,copy,0,size);device.queue.submit([encoder.finish()]);
     try{await copy.mapAsync(GPUMapMode.READ);c.frames.push(Array.from(new Float32Array(copy.getMappedRange())));}finally{copy.destroy();}
    }
   }
