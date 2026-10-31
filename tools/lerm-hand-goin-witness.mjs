@@ -6,6 +6,7 @@ import {once} from 'node:events';
 import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {bindMlsWitnessSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
+import {waitForLermScene} from './lerm-witness-startup.mjs';
 const {values:a}=parseArgs({options:Object.fromEntries(['output','browser','playwright','capture','setup','python','models','joint-regressor','port'].map(k=>[k,{type:'string'}]))});
 const out=path.resolve(a.output);fs.mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'input',argv:process.argv,pageErrors:[],consoleErrors:[],observations:[],browserClosed:false,serverStopped:false};
@@ -17,7 +18,8 @@ try{
  report.setup=JSON.parse(fs.readFileSync(a.setup));report.fixture='retained real camera image; controlled world hand placement, not live human aiming';
  const url=new URL(`http://127.0.0.1:${a.port}/`);url.searchParams.set('workspace','workbench');url.searchParams.set('experiment','lerms/hand-goin');url.searchParams.set('experiment_inputs',JSON.stringify(report.setup));report.url=url.href;
  const log=fs.openSync(out+'/server.log','w');
- server=spawn(a.python,['-u','tools/hand_browser_server.py','--port',a.port,'--models',a.models,'--joint-regressor',a['joint-regressor'],'--output',out+'/server'],{cwd:process.cwd(),stdio:['ignore',log,log]});fs.closeSync(log);
+ report.catalogue='experiments/lerms';report.startupWait={timeoutMs:0,completion:'actual experiment activation',failure:'explicit activation error or browser failure'};
+ server=spawn(a.python,['-u','tools/hand_browser_server.py','--port',a.port,'--models',a.models,'--joint-regressor',a['joint-regressor'],'--output',out+'/server'],{cwd:process.cwd(),env:{...process.env,KAMINOS_EXPERIMENTS_DIR:report.catalogue},stdio:['ignore',log,log]});fs.closeSync(log);
  report.serverPid=server.pid;report.phase='server';save();
  while(true){if(server.exitCode!==null)throw Error('Owned asset server exited');let response;try{response=await fetch(new URL('/api/runtime-config',url));}catch{}
    if(response?.ok){report.preflight=await response.json();assert.equal(report.preflight.source?.repoRoot,fs.realpathSync(process.cwd()),'Wrong served source root');break;}await new Promise(r=>setTimeout(r,100));}
@@ -33,7 +35,7 @@ try{
    const draw=()=>{if(stream.getTracks().some(t=>t.readyState==='live')){ctx.drawImage(image,0,0);requestAnimationFrame(draw);}};draw();return stream;
  };});
  report.phase='load';save();await page.goto(url.href);
- await page.waitForFunction(()=>{const x=window.kaminosWorkbenchExperiments?.state();if(document.body.innerText.includes('Experiments unavailable'))throw Error(document.body.innerText);return x?.id==='lerms/hand-goin';});
+ await waitForLermScene(page);
  const invoke=(name,input)=>page.evaluate(async({name,input})=>{const result=await window.kaminosWorkbenchExperiments.invoke(name,input);return ArrayBuffer.isView(result)?Array.from(result):result;},{name,input});
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
  const captureState=async name=>{const state=await read();report.observations.push({name,state});await page.screenshot({path:out+'/'+name+'.png'});save();return state;};
