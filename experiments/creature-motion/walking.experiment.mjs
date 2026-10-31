@@ -235,7 +235,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(()=>reachEdit?.dispose());attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(()=>presentation?.dispose());attempt(()=>reachEdit?.dispose());attempt(()=>workspace?.dispose());attempt(unsubscribe);attempt(releaseEncounter);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -361,6 +361,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
   };
   const operations={
+   attachmentHeatmap:operation('attachmentHeatmap',input=>{reachEdit.heatmap(input?.visible);return read();}),
    limbAttachmentReach:operation('limbAttachmentReach',async input=>{await reachEdit.set(input?.value);return read();}),
    action:operation('action',async input=>{
     if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
@@ -449,7 +450,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();
-   presentation=mountProperties({document,read,invoke,
+   presentation=mountProperties({document,read,invoke,attachmentEdit:reachEdit,
     save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      await checkRecipeView(recipe.view,session.readView());await prepareWalkingSetup(recipe,{loadSources});

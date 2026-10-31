@@ -33,6 +33,26 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
  const group=new THREE.Group();group.name='Creature · generated walking';
  let geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();
  const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.kaminosDynamicGeometry=true;group.add(mesh);
+ let attachmentHeatmap=false,bodyMaterial=null,heatmapMaterial=null;
+ const influenceColors=[new THREE.Color('#286ce0'),new THREE.Color('#f7ad35'),new THREE.Color('#858585')].map(color=>color.toArray());
+ function paintAttachment(target,data){
+  const {body,limb}=limbAttachmentGroups(data.manifest),n=channels.length,colors=new Float32Array(data.manifest.vertices*3);
+  for(let v=0;v<data.manifest.vertices;v++){
+   const base=v*n;let b=0,l=0,total=0;
+   for(const i of body)b+=data.weights[base+i];for(const i of limb)l+=data.weights[base+i];for(let i=0;i<n;i++)total+=data.weights[base+i];
+   const shares=total>0?[b/total,l/total,Math.max(0,total-b-l)/total]:[0,0,1];
+   for(let c=0;c<3;c++)colors[v*3+c]=shares[0]*influenceColors[0][c]+shares[1]*influenceColors[1][c]+shares[2]*influenceColors[2][c];
+  }
+  target.setAttribute('color',new THREE.BufferAttribute(colors,3));
+ }
+ function setAttachmentHeatmap(visible){
+  active();if(typeof visible!=='boolean')throw Error('Boolean attachment heatmap state required');if(visible===attachmentHeatmap)return runtime.read();
+  if(visible){
+   paintAttachment(geometry,skin);bodyMaterial=mesh.material;
+   heatmapMaterial??=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,toneMapped:false});mesh.material=heatmapMaterial;
+  }else{mesh.material=bodyMaterial;bodyMaterial=null;geometry.deleteAttribute('color');}
+  attachmentHeatmap=visible;return runtime.read();
+ }
  const bones=new Map(),inverseRest=new Map();
  for(const spec of manifest.bones){const bone=new THREE.Bone();bone.name=spec.name;bones.set(spec.name,bone);inverseRest.set(spec.name,new THREE.Matrix4().set(...spec.restMatrix.flat()).invert());}
  for(const spec of manifest.bones){
@@ -94,6 +114,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   try{
    next.setAttribute('position',new THREE.Float32BufferAttribute(result,3));next.setIndex(new THREE.BufferAttribute(candidate.triangles,1));
    next.computeVertexNormals();next.computeBoundingSphere();next.computeBoundingBox();
+   if(attachmentHeatmap)paintAttachment(next,candidate);
    nextDeformer=makeDeformer(next,candidate);nextDeformer?.setRunning?.(physicalRunning);nextDeformer?.update(matrices);
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
@@ -110,7 +131,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   active();checkLimbAttachmentReach(value);if(value===limbAttachmentReach)return runtime.read();
   replaceBoundSkin(withLimbAttachmentReach(originalSkin,value));limbAttachmentReach=value;return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,setLimbAttachmentReach,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',binding:{limbAttachmentReach,supported:bindingSupported},deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,setLimbAttachmentReach,setAttachmentHeatmap,syncCpuGeometry,flesh:{advance:(...args)=>deformer?.advance?.(...args),setRunning:value=>{if(typeof value!=='boolean')throw Error('Boolean flesh run state required');physicalRunning=value;deformer?.setRunning?.(value);},setEnabled:value=>deformer?.setEnabled?.(value),setContacts:value=>deformer?.setContacts?.(value),capsules:()=>deformer?.capsules?.()??[],snapshot:()=>deformer?.snapshot?.(),read:()=>deformer?.read().flesh??null},async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',binding:{limbAttachmentReach,supported:bindingSupported,heatmap:attachmentHeatmap},deformation:deformer?.read()??{backend:'cpu-reference',rotationSigns},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;if(attachmentHeatmap)setAttachmentHeatmap(false);heatmapMaterial?.dispose();disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  // Proposal query: compute only small support geometry from the given pose.
  // No live Bone, attention state, skin buffer, or physical state is touched.
  runtime.flesh.project=pose=>{

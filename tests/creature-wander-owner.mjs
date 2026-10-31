@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
-class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(k,v){this[k]=v;}remove(){this.removed=true;}}
-const document={createElement:()=>new Element(),getElementById:()=>null};
+import {Element,controlDocument} from './helpers/control-document.mjs';
+const document=controlDocument();
 const scene=new THREE.Scene();let callback=null,registered=0;
 const session={async attach(root){scene.add(root);return {id:'owned-'+(++registered),root,owned:true};},onFrame(fn){assert.equal(callback,null,'Wander must reuse one actual shared frame subscription');callback=fn;return ()=>callback=null;},redraw(){},setView(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),async dispose(){scene.clear();callback=null;}};
 const host={controls:{document},scene:{open:async()=>session,refreshPresentation(){}}};

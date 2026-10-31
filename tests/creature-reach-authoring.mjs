@@ -4,13 +4,13 @@ import * as THREE from '../lib/three.core.js';
 import {createPosedSkeleton} from '../experiments/creature-motion/posed-skeleton.experiment.mjs';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
-class Element{constructor(){this.children=[];this.style={};this.value='';}append(...x){this.children.push(...x);}setAttribute(k,v){this[k]=String(v);}remove(){}}
+import {Element,controlDocument} from './helpers/control-document.mjs';
 const all=n=>[n,...n.children.flatMap(all)];
 const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
 const bones=[{name:'pelvis',parent:null,restMatrix:I},{name:'forelimb-left-shoulder',parent:'pelvis',restMatrix:I}];
 const data={manifest:{bones,channels:['fixed',...bones.map(b=>b.name)],vertices:3,triangles:1},rest:new Float32Array([1,0,0,0,1,0,1,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,.5,.5,0,.5,.5,0,.5,.5]),source:{caseSha256:'a'.repeat(64),motionSha256:'b'.repeat(64),frameSha256:'c'.repeat(64)}};
 function fixture(){const edits=createSceneEdits({read:()=>null,write(){}}),scene=new THREE.Scene();let properties;
- const document={createElement:()=>new Element(),getElementById:()=>null,defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}};
+ const document=controlDocument();Object.assign(document.defaultView,{kaminosSceneEdits:edits,kaminosSelection:{set(){}}});
  const session={attach:async root=>{scene.add(root);return {id:root.uuid,root};},redraw(){},setView(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),dispose:async()=>scene.clear()};
  const host={controls:{document,mountObject:x=>(properties=x.properties,{dispose(){}}),components:{register:()=>({changed:f=>f(),dispose(){}})}},scene:{open:async()=>session,refreshPresentation(){}}};
  return {host,edits,document,properties:()=>properties};}
@@ -19,8 +19,20 @@ try{
  assert.equal(typeof entry.operations.limbAttachmentReach,'function','native creature posing must expose a saved, undoable reach operation');
  entry.mount({root:new Element(),document:f.document,invoke:(name,input)=>entry.operations[name](input)});
  const control=all(f.properties()).find(n=>n['aria-label']==='Limb attachment reach');assert(control,'selected creature inspector owns the property');
- control.value='2';await control.onchange();assert.equal(entry.read().binding.limbAttachmentReach,2);
+ control.focus();control.value='2';control.fire('input');assert.equal(entry.read().binding.heatmap,true);control.fire('change');control.blur();assert.equal(entry.read().binding.heatmap,false);assert.equal(entry.read().binding.limbAttachmentReach,2);
  await f.edits.undo();assert.equal(entry.read().binding.limbAttachmentReach,0);await f.edits.redo();assert.equal(entry.read().binding.limbAttachmentReach,2);
+ // Drag updates the live binding and overlay, with one shared undo transaction.
+ const before=f.edits.state().undoCount;
+ control.fire('pointerdown',{button:0,pointerId:1,clientX:0,clientY:0});
+ control.fire('pointermove',{pointerId:1,clientX:20,clientY:0});
+ assert.equal(entry.read().binding.limbAttachmentReach,2.5);assert.equal(entry.read().binding.heatmap,true);assert.equal(f.edits.state().undoCount,before);
+ control.fire('pointermove',{pointerId:1,clientX:40,clientY:0,shiftKey:true});assert.equal(entry.read().binding.limbAttachmentReach,2.55);
+ control.fire('pointerup',{pointerId:1});assert.equal(f.edits.state().undoCount,before+1);assert.equal(entry.read().binding.heatmap,false);
+ f.edits.undo();assert.equal(entry.read().binding.limbAttachmentReach,2);
+ // Blank intermediate input is necessary to type a replacement, including a minus sign.
+ control.focus();control.value='';control.fire('input');assert.equal(control.value,'','typing must allow a transient empty value');assert.equal(entry.read().binding.limbAttachmentReach,2);
+ control.value='-3';control.fire('input');assert.equal(entry.read().binding.limbAttachmentReach,-3);control.fire('pointercancel');control.blur();assert.equal(entry.read().binding.limbAttachmentReach,2);assert.equal(f.edits.state().undoCount,before);
+ const keep=all(f.properties()).find(n=>n['aria-label']==='Keep attachment heatmap visible');keep.checked=true;keep.fire('change');assert.equal(entry.read().binding.heatmap,true);control.focus();control.value='3';control.fire('input');control.fire('pointercancel');control.blur();assert.equal(entry.read().binding.heatmap,true);keep.checked=false;keep.fire('change');assert.equal(entry.read().binding.heatmap,false);
  const saved=JSON.parse(JSON.stringify(entry.operations.snapshot()));assert.equal(saved.limbAttachmentReach,2);
  await entry.operations.limbAttachmentReach({value:0});await entry.operations.restore(saved);assert.equal(entry.read().binding.limbAttachmentReach,2);
  const bad={...saved,caseSha256:'f'.repeat(64),limbAttachmentReach:1};await assert.rejects(async()=>entry.operations.restore(bad));assert.equal(entry.read().binding.limbAttachmentReach,2);

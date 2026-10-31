@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 let module={};try{module=await import('../experiments/creature-motion/walking.experiment.mjs');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
 assert.equal(module.default?.id,'marionette/walking-creature','full-body walking is not a discoverable shared-host owner experiment');
-class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){this.removed=true;}}
-const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene();
+import {Element,controlDocument} from './helpers/control-document.mjs';
+const document=controlDocument(),scene=new THREE.Scene();
 let frameCallback=null,attached=0,closed=0,redrawFailure=false;
 const session={async attach(root){scene.add(root);attached++;return {id:'actual-owner-root',root,owned:true};},onFrame(fn){assert.equal(frameCallback,null,'one shared frame subscription');frameCallback=fn;return ()=>{frameCallback=null;};},redraw(){if(redrawFailure)throw Error('host redraw failed');},setView(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),async dispose(){closed++;scene.clear();frameCallback=null;}};
 const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];

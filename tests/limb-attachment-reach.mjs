@@ -21,5 +21,22 @@ runtime.setLimbAttachmentReach(Math.log(3));assert.deepEqual(seen.at(-1),w,'ever
 runtime.replaceSkin({...data,weights:new Float32Array(original)});assert.deepEqual(seen.at(-1),w,'cast exchange reapplies authored reach');
 runtime.setLimbAttachmentReach(0);assert.deepEqual(seen.at(-1),original);assert.deepEqual(data.weights,original);assert.deepEqual(runtime.syncCpuGeometry().attributes.position.array,before);assert.equal(runtime.bones.get('arm').rotation.z,Math.PI/2);
 const count=seen.length;runtime.setLimbAttachmentReach(0);assert.equal(seen.length,count,'unchanged property does not rebuild skin');
-runtime.dispose();peer.dispose();assert.throws(()=>runtime.setLimbAttachmentReach(1),/disposed/);
+const material=runtime.mesh.material,restWeights=seen.at(-1).slice();
+assert.equal(typeof runtime.setAttachmentHeatmap,'function','live attachment weights must be inspectable on the posed surface');
+runtime.setAttachmentHeatmap(true);
+assert.equal(runtime.read().binding.heatmap,true);assert.equal(runtime.mesh.material.vertexColors,true);
+assert.notEqual(runtime.mesh.material,material);
+const colors=runtime.mesh.geometry.getAttribute('color').array.slice();
+assert.equal(colors.length,9);assert(colors.every(Number.isFinite));
+const blue=new THREE.Color('#286ce0').toArray(),amber=new THREE.Color('#f7ad35').toArray(),gray=new THREE.Color('#858585').toArray();
+for(let c=0;c<3;c++){near(colors[c],.6*blue[c]+.2*amber[c]+.2*gray[c]);near(colors[6+c],blue[c]);}
+runtime.setLimbAttachmentReach(Math.log(3));
+const changedColors=runtime.mesh.geometry.getAttribute('color').array.slice();
+assert.notDeepEqual(changedColors.slice(0,6),colors.slice(0,6),'colors track the effective uploaded weights');
+assert.deepEqual(changedColors.slice(6),colors.slice(6),'unaffected body-only vertex keeps its color');
+assert.deepEqual(data.weights,original,'visualization must not edit source weights');
+runtime.setLimbAttachmentReach(0);assert.deepEqual(runtime.mesh.geometry.getAttribute('color').array,colors);
+runtime.replaceSkin({...data,weights:original.slice()});assert.deepEqual(runtime.mesh.geometry.getAttribute('color').array,colors,'skin exchange refreshes the overlay');
+runtime.setAttachmentHeatmap(false);assert.equal(runtime.mesh.material,material);assert.equal(runtime.read().binding.heatmap,false);assert.deepEqual(seen.at(-1),restWeights);
+let bodyDisposed=0,heatmapDisposed=0;material.addEventListener('dispose',()=>bodyDisposed++);runtime.setAttachmentHeatmap(true);runtime.mesh.material.addEventListener('dispose',()=>heatmapDisposed++);runtime.dispose();runtime.dispose();assert.equal(bodyDisposed,1);assert.equal(heatmapDisposed,1);peer.dispose();assert.throws(()=>runtime.setLimbAttachmentReach(1),/disposed/);
 console.log('Limb reach changes live weights and held geometry, preserves unrelated shares, restores exactly and remains per creature');

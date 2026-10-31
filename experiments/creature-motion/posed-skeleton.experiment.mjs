@@ -54,6 +54,7 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSourc
   unsubscribe=edits.subscribe(()=>{if(!disposed){drawLines();putProxy();refresh();}});
   const operations={
    async limbAttachmentReach({value}){active();await reachEdit.set(value);record({kind:'creature.attachment-reach',value});return read();},
+   attachmentHeatmap({visible}){active();reachEdit.heatmap(visible);return read();},
    select({joint}){active();if(!runtime.bones.has(joint))throw Error('Unknown joint');seat.changed(()=>{selected=joint;changed();});return read();},
    // Agent comparison operations use the same live Bones; viewport transforms remain native.
    rotate({joint=selected,degrees}){active();model.rotate(joint,degrees);selected=joint;changed();return read();},
@@ -70,14 +71,14 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSourc
   return {read,operations,mount({root:panel,document,invoke}){
    panel.textContent='Select the creature. Tab edits its pose; click a cyan joint, then use the viewport rotate or move tool. F frames the selected joint.';
    const properties=document.createElement('section'),heading=document.createElement('h3'),status=document.createElement('p');heading.textContent='Skeleton pose';properties.style.cssText='font:12px system-ui;line-height:1.5';properties.append(heading,status);
-   reachProperty=mountLimbAttachmentReach({document,read:()=>runtime.read().binding,invoke:input=>invoke('limbAttachmentReach',input)});properties.append(reachProperty.node);
+   reachProperty=mountLimbAttachmentReach({document,edit:reachEdit,read:()=>runtime.read().binding,invoke:input=>invoke('limbAttachmentReach',input)});properties.append(reachProperty.node);
    const error=document.createElement('p');error.setAttribute('role','alert');
    const button=(text,work)=>{const b=document.createElement('button');b.type='button';b.style.cssText='padding:7px 9px;margin:3px 5px 3px 0;background:#303b41;color:#d9e2e5;border:1px solid #56666d;border-radius:4px;cursor:pointer';b.textContent=text;b.onclick=()=>Promise.resolve().then(work).catch(e=>error.textContent=e.message);properties.append(b);};
    button('Reset joint',()=>invoke('resetJoint'));button('Rest pose',()=>invoke('reset'));if(motion)button('Held motion pose',()=>invoke('base',{kind:'motion',frame:20}));
    button('Save pose…',async()=>{const value=await invoke('snapshot'),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)+'\n'],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='creature-pose.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
    const file=document.createElement('input');file.type='file';file.accept='.json,application/json';file.hidden=true;file.setAttribute('aria-label','Open creature pose');file.onchange=async()=>{try{if(file.files?.[0])await invoke('restore',JSON.parse(await file.files[0].text()));}catch(e){error.textContent=e.message;}finally{file.value='';}};button('Open pose…',()=>file.click());properties.append(file,error);
    refresh=()=>{reachProperty.update();status.textContent=editing?selected.replaceAll('-',' ')+' · native Move / Rotate · Undo / Redo':'Tab enters Pose Mode. Pose edits preserve the binding and rest skeleton.';};controls=host.controls.mountObject({asset,properties});refresh();
-  },async dispose(){if(disposed)return;seat?.dispose();unsubscribe?.();reachEdit?.dispose();reachProperty?.dispose();edits.discard(e=>[target,whole,asset.id,floorAsset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);controls?.dispose();proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime.dispose();floor.geometry.dispose();floor.material.dispose();}};
- }catch(error){seat?.dispose();unsubscribe?.();reachEdit?.dispose();reachProperty?.dispose();edits.discard(e=>[target,whole,asset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime?.dispose();floor?.geometry.dispose();floor?.material.dispose();throw error;}
+  },async dispose(){if(disposed)return;seat?.dispose();unsubscribe?.();reachProperty?.dispose();reachEdit?.dispose();edits.discard(e=>[target,whole,asset.id,floorAsset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);controls?.dispose();proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime.dispose();floor.geometry.dispose();floor.material.dispose();}};
+ }catch(error){seat?.dispose();unsubscribe?.();reachProperty?.dispose();reachEdit?.dispose();edits.discard(e=>[target,whole,asset?.id].includes(e.id));edits.unregister(target);edits.unregister(whole);proxy.removeFromParent();restoreGround();disposed=true;await session.dispose();runtime?.dispose();floor?.geometry.dispose();floor?.material.dispose();throw error;}
 }
 export default {id:'marionette/posed-skeleton',title:'Creature · pose skeleton',create:createPosedSkeleton};

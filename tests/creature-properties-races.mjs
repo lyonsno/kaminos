@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {openExperiment} from '../workbench-experiments.mjs';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
-class Element{constructor(){this.children=[];this.style={};this.value='';}append(...x){this.children.push(...x);}setAttribute(k,v){this[k]=String(v);}remove(){this.removed=true;}}
+import {Element,controlDocument} from './helpers/control-document.mjs';
 const nodes=n=>[n,...n.children.flatMap(nodes)];
 async function fixture(){
- const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene();let seating;
+ const document=controlDocument(),scene=new THREE.Scene();let seating;
  const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
  const skin=sha=>({manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),source:{caseSha256:sha}});
  const heavy='a'.repeat(64),lean='d'.repeat(64),choices=[{cast:'heavy',label:'Heavy',attachment:'distributed',case:'heavy',case_sha256:heavy},{cast:'lean',label:'Lean',attachment:'distributed',case:'lean',case_sha256:lean}];

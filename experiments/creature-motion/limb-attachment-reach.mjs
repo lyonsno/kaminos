@@ -1,3 +1,4 @@
+import {installRelativeNumberDrag,installSceneControlHistory} from '../../scene-control-history.mjs';
 // Authored offset of limb/body log odds, not sharpening of every influence.
 // Unknown/head/tail/fixed channels keep their original share. Within each of
 // the two groups relative influences stay intact, including left/right limbs.
@@ -39,16 +40,26 @@ export function withLimbAttachmentReach(skin,value){
 }
 
 // Same native property in the posed-skeleton and walking-creature inspectors.
-export function mountLimbAttachmentReach({document,read,invoke}){
- const node=document.createElement('label');node.style.cssText='display:grid;gap:5px;margin:10px 0';
+export function mountLimbAttachmentReach({document,read,invoke,edit}){
+ const node=document.createElement('section');node.style.cssText='display:grid;gap:5px;margin:10px 0';
+ const row=document.createElement('label');row.className='slider-row';row.style.cssText='display:grid;gap:5px';
  const title=document.createElement('span');title.textContent='Limb attachment reach';
- const input=document.createElement('input');input.type='number';input.step='0.25';input.setAttribute('aria-label','Limb attachment reach');input.style.cssText='width:100%;box-sizing:border-box;background:#292e32;color:inherit;border:1px solid #505d64;padding:7px;border-radius:4px';
+ const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.setAttribute('aria-label','Limb attachment reach');input.style.cssText='width:100%;box-sizing:border-box';row.append(title,input);
  const note=document.createElement('small');note.textContent='0 keeps the original binding. Increase to carry more surface with the limbs; decrease to keep more with the body.';
- const error=document.createElement('span');error.setAttribute('role','alert');node.append(title,input,note,error);
+ const keepLabel=document.createElement('label'),keep=document.createElement('input');keep.type='checkbox';keep.setAttribute('aria-label','Keep attachment heatmap visible');keepLabel.style.cssText='display:flex;gap:6px;align-items:center';const keepText=document.createElement('span');keepText.textContent='Keep heatmap visible';keepLabel.append(keep,keepText);keepLabel.hidden=!edit;
+ const legend=document.createElement('small');legend.setAttribute('aria-label','Attachment influence legend');legend.textContent='Blue: body · Amber: limbs · Gray: other influences';legend.style.cssText='padding:6px;border-left:3px solid #f7ad35';
+ const error=document.createElement('span');error.setAttribute('role','alert');node.append(row,note,keepLabel,legend,error);
  let disposed=false;
- const update=()=>{if(disposed)return;const state=read();node.hidden=!state?.supported;if(document.activeElement!==input)input.value=String(state?.limbAttachmentReach??0);};
- input.onchange=async()=>{try{if(!input.value.trim())throw Error('Enter a finite attachment reach');await invoke({value:checkLimbAttachmentReach(Number(input.value))});error.textContent='';}catch(e){error.textContent=e.message;}finally{if(!disposed){input.value=String(read()?.limbAttachmentReach??0);update();}}};
- update();return {node,update,dispose(){disposed=true;input.onchange=null;node.remove();}};
+ const editing=()=>Boolean(edit&&edit.edits?.state().active?.id===edit.id);
+ const update=()=>{if(disposed)return;const state=read();node.hidden=!state?.supported;legend.hidden=!state?.heatmap;if(document.activeElement!==input||!editing())input.value=String(state?.limbAttachmentReach??0);};
+ const show=()=>{edit?.heatmap(Boolean(read()?.supported&&(keep.checked||editing())));update();};
+ const fail=e=>{error.textContent=e.message;input.value=String(read()?.limbAttachmentReach??0);};
+ const history=edit?.edits?installSceneControlHistory({controls:[input],edits:edit.edits,id:edit.id,label:'Change limb attachment reach',onError:fail}):null;
+ const scrub=installRelativeNumberDrag({input,grip:title,step:.025});
+ const preview=async()=>{try{if(!input.value.trim()){error.textContent='';return;}const value=checkLimbAttachmentReach(Number(input.value));if(history){if(!editing())return;edit.edits.preview({value});}else await invoke({value});error.textContent='';}catch(e){fail(e);}};
+ input.addEventListener('input',preview);keep.addEventListener('change',show);
+ const unsubscribe=edit?.edits?.subscribe(()=>{if(!editing())scrub.stop();show();});
+ update();return {node,update,dispose(){if(disposed)return;history?.dispose();unsubscribe?.();scrub.dispose();edit?.heatmap(false);disposed=true;input.removeEventListener('input',preview);keep.removeEventListener('change',show);node.remove();}};
 }
 
 export function registerLimbAttachmentReach({edits,runtime,changed=()=>{}}){
@@ -56,5 +67,5 @@ export function registerLimbAttachmentReach({edits,runtime,changed=()=>{}}){
  const check=state=>{const value=checkLimbAttachmentReach(state.value);if(value!==0&&!runtime.read().binding.supported)throw Error('Limb attachment reach requires mapped limb and body bones');return {value};};
  const write=state=>{runtime.setLimbAttachmentReach(state.value);changed();};
  edits?.register(id,{read:()=>({value:runtime.read().binding.limbAttachmentReach}),check,write});
- return {async set(value){const state=check({value});if(edits)await edits.applySettled(id,state,'Change limb attachment reach');else write(state);},dispose(){edits?.discard(e=>e.id===id);edits?.unregister(id);}};
+ return {id,edits,heatmap(value){if(runtime.read().binding.heatmap!==value){runtime.setAttachmentHeatmap(value);changed();}},async set(value){const state=check({value});if(edits)await edits.applySettled(id,state,'Change limb attachment reach');else write(state);},dispose(){edits?.discard(e=>e.id===id);edits?.unregister(id);}};
 }

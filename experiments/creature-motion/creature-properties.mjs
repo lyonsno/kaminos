@@ -1,12 +1,12 @@
 import {mountLimbAttachmentReach} from './limb-attachment-reach.mjs';
 import {mountPlaybackControls} from '../../playback-controls.mjs';
 
-export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null}) {
+export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null,attachmentEdit}) {
  const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const properties=el('section');properties.className='creature-properties';
  const style=el('style',`.creature-properties{display:grid;gap:12px;border-top:1px solid #41494e;padding-top:12px;margin-top:8px;color:#d9e2e5;font:12px system-ui}.creature-properties[hidden]{display:none}.creature-properties h3{margin:0}.creature-properties label{display:grid;gap:5px}.creature-properties select{width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #505d64;border-radius:4px}.creature-properties details{font-size:11px}.creature-properties details>div{display:grid;gap:10px;margin-top:10px}.creature-properties button{padding:6px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.creature-properties [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}.creature-properties .creature-identity{font:10px ui-monospace,monospace;overflow-wrap:anywhere;color:#95a7ad}.scene-owner-playback{position:absolute;bottom:0;left:0;right:0;z-index:35}.creature-properties input[type=file]{max-width:100%}`);
  properties.append(style,el('h3','Creature'));
- const reach=mountLimbAttachmentReach({document,read:()=>read().skin?.binding,invoke:input=>invoke('limbAttachmentReach',input)});properties.append(reach.node);
+ const reach=mountLimbAttachmentReach({document,edit:attachmentEdit,read:()=>read().skin?.binding,invoke:input=>invoke('limbAttachmentReach',input)});properties.append(reach.node);
  const error=el('div');error.setAttribute('role','alert');error.setAttribute('aria-label','Creature setup error');error.textContent='';
  const select=(name,items,parent=properties)=>{const label=el('label',name),control=el('select');control.setAttribute('aria-label','Creature '+name.toLowerCase());for(const [value,text]of items){const option=el('option',text);option.value=value;control.append(option);}label.append(control);parent.append(label);return control;};
  const action=select('Action',[['preview','Motion preview'],['wander','Wander here']]);
