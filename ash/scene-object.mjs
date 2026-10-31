@@ -48,8 +48,8 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,onEr
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
    try{patch.step(null,source());return true;}catch(error){failure=error.message;onError(failure);return false;}
   },
-  set(patchSettings){check();const next=checkedAshSettings({...settings,...patchSettings});
-   for(const key of ['width','depth','height','cellSize','initialDepth','checkpoint'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Field dimensions and initial layer belong to creation; add a new field to change its lattice without deleting retained ash');
+  set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
+   for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Field dimensions and initial layer belong to creation; add a new field to change its lattice without deleting retained ash');
    settings=next;sync();return api.read();
   },
   async checkpoint(){return locked(async()=>{const state=await patch.snapshot();settings={...settings,checkpoint:state};sync();return structuredClone(settings);});},
