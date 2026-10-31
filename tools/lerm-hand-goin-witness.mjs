@@ -6,7 +6,7 @@ import {once} from 'node:events';
 import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {bindMlsWitnessSource,MLS_WITNESS_FILES} from './mls-witness-source.mjs';
-import {waitForLermScene} from './lerm-witness-startup.mjs';
+import {waitForLermScene,waitForLermState} from './lerm-witness-startup.mjs';
 const {values:a}=parseArgs({options:Object.fromEntries(['output','browser','playwright','capture','setup','python','models','joint-regressor','port'].map(k=>[k,{type:'string'}]))});
 const out=path.resolve(a.output);fs.mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'input',argv:process.argv,pageErrors:[],consoleErrors:[],observations:[],browserClosed:false,serverStopped:false};
@@ -29,20 +29,25 @@ try{
  page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const verify=bindMlsWitnessSource({page,url:url.href,root:process.cwd(),out,report,files:[...MLS_WITNESS_FILES,'mls-sphere-query.mjs','experiments/lerms/hand-goin.experiment.mjs','experiments/lerms/goin-pursuit.experiment.mjs','experiments/lerms/goin-task.mjs','experiments/hand-live.experiment.mjs','experiments/hand-browser-juice.experiment.mjs','experiments/hand-play-space.mjs']});
  await page.route('**/__lerm-camera.png',route=>route.fulfill({contentType:'image/png',body:image}));
- await page.addInitScript(()=>{navigator.mediaDevices.getUserMedia=async()=>{
+ const installCamera=()=>{globalThis.lermWitnessCameraCalls=0;navigator.mediaDevices.getUserMedia=async()=>{
+   globalThis.lermWitnessCameraCalls++;
    const image=new Image();image.src='/__lerm-camera.png';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
    const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);const stream=canvas.captureStream(30);
    const draw=()=>{if(stream.getTracks().some(t=>t.readyState==='live')){ctx.drawImage(image,0,0);requestAnimationFrame(draw);}};draw();return stream;
- };});
+ };};
+ await page.addInitScript(installCamera);
  report.phase='load';save();await page.goto(url.href);
- await waitForLermScene(page);
+ await waitForLermScene(page,report.consoleErrors);
+ await page.evaluate(installCamera);
  const invoke=(name,input)=>page.evaluate(async({name,input})=>{const result=await window.kaminosWorkbenchExperiments.invoke(name,input);return ArrayBuffer.isView(result)?Array.from(result):result;},{name,input});
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+ const wait=predicate=>waitForLermState(read,predicate);
  const captureState=async name=>{const state=await read();report.observations.push({name,state});await page.screenshot({path:out+'/'+name+'.png'});save();return state;};
  await invoke('setSourceFlux',0);await invoke('start');
- await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.hand.error||s.hand.fingerJuice.error)throw Error(s.hand.error??s.hand.fingerJuice.error);return s.hand.received>=2&&s.hand.visible;});
+ report.cameraFixtureCalls=await page.evaluate(()=>globalThis.lermWitnessCameraCalls);assert(report.cameraFixtureCalls>0,'Retained camera fixture was not consumed');save();
+ await wait(s=>{if(s.hand.error||s.hand.fingerJuice.error)throw Error(s.hand.error??s.hand.fingerJuice.error);return s.hand.received>=2&&s.hand.visible;});
  report.phase='dry-theft';save();await invoke('setRunning',{running:true});
- await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
+ await wait(s=>{if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
  await invoke('setRunning',{running:false});
  let state=await captureState('carried-dry');assert.equal(state.task.custody.phase,'carried');const goinId=state.goin.id;
  assert.equal(state.hand.identity.backend,'webgpu-local');assert.equal(state.hand.fingerJuice.backend,'mls-mpm');assert.equal(state.hand.acquisitionDetails.fallback,false);
@@ -55,7 +60,7 @@ try{
  report.alignment={receiver:center,emitter,playSpace:{reachX,height:config.height+center[1]-emitter.origin_world[1],depth:config.depth+center[2]-emitter.origin_world[2]}};
  await invoke('setPlaySpace',report.alignment.playSpace);await invoke('setSourceFlux',1800);
  report.phase='liquid-hit';save();
- await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.water.status==='failed')throw Error(s.water.error);return s.task.custody.phase==='dropped'&&s.water.overlap>0;});
+ await wait(s=>{if(s.water.status==='failed')throw Error(s.water.error);return s.task.custody.phase==='dropped'&&s.water.overlap>0;});
  state=await captureState('liquid-drop');assert.equal(state.goin.id,goinId);assert(state.physics.active);assert.equal(state.water.route,'kaminos/mls-mpm-finger-juice-v1');
  await verify();
  await invoke('stop');
@@ -71,7 +76,7 @@ try{
  await invoke('setSourceFlux',0);await invoke('resetPile');await invoke('sampleWater');
  await invoke('advance',{seconds:.25});state=await captureState('physical-fall');assert.equal(state.goin.id,goinId);
  await invoke('setRunning',{running:true});
- await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
+ await wait(s=>{if(s.physics.failure||s.water.status==='failed')throw Error(s.physics.failure??s.water.error);return s.task.custody.phase==='carried';});
  await invoke('setRunning',{running:false});state=await captureState('recovered');assert.equal(state.task.custody.phase,'carried');assert.equal(state.goin.id,goinId);
  assert.deepEqual(report.pageErrors,[]);report.status='complete';report.phase='complete';
 }catch(error){report.error=String(error);report.stack=error.stack;process.exitCode=1;if(page){try{report.failure=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),text:document.body.innerText}));await page.screenshot({path:out+'/failure.png'});}catch{}}}

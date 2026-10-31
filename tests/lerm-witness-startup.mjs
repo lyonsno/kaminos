@@ -1,6 +1,12 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {waitForLermScene} from '../tools/lerm-witness-startup.mjs';
+import {EventEmitter} from 'node:events';
+import {waitForLermScene,waitForLermState} from '../tools/lerm-witness-startup.mjs';
+
+let reads=0;
+await waitForLermState(async()=>({carried:++reads===3}),state=>state.carried,async()=>{});
+assert.equal(reads,3,'A Promise resolving false must keep waiting');
+await assert.rejects(waitForLermState(async()=>{throw Error('GPU failed');},()=>true),/GPU failed/);
 
 let predicate, options;
 await waitForLermScene({waitForFunction(fn, arg, config) { predicate=fn; options=config; }});
@@ -15,3 +21,11 @@ delete window.kaminosWorkbenchExperimentError;
 window.kaminosWorkbenchExperiments={state:()=>({id:'lerms/hand-goin'})};
 assert.equal(predicate(),true);
 delete globalThis.window;delete globalThis.document;
+
+const failedPage=new EventEmitter();
+failedPage.waitForFunction=()=>new Promise(()=>{});
+const failure=waitForLermScene(failedPage);
+failedPage.emit('console',{type:()=> 'error',text:()=> 'initScene failed: GPU unavailable'});
+await assert.rejects(failure,/initScene failed: GPU unavailable/);
+assert.equal(failedPage.listenerCount('console'),0,'Terminal failure releases its listener');
+await assert.rejects(waitForLermScene(failedPage,['initScene failed: before wait']),/before wait/);
