@@ -107,6 +107,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-flame-properties'), 'authoring-type-slot');
+  if(byId('selected-ash-properties'))move(byId('selected-ash-properties'), 'authoring-type-slot');
   if(byId('selected-water-properties'))move(byId('selected-water-properties'), 'authoring-type-slot');
   if(byId('selected-water-simulation-properties'))move(byId('selected-water-simulation-properties'), 'authoring-type-slot');
   move(byId('selected-bed-properties'), 'authoring-type-slot');
