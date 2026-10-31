@@ -123,11 +123,29 @@ assert.equal(committed,1);assert.equal(discarded,1);
 console.log('PASS live preparation restores drawing context at yields and promotes only complete lighting');
 
 // Exercise the effective renderer API, not only the pass-coordinator fake.
-const {WebGPURenderer}=await import('../lib/three.webgpu.js');
+const {WebGPURenderer,Scene,SpotLight}=await import('../lib/three.webgpu.js');
 assert.equal(typeof WebGPURenderer.prototype.beginLightingPreparation,'function','live preparation is an API on the native renderer');
 const retired=[],activeNode={},candidateNode={};
 const generation={node:candidateNode};
-const nativeOwner={_lighting:{_retained:new Map([[scene,activeNode]]),prepare(s,retire){assert.equal(s,scene);retire(activeNode);return generation;}},_objects:{disposeLightsNode:n=>retired.push(n)}};
+const nativeOwner={lighting:{_retained:new Map([[scene,activeNode]]),prepare(s,retire){assert.equal(s,scene);retire(activeNode);return generation;}},_objects:{disposeLightsNode:n=>retired.push(n)}};
 assert.equal(WebGPURenderer.prototype.beginLightingPreparation.call(nativeOwner,scene),generation);
 assert.deepEqual(retired,[activeNode]);
-WebGPURenderer.prototype.releaseRetainedLighting.call(nativeOwner,scene);assert.equal(nativeOwner._lighting._retained.has(scene),false);
+WebGPURenderer.prototype.releaseRetainedLighting.call(nativeOwner,scene);assert.equal(nativeOwner.lighting._retained.has(scene),false);
+
+const effectiveRenderer=new WebGPURenderer({canvas:{width:1,height:1,style:{},addEventListener(){}}});
+const effectiveScene=new Scene(),retirements=[];
+effectiveRenderer._objects={disposeLightsNode:n=>retirements.push(n)};
+const active=effectiveRenderer.lighting.getNode(effectiveScene),light=new SpotLight();
+active.setLights([light]);
+const pending=effectiveRenderer.beginLightingPreparation(effectiveScene);
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),active);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),true);
+assert.notEqual(pending.node,active);pending.node.setLights([]);pending.commit();pending.commit();
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),pending.node);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),false);assert.deepEqual(retirements,[active]);
+const rejected=effectiveRenderer.beginLightingPreparation(effectiveScene);rejected.discard();
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),pending.node);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),true);
+assert.deepEqual(retirements,[active,rejected.node]);
+effectiveRenderer.releaseRetainedLighting(effectiveScene);assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),false);
+console.log('PASS effective native renderer lighting generation commit, discard, release and retirement');
