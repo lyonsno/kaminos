@@ -104,9 +104,21 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
-#scene-first-flame-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; margin:auto; padding:20px; }
+#scene-first-flame-dialog, #ash-setup-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; margin:auto; padding:20px; }
 #scene-first-flame-dialog select { width:100%; margin:10px 0; }
-#scene-first-flame-dialog::backdrop { background:#0008; }
+#scene-first-flame-dialog::backdrop, #ash-setup-dialog::backdrop { background:#0008; }
+#ash-setup-dialog { width:400px; max-width:calc(100vw - 32px); max-height:calc(100vh - 32px); overflow:auto; }
+#ash-setup-dialog h2 { margin:0 0 12px; color:#e6ecee; font-size:14px; }
+#ash-setup-dialog .ash-setup-description { margin:0 0 18px; color:#a6b2b6; font-size:12px; line-height:1.5; }
+#ash-setup-dialog [data-fields] { display:grid; gap:10px; }
+#ash-setup-dialog label { display:grid; grid-template-columns:minmax(0,1fr) 128px; align-items:center; gap:16px; font-size:12px; }
+#ash-setup-dialog .authoring-number-wrap { min-width:0; width:100%; }
+#ash-setup-dialog input { height:30px; font-size:12px; padding:4px 8px; }
+#ash-setup-dialog [data-error] { color:#f1b7a8; font-size:12px; line-height:1.5; margin:12px 0 0; }
+#ash-setup-dialog [data-error]:empty { display:none; }
+#ash-setup-dialog .ash-setup-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+#ash-setup-dialog .btn { margin:0; min-height:32px; }
+#ash-setup-dialog [value="add"] { border-color:#687a80; color:#edf1f2; background:#304047; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
 #local-liquid-performance .slider-label { flex:0 0 105px; }
 #local-liquid-performance-status { color:#add4d6 !important; }
