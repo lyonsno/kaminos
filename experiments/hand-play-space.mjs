@@ -10,6 +10,8 @@ export function playSpaceConfig(input={}){
 
 // Crop UV is already unflipped by the browser route. Mirror the entire avatar,
 // not only translation, so a wrist turn and a sideways move agree on direction.
+// Cancel the shared camera-to-scene depth flip here to preserve the accepted
+// authored play mapping. Its mirrored default has positive total determinant.
 export function handPlayPlacement(result,{width,height},config){
   if(result.pixelBasis!=='unmirrored_camera')throw Error('Unsupported play space pixel basis');
   const box=result.cropBox,uv=result.cropUV,wrist=result.meshJointsMeters?.[0];
@@ -20,7 +22,7 @@ export function handPlayPlacement(result,{width,height},config){
   return {mode:'camera_plane_authored_depth',source:'mobrecon_crop_uv_wrist',captureId:result.captureId,
     acquisition:result.acquisition,fallback:result.acquisitionDetails?.fallback===true,
     imageWrist,center:[...wrist],position:[(imageWrist[0]-.5)*config.reachX*(config.mirror?-1:1),config.height+(.65-imageWrist[1])*config.reachY,config.depth],
-    rotation:[-config.pitchDegrees*Math.PI/180,0,0],scale:[config.mirror?-5:5,5,5],
+    rotation:[-config.pitchDegrees*Math.PI/180,0,0],scale:[config.mirror?-5:5,5,-5],
     authority:'authored_game_mapping_not_metric_camera_registration'};
 }
 

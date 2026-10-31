@@ -1,5 +1,5 @@
 import {Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide} from '../lib/three.core.js';
-import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
+import {cameraCrop, liveMeshFrame, HAND_SCENE_AXES} from './hand-live-contract.mjs';
 import {openCaptureStore} from './hand-live-retention.mjs';
 import {openBrowserCaptureStore} from './hand-browser-retention.mjs';
 import {nativeFingerPacket,idleFingerPacket,fingerFluidLoad} from './hand-live-fluid.mjs';
@@ -205,13 +205,15 @@ export default {
       if(!placement)for(let i=0;i<positions.length;i++) center[i%3]+=positions[i]/778;
       if(placement){applyHandPlayPlacement(mesh,placement);playObservation=placement;}
       displayCenter=center;
-      for(let i=0;i<positions.length;i++) positions[i]=(positions[i]-center[i%3])*(i%3===1?-1:1);
+      for(let i=0;i<positions.length;i++) positions[i]=(positions[i]-center[i%3])*HAND_SCENE_AXES[i%3];
       geometry.setAttribute('position',new BufferAttribute(positions,3));
-      geometry.setIndex(health.faces.flatMap(f=>result.handedness==='left'?[f[0],f[2],f[1]]:f));
+      // Play placement cancels the new local Z flip; preserve its surface normals too.
+      const reverseWinding=(result.handedness==='left')!==!!placement;
+      geometry.setIndex(health.faces.flatMap(f=>reverseWinding?[f[0],f[2],f[1]]:f));
       geometry.computeVertexNormals();geometry.computeBoundingSphere();mesh.visible=true;
       last=result;received++;updateFluid();scene.redraw();sync();
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
-        displayTransform:{center,scale:5,scaleVector:mesh.scale.toArray(),position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray(),invertY:true,playSpace:playObservation}});
+        displayTransform:{center,scale:5,scaleVector:mesh.scale.toArray(),position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray(),invertY:true,invertZ:true,basis:'camera_xyz_to_scene_x_neg_y_neg_z',reverseWinding,playSpace:playObservation}});
     };
     const frame = () => scene.setView(sceneLayout==='runway'?(document.defaultView.innerWidth<600?{position:[0,4.4,11],target:[0,1,-1.2]}:{position:[0,3.5,7.5],target:[0,.65,-1.2]}):fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     const setAcquisition = value => {

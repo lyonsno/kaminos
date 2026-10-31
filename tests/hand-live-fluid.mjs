@@ -28,6 +28,13 @@ test('native joints drive five distal jets without changing the source pose',()=
     assert.equal(inlet.opticalDensity.authority,'consumer_owned_not_applied');
   }
 });
+test('camera depth points into the scene without reflecting the standalone hand',()=>{
+  const f=frame();
+  f.meshJointsMeters=f.meshJointsMeters.map(([x,y])=>[x,y,y*.5]);
+  const packet=module.nativeFingerPacket(f,options());
+  assert.equal(packet.emitters[1].origin_world[2],-.15,'camera depth must become negative scene depth');
+  assert(packet.emitters[1].aim_world[2]<0,'the distal jet must use the same depth basis');
+});
 test('fist, stale, stopped, detection miss and malformed joints cannot emit',()=>{
   assert.equal(typeof module.nativeFingerPacket,'function');
   for(const patch of [{nowMs:1800},{running:false}]){

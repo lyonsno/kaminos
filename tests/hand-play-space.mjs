@@ -1,6 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {Mesh,Vector3} from '../lib/three.core.js';
+import {Mesh,Vector3,Matrix4,Euler,Quaternion} from '../lib/three.core.js';
 import {handPlayPlacement,playSpaceConfig,applyHandPlayPlacement} from '../experiments/hand-play-space.mjs';
 import {mlsConfig} from '../mls-juice-contract.mjs';
 import {createMlsGoinPile} from '../mls-goin-pile.mjs';
@@ -46,6 +46,23 @@ assert.throws(()=>handPlayPlacement({...source,cropUV:[]},size,config),/observat
 assert.throws(()=>handPlayPlacement({...source,pixelBasis:'mirrored'},size,config),/pixel basis/);
 assert.throws(()=>playSpaceConfig({depth:NaN}),/play space/);
 assert.equal(handPlayPlacement({...source,acquisitionDetails:{fallback:true}},size,config).fallback,true);
+
+// Preserve the accepted world mapping, including depth, at both mirror settings
+// and optional offsets. The basis and placement must compose, not fix each other twice.
+for(const mirror of [false,true])for(const pitchDegrees of [0,30,-25]){
+  const cfg=playSpaceConfig({mirror,pitchDegrees});
+  const placement=handPlayPlacement(source,size,cfg);applyHandPlayPlacement(mesh,placement);
+  const points=[source.meshJointsMeters[0],...Array.from({length:20},(_,i)=>[.02+i*.003,.03-(i%4+1)*.02,.04+(i%4+1)*.013])];
+  const actual=nativeFingerPacket({...source,meshJointsMeters:points,source:'mobrecon_densestack_spiralconv',jointBasis:'upstream_j_reg_mano_to_mpii',captureEpochMs:100},
+    {nowMs:100,running:true,center:placement.center,matrix:mesh.matrixWorld});
+  const accepted=new Matrix4().compose(new Vector3(...placement.position),new Quaternion().setFromEuler(new Euler(-pitchDegrees*Math.PI/180,0,0)),new Vector3(mirror?-5:5,5,5));
+  const world=p=>new Vector3(p[0]-.02,-(p[1]-.03),p[2]-.04).applyMatrix4(accepted);
+  for(let finger=0;finger<5;finger++){
+    const tip=world(points[4+finger*4]),distal=world(points[3+finger*4]);
+    assert(tip.distanceTo(new Vector3(...actual.emitters[finger].origin_world))<1e-10,'accepted fingertip position changed');
+    assert(tip.sub(distal).normalize().distanceTo(new Vector3(...actual.emitters[finger].aim_world))<1e-10,'accepted pointing direction changed');
+  }
+}
 
 const centers=[[-1.8,-1.3],[-.6,-2.1],[.6,-2.1],[1.8,-1.3]];
 const pile=createMlsGoinPile(mlsConfig({gridSize:[192,80,256],goinPile:{count:24,stackCenters:centers}}));
