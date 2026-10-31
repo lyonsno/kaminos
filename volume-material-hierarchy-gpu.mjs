@@ -59,7 +59,7 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
 @compute @workgroup_size(64) fn advanceBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
  var r=Gas(vec4<f32>(0),vec4<f32>(0));
- if(donor(p)){r=fineGasAt(p,n.loPitch.w);}else{
+ if(materialDonor(p,n.loPitch.w)){r=fineGasAt(p,n.loPitch.w);}else{
   r=suppliedGas(hierarchyGas(clipped(p,p-velocity(p)*u.time.y)),supplyTexel(materialSupply,2u*(slot*64u+l)));
   if(reactantLawOn()){
    let dt=u.time.x;

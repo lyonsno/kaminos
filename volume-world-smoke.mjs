@@ -118,6 +118,13 @@ fn inside(c:vec3<i32>,d:vec3<f32>)->bool{return all(c>=vec3<i32>(0))&&all(c<vec3
 fn blocked(c:vec3<i32>)->bool{if(u.time.w<.5){return false;}return inside(c,u.flow.xyz)&&textureLoad(solids,c,0).x!=0u;}
 fn finePoint(p:vec3<f32>)->vec3<f32>{return (p-u.mapping.xyz)/u.mapping.w;}
 fn donor(p:vec3<f32>)->bool{let q=finePoint(p);let margin=2.0/u.near.x;return all(q>=vec3<f32>(-1.0+margin))&&all(q<=vec3<f32>(1.0-margin,2.0*u.near.y/u.near.x-1.0-margin,1.0-margin));}
+// Only wholly interior receiving cells may be overwritten. A crossing cell
+// owns exterior volume even when its center is inside Fine; it must retain its
+// transported gas and accept the disjoint exterior source parcels.
+fn materialDonor(p:vec3<f32>,pitch:f32)->bool{
+ let q=finePoint(p);let radius=vec3<f32>(.5*pitch/u.mapping.w);
+ return donor(p)&&all(q-radius>=vec3<f32>(-1))&&all(q+radius<=vec3<f32>(1,2.0*u.near.y/u.near.x-1.0,1));
+}
 fn momentumDonor(c:vec3<i32>,a:u32)->bool{
  let face=2*c+vec3<i32>(1)+axis(a);
  return all(face>=vec3<i32>(u.momentumLo.xyz))&&all(face<=vec3<i32>(u.momentumHi.xyz));
@@ -330,7 +337,7 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas){
 }
 @compute @workgroup_size(4,4,4) fn transportMaterial(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}let i=idx(c,u.material.xyz);let p=u.lo.xyz+(vec3<f32>(c)+.5)*u.material.w;
- if(donor(p)){
+ if(materialDonor(p,u.material.w)){
    let r=fineGas(p);
    storeMaterial(c,i,p,r);return;
  }

@@ -29,10 +29,11 @@ test('authored world source remains enabled beyond Fine and carries authority to
 test('direct world supply completes the Fine partition and preserves source motion in anchor units',async()=>{
  const {compileWorldSourceParcels,compileImmersedSourceCollection}=await import('../volume-immersed-source-collection.mjs');
  assert.equal(typeof compileWorldSourceParcels,'function','authored source supply must reach world cells');
- const controls={emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',pressureIterations:8,immersedX:1,immersedY:0,immersedZ:0,immersedRadius:.2,immersedPitch:90,immersedSpeed:.1};
+ const controls={emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',pressureIterations:8,immersedCentreX:1,immersedCentreY:0,immersedCentreZ:0,immersedRadius:.2,immersedPitch:90,immersedSpeed:.1};
  const packed=compileImmersedSourceCollection([{id:'crossing',worldSource:true,controls}],{controls,grid:16,gridHeight:16});
  const t={translate:[2,0,0],scale:2},anchor={translate:[0,0,0],scale:1};
  const result=compileWorldSourceParcels(packed,{grid:16,gridHeight:16,transform:t,anchor});
+ assert.ok(result.parcels.length>0,'the crossing fixture must actually reach outside Fine');
  const e=packed.sources[0].config.effective,cellVolume=(2/16*2)**3;
  const volume=result.parcels.reduce((s,p)=>s+p.rate*p.lo.reduce((v,x,a)=>v*(p.hi[a]-x),1),0);
  assert.ok(Math.abs(volume/cellVolume+e.fluxEffectivePredicted-e.fullFlux)<1e-7);

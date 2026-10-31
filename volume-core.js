@@ -2671,7 +2671,7 @@ export const immersedPlainWeightSumCache = {
   stats() { return { hits: plainWeightSumHits, misses: plainWeightSumMisses, size: plainWeightSumEntries.size }; },
 };
 export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
-  const key = JSON.stringify([grid, gridHeight, unbounded, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
+  const key = JSON.stringify([grid, gridHeight, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
   const hit = plainWeightSumEntries.get(key);
   if (hit !== undefined) { plainWeightSumHits += 1; return hit; }
   plainWeightSumMisses += 1;

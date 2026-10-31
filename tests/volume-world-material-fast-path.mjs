@@ -6,7 +6,9 @@ import {WORLD_SMOKE_WGSL} from '../volume-world-smoke.mjs';
 // work-elision contract, not a performance or external-runtime claim.
 test('donor material bypasses evolution that would be overwritten',()=>{
   const body=WORLD_SMOKE_WGSL.slice(WORLD_SMOKE_WGSL.indexOf('fn transportMaterial'));
-  assert.ok(body.indexOf('if(donor(p))')<body.indexOf('var r=gas('));
+  const donor=body.indexOf('if(materialDonor(p,u.material.w))');
+  const evolution=body.indexOf('var r=suppliedGas(');
+  assert.ok(donor>=0&&evolution>donor,'wholly interior donor cells bypass source/evolution work');
   assert.match(body,/storeMaterial\(c,i,p,r\);return;/);
 });
 test('the known-empty collision route bypasses voxel traversal and mixing interpolation',()=>{
