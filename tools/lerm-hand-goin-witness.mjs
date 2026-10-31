@@ -53,11 +53,21 @@ try{
  assert.equal(state.hand.identity.backend,'webgpu-local');assert.equal(state.hand.fingerJuice.backend,'mls-mpm');assert.equal(state.hand.acquisitionDetails.fallback,false);
  assert.deepEqual(state.hand.fingerJuice.runtime.solver.domain.gridDimensions,report.setup.hand.fluidGridSize);
  await invoke('sampleWater');state=await read();assert.equal(state.water.overlap,0);assert.equal(state.task.custody.phase,'carried');
- const center=state.water.receiver.center,hand=state.hand,emitter=hand.fingerJuice.packet.emitters.find(e=>e.active);assert(emitter,'real retained hand must produce an active finger');
- const config=hand.playSpace.config,observation=hand.playSpace.observation;
- const factor=(observation.imageWrist[0]-.5)*(config.mirror?-1:1);assert(Math.abs(factor)>.01,'fixture wrist must support controlled horizontal placement');
- const reachX=config.reachX+(center[0]-emitter.origin_world[0])/factor;assert(reachX>0,'controlled hand placement must preserve legal reach');
- report.alignment={receiver:center,emitter,playSpace:{reachX,height:config.height+center[1]-emitter.origin_world[1],depth:config.depth+center[2]-emitter.origin_world[2]}};
+ const center=state.water.receiver.center;
+ const activeHand=async()=> (await wait(s=>{if(s.hand.error)throw Error(s.hand.error);return s.hand.fingerJuice.packet.emitters.some(e=>e.active);})).hand;
+ let hand=await activeHand(),emitter=hand.fingerJuice.packet.emitters.find(e=>e.active);
+ let config=hand.playSpace.config,observation=hand.playSpace.observation;
+ let factor=(observation.imageWrist[0]-.5)*(config.mirror?-1:1);assert(Math.abs(factor)>.01,'fixture wrist must support controlled horizontal placement');
+ let reachX=config.reachX+(center[0]-emitter.origin_world[0])/factor;
+ if(reachX<=0){
+   await invoke('setPlaySpace',{mirror:!config.mirror});
+   hand=await activeHand();emitter=hand.fingerJuice.packet.emitters.find(e=>e.active);
+   config=hand.playSpace.config;observation=hand.playSpace.observation;
+   factor=(observation.imageWrist[0]-.5)*(config.mirror?-1:1);
+   reachX=config.reachX+(center[0]-emitter.origin_world[0])/factor;
+ }
+ assert(reachX>0,'controlled hand placement must preserve legal reach');
+ report.alignment={receiver:center,emitter,playSpace:{mirror:config.mirror,reachX,height:config.height+center[1]-emitter.origin_world[1],depth:config.depth+center[2]-emitter.origin_world[2]}};
  await invoke('setPlaySpace',report.alignment.playSpace);await invoke('setSourceFlux',1800);
  report.phase='liquid-hit';save();
  await wait(s=>{if(s.water.status==='failed')throw Error(s.water.error);return s.task.custody.phase==='dropped'&&s.water.overlap>0;});
