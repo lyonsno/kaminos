@@ -12,7 +12,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const textures=[],bound=[],anchor={translate:[0,0,0],scale:1};
   const createWorldSmoke=(_device,plan)=>{const optical={destroyed:false};textures.push(optical);return {optical,anchor,encode(){return {flowDims:plan.flowDims,materialDims:plan.materialDims};},destroy(){optical.destroyed=true;}};};
   const oldPlan=worldSmokePlan({flow:16,material:32,extent:3,fineHeightRatio:2});
-  const ctx={adaptiveMaterialOptions:null,adaptiveMaterialError:null,intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
+  const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
     controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
     encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,prepareFineVelocity(){return null;},
@@ -65,7 +65,7 @@ test('separated pressure rebinds resized world optical and emitter collection te
 });
 
 test('world resize keeps ordinary transport available when adaptive capacity is no longer admitted',()=>{
-  const ctx={adaptiveMaterialOptions:{budget:100},adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldSolidProducer:null,
+  const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:{budget:100},adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldSolidProducer:null,
     intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldRenderUniform:{},
     controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     state:{reactantCombustion:{effective:{admitted:true}}},gridSize:32,gridHeight:64,
@@ -78,4 +78,22 @@ test('world resize keeps ordinary transport available when adaptive capacity is 
   assert.equal(ctx.adaptiveMaterialError,'Material pool exceeds device capacity');
   assert.ok(ctx.worldSmoke,'Ordinary world field remains available after adaptive admission fails');
   assert.equal(ctx.adaptiveMaterialOptions.budget,100,'Requested policy remains visible for correction');
+});
+
+test('Fine height changes do not resize the existing world envelope',()=>{
+ let allocations=0;
+ const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldFrameRestore:undefined,worldReferenceDims:null,worldSolidProducer:null,
+  intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldRenderUniform:{},
+  controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
+  state:{reactantCombustion:{effective:{admitted:true}}},gridSize:32,gridHeight:64,
+  device:{queue:{writeBuffer(){}}},resolveWorldRegions,productTransform:{translate:[0,0,0],scale:1},
+  resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
+  createGpuSceneSolidProducer:()=>({destroy(){}}),rebuildFluidBindGroups(){},Float32Array,
+  createWorldSmoke:(_d,plan,anchor)=>{allocations++;return {plan,anchor,destroy(){}};}};
+ ctx.uniforms[368]=2;vm.createContext(ctx);vm.runInContext(['retireIntermediateFlow','prepareWorldSmoke'].map(grab).join('\n'),ctx);
+ ctx.prepareWorldSmoke();const first=ctx.worldSmoke;
+ ctx.gridHeight=256;ctx.productTransform={translate:[4,0,0],scale:2};ctx.prepareWorldSmoke();
+ assert.equal(allocations,1,'Fine coverage is independent of the existing world allocation');
+ assert.equal(ctx.worldSmoke,first);
+ assert.deepEqual(Array.from(first.anchor.translate),[0,0,0]);
 });

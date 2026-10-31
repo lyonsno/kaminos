@@ -4,20 +4,23 @@ import test from 'node:test';
 import {createMaterialHierarchyGPU} from '../volume-material-hierarchy-gpu.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};
 globalThis.GPUMapMode={READ:1};
+globalThis.GPUTextureUsage={TEXTURE_BINDING:1,COPY_DST:2};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 // This fake checks ownership/dispatch, not WebGPU shader conformance. The
 // native witness separately exercises the shaders and real buffer mapping.
 function fixture(options={}){
  const buffers=[],groups=[],passes=[];let hold=false;const maps=[];
- const device={limits:{maxStorageBufferBindingSize:2**28,maxBufferSize:2**28,maxComputeWorkgroupsPerDimension:65535},
+ const device={limits:{maxTextureDimension2D:16384,maxStorageBufferBindingSize:2**28,maxBufferSize:2**28,maxComputeWorkgroupsPerDimension:65535},
   createBuffer(spec){const b={...spec,data:new ArrayBuffer(spec.size),destroyed:false,mapState:'unmapped',
    async mapAsync(){assert.equal(this.destroyed,false);assert.equal(this.mapState,'unmapped');this.mapState='pending';if(hold)await new Promise(resolve=>maps.push(resolve));assert.equal(this.destroyed,false);this.mapState='mapped';},
    getMappedRange(){assert.equal(this.mapState,'mapped');return this.data;},unmap(){assert.equal(this.mapState,'mapped');this.mapState='unmapped';},destroy(){assert.equal(this.destroyed,false,`${this.label} double destroy`);this.destroyed=true;}};buffers.push(b);return b;},
+  createTexture:spec=>({...spec,createView:()=>({label:spec.label}),destroy(){}}),
   createShaderModule:x=>x,createComputePipeline:x=>({...x,getBindGroupLayout:index=>({name:x.label,index})}),
   createBindGroup(spec){groups.push(spec);return spec;},
-  queue:{writeBuffer(b,offset,data){new Uint8Array(b.data).set(new Uint8Array(data.buffer??data,data.byteOffset??0,data.byteLength),offset);},onSubmittedWorkDone:async()=>{}},
+  queue:{writeTexture(){},writeBuffer(b,offset,data){new Uint8Array(b.data).set(new Uint8Array(data.buffer??data,data.byteOffset??0,data.byteLength),offset);},submit(){},onSubmittedWorkDone:async()=>{}},
  };
  const encoder=()=>({beginComputePass({label}){const pass={label,groups:[]};passes.push(pass);return {setPipeline(){},setBindGroup(i,g){pass.groups[i]=g;},dispatchWorkgroups(x,y=1,z=1){pass.count=x*y*z;if(label==='measureBricks'){const b=pass.groups[1].entries.find(e=>e.binding===5).resource.buffer;new Float32Array(b.data).fill(.5);}},end(){}};},copyBufferToBuffer(src,so,dst,offset,bytes){assert.equal(dst.destroyed,false);assert.equal(dst.mapState,'unmapped','never copy into an in-flight/mapped readback');new Uint8Array(dst.data,offset,bytes).set(new Uint8Array(src.data,so,bytes));}});
+ device.createCommandEncoder=()=>({...encoder(),finish(){return {};}});
  const world=Object.fromEntries([0,1,2,4,5].map(k=>[k,{buffer:device.createBuffer({label:`world${k}`,size:16})}]));
  for(const k of [8,9,10,11,14,15,16])world[k]={texture:k};
  const hierarchy=createMaterialHierarchyGPU(device,{materialDims:[8,4,4],materialPitch:1,min:[0,0,0],max:[8,4,4]},'',{budget:0,...options});
@@ -56,4 +59,17 @@ test('resize and disposal preserve an in-flight demand readback, then retire it'
  f.hold();f.step();await flush();f.hierarchy.destroy();f.release();await flush();
  assert.equal(replacement.destroyed,true);
  assert.ok(f.buffers.filter(b=>b.label.startsWith('material')||b.label==='hierarchy parameters').every(b=>b.destroyed),'all owned buffers are retired');
+});
+
+test('diagnostic snapshot keeps topology from its GPU copy while allocation advances',async()=>{
+ const f=fixture();try{
+  f.step();await flush();const before=f.hierarchy.read();
+  f.hold();const pending=f.hierarchy.snapshot();await flush();
+  f.hierarchy.configure({budget:8});f.step();await flush();
+  assert.ok(f.hierarchy.read().allocatedBricks>before.allocatedBricks);
+  f.release();const snapshot=await pending;
+  assert.equal(snapshot.nodes.length,before.allocatedBricks,'topology must name the copied allocation, not a later one');
+  assert.equal(snapshot.revision,before.revision);assert.equal(snapshot.steps,before.steps);
+  assert.ok(snapshot.nodes.every(n=>(n.slot+1)*64*8<=snapshot.values.length));
+ }finally{f.release();f.hierarchy.destroy();await flush();}
 });

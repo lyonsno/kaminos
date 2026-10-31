@@ -1,8 +1,9 @@
+import {checkedWorldFrame} from './volume-world-frame.mjs';
 import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
-import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
+import {checkedImmersedSources,compileImmersedSourceCollection,compileWorldSourceParcels,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
 import { FIRE_EMISSION_EXTENT_WGSL } from './fire-emission-extent.mjs';
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
@@ -2670,7 +2671,7 @@ export const immersedPlainWeightSumCache = {
   stats() { return { hits: plainWeightSumHits, misses: plainWeightSumMisses, size: plainWeightSumEntries.size }; },
 };
 export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
-  const key = JSON.stringify([grid, gridHeight, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
+  const key = JSON.stringify([grid, gridHeight, unbounded, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
   const hit = plainWeightSumEntries.get(key);
   if (hit !== undefined) { plainWeightSumHits += 1; return hit; }
   plainWeightSumMisses += 1;
@@ -2679,7 +2680,7 @@ export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
   plainWeightSumEntries.set(key, sum);
   return sum;
 }
-export function immersedSourceWeights(effective, { grid, gridHeight }) {
+export function immersedSourceWeights(effective, { grid, gridHeight, unbounded=false }) {
   const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
   const reach = Math.ceil(Math.max(r, h) + 1.5);
   const cells = []; let sum = 0;
@@ -2689,9 +2690,9 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
   const map = immersedCoverageMapForConfig({ effective: { ...effective, admitted: true } });
   const basis = effective.basis ?? immersedSlabBasis(n);
   const coverageAt = d => (map ? map.cells[immersedSlabLookup(d, basis, grid).index] : 1);
-  for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
-    for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
-      for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
+  for (let z = Math.max(unbounded?-Infinity:0, Math.floor(c[2] - reach)); z <= Math.min(unbounded?Infinity:grid - 1, Math.ceil(c[2] + reach)); z += 1)
+    for (let y = Math.max(unbounded?-Infinity:0, Math.floor(c[1] - reach)); y <= Math.min(unbounded?Infinity:gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
+      for (let x = Math.max(unbounded?-Infinity:0, Math.floor(c[0] - reach)); x <= Math.min(unbounded?Infinity:grid - 1, Math.ceil(c[0] + reach)); x += 1) {
         const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
         const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
         const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
@@ -2705,12 +2706,12 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
 export function createImmersedSourceWeightCache() {
   let previousKey = null, weights = null, builds = 0;
   return {
-    read(effective, {grid, gridHeight}) {
-      const key = JSON.stringify([grid, gridHeight, effective.centreCells,
+    read(effective, {grid, gridHeight, unbounded=false}) {
+      const key = JSON.stringify([grid, gridHeight, unbounded, effective.centreCells,
         effective.direction, effective.radiusCells, effective.thickness,
         effective.basis ?? null, effective.pattern ?? null]);
       if (key !== previousKey) {
-        weights = immersedSourceWeights(effective, {grid, gridHeight});
+        weights = immersedSourceWeights(effective, {grid, gridHeight, unbounded});
         previousKey = key;
         builds += 1;
       }
@@ -2756,7 +2757,8 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const pressure = resolvePressureSolverConfig(controls).effective;
   const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
   const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
-  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
+  const centre = options.worldSource ? [Number(controls.immersedCentreX??0),Number(controls.immersedCentreY??-.5),Number(controls.immersedCentreZ??0)] : [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
+  if(!centre.every(Number.isFinite))throw Error('Immersed source centre must be finite');
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
   const radius = clampFinite(controls.immersedRadius, 0.02, Infinity, 0.2);
   const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
@@ -2805,7 +2807,10 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // of the disc's weight it leaves, and the per-cell rate Q/Σw stays the plain
   // disc's. (Before this, a pattern concentrated the whole disc's supply into
   // its covered cells, several times the authored speed per cell.)
-  const plainWeightSum = Math.max(1e-6, pattern.kind === 'shape' ? weights.sum : immersedPlainWeightSum(effective, { grid, gridHeight }));
+  const fullShape={...effective,pattern:{...pattern,kind:'shape'}};
+  const fullWeights=options.worldSource?(options.fullWeightCache?.read(fullShape,{grid,gridHeight,unbounded:true})??immersedSourceWeights(fullShape,{grid,gridHeight,unbounded:true})):null;
+  const plainWeightSum = Math.max(1e-6, fullWeights?.sum ?? (pattern.kind === 'shape' ? weights.sum : immersedPlainWeightSum(effective, { grid, gridHeight })));
+  if(options.worldSource){effective.fullFlux=fluxRequested;effective.fullWeightSum=plainWeightSum;}
   const solidCells = options.solidCells ?? null;
   const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
   for (const cell of weights.cells) {
@@ -11642,7 +11647,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidCellsCpu = null;
   let sceneSolidGeometryCache = null;
   let sceneSolidSupportCache = null;
-  let worldSmoke = null, worldSolidProducer = null, worldSmokeKey = null;
+  let worldSmoke = null, worldSolidProducer = null, worldSmokeKey = null, worldReferenceDims = null, pendingWorldSeed = false, worldFrameRestore = undefined;
   let intermediateFlow=null, intermediateSolidProducer=null, intermediateKey=null;
   function retireIntermediateFlow(){
     intermediateFlow?.destroy();intermediateSolidProducer?.destroy();
@@ -11665,7 +11670,7 @@ export function createKaminosVolumePrototype({
       return;
     }
     let plan,regions;
-    try {regions=resolveWorldRegions(controlsSnapshot,[gridSize,gridHeight,gridSize]);plan=regions.world;}
+    try {regions=resolveWorldRegions(controlsSnapshot,worldReferenceDims??[gridSize,gridHeight,gridSize]);plan=regions.world;}
     catch(error){device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));state.worldSmoke={requested,effective:'off',reason:error.message};return;}
     const open=resolvePressureSolverConfig(controlsSnapshot).effective.solver===PRESSURE_SOLVER_CONVERGED
       && controlsSnapshot.emitterSourceLaw===IMMERSED_SOURCE_LAW && !state.joinedBoundary?.admitted;
@@ -11677,7 +11682,10 @@ export function createKaminosVolumePrototype({
       retireIntermediateFlow();
       worldSmoke?.destroy();worldSolidProducer?.destroy();
       worldSolidProducer=createGpuSceneSolidProducer(device,{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
-      worldSmoke=createWorldSmoke(device,plan,{translate:[...productTransform.translate],scale:productTransform.scale});worldSmokeKey=key;
+      const anchor=worldFrameRestore!==undefined?(worldFrameRestore??{translate:[...productTransform.translate],scale:productTransform.scale}):(worldSmoke?.anchor??{translate:[...productTransform.translate],scale:productTransform.scale});
+      worldFrameRestore=undefined;
+      worldSmoke=createWorldSmoke(device,plan,anchor);worldSmokeKey=key;
+      worldReferenceDims??=[gridSize,gridHeight,gridSize];
       adaptiveMaterialError=null;
       try {if(adaptiveMaterialOptions)worldSmoke.configureAdaptiveMaterial(adaptiveMaterialOptions);}
       catch(error){adaptiveMaterialError=error.message;}
@@ -11709,7 +11717,8 @@ export function createKaminosVolumePrototype({
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    const input={fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
+    const sources=immersedCollectionPrepared?compileWorldSourceParcels(immersedCollectionPrepared,{grid:gridSize,gridHeight,transform:productTransform,anchor:worldSmoke.anchor}):{parcels:[],supports:[],count:0};
+    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;
@@ -12735,10 +12744,12 @@ export function createKaminosVolumePrototype({
     return data;
   }
 
-  function destroyFluidState() {
+  function destroyFluidState(preserveWorld = false) {
     fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null; materialOnlyPredictPipeline=null;
-    retireIntermediateFlow();
-    worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;
+    if(!preserveWorld){
+      retireIntermediateFlow();
+      worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;worldReferenceDims=null;
+    }
     if(worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));
     separatedPressure?.destroy();
     separatedPressure = null;
@@ -12766,7 +12777,7 @@ export function createKaminosVolumePrototype({
     for (const texture of waveletTextures) texture.destroy();
     waveletTextures = [];
     waveletSidecarFull = false;
-    immersedCollectionTexture?.destroy();immersedCollectionTexture=null;immersedCollectionTextureKey=null;immersedCollectionSignals.clear();
+    immersedCollectionTexture?.destroy();immersedCollectionTexture=null;immersedCollectionTextureKey=null;if(!preserveWorld)immersedCollectionSignals.clear();
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';
@@ -14022,6 +14033,8 @@ export function createKaminosVolumePrototype({
   }
 
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
+    const preserveWorld=!!worldSmoke&&controlsSnapshot.worldSmoke==='on'&&['grid-rebuilt','grid-height-change','authored-flame-domain-relocation','volume-primitive-change'].includes(reason);
+    const previousStep=state.simStepCount;
     state.thermalFluidAllocationId='thermal-fluid-'+(++thermalFluidGeneration);
     gridSize = normalizeGridSize(nextGridSize);
     gridHeight = gridHeightForSize(gridSize);
@@ -14031,7 +14044,8 @@ export function createKaminosVolumePrototype({
       state.boundarySplatLiveUnionOverlayFallbackReason = `fluid-state-rebuilt:${reason}`;
       state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
     }
-    destroyFluidState();
+    destroyFluidState(preserveWorld);
+    pendingWorldSeed=preserveWorld;
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacityLimitReceipt = null;
@@ -14747,7 +14761,7 @@ export function createKaminosVolumePrototype({
     currentFront = 0;
     currentQuench = 0;
     fluidLayoutInForce = 'authored';
-    state.simStepCount = 0;
+    state.simStepCount = preserveWorld?previousStep:0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
     state.simGridDimensions = [gridSize, gridHeight, gridSize];
@@ -16585,7 +16599,7 @@ export function createKaminosVolumePrototype({
       }
       const sources=immersedCollectionPrepared.sources;
       if(sceneSolidGpu)for(const source of sources){source.config.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';source.config.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};}
-      Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:structuredClone(sources),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
+      Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
     }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
@@ -17350,6 +17364,12 @@ export function createKaminosVolumePrototype({
     }
     const worldPlan = prepareWorldSmoke();
     refreshSceneCollision();
+    if(pendingWorldSeed){
+      if(worldSmoke&&reactantSidecarFull){
+        state.fineWorldSeed=worldSmoke.seedFine(encoder,{dims:[gridSize,gridHeight,gridSize],transform:productTransform,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',fluid:fluidBuffers[currentFluid],reaction:reactantTextures[currentFluid]});
+      }
+      pendingWorldSeed=false;
+    }
     ensureAppearanceLayout(encoder);
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
@@ -28609,6 +28629,9 @@ export function createKaminosVolumePrototype({
       return {requested,effective,status:worldSmoke?'configured':'awaiting-world-field'};
     },
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
+    worldFrame(){const anchor=worldFrameRestore!==undefined?worldFrameRestore:worldSmoke?.anchor;return anchor?{translate:[...anchor.translate],scale:anchor.scale,referenceDims:[...(worldReferenceDims??[gridSize,gridHeight,gridSize])]}:null;},
+    restoreWorldFrame(value){const frame=checkedWorldFrame(value);worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},
+    async adaptiveMaterialSnapshot(){const owner=worldSmoke;if(!owner)throw Error('World field is absent');const identity={anchor:structuredClone(owner.anchor),worldSteps:state.worldSmoke?.steps};const snapshot=await owner.adaptiveMaterialSnapshot();if(owner!==worldSmoke)throw Error('World material snapshot became stale');if(!snapshot)throw Error('Adaptive material is absent');return {...snapshot,...identity};},
     setWorldSmokeOverlay(mode) {
       if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
       worldSmokeOverlay=mode;

@@ -181,7 +181,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const flameDomainScale = normalizeFlameDomainScale(data.flameDomainScale);
   const flameDomainFollowSource = data.flameDomainFollowSource ?? true;
   if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
-  if (flameSources.length && flameDomainFollowSource && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale,flameDomainControlsFromSettings(fire?.settings))) {
+  if (flameSources.length && flameDomainFollowSource && fire?.settings.domControls['volume-world-smoke']?.value!=='on' && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale,flameDomainControlsFromSettings(fire?.settings))) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
   const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
@@ -200,7 +200,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
     viewport:normalizeCameraViewport(data.viewport,normalizeSceneCamera(data.sceneCamera,objects)),
     version: data.version,
-    authoredObjects,fireSettings:fire?.settings??null,fireDomain:fire?.domain??null,
+    authoredObjects,fireSettings:fire?.settings??null,fireDomain:fire?.domain??null,flameWorldFrame:fire?.domain.simulation.worldFrame??null,
     objects,
     groups,
     activeObjectId,
@@ -229,6 +229,7 @@ export function buildSceneDocument({
   flameDomainTranslation = undefined,
   flameDomainScale = 1,
   flameDomainFollowSource = true,
+  flameWorldFrame = null,
   localLiquid = null,
   capture = null,
   camera = null,
@@ -257,14 +258,14 @@ export function buildSceneDocument({
     : null;
   flameDomainScale = normalizeFlameDomainScale(flameDomainScale);
   if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
-  if (flameSource && flameDomainFollowSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale,flameDomainControlsFromSettings(fireSettings))) {
+  if (flameSource && flameDomainFollowSource && fireSettings?.domControls['volume-world-smoke']?.value!=='on' && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale,flameDomainControlsFromSettings(fireSettings))) {
     throw new Error('Flame source lies outside its authored simulation domain');
   }
   const document = {
     schema: SCENE_SCHEMA,
     version: sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
     timestamp,
-    objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
+    objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,worldFrame:flameWorldFrame,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,

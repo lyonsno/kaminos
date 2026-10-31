@@ -1,3 +1,4 @@
+import {depositHierarchySources,createSourceAtlas,sourceDemandAt} from './volume-world-sources.mjs';
 import {MaterialHierarchy,validateAllocation,predictDemand} from './volume-material-hierarchy.mjs';
 
 // Material remains resident. Only one compact demand record per leaf brick
@@ -59,7 +60,7 @@ fn hierarchyGas(p:vec3<f32>)->Gas{
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
  var r=Gas(vec4<f32>(0),vec4<f32>(0));
  if(donor(p)){r=fineGasAt(p,n.loPitch.w);}else{
-  r=hierarchyGas(clipped(p,p-velocity(p)*u.time.y));
+  r=suppliedGas(hierarchyGas(clipped(p,p-velocity(p)*u.time.y)),supplyTexel(materialSupply,2u*(slot*64u+l)));
   if(reactantLawOn()){
    let dt=u.time.x;
    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
@@ -121,6 +122,8 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
 `;}
 
 export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
+ const sourceAtlas=createSourceAtlas(device,'adaptive material source supply');
+ let sourceKey=null,sourceUploadKey=null,sourceView=null;
  const topology=new MaterialHierarchy({dims:plan.materialDims,options});
  admission(topology.capacity);
  const S=GPUBufferUsage.STORAGE,D=GPUBufferUsage.COPY_DST,C=GPUBufferUsage.COPY_SRC;
@@ -151,17 +154,17 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  function dispatch(encoder,name,count,world,items){
   if(!count)return;
   const pipeline=pipelines[name];
-  const bindings={migrateBricks:[0,4,9],advanceBricks:[0,1,2,8,9,11,14,15],restrictBricks:[],exportBricks:[0,5,10,16],measureBricks:[0,2,9,11]}[name];
+  const bindings={migrateBricks:[0,4,9],advanceBricks:[0,1,2,8,9,11,14,15,18],restrictBricks:[],exportBricks:[0,5,10,16],measureBricks:[0,2,9,11]}[name];
   const pass=encoder.beginComputePass({label:name});pass.setPipeline(pipeline);
   pass.setBindGroup(0,bindGroup(name,0,bindings.map(binding=>({binding,resource:world[binding]}))));
   pass.setBindGroup(1,bindGroup(name,1,items.map(([binding,b])=>({binding,resource:{buffer:b}}))));
   if(name==='exportBricks')pass.dispatchWorkgroups(...plan.materialDims.map(n=>Math.ceil(n/4)));else {const width=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(width,Math.ceil(count/width));}
   pass.end();
  }
- function stage(encoder,world){
+ function stage(encoder,world,sources){
   const previous=lastPlan?.nodes??[],oldByKey=new Map(previous.map(n=>[n.key,n]));
   const signals=lastPlan?predictDemand(lastPlan.nodes,latestSignals,{dims:plan.materialDims,basePitch:plan.materialPitch,horizon:topology.options.lookahead*demandLag}):latestSignals;
-  const next=topology.allocate(signals);admission(next.capacity);const nextByKey=new Map(next.nodes.map(n=>[n.key,n]));
+  const next=topology.allocate(signals,n=>sourceDemandAt(n,sources.supports,plan));admission(next.capacity);const nextByKey=new Map(next.nodes.map(n=>[n.key,n]));
   if(initialized&&storage.capacity===next.capacity&&previous.length===next.nodes.length&&next.nodes.every(n=>{const old=oldByKey.get(n.key);return old&&old.slot===n.slot&&JSON.stringify(old.childSlots)===JSON.stringify(n.childSlots);})){for(const n of next.nodes){const old=oldByKey.get(n.key);n.lo=old.lo;n.pitch=old.pitch;}lastPlan=next;pending=false;return;}
   const old=storage;if(!storage||storage.capacity!==next.capacity)storage=makeStorage(next.capacity);
   const meta=new ArrayBuffer(next.capacity*64),f=new Float32Array(meta),ui=new Uint32Array(meta),remap=new ArrayBuffer(next.capacity*32),rf=new Float32Array(remap),ru=new Uint32Array(remap);
@@ -187,10 +190,14 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  }
  return {
   configure(patch){const next=validateAllocation({...topology.options,...patch,weights:{...topology.options.weights,...patch.weights}});const capacity=topology.roots.length+8*Math.floor(topology.roots.length*next.budget/8);admission(capacity,next);topology.options=next;pending=true;return this.read();},
-  encode(encoder,world,backtraceScale=0){
+  encode(encoder,world,backtraceScale=0,sources={parcels:[],supports:[]}){
    transportClock+=Math.abs(backtraceScale);
    if(destroyed)throw Error('Material hierarchy disposed');
-   if(pending||!initialized)stage(encoder,world);
+   const key=JSON.stringify(sources);if(key!==sourceKey){pending=true;sourceKey=key;}
+   if(pending||!initialized)stage(encoder,world,sources);
+   const uploadKey=key+':'+revision;
+   if(sourceUploadKey!==uploadKey){sourceView=sourceAtlas.upload(depositHierarchySources(sources.parcels,lastPlan.nodes,storage.capacity,plan));sourceUploadKey=uploadKey;}
+   world={...world,18:sourceView};
    dispatch(encoder,'advanceBricks',lastPlan.leaves.length,world,[[0,storage.meta],[1,storage.fields[current]],[2,storage.fields[1-current]],[3,lists.leaves],[6,params]]);
    current=1-current;
    for(const level of lists.levels)dispatch(encoder,'restrictBricks',level.count,world,[[0,storage.meta],[2,storage.fields[current]],[3,level.buffer]]);
@@ -215,10 +222,11 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
   },
   async snapshot(){
    if(!storage)return null;
+   const identity={nodes:structuredClone(lastPlan.nodes),steps,revision,dims:[...plan.materialDims],pitch:plan.materialPitch};
    const b=buffer('material hierarchy diagnostic',storage.fields[current].size,D|GPUBufferUsage.MAP_READ);const e=device.createCommandEncoder();e.copyBufferToBuffer(storage.fields[current],0,b,0,b.size);device.queue.submit([e.finish()]);
-   try{await b.mapAsync(GPUMapMode.READ);return {nodes:lastPlan.nodes.map(n=>({...n})),values:Array.from(new Float32Array(b.getMappedRange())),dims:plan.materialDims,pitch:plan.materialPitch};}finally{b.destroy();}
+   try{await b.mapAsync(GPUMapMode.READ);return {...identity,values:Array.from(new Float32Array(b.getMappedRange()))};}finally{b.destroy();}
   },
   read(){return {identity:'pooled-material-hierarchy-v1',options:structuredClone(topology.options),baseDims:plan.materialDims,steps,revision,allocatedBricks:lastPlan?.nodes.length??0,leafBricks:lastPlan?.leaves.length??0,capacity:storage?.capacity??topology.capacity,estimatedCellWork:lastPlan?.cost??0,materialBytes:(storage?.capacity??topology.capacity)*64*32*2,demandRoute:'asynchronous-per-brick-GPU-reduction',predictionTransportInterval:demandLag,renderMaterialDims:plan.materialDims,error,...diagnostics};},
-  destroy(){destroyed=true;release(storage);params.destroy();for(const b of ownedLists)b.destroy();groups.clear();if(!reading)readback?.destroy();readback=null;},
+  destroy(){sourceAtlas.destroy();destroyed=true;release(storage);params.destroy();for(const b of ownedLists)b.destroy();groups.clear();if(!reading)readback?.destroy();readback=null;},
  };
 }

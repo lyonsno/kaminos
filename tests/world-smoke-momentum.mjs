@@ -9,7 +9,7 @@ function producer(plan,anchor={translate:[0,0,0],scale:1},borrow=false){
  globalThis.GPUTextureUsage={TEXTURE_BINDING:1,STORAGE_BINDING:2,COPY_SRC:4};
  globalThis.GPUShaderStage={COMPUTE:1};
  const resource=d=>({...d,createView(){return this;},destroy(){}});let uniform;
- const device={limits:{maxTextureDimension3D:2048,maxStorageBufferBindingSize:1e9,maxBufferSize:1e9},createBuffer:resource,createTexture:resource,createShaderModule:x=>x,createBindGroupLayout:x=>x,createPipelineLayout:x=>x,createComputePipeline:x=>x,createBindGroup:x=>x,queue:{writeBuffer(b,o,data){if(b.label==='world smoke uniforms')uniform=Array.from(data);}}};
+ const device={limits:{maxTextureDimension2D:16384,maxTextureDimension3D:2048,maxStorageBufferBindingSize:1e9,maxBufferSize:1e9},createBuffer:resource,createTexture:resource,createShaderModule:x=>x,createBindGroupLayout:x=>x,createPipelineLayout:x=>x,createComputePipeline:x=>x,createBindGroup:x=>x,queue:{writeTexture(){},writeBuffer(b,o,data){if(b.label==='world smoke uniforms')uniform=Array.from(data);}}};
  const field=createWorldSmoke(device,plan,anchor,borrow?{borrowMaterial:{buffers:[{},{}],optical:resource({})}}:{});
  const encoder={beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}})};
  return (fineDims,transform=anchor)=>{field.encode(encoder,{fineBuffer:{},reactionTexture:resource({}),fineDims,transform,time:{dtScale:1,backtraceScale:1},iterations:0});return {lo:uniform.slice(72,75),hi:uniform.slice(76,79)};};

@@ -1,3 +1,4 @@
+import {checkedWorldFrame} from './volume-world-frame.mjs';
 // Authored fire records. The single-domain engine consumes these through an
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
@@ -28,13 +29,13 @@ export function fireRenderingSettings(settings){
  return {domControls:Object.fromEntries(Object.entries(controls(settings.domControls,'settings')).filter(([id])=>fireControlOwner(id)==='scene')),
  rendererControls:controls(settings.rendererControls,'renderer settings'),presentationControls:controls(settings.presentationControls,'presentation settings')};
 }
-export function createFireDomainRecord({settings,translation=[0,0,0],scale=1,followSource=true,label='Fire & smoke',collision=false}){
+export function createFireDomainRecord({settings,translation=[0,0,0],scale=1,followSource=true,label='Fire & smoke',collision=false,worldFrame=null}){
  const buckets={source:{},domain:{},material:{},scene:{}};
  for(const [id,value] of Object.entries(controls(settings.domControls,'settings')))buckets[fireControlOwner(id)][id]=value;
  const t=normalizeFlameDomainTranslation(translation),s=normalizeFlameDomainScale(scale);
  return checkedFireDomainRecord({id:FIRE_DOMAIN_ID,type:FIRE_DOMAIN_TYPE,source:FIRE_DOMAIN_SOURCE,label,fileName:'Fire simulation',
  transform:{position:[t[0],t[1]+s,t[2]],rotation:[0,0,0],scale:[s,s,s]},
- simulation:{kind:'fire',followSource,collision,settings:buckets.domain,sourceTemplate:buckets.source},
+ simulation:{kind:'fire',followSource,collision,...(worldFrame?{worldFrame:checkedWorldFrame(worldFrame)}:{}),settings:buckets.domain,sourceTemplate:buckets.source},
  volumeMaterial:{kind:'fire-volume',settings:buckets.material}});
 }
 export function checkedFireDomainRecord(record){
@@ -43,6 +44,7 @@ export function checkedFireDomainRecord(record){
  if(pose.scale.some(v=>v!==s)||pose.rotation.some(v=>v!==0))throw Error('Fire domain requires world-aligned uniform scale');
  if(r.simulation?.kind!=='fire'||typeof r.simulation.followSource!=='boolean'||typeof r.simulation.collision!=='boolean')throw Error('Invalid fire domain simulation');
  if(r.volumeMaterial?.kind!=='fire-volume')throw Error('Invalid fire volume material');
+ if(r.simulation.worldFrame!=null)r.simulation.worldFrame=checkedWorldFrame(r.simulation.worldFrame);
  r.simulation.settings=controls(r.simulation.settings,'domain settings');
  r.simulation.sourceTemplate=controls(r.simulation.sourceTemplate,'source template');
  r.volumeMaterial.settings=controls(r.volumeMaterial.settings,'material settings');
@@ -52,7 +54,7 @@ export function checkedFireDomainRecord(record){
 export function fireDomainFrame(record){const r=checkedFireDomainRecord(record),s=r.transform.scale[0];return {translation:[r.transform.position[0],r.transform.position[1]-s,r.transform.position[2]],scale:s,followSource:r.simulation.followSource};}
 // Source-owned descriptors retain the cockpit schema; only this adapter maps
 // them to solver control names. Pose is authoritative for centre/aim/scale.
-export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1,visible=()=>true}={}){
+export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1,visible=()=>true,worldSources=false}={}){
  const ids=new Set();
  return records.map(raw=>{
   const record=checkedFireSourceRecord(raw);if(ids.has(record.id))throw Error('Duplicate flame source identity');ids.add(record.id);
@@ -68,7 +70,7 @@ export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0
   }
   const pose=flamePoseToDomain(record.transform,translation,scale);
   const inside=flamePoseInDomain(record.transform,translation,scale,shared);
-  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false&&visible(record.id),shared)};
+  return {id:record.id,...(worldSources?{worldSource:true}:{}),controls:immersedControlsForFlamePose(controls,pose,(inside||worldSources)&&record.emissionEnabled!==false&&visible(record.id),shared,{worldSource:worldSources})};
  });
 }
 export function checkedFireSourceRecord(record){

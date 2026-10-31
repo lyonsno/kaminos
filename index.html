@@ -5357,6 +5357,12 @@ function requirePluralFlameSourceRuntime(){
   if(typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');
   if(readVolumeControls().emitterSourceLaw!=='immersed-source')throw Error('Multiple scene sources require the immersed source law');
 }
+function worldSourceSupplyEnabled(){const c=readVolumeControls();return c.worldSmoke==='on'&&c.emitterSourceLaw==='immersed-source';}
+function flameSourceInsideWorld(pose){
+  const world=volumePrototype?.debugState?.().worldSmoke;
+  if(world?.effective!=='one-way-world-field')return false;
+  return pose.position.every((v,a)=>{const q=(v-world.anchor.translate[a])/world.anchor.scale;return q>=world.min[a]&&q<=world.max[a];});
+}
 function syncAuthoredFlameSources(){
   // Standalone basin previews use the control-driven source. Only an authored
   // scene owns a source collection, including its authoritative empty state.
@@ -5366,8 +5372,9 @@ function syncAuthoredFlameSources(){
   if(records.length>1){requirePluralFlameSourceRuntime();if(records.some(record=>record.emission.settings['volume-emitter-source-law']?.value!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');flameDomainFollowSource=false;}
   if(typeof volumePrototype?.setImmersedSources==='function'){
     const immersed=records.every(record=>(record.emission.settings['volume-emitter-source-law']?.rawValue??record.emission.settings['volume-emitter-source-law']?.value??readVolumeControls().emitterSourceLaw)==='immersed-source');
-    const inputs=immersed?flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale,visible:isSceneItemVisible}):[];
+    const inputs=immersed?flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale,visible:isSceneItemVisible,worldSources:worldSourceSupplyEnabled()}):[];
     volumePrototype.setImmersedSources(inputs);
+    if(worldSourceSupplyEnabled())flameEmitterInjectionSuspended=authoredFlamePresent&&!flameSourceInsideWorld(flameEmitterPose);
   }
   window._kaminosDirty?.();
 }
@@ -5485,14 +5492,14 @@ function settleAuthoredFlameDomain(event) {
   catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
   flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
   flameDomainDraft=null;refreshFlameDomainPreview();
-  setInfo(flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
+  setInfo(worldSourceSupplyEnabled()?'Fine detail region moved; existing world gas continues':flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
   // Several sources share this gas. Releasing or undoing one source must not
   // carry the field to that source and erase what the others already emitted.
   if(workingScene.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1)return false;
-  if(!targetDomain&&!flameDomainFollowSource)return false;
+  if(!targetDomain&&(worldSourceSupplyEnabled()||!flameDomainFollowSource))return false;
   const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
     { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:effectiveFlameDomainControls(readVolumeControls(),volumePrototype) });
   const previous = [...flameDomainTranslation];
@@ -5549,8 +5556,8 @@ function writeAuthoredFlameEmitterPose(value,id=null) {
   syncAuthoredFlameSources();
   if (wasSuspended !== flameEmitterInjectionSuspended) {
     setInfo(flameEmitterInjectionSuspended
-      ? 'Flame source support outside current grid: injection paused; drag continues'
-      : 'Flame source returned to the current simulation grid');
+      ? (worldSourceSupplyEnabled()?'Flame source is outside the world envelope; existing gas continues':'Flame source support outside current grid: injection paused; drag continues')
+      : (worldSourceSupplyEnabled()?'Flame source supplies the world field':'Flame source returned to the current simulation grid'));
     renderSceneObjectList();
   }
 }
@@ -17001,6 +17008,7 @@ function setVolumeControlValue(id, value) {
   const el = document.getElementById(id);
   if (!el) return;
   if(GRID_TUNING_FIELDS.some(([,key])=>key===id)&&el.tagName==='SELECT'&&Number.isFinite(Number(value))&&![...el.options].some(o=>o.value===String(value))){const option=document.createElement('option');option.value=String(value);option.textContent=String(value);el.append(option);}
+  if(/^volume-immersed-centre-[xyz]$/.test(id)&&Number.isFinite(Number(value))){el.min=String(Math.min(Number(el.min),Number(value)));el.max=String(Math.max(Number(el.max),Number(value)));}
   if(id==='volume-immersed-radius'&&Number.isFinite(Number(value)))el.max=String(Math.max(Number(el.max)||0,Number(value)));
   if (el.type === 'checkbox') {
     el.checked = value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -17026,6 +17034,7 @@ function setVolumeColorControlValue(id, value, fallback) {
 // step to any rather than snapping, and is recorded.
 function applyVolumeRangeSavedValue(el, value) {
   if (!el || !Number.isFinite(value)) return;
+  if(/^volume-immersed-centre-[xyz]$/.test(el.id)){el.min=String(Math.min(Number(el.min),value));el.max=String(Math.max(Number(el.max),value));}
   if(el.id==='volume-immersed-radius')el.max=String(Math.max(Number(el.max)||0,value));
   const min = el.min === '' ? -Infinity : Number(el.min);
   const max = el.max === '' ? Infinity : Number(el.max);
@@ -22155,7 +22164,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
       // unlike saved basin values. Use the same DOM representation as runtime
       // readback without touching the live control or rounding any feed data.
       const range=document.getElementById(id).cloneNode();
-      range.step='any';range.value=String(mapped[key]);
+      range.step='any';if(suffix.startsWith('centre-')){range.min=String(Math.min(Number(range.min),mapped[key]));range.max=String(Math.max(Number(range.max),mapped[key]));}range.value=String(mapped[key]);
       const descriptor=state.domControls[id];descriptor.value=Number(range.value);descriptor.rawValue=range.value;
     }
   }
@@ -25247,7 +25256,7 @@ function readAuthoredCameraView(){return {position:camera.position.toArray(),tar
 function readAuthoredFireObjects() {
   const objects=workingScene.objects.map(serializeSceneObject);
   return activeSceneComposition?authorFireObjects(objects,readVolumeSettingsValues(),{
-    translation:flameDomainTranslation,scale:flameDomainScale,followSource:flameDomainFollowSource,
+    translation:flameDomainTranslation,scale:flameDomainScale,followSource:flameDomainFollowSource,worldFrame:volumePrototype?.worldFrame?.()??null,
     collision:isAuthoredKilnCollisionRoute()}):objects;
 }
 function editOwnedFireSettings(ownerId,kind,patch) {
@@ -25312,7 +25321,7 @@ function buildSceneData(capture = null) {
         color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
     },
     volumePrimitives: getVolumePrimitiveState(),
-    flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
+    flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,flameWorldFrame:volumePrototype?.worldFrame?.()??null,
     postprocessing: {
       sceneGI: {...sceneGISettings},
       ao: {
@@ -27012,9 +27021,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     })());
     if(!schemaStage.current)return;
     const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
-    writeFlameSettingsState({...fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
+    writeFlameSettingsState(flameSettingsState(fireSettings,activeVolumeSettingsPresetReceipt));
     adaptiveMaterialSettingsAuthored=Object.hasOwn(restorePlan.fireSettings.domControls,'volume-adaptive-material');
   }
+
+  volumePrototype?.restoreWorldFrame?.(restorePlan.flameWorldFrame??null);
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});

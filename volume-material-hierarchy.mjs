@@ -29,14 +29,16 @@ export class MaterialHierarchy{
  }
  get capacity(){return this.roots.length+8*Math.floor(this.roots.length*this.options.budget/8);}
  configure(patch){this.options=validateAllocation({...this.options,...patch,weights:{...this.options.weights,...patch.weights}});return this.allocate(this.signals);}
- allocate(signals=new Map()){
+ allocate(signals=new Map(),birthDemand=null){
   this.signals=signals;
   const old=new Map(this.nodes.map(n=>[n.key,n])),nodes=this.roots.map(n=>({...n,children:null}));
   const heap=[];
   const put=n=>{heap.push(n);let i=heap.length-1;while(i){const p=(i-1)>>1;if(heap[p].priority>=n.priority)break;heap[i]=heap[p];i=p;}heap[i]=n;};
   const take=()=>{const top=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let c=i*2+1;if(c+1<heap.length&&heap[c+1].priority>heap[c].priority)c++;if(heap[c].priority<=last.priority)break;heap[i]=heap[c];i=c;}heap[i]=last;}return top;};
   const offer=(n,inherited={})=>{
-   n.signal=signals.get(n.key)??inherited;
+   n.measured={...(signals.get(n.key)??inherited)};
+   n.signal={...n.measured};
+   if(birthDemand){const birth=birthDemand(n);for(const k of Object.keys(this.options.weights))n.signal[k]=Math.max(n.signal[k]??0,birth[k]??0);}
    if(n.level>=this.options.maxDetail)return;
    const gain=detailUtility(n.level+1,this.options.spread)-detailUtility(n.level,this.options.spread);
    const importance=materialImportance(n.signal,this.options.weights);
@@ -49,7 +51,7 @@ export class MaterialHierarchy{
    const n=take();n.children=[];
    for(let oct=0;oct<8;oct++){
     const c=n.c.map((v,a)=>2*v+((oct>>a)&1)),child={key:key(n.level+1,c),level:n.level+1,c,parent:n.key,oct,children:null};
-    nodes.push(child);n.children.push(child.key);offer(child,n.signal);
+    nodes.push(child);n.children.push(child.key);offer(child,n.measured);
    }
   }
   // Root identities never move. Remaining surviving nodes keep their slots
