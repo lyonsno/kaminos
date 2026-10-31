@@ -67,3 +67,12 @@ renderer._geometries.updateForRender=()=>assert.equal(graphResolved,true,'geomet
 renderer._pipelines.getForRender=()=>{graphResolved=false;};
 await WebGPURenderer.prototype.compileAsync.call(renderer,new Scene(),new PerspectiveCamera());
 console.log('PASS geometry attributes consume the completed asynchronous graph');
+
+// Exercise the compiler's pending RenderList with the shipped Lighting manager.
+const native=new WebGPURenderer({canvas:{width:1,height:1,style:{},addEventListener(){}}});
+renderer.lighting=native.lighting;
+const liveScene=new Scene(),activeLights=native.lighting.getNode(liveScene);
+const candidate=native.lighting.prepare(liveScene,()=>{});
+await WebGPURenderer.prototype.compileAsync.call(renderer,liveScene,new PerspectiveCamera(),null,{lightsNode:candidate.node});
+assert.equal(native.lighting.getNode(liveScene),activeLights,'preparation does not replace the active generation');
+candidate.commit();assert.equal(native.lighting.getNode(liveScene),candidate.node);
