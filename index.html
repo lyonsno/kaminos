@@ -3318,7 +3318,7 @@ import { installSceneControlHistory, installRelativeNumberDrag } from './scene-c
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
-import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility,withViewportVisibilityAsync} from './scene-visibility.mjs';
+import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility,withViewportVisibilityAsync,borrowViewportVisibility} from './scene-visibility.mjs';
 import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies} from './scene-repetition.mjs';
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
 import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
@@ -11187,12 +11187,13 @@ async function initScene() {
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneLightingPreparation=createLightingPreparation({
     compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass])),
+    liveCompile:()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,visibility:()=>borrowViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible)}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:value=>volumePrototype?.setSceneLightingRebuildPending(value),
     onStatus:state=>{
       const node=document.getElementById('scene-lighting-preparation-status');
-      node.hidden=!state.held;
-      node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:'Preparing lighting — previous frame shown';
+      node.hidden=!state.pending&&!state.error;
+      node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:(state.held?'Preparing lighting — previous frame shown':'Preparing lighting — scene remains live');
       node.querySelector('button').hidden=!state.error;
       if(!state.held)window._kaminosDirty?.();
     },
@@ -25002,7 +25003,8 @@ function mountSceneSpotLight(raw) {
 function disposeSceneSpotLight(id) {
   const binding=sceneSpotLights.get(id);if(!binding)return;
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
-  binding.light.removeFromParent();binding.light.target.removeFromParent();binding.light.dispose?.();
+  binding.light.removeFromParent();binding.light.target.removeFromParent();
+  if(sceneLightingPreparation)sceneLightingPreparation.deferDisposal(()=>binding.light.dispose?.());else binding.light.dispose?.();
   sceneSpotLights.delete(id);
   sceneLightingPreparation?.request();
 }

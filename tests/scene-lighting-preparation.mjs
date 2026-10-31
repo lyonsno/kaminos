@@ -51,3 +51,21 @@ for(const hidden of [['hidden'],['@group:lights']]){
  if(visibility.withViewportVisibilityAsync)await assert.rejects(visibility.withViewportVisibilityAsync(objects,visible,async()=>{await Promise.resolve();throw Error('compile rejection');}),/compile rejection/);
  assert(objects.every(x=>x.object.visible));
 }
+
+// Ordinary light topology edits use pending lighting without stopping the scene.
+let blockingHeld=true,liveFinish,liveCalls=0,heldCalls=0,disposed=0;
+const liveOwner=lighting.createLightingPreparation({hold:v=>{if(v)heldCalls++;},
+ compile:async()=>{if(blockingHeld)await new Promise(r=>liveFinish=r);},liveCompile:async()=>{liveCalls++;await new Promise(r=>liveFinish=r);}});
+liveOwner.deferDisposal?.(()=>disposed++);
+const liveTask=liveOwner.request();
+await new Promise(r=>setImmediate(r));
+assert.equal(liveOwner.state().held,false,'ordinary pending light compilation keeps presentation running');
+assert.equal(liveCalls,1);assert.equal(disposed,0);
+liveFinish();await liveTask;assert.equal(disposed,1);assert.equal(heldCalls,0);
+blockingHeld=false;await liveOwner.request(()=>{});assert.equal(heldCalls,1,'flame graph mutation retains exclusive preparation');
+const liveFailure=lighting.createLightingPreparation({hold(){},compile:async()=>{},liveCompile:async()=>{throw Error('pending rejected');}});
+liveFailure.deferDisposal?.(()=>disposed++);
+await assert.rejects(liveFailure.request(),/pending rejected/);
+assert.equal(liveFailure.state().held,false,'retained lighting still animates after pending failure');
+assert.equal(disposed,1,'failed replacement retains old light resources');
+console.log('PASS live ordinary edits, exclusive graph edits, retained resources on failure');

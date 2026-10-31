@@ -1,18 +1,25 @@
 import {TSL} from './lib/three.webgpu.js';
+import {yieldToMain} from './lib/three.core.js';
 
 // Match this bundled Three version's PassNode.updateBefore context. Its
 // compileAsync alone carries target/MRT, but omits AO/GI context and draw flags.
 // Caller holds scene submission for the complete asynchronous interval.
-export async function compileSceneLighting(renderer, passes) {
+export async function compileSceneLighting(renderer, passes, {live=false,visibility=()=>()=>{}}={}) {
+  const generations=new Map();
+  if(live)for(const {scene} of passes)if(!generations.has(scene))generations.set(scene,renderer.beginLightingPreparation(scene));
+  if(!live)for(const {scene} of passes)renderer.releaseRetainedLighting?.(scene);
   const pipelineWork=[];
+  try {
   try {
     for (const pass of passes) {
       const {scene,camera}=pass;
-      const prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
+      let prior,restoreVisibility=()=>{};
+      const enter=()=>{
+      restoreVisibility=visibility();
+      prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
         transparent:renderer.transparent,opaque:renderer.opaque,autoClear:renderer.autoClear,
         material:scene.overrideMaterial,mask:camera.layers.mask,name:scene.name};
-      let receivingContext, receivingValue;
-      try {
+
         renderer.setRenderTarget(pass.renderTarget);renderer.setMRT(pass._mrt);
         renderer.transparent=pass.transparent;renderer.opaque=pass.opaque;renderer.autoClear=true;
         if(pass._layers)camera.layers.mask=pass._layers.mask;
@@ -41,13 +48,21 @@ export async function compileSceneLighting(renderer, passes) {
           renderer.contextNode=receivingContext;
         }
         scene.name=pass.name||scene.name;
-        await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0,pipelineWork});
-      } finally {
+      };
+      let receivingContext, receivingValue;
+      const leave=()=>{
         if(receivingContext)receivingContext.value=receivingValue;
         renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;
         renderer.transparent=prior.transparent;renderer.opaque=prior.opaque;renderer.autoClear=prior.autoClear;
         scene.overrideMaterial=prior.material;camera.layers.mask=prior.mask;scene.name=prior.name;
-      }
+        restoreVisibility();
+      };
+      enter();
+      try {
+        const cooperativeYield=async(wait=yieldToMain)=>{leave();try{await wait();}finally{enter();}};
+        await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0,pipelineWork,
+          ...(live?{lightsNode:generations.get(scene).node,yieldToMain:cooperativeYield}:{})});
+      } finally {leave();}
     }
   } finally {
     // Drain every submitted pass even if a later graph build fails. Driver
@@ -55,23 +70,26 @@ export async function compileSceneLighting(renderer, passes) {
     const results=await Promise.all(pipelineWork);
     for(const batch of results)for(const result of batch)if(result.status==='rejected')throw result.reason;
   }
+  for(const generation of generations.values())generation.commit();
+  }catch(error){for(const generation of generations.values())generation.discard();throw error;}
 }
 
 // One owner for renderer state across asynchronous lighting preparation. A
 // flame graph replacement queues with ordinary light edits, before compiling.
-export function createLightingPreparation({compile,hold,recover,onStatus=()=>{}}) {
+export function createLightingPreparation({compile,liveCompile,hold,recover,onStatus=()=>{}}) {
   let task=null,revision=0,completed=0,compiling=false,external=false,held=false,error=null;
-  const changes=[];
+  const changes=[],disposals=[];
+  let exclusive=!liveCompile;
   let drain;
   const state=()=>({held,compiling,pending:completed!==revision,error,revision,completed});
   const publish=()=>onStatus(state());
   const syncHold=()=>{
-    const next=external||completed!==revision||error!==null;
+    const next=external||(exclusive&&(completed!==revision||error!==null));
     if(next===held)return drain;
     held=next;drain=hold(next);return drain;
   };
   function request(change) {
-    if(change)changes.push(change);
+    if(change){changes.push(change);exclusive=true;}
     revision++;error=null;
     const quiescent=syncHold();publish();
     if(task)return task;
@@ -81,14 +99,15 @@ export function createLightingPreparation({compile,hold,recover,onStatus=()=>{}}
       while(completed!==revision){
         const current=revision;
         for(const apply of changes.splice(0))await apply();
-        await compile();
+        await (exclusive||external?compile:liveCompile)();
         completed=current;
       }
+          for(const dispose of disposals.splice(0))dispose();
     }).catch(cause=>{error=String(cause.message??cause);throw cause;})
-      .finally(()=>{compiling=false;task=null;syncHold();publish();});
+      .finally(()=>{compiling=false;task=null;syncHold();if(!error)exclusive=!liveCompile;publish();});
     task.catch(()=>{}); // UI callers surface failure through onStatus.
     return task;
   }
-  return {request,state,retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
+  return {request,state,deferDisposal:dispose=>disposals.push(dispose),retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
     setExternalHold(value){external=Boolean(value);const result=syncHold();publish();return result;}};
 }

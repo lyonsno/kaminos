@@ -97,3 +97,27 @@ failureRelease();await checkedFailure;
 renderer.compileAsync=async(s,c,target,options)=>{options.pipelineWork.push(Promise.resolve([{status:'rejected',reason:Error('native failed')}]))};
 await assert.rejects(compileSceneLighting(renderer,[pass]),/native failed/);
 console.log('PASS shared pass barrier propagates native failure and drains after graph failure');
+
+// A live preparation yields with the exact active draw context restored, and
+// promotes the pending light set only after every pass's native work settles.
+let entered=0,committed=0,discarded=0,yielded=0,liveRelease;
+renderer.beginLightingPreparation=()=>({node:{candidate:true},commit(){committed++;},discard(){discarded++;}});
+renderer.compileAsync=async(s,c,target,options)=>{
+  assert.equal(options.lightsNode?.candidate,true,'live compilation uses an isolated pending lighting node');
+  assert.equal(renderer.target,pass.renderTarget);
+  await options.yieldToMain(async()=>{
+    yielded++;for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'drawing context restored while compiler yields');
+    assert.equal(camera.layers.mask,1);assert.equal(scene.overrideMaterial,null);
+  });
+  entered++;assert.equal(renderer.target,pass.renderTarget,'compile context restored after yielding');
+  options.pipelineWork.push(new Promise(r=>liveRelease=()=>r([])));
+};
+const live=compileSceneLighting(renderer,[pass],{live:true});
+await new Promise(r=>setImmediate(r));
+assert.equal(yielded,1);assert.equal(entered,1);assert.equal(committed,0);
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
+liveRelease();await live;assert.equal(committed,1);assert.equal(discarded,0);
+renderer.compileAsync=async()=>{throw Error('pending failed');};
+await assert.rejects(compileSceneLighting(renderer,[pass],{live:true}),/pending failed/);
+assert.equal(committed,1);assert.equal(discarded,1);
+console.log('PASS live preparation restores drawing context at yields and promotes only complete lighting');
