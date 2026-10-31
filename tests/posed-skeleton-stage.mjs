@@ -8,3 +8,9 @@ const session={attach:async root=>{scene.add(root);const asset={id:'object-'+ass
 const host={controls:{document,components:{register:()=>({changed:f=>f(),dispose(){}})}},scene:{open:async()=>session}};
 const entry=await createPosedSkeleton({host,inputs:{}},{loadSources:async()=>data});
 try{const creature=assets.find(a=>a.root.name.includes('pose skeleton')),size=sceneContentBounds(creature.root).getSize(new T.Vector3());assert(size.length()<3,'Native creature framing must exclude the 30-unit comparison stage');const stage=assets.find(a=>a!==creature);assert(stage,'Reference stage is separately registered');scene.updateMatrixWorld(true);const before=stage.root.matrixWorld.clone();creature.root.position.set(2,0,0);creature.root.rotation.z=.4;scene.updateMatrixWorld(true);assert.deepEqual(stage.root.matrixWorld.toArray(),before.toArray());const c=new T.PerspectiveCamera(50,1,.01,1000),controls={target:new T.Vector3(),update(){}};c.position.set(3,2,3);assert(frameSceneObjectRecord({object:creature.root},c,controls));assert(c.position.distanceTo(controls.target)<6,'Native Frame Selected must remain near the creature');}finally{await entry.dispose();}assert(assets.every(a=>!a.root.parent));console.log('Actual posed factory keeps the stage separate through native framing and whole-creature transforms, and cleans both registrations');
+
+// Generated casts can contain more vertices than a JS call accepts as arguments.
+const count=340494,dense={...data,manifest:{...data.manifest,vertices:count},rest:new Float32Array(count*3),weights:new Float32Array(count*2)};
+dense.rest[(count-1)*3+1]=-3;for(let i=0;i<count;i++)dense.weights[i*2+1]=1;
+const start=assets.length,large=await createPosedSkeleton({host,inputs:{view:{position:[4,2,4],target:[0,0,0]}}},{loadSources:async()=>dense});
+try{assert.equal(assets.slice(start).find(a=>a.root.name==='Pose reference floor').root.position.y,-3.04);}finally{await large.dispose();}

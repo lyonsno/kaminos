@@ -396,7 +396,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
-     replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
+     replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,retarget:nextAdapter.retarget,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
      if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
      if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();

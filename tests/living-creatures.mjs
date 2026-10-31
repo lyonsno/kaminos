@@ -42,3 +42,18 @@ const held=await module.createLivingScene({host,inputs:{actors:[{id:'held',label
 assert.deepEqual(held.read().actors[0].state.recipe.wander.motion,motion,'Floating frame conversion consumed RNG/replanned a saved Wander setup');
 await held.dispose();
 console.log('Stable independent actor identity, source sharing, local clocks/poses/removal, truthful pose reads and retained cohort reconstruction');
+
+// A fitted rest remains the effective route through success and rollback.
+const retarget={schema:'kaminos.fitted-rest-motion.v1',method:'incoming-swing-local-deltas',jointNames:['pelvis'],sourceRestPositions:[[0,0,0]],fitSourceSha256:'d'.repeat(64)};
+const fitTemplate={...template,motions:[{id:'first',label:'First',motion:'fixture-motion',motion_sha256:'a'.repeat(64)},{id:'second',label:'Second',motion:'second-motion',motion_sha256:'e'.repeat(64)}]};
+const fitted=await module.createLivingScene({host,inputs:{actors:[{id:'fitted',label:'Fitted',creature:fitTemplate}]}},{loadSources:async input=>({...data,frame:{...data.frame,retarget},source:{...data.source,motionSha256:input.motion_sha256}})});
+try{
+ const identity=fitted.read().actors[0].state.source.retarget;assert.equal(identity.fitSourceSha256,retarget.fitSourceSha256);
+ await fitted.operations.actor({id:'fitted',operation:'motion',input:{id:'second'}});
+ assert.deepEqual(fitted.read().actors[0].state.source.retarget,identity,'Motion switch erased effective fitted-rest identity');
+ const prior=fitted.read().actors[0].state.source;let reject=true;
+ host.scene.refreshPresentation=()=>{if(reject){reject=false;throw Error('Injected presentation failure');}};
+ await assert.rejects(()=>fitted.operations.actor({id:'fitted',operation:'motion',input:{id:'first'}}),/Injected presentation failure/);
+ assert.deepEqual(fitted.read().actors[0].state.source,prior,'Failed switch changed prior effective source identity');
+ assert.deepEqual(fitted.pose('fitted',{bones:['pelvis']}).source.retarget,identity);
+}finally{host.scene.refreshPresentation=()=>{};await fitted.dispose();}
