@@ -16,7 +16,9 @@ The runtime is the same shared-device WebGPU tiled solver as the ash experiment,
 using merged exposed-face runs. Ordinary rigid scene meshes are sampled in the
 field's coordinates and update their collision occupancy as they move. Skinning,
 instancing and active morph targets require evaluated geometry and currently
-stop this ash field with an explicit error. Other ash fields are independent;
+stop this ash field with an explicit error. Correcting or removing the offending
+geometry lets stepping resume; checkpointing revalidates the scene and preserves
+the current material without requiring another simulation step. Other ash fields are independent;
 they do not exchange material or act as obstacles for each other. The outer
 bounds retain material. The bottom of the field is its support floor; match its
 placement to the desired surface.

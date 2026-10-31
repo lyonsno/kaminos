@@ -42,3 +42,27 @@ test('scene triangles are borrowed in field coordinates; their native transform 
 test('ash refuses a singular field transform before GPU construction',()=>{
  const raw=record();raw.transform.scale=[1,0,1];assert.throws(()=>records.normalize(raw),/scale|transform/i);
 });
+
+test('corrected scene collision permits checkpoint without losing retained or falling state',async()=>{
+ let scene=[],steps=0,collisions;const state={schema:'kaminos.tiled-ash.v1',values:[.25,.75],falling:{particles:[1,2,3,.5]}};
+ const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,initialDepth:0}},readObjects:()=>scene,createPatch:async options=>{collisions=options.sceneRecords;return {root:new Group(),syncScene:()=>collisions(),step(){collisions();steps++;},read:()=>({steps}),snapshot:async()=>structuredClone(state),dispose(){}};}});
+ await object.initialize();object.tick(1000);assert.equal(steps,1);
+ const mesh=new Mesh(new BoxGeometry(),new MeshBasicMaterial());mesh.isSkinnedMesh=true;
+ scene=[{id:'bad',label:'rig',type:'glb',object:mesh}];object.tick(1100);assert.match(object.read().failure,/rigid triangles/);
+ await assert.rejects(object.checkpoint(),/rigid triangles/);
+ scene=[];
+ object.set({paused:true}); // a refusal must not lock out authoring or require deletion
+ const saved=await object.checkpoint();assert.deepEqual(saved.checkpoint,state);assert.equal(object.read().failure,null);
+ object.set({paused:false});object.tick(1200);assert.equal(steps,2);
+ object.dispose();mesh.geometry.dispose();mesh.material.dispose();
+});
+
+test('ash payload synchronization preserves the current authored name',async()=>{
+ const {createSceneRecordOperations}=await import('../scene-record-operations.mjs');
+ const object=await createAshSceneObject({record:record(),readObjects:()=>[],createPatch:async()=>({root:new Group(),syncScene(){},deposit:async()=>{},read:()=>({}),snapshot:async()=>({schema:'kaminos.tiled-ash.v1',values:[.4]}),dispose(){}})});
+ await object.initialize();const entry={...record(),object:object.root,label:'Kiln aftermath'};
+ object.root.userData.kaminosSceneObject.label=entry.label;
+ object.set({rate:.002});entry.ash=await object.checkpoint();
+ const serializer=createSceneRecordOperations({readers:{transform:()=>record().transform,materials:()=>null}});
+ assert.equal(serializer.serialize(entry).label,'Kiln aftermath');object.dispose();
+});

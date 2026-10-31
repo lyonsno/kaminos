@@ -32,9 +32,9 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,onEr
  const boxGeometry=new BoxGeometry(settings.width,settings.height,settings.depth),edges=new EdgesGeometry(boxGeometry);boxGeometry.dispose();
  const guide=new LineSegments(edges,new LineBasicMaterial({color:0xa4aba4,transparent:true,opacity:.4}));guide.position.y=settings.height/2;guide.userData.kaminosEditorHelper=true;root.add(guide);
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
- const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...record,ash:settings};};sync();
+ const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
  const collisionRecords=createAshCollisionRecords(root,readObjects);
- const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');if(failure)throw Error(failure);};
+ const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
@@ -44,15 +44,15 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,onEr
   async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});initialized=true;});},
   tick(timestamp,{active=true,selected=false}={}){
    guide.visible=emitter.visible=selected;
-   if(disposed||busy||failure||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
+   if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
-   try{patch.step(null,source());return true;}catch(error){failure=error.message;onError(failure);return false;}
+   try{patch.step(null,source());if(failure){failure=null;onError(null);}return true;}catch(error){const changed=failure!==error.message;failure=error.message;if(changed)onError(failure);return false;}
   },
   set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
    for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Field dimensions and initial layer belong to creation; add a new field to change its lattice without deleting retained ash');
    settings=next;sync();return api.read();
   },
-  async checkpoint(){return locked(async()=>{const state=await patch.snapshot();settings={...settings,checkpoint:state};sync();return structuredClone(settings);});},
+  async checkpoint(){return locked(async()=>{patch.syncScene();const state=await patch.snapshot();failure=null;settings={...settings,checkpoint:state};sync();return structuredClone(settings);});},
   cover(depth){return locked(()=>patch.deposit({blanketDepth:depth,groundOnly:true}));},
   burst(volume){check();patch.burst(volume);},
   advance(steps=1){check();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Ash steps must be a positive integer');for(let i=0;i<steps;i++)patch.step(null,source());},
