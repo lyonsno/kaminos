@@ -1,5 +1,6 @@
 // Same given joint tree, two observed coordinate frames. Motion quaternions
 // are canonical model-local rotations, never original-Bone pose deltas.
+import {createFittedRestMotion} from './fitted-rest-motion.mjs';
 export function createGivenPaletteMotion({THREE,motion,rigFrame}) {
  const fail=message=>{throw Error(message);};
  const names=motion?.skeleton?.jointNames,parents=motion?.skeleton?.parents,n=names?.length,frames=motion?.frames,fps=motion?.skeleton?.fps;
@@ -27,6 +28,7 @@ export function createGivenPaletteMotion({THREE,motion,rigFrame}) {
  const rest=names.map(name=>matrix(specs.get(name).restMatrix,'rest Bone'));
  const restRotation=rest.map(m=>{const p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();m.decompose(p,q,s);if(s.toArray().some(v=>Math.abs(v-1)>1e-5))fail('Rest Bone scaling is not rigid');return q.normalize();});
  const inverseRest=rest.map(m=>m.clone().invert());
+ const retarget=Object.hasOwn(rigFrame,'retarget')?createFittedRestMotion({THREE,spec:rigFrame.retarget,names,parents,rest}):null;
  function frame(index){
   if(!Number.isInteger(index)||index<0||index>=frames)throw RangeError('Source frame is outside retained motion');
   const global=new Array(n);
@@ -35,11 +37,12 @@ export function createGivenPaletteMotion({THREE,motion,rigFrame}) {
    if(Math.abs(Math.hypot(w,x,y,z)-1)>1e-3)fail('Motion local rotation is not normalized');
    const q=new THREE.Quaternion(x,y,z,w).normalize();global[j]=parents[j]<0?q:worldRotation(parents[j]).clone().multiply(q).normalize();return global[j];
   }
-  const world=names.map((name,j)=>{
+  let world=names.map((name,j)=>{
    const p=new THREE.Vector3().fromArray(motion.positions,(index*n+j)*3).applyMatrix4(conversion);
    const q=rotation.clone().multiply(worldRotation(j)).multiply(inverseRotation).multiply(restRotation[j]).normalize();
    return new THREE.Matrix4().compose(p,q,new THREE.Vector3(1,1,1));
   });
+  if(retarget)world=retarget.frame(world);
   // Common root motion belongs to the actor, so even the fixed influence
   // channel travels. Bone deltas are factored relative to that same actor.
   const actor=world[root].clone().multiply(inverseRest[root]),inverseActor=actor.clone().invert();
@@ -49,5 +52,5 @@ export function createGivenPaletteMotion({THREE,motion,rigFrame}) {
    skinMatrix:inverseActor.clone().multiply(world[j]).multiply(inverseRest[j]).toArray(),
   }))};
  }
- return Object.freeze({frames,fps,jointNames:Object.freeze([...names]),frame});
+ return Object.freeze({frames,fps,jointNames:Object.freeze([...names]),retarget:retarget?.identity??null,frame});
 }

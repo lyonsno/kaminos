@@ -1,0 +1,21 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.core.js';
+import {createGivenPaletteMotion} from '../experiments/creature-motion/given-palette-motion.mjs';
+const identity=()=>[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+const names=['root','elbow','tip'],parents=[-1,0,1],source=[[0,0,0],[1,0,0],[2,0,0]],target=[[0,0,0],[1,0,0],[1,1,0]];
+const frame={canonicalWorldToSourceNormalized:identity(),bones:names.map((name,i)=>{const m=identity();for(let k=0;k<3;k++)m[k][3]=target[i][k];return {name,parent:i?names[i-1]:null,restMatrix:m};}),retarget:{schema:'kaminos.fitted-rest-motion.v1',method:'incoming-swing-local-deltas',jointNames:names,sourceRestPositions:source,fitSourceSha256:'a'.repeat(64)}};
+const motion={joints:3,frames:2,skeleton:{jointNames:names,parents,fps:30},positions:[...source.flat(),0,0,0,1,0,0,1,1,0],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,Math.SQRT1_2,0,0,Math.SQRT1_2,1,0,0,0]};
+const near=(a,b)=>assert(Math.max(...a.map((v,i)=>Math.abs(v-b[i])))<1e-7,JSON.stringify({a,b}));
+const adapter=createGivenPaletteMotion({THREE,motion,rigFrame:frame});
+for(const b of adapter.frame(0).bones)near(b.skinMatrix,new THREE.Matrix4().toArray());
+near(new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(adapter.frame(1).bones[2].worldMatrix)).toArray(),[0,0,0]);
+const unchanged=structuredClone(frame);for(let i=0;i<3;i++)for(let k=0;k<3;k++)unchanged.bones[i].restMatrix[k][3]=source[i][k];
+const retarget=createGivenPaletteMotion({THREE,motion,rigFrame:unchanged});delete unchanged.retarget;const original=createGivenPaletteMotion({THREE,motion,rigFrame:unchanged});
+for(let f=0;f<2;f++)for(let j=0;j<3;j++)near(retarget.frame(f).bones[j].worldMatrix,original.frame(f).bones[j].worldMatrix);
+const invalid=structuredClone(frame);invalid.retarget.jointNames[1]='wrong';assert.throws(()=>createGivenPaletteMotion({THREE,motion,rigFrame:invalid}),/retarget|fitted/i);
+const wrongOffsets=structuredClone(frame);wrongOffsets.retarget.sourceRestPositions[1][0]=1.5;
+assert.throws(()=>createGivenPaletteMotion({THREE,motion,rigFrame:wrongOffsets}).frame(0),/offsets disagree/);
+const malformed=structuredClone(frame);malformed.retarget.sourceRestPositions[0][1]=NaN;assert.throws(()=>createGivenPaletteMotion({THREE,motion,rigFrame:malformed}),/retarget/);
+const wrongMethod=structuredClone(frame);wrongMethod.retarget.method='silent-copy';assert.throws(()=>createGivenPaletteMotion({THREE,motion,rigFrame:wrongMethod}),/retarget/);
+console.log('fitted-rest motion: neutral identity, bend, unchanged equivalence and mismatch rejection passed');
