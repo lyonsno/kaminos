@@ -1,3 +1,4 @@
+import {ashRecordDomain} from './ash/scene-record.mjs';
 import {brazierRoomRecordDomain} from './brazier-room-record.mjs';
 // Application installation only: payload meaning lives with each domain.
 import {sceneAssetRecordDomains} from './scene-asset-records.mjs';
@@ -11,5 +12,5 @@ import {promptReliefRecordDomain} from './inference-kiln-record.mjs';
 export const sceneRecordDomains=Object.freeze([
   ...sceneAssetRecordDomains,cameraRecordDomain,spotLightRecordDomain,proceduralMeshRecordDomain,
   {...proceduralMeshRecordDomain,type:'burner-bed'},fireSourceRecordDomain,fireDomainRecordDomain,
-  localLiquidRecordDomain,promptReliefRecordDomain,brazierRoomRecordDomain,
+  localLiquidRecordDomain,promptReliefRecordDomain,brazierRoomRecordDomain,ashRecordDomain,
 ]);
