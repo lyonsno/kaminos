@@ -69,3 +69,15 @@ await assert.rejects(liveFailure.request(),/pending rejected/);
 assert.equal(liveFailure.state().held,false,'retained lighting still animates after pending failure');
 assert.equal(disposed,1,'failed replacement retains old light resources');
 console.log('PASS live ordinary edits, exclusive graph edits, retained resources on failure');
+
+// A live edit may be escalated to a graph mutation while a frame is in flight.
+let finishLive,finishDrain,graphMutated=false;
+const escalated=lighting.createLightingPreparation({
+ hold:held=>held?new Promise(resolve=>finishDrain=resolve):undefined,
+ liveCompile:()=>new Promise(resolve=>finishLive=resolve),compile:async()=>{},
+});
+const ordinary=escalated.request();await new Promise(r=>setImmediate(r));
+const graph=escalated.request(()=>{graphMutated=true;});
+finishLive();await new Promise(r=>setImmediate(r));
+assert.equal(graphMutated,false,'escalation waits for the newly requested foreground drain');
+finishDrain();await Promise.all([ordinary,graph]);assert.equal(graphMutated,true);

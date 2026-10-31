@@ -3,7 +3,7 @@ import {yieldToMain} from './lib/three.core.js';
 
 // Match this bundled Three version's PassNode.updateBefore context. Its
 // compileAsync alone carries target/MRT, but omits AO/GI context and draw flags.
-// Caller holds scene submission for the complete asynchronous interval.
+// Held preparation owns submission; live preparation restores draw state at every yield.
 export async function compileSceneLighting(renderer, passes, {live=false,visibility=()=>()=>{}}={}) {
   const generations=new Map();
   if(live)for(const {scene} of passes)if(!generations.has(scene))generations.set(scene,renderer.beginLightingPreparation(scene));
@@ -97,6 +97,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
       await quiescent;
       compiling=true;publish();
       while(completed!==revision){
+        await drain; // A live edit can acquire an exclusive hold during its compile.
         const current=revision;
         for(const apply of changes.splice(0))await apply();
         await (exclusive||external?compile:liveCompile)();
