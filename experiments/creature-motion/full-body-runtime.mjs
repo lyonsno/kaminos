@@ -33,8 +33,16 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
  const group=new THREE.Group();group.name='Creature · generated walking';
  let geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();
  const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.kaminosDynamicGeometry=true;group.add(mesh);
- let attachmentHeatmap=false,bodyMaterial=null,heatmapMaterial=null;
+ let attachmentHeatmap=false,bodyMaterial=null,heatmapMaterial=null,renderer=null;
  const influenceColors=[new THREE.Color('#286ce0'),new THREE.Color('#f7ad35'),new THREE.Color('#858585')].map(color=>color.toArray());
+ function clearAttachment({target}){
+  const color=target.getAttribute('color');
+  // The shipped renderer's geometry cleanup enumerates the first draw's
+  // attributes. A body or shadow draw may precede this diagnostic material.
+  // Release our optional attribute explicitly, like the GPU deformer inputs.
+  if(color&&renderer)renderer._attributes.delete(color);
+  target.deleteAttribute('color');target.removeEventListener('dispose',clearAttachment);
+ }
  function paintAttachment(target,data){
   const {body,limb}=limbAttachmentGroups(data.manifest),n=channels.length,colors=new Float32Array(data.manifest.vertices*3);
   for(let v=0;v<data.manifest.vertices;v++){
@@ -44,13 +52,14 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
    for(let c=0;c<3;c++)colors[v*3+c]=shares[0]*influenceColors[0][c]+shares[1]*influenceColors[1][c]+shares[2]*influenceColors[2][c];
   }
   target.setAttribute('color',new THREE.BufferAttribute(colors,3));
+  target.addEventListener('dispose',clearAttachment);
  }
  function setAttachmentHeatmap(visible){
   active();if(typeof visible!=='boolean')throw Error('Boolean attachment heatmap state required');if(visible===attachmentHeatmap)return runtime.read();
   if(visible){
    paintAttachment(geometry,skin);bodyMaterial=mesh.material;
    heatmapMaterial??=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,toneMapped:false});mesh.material=heatmapMaterial;
-  }else{mesh.material=bodyMaterial;bodyMaterial=null;geometry.deleteAttribute('color');}
+  }else{mesh.material=bodyMaterial;bodyMaterial=null;clearAttachment({target:geometry});}
   attachmentHeatmap=visible;return runtime.read();
  }
  const bones=new Map(),inverseRest=new Map();
@@ -69,7 +78,8 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   target.addEventListener('dispose',()=>next.dispose());return next;
  };
  deformer=makeDeformer(geometry,skin);
- if(deformer){retainPoses=false;mesh.frustumCulled=false;mesh.onBeforeRender=renderer=>deformer.flush(renderer);}
+ mesh.onBeforeRender=actualRenderer=>{renderer=actualRenderer;deformer?.flush(actualRenderer);};
+ if(deformer){retainPoses=false;mesh.frustumCulled=false;}
  const poses=new Map();
  const clearPoses=()=>{poses.clear();cacheBytes=0;};
  function active(){if(disposed)throw Error('Full-body runtime is disposed');}
