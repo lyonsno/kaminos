@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {createAuthoredWaterFeature} from '../authored-water-feature.mjs';
 import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -22,8 +23,9 @@ test('restored finite setup remains an editable preview until explicit release',
  const c={localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,refreshAuthoredWaterSamplingPreviews(){},localLiquidHost:null,localLiquidPaused:false,localLiquidFailure:null,
   localLiquidEmitterRecords:()=>[{transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32}}}],setAuthoredWaterPreviewVisible:v=>preview=v,
   localLiquidHostMount:{mount:async()=>{allocations++;return true;}},refreshLocalLiquidPerformance(){},authoredWaterControls:null,structuredClone,setInfo(){},window:{_kaminosDirty(){}}};
+ c.waterFeature=createAuthoredWaterFeature({services:()=>({}),emitters:c.localLiquidEmitterRecords,preview:c.setAuthoredWaterPreviewVisible,loadHost:()=>{allocations++;throw Error('Unexpected runtime');}});c.waterFeature.setup=c.localLiquidSetup;
  sceneContext(c);vm.runInContext(actual('mountLocalLiquidHost'),c);await c.mountLocalLiquidHost();
- assert.equal(allocations,0,'Restoring initial finite water must not freeze a GPU population ahead of placement');assert.equal(preview,true);assert.equal(c.localLiquidPaused,true);
+ assert.equal(allocations,0,'Restoring initial finite water must not freeze a GPU population ahead of placement');assert.equal(preview,true);assert.equal(c.waterFeature.paused,true);
 });
 test('finite simulation selection does not expose unrelated legacy basin budget controls',()=>{
  const water={hidden:true},a=source.indexOf('function updateAuthoringPropertySelection()'),b=source.indexOf('\n}',a);

@@ -23,7 +23,7 @@ for(const matching of [true,false])for(const mountTransform of [true,false])for(
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,
-    localLiquidHost:host,ordinarySceneTransportFrame:null,localLiquidFailure:null,sceneCameraStatusText:'',console:{error(){}},
+    waterFeature:{host,render:options=>host.render(options),fail(error){host.dispose();this.host=null;this.failure=error.message;}},ordinarySceneTransportFrame:null,localLiquidFailure:null,sceneCameraStatusText:'',console:{error(){}},
     syncWaterProxy(){},syncFireProxy(){},renderWithViewportShading:draw=>draw(),refreshLocalLiquidPerformance(){},setInfo(){},
     withViewportVisibility,viewportVisibilityObjects:()=>[],isSceneItemVisible:()=>true,
   });

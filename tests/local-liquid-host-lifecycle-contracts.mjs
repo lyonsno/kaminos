@@ -10,7 +10,7 @@ const indexHtml = readFileSync(join(root, 'index.html'), 'utf8');
 const hostSource = readFileSync(join(root, 'local-liquid-host.mjs'), 'utf8');
 
 test('local-liquid mount is generation-scoped so a stale async create cannot own a later scene', () => {
-  assert.ok(/createGenerationBoundLocalLiquidHostMount/.test(indexHtml), 'scene host mounting must use a generation-bound lifecycle controller');
+  assert.ok(/createAuthoredWaterFeature/.test(indexHtml), 'scene host mounting uses the water feature owner');
   const staleCheck = hostSource.indexOf('if (!isCurrent())');
   const supportAttach = hostSource.indexOf('scene.add(group)');
   assert.ok(staleCheck >= 0 && supportAttach > staleCheck, 'a stale solver result must be retired before its support geometry attaches to the shared scene');

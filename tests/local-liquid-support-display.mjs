@@ -46,6 +46,7 @@ test('the actual frontend support control shares reversible scene history', () =
   const c=source.indexOf('window.kaminosSetLocalLiquidSupportVisible =');
   const d=source.indexOf("document.getElementById('local-liquid-support-visible').addEventListener",c);
   let localLiquidSetup=defaultLocalLiquidSetup();
+  const waterFeature={get setup(){return localLiquidSetup;},set setup(value){localLiquidSetup=value;},host:{setSetup(){}}};
   const localLiquidHost={setSetup(){}},refreshLocalLiquidPerformance=()=>{},assertSceneConstructionAvailable=()=>{};
   const window={_kaminosDirty:()=>{}},scenePlacementTools={edits:createSceneEdits({read:()=>null,write:()=>{}})};
   eval(source.slice(a,b)+source.slice(c,d));

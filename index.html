@@ -2898,7 +2898,7 @@ import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
-import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
+import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
@@ -3322,7 +3322,7 @@ import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisib
 import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies} from './scene-repetition.mjs';
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
 import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
-import {createSceneSimulationActivity} from './scene-simulation-activity.mjs';
+import {createAuthoredFlameFeature} from './authored-flame-feature.mjs';
 import { installCommandSearch } from './scene-command-search.mjs';
 import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
@@ -3450,7 +3450,7 @@ function restoreVisibilitySelection(ids,activeId){
 function viewportVisibilityObjects(){
  return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light}))];
 }
-function sceneVisibilityContext(){return {objects:workingScene.objects,groups:workingScene.groups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(localLiquidSetup?[{id:'water-field'}]:[])]};}
+function sceneVisibilityContext(){return {objects:workingScene.objects,groups:workingScene.groups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','zones','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
@@ -3517,11 +3517,11 @@ window.kaminosProxyPreview={layer:PROXY_LAYER,layers:{water:PROXY_LAYER,fire:FIR
 // disposal need no extra hooks.
 let waterProxy=null;
 function syncWaterProxy() {
- const host=localLiquidHost,display=isSceneItemVisible('water-field')&&viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
+ const host=waterFeature.host,display=isSceneItemVisible('water-field')&&viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
  camera?.layers[display?'enable':'disable'](PROXY_LAYER);
  if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
  if(host&&!waterProxy){
-  const descriptor=()=>localLiquidHost===host?host.interfaceRecordDescriptor():null;
+  const descriptor=()=>waterFeature.host===host?host.interfaceRecordDescriptor():null;
   waterProxy={host,layer:null,unsubscribe:null,
    producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
  }
@@ -3553,11 +3553,11 @@ window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyl
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
  ...(fireProxySync?.state()??{attached:false,awaitingSnapshot:false,fieldGeneration:null,presentationSuppressed:false,decodeErrors:0,lastError:null,layer:{visible:false}}),
  bridgeVisible:volumeBridge?.mesh?.visible??null,canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
-window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
+window.kaminosWaterProxyStepEvery=n=>{if(!waterFeature.host)throw Error('Water host is absent');return waterFeature.host.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
-window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
+window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:waterFeature.host?.presentation??null,
  proxyLayer:PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(PROXY_LAYER):null,meshLayerMask:waterProxy?.layer?.mesh.layers.mask??null,required:Object.fromEntries(proxyRequirements),
- hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
+ hostFrame:waterFeature.host?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
  layer:waterProxy?.layer?.state()??{visible:false},snapshots:proxySnapshots.sources(),registry:proxySnapshots.state()});
 // Witness view: authored materials as save/export see them, plus what the last
 // viewport render drew.
@@ -3613,7 +3613,8 @@ let authoringBusy = false;
 let vantageCaptureHeld = false;
 let volumePrototype = null;
 let sceneBurning = null;
-const syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>activeSceneComposition?volumePrototype:null,wanted:()=>isSceneItemVisible('flame-field')});
+const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
+const syncAuthoredFireActivity=flameFeature.sync;
 let ownerVolumeReady = null;
 let annularBurner = null;
 let burnerRecipe = null;
@@ -3998,7 +3999,7 @@ const sceneRecords = createSceneRecordOperations({
     light:record=>mountSceneSpotLight(record).object,
     procedural:record=>mountProceduralMesh(record).object,
     flame(record,{activate}){authoredFlamePresent=true;const object=ensureAuthoredFlameEmitter(record,{activate});if(!object)throw Error('The saved analytic flame source is not mounted');return object;},
-    water(record,{activate}){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate});return object;},
+    water(record,{activate}){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate});return object;},
     constructed(object,record,{activate}){scene.add(object);registerSceneObject(object,record,{activate});return object;},
     async pbr(record,{activate}){const files=await loadDemoFiles(record.source);if(!files)throw Error(`Scene object "${record.fileName||record.id}" demo source "${record.source}" is not readable`);return handleFiles(files,{clear:false,activate,metadata:record});},
     image:(record,{activate})=>showImagePlane(record.source,{clear:false,activate,metadata:record}),
@@ -4031,14 +4032,14 @@ window.kaminosGiProxies = {
 
 let getLocalLiquidDisplayPolicy=null;
 let authoredWaterControls=null;
-let localLiquidSetup = null;
-let localLiquidHost = null;
-let localLiquidFailure = null;
+
+
+
 let sceneLightingPreparation=null;
-let localLiquidPaused = false;
+
 let sceneViewerPaused = null;
-let localLiquidGeneration = 0;
-let authoredWaterReleaseRequest = 0;
+
+
 const sceneLoadRequests = workingScene.loads;
 function createPageSceneDocumentSession(options = {}) {
   return createSceneDocumentSession({
@@ -4062,28 +4063,17 @@ function createPageSceneDocumentSession(options = {}) {
 }
 const sceneDocument = createPageSceneDocumentSession();
 
-const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
-  getGeneration: () => localLiquidGeneration,
-  getHost: () => localLiquidHost,
-  setHost: host => { localLiquidHost = host; },
-  createHost: async ({ setup, emitters, isCurrent }) => {
-    const { createAuthoredWaterHost } = await import('./authored-water-host.mjs');
-    return createAuthoredWaterHost({
-      renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent, readColliders:()=>workingScene.objects, redraw:()=>window._kaminosDirty?.(),
-      getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output),
-    });
-  },
-  onFailure: error => {
-    localLiquidFailure = error.message || String(error);
-    setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
-  },
-  onMounted: host => {
-    if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
-    if(host.state().mode==='finite_drop'){localLiquidPaused=true;setAuthoredWaterPreviewVisible(false);}
-    else if(sceneViewerPaused!==null)localLiquidPaused=sceneViewerPaused;
-    host.setPaused(localLiquidPaused||!isSceneItemVisible('water-field'));
-  },
+const waterFeature = createAuthoredWaterFeature({
+  services:()=>({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,
+    readColliders:()=>workingScene.objects,redraw:()=>window._kaminosDirty?.(),
+    getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
+  emitters:localLiquidEmitterRecords,
+  enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),
+  runtimeEmitters:()=>localLiquidEmitterState().emitters,
+  visible:()=>isSceneItemVisible('water-field'),viewerPaused:()=>sceneViewerPaused,
+  preview:visible=>{refreshAuthoredWaterSamplingPreviews();setAuthoredWaterPreviewVisible(visible);},
+  refresh:()=>{authoredWaterControls?.refresh();refreshLocalLiquidPerformance();window._kaminosDirty?.();},
+  report:setInfo,
 });
 
 let sceneRepetitionController=null,sceneRepetitionInspector=null;
@@ -6671,7 +6661,7 @@ function renderSceneObjectList() {
   pruneSceneGroups();
   empty.style.display = workingScene.objects.length ? 'none' : '';
   // The outliner is a tree: fields own their emitters, groups their members.
-  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
+  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!waterFeature.setup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
   const outline = visibleOutlineRows(buildSceneOutline({fields, groups: workingScene.groups, objects: workingScene.objects,
     emitterFields: {[FLAME_EMITTER_TYPE]:'flame-field', [LOCAL_LIQUID_EMITTER_TYPE]:'water-field'}}), sceneOutlineCollapsed);
   const rows = [];
@@ -6887,74 +6877,45 @@ function localLiquidEmitterRecords() {
 }
 
 function localLiquidEmitterState() {
-  if (!localLiquidSetup) return {emitters:[]};
+  if (!waterFeature.setup) return {emitters:[]};
   return localLiquidRuntimeSourceState({ objects: workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)).map(entry => ({
     id: entry.id,
     type: entry.type,
     source: entry.source,
     transform: sceneObjectTransformState(entry.object),
     localLiquidEmitter: entry.localLiquidEmitter,
-  })), localLiquid: localLiquidSetup });
+  })), localLiquid: waterFeature.setup });
 }
 
 function syncLocalLiquidHostEmitters() {
   refreshAuthoredWaterSamplingPreviews();
-  if (!localLiquidHost || !localLiquidSetup) return;
-  localLiquidHost.setEmitters(localLiquidEmitterState().emitters);
-  localLiquidHost.setSetup?.(localLiquidSetup);
+  waterFeature.sync();
 }
 
-async function mountLocalLiquidHost() {
-  if (!localLiquidSetup) return false;
-  if (localLiquidHost) return true;
-  localLiquidFailure = null;
-  if(localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop')){
-    localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup)});
-    refreshAuthoredWaterSamplingPreviews();localLiquidPaused=true;setAuthoredWaterPreviewVisible(true);
-    authoredWaterControls?.refresh();refreshLocalLiquidPerformance();
-    setInfo('Initial water preview restored. Place or edit it, then Release water.');
-    window._kaminosDirty?.();return true;
-  }
-  const mounting = localLiquidHostMount.mount({
-    setup: structuredClone(localLiquidSetup),
-    emitters: localLiquidEmitterRecords(),
-  });
-  refreshLocalLiquidPerformance();
-  const mounted = await mounting;
-  refreshLocalLiquidPerformance();
-  if (mounted) {
-    setInfo('Local water mounted on the retained analytical basin. The solver restarts from its saved authored setup.');
-    window._kaminosDirty?.();
-  }
-  return mounted;
-}
+async function mountLocalLiquidHost() { return waterFeature.restore(); }
 
 async function applyLocalLiquidPerformance(values) {
-  if (!localLiquidSetup) throw Error('Add a Water Emitter first');
-  const requestedGeneration = localLiquidGeneration;
-  const requestedSetup = localLiquidSetup;
+  if (!waterFeature.setup) throw Error('Add a Water Emitter first');
+  const requestedGeneration = waterFeature.generation;
+  const requestedSetup = waterFeature.setup;
   const {measureFingerFluidParticleAllocationCapacity,evaluateFingerFluidParticleAllocationRequest} = await loadFingerFluidRuntime();
-  if (requestedGeneration !== localLiquidGeneration || requestedSetup !== localLiquidSetup) return false;
+  if (requestedGeneration !== waterFeature.generation || requestedSetup !== waterFeature.setup) return false;
   const edit = scenePlacementTools?.edits.state();
-  if (authoringBusy || sceneDocument.state().blocked || edit?.active || edit?.replaying || localLiquidHostMount.isLoading()) {
+  if (authoringBusy || sceneDocument.state().blocked || edit?.active || edit?.replaying || waterFeature.isLoading()) {
     throw Error('Finish the current scene action before restarting water');
   }
-  const next = normalizeLocalLiquidSetup({...localLiquidSetup,
-    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support});
+  const next = normalizeLocalLiquidSetup({...waterFeature.setup,
+    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??waterFeature.setup.support});
   const capacity = measureFingerFluidParticleAllocationCapacity(sharedGpu.device.limits);
   const admission = evaluateFingerFluidParticleAllocationRequest(next.particleCount, capacity);
   if (!admission.ok) throw Error(admission.reason);
-  const generation = ++localLiquidGeneration;
-  localLiquidHost?.dispose();
-  localLiquidHost = null;
-  localLiquidSetup = next;
-  localLiquidFailure = null;
+  const generation = waterFeature.restart(next);
   refreshLocalLiquidPerformance();
   const mounted = await mountLocalLiquidHost();
-  if (generation !== localLiquidGeneration) return false;
+  if (generation !== waterFeature.generation) return false;
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
-  if (!mounted) throw Error(localLiquidFailure || 'Water host could not restart; settings retained for retry');
+  if (!mounted) throw Error(waterFeature.failure || 'Water host could not restart; settings retained for retry');
   setInfo(`Water restarted: ${next.particleCount.toLocaleString()} particles · ${next.densityIterations} density passes. Emitter poses retained.`);
   return true;
 }
@@ -6963,38 +6924,38 @@ function refreshLocalLiquidPerformance() {
   syncVolumeViewerPlay();
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
-  panel.hidden = !localLiquidSetup || localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop') || (document.body.dataset.workspace==='authoring' && workingScene.activeFieldId!=='water-field');
-  if (!localLiquidSetup) { delete panel.dataset.setup; return; }
-  const signature = JSON.stringify(localLiquidSetup);
+  panel.hidden = !waterFeature.setup || localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop') || (document.body.dataset.workspace==='authoring' && workingScene.activeFieldId!=='water-field');
+  if (!waterFeature.setup) { delete panel.dataset.setup; return; }
+  const signature = JSON.stringify(waterFeature.setup);
   if (panel.dataset.setup !== signature) {
-    document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
-    document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
-    document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
-    document.getElementById('local-liquid-support-visible').closest('label').hidden=localLiquidSetup.support==='scene_primitives';
-    document.getElementById('local-liquid-support-mode').value=localLiquidSetup.support;
+    document.getElementById('local-liquid-particles').value = waterFeature.setup.particleCount;
+    document.getElementById('local-liquid-iterations').value = waterFeature.setup.densityIterations;
+    document.getElementById('local-liquid-support-visible').checked = waterFeature.setup.showSupportGeometry;
+    document.getElementById('local-liquid-support-visible').closest('label').hidden=waterFeature.setup.support==='scene_primitives';
+    document.getElementById('local-liquid-support-mode').value=waterFeature.setup.support;
     panel.dataset.setup = signature;
   }
-  const loading = localLiquidHostMount.isLoading();
+  const loading = waterFeature.isLoading();
   document.getElementById('local-liquid-apply').disabled = loading;
   const pause = document.getElementById('local-liquid-pause');
-  pause.disabled = !localLiquidHost;
-  pause.textContent = localLiquidPaused ? 'Resume Water' : 'Pause Water';
-  pause.setAttribute('aria-pressed', String(localLiquidPaused));
-  const effective = localLiquidHost?.state().solver;
-  document.getElementById('local-liquid-performance-status').textContent = localLiquidFailure
-    ? `Water unavailable: ${localLiquidFailure}`
+  pause.disabled = !waterFeature.host;
+  pause.textContent = waterFeature.paused ? 'Resume Water' : 'Pause Water';
+  pause.setAttribute('aria-pressed', String(waterFeature.paused));
+  const effective = waterFeature.host?.state().solver;
+  document.getElementById('local-liquid-performance-status').textContent = waterFeature.failure
+    ? `Water unavailable: ${waterFeature.failure}`
     : loading ? 'Restarting water…'
-    : effective ? `${localLiquidPaused ? 'Paused' : 'Running'} · ${effective.particleCount.toLocaleString()} particles · ${effective.densityIterationsPerStep} density ${effective.densityIterationsPerStep === 1 ? 'pass' : 'passes'}`
+    : effective ? `${waterFeature.paused ? 'Paused' : 'Running'} · ${effective.particleCount.toLocaleString()} particles · ${effective.densityIterationsPerStep} density ${effective.densityIterationsPerStep === 1 ? 'pass' : 'passes'}`
     : 'Water host not mounted';
 }
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
 document.getElementById('local-liquid-support-mode').addEventListener('change',event=>{
-  applyLocalLiquidPerformance({...localLiquidSetup,support:event.target.value}).catch(error=>{refreshLocalLiquidPerformance();setInfo(error.message);});
+  applyLocalLiquidPerformance({...waterFeature.setup,support:event.target.value}).catch(error=>{refreshLocalLiquidPerformance();setInfo(error.message);});
 });
 window.kaminosSetLocalLiquidSupportVisible = value => {
   assertSceneConstructionAvailable();
-  if(!localLiquidSetup)throw Error('Add a Water Emitter first');
+  if(!waterFeature.setup)throw Error('Add a Water Emitter first');
   return scenePlacementTools.edits.apply('@local-liquid-support-display',{visible:value},'Show water support');
 };
 document.getElementById('local-liquid-support-visible').addEventListener('change',event=>{
@@ -7003,12 +6964,11 @@ document.getElementById('local-liquid-support-visible').addEventListener('change
 });
 window.kaminosPauseLocalLiquid = paused => {
   sceneViewerPaused=null;
-  localLiquidPaused = Boolean(paused);
-  localLiquidHost?.setPaused(localLiquidPaused);
+  waterFeature.setPaused(paused);
   authoredWaterControls?.refreshStatus();
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
-  return localLiquidPaused;
+  return waterFeature.paused;
 };
 document.querySelectorAll('[data-water-budget]').forEach(button => button.addEventListener('click', () => {
   const [particles, passes] = button.dataset.waterBudget.split(',');
@@ -7022,21 +6982,21 @@ document.getElementById('local-liquid-apply').addEventListener('click', () => {
     .catch(error => { refreshLocalLiquidPerformance(); setInfo(error.message);
       document.getElementById('local-liquid-performance-status').textContent = error.message; });
 });
-document.getElementById('local-liquid-pause').addEventListener('click', () => window.kaminosPauseLocalLiquid(!localLiquidPaused));
+document.getElementById('local-liquid-pause').addEventListener('click', () => window.kaminosPauseLocalLiquid(!waterFeature.paused));
 
-window.kaminosLocalLiquidReadSceneColor = region => {if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.readSceneColor(region);};
+window.kaminosLocalLiquidReadSceneColor = region => {if(!waterFeature.host)throw Error('Water host is absent');return waterFeature.host.readSceneColor(region);};
 window.kaminosLocalLiquidState = () => {
-  const hostState = localLiquidHost?.state() || null;
+  const hostState = waterFeature.host?.state() || null;
   return ({
-  requestedRoute: localLiquidSetup ? 'kaminos/finger-fluid/local-analytic-host-frame-v0' : null,
-  effectiveRoute: localLiquidHost?.state().effectiveRoute || null,
+  requestedRoute: waterFeature.setup ? 'kaminos/finger-fluid/local-analytic-host-frame-v0' : null,
+  effectiveRoute: waterFeature.host?.state().effectiveRoute || null,
   backend: renderer?.backend?.constructor?.name || null,
-  mounted: Boolean(localLiquidHost),
-  loading: localLiquidHostMount.isLoading(),
-  paused: localLiquidPaused,
+  mounted: Boolean(waterFeature.host),
+  loading: waterFeature.isLoading(),
+  paused: waterFeature.paused,
   frameCount: hostState?.frameCount ?? 0,
-  failure: localLiquidFailure,
-  setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
+  failure: waterFeature.failure,
+  setup: waterFeature.setup ? structuredClone(waterFeature.setup) : null,
   supportGeometryVisible: hostState?.supportGeometryVisible ?? null,
   sourceGeneration: hostState?.sourceGeneration ?? null,
   linearSceneColorInput: hostState?.linearSceneColorInput ?? null,
@@ -11208,7 +11168,7 @@ async function initScene() {
   let sceneEmissionSource=null,sceneFlameHDR=null;
   sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
-  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!localLiquidHost&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
+  window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
@@ -11524,12 +11484,12 @@ async function initScene() {
   });
   setupSelectionTransforms();
   scenePlacementTools.edits.register('@local-liquid-support-display',{
-    read:()=>({visible:localLiquidSetup?.showSupportGeometry??false}),
+    read:()=>({visible:waterFeature.setup?.showSupportGeometry??false}),
     check:value=>{if(typeof value?.visible!=='boolean')throw Error('Water support visibility must be Boolean');return {visible:value.visible};},
     write:value=>{
-      if(!localLiquidSetup)throw Error('Water field is absent');
-      localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,showSupportGeometry:value.visible});
-      localLiquidHost?.setSetup(localLiquidSetup);
+      if(!waterFeature.setup)throw Error('Water field is absent');
+      waterFeature.setup=normalizeLocalLiquidSetup({...waterFeature.setup,showSupportGeometry:value.visible});
+      waterFeature.host?.setSetup(waterFeature.setup);
       refreshLocalLiquidPerformance();window._kaminosDirty?.();
     },
   });
@@ -11706,9 +11666,9 @@ async function initScene() {
     const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
       &&ordinaryDepthEnabled
       &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
-      &&localLiquidHost?.supportsVolumeTransport===true&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
+      &&waterFeature.host?.supportsVolumeTransport===true&&waterFeature.host.presentation==='full'&&viewportDisplay.fire==='full'
       &&prototype?.isActive?.()===true;
-    const wantedHDR=typeof sceneBloom!=='undefined'&&sceneBloom.read().settings.composeFlame&&!localLiquidHost
+    const wantedHDR=typeof sceneBloom!=='undefined'&&sceneBloom.read().settings.composeFlame&&!waterFeature.host
       &&ordinaryDepthEnabled&&isSceneItemVisible('flame-field')&&viewportDisplay.fire==='full'&&prototype?.isActive?.()===true
       &&(typeof sceneGISettings==='undefined'||sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene');
     if(transportPrototype&&(!(wanted||wantedHDR)||transportPrototype!==prototype)) {
@@ -11729,8 +11689,8 @@ async function initScene() {
     if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
   }
   window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
-    registered:!!transportPrototype,effective:!!transportPrototype&&!!localLiquidHost?.state().lastFrame?.volumeTransport,
-    lastFrame:localLiquidHost?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
+    registered:!!transportPrototype,effective:!!transportPrototype&&!!waterFeature.host?.state().lastFrame?.volumeTransport,
+    lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
@@ -11777,44 +11737,42 @@ async function initScene() {
       const physical=window.__kaminosVolumePrototype?.emissiveCameraState();
       const state=sceneEmissiveCamera.update(requested,physical);
       matchedCameraEffective=state.effective;
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
-      localLiquidHost?.setSceneCamera?.(requested,physical);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:typeof waterFeature.host?.setSceneCamera==='function'});
+      waterFeature.host?.setSceneCamera?.(requested,physical);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!requested||state.effective;
       if(text!==sceneCameraStatusText){cameraStatus.textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
-      localLiquidHost?.setSceneCamera?.(false);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:typeof waterFeature.host?.setSceneCamera==='function'});
+      waterFeature.host?.setSceneCamera?.(false);
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!document.getElementById('rendering-match-flame-camera').checked;
       cameraStatus.textContent=sceneCameraStatusText='Flame camera matching is inactive while inspecting indirect lighting.';
-    } else localLiquidHost?.setSceneCamera?.(false);
+    } else waterFeature.host?.setSceneCamera?.(false);
     syncWaterProxy();
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
-      if (localLiquidHost) {
+      if (waterFeature.host) {
         if(!isSceneItemVisible('water-field')) {
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
-        } else try { localLiquidHost.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
-          const state=localLiquidHost.state(),clock=state.clock??{paused:localLiquidHost.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
+        } else try { waterFeature.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
+          const state=waterFeature.host.state(),clock=state.clock??{paused:waterFeature.host.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
           if(outputCaptureExtent)throw error;
           recordingFrameSink?.({error});
           console.error('Local water frame failed', error);
-          localLiquidFailure = String(error?.message || error);
-          localLiquidHost.dispose();
-          localLiquidHost = null;
+          waterFeature.fail(error);
           authoredWaterControls?.refreshStatus();
-          sharedWorkbench?.update({source:'Authored water',status:'Stopped',clock:localLiquidFailure});
+          sharedWorkbench?.update({source:'Authored water',status:'Stopped',clock:waterFeature.failure});
           refreshLocalLiquidPerformance();
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
-          setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
+          setInfo(`Local water stopped; scene renderer resumed: ${waterFeature.failure}`);
         }
       } else if(authoredFlameHDRActive&&ordinarySceneTransportFrame){
         sceneFlameHDR??=createSceneFlameHDR({renderer,camera,device:sharedGpu.device,bloom:sceneBloom,decorate:node=>selectionFeedback.output(node)});
@@ -11875,7 +11833,7 @@ async function initScene() {
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && isSceneItemVisible('flame-field') && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
-    const localWaterActive = localLiquidHost && !localLiquidHost.paused;
+    const localWaterActive = waterFeature.active;
 
     if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
 
@@ -12011,7 +11969,7 @@ async function initScene() {
         }finally{manualInspectionRender=false;}
       },capture(){
         const shot=captureComposedCanvases({host:renderer.domElement,volumeRaster:fireRaster,document,label:settings.filename});
-        return {dataUrl:shot.image,width:shot.width,height:shot.height,layers:shot.layers,camera:readAuthoredCameraView(),cameraId:settings.cameraId,rendering:{backend:'webgpu',sceneFrames:drawnFrames,lighting:sceneGI.debugState(),fire:fireReceipt,water:localLiquidHost?.state()??null}};
+        return {dataUrl:shot.image,width:shot.width,height:shot.height,layers:shot.layers,camera:readAuthoredCameraView(),cameraId:settings.cameraId,rendering:{backend:'webgpu',sceneFrames:drawnFrames,lighting:sceneGI.debugState(),fire:fireReceipt,water:waterFeature.host?.state()??null}};
       }};
     }catch(error){await release();throw error;}
   }});
@@ -12055,7 +12013,7 @@ async function initScene() {
         const ctx=canvas.getContext('2d');ctx.drawImage(host,0,0,canvas.width,canvas.height);
         if(visible&&frame.fire.presentation!=='host-composed'){const volume=frame.fire.canvas;ctx.drawImage(volume,0,0,canvas.width,canvas.height);}
         const overlay=transformControls?.getOverlay?.();if(overlay&&overlay.style.display!=='none'&&overlay.width&&overlay.height)ctx.drawImage(overlay,0,0,canvas.width,canvas.height);
-        return {canvas,receipt:{backend:'webgpu',sceneFrameCount,camera:readAuthoredCameraView(),layers:visible?['mesh','ordinary-emissive-volume',...(frame.fire.presentation==='host-composed'?['authored-water-volume-transport']:[])]:['mesh'],fire:visible?{...frame.fire,canvas:undefined}:null,water:localLiquidHost?{frameCount:localLiquidHost.state().frameCount,paused:!!localLiquidHost.paused}:null}};
+        return {canvas,receipt:{backend:'webgpu',sceneFrameCount,camera:readAuthoredCameraView(),layers:visible?['mesh','ordinary-emissive-volume',...(frame.fire.presentation==='host-composed'?['authored-water-volume-transport']:[])]:['mesh'],fire:visible?{...frame.fire,canvas:undefined}:null,water:waterFeature.host?{frameCount:waterFeature.host.state().frameCount,paused:!!waterFeature.host.paused}:null}};
       }};
     }catch(error){release();throw error;}
   }}});
@@ -12063,7 +12021,7 @@ async function initScene() {
   window.kaminosRenderOutput={open:outputUI.open,close:outputUI.close,read:outputUI.read,write:outputUI.write,capture:renderOutput,profiles:outputProfiles,recording:viewportRecording,
     state:()=>({capturing:!!outputCaptureExtent,canvas:[renderer.domElement.width,renderer.domElement.height],camera:readAuthoredCameraView(),projection:viewProjection.state(),pixelRatio:renderer.getPixelRatio()})};
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
-  const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
+  const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:waterFeature.host?{paused:!!waterFeature.host.paused}:null};};
   // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
   // flag rather than authoringBusy, which in-flight imports read as a stale document. Presses on the
   // viewport canvases wait too, since they would resolve through the borrowed camera; the window capture
@@ -12080,11 +12038,11 @@ async function initScene() {
       selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
       redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
-      idPass,glance,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
+      idPass,glance,water:()=>!!waterFeature.host,coordinateSystem:renderer.coordinateSystem,
       // The fire and water proxies (Proxy Preview) a sub's own camera can draw: held while a sub looks, read from their own state.
       proxies:window.kaminosProxyPreview?{layers:window.kaminosProxyPreview.layers,require:source=>window.kaminosProxyPreview.require(source),
        states:()=>({fire:{present:!!volumePrototype&&(volumePrototype.isActive?.()??true),visible:isSceneItemVisible('flame-field'),fieldGeneration:volumePrototype?.getResidualFieldGeneration?.()??null,layer:window.kaminosFireProxyDebugState?.().layer??null},
-        water:{present:!!localLiquidHost,visible:isSceneItemVisible('water-field'),layer:window.kaminosWaterProxyDebugState?.().layer??null}})}:null,
+        water:{present:!!waterFeature.host,visible:isSceneItemVisible('water-field'),layer:window.kaminosWaterProxyDebugState?.().layer??null}})}:null,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera; watching() reports a watch in progress.
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,watching:agentVantage.watching,idle:agentVantage.idle};
@@ -12225,7 +12183,7 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{localLiquidSetup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
+      beginLoad:setup=>{waterFeature.setup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
       capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
@@ -12264,12 +12222,8 @@ function clearSceneEditingState(){
   sceneMembership.clearHistoryTargets();
 }
 function clearSceneDomains(){
-  localLiquidGeneration++;
-  localLiquidHost?.dispose();
-  localLiquidHost = null;
-  localLiquidSetup = null;
-  localLiquidFailure = null;
-  localLiquidPaused = false;
+  flameFeature.clear().catch(error=>setInfo(`Fire retirement: ${error.message}`));
+  waterFeature.clear();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
 }
@@ -12704,12 +12658,12 @@ function setAuthoredWaterPreviewVisible(visible){for(const row of workingScene.o
 function selectedWaterSource(){const row=selectedSceneObjectEntry();return row?.type===LOCAL_LIQUID_EMITTER_TYPE?row:null;}
 function authoredWaterSimulationState(){
  const sources=localLiquidEmitterRecords(),finite=sources.filter(r=>r.localLiquidEmitter.mode==='finite_drop');
- const sampling=resolveAuthoredWaterSampling(sources,localLiquidSetup??{}),descriptions=finite.map(r=>describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling));
+ const sampling=resolveAuthoredWaterSampling(sources,waterFeature.setup??{}),descriptions=finite.map(r=>describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling));
  const proposed=descriptions.reduce((n,d)=>n+d.particleCount,0),requestedVolume=descriptions.reduce((n,d)=>n+d.requestedVolume,0),representedVolume=descriptions.reduce((n,d)=>n+d.worldVolume,0);
- return {present:!!localLiquidSetup,scope:'all_water',sampling,compatibility:inspectAuthoredWaterCompatibility(sources,sampling),boundsFit:planAuthoredWaterBounds(sources,sampling),selected:workingScene.activeFieldId==='water-field',sourceCount:sources.length,particleCount:localLiquidHost?.state().solver?.particleCount??proposed,proposedParticleCount:proposed,requestedVolume,representedVolume,relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0,settings:localLiquidSetup?structuredClone({...localLiquidSetup,waterSampling:sampling}):null};
+ return {present:!!waterFeature.setup,scope:'all_water',sampling,compatibility:inspectAuthoredWaterCompatibility(sources,sampling),boundsFit:planAuthoredWaterBounds(sources,sampling),selected:workingScene.activeFieldId==='water-field',sourceCount:sources.length,particleCount:waterFeature.host?.state().solver?.particleCount??proposed,proposedParticleCount:proposed,requestedVolume,representedVolume,relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0,settings:waterFeature.setup?structuredClone({...waterFeature.setup,waterSampling:sampling}):null};
 }
 
-function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter),transform:sceneObjectTransformState(row.object),sampling:describeAuthoredWaterDrop(row.localLiquidEmitter.drop,sceneObjectTransformState(row.object),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{})),initialPreview:(()=>{const p=row.object?.children.find(c=>c.userData.kaminosWaterPreview);return p?.userData.initialStateOnly?{kind:'initial_particles',draft:!!authoredWaterDraftPreview,particleCount:p.count,visible:p.visible,spacing:p.userData.spacing*row.object.scale.x,glyphRadius:p.userData.glyphRadius*row.object.scale.x}:null;})()}:null,failure:localLiquidFailure,simulation:authoredWaterSimulationState(),sources:localLiquidEmitterRecords().map(r=>({id:r.id,mode:r.localLiquidEmitter.mode??'continuous'})),runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount,pendingSourceChanges:runtime.pendingSourceChanges}:null};}
+function authoredWaterState(){const row=selectedWaterSource(),runtime=waterFeature.host?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter),transform:sceneObjectTransformState(row.object),sampling:describeAuthoredWaterDrop(row.localLiquidEmitter.drop,sceneObjectTransformState(row.object),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup??{})),initialPreview:(()=>{const p=row.object?.children.find(c=>c.userData.kaminosWaterPreview);return p?.userData.initialStateOnly?{kind:'initial_particles',draft:!!authoredWaterDraftPreview,particleCount:p.count,visible:p.visible,spacing:p.userData.spacing*row.object.scale.x,glyphRadius:p.userData.glyphRadius*row.object.scale.x}:null;})()}:null,failure:waterFeature.failure,simulation:authoredWaterSimulationState(),sources:localLiquidEmitterRecords().map(r=>({id:r.id,mode:r.localLiquidEmitter.mode??'continuous'})),runtime:runtime?{paused:waterFeature.host.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount,pendingSourceChanges:runtime.pendingSourceChanges}:null};}
 const waterSettingTargets=new Set();
 function applyAuthoredWaterSettings(id,patch){
  assertSceneConstructionAvailable();const row=workingScene.objects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
@@ -12721,26 +12675,26 @@ function applyAuthoredWaterSettings(id,patch){
 }
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
   const entry=workingScene.objects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
-  if(!deferSync&&localLiquidSetup?.waterSampling?.particleTarget!==undefined){
-   const records=localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),sampling=resolveAuthoredWaterSampling(records,localLiquidSetup);
+  if(!deferSync&&waterFeature.setup?.waterSampling?.particleTarget!==undefined){
+   const records=localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:checked}:r),sampling=resolveAuthoredWaterSampling(records,waterFeature.setup);
    const rows=workingScene.objects.filter(r=>r.id===id||(r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')),builds=[];
    // Resolve the proposed whole-volume budget before any allocation or source
    // mutation. Peer previews change resolution in the same transaction.
    try{for(const row of rows)builds.push([row,createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object),localLiquidEmitter:row.id===id?checked:row.localLiquidEmitter},{sampling}).object]);}
    catch(error){for(const [,object]of builds)object.traverse(n=>{n.geometry?.dispose();for(const m of(Array.isArray(n.material)?n.material:[n.material]).filter(Boolean))m.dispose();});throw error;}
-   localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:sampling});
+   waterFeature.setup=normalizeLocalLiquidSetup({...waterFeature.setup,waterSampling:sampling});
    entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);
    for(const [row,object]of builds)replaceAuthoredWaterPreviewChildren(row,object);
    syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();return;
   }
-  const replacement=prepared??createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked},{sampling:localLiquidSetup?.waterSampling}).object;
+  const replacement=prepared??createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked},{sampling:waterFeature.setup?.waterSampling}).object;
   replaceAuthoredWaterPreviewChildren(entry,replacement);
   entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);if(!deferSync)syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();window._kaminosDirty?.();
 }
 function replaceAuthoredWaterPreviewChildren(entry,replacement){
  const id=entry.id;
   const children=[...entry.object.children];for(const child of children){entry.object.remove(child);child.traverse(node=>{node.geometry?.dispose();for(const mat of(Array.isArray(node.material)?node.material:[node.material]).filter(Boolean))mat.dispose();});}
-  for(const child of [...replacement.children]){if(localLiquidHost?.state().sourceIds?.includes(id)&&child.userData.kaminosWaterPreview)child.visible=false;entry.object.add(child);}
+  for(const child of [...replacement.children]){if(waterFeature.host?.state().sourceIds?.includes(id)&&child.userData.kaminosWaterPreview)child.visible=false;entry.object.add(child);}
   updateWaterSourceGuides();
 
 }
@@ -12748,7 +12702,7 @@ let authoredWaterDraftPreview=null;
 function previewAuthoredWaterSetup(draft=null){
  if(!draft&&!authoredWaterDraftPreview)return {initialOnly:true,draft:false};
  const records=localLiquidEmitterRecords().map(r=>draft?.source&&draft.id===r.id?{...r,localLiquidEmitter:{...r.localLiquidEmitter,...draft.source}}:r);
- const sampling=resolveAuthoredWaterSampling(records,{...localLiquidSetup,waterSampling:draft?.waterSampling??localLiquidSetup?.waterSampling});
+ const sampling=resolveAuthoredWaterSampling(records,{...waterFeature.setup,waterSampling:draft?.waterSampling??waterFeature.setup?.waterSampling});
  const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
  const builds=[],updates=[];
  try{for(const row of rows){
@@ -12771,11 +12725,11 @@ function previewAuthoredWaterSetup(draft=null){
 
 let refreshingWaterPreviews=false;
 function refreshAuthoredWaterSamplingPreviews(){
- if(refreshingWaterPreviews||!localLiquidSetup?.waterSampling)return;
+ if(refreshingWaterPreviews||!waterFeature.setup?.waterSampling)return;
  refreshingWaterPreviews=true;
- try{if(localLiquidSetup.waterSampling.particleTarget!==undefined)localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup)});
+ try{if(waterFeature.setup.waterSampling.particleTarget!==undefined)waterFeature.setup=normalizeLocalLiquidSetup({...waterFeature.setup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup)});
  for(const row of workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')){
-  const pose=sceneObjectTransformState(row.object),d=describeAuthoredWaterDrop(row.localLiquidEmitter.drop,pose,localLiquidSetup.waterSampling),p=row.object.children.find(c=>c.userData.kaminosWaterPreview);
+  const pose=sceneObjectTransformState(row.object),d=describeAuthoredWaterDrop(row.localLiquidEmitter.drop,pose,waterFeature.setup.waterSampling),p=row.object.children.find(c=>c.userData.kaminosWaterPreview);
   if(p&&p.count===d.particleCount&&Math.abs(p.userData.spacing*pose.scale[0]-d.spacing)<1e-12&&p.userData.requestedVolume===d.requestedVolume)continue;
   replaceAuthoredWaterSettings(row.id,row.localLiquidEmitter,null,{deferSync:true});
  }}finally{refreshingWaterPreviews=false;}
@@ -12793,7 +12747,7 @@ function matchAuthoredWaterSetup(referenceId){
    checked(value);
    // Construct every preview before replacing any source; a construction error
    // leaves all existing source previews untouched.
-   const replacements=ids.map(id=>{const row=workingScene.objects.find(r=>r.id===id);return createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object),localLiquidEmitter:value.entries[id]},{sampling:localLiquidSetup?.waterSampling}).object;});
+   const replacements=ids.map(id=>{const row=workingScene.objects.find(r=>r.id===id);return createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object),localLiquidEmitter:value.entries[id]},{sampling:waterFeature.setup?.waterSampling}).object;});
    ids.forEach((id,i)=>replaceAuthoredWaterSettings(id,value.entries[id],replacements[i]));
   }});waterMatchTargets.add(target);
  }
@@ -12803,22 +12757,22 @@ function matchAuthoredWaterSetup(referenceId){
 
 let authoredWaterSimulationTarget=false;
 function editAuthoredWaterSimulation(patch){
- assertSceneConstructionAvailable();if(!localLiquidSetup)throw Error('Add water first');
+ assertSceneConstructionAvailable();if(!waterFeature.setup)throw Error('Add water first');
  if(Object.keys(patch).some(key=>!['densityIterations','waterSampling'].includes(key)))throw Error('Water simulation edits require shared density or sampling settings');
  const target='@authored-water-simulation';
- if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
+ if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(waterFeature.setup),check:normalizeLocalLiquidSetup,write:value=>{
   const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);
-  localLiquidSetup=next;rows.forEach((row,i)=>replaceAuthoredWaterSettings(row.id,row.localLiquidEmitter,replacements[i],{deferSync:true}));
+  waterFeature.setup=next;rows.forEach((row,i)=>replaceAuthoredWaterSettings(row.id,row.localLiquidEmitter,replacements[i],{deferSync:true}));
   syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();
  }});authoredWaterSimulationTarget=true;}
 
- return scenePlacementTools.edits.apply(target,normalizeLocalLiquidSetup({...localLiquidSetup,...patch}),'Edit water simulation');
+ return scenePlacementTools.edits.apply(target,normalizeLocalLiquidSetup({...waterFeature.setup,...patch}),'Edit water simulation');
 }
 async function addAuthoredWaterDrop(){
- assertSceneConstructionAvailable();localLiquidSetup||=defaultLocalLiquidSetup();localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup)});const id=makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE);
+ assertSceneConstructionAvailable();waterFeature.setup||=defaultLocalLiquidSetup();waterFeature.setup=normalizeLocalLiquidSetup({...waterFeature.setup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup)});const id=makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE);
  const sources=localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode==='finite_drop');
  const preferred=selectedWaterSource(),reference=sources.find(r=>r.id===preferred?.id)??sources[0];
  const settings=reference?structuredClone(reference.localLiquidEmitter):{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.5,samplesPerUnit:48}};
@@ -12833,41 +12787,27 @@ async function addAuthoredWaterDrop(){
  }
  const labels=new Set(workingScene.objects.map(r=>sceneObjectDisplayLabel(r)));let label='Water drop';for(let n=2;labels.has(label);n++)label='Water drop '+n;
  const record=createLocalLiquidEmitterSceneRecord({id,label,transform,settings});
- const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);syncLocalLiquidHostEmitters();setActiveSceneObject(id);setActiveTab('finger-fluid-bench');authoredWaterControls?.refresh();sharedWorkbench?.update({source:'Authored water source',status:'Initial preview',clock:'Release starts water'});window._kaminosDirty?.();return id;
+ const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);syncLocalLiquidHostEmitters();setActiveSceneObject(id);setActiveTab('finger-fluid-bench');authoredWaterControls?.refresh();sharedWorkbench?.update({source:'Authored water source',status:'Initial preview',clock:'Release starts water'});window._kaminosDirty?.();return id;
 }
 async function releaseAuthoredWater(id){
  assertSceneConstructionAvailable();const selected=id?workingScene.objects.find(r=>r.id===id):workingScene.objects.find(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE);if(selected?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Add a water source');
- const generation=localLiquidGeneration,request=++authoredWaterReleaseRequest;
- let published=false;
- const isCurrent=()=>generation===localLiquidGeneration&&(published||request===authoredWaterReleaseRequest);
- const emitters=localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),setup=structuredClone(localLiquidSetup);
- if(!emitters.length)throw Error('Show a water emitter before releasing water');
- const {createAuthoredWaterHost}=await import('./authored-water-host.mjs');
- if(!isCurrent())throw Error('Water release superseded or scene changed');
- const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
- if(!isCurrent()){candidate?.dispose();throw Error('Water release superseded or scene changed');}
- if(!candidate)throw Error('Water replacement did not create an available host');
- try{candidate.setPaused(false);}catch(error){candidate.dispose();throw error;}
- const previous=localLiquidHost;published=true;localLiquidHost=candidate;localLiquidFailure=null;localLiquidPaused=false;previous?.dispose();
- setAuthoredWaterPreviewVisible(false);
+ await waterFeature.release();
  updateAuthoringPropertySelection();authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
 }
 function resetAuthoredWater(){
  assertSceneConstructionAvailable();
  // Retire the active water and any uncompleted release, preserving authored
  // sources/settings/placement. The next Play or Replay allocates fresh water.
- authoredWaterReleaseRequest++;localLiquidGeneration++;
- const previous=localLiquidHost;localLiquidHost=null;localLiquidPaused=true;localLiquidFailure=null;previous?.dispose();
- setAuthoredWaterPreviewVisible(true);refreshLocalLiquidPerformance();updateAuthoringPropertySelection();authoredWaterControls?.refresh();
+ waterFeature.reset();refreshLocalLiquidPerformance();updateAuthoringPropertySelection();authoredWaterControls?.refresh();
  sharedWorkbench?.update({source:'Authored water sources',status:'Initial preview',clock:'Stopped · initial particles'});window._kaminosDirty?.();return authoredWaterState();
 }
 function fitAuthoredWaterBounds(){
  assertSceneConstructionAvailable();
- const plan=planAuthoredWaterBounds(localLiquidEmitterRecords(),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{}));
+ const plan=planAuthoredWaterBounds(localLiquidEmitterRecords(),resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup??{}));
  if(plan.changed)editAuthoredWaterSimulation({waterSampling:plan.sampling});
  return authoredWaterState();
 }
-window.kaminosWaterSources={fitBounds:fitAuthoredWaterBounds,preview:previewAuthoredWaterSetup,match:matchAuthoredWaterSetup,reset:resetAuthoredWater,subscribeEdits:listener=>scenePlacementTools.edits.subscribe(listener),requestParticleState(){if(!localLiquidHost?.requestParticleState)throw Error('Finite water is not mounted');return localLiquidHost.requestParticleState();},read:authoredWaterState,editSimulation:editAuthoredWaterSimulation,selectSimulation:()=>window.selectSceneField('water-field'),add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;authoredWaterControls?.refreshStatus();window._kaminosDirty?.();return result;}};
+window.kaminosWaterSources={fitBounds:fitAuthoredWaterBounds,preview:previewAuthoredWaterSetup,match:matchAuthoredWaterSetup,reset:resetAuthoredWater,subscribeEdits:listener=>scenePlacementTools.edits.subscribe(listener),requestParticleState(){if(!waterFeature.host?.requestParticleState)throw Error('Finite water is not mounted');return waterFeature.host.requestParticleState();},read:authoredWaterState,editSimulation:editAuthoredWaterSimulation,selectSimulation:()=>window.selectSceneField('water-field'),add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!waterFeature.host?.paused),async advanceTo(step){if(!waterFeature.host?.advanceTo)throw Error('Finite water is not mounted');const result=await waterFeature.host.advanceTo(step);waterFeature.setPaused(true);authoredWaterControls?.refreshStatus();window._kaminosDirty?.();return result;}};
 
 function installSharedWorkbench() {
   if(sharedWorkbench)return;
@@ -12892,14 +12832,9 @@ async function installOwnerWorkbenchEntry() {
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
-      await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
-      const generation=localLiquidGeneration;
-      const [{createFiniteFluidHost},{createFluidViewportHost},{createWebGPUFingerFluidSolver}]=await Promise.all([import('./finite-fluid-host.mjs'),import('./fluid-viewport-host.mjs'),import('./finger-fluid-webgpu-core.js')]);
-      const candidate=await createFiniteFluidHost({setup,device:sharedGpu?.device,isCurrent:()=>generation===localLiquidGeneration,redraw:()=>window._kaminosDirty?.(),createSolver:createWebGPUFingerFluidSolver,
-        createPresentation:solver=>createFluidViewportHost({renderer,scene,camera,device:sharedGpu?.device,solver,getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)})});
-      const old=localLiquidHost;localLiquidHost=candidate;old?.dispose();
-      const dispose=candidate.dispose;candidate.dispose=()=>{dispose();if(localLiquidHost===candidate)localLiquidHost=null;window._kaminosDirty?.();};
-      setActiveTab('finger-fluid-bench');const capability=candidate.capability;return {...capability,async dispose(){await capability.dispose();if(localLiquidHost===candidate)localLiquidHost=null;window._kaminosDirty?.();}};
+      await workbenchViewerReady;
+      const capability=await waterFeature.openExperiment(setup);
+      setActiveTab('finger-fluid-bench');return capability;
     },
   },scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
@@ -14063,7 +13998,7 @@ async function activateFingerFluidPyroComposition() {
   volumePrototype.setSelectiveHeadLiveRole('truthHigh');
   volumePrototype.setSelectiveHeadLiveRenderComposition('smoke-raymarch-under-splats-v0');
   syncFingerFluidCompositionCamera();
-  await volumePrototype.setActive(true);
+  await flameFeature.setActive(true);
   fingerFluidPyroCompositionActivatedAtMs = performance.now();
   fingerFluidPyroCompositionState = {
     schema: 'kaminos.finger-fluid-pyro-composition.v0',
@@ -19244,9 +19179,9 @@ function syncPhysicsAppearanceCockpit(physics) {
   }
 }
 function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
-  const fire=!!s?.active,water=!!localLiquidHost;
+  const fire=!!s?.active,water=!!waterFeature.host;
   const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
-  return {present:fire||water,paused:!(fire&&!firePaused||water&&!localLiquidPaused)};
+  return {present:fire||water,paused:!(fire&&!firePaused||water&&!waterFeature.paused)};
 }
 function syncVolumeViewerPlay(s) {
   const button=document.getElementById('volume-viewer-play');if(!button)return;
@@ -19261,7 +19196,7 @@ document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
   const paused=!sceneViewerPlaybackState().paused;
   const freeze=document.getElementById('volume-look-freeze');
   if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
-  if(localLiquidHost)window.kaminosPauseLocalLiquid(paused);
+  if(waterFeature.host)window.kaminosPauseLocalLiquid(paused);
   sceneViewerPaused=paused;
   syncVolumeViewerPlay();window._kaminosDirty?.();
 });
@@ -20849,7 +20784,7 @@ async function initKaminosVolumeRoute() {
       || sourceManifest.grid !== FULL_SUPPORT_STAGE_A.state.grid
     ) throw new Error('full-support-source-manifest-contract-mismatch');
     volumePrototype.setSelectiveHeadLiveCapturePaused(true);
-    await volumePrototype.setActive(false);
+    await flameFeature.setActive(false);
     const sourceManifestSha256 = await fullSupportSha256(manifestBytes);
     const begin = volumePrototype.beginDebugFullFieldImport({
       grid: sourceManifest.grid,
@@ -21474,10 +21409,10 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
-      await volumePrototype.setActive(false);
+      await flameFeature.setActive(false);
       setInfo('Volume renderer disabled');
     } else {
-      await volumePrototype.setActive(true);
+      await flameFeature.setActive(true);
       setInfo('Volume renderer — native WebGPU compute fluid raymarch');
     }
     window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
@@ -21521,7 +21456,7 @@ async function initKaminosVolumeRoute() {
     setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
     try {
-      await volumePrototype.setActive(true);
+      await flameFeature.setActive(true);
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
@@ -21729,7 +21664,7 @@ function updateAuthoringPropertySelection() {
   const water=document.getElementById('local-liquid-performance');if(water)water.hidden=workingScene.activeFieldId!=='water-field'||localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop');
   const source=document.getElementById('selected-water-properties');if(source){updateWaterSourceGuides();source.hidden=selectedSceneObjectEntry()?.type!==LOCAL_LIQUID_EMITTER_TYPE;}
   const simulation=document.getElementById('selected-water-simulation-properties');if(simulation)simulation.hidden=workingScene.activeFieldId!=='water-field'&&selectedSceneObjectEntry()?.type!==LOCAL_LIQUID_EMITTER_TYPE;
-  const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${localLiquidHost?'Current simulation':'Initial setup'} · Density passes ${state.settings.densityIterations} for all ${state.sourceCount} sources`;}
+  const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${waterFeature.host?'Current simulation':'Initial setup'} · Density passes ${state.settings.densityIterations} for all ${state.sourceCount} sources`;}
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
@@ -21985,7 +21920,7 @@ function writeFirstFlameFieldState(value) {
   } catch(error){apply(before);throw error;}
 }
 function writeFirstFlameFieldStateUnchecked(value) {
-  volumePrototype.setActive(false);
+  flameFeature.setActive(false);
   const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
   for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
   for(const [key,entry] of Object.entries(value.route))hash.set(key,entry);
@@ -22000,8 +21935,8 @@ function writeFirstFlameFieldStateUnchecked(value) {
   if(!value.composition&&workingScene.activeFieldId==='flame-field')workingScene.clearSelection();
   renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
-    if(value.composition&&activeSceneComposition){await volumePrototype.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
-    if(!activeSceneComposition)volumePrototype.setActive(false);
+    if(value.composition&&activeSceneComposition){await flameFeature.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
+    if(!activeSceneComposition)flameFeature.setActive(false);
   });
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
@@ -24711,7 +24646,7 @@ function buildSceneData(capture = null) {
     provenance,
     composition: activeSceneComposition,
     fireSettings: activeSceneComposition ? readVolumeSettingsValues() : null,
-    localLiquid: localLiquidSetup,
+    localLiquid: waterFeature.setup,
     capture,
     cameraViews:cameraViews?.read(),
     sceneCamera:sceneCameras?.read().settings,
@@ -25116,7 +25051,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE&&record.localLiquidEmitter.mode!=='finite_drop'&&localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode!=='finite_drop').length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error('Water inlet capacity '+LOCAL_LIQUID_EMITTER_CAPACITY+' would be exceeded');
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
-  else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
+  else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
@@ -25479,12 +25414,12 @@ function selectionTransformProxy(){
   selectionProxy.userData.kaminosSceneObject={label:`${workingScene.selection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
 function setSceneSelection(ids,activeId=ids.at(-1)??null){
-  const valid=new Set([...workingScene.objects.map(o=>o.id),...workingScene.groups.map(g=>'@group:'+g.id),...(activeSceneComposition?['flame-field']:[]),...(localLiquidSetup?['water-field']:[])]);
+  const valid=new Set([...workingScene.objects.map(o=>o.id),...workingScene.groups.map(g=>'@group:'+g.id),...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=checkedSelection(ids,activeId);
   if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
   if(JSON.stringify(next)!==JSON.stringify(workingScene.selection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
-  workingScene.select(next.ids,next.activeId,[...(activeSceneComposition?['flame-field']:[]),...(localLiquidSetup?['water-field']:[])]);
+  workingScene.select(next.ids,next.activeId,[...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
   currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():workingScene.activeFieldId==='flame-field'?flameDomainEditObject():workingScene.activeGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
   renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
@@ -25518,13 +25453,13 @@ function styleSimulationDomainGuide(guide,id){
   styleHelperLines(guide,{width:viewportDisplay.domainWidth+(selected?1:0),opacity:viewportDisplay.domainOpacity});
 }
 function syncWaterDomainGuide(){
-  if(localLiquidSetup&&!localLiquidDomainGuide){
+  if(waterFeature.setup&&!localLiquidDomainGuide){
     const {boundsMin,boundsMax}=fingerFluidAnalyticalSupportGeometry();
     localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(...boundsMin),new THREE.Vector3(...boundsMax)),0x5bd8f5);
     localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
     localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
   }
-  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!localLiquidSetup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
+  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!waterFeature.setup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
 }
 function pickWaterDomainFromViewportPointer(event){
   if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
@@ -25537,7 +25472,7 @@ function syncSceneSimulationVisibility(){
   }
   syncAuthoredFireActivity().catch(error=>setInfo(`Fire activity: ${error.message}`));
   syncLocalLiquidHostEmitters();
-  if(localLiquidHost){const paused=localLiquidPaused||!isSceneItemVisible('water-field');if(localLiquidHost.paused!==paused)localLiquidHost.setPaused(paused);}
+  if(waterFeature.host){const paused=waterFeature.paused||!isSceneItemVisible('water-field');if(waterFeature.host.paused!==paused)waterFeature.host.setPaused(paused);}
 }
 function syncEditorHelperVisibility(){
   syncWaterDomainGuide();
@@ -26150,7 +26085,7 @@ async function saveToServer(sceneData, filename, options = {}) {
 
 function sceneIsEmpty() {
   const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
-  return workingScene.objects.length === 0 && volumePrimitives.length === 0 && !persistableFlame && !localLiquidSetup;
+  return workingScene.objects.length === 0 && volumePrimitives.length === 0 && !persistableFlame && !waterFeature.setup;
 }
 
 function sceneSaveIsBlocked() {
@@ -26335,23 +26270,17 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
-  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>workingScene.objects.some(o=>o.id===id)||workingScene.groups.some(g=>'@group:'+g.id===id)||(id==='flame-field'&&!!activeSceneComposition)||(id==='water-field'&&!!localLiquidSetup));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
-  if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))setSceneSelection([...new Set([...workingScene.selection.ids,data.activeFieldId])],data.activeFieldId);
+  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>workingScene.objects.some(o=>o.id===id)||workingScene.groups.some(g=>'@group:'+g.id===id)||(id==='flame-field'&&!!activeSceneComposition)||(id==='water-field'&&!!waterFeature.setup));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
+  if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:waterFeature.setup))setSceneSelection([...new Set([...workingScene.selection.ids,data.activeFieldId])],data.activeFieldId);
 
   // The pinned basin is already mounted. Reapplying identical primitives would
   // rebuild its GPU field and invalidate textures held by the lighting pass.
   if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
-    setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
-    await volumePrototype?.setActive?.(!activeSceneComposition||isSceneItemVisible('flame-field'));
-    if(activeSceneComposition)await syncAuthoredFireActivity();
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
-  } else {
-    await volumePrototype?.setActive?.(false);
-    if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
-  }
+  const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition||new URLSearchParams(location.search).get('kaminos_volume_smoke')==='1');
+  if(firePresent)setActiveTab(activeSceneComposition?'assets':'volume',{reveal:false});
+  if(!await flameFeature.restore({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
 
 
   // Apply camera
@@ -26426,9 +26355,9 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   sceneNavigation?.resetView();
   cameraAuthoring?.refresh();
   if (objectRecords.length > 0) {
-    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${sceneFile ? '' : ' · Imported file; Save to keep a local copy'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
+    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${sceneFile ? '' : ' · Imported file; Save to keep a local copy'}${waterFeature.failure ? `; water host unavailable: ${waterFeature.failure}` : ''}`);
   } else {
-    setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
+    setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
   return true;
 }

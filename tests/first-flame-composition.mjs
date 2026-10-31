@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {createAuthoredFlameFeature} from '../authored-flame-feature.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { createFireLightingHistory } from '../fire-lighting-history.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
@@ -85,12 +86,14 @@ test('first-field writes await lighting synchronization before resuming, includi
     writeFlameSettingsState(){},ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
     fireLightFieldRouteParams:()=>new URLSearchParams(),window:{},async syncSceneRadianceRoute(){await Promise.resolve();events.push(['lighting',!!context.activeSceneComposition]);}};
   const start=source.indexOf('function writeFirstFlameFieldStateUnchecked('),end=source.indexOf('async function addFirstFlameField',start);
+  context.volumePrototype.isActive=()=>events.findLast(e=>e[0]==='active')?.[1]??false;
+  context.flameFeature=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,visible:()=>true,composed:()=>!!context.activeSceneComposition});
   vm.createContext(context);vm.runInContext(source.slice(start,end),context);
   await context.writeFirstFlameFieldStateUnchecked({composition:{},sourcePresent:true,settings:{},route:{volume_light_field:'1'}});
   assert.deepEqual(events,[['active',false],['lighting',true],['active',true]]);
   events.length=0;
   await context.writeFirstFlameFieldStateUnchecked({composition:null,sourcePresent:false,settings:{},route:{}});
-  assert.deepEqual(events,[['active',false],['lighting',false],['active',false]],'undo must remove the consumer, not strand canRender on an absent source');
+  assert.deepEqual(events,[['active',false],['lighting',false]],'undo must remove the consumer, not strand canRender on an absent source');
 });
 
 test('lighting route mounts are idempotent and serialized with undo and failed imports',async()=>{
