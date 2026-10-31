@@ -1,4 +1,5 @@
 import {installRelativeNumberDrag,installSceneControlHistory} from '../scene-control-history.mjs';
+import {checkedAshSettings} from './scene-record.mjs';
 // Native selection inspector; all controls call the same authored operations.
 export function installAshInspector({document,anchor,selected,read,edit,cover,burst,changed,error,edits,target,ownHistory}){
  const panel=document.createElement('section');panel.id='selected-ash-properties';panel.hidden=true;anchor.after(panel);
@@ -30,7 +31,29 @@ export function installAshInspector({document,anchor,selected,read,edit,cover,bu
 }
 
 export function askAshSetup(document,defaults){return new Promise(resolve=>{
- const disposers=[];const dialog=document.createElement('dialog');dialog.innerHTML='<form method="dialog"><h2>Add ash field</h2><p>Position and scale it with the scene tools. Cell width controls detail and memory.</p><div data-fields></div><p data-error class="hint"></p><button value="cancel">Cancel</button><button value="add">Add ash</button></form>';
- for(const [key,label]of [['width','Width'],['depth','Depth'],['height','Height'],['cellSize','Cell width'],['initialDepth','Initial ash layer']]){const row=document.createElement('label');row.style.display='block';row.textContent=label+' ';const input=document.createElement('input');input.type='number';input.step='any';input.required=true;input.value=String(defaults[key]);input.dataset.key=key;row.append(input);dialog.querySelector('[data-fields]').append(row);disposers.push(installRelativeNumberDrag({input,grip:input,step:key==='cellSize'||key==='initialDepth'?.01:.1}));}
- dialog.addEventListener('close',()=>{const result=dialog.returnValue==='add'?Object.fromEntries([...dialog.querySelectorAll('[data-key]')].map(input=>[input.dataset.key,Number(input.value)])):null;for(const handle of disposers)handle.dispose();dialog.remove();resolve(result);},{once:true});document.body.append(dialog);dialog.showModal();
+ const disposers=[];
+ let accepted=null;
+ const dialog=document.createElement('dialog');
+ dialog.id='ash-setup-dialog';
+ dialog.setAttribute('aria-labelledby','ash-setup-title');
+ dialog.innerHTML='<form method="dialog"><h2 id="ash-setup-title">Add ash field</h2><p class="ash-setup-description">Position and scale it with the scene tools. Cell width controls detail and memory.</p><div data-fields></div><p data-error role="alert"></p><div class="ash-setup-actions"><button type="button" value="cancel" class="btn">Cancel</button><button type="submit" value="add" class="btn">Add ash</button></div></form>';
+ for(const [key,label]of [['width','Width'],['depth','Depth'],['height','Height'],['cellSize','Cell width'],['initialDepth','Initial ash layer']]){
+  const row=document.createElement('label');row.textContent=label;
+  const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.required=true;input.className='transform-input';input.value=String(defaults[key]);input.dataset.key=key;
+  row.append(input);dialog.querySelector('[data-fields]').append(row);
+  disposers.push(installRelativeNumberDrag({input,grip:input,step:key==='cellSize'||key==='initialDepth'?.01:.1}));
+ }
+ dialog.querySelector('form').addEventListener('submit',event=>{
+  event.preventDefault();
+  const values=Object.fromEntries([...dialog.querySelectorAll('input[data-key]')].map(input=>[input.dataset.key,input.valueAsNumber]));
+  try{checkedAshSettings({...defaults,...values});}
+  catch(error){dialog.querySelector('[data-error]').textContent=error.message;return;}
+  accepted=values;dialog.close('add');
+ });
+ dialog.querySelector('[value="cancel"]').addEventListener('click',()=>dialog.close('cancel'));
+ dialog.addEventListener('close',()=>{
+  for(const handle of disposers)handle.dispose();
+  dialog.remove();resolve(accepted);
+ },{once:true});
+ document.body.append(dialog);dialog.showModal();
  });}
