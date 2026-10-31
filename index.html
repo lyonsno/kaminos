@@ -4011,22 +4011,27 @@ function addNativeCrystal(options={}){
 }
 function nativeCrystal(id){const entry=workingScene.objects.find(o=>o.id===id);const runtime=entry?.object?.[crystalRuntime];if(!runtime)throw Error('Choose a crystal growth object');return runtime;}
 const crystalEditTargets=new Set();
-function invokeNativeCrystal(id,operation,input){
- assertSceneConstructionAvailable();const runtime=nativeCrystal(id);
- if(['checkpoint','remember','play','advance'].includes(operation)){const value=runtime.invoke(operation,input);syncVolumeViewerPlay();return value;}
- // Editing a retained specimen uses the same scene history as placement.
+function ensureCrystalEditTarget(id){
  const target='@crystal:'+id;
  if(!crystalEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>nativeCrystal(id).snapshot(),check:checkedCrystalSnapshot,write:value=>{nativeCrystal(id).invoke('restore',value);syncNativeCrystalInspector(selectedSceneObjectEntry());}});crystalEditTargets.add(target);}
+ return target;
+}
+function invokeNativeCrystal(id,operation,input){
+ assertSceneConstructionAvailable({editTarget:'@crystal:'+id});const runtime=nativeCrystal(id);
+ if(['checkpoint','remember','play','advance'].includes(operation)){const value=runtime.invoke(operation,input);syncVolumeViewerPlay();return value;}
+ // Editing a retained specimen uses the same scene history as placement.
+ const target=ensureCrystalEditTarget(id),active=scenePlacementTools.edits.state().active;
+ if(active&&active.id!==target)throw Error('Finish the active scene edit first');
  const before=runtime.snapshot();let after;
  try{runtime.invoke(operation,input);after=runtime.snapshot();}catch(error){runtime.invoke('restore',before);throw error;}
- runtime.invoke('restore',before);scenePlacementTools.edits.apply(target,after,'Edit crystal growth');return runtime.read();
+ if(active)scenePlacementTools.edits.preview(after);else{runtime.invoke('restore',before);scenePlacementTools.edits.apply(target,after,'Edit crystal growth');}return runtime.read();
 }
 function syncNativeCrystalInspector(entry){
- if(!crystalInspectorPanel){const anchor=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');if(!anchor)return;crystalInspectorPanel=document.createElement('section');crystalInspectorPanel.id='selected-crystal-properties';anchor.before(crystalInspectorPanel);}
+ if(!crystalInspectorPanel){const anchor=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');if(!anchor)return;crystalInspectorPanel=document.createElement('section');crystalInspectorPanel.id='selected-crystal-properties';anchor.before(crystalInspectorPanel);scenePlacementTools.addHistoryScope(crystalInspectorPanel);}
  const id=entry?.type===CRYSTAL_TYPE?entry.id:null;crystalInspectorPanel.hidden=!id;
  if(id===crystalInspectorId){crystalInspector?.sync();return;}
- crystalInspector?.dispose();crystalInspector=null;crystalInspectorId=id;
- if(id)crystalInspector=mountCrystalInspector({document,root:crystalInspectorPanel,read:()=>nativeCrystal(id).read(),invoke:(op,value)=>invokeNativeCrystal(id,op,value),installNumberDrag:installRelativeNumberDrag});
+ const previous=crystalInspector;crystalInspector=null;crystalInspectorId=id;previous?.dispose();
+ if(id)crystalInspector=mountCrystalInspector({document,root:crystalInspectorPanel,read:()=>nativeCrystal(id).read(),invoke:(op,value)=>invokeNativeCrystal(id,op,value),installNumberDrag:installRelativeNumberDrag,installControlHistory:(controls,onError)=>installSceneControlHistory({controls,edits:scenePlacementTools.edits,id:()=>ensureCrystalEditTarget(id),label:'Edit crystal growth',onError})});
 }
 let crystalStatusAt=0;
 workbenchSceneFrames.onFrame(({timestampMs})=>{if(timestampMs-crystalStatusAt<250)return;crystalStatusAt=timestampMs;if(crystalInspectorId&&workingScene.objects.some(o=>o.id===crystalInspectorId))crystalInspector?.sync();if(nativeCrystals.size)syncVolumeViewerPlay();});
@@ -25114,11 +25119,11 @@ function attachSceneObject(id,groupId) {
     if(target)target.objectIds.push(id);groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));
   },groupId?'Parent object':'Unparent object');
 }
-function assertSceneConstructionAvailable() {
+function assertSceneConstructionAvailable({editTarget=null}={}) {
   if(sceneLightingPreparation?.state().compiling)throw Error('Lighting is being prepared; scene edits resume when it finishes');
   if(workingScene.isSuspended)throw Error('Finish preview before editing the scene');
   if(authoringBusy||sceneDocument.state().blocked)throw Error('Wait for the document to finish loading');
-  const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying||scenePlacementTools.edits.isSettling())throw Error('Finish the current edit first');
+  const state=scenePlacementTools?.edits.state();if(!state||(state.active&&state.active.id!==editTarget)||state.replaying||scenePlacementTools.edits.isSettling())throw Error('Finish the current edit first');
 }
 function checkedObjectData(raw){if(raw.type===PROCEDURAL_MESH_TYPE)return checkedProceduralMesh(raw);if(raw.type==='light')return checkedSceneLightRecord(raw);throw Error('This data provider is read only');}
 function ensureMeshDataTarget(id) {
