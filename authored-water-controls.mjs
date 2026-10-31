@@ -102,6 +102,25 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   })();
   inFlight=operation;try{return await operation;}finally{if(inFlight===operation)inFlight=null;}
  }
+ // Another native control may begin a synchronous scene-history gesture before
+ // the typing debounce fires. Commit that draft first, without losing its fields.
+ // This entry is for the application's synchronous edit/editSimulation adapters.
+ function commitBeforeEdit(){
+  if(disposed)throw Error('Water controls are closed');
+  if(inFlight)throw Error('Wait for the pending water edit to finish');
+  const changes=[];
+  if(dirty&&selected)changes.push(['source',proposal()]);
+  if(simulationDirty)changes.push(['simulation',simulationProposal()]);
+  for(const [kind,patch]of changes){
+   stopTimer(kind);restorePreview();ownWrite=kind;
+   try{
+    const result=kind==='source'?api.edit(selected.id,patch):api.editSimulation(patch);
+    if(result?.then)throw Error('This water editor requires asynchronous completion before another gesture');
+    if(kind==='source'){dirty=false;sourceError.textContent='';}else{simulationDirty=false;simulationError.textContent='';}
+   }finally{ownWrite=null;}
+  }
+  refresh();
+ }
  function queue(kind){stopTimer(kind);if(!disposed&&!gestures.has(kind))timers.set(kind,schedule(()=>{timers.delete(kind);return flush(kind);},250));}
  function showResolutionSummary(simulation=api.read().simulation){
   const preview=previewInfo?.draft?previewInfo:null,sampling=preview?.sampling??simulation?.sampling,count=preview?.particleCount??simulation?.proposedParticleCount,error=preview?.relativeVolumeError??simulation?.relativeVolumeError;
@@ -200,5 +219,5 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   }
  });
  if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot)simulationRoot.append(simulationPanel);
- refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
+ refresh();return {node,refresh,refreshStatus,commitBeforeEdit,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
 }

@@ -72,7 +72,7 @@ export default {
     if(disposed)throw Error('Pour study is closed');
     const litres=Number(value);if(value===''||!Number.isFinite(litres)||litres<0)throw Error('Flow must be zero or more litres per second');
     const patch={volumeRate:litres/1000};
-    if(flowHistory?.state().pending)app.kaminosSceneEdits.preview(patch);else water.edit(emitterId,patch);
+    if(flowHistory?.state().pending)app.kaminosSceneEdits.preview(patch);else {water.commitBeforeEdit();water.edit(emitterId,patch);}
     return read();
    },...Object.fromEntries(Object.entries({makeWord,frame,reset,
     async pour(){
@@ -127,9 +127,10 @@ export default {
     mounts.push(host.controls.mountOperating({asset:{id:emitterId,root:sourceRoot},node:spigot,side:'left',anchor:[0,0,0]}));
     mounts.push(host.controls.mountOperating({asset,node:mold,side:'right',anchor:[recipe.rows[0].length*recipe.pitch/2,recipe.wallHeight,0]}));
     const fail=error=>{sourceStatus.textContent=error.message;};
-    flowHistory=installSceneControlHistory({controls:[flow],edits:app.kaminosSceneEdits,id:()=>water.editTarget(emitterId),label:'Change spigot flow',onError:fail});
+    flowHistory=installSceneControlHistory({controls:[flow],edits:app.kaminosSceneEdits,id:()=>{water.commitBeforeEdit();return water.editTarget(emitterId);},label:'Change spigot flow',onError:fail});
+    flow.addEventListener('pointerdown',e=>{if(!flowHistory.state().pending)e.stopImmediatePropagation();});
     drag=host.controls.installNumberDrag({input:flow,step:.1});
-    flow.addEventListener('input',()=>{void call('setFlow',flow.value,sourceStatus);});
+    flow.addEventListener('input',()=>{if(flowHistory.state().pending)void call('setFlow',flow.value,sourceStatus);});
     flow.addEventListener('blur',()=>queueMicrotask(refreshControls));
     unsubscribe=water.subscribeEdits(refreshControls);refreshControls();
    },
