@@ -4072,7 +4072,7 @@ const waterFeature = createAuthoredWaterFeature({
   runtimeEmitters:()=>localLiquidEmitterState().emitters,
   visible:()=>isSceneItemVisible('water-field'),viewerPaused:()=>sceneViewerPaused,
   preview:visible=>{refreshAuthoredWaterSamplingPreviews();setAuthoredWaterPreviewVisible(visible);},
-  refresh:()=>{authoredWaterControls?.refresh();refreshLocalLiquidPerformance();window._kaminosDirty?.();},
+  refresh:()=>{authoredWaterControls?.refresh();refreshLocalLiquidPerformance();if(!waterFeature.host)sharedWorkbench?.update({source:waterFeature.setup?'Authored water sources':'Shared scene',status:waterFeature.setup?'Initial preview':'No water',clock:waterFeature.setup?'Release starts water':''});window._kaminosDirty?.();},
   report:setInfo,
 });
 

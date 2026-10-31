@@ -22,11 +22,11 @@ const drop=createLocalLiquidEmitterSceneRecord({id:'water',transform:{position:[
 console.log('Authored preview stays lazy; experiment and authored integration share runtime retirement');
 {
  const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
- let redraws=0,destroyed=0;
+ let redraws=0,destroyed=0;const projections=[];
  const setup={dt:1/240,support:{kind:'invisible_box'},solver:{particleCount:8,diagnosticPopulation:{},diagnosticBox:{},rendererMode:'screen_space_refraction'}};
- const feature=createAuthoredWaterFeature({services:()=>({redraw(){redraws++;}}),emitters:()=>[],loadExperiment:options=>createFiniteFluidHost({...options,device:{},createSolver:async()=>({available:true,getDebugState:()=>({}),destroy(){destroyed++;}}),createPresentation:()=>({state:()=>({}),dispose(){}})})});
+ const feature=createAuthoredWaterFeature({services:()=>({redraw(){redraws++;}}),refresh:()=>projections.push(feature.host),emitters:()=>[],loadExperiment:options=>createFiniteFluidHost({...options,device:{},createSolver:async()=>({available:true,getDebugState:()=>({}),destroy(){destroyed++;}}),createPresentation:()=>({state:()=>({}),dispose(){}})})});
  const old=await feature.openExperiment(setup);const current=await feature.openExperiment(setup);
  const before=redraws;await old.dispose();assert.equal(redraws,before,'Obsolete closure cannot disturb the current presentation');assert.ok(feature.host);
- await current.dispose();assert.equal(feature.host,null);assert.equal(destroyed,2);assert.equal(redraws,before+1,'Closing the current experiment must redraw its removed presentation');
+ await current.dispose();assert.deepEqual(projections,[null],'Closing must publish absent water to controls');assert.equal(feature.host,null);assert.equal(destroyed,2);assert.equal(redraws,before+1,'Closing the current experiment must redraw its removed presentation');
  await current.dispose();assert.equal(redraws,before+1,'Repeated close remains inert');
 }
