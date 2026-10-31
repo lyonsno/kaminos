@@ -1,19 +1,20 @@
 import {createStageMold,stageWordMold,checkedStageMold,STAGE_MOLD_SOURCE} from '../stage-mold.mjs';
+import {installSceneControlHistory} from '../scene-control-history.mjs';
 
 export default {
  id:'stage-pour',title:'Stage word · pour study',
  async create({host,inputs,record}){
   const document=host.controls.document,app=document.defaultView,water=app.kaminosWaterSources;
   if(!water||!app.kaminosSceneAuthoring)throw Error('Open the authored scene before the pour study');
-  let session,asset,emitterId,recipe,status,wordField,disposed=false,disposal,borrowed=false,pending=Promise.resolve();
+  let session,asset,emitterId,recipe,status,wordField,flowHistory,refreshControls=()=>{},cleanupControls=()=>{},disposed=false,disposal,borrowed=false,pending=Promise.resolve();
   // Mounted controls and agent operations share this boundary, including close.
   const serial=action=>value=>{
    if(disposed)return Promise.reject(Error('Pour study is closed'));
    const task=pending.then(()=>{if(disposed)throw Error('Pour study is closed');return action(value);});
    pending=task.catch(()=>{});return task;
   };
-  const read=()=>({label:recipe?.label,moldId:asset?.id,emitterId,water:water.read(),stage:'liquid contact study; ignition is not coupled'});
-  async function reset(){await water.commitEdits();water.reset();return read();}
+  const read=()=>({label:asset?.root.userData.kaminosStageMold?.label??recipe?.label,moldId:asset?.id,emitterId,water:water.read(),stage:'liquid contact study; ignition is not coupled'});
+  async function reset(){await water.commitEdits();water.edit(emitterId,{emissionEnabled:false});water.reset();return read();}
   async function retire(replace=false){
    const oldSession=session,oldAsset=asset,oldEmitter=emitterId,wasBorrowed=borrowed;
    session=asset=emitterId=null;borrowed=false;
@@ -25,6 +26,15 @@ export default {
    await oldSession?.dispose();
   }
   async function makeWord(label){
+   if(asset){
+    await water.commitEdits();
+    const runtime=water.read().runtime;
+    const flowing=app.kaminosLocalLiquidState().emitters.find(row=>row.id===emitterId)?.localLiquidEmitter.emissionEnabled;
+    if(runtime&&(runtime.population?.active!==0||flowing))throw Error('Reset water before changing the mold. Its source and placement will be kept.');
+    recipe=app.kaminosSceneAuthoring.setStageWord(asset.id,label);
+    record({kind:'stage-pour.mold',phase:'applied',effective:{label,recipe,emitterId,moldId:asset.id}});
+    return read();
+   }
    const next=stageWordMold(document,label);
    if(water.read().sources.some(r=>r.id!==emitterId))throw Error('Build a word in a scene without unrelated water sources.');
    await retire(true);
@@ -58,7 +68,13 @@ export default {
   }else{await makeWord(inputs.word??'DENOISER');frame();}
   return {
    read,
-   operations:Object.fromEntries(Object.entries({makeWord,frame,reset,
+   operations:{setFlow(value){
+    if(disposed)throw Error('Pour study is closed');
+    const litres=Number(value);if(value===''||!Number.isFinite(litres)||litres<0)throw Error('Flow must be zero or more litres per second');
+    const patch={volumeRate:litres/1000};
+    if(flowHistory?.state().pending)app.kaminosSceneEdits.preview(patch);else water.edit(emitterId,patch);
+    return read();
+   },...Object.fromEntries(Object.entries({makeWord,frame,reset,
     async pour(){
      if(disposed)throw Error('Pour study is closed');
      await water.commitEdits();
@@ -72,21 +88,52 @@ export default {
      water.edit(emitterId,{emissionEnabled:false});return read();
     },
     selectEmitter(){app.selectSceneObject(emitterId);return read();},
-   }).map(([name,action])=>[name,serial(action)])),
+   }).map(([name,action])=>[name,serial(action)]))},
    mount({root,invoke}){
-    const heading=document.createElement('h3');heading.textContent='Pour a stage word';
-    const label=document.createElement('label');label.textContent='Word ';
-    wordField=document.createElement('input');wordField.value=recipe.label;wordField.type='text';wordField.setAttribute('aria-label','Stage word');wordField.className='transform-input';label.append(wordField);
-    status=document.createElement('p');status.setAttribute('role','status');
-    const call=(name,value)=>invoke(name,value).then(()=>{status.textContent='';}).catch(error=>{status.textContent=error.message;});
-    wordField.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();call('makeWord',wordField.value);}});
-    const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:12px 0';
-    for(const [text,name]of [['Build word','makeWord'],['Pour','pour'],['Reset water','reset']]){
-     const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=text;b.addEventListener('click',()=>call(name,name==='makeWord'?wordField.value:undefined));buttons.append(b);
-    }
-    root.append(heading,label,buttons,status);
+    const element=(tag,text,className)=>{const node=document.createElement(tag);if(text)node.textContent=text;if(className)node.className=className;return node;};
+    const heading=element('h3','Stage word · pour study');
+    const help=element('p','Use the controls beside the spigot and mold. Select either object for placement and deeper properties.');
+    status=element('p');status.setAttribute('role','status');
+    const spigot=element('section'),mold=element('section');
+    spigot.dataset.stageOperating='spigot';mold.dataset.stageOperating='mold';
+    spigot.setAttribute('aria-label','Spigot controls');mold.setAttribute('aria-label','Mold controls');
+    const source=()=>host.scene.objects().find(row=>row.id===emitterId);
+    const sourceRoot=source()?.object;if(!sourceRoot)throw Error('The pour source is absent');
+    const sourceStatus=element('p',null,'operating-status'),moldStatus=element('p',null,'operating-status');
+    sourceStatus.setAttribute('role','status');moldStatus.setAttribute('role','status');
+    const call=(name,value,output=status)=>invoke(name,value).then(()=>{output.textContent='';refreshControls();return true;}).catch(error=>{output.textContent=error.message;return false;});
+    const pour=element('button','Pour','btn');pour.type='button';pour.title='Open or close this spigot. Stopping preserves the water already poured.';
+    pour.addEventListener('click',()=>call(source()?.localLiquidEmitter.emissionEnabled?'stopPour':'pour',undefined,sourceStatus));
+    const top=element('header');top.append(element('span','Spigot','operating-title'),pour);
+    const flowLabel=element('label','Flow · L/s'),flow=element('input',null,'transform-input');flow.type='number';flow.min='0';flow.step='.1';flow.setAttribute('aria-label','Spigot flow in litres per second');flowLabel.append(flow);
+    spigot.append(top,flowLabel,element('p','Drag the value · click to type','operating-hint'),sourceStatus);
+    const moldHeader=element('header');moldHeader.append(element('span','Mold','operating-title'));
+    wordField=element('input',null,'transform-input');wordField.type='text';wordField.value=read().label;wordField.setAttribute('aria-label','Mold word');wordField.title='Edit the lettering; press Enter to rebuild its channels. Placement, material and the spigot stay attached. Reset water first if it has been released.';
+    wordField.addEventListener('keydown',async e=>{
+     if(e.key==='Enter'){e.preventDefault();if(await call('makeWord',wordField.value,moldStatus))wordField.blur();}
+     if(e.key==='Escape'){e.preventDefault();wordField.value=read().label;wordField.blur();moldStatus.textContent='';}
+    });
+    mold.append(moldHeader,wordField,element('p','Enter to change · Esc to cancel','operating-hint'),moldStatus);
+    const resetButton=element('button','Reset water','btn');resetButton.type='button';resetButton.title='Stop pouring and clear all water in this study. Keep the mold, spigot placement and source settings.';resetButton.addEventListener('click',()=>call('reset'));
+    root.append(heading,help,resetButton,status);
+    refreshControls=()=>{
+     const settings=source()?.localLiquidEmitter;if(!settings)return;
+     pour.textContent=settings.emissionEnabled?'Stop':'Pour';pour.setAttribute('aria-pressed',String(!!settings.emissionEnabled));
+     if(document.activeElement!==flow&&!flowHistory?.state().pending)flow.value=String(settings.volumeRate*1000);
+     if(document.activeElement!==wordField)wordField.value=read().label;
+    };
+    const mounts=[];let drag,unsubscribe;
+    cleanupControls=()=>{unsubscribe?.();drag?.dispose();flowHistory?.dispose();mounts.forEach(m=>m.dispose());};
+    mounts.push(host.controls.mountOperating({asset:{id:emitterId,root:sourceRoot},node:spigot,side:'left',anchor:[0,0,0]}));
+    mounts.push(host.controls.mountOperating({asset,node:mold,side:'right',anchor:[recipe.rows[0].length*recipe.pitch/2,recipe.wallHeight,0]}));
+    const fail=error=>{sourceStatus.textContent=error.message;};
+    flowHistory=installSceneControlHistory({controls:[flow],edits:app.kaminosSceneEdits,id:()=>water.editTarget(emitterId),label:'Change spigot flow',onError:fail});
+    drag=host.controls.installNumberDrag({input:flow,step:.1});
+    flow.addEventListener('input',()=>{void call('setFlow',flow.value,sourceStatus);});
+    flow.addEventListener('blur',()=>queueMicrotask(refreshControls));
+    unsubscribe=water.subscribeEdits(refreshControls);refreshControls();
    },
-   dispose(){if(!disposed){disposed=true;disposal=pending.then(()=>retire());}return disposal;},
+   dispose(){if(!disposed){cleanupControls();disposed=true;disposal=pending.then(()=>retire());}return disposal;},
   };
  },
 };

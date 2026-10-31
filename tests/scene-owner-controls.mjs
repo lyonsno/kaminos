@@ -21,3 +21,24 @@ const propertiesHandle=registry.mount({asset:{id:'animal',root},properties:prope
 assert.equal(propertiesOnly.hidden,false);assert.equal(viewport.children.length,0,'Properties-only behavior created a global-looking transport');
 propertiesHandle.dispose();
 console.log('Owner properties/transport follow actual selected roots and descendants and release independently');
+
+assert.equal(typeof registry.mountOperating,'function','object operating controls must remain available without selection');
+
+class OperatingElement extends EventTarget{
+ children=[];style={};dataset={};offsetWidth=220;offsetHeight=110;classList={add(){}};
+ append(node){node.parent=this;this.children.push(node);}remove(){if(this.parent)this.parent.children.splice(this.parent.children.indexOf(this),1);}
+ contains(node){return node===this||this.children.includes(node);}
+}
+const operatingDoc=new EventTarget();operatingDoc.defaultView=new EventTarget();
+const operatingViewport=new OperatingElement();let frame=null,position={x:350,y:180,bounds:{left:0,top:0,right:700,bottom:500}};
+const controls=createSceneOwnerControls({document:operatingDoc,viewport:operatingViewport,inspector,selected:()=>null,project:()=>position,onFrame:fn=>{frame=fn;return()=>{frame=null;};}});
+const a=new OperatingElement(),b=new OperatingElement();
+const first=controls.mountOperating({asset:{id:'spigot',root:{}},node:a,side:'left'});
+const second=controls.mountOperating({asset:{id:'mold',root:{}},node:b,side:'left'});
+assert.equal(a.hidden,false);assert.equal(b.hidden,false,'both controls remain available with no selection');
+assert.ok(Number.parseFloat(b.style.top)>=Number.parseFloat(a.style.top)+a.offsetHeight,'overlapping cards separate');
+const before={...a.style};a.dispatchEvent(new Event('pointerdown'));position={...position,x:600};frame();assert.deepEqual(a.style,before,'controls stay still during first-touch manipulation');
+operatingDoc.dispatchEvent(new Event('pointerup'));frame();assert.notDeepEqual(a.style,before);
+operatingDoc.activeElement=b;const typing={...b.style};position={...position,y:300};frame();assert.deepEqual(b.style,typing,'keyboard focus holds the controls still');
+operatingDoc.activeElement=null;position=null;frame();assert.equal(a.hidden,true,'removed or behind-camera roots do not leave misleading controls');
+first.dispose();assert.ok(frame);second.dispose();assert.equal(frame,null);assert.equal(operatingViewport.children.length,0,'last owner releases its frame subscription and DOM');

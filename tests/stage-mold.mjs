@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {sceneLiquidCollider,sceneLiquidDistance} from '../scene-liquid-support.mjs';
 import {packSceneLiquidTexture} from '../scene-liquid-support.mjs';
-import {createStageMold,stageMoldField} from '../stage-mold.mjs';
+import {createStageMold,stageMoldField,replaceStageMold} from '../stage-mold.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {buildSceneDocument,planSceneRestore,isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 import {Raycaster,Vector3} from '../lib/three.core.js';
@@ -56,4 +56,15 @@ test('mixed primitive/mold texture keeps header indices separate from every comp
  const offsets=[pixel(3,1,3),pixel(3,2,3)];assert.deepEqual(offsets,[3,12]);
  const field=stageMoldField(stageMold);
  for(const offset of offsets)for(let z=0;z<9;z++)for(let x=0;x<9;x++)assert.equal(pixel(x,z+offset),field.data[z*9+x]);
+});
+
+test('in-place lettering edits keep the native object, material, pose and collision record aligned',()=>{
+ const object=createStageMold(stageMold),entry={...record,object},material=object.material;
+ object.position.set(2,3,4);entry.groupId='cradle';
+ const next={...stageMold,label:'Filled',rows:stageMold.rows.map(row=>'###'+row.slice(3))};
+ replaceStageMold(entry,next);
+ assert.equal(entry.object,object);assert.equal(object.material,material);assert.equal(entry.groupId,'cradle');assert.deepEqual(object.position.toArray(),[2,3,4]);
+ assert.deepEqual(entry.stageMold,next);assert.deepEqual(object.userData.kaminosStageMold,next);
+ assert.ok(sceneLiquidDistance(sceneLiquidCollider(entry),[1.7,3.2,4]).distance<0,'collision changes with the visible lettering');
+ object.geometry.dispose();object.material.dispose();
 });

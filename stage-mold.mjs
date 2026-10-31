@@ -71,11 +71,11 @@ export function createStageMold(value){
  const object=new Mesh(geometry,new MeshStandardMaterial({color:0x887b69,roughness:.85,metalness:0}));
  object.name=p.label+' · casting mold';object.castShadow=true;object.receiveShadow=true;object.userData.kaminosStageMold=p;return object;
 }
-export function stageWordMold(document,label='DENOISER'){
+export function stageWordMold(document,label='DENOISER',template=null){
  if(typeof label!=='string'||!label.trim())throw Error('Enter a stage word');
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
- ctx.font='900 48px monospace';const width=Math.ceil(ctx.measureText(label).width)+32;
- canvas.width=width;canvas.height=96;ctx.font='900 48px monospace';ctx.textBaseline='alphabetic';ctx.fillStyle='white';ctx.fillText(label,16,58);
+ ctx.font='900 48px monospace';const width=template?.rows[0].length??Math.ceil(ctx.measureText(label).width)+32;
+ canvas.width=width;canvas.height=96;ctx.font='900 48px monospace';ctx.textBaseline='alphabetic';ctx.fillStyle='white';ctx.fillText(label,16,58,width-32);
  const data=ctx.getImageData(0,0,width,96).data,rows=[];
  // A shared runner and short risers feed disconnected glyphs from one pour.
  // They are ordinary open channels in the same saved mold, not animated fill.
@@ -89,7 +89,7 @@ export function stageWordMold(document,label='DENOISER'){
   }inGlyph=occupied;
  }
  for(let z=0;z<96;z++)rows.push(mask[z].map(v=>v?'.':'#').join(''));
- return checkedStageMold({schema:'kaminos.stage-mold.v1',label,pitch:.025,wallHeight:.18,baseThickness:.1,rows});
+ return checkedStageMold({schema:'kaminos.stage-mold.v1',label,pitch:template?.pitch??.025,wallHeight:template?.wallHeight??.18,baseThickness:template?.baseThickness??.1,rows});
 }
 export const stageMoldRecordDomain={type:'pbr',source:STAGE_MOLD_SOURCE,
  recognize:object=>Boolean(object?.userData?.kaminosStageMold),
@@ -97,3 +97,13 @@ export const stageMoldRecordDomain={type:'pbr',source:STAGE_MOLD_SOURCE,
  capture:entry=>({stageMold:checkedStageMold(entry.object.userData.kaminosStageMold)}),
  reloadable:r=>{checkedStageMold(r.stageMold);return true;},
  load:(r,loaders,options)=>loaders.constructed(createStageMold(r.stageMold),r,options)};
+
+// Replace the lettering geometry while retaining placement, grouping and material.
+export function replaceStageMold(entry,value){
+ const recipe=checkedStageMold(value),object=entry.object,replacement=createStageMold(recipe);
+ object.geometry.dispose();object.geometry=replacement.geometry;replacement.material.dispose();
+ object.userData.kaminosStageMold=recipe;entry.stageMold=recipe;
+ object.name=entry.label=recipe.label+' · casting mold';
+ if(object.userData.kaminosSceneObject)Object.assign(object.userData.kaminosSceneObject,{stageMold:recipe,label:entry.label});
+ return recipe;
+}

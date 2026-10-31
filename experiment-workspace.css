@@ -103,3 +103,16 @@ body.experiment-workspace #authored-mix-panel-content { display:block; }
 .owner-experiment-content { margin-top:12px; }
 #experiment-scene-slot .scene-object-tools { display:none; }
 #experiment-scene-slot .panel { border:0;padding:0; }
+
+.scene-owner-operating { position:absolute; z-index:12; width:220px; box-sizing:border-box; padding:12px; border:1px solid #ffffff30; border-radius:9px; background:rgba(25,29,32,.82); color:#e7e7e4; box-shadow:0 4px 18px #0003; font:13px/1.4 system-ui,sans-serif; pointer-events:auto; }
+.scene-owner-operating[hidden] { display:none; }
+.scene-owner-operating header { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+.scene-owner-operating .operating-title { font-weight:600; color:#ead3a8; }
+.scene-owner-operating label { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.scene-owner-operating input { min-width:0; width:100%; box-sizing:border-box; }
+.scene-owner-operating .authoring-number-wrap { flex:1; min-width:0; }
+.scene-owner-operating .operating-hint { margin:6px 0 0; color:#b4bbbd; font-size:11px; }
+.scene-owner-operating .btn { padding:5px 9px; min-height:30px; }
+.scene-owner-operating .operating-status { color:#e1b886; font-size:12px; margin:7px 0 0; }
+
+.scene-owner-operating input { font:14px/1.4 system-ui,sans-serif; height:30px; padding:4px 7px; }

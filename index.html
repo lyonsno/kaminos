@@ -3352,6 +3352,7 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
+import {stageWordMold,checkedStageMold,replaceStageMold} from './stage-mold.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
@@ -6758,7 +6759,7 @@ function pickVisibleFlameFromViewportPointer(hits) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback, .living-scene-run');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback, .scene-owner-operating, .living-scene-run');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -12178,6 +12179,7 @@ function clearSceneEditingState(){
   for(const id of giProxyEditTargets)scenePlacementTools?.edits.unregister(id);giProxyEditTargets.clear();
   for(const id of burnableEditTargets)scenePlacementTools?.edits.unregister(id);burnableEditTargets.clear();
   for(const id of promptEditTargets)scenePlacementTools?.edits.unregister(id);promptEditTargets.clear();
+  for(const id of stageWordEditTargets)scenePlacementTools?.edits.unregister(id);stageWordEditTargets.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -12644,12 +12646,19 @@ function applyAuthoredWaterSettings(id,patch){
   const cell=localLiquidHost?.state().solver?.domain?.cellSize??authoredMlsCellSize(localLiquidEmitterRecords(),localLiquidSetup??{});
   patch={...patch,volumeRate:patch.rate*authoredMlsParticleVolume(cell)};
  }
- const target='@authored-water:'+id;
- if(!waterSettingTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>structuredClone(workingScene.objects.find(r=>r.id===id).localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(workingScene.objects.find(r=>r.id===id).object)),write:value=>{
-  replaceAuthoredWaterSettings(id,value);
- }});waterSettingTargets.add(target);}
- return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');
+ const target=authoredWaterEditTarget(id);
+ return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit water source');
 }
+function authoredWaterEditTarget(id){
+ const row=workingScene.objects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Water source is absent');
+ const target='@authored-water:'+id;
+ if(!waterSettingTargets.has(target)){
+  const current=()=>workingScene.objects.find(r=>r.id===id)??workingScene.retained(id);
+  scenePlacementTools.edits.register(target,{read:()=>structuredClone(current().localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(current().object)),write:value=>replaceAuthoredWaterSettings(id,value)});waterSettingTargets.add(target);
+ }
+ return target;
+}
+
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
   const entry=workingScene.objects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
   if(!deferSync&&localLiquidSetup?.waterSampling?.particleTarget!==undefined){
@@ -12800,7 +12809,7 @@ function fitAuthoredWaterBounds(){
  if(plan.changed)editAuthoredWaterSimulation({waterSampling:plan.sampling});
  return authoredWaterState();
 }
-window.kaminosWaterSources={async commitEdits(){if(await authoredWaterControls?.flush()===false)throw Error('Complete the pending water property edits before continuing.');},fitBounds:fitAuthoredWaterBounds,preview:previewAuthoredWaterSetup,match:matchAuthoredWaterSetup,reset:resetAuthoredWater,subscribeEdits:listener=>scenePlacementTools.edits.subscribe(listener),requestParticleState(){if(!localLiquidHost?.requestParticleState)throw Error('Finite water is not mounted');return localLiquidHost.requestParticleState();},read:authoredWaterState,editSimulation:editAuthoredWaterSimulation,selectSimulation:()=>window.selectSceneField('water-field'),add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;authoredWaterControls?.refreshStatus();window._kaminosDirty?.();return result;}};
+window.kaminosWaterSources={editTarget:authoredWaterEditTarget,async commitEdits(){if(await authoredWaterControls?.flush()===false)throw Error('Complete the pending water property edits before continuing.');},fitBounds:fitAuthoredWaterBounds,preview:previewAuthoredWaterSetup,match:matchAuthoredWaterSetup,reset:resetAuthoredWater,subscribeEdits:listener=>scenePlacementTools.edits.subscribe(listener),requestParticleState(){if(!localLiquidHost?.requestParticleState)throw Error('Finite water is not mounted');return localLiquidHost.requestParticleState();},read:authoredWaterState,editSimulation:editAuthoredWaterSimulation,selectSimulation:()=>window.selectSceneField('water-field'),add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;authoredWaterControls?.refreshStatus();window._kaminosDirty?.();return result;}};
 
 function installSharedWorkbench() {
   if(sharedWorkbench)return;
@@ -12821,8 +12830,17 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
+  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value),
+    onFrame:workbenchSceneFrames.onFrame,
+    project:(asset,anchor)=>{
+      if(!workingScene.objects.some(row=>row.id===asset.id&&row.object===asset.root)||!asset.root.visible)return null;
+      const p=asset.root.localToWorld(new THREE.Vector3(...anchor)).project(camera);
+      if(p.z<-1||p.z>1)return null;
+      const canvas=renderer.domElement.getBoundingClientRect(),view=document.getElementById('viewport').getBoundingClientRect();
+      const left=canvas.left-view.left,top=canvas.top-view.top;
+      return {x:left+(p.x+1)*canvas.width/2,y:top+(1-p.y)*canvas.height/2,bounds:{left,top:top+88,right:left+canvas.width,bottom:top+canvas.height-90}};
+    }});
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,mountOperating:sceneOwnerControls.mountOperating,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
       const generation=localLiquidGeneration;
@@ -25011,6 +25029,21 @@ function setPromptLettering(id,prompt){
   const object=createPromptLettering(document,prompt,entry.burnable?.appearance?.profile??'incineration');
   try{return scenePlacementTools.edits.apply(target,promptReliefRecord(object).promptRelief,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
 }
+const stageWordEditTargets=new Set();
+function setStageWord(id,label){
+ assertSceneConstructionAvailable();
+ const current=()=>workingScene.objects.find(row=>row.id===id)??workingScene.retained(id);
+ const entry=current();if(!entry?.object.userData.kaminosStageMold)throw Error('Stage mold is absent');
+ const before=checkedStageMold(entry.object.userData.kaminosStageMold);
+ if(before.label===label)return before;
+ const next=stageWordMold(document,label,before),target='@stage-word:'+id;
+ if(!stageWordEditTargets.has(target)){
+  scenePlacementTools.edits.register(target,{read:()=>current().object.userData.kaminosStageMold,check:checkedStageMold,write:value=>{
+   replaceStageMold(current(),value);renderSceneObjectList();window._kaminosDirty?.();
+  }});stageWordEditTargets.add(target);
+ }
+ scenePlacementTools.edits.apply(target,next,'Edit mold word');return next;
+}
 function addSceneSpotLight() {
   assertSceneConstructionAvailable();const id=makeSceneObjectId('light');
   const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
@@ -25323,7 +25356,7 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
-    addPrompt:addPromptLettering,setPrompt:setPromptLettering,
+    addPrompt:addPromptLettering,setPrompt:setPromptLettering,setStageWord,
     setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);return edits.apply(ensureObjectBurnableTarget(id),{...entry?.burnable,enabled,material:'wood'},'Set burnable wood');},
     burningState:id=>sceneBurning.read(id),
     setBurnAppearance:(id,value)=>{const entry=workingScene.objects.find(row=>row.id===id);if(!entry)throw Error('Select a burnable mesh');if(value.kelvinPerHeat!==undefined)throw Error('Change Kelvin per heat in the flame physical controls');const prior=entry.burnable??{enabled:false,material:'wood'};const appearance=checkedBurnAppearance({...checkedBurnAppearance(prior.appearance??{profile:entry.object.userData.kaminosPromptRelief?.appearance??'crust',glow:1}),...value});return edits.apply(ensureObjectBurnableTarget(id),{...prior,appearance},'Edit burn appearance');},
