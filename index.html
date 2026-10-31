@@ -2489,6 +2489,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
+        <div class="scene-menu-heading">Simulation</div>
+        <button type="button" role="menuitem" data-scene-add="crystal-growth">Crystal growth</button>
         <div class="scene-menu-heading">Emitter</div>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water</button>
         <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
@@ -2854,6 +2856,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import {CRYSTAL_TYPE,CRYSTAL_SOURCE,crystalRuntime,defaultCrystalSnapshot,checkedCrystalSnapshot} from './mineral-worlds/crust-record.mjs';
+import {createCrystalObject} from './mineral-worlds/crust-object.mjs';
+import {mountCrystalInspector} from './mineral-worlds/crust-inspector.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
@@ -3986,6 +3991,46 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 const workingScene = createWorkingScene();
+const nativeCrystals=new Map();
+let crystalInspector=null,crystalInspectorId=null,crystalInspectorPanel=null;
+function mountNativeCrystal(record,{activate=true}={}){
+ const runtime=createCrystalObject({snapshot:record.crystalGrowth,onFrame:workbenchSceneFrames.onFrame,
+  redraw:()=>window._kaminosDirty?.(),changed:()=>sceneDocument.authoringChanged(),
+  isMounted:root=>root.parent===scene&&root.visible&&!workingScene.isSuspended&&isSceneItemVisible(record.id),
+  requestIdle:callback=>window.requestIdleCallback(callback),cancelIdle:id=>window.cancelIdleCallback(id)});
+ const object=runtime.root,pose=record.transform??identityGroupPose();object.position.fromArray(pose.position);object.rotation.set(...pose.rotation);object.scale.fromArray(pose.scale);object.name=record.label??'Crystal growth';
+ nativeCrystals.set(object,runtime);
+ try{scene.add(object);registerSceneObject(object,record,{activate});}catch(error){object.removeFromParent();runtime.dispose();nativeCrystals.delete(object);throw error;}
+ return runtime;
+}
+function addNativeCrystal(options={}){
+ assertSceneConstructionAvailable();const id=makeSceneObjectId(CRYSTAL_TYPE),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+ mountNativeCrystal({id,type:CRYSTAL_TYPE,source:CRYSTAL_SOURCE,label:'Crystal growth',fileName:'Crystal growth',createdAt:new Date().toISOString(),transform:{...identityGroupPose(),position:[controls.target.x,Math.max(controls.target.y,groundPlane.position.y+.02),controls.target.z]},crystalGrowth:options.snapshot??defaultCrystalSnapshot()});
+ try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+ setActiveSceneObject(id);renderSceneObjectList();syncVolumeViewerPlay();return id;
+}
+function nativeCrystal(id){const entry=workingScene.objects.find(o=>o.id===id);const runtime=entry?.object?.[crystalRuntime];if(!runtime)throw Error('Choose a crystal growth object');return runtime;}
+const crystalEditTargets=new Set();
+function invokeNativeCrystal(id,operation,input){
+ assertSceneConstructionAvailable();const runtime=nativeCrystal(id);
+ if(['checkpoint','remember','play','advance'].includes(operation)){const value=runtime.invoke(operation,input);syncVolumeViewerPlay();return value;}
+ // Editing a retained specimen uses the same scene history as placement.
+ const target='@crystal:'+id;
+ if(!crystalEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>nativeCrystal(id).snapshot(),check:checkedCrystalSnapshot,write:value=>{nativeCrystal(id).invoke('restore',value);syncNativeCrystalInspector(selectedSceneObjectEntry());}});crystalEditTargets.add(target);}
+ const before=runtime.snapshot();let after;
+ try{runtime.invoke(operation,input);after=runtime.snapshot();}catch(error){runtime.invoke('restore',before);throw error;}
+ runtime.invoke('restore',before);scenePlacementTools.edits.apply(target,after,'Edit crystal growth');return runtime.read();
+}
+function syncNativeCrystalInspector(entry){
+ if(!crystalInspectorPanel){const anchor=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');if(!anchor)return;crystalInspectorPanel=document.createElement('section');crystalInspectorPanel.id='selected-crystal-properties';anchor.before(crystalInspectorPanel);}
+ const id=entry?.type===CRYSTAL_TYPE?entry.id:null;crystalInspectorPanel.hidden=!id;
+ if(id===crystalInspectorId){crystalInspector?.sync();return;}
+ crystalInspector?.dispose();crystalInspector=null;crystalInspectorId=id;
+ if(id)crystalInspector=mountCrystalInspector({document,root:crystalInspectorPanel,read:()=>nativeCrystal(id).read(),invoke:(op,value)=>invokeNativeCrystal(id,op,value),installNumberDrag:installRelativeNumberDrag});
+}
+let crystalStatusAt=0;
+workbenchSceneFrames.onFrame(({timestampMs})=>{if(timestampMs-crystalStatusAt<250)return;crystalStatusAt=timestampMs;if(crystalInspectorId&&workingScene.objects.some(o=>o.id===crystalInspectorId))crystalInspector?.sync();if(nativeCrystals.size)syncVolumeViewerPlay();});
+window.kaminosCrystalGrowth={add:addNativeCrystal,read:id=>nativeCrystal(id).read(),invoke:invokeNativeCrystal};
 const sceneRecords = createSceneRecordOperations({
   readers:{transform:object=>sceneObjectTransformState(object),materials:object=>getMaterialStateForObject(object),splatTransform:entry=>splatSceneTransformState(entry)},
   loaders:{
@@ -4000,6 +4045,7 @@ const sceneRecords = createSceneRecordOperations({
     procedural:record=>mountProceduralMesh(record).object,
     flame(record,{activate}){authoredFlamePresent=true;const object=ensureAuthoredFlameEmitter(record,{activate});if(!object)throw Error('The saved analytic flame source is not mounted');return object;},
     water(record,{activate}){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate});return object;},
+    crystal:(record,options)=>mountNativeCrystal(record,options).root,
     constructed(object,record,{activate}){scene.add(object);registerSceneObject(object,record,{activate});return object;},
     async pbr(record,{activate}){const files=await loadDemoFiles(record.source);if(!files)throw Error(`Scene object "${record.fileName||record.id}" demo source "${record.source}" is not readable`);return handleFiles(files,{clear:false,activate,metadata:record});},
     image:(record,{activate})=>showImagePlane(record.source,{clear:false,activate,metadata:record}),
@@ -5123,6 +5169,7 @@ function sceneObjectMetadataFor(object) {
 
 function disposeObjectTree(object) {
   sceneBurning?.forget(object);
+  if(object[crystalRuntime]){object[crystalRuntime].dispose();nativeCrystals.delete(object);return;}
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
   if(object.userData?.disposeBrazierRoom){object.userData.disposeBrazierRoom();return;}
   object.traverse(child => {
@@ -7075,6 +7122,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if ([...Object.keys(GEOMETRY_DEFAULTS),'annular'].includes(action.dataset.sceneAdd)) {
     try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
+  if(action.dataset.sceneAdd===CRYSTAL_TYPE){try{addNativeCrystal();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
@@ -10232,6 +10280,7 @@ function createPageSceneMembershipOperations() {
       dispose:disposeObjectTree,
     },
     domains:{
+      [CRYSTAL_TYPE]:{retainRoot:true,detached:entry=>entry.object[crystalRuntime]?.setActive(false),restored:(entry,snapshot)=>{entry.object[crystalRuntime]?.invoke('restore',snapshot.record.crystalGrowth);entry.object[crystalRuntime]?.setActive(true);}},
       glb:{retainRoot:true},
       light:{retainRoot:true,
         detached(entry){setSceneObjectMounted(entry,false);},
@@ -19255,7 +19304,8 @@ function syncPhysicsAppearanceCockpit(physics) {
 function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
   const fire=!!s?.active,water=!!localLiquidHost;
   const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
-  return {present:fire||water,paused:!(fire&&!firePaused||water&&!localLiquidPaused)};
+  const crystals=[...nativeCrystals.values()].filter(r=>r.root.parent===scene);
+  return {present:fire||water||crystals.length>0,paused:!(fire&&!firePaused||water&&!localLiquidPaused||crystals.some(r=>r.read().effectivePlaying))};
 }
 function syncVolumeViewerPlay(s) {
   const button=document.getElementById('volume-viewer-play');if(!button)return;
@@ -19271,6 +19321,7 @@ document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
   const freeze=document.getElementById('volume-look-freeze');
   if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
   if(localLiquidHost)window.kaminosPauseLocalLiquid(paused);
+  for(const runtime of nativeCrystals.values())if(runtime.root.parent===scene)runtime.invoke('play',!paused);
   sceneViewerPaused=paused;
   syncVolumeViewerPlay();window._kaminosDirty?.();
 });
@@ -25117,7 +25168,7 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,CRYSTAL_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
@@ -25126,6 +25177,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:localLiquidSetup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
+  else if(entry.type===CRYSTAL_TYPE)mountNativeCrystal(record);
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
@@ -25246,6 +25298,7 @@ function setObjectWaterCollision(id,enabled){
 function syncSceneDataInspector() {
   sceneRepetitionInspector?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
+  syncNativeCrystalInspector(entry);
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
   const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
   primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
@@ -25417,7 +25470,7 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
-  window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addCrystalGrowth:addNativeCrystal,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},

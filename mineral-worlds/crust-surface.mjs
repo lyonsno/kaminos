@@ -67,5 +67,5 @@ export function createCrustSurface(state){
   liquid.geometry=wetGeometry;fronts.geometry=frontGeometry;fronts.visible=showInterfaces;last=s.tick;uploads++;
  }
  update(state);
- return {root,update,interfaces(value){showInterfaces=Boolean(value);fronts.visible=showInterfaces;},read:()=>({grains:crystals.count,triangles:crystals.count*12+wetGeometry.attributes.position.count/3+frontGeometry.attributes.position.count/3,interfaces:showInterfaces,uploads,tick:last,renderer:'instanced opaque facets + retained film strips; no raymarch'}),dispose(){crystalGeometry.dispose();crystalMaterial.dispose();bedGeometry.dispose();bedMaterial.dispose();wetGeometry.dispose();frontGeometry.dispose();liquidMaterial.dispose();frontMaterial.dispose();}};
+ return {root,update,substrate(value){bed.visible=Boolean(value);},interfaces(value){showInterfaces=Boolean(value);fronts.visible=showInterfaces;},read:()=>({grains:crystals.count,triangles:crystals.count*12+wetGeometry.attributes.position.count/3+frontGeometry.attributes.position.count/3,interfaces:showInterfaces,uploads,tick:last,renderer:'instanced opaque facets + retained film strips; no raymarch'}),dispose(){crystals?.dispose();crystalGeometry.dispose();crystalMaterial.dispose();bedGeometry.dispose();bedMaterial.dispose();wetGeometry.dispose();frontGeometry.dispose();liquidMaterial.dispose();frontMaterial.dispose();}};
 }

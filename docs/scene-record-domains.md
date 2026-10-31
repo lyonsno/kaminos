@@ -61,7 +61,16 @@ composition exercise the mounted application. Keep malformed-source refusal and
 existing scene/history/resource checks.
 
 These records describe authored reconstruction. Evolved gas, water, thermal
-state and debris need their own owner-supported continuation. An experiment's
+state and debris need their own owner-supported continuation. Crystal growth
+provides one: its `crystalGrowth` payload stores the retained grain/film state,
+conditions, playback settings and pending model time through
+`mineral-worlds/crust-record.mjs`. Add → Simulation → Crystal growth creates an
+independent paused specimen; select it for growth, supply and layout controls.
+Normal scene saves retain its evolution. The selected inspector can also load
+a JSON checkpoint from the mineral experiment without taking over the camera.
+Hiding or removing the object suspends its clock; duplication copies its current
+state into an independent runtime. This local material model does not exchange
+brine or heat with the scene’s water/fire simulations. An experiment's
 owned/borrowed resource lifetime remains the scene-session contract. A file URL
 passing its existing source policy does not prove remote bytes are available.
 
