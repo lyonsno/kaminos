@@ -12,6 +12,7 @@ for(const fire of [true,false])for(const water of [true,false]) {
  const context={document:{getElementById:id=>id==='volume-viewer-play'?button:id==='volume-look-freeze'?freeze:id==='kaminos-volume-canvas'?{classList:{contains:()=>fire}}:null},
   Event:class{},volumePrototype:{isActive:()=>fire,debugState:()=>({active:fire})},localLiquidHost:water?{}:null,localLiquidPaused:false,sceneViewerPaused:null,window:{}};
  context.window.kaminosPauseLocalLiquid=value=>{context.localLiquidPaused=value;};
+ context.waterFeature={get host(){return context.localLiquidHost;},get paused(){return context.localLiquidPaused;}};
  runInNewContext(source.slice(start,end),context);
  context.syncVolumeViewerPlay({active:fire});
  assert.equal(button.hidden,!fire&&!water,'viewport playback is visible for water alone');

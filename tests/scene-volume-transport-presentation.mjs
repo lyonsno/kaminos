@@ -26,7 +26,8 @@ for(const unregister of ['depth','water','request','hidden-water','hidden-fire']
   context.fireLightFieldRouteParams=()=>new URLSearchParams({volume_light_field_water_transport:context.requested?'1':'0'});
   context.syncFireProxy=()=>proxy.sync({prototype,visible:context.isSceneItemVisible('flame-field'),display:context.viewportDisplay.fire==='proxy',required:false,
     camera:{layers:{enable(){},disable(){}}},layerId:4,canvas});
-  runInNewContext(source.slice(start,end),context);
+  context.waterFeature={get host(){return context.localLiquidHost;},get paused(){return context.localLiquidPaused;}};
+ runInNewContext(source.slice(start,end),context);
   const frame=()=>{context.syncAuthoredWaterFlameTransport();context.syncFireProxy();};
   frame();assert.ok(consumer);assert.equal(canvas.style.visibility,'hidden');
   context.viewportDisplay.fire='proxy';frame();assert.equal(consumer,null);assert.equal(proxy.effective(),true);
@@ -63,6 +64,7 @@ for(const replacing of [false,true]){
  const scope={volumePrototype:prototype,localLiquidHost:replacing?{presentation:'full',supportsVolumeTransport:true}:finite,viewportDisplay:{fire:'full'},
   ordinaryDepthEnabled:true,transportPrototype:null,transportCanvasVisibility:'',authoredWaterFlameTransportActive:false,
   fireLightFieldRouteParams:()=>new URLSearchParams({volume_light_field_water_transport:'1'}),isSceneItemVisible:()=>true,syncWaterProxy(){},syncFireProxy(){},consumeSceneTransportFrame(){},fireProxySync:null};
+ scope.waterFeature={get host(){return scope.localLiquidHost;}};
  runInNewContext(source.slice(start,end),scope);
  if(replacing){scope.syncAuthoredWaterFlameTransport();assert.ok(consumer);assert.equal(canvas.style.visibility,'hidden');scope.localLiquidHost=finite;}
  scope.syncAuthoredWaterFlameTransport();

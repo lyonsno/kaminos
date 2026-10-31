@@ -113,7 +113,7 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   const {registry}=world(),{root}=sceneObject(heroSource);await registry.attach(root);let disposed=0;
   registry.get(root).proxyRoot.traverse(node=>node.geometry?.addEventListener('dispose',()=>disposed++));
   const h=vm.createContext({createSceneLifecycle,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
-    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,localLiquidGeneration:0,localLiquidHost:null,sceneSpotLights:new Map()});
+    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,waterFeature:{clear(){}},flameFeature:{clear:async()=>{}},setInfo(){},sceneSpotLights:new Map()});
   const extract=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);return html.slice(a,b);};
   vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);
   h.sceneLifecycle=h.createPageSceneLifecycle();

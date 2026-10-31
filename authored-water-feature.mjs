@@ -77,7 +77,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     if(host===candidate){
      // The capability closes its own operation admission before disposal.
      generation++;request++;pending=null;admitted=null;host=null;
-     await capability.dispose();
+     try{await capability.dispose();}finally{services().redraw?.();}
     }
    }};
   },
