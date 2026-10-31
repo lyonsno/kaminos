@@ -86,7 +86,9 @@ export function installScenePlacementTools({
     return caster.ray;
   }
   function finish(commit = true) {
-    if (!edits.state().active && !gizmoEditing) return false;
+    // Only a placement gesture belongs to this controller. Selection/focus
+    // notifications must not cancel another owner’s asynchronous scene edit.
+    if (!modal && !field && !gizmoEditing) return false;
     const completed=modal?.completed;
     const prior = modal?.prior || gizmoPrior;
     const capture = field?.capture || (gizmoEditing ? pointerOrigin : null);

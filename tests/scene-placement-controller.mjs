@@ -220,3 +220,20 @@ test('overlay master clears the pivot diamond and axis guide without altering se
  assert.equal(f.overlay.innerHTML,'','modal axis guide obeys the same overlay master');
  assert.ok(f.tools.state().active);visible=true;f.tools.draw();assert.match(f.overlay.innerHTML,/stroke-dasharray/);f.tools.finish(false);
 });
+
+test('placement blur and selection changes leave another owner’s settling edit intact',async()=>{
+ for(const boundary of ['blur','selectionChanged','finish']){
+  const f=fixture();let value=4,release;const pending=new Promise(resolve=>release=resolve);
+  f.tools.edits.register('@fire-lighting:setQuadrature',{
+   read:()=>({value}),check:v=>v,async write(next){value=next.value;await pending;},
+  });
+  const result=f.tools.edits.applySettled('@fire-lighting:setQuadrature',{value:8});
+  result.catch(()=>{});
+  boundary==='blur'?emit(f.window,'blur'):boundary==='finish'?f.tools.finish(false):f.tools.selectionChanged();
+  const active=f.tools.edits.state().active;
+  release();await result;
+  assert.equal(active?.id,'@fire-lighting:setQuadrature',boundary+' must not cancel a lighting rebuild');
+  assert.equal(value,8);assert.equal(f.tools.edits.state().undoCount,1);
+  await f.tools.edits.undo();assert.equal(value,4);
+ }
+});
