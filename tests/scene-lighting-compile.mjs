@@ -121,3 +121,13 @@ renderer.compileAsync=async()=>{throw Error('pending failed');};
 await assert.rejects(compileSceneLighting(renderer,[pass],{live:true}),/pending failed/);
 assert.equal(committed,1);assert.equal(discarded,1);
 console.log('PASS live preparation restores drawing context at yields and promotes only complete lighting');
+
+// Exercise the effective renderer API, not only the pass-coordinator fake.
+const {WebGPURenderer}=await import('../lib/three.webgpu.js');
+assert.equal(typeof WebGPURenderer.prototype.beginLightingPreparation,'function','live preparation is an API on the native renderer');
+const retired=[],activeNode={},candidateNode={};
+const generation={node:candidateNode};
+const nativeOwner={_lighting:{_retained:new Map([[scene,activeNode]]),prepare(s,retire){assert.equal(s,scene);retire(activeNode);return generation;}},_objects:{disposeLightsNode:n=>retired.push(n)}};
+assert.equal(WebGPURenderer.prototype.beginLightingPreparation.call(nativeOwner,scene),generation);
+assert.deepEqual(retired,[activeNode]);
+WebGPURenderer.prototype.releaseRetainedLighting.call(nativeOwner,scene);assert.equal(nativeOwner._lighting._retained.has(scene),false);
