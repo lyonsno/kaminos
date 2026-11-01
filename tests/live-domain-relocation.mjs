@@ -110,3 +110,41 @@ proxyRuntime.setResidualPartialsConsumer(()=>deliveries++);
 proxyRuntime.relocateOrdinaryDomain([.4,0,0]);
 await Promise.resolve();
 assert.equal(deliveries,0,'a replay queued before preview cannot use the new coordinates');
+
+// A coordinate change makes the measurement stale, but cannot make an
+// unresolved map safe to reuse. Exercise timeout cleanup before and after
+// the deferred remap, using the actual retirement and probe admission paths.
+const retireMap=source.slice(source.indexOf('  function retirePressureResidualMap('),source.indexOf('  function advancePressureResidualFreshness('));
+const beginProbe=source.slice(source.indexOf('  function beginPressureResidualProbe('),source.indexOf('  function finishPressureResidualProbe('));
+for(const invalidation of ['preview','remap','replacement']){
+  let timeout,lateMap,destroyed=0,allocations=0;
+  const oldBuffer={mapAsync:()=>new Promise(r=>{lateMap=r;}),destroy(){destroyed++;},unmap(){}};
+  const replacement={};
+  const c={...residual,pressureResidualCopyPending:true,pressureResidualMapPending:false,
+    pressureResidualMapGeneration:0,pressureResidualReadbackBuffer:oldBuffer,
+    state:{frameCount:4,simStepCount:16,residualFieldGeneration:1,pressureResidualCopyFieldGeneration:1,pressureSolver:{}},
+    device:{createBuffer(){allocations++;return replacement;}},GPUBufferUsage:{COPY_DST:1,MAP_READ:2},
+    PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP:20,PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS:16,
+    gridShapeLabel:()=> '4x4x4',setTimeout(fn){timeout=fn;return 1;},
+    pressureResidualBeforePipeline:{},pressureResidualAfterPipeline:{},pressureResidualBindGroup:{},pressureResidualPartialsBuffer:{},
+    fluidBindGroup:()=>({})};
+  const probe=vm.runInNewContext(`${retireMap}\n${beginProbe}\n${resolveMap}\n({resolvePressureResidualProbe,beginPressureResidualProbe})`,c);
+  const pending=probe.resolvePressureResidualProbe();
+  c.state.residualFieldGeneration++;
+  if(invalidation==='remap')c.state.domainRemap={count:1};
+  if(invalidation==='replacement'){c.pressureResidualMapGeneration++;c.pressureResidualReadbackBuffer=replacement;c.pressureResidualMapPending=true;}
+  timeout();await pending;
+  if(invalidation==='replacement'){
+    assert.equal(destroyed,0,'an old resolver cannot retire the replacement buffer');
+    assert.equal(c.pressureResidualMapPending,true,'an old resolver cannot release the replacement guard');
+  }else{
+    assert.equal(destroyed,1,`${invalidation}: stale timed-out map must be retired`);
+    assert.equal(allocations,1);assert.equal(c.pressureResidualReadbackBuffer,replacement);
+    assert.equal(c.pressureResidualMapPending,false);
+    const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};
+    assert.equal(probe.beginPressureResidualProbe({beginComputePass:()=>pass}),true,'next probe uses the replacement');
+  }
+  lateMap();await Promise.resolve();
+  assert.equal(c.pressureResidualReadbackBuffer,replacement,'late completion cannot restore the retired buffer');
+}
+console.log('Stale diagnostic timeouts retire their own buffer and preserve replacement custody');

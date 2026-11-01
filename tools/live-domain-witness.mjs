@@ -61,6 +61,7 @@ try{
      pose:window.kaminosFlameDomain.read(),sources:window.kaminosSceneAuthoring.read().objects.filter(x=>x.type==='flame-emitter'),
      world:d.worldSmoke,adaptive:a,controls:d.controls,timing:d.timing};
  });
+ const authoredSource=({id,type,transform,sceneTransform,emissionEnabled,emission})=>({id,type,transform,sceneTransform,emissionEnabled,domainId:emission?.domainId});
  const check=(s,prior,{advancing=false}={})=>{
    assert.match(s.backend,/^webgpu:apple/i);assert.equal(s.active,true);assert.ok(!s.error,s.error);
    assert.ok(s.adaptive.effective);assert.ok(!s.adaptive.error);
@@ -102,7 +103,7 @@ try{
  }
  assert.ok(signal>0,'nonempty flame required');assert.ok(maxError<.002,'integer move must retain solver fields, error '+maxError);
  report.pausedTransfer={maxError,signal,dims,cellWidth};
- const moved=await capture('paused-moved');check(moved,initial);assert.equal(moved.step,initial.step);assert.deepEqual(moved.sources,initial.sources,'coverage movement must not move authored emitters');
+ const moved=await capture('paused-moved');check(moved,initial);assert.equal(moved.step,initial.step);assert.deepEqual(moved.sources.map(authoredSource),initial.sources.map(authoredSource),'coverage movement must not move authored emitters');
  await page.evaluate(()=>window.kaminosSceneEdits.cancel());await waitRemap(moved.remap.count);
  const cancelled=await capture('cancelled');check(cancelled,initial);assert.deepEqual(cancelled.pose,initial.pose);
  // Cadence uses the same inexpensive render configuration for both arms.

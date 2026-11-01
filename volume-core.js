@@ -17871,12 +17871,15 @@ export function createKaminosVolumePrototype({
     } catch (error) {
       clearTimeout(timeoutTimer);
       if (generation !== pressureResidualMapGeneration) return;
-      if (domainRemapCount !== (state.domainRemap?.count || 0)) return;
-      if (fieldGeneration !== state.residualFieldGeneration) return;
+      // Coordinate freshness governs publication, not ownership of a pending
+      // map. A timeout must retire our buffer even if the field moved while
+      // mapping; otherwise finally releases the guard on an unresolved map.
       if (error?.message === PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR) {
         retirePressureResidualMap('residual-map-timeout-reset');
         return;
       }
+      if (domainRemapCount !== (state.domainRemap?.count || 0)) return;
+      if (fieldGeneration !== state.residualFieldGeneration) return;
       state.pressureSolver = { ...state.pressureSolver, residualError: `residual-readback-failed:${error?.message || String(error)}` };
     } finally {
       if (generation === pressureResidualMapGeneration) pressureResidualMapPending = false;
