@@ -5539,7 +5539,14 @@ function refreshFlameDomainPreview() {
   window._kaminosDirty?.();
 }
 function writeFlameDomainPreview(value) {
-  flameDomainDraft=checkedFlameDomainPose(value);refreshFlameDomainPreview();
+  const pose=checkedFlameDomainPose(value),next=domainTransformForPose(pose);
+  const previous=[...flameDomainTranslation],previousScale=flameDomainScale;
+  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
+  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
+  const analytic=window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster';
+  try {if(setFlameDomainTranslation(next.translation,next.scale)&&analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
+  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  flameDomainDraft=pose;refreshFlameDomainPreview();
 }
 function flameDomainTopY() {
   const dims = window.__kaminosVolumeGridPreview?.dimensions ?? window.__kaminosVolumeGridDimensions;
@@ -5563,15 +5570,10 @@ function setFlameDomainTranslation(next, scale = flameDomainScale) {
   return true;
 }
 function settleAuthoredFlameDomain(event) {
-  const next=domainTransformForPose(event.after),previous=[...flameDomainTranslation],previousScale=flameDomainScale;
-  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
-  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
-  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
-  try {setFlameDomainTranslation(next.translation,next.scale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
-  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  writeFlameDomainPreview(event.after);
   flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
   flameDomainDraft=null;refreshFlameDomainPreview();
-  setInfo(worldSourceSupplyEnabled()?'Fine detail region moved; existing world gas continues':flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
+  setInfo(worldSourceSupplyEnabled()?'Fine coverage moved; overlapping detail and World gas continue':'Simulation box changed; overlapping gas retained · newly covered space starts as ambient');
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
@@ -5596,7 +5598,7 @@ function settleFlameDomainForPose(pose, targetDomain = null) {
   }
   setInfo(flameEmitterInjectionSuspended
     ? 'Flame source support still exceeds the relocated grid: injection paused'
-    : 'Flame grid moved to the released source; the field restarted there');
+    : 'Fine coverage moved to the released source; overlapping gas retained');
   return true;
 }
 

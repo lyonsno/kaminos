@@ -36,6 +36,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import {followingDomainShift} from './moving-volume.mjs';
 import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
+import {createDomainRemap} from './volume-domain-remap.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDisplayReconstruction, displayPreparationTiming } from './volume-display-reconstruction.mjs';
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
@@ -11769,8 +11770,12 @@ export function createKaminosVolumePrototype({
       intermediateState={...result,effective:intermediateFlow.exportFields?'independent-material-and-flow':'two-fine-cell-flow',flowPitch:p.flowPitch,materialPitch:p.materialPitch,flowCells:p.flowCells,min:p.min,max:p.max,extraMaterialCells:p.extraMaterialCells,pressureIterations:result.pressureIterations,overlapCells:2,handoff:intermediateFlow.exportFields?'projected-velocity-and-material-to-world':'projected-velocity-blend-before-world-material',fineFeedback:false};
     }
     state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{...input,iterations:regions.worldIterations,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing,intermediate:intermediateFlow}),intermediate:intermediateState};
-    const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
     Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale},raymarch:{policy:'shared-quality-material-cell-step',reference:'160-steps-adaptive-off-half-cell',steps:uniforms[22],adaptive:controlsSnapshot.adaptiveRays,sampleTelemetry:'includes-exterior'}});
+    refreshWorldRenderMapping();
+  }
+  function refreshWorldRenderMapping() {
+    if (!worldSmoke || controlsSnapshot.worldSmoke !== 'on') return;
+    const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
     const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
     device.queue.writeBuffer(worldRenderUniform,48,new Float32Array(middleMap?[...middleMap.renderMin,middleMap.renderPitch,...middleMap.renderMax,1]:Array(8).fill(0)));
@@ -12246,6 +12251,52 @@ export function createKaminosVolumePrototype({
   let sceneSolidGpu = null;
   let sceneSolidGpuSupportKey = null;
   let followingDomain = null;
+  let domainRemapper = null, pendingDomainRemap = null;
+
+  function encodeDomainRemap(encoder) {
+    const before = pendingDomainRemap;
+    if (!before) return false;
+    const after = {translate: [...productTransform.translate], scale: productTransform.scale};
+    // A cancelled drag can return to its applied pose before a GPU frame.
+    if (before.scale === after.scale && before.translate.every((v, i) => v === after.translate[i])) {
+      pendingDomainRemap = null; return false;
+    }
+    const world = controlsSnapshot.worldSmoke === 'on' ? worldSmoke?.remapResources() : null;
+    const common = {before, after, world, ambient: REACTANT_MODEL.ambientOxidizer,
+      staggered: resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode === 'staggered'};
+    domainRemapper.encode(encoder, {...common,
+      fluid: [fluidBuffers[currentFluid], fluidBuffers[1-currentFluid]],
+      front: [frontBuffers[currentFront], frontBuffers[1-currentFront]],
+      quench: [quenchBuffers[currentQuench], quenchBuffers[1-currentQuench]],
+      reaction: [reactantTextures[currentFluid], reactantTextures[1-currentFluid]],
+      wavelet: [waveletTextures[currentQuench], waveletTextures[1-currentQuench]], lower: joinedLowerFaceTexture});
+    currentFluid = 1-currentFluid; currentFront = 1-currentFront; currentQuench = 1-currentQuench;
+    if (fineVelocity) {
+      const owner = fineVelocity, i = owner.current;
+      owner.remapper.encode(encoder, {...common, staggered: true,
+        fluid: [owner.fluid[i], owner.fluid[1-i]], front: owner.front, quench: owner.quench,
+        reaction: owner.reactant, wavelet: [owner.wavelet[i], owner.wavelet[1-i]], lower: owner.lower});
+      owner.flip();
+    }
+    // Pressure is derived. A warm start in the old coordinates would kick the
+    // retained flow; clear only those small fields, then project as usual.
+    for (const buffer of pressureBuffers) encoder.clearBuffer(buffer);
+    if (separatedPressure) encoder.clearBuffer(separatedPressure.pressure);
+    // Keep a pending map's buffer and guard alive until it unmaps. The remap
+    // count invalidates its result independently of buffer retirement.
+    pressureResidualCopyPending = false;
+    state.pressureSolver.residual = null;
+    state.frontFieldReadIndex = currentFront; state.frontFieldWriteIndex = 1-currentFront;
+    state.frontFieldProjectionPassthrough = false;
+    pendingDomainRemap = null;
+    state.domainRemap = {route: 'retained-world-space-overlap', count: (state.domainRemap?.count || 0)+1,
+      before, after, simStep: state.simStepCount, allocationId: state.thermalFluidAllocationId,
+      materialDims: [gridSize, gridHeight, gridSize], velocityDims: fineVelocity?.plan.velocityDims ?? [gridSize, gridHeight, gridSize],
+      newCoverage: world ? 'live-world-gas-and-flow' : 'ambient', runtimeReadbacks: 0};
+    refreshWorldRenderMapping();
+    return true;
+  }
+
 
   function prepareFollowingDomain(lookFreeze) {
     const owner=followingDomain;
@@ -12783,6 +12834,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState(preserveWorld = false) {
+    domainRemapper?.destroy(); domainRemapper=null; pendingDomainRemap=null;
     fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null; materialOnlyPredictPipeline=null;
     if(!preserveWorld){
       retireIntermediateFlow();
@@ -14092,6 +14144,7 @@ export function createKaminosVolumePrototype({
     }
     destroyFluidState(preserveWorld);
     pendingWorldSeed=preserveWorld;
+    domainRemapper=createDomainRemap(device,[gridSize,gridHeight,gridSize]);
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacityLimitReceipt = null;
@@ -14168,7 +14221,7 @@ export function createKaminosVolumePrototype({
         size,
         dimension: '2d',
         format: 'r32float',
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
       });
       for (let layer = 0; layer < 3; layer++) {
         device.queue.writeTexture({ texture: joinedLowerFaceTexture, origin: [0, 0, layer] }, new Float32Array(size[0] * size[1]), { bytesPerRow: size[0] * Float32Array.BYTES_PER_ELEMENT }, [size[0], size[1], 1]);
@@ -17362,7 +17415,7 @@ export function createKaminosVolumePrototype({
       boundarySidecarBufferBytes: boundarySidecarBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       analyticEmitterUniformBufferBytes: analyticEmitterInjectionUniformData.byteLength,
-      estimatedResidentBytes: (fineVelocity?.residentBytes??0) + fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength + (separatedPressure?.residentBytes ?? 0) + (separatedPressure ? uniforms.byteLength : 0),
+      estimatedResidentBytes: (domainRemapper?.residentBytes??0) + (fineVelocity?.residentBytes??0) + fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength + (separatedPressure?.residentBytes ?? 0) + (separatedPressure ? uniforms.byteLength : 0),
       timing: { ...state.timing },
     };
     if (fineVelocity || worldSmoke) {
@@ -17437,6 +17490,7 @@ export function createKaminosVolumePrototype({
       return false;
     }
     const worldPlan = prepareWorldSmoke();
+    encodeDomainRemap(encoder);
     refreshSceneCollision();
     if(pendingWorldSeed){
       if(worldSmoke&&reactantSidecarFull){
@@ -17702,6 +17756,7 @@ export function createKaminosVolumePrototype({
     pressureResidualMapPending = true;
     pressureResidualMapStartedFrame = state.frameCount;
     const generation = pressureResidualMapGeneration;
+    const domainRemapCount = state.domainRemap?.count || 0;
     const buffer = pressureResidualReadbackBuffer;
     const workgroupCount = pressureResidualWorkgroupCount;
     const step = pressureResidualCopyStep;
@@ -17728,6 +17783,7 @@ export function createKaminosVolumePrototype({
         try { buffer.unmap(); } catch { /* destroyed buffers cannot be unmapped */ }
         return;
       }
+      if (domainRemapCount !== (state.domainRemap?.count || 0)) { buffer.unmap(); return; }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
       // typeof: source-extraction contract harnesses run this body without the
@@ -17806,6 +17862,7 @@ export function createKaminosVolumePrototype({
     } catch (error) {
       clearTimeout(timeoutTimer);
       if (generation !== pressureResidualMapGeneration) return;
+      if (domainRemapCount !== (state.domainRemap?.count || 0)) return;
       if (error?.message === PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR) {
         retirePressureResidualMap('residual-map-timeout-reset');
         return;
@@ -21610,6 +21667,12 @@ export function createKaminosVolumePrototype({
       // Armed for this frame's light field build only (see
       // encodeFireIrradianceLightField).
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
+      if (!stepThisFrame && pendingDomainRemap) {
+        prepareWorldSmoke();
+        encodeDomainRemap(encoder);
+        refreshSceneCollision();
+        encodeFireIrradianceLightField(encoder);
+      }
       if (stepThisFrame) {
         encodeSim(encoder);
         encodeFireIrradianceLightField(encoder);
@@ -27836,12 +27899,13 @@ export function createKaminosVolumePrototype({
       const next = [...translation];
       if (scale === productTransform.scale && next.every((value, index) => value === productTransform.translate[index])) return false;
       const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
+      if (device && !pendingDomainRemap) pendingDomainRemap = structuredClone(productTransform);
       productTransform.translate = next;
       productTransform.scale = scale;
       volumePrimitives = normalizedPrimitives;
       publishVolumePrimitiveState();
       getPrimitiveSource();
-      if (device) rebuildFluidState(gridSize, 'authored-flame-domain-relocation');
+      updateAnalyticEmitterDebug();
       writeLiquidFireContactParams();
       return true;
     },
