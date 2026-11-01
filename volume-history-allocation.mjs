@@ -97,7 +97,7 @@ export function createRayAllocationHistory(device){
 }
 
 export const HISTORY_ALLOCATION_WGSL=/* wgsl */`
-@group(0) @binding(35) var<storage,read_write> rayGuidanceData:array<atomic<u32>>;
+@group(0) @binding(39) var<storage,read_write> rayGuidanceData:array<atomic<u32>>;
 struct RayGuidanceGeometry { loPitch:vec4<f32>, dimsCells:vec4<u32> }
 @group(0) @binding(37) var<uniform> rayGuidance:RayGuidanceGeometry;
 fn guidanceCell(p:vec3<f32>)->vec3<i32>{return clamp(vec3<i32>(floor((p-rayGuidance.loPitch.xyz)/rayGuidance.loPitch.w)),vec3<i32>(0),vec3<i32>(rayGuidance.dimsCells.xyz)-1);}
