@@ -48,7 +48,7 @@ export function seedPatch(p,solid,{volume,radius,center,blanketDepth,groundOnly=
  const out=previous.slice();for(const i of indices){if(remaining<=0)break;const n=Math.min(remaining,1-out[i]);out[i]+=n;remaining-=n;}return out;
 }
 // Positive transfers lower coordinate -> upper; negative reverse. Mirrors WGSL.
-export function pairTransfer({a,b,axis,solidA,solidB,penetrationA,penetrationB}){
+export function pairTransfer({a,b,axis,solidA,solidB,penetrationA,penetrationB,threshold=.5,tolerance=0,release=0}){
  // 1 is immovable authored support; 2 is a moving scene occupancy.
  // A moved solid may overlap existing material. Retain that mass and evacuate
  // it conservatively instead of clearing it or trapping it permanently.
@@ -60,8 +60,8 @@ export function pairTransfer({a,b,axis,solidA,solidB,penetrationA,penetrationB})
  if(penetrationB>penetrationA+1e-5)return -Math.min(b,1-a);
  if(penetrationA>0||penetrationB>0)return 0;
  if(axis===1)return -Math.min(b,1-a);
- const diff=a-b;if(Math.abs(diff)<=.5)return 0;
- return Math.sign(diff)*(Math.abs(diff)-.5)*.5;
+ const diff=a-b;if(Math.abs(diff)<=threshold+tolerance)return 0;
+ return Math.sign(diff)*(Math.abs(diff)-threshold*(1-release))*.5;
 }
 // Packed dispatch grid, with shader-side rejection of padded groups.
 export function ashDispatchGrid(groups,limit=65535){

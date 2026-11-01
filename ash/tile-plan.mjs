@@ -1,3 +1,4 @@
+import {slidingThreshold} from './sliding.mjs';
 import {pairTransfer,ASH_SURFACE_MIN_FILL} from './gpu-plan.mjs';
 export const tileIndex=(p,c)=>{const t=p.tiles;return Math.floor(c[0]/t.width)+t.dims[0]*(Math.floor(c[1]/t.width)+t.dims[1]*Math.floor(c[2]/t.width));};
 export const cellCoord=(p,i)=>[i%p.dims[0],Math.floor(i/p.dims[0])%p.dims[1],Math.floor(i/(p.dims[0]*p.dims[1]))];
@@ -20,13 +21,13 @@ export function admittedTiles(p,pending,contact=null,previous=null){
  return active;
 }
 // Small deterministic reference, not a serving-path CPU solver.
-export function referenceTileStep(p,{values,solid=new Uint8Array(p.count),pending=new Set(),contact=null,previous=null,all=false}){
+export function referenceTileStep(p,{values,solid=new Uint8Array(p.count),pending=new Set(),contact=null,previous=null,all=false,sliding={}}){
  const out=Float32Array.from(values),active=all?new Set(Array.from({length:p.tiles.count},(_,i)=>i)):admittedTiles(p,pending,contact,previous),next=new Set(),dirty=new Set();
  const pen=c=>{if(!contact)return 0;const w=c.map((n,k)=>p.origin[k]+(n+.5)*p.cellSize),old=previous??contact,d=contact.slice(0,3).map((v,k)=>v-old[k]),dot=d.reduce((s,v,k)=>s+(w[k]-old[k])*v,0),len=d.reduce((s,v)=>s+v*v,0),s=Math.max(0,Math.min(1,dot/Math.max(len,1e-12)));return Math.max(0,contact[3]-Math.hypot(...w.map((v,k)=>v-old[k]-s*d[k])))/p.cellSize;};
  for(const axis of [1,0,2])for(let phase=0;phase<2;phase++)for(let i=0;i<p.count;i++){
   const c=cellCoord(p,i);if(!active.has(tileIndex(p,c))||c[axis]%2!==phase||c[axis]+1>=p.dims[axis])continue;
   const q=[...c];q[axis]++;const j=cellIndex(p,q),a=out[i],b=out[j];
-  const v=pairTransfer({a,b,axis,solidA:solid[i],solidB:solid[j],penetrationA:pen(c),penetrationB:pen(q)}),na=Math.fround(a-v),nb=Math.fround(b+v);
+  const v=pairTransfer({a,b,axis,solidA:solid[i],solidB:solid[j],penetrationA:pen(c),penetrationB:pen(q),release:sliding.release??0,tolerance:sliding.variation>0?1e-6:0,threshold:axis===1?.5:slidingThreshold(c.map((n,k)=>p.origin[k]+(n+.5+(k===axis?.5:0))*p.cellSize),sliding)}),na=Math.fround(a-v),nb=Math.fround(b+v);
   if(na!==a&&nb!==b){out[i]=na;out[j]=nb;for(const k of [i,j]){const t=tileIndex(p,cellCoord(p,k));next.add(t);dirty.add(t);}}
  }
  return {values:out,active,pending:next,dirty};

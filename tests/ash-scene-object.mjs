@@ -101,3 +101,12 @@ test('field fallout remains valid on one-cell and two-cell authored extents',asy
   assert.equal(object.tick(1100),true);object.dispose();
  }
 });
+
+test('native sliding edits persist and reach the existing field owner without replacing its state',async()=>{
+ const changes=[];let constructs=0;
+ const object=await createAshSceneObject({record:record(),readObjects:()=>[],createPatch:async()=>{constructs++;return {root:new Group(),syncScene(){},deposit:async()=>{},setSliding:s=>changes.push(s),read:()=>({}),dispose(){}};}});
+ await object.initialize();object.set({slideVariation:.8,slideScale:.2});
+ assert.deepEqual(changes.at(-1),{variation:.8,scale:.2,release:undefined});assert.equal(constructs,1);
+ assert.equal(records.normalize({...record(),ash:object.read().settings}).ash.slideVariation,.8);
+ assert.throws(()=>object.set({slideVariation:2}),/variation/);assert.equal(object.read().settings.slideVariation,.8);object.dispose();
+});

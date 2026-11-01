@@ -38,10 +38,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
- try{patch=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,sceneRecords:collisionRecords,surfaceMode:'runs'});root.add(patch.root);patch.setSoftNormals?.(settings.softNormals);}
+ try{patch=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease}});root.add(patch.root);patch.setSoftNormals?.(settings.softNormals);}
  catch(error){dispose();throw error;}
  const api={root,
-  async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});initialized=true;});},
+  async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
   tick(timestamp,{active=true,selected=false}={}){
    guide.visible=selected;emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
@@ -50,7 +50,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   },
   set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
    for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Field dimensions and initial layer belong to creation; add a new field to change its lattice without deleting retained ash');
-   settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
+   patch.setSliding?.({variation:next.slideVariation,scale:next.slideScale,release:next.slideRelease});settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
   },
   async checkpoint(){return locked(async()=>{patch.syncScene();const state=await patch.snapshot();failure=null;settings={...settings,checkpoint:state};sync();return structuredClone(settings);});},
   cover(depth){return locked(()=>patch.deposit({blanketDepth:depth,groundOnly:true}));},

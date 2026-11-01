@@ -1,12 +1,14 @@
+import {checkedSliding} from './sliding.mjs';
 import {patchLayout} from './gpu-plan.mjs';
 import {sourceSettings} from './fall-plan.mjs';
 export const ASH_OBJECT_TYPE='retained-ash';
 export const ASH_OBJECT_SOURCE='kaminos:retained-ash';
-export const defaultAshSettings=()=>({schema:'kaminos.ash-object.v1',width:7.68,depth:7.68,height:1.6,cellSize:.04,initialDepth:.08,paused:false,softNormals:false,fallout:false,emitting:false,rate:.008,spread:.24,sourcePosition:[0,1.15,0],checkpoint:null});
+export const defaultAshSettings=()=>({schema:'kaminos.ash-object.v1',width:7.68,depth:7.68,height:1.6,cellSize:.04,initialDepth:.08,paused:false,slideVariation:0,slideScale:.24,slideRelease:0,softNormals:false,fallout:false,emitting:false,rate:.008,spread:.24,sourcePosition:[0,1.15,0],checkpoint:null});
 export function checkedAshSettings(raw){
  if(!raw||raw.schema!=='kaminos.ash-object.v1')throw Error('Ash object requires saved ash settings');
  for(const key of ['width','depth','height','cellSize'])if(!Number.isFinite(raw[key])||raw[key]<=0)throw Error(`Invalid ash ${key}`);
  if(!Number.isFinite(raw.initialDepth)||raw.initialDepth<0||raw.initialDepth>raw.height)throw Error('Invalid initial ash depth');
+ checkedSliding({variation:raw.slideVariation,scale:raw.slideScale,release:raw.slideRelease});
  if(raw.softNormals!==undefined&&typeof raw.softNormals!=='boolean')throw Error('Invalid ash shading');
  if(raw.fallout!==undefined&&typeof raw.fallout!=='boolean')throw Error('Invalid field fallout');
  for(const key of ['paused','emitting'])if(typeof raw[key]!=='boolean')throw Error(`Invalid ash ${key}`);

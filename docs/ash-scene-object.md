@@ -56,3 +56,12 @@ schema `kaminos.ash-object.v1`. Record validation and reconstruction live beside
 the ash owner in `ash/scene-record.mjs` and `ash/scene-object.mjs`.
 
 Independent source records use type `ash-source`, source `kaminos:ash-source`, and `ashSource: {fieldId, enabled, rate, spread}`. They persist and participate in native transforms/history independently of retained fields.
+
+
+## Spatial sliding resistance
+
+The field inspector exposes **Slide variation** (0–1), **Variation scale** (field-local distance), and **Slide release** (0–1). Release lowers the target resistance after a pair yields, allowing a finite slump instead of repeatedly stopping just under the starting threshold. Zero release preserves the old stopping rule. Zero preserves the uniform lateral threshold. Increasing variation creates smoothly varying patches of stronger and weaker resistance; it changes conservative material transfers, not rendered displacement. The pattern is stable in field-local X/Z, independent of camera, time, height and tile boundaries. It is spatial heterogeneity, not compaction memory or grain momentum.
+
+The first plain-variation fixture retained a long active settling tail; release is independently adjustable so that tradeoff remains inspectable. Recommended comparison values are variation1, scale0.24, release0.5, against all-zero variation/release. These are provisional appearance settings, not calibrated ash properties.
+
+Only already-admitted exchange work evaluates the variation. The six existing exchange passes and wake propagation remain; a settings edit wakes the field once so existing material can respond. Settling can take more or fewer steps and change exposed-face counts. No total-cost or speedup claim follows. With variation enabled, a one-millionth-cell fill-difference deadband stops floating-point creep at the repose threshold; material remains retained unchanged when a transfer is skipped. Sleeping fields retain their cached surface. Configuration and evolved density survive ordinary scene saving; old records/checkpoints retain uniform resistance by default. The Workbench tiled experiment uses the same `sliding({variation,scale,release})` operation and controls.
