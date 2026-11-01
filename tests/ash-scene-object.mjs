@@ -89,3 +89,15 @@ test('world-space source follows transforms and refuses out-of-field coverage wi
  const inside=sourceInField({object},field);assert.deepEqual(inside.position,[0,.5,0]);assert.equal(inside.spread,.1);assert.equal(inside.rate,.02);
  object.position.x=10;const outside=sourceInField({object},field);assert.equal(outside.inside,false);assert.equal(outside.rate,0);assert.equal(outside.position[0],4);
 });
+
+import {sourceSettings} from '../ash/fall-plan.mjs';
+test('field fallout remains valid on one-cell and two-cell authored extents',async()=>{
+ for(const [width,depth] of [[.5,.5],[1,1],[.5,3],[3,1]]){
+  let emitted;
+  const raw=record();Object.assign(raw.ash,{width,depth,cellSize:.5,initialDepth:0,fallout:true});
+  const object=await createAshSceneObject({record:raw,readObjects:()=>[],createPatch:async()=>({root:new Group(),syncScene(){},step(c,s){emitted=s.sources.map(sourceSettings);},read:()=>({}),dispose(){}})});
+  await object.initialize();assert.equal(object.tick(1000),true,object.read().failure);
+  assert.equal(emitted.length,1);assert.deepEqual(emitted[0].halfExtents,[width/2,depth/2]);
+  assert.equal(object.tick(1100),true);object.dispose();
+ }
+});

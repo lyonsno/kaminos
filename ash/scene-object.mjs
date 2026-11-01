@@ -35,7 +35,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
  const collisionRecords=createAshCollisionRecords(root,readObjects);
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
- const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2-layout.cellSize,settings.depth/2-layout.cellSize]}]:[])]});
+ const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
  try{patch=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,sceneRecords:collisionRecords,surfaceMode:'runs'});root.add(patch.root);patch.setSoftNormals?.(settings.softNormals);}
