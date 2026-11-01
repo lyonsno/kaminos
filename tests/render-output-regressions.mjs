@@ -50,4 +50,32 @@ test('selected preset survives close/reopen/save, including a different previous
  }finally{f.restore();}
 });
 
-test('still output explicitly refuses live host transport instead of capturing its stale volume canvas',async()=>{const f=heldFixture();f.scope.sceneTransportConsumer=()=>{};await assert.rejects(f.scope.hold(),/ordinary flame canvas route/);assert.equal(f.scope.stillPresentationHeld,false);});
+for(const outcome of ['success','failure','cancel'])test(`host-composed still keeps source state and restores presentation after ${outcome}`,async()=>{
+ const f=heldFixture(),consumer=()=>{};f.scope.sceneTransportConsumer=consumer;
+ const controls=f.scope.controlsSnapshot,requests=[];
+ f.scope.sampleFrame=async options=>{requests.push(options);assert.equal(options.advanceSim,false);if(outcome==='failure')throw Error('capture GPU failed');return {ok:true};};
+ const abort=new AbortController();
+ const capture=captureStill({async begin(){const held=await f.scope.hold({raySteps:8});return {...held,async draw(){const frame=await held.draw();assert.equal(frame.receipt.presentation,'host-composed');assert.equal(frame.image,undefined);if(outcome==='cancel')abort.abort();},capture:()=>({dataUrl:'data:image/png;base64,AAAA',width:320,height:240})};}});
+ const result=capture({width:320,height:240},{signal:abort.signal});
+ if(outcome==='success')await result;else await assert.rejects(result,outcome==='cancel'?{name:'AbortError'}:/capture GPU failed/);
+ assert.equal(requests.length,1);assert.equal(requests[0].includeRgba,false);
+ assert.equal(f.scope.sceneTransportConsumer,consumer);assert.equal(f.scope.state.simStepCount,0);
+ assert.equal(f.scope.controlsSnapshot,controls);assert.equal(f.scope.selectiveHeadLiveCapturePaused,false);assert.equal(f.scope.stillPresentationHeld,false);assert.equal(f.scope.state.active,true);
+});
+
+// Execute the actual page output owner: it must request the composed frame
+// during GI refinement and never overlay the stale private flame canvas.
+test('page still output consumes held transport frames and captures only the host',async()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const start=html.indexOf('  const renderOutput=captureStill('),end=html.indexOf('  const viewportRecording=',start);
+ const f=heldFixture(),released=[];let ratio=2,frames=0;
+ const ctx={captureStill,recordingExtent:null,vantageBusy:()=>null,sceneDocument:{state:()=>({})},workingScene:{objects:[]},sceneCameras:{read:()=>({cameras:[]})},activeSceneComposition:{},isSceneItemVisible:()=>true,isFireLightFieldRoute:()=>true,viewportDisplay:{fire:'full'},camera:{aspect:1,zoom:1,updateProjectionMatrix(){}},readAuthoredCameraView:()=>({}),writeAuthoredCameraView(){},viewProjection:{state:()=>({orthographic:false}),setOrthographic(){}},controls:{enabled:true},holdViewportForVantage:()=>()=>released.push('viewport'),suspendEditorDrawingForVantage:()=>()=>released.push('drawing'),window:{__kaminosBeginSceneInspection:()=>()=>released.push('inspection')},outputCaptureExtent:null,manualInspectionRender:false,sceneFrameCount:0,syncViewportRendererSize(){},markDirty(){},sceneGI:{resetHistory(){},needsHistoryFrame:()=>frames<2,debugState:()=>({})},fireLightFieldPass:null,transportPrototype:{},waterFeature:{host:{state:()=>({})}},requestAnimationFrame:fn=>fn(),document:{},renderer:{backend:{device:{limits:{maxTextureDimension2D:4096}}},getPixelRatio:()=>ratio,setPixelRatio:v=>ratio=v,domElement:{id:'host'}},renderSceneFrame(){throw Error('scene draw outside held source frame');},captureComposedCanvases({host,volumeRaster}){assert.equal(host.id,'host');assert.equal(volumeRaster,null);return {image:'data:image/png;base64,AAAA',width:320,height:240,layers:['host']};}};
+ f.scope.sceneTransportConsumer=()=>{};
+ f.scope.sampleFrame=async()=>{frames++;ctx.sceneFrameCount++;return {ok:true};};
+ ctx.volumePrototype={holdPresentationForStill:options=>f.scope.hold(options)};
+ vm.runInNewContext(html.slice(start,end)+'\nglobalThis.capture=renderOutput;',ctx);
+ const result=await ctx.capture({width:320,height:240});
+ assert.equal(frames,2);assert.equal(result.rendering.fire.presentation,'host-composed');
+ assert.equal(ctx.outputCaptureExtent,null);assert.equal(ctx.controls.enabled,true);assert.equal(ratio,2);
+ assert.deepEqual(released,['drawing','inspection','viewport']);assert.equal(f.scope.stillPresentationHeld,false);
+});
