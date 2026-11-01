@@ -183,9 +183,12 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   state=structuredClone(value);
  }
  if(snapshot)restore(snapshot);else update(initial);
- function advance(from,to,baseTime=state.baseTime){
+ function advance(from,to,baseTime=state.baseTime,activeSeconds=0){
+  if(!Number.isFinite(activeSeconds)||activeSeconds<0)throw Error('Grounded walk needs finite nonnegative active time');
+  if(activeSeconds<=64*Number.EPSILON*Math.max(1,...Object.values(state.legTimes).map(Math.abs)))activeSeconds=0;
   const yaw=p=>Math.atan2(p.direction[0],p.direction[1]),start=yaw(from),delta=Math.atan2(Math.sin(yaw(to)-start),Math.cos(yaw(to)-start));
-  if(Math.hypot(...to.position.map((v,i)=>v-from.position[i]))===0&&delta===0)return;
+  const pendingSwing=()=>legs.some(l=>!state.feet[l.name].stance);
+  if(Math.hypot(...to.position.map((v,i)=>v-from.position[i]))===0&&delta===0&&(!activeSeconds||!pendingSwing()))return;
   const sourceYaw=Math.atan2(forward[0],forward[1]);
   const hip=(path,leg)=>new THREE.Vector3(...leg.offset).applyAxisAngle(new THREE.Vector3(0,1,0),yaw(path)-sourceYaw).add(new THREE.Vector3(path.position[0],0,path.position[1]));
   // Resolve each source-frame-sized phase increment, including delayed ticks.
@@ -193,14 +196,21 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   // A floating-point remainder is not a new contact decision. Scale the
   // threshold to coordinate arithmetic, far below meaningful foot travel.
   const roundoff=64*Number.EPSILON*Math.max(1,...from.position.map(Math.abs),...to.position.map(Math.abs),...legs.flatMap(l=>l.offset.map(Math.abs)));
-  if(bound<=roundoff)return;
-  const steps=Math.max(1,Math.ceil(bound/speed*walking.fps));let previous=from;
+  if(bound<=roundoff&&(!activeSeconds||!pendingSwing()))return;
+  const steps=Math.max(1,Math.ceil(Math.max(bound/speed,activeSeconds)*walking.fps));let previous=from;
   for(let step=1;step<=steps;step++){
    const t=step/steps,angle=start+delta*t,next={position:to.position.map((v,i)=>from.position[i]+(v-from.position[i])*t),direction:[Math.sin(angle),Math.cos(angle)]};
    for(const leg of legs){const v=hip(next,leg).sub(hip(previous,leg));if(v.length()>64*Number.EPSILON*Math.max(1,...next.position.map(Math.abs),...leg.offset.map(Math.abs)))state.velocities[leg.name]=[v.x,v.z];}
    for(const name of ['front','rear']){
     const pair=legs.filter(l=>l.group===name),distance=pair.reduce((sum,l)=>sum+hip(previous,l).distanceTo(hip(next,l)),0)/pair.length;
-    state[name+'Time']+=distance/speed;for(const leg of pair){state.legTimes[leg.name]+=distance/speed;if(distance>roundoff){const v=hip(next,leg).sub(hip(previous,leg));(state.phaseVelocities??={})[leg.name]=[v.x*speed/distance,v.z*speed/distance];}}
+    state[name+'Time']+=distance/speed;
+    for(const leg of pair){
+     // A swing already in flight completes on active time even when support
+     // holds the body. Stance remains clocked by accepted body travel.
+     const phaseAdvance=state.feet[leg.name].stance?distance/speed:Math.max(distance/speed,activeSeconds/steps);
+     state.legTimes[leg.name]+=phaseAdvance;
+     if(phaseAdvance>0){const v=hip(next,leg).sub(hip(previous,leg));(state.phaseVelocities??={})[leg.name]=[v.x/phaseAdvance,v.z/phaseAdvance];}
+    }
    }
    state.baseTime+=(baseTime-state.baseTime)/(steps-step+1);update(next);previous=next;
   }

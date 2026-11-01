@@ -70,7 +70,7 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   if(direction)path.redirect(direction);
   heldFrame=null;
   if(navigation){
-   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,turnScale:feet?state=>feet.turnScale(state):null,onStep:feet?({from,to})=>feet.advance(from,to,elapsed):null,drive:({seconds,walkingFraction})=>{
+   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,turnScale:feet?state=>feet.turnScale(state):null,onStep:feet?({from,to,seconds})=>feet.advance(from,to,elapsed,seconds):null,drive:({seconds,walkingFraction})=>{
     const from=elapsed,to=from+seconds*walkingFraction*distanceScale,before=timing(from).distance;
     const distance=Math.max(0,timing(to).distance-before);
     return {distance,accept(consumed){
@@ -109,7 +109,8 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
     const angle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);
     const fraction=admit({from,to:{...from,direction:to.direction},turnOnly:true});
     if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Motion admission must return a fraction in [0,1]');
-    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);if(feet)feet.advance(from,path.read(),elapsed);}
+    if(fraction>0&&angle!==0){const c=Math.cos(angle*fraction),s=Math.sin(angle*fraction),heading=[c*from.direction[0]-s*from.direction[1],s*from.direction[0]+c*from.direction[1]];if(navigation)path.contact(from.position,heading,from.distance);else path.redirect(heading);}
+    if(feet)feet.advance(from,path.read(),elapsed,delta);
    }
   }
   if(feet&&!navigation)feet.advance(footStart,path.read(),elapsed);
@@ -130,8 +131,8 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
    if(journey!==undefined){
     if(!Array.isArray(journey)||!journey.length||journey.some((p,i)=>!Number.isFinite(p.seconds)||p.seconds<=0||i&&p.seconds<=journey[i-1].seconds||!Array.isArray(p.position)||p.position.length!==2||!p.position.every(Number.isFinite)||!Array.isArray(p.direction)||p.direction.length!==2||!p.direction.every(Number.isFinite)||Math.abs(Math.hypot(...p.direction)-1)>1e-8))throw Error('Grounded physical contact needs a complete accepted journey');
     const last=journey.at(-1);if(Math.hypot(...last.position.map((x,i)=>x-position[i]),...last.direction.map((x,i)=>x-direction[i]))>1e-8)throw Error('Accepted journey does not end at the physical pose');
-    feet.restore(before.grounding);let from=prior;
-    for(const point of journey){feet.advance(from,point,before.elapsed+(elapsed-before.elapsed)*point.seconds/last.seconds);from=point;}
+    feet.restore(before.grounding);let from=prior,previousSeconds=0;
+    for(const point of journey){feet.advance(from,point,before.elapsed+(elapsed-before.elapsed)*point.seconds/last.seconds,point.seconds-previousSeconds);from=point;previousSeconds=point.seconds;}
    }else if(changed)throw Error('Grounded physical contact requires accepted substeps');
    // Identity feedback preserves the already integrated curved journey.
   }

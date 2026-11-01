@@ -159,3 +159,21 @@ const straightFree=createWanderLocomotion(navOptions),straightSupported=createWa
 for(const nav of [straightFree,straightSupported])nav.setDestination([0,10]);
 straightFree.advance(1,{seconds:1});straightSupported.advance(1,{seconds:1,turnScale:()=>.5});
 assert.ok(Math.abs(straightFree.read().distance-straightSupported.read().distance)<1e-10,'Straight travel must retain the source pace');
+
+// A support-limited body must let already airborne feet finish landing.
+// Body travel can clock stance, but cannot be the sole clock of its release.
+const settling=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial});
+const airborne=Object.entries(settling.read().feet).filter(([,f])=>!f.stance).map(([name])=>name);
+assert.ok(airborne.length>0,'Exercise a pending support handoff');
+for(let i=0;i<60;i++)settling.advance(initial,initial,0,1/30);
+for(const name of airborne)assert.equal(settling.read().feet[name].stance,true,`An airborne foot must finish its step while the body waits: ${name}`);
+const settled=settling.snapshot();
+for(let i=0;i<60;i++)settling.advance(initial,initial,0,1/30);
+assert.deepEqual(settling.snapshot(),settled,'Settled support must not cycle or march when the body stays still');
+// Admission rollback must still consume active swing time on the accepted hold.
+const blocked=make(),blockedBefore=blocked.snapshot();
+const blockedSwing=Object.entries(blocked.read().grounding.feet).filter(([,f])=>!f.stance).map(([name])=>name);
+assert.ok(blockedSwing.length);
+for(let i=0;i<60;i++)blocked.advance(1/30,{admit:()=>0});
+assert.deepEqual(blocked.snapshot().path,blockedBefore.path,'Blocked travel must not change the accepted root');
+for(const name of blockedSwing)assert.equal(blocked.read().grounding.feet[name].stance,true,`Admission hold must finish a pending swing: ${name}`);
