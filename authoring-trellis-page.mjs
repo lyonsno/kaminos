@@ -32,7 +32,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   const session=await appGpu.session();
   const host=await d.createTrellisSharedHost({appGpu:{device:appGpu.device,queue:appGpu.queue,session,
     beginRun:(runId,options)=>appGpu.beginRun(runId,options)}});
-  let run,generation,asset,released=false,result,timing=null;
+  let run,generation,asset,released=false,result,timing=null,primaryError;
   // Per phase: wall time, and GPU time from the kit's timestamp-query timer (the change in
   // its running total; timings resolve lazily, so the totals are settled before release).
   const phases=[],clock=()=>globalThis.performance.now();
@@ -87,6 +87,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
     }
   }catch(error){
+    primaryError=error;
     // While the run still holds its tensors: what a decoder-only replay needs.
     if(run&&generation&&error&&typeof error==='object')
       error.trellisCapture=await captureFailure(generation,run.route.runtime).catch(failure=>({captureError:failure.message}));
@@ -104,6 +105,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       if(!released)failure=Object.assign(Error(`TRELLIS GPU route was not released: ${report?.status}${report?.error?` (${report.error.message})`:''}`),{gpuRouteHeld:true});
     }else released=true;
     // A held run keeps its tensors; disposing under it would free resources still in use.
+    if(released&&primaryError?.trellisSurfels)primaryError.trellisSurfels.receiptValidation={ok:true,by:'authoring-trellis-page',checks:['route-released']};
     if(released){asset?.dispose();generation?.dispose();await host.dispose();}
     if(failure)throw failure;
   }

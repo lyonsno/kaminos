@@ -26939,7 +26939,7 @@ function setupAuthoringAssets(){
     if(out.levelInputs){
       const {encodeTrellisReconstruction}=await loadModule('./trellis-reconstruction.mjs');
       const raw=encodeTrellisReconstruction(out.levelInputs,{provenance:out.generation});
-      reconstruction=await persistGeneratedMesh(raw,{...out.generation,representation:'trellis-raw-reconstruction',frame:'trellis-source'},out.label,'TRELLIS raw recovery');
+      reconstruction=await persistGeneratedMesh(raw,{...out.generation,representation:'trellis-raw-reconstruction',frame:'trellis-source',receiptValidation:{...out.generation.receiptValidation,checks:[...(out.generation.receiptValidation?.checks??[]),'raw-reconstruction-glb-encoded']}},out.label,'TRELLIS raw recovery');
     }
     const retained=reconstruction?{source:reconstruction.source,sha256:reconstruction.sha256}:null;
     if(!out.glb){if(!out.surfelGlb){if(reconstruction)return reconstruction;throw Error('TRELLIS run produced neither a mesh, surfels nor recovery fields');}
@@ -27034,7 +27034,7 @@ function setupAuthoringAssets(){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
       // Decoding succeeded and mesh finishing failed: the surfels built before cleanup go back with the run's identity.
       if((error?.trellisSurfels?.surfelGlb||error?.trellisSurfels?.levelInputs)&&!signal?.aborted)error.trellisSurfelsRun={surfelGlb:error.trellisSurfels.surfelGlb,surfels:error.trellisSurfels.surfels,levelInputs:error.trellisSurfels.levelInputs,label,
-        generation:{schema:'kaminos.asset-generation.v1',runId,route:error.trellisSurfels.route,target:'this-page',
+        generation:{schema:'kaminos.asset-generation.v1',runId,route:error.trellisSurfels.route,target:'this-page',receiptValidation:error.trellisSurfels.receiptValidation,
           input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},
           decoderActivationStorage:'f16',meshFinishing:{status:'failed',error:error.message}}};
       if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
