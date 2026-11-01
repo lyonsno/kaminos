@@ -3443,7 +3443,7 @@ function syncViewportDisplayControls() {
 // Viewport Preview: the scene at device pixel ratio 1 and the fire's raymarch
 // on the runtime ladder's preview tier (see preview-quality.mjs). Applied
 // when the preference changes; the simulation is not touched.
-let outputCaptureExtent=null,recordingExtent=null,recordingFrameSink=null;
+let outputCaptureExtent=null,outputCaptureFrame=null,recordingExtent=null,recordingFrameSink=null;
 let appliedViewportQuality=null;
 function syncViewportQuality(syncRendererSize) {
  if(outputCaptureExtent||recordingExtent)return;
@@ -11730,6 +11730,7 @@ async function initScene() {
     // copy after the step.
     if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
     sceneFrameCount++;
+    outputCaptureFrame?.();
     if(recordingFrameSink&&(!activeSceneComposition||!isSceneItemVisible('flame-field')||!volumePrototype?.isActive()))recordingFrameSink();
     lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;
@@ -11879,7 +11880,7 @@ async function initScene() {
       if(released)return;released=true;
       // Restore every borrowed resource even if another restoration throws.
       const errors=[];const restore=fn=>{try{fn?.();}catch(error){errors.push(error);}};
-      outputCaptureExtent=null;manualInspectionRender=false;
+      outputCaptureExtent=null;outputCaptureFrame=null;manualInspectionRender=false;
       restore(()=>{viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;writeAuthoredCameraView(snapshot.view);camera.aspect=snapshot.aspect;camera.updateProjectionMatrix();});
       restore(()=>{renderer.setPixelRatio(snapshot.pixelRatio);syncViewportRendererSize();});
       restore(()=>fire?.release());restore(releaseDrawing);restore(releaseInspection);restore(releaseViewport);
@@ -11899,7 +11900,10 @@ async function initScene() {
       camera.zoom=1;writeAuthoredCameraView(record?cameraViewFromRecord(record,pixels.width/pixels.height):snapshot.view);
       renderer.setPixelRatio(1);syncViewportRendererSize();camera.updateProjectionMatrix();
       sceneGI.resetHistory('output-camera-and-size');
-      let fireReceipt=null,fireRaster=null,drawnFrames=0;
+      let fireReceipt=null,fireRaster=null,drawnFrames=0,composedShot=null;
+      // WebGPU's canvas can be cleared when the browser presents. Copy the
+      // final composed frame before sampleFrame awaits its GPU validation.
+      outputCaptureFrame=()=>{if(ordinarySceneTransportFrame&&!sceneGI.needsHistoryFrame())composedShot=captureComposedCanvases({host:renderer.domElement,volumeRaster:null,document,label:settings.filename});};
       return {release,async draw(){
         manualInspectionRender=true;
         try{
@@ -11918,7 +11922,8 @@ async function initScene() {
           if(!transportPrototype&&renderSceneFrame()===false)throw Error('Scene output was skipped');
         }finally{manualInspectionRender=false;}
       },capture(){
-        const shot=captureComposedCanvases({host:renderer.domElement,volumeRaster:fireRaster,document,label:settings.filename});
+        if(transportPrototype&&!composedShot)throw Error('Shared scene output was not copied at presentation');
+        const shot=composedShot??captureComposedCanvases({host:renderer.domElement,volumeRaster:fireRaster,document,label:settings.filename});
         return {dataUrl:shot.image,width:shot.width,height:shot.height,layers:shot.layers,camera:readAuthoredCameraView(),cameraId:settings.cameraId,rendering:{backend:'webgpu',sceneFrames:drawnFrames,lighting:sceneGI.debugState(),fire:fireReceipt,water:waterFeature.host?.state()??null}};
       }};
     }catch(error){await release();throw error;}
