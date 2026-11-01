@@ -82,9 +82,11 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
    const delta=goal.map((x,i)=>x-position[i]),desired=intent??heading(delta),error=angle(direction,desired);
    const support=turnScale?.({position:[...position],direction:[...direction]})??1;
    if(!Number.isFinite(support)||support<0||support>1)throw Error('Invalid support turn scale');
-   const omega=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength))*support;
-   // Slow the motor as a whole; reducing yaw alone would enlarge its arc.
-   const walkingFraction=Math.max(0,Math.cos(error))**2*support;
+   const requestedYaw=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength));
+   const turnSupport=1-(1-support)*Math.abs(requestedYaw)/maxYawRate,omega=requestedYaw*turnSupport;
+   // Ease the whole motor only while turning: slowing yaw alone enlarges
+   // the arc, but applying support strain on a straight throttles the gait.
+   const walkingFraction=Math.max(0,Math.cos(error))**2*turnSupport;
    // The motion owner integrates its nonuniform source phase here, in the
    // SAME time step as steering. A source-distance plateau still consumes
    // active phase, whereas reorientation without forward walking does not.

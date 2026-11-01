@@ -139,3 +139,23 @@ for(const nav of [freeTurn,supportedTurn])nav.setDestination([10,0]);
 freeTurn.advance(0,{seconds:.001});supportedTurn.advance(0,{seconds:.001,turnScale:()=>.5});
 const yaw=p=>Math.atan2(p.direction[0],p.direction[1]);
 assert.ok(Math.abs(yaw(supportedTurn.read())-.5*yaw(freeTurn.read()))<1e-10,'Support must actually reduce the motor turn, before contact resolution');
+
+// A turning torso and independently sampled legs do not reproduce the same
+// source offset. The approached endpoint must survive that change at landing.
+const twistedBase=(time,path)=>{const pose=baseFrame(time,path),chest=pose.bones.find(b=>b.name==='spine-chest');chest.localMatrix=new THREE.Matrix4().fromArray(chest.localMatrix).multiply(new THREE.Matrix4().makeRotationY(.6)).toArray();return pose;};
+let twistedLandings=0;
+for(let index=1;index<60;index++){
+ const time=index/30-1e-6,g=feature.createGroundedWalk({THREE,walking:cycle,baseFrame:twistedBase,forward:[0,1],speed:1,groundHeight:0,initial,time});
+ const before=g.frame(twistedBase(time,initial)),state=g.read(),to={position:[0,4e-6],direction:[0,1]};
+ g.advance(initial,to,time+4e-6);const after=g.frame(twistedBase(time+4e-6,to)),nextState=g.read();
+ for(const name of Object.keys(state.feet))if(!state.feet[name].stance&&nextState.feet[name].stance){
+  twistedLandings++;
+  for(const key of ['target','reached'])assert.ok(Math.hypot(...before.grounding.feet[name][key].map((v,i)=>v-after.grounding.feet[name][key][i]))<1e-3,`Turning torso touchdown must preserve ${key}: ${name} at ${index}`);
+ }
+}
+assert.ok(twistedLandings>=4);
+// Support strain limits a requested turn; it must not throttle straight travel.
+const straightFree=createWanderLocomotion(navOptions),straightSupported=createWanderLocomotion(navOptions);
+for(const nav of [straightFree,straightSupported])nav.setDestination([0,10]);
+straightFree.advance(1,{seconds:1});straightSupported.advance(1,{seconds:1,turnScale:()=>.5});
+assert.ok(Math.abs(straightFree.read().distance-straightSupported.read().distance)<1e-10,'Straight travel must retain the source pace');

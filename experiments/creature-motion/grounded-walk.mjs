@@ -147,7 +147,9 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
    }
    const source=at(leg.chain[3]);source.y+=groundHeight-leg.sourceGround;
    let target,plan=previous?.step??null,release=previous?.release??null,releaseTime=previous?.releaseTime??clock;
-   const landingNow=()=>feasible(path,leg,at(leg.chain[0]),source);
+   // Use the same retained landing offset as the approaching swing. The
+   // current torso plus independently sampled limb can have another toe pose.
+   const landingNow=()=>feasible(path,leg,at(leg.chain[0]),leg.samples[index].clone().applyAxisAngle(axis,Math.atan2(path.direction[0],path.direction[1])).add(at(leg.chain[0])));
    if(stance){
     target=previous?.stance?new THREE.Vector3(...previous.anchor):plan?landingNow():feasible(path,leg,at(leg.chain[0]),source);
     plan=null;release=null;
