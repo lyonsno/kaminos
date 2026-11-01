@@ -199,6 +199,9 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   if(bound<=roundoff&&(!activeSeconds||!pendingSwing()))return;
   const steps=Math.max(1,Math.ceil(Math.max(bound/speed,activeSeconds)*walking.fps));let previous=from;
   for(let step=1;step<=steps;step++){
+   // A delayed stationary callback only finishes the pending handoff. Once
+   // every foot lands, further catch-up must not trigger another release.
+   if(bound<=roundoff&&!pendingSwing())break;
    const t=step/steps,angle=start+delta*t,next={position:to.position.map((v,i)=>from.position[i]+(v-from.position[i])*t),direction:[Math.sin(angle),Math.cos(angle)]};
    for(const leg of legs){const v=hip(next,leg).sub(hip(previous,leg));if(v.length()>64*Number.EPSILON*Math.max(1,...next.position.map(Math.abs),...leg.offset.map(Math.abs)))state.velocities[leg.name]=[v.x,v.z];}
    for(const name of ['front','rear']){

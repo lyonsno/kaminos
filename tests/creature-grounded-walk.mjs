@@ -177,3 +177,8 @@ assert.ok(blockedSwing.length);
 for(let i=0;i<60;i++)blocked.advance(1/30,{admit:()=>0});
 assert.deepEqual(blocked.snapshot().path,blockedBefore.path,'Blocked travel must not change the accepted root');
 for(const name of blockedSwing)assert.equal(blocked.read().grounding.feet[name].stance,true,`Admission hold must finish a pending swing: ${name}`);
+// Delayed callbacks must settle the same pending handoff without releasing it again.
+const blockedDelayed=make();blockedDelayed.advance(2,{admit:()=>0});
+assert.deepEqual(blockedDelayed.snapshot(),blocked.snapshot(),'A delayed blocked interval must match its subdivided support handoff');
+const blockedSettled=blockedDelayed.snapshot();blockedDelayed.advance(2,{admit:()=>0});
+assert.deepEqual(blockedDelayed.snapshot(),blockedSettled,'Further blocked active time must leave settled feet planted');
