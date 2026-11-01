@@ -65,7 +65,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     report('Initial water preview restored. Place or edit it, then Release water.');return true;
    }
    const mounting=acquire();refresh();const mounted=await mounting;refresh();
-   if(mounted)report('Local water mounted on the retained analytical basin. The solver restarts from its saved authored setup.');
+   if(mounted)report('Water mounted in the shared scene. The solver restarts from its saved authored setup.');
    return mounted;
   },
   release:()=>acquire({replace:true}),
