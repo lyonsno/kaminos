@@ -23,6 +23,10 @@ assert.ok(maxEdge<.3,`distributed floor must interpolate locally, not along radi
 assert.equal(mesh.position.y,-.85);assert.equal(mesh.material.color.getHex(),0x808080);
 assert.equal(mesh.material.roughness,.65);
 assert.equal(mesh.material.metalness,0);
+assert.equal(mesh.material.isMeshStandardNodeMaterial,true,'cyclorama floor uses node material for radial edge feathering');
+assert.equal(mesh.material.transparent,false,'cyclorama floor remains in the opaque pass so SSGI source and receiver contracts hold');
+assert.equal(mesh.material.blending,THREE.CustomBlending,'cyclorama floor hardware-blends its feathered outer rim into the background');
+assert.ok(mesh.material.opacityNode,'cyclorama floor defines a radial opacity falloff node');
 for(let i=0;i<p.count;i++)assert.ok(Math.hypot(p.getX(i),p.getY(i))<=5.000001);
 assert.equal(floor(false).geometry.type,'CircleGeometry','ordinary route retains its floor');
 console.log('floor receiver locality contracts passed', {maxEdge,vertices:p.count});

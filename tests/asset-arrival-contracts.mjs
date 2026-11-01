@@ -7,8 +7,11 @@ import {
   assetArrivalFramingWindow,
   computeAssetArrivalFraming,
   computeAssetArrivalPlacement,
+  inspectArrivalMaterialProfile,
+  planArrivalStudioLights,
   resolveAssetArrivalMode,
 } from '../asset-arrival.mjs';
+import { checkedSceneLightRecord } from '../scene-spot-light.mjs';
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
 
@@ -105,4 +108,49 @@ test('arrival framing fits the asset points tightly inside an off-centre window'
 test('arrival window clears an overlay at the top of the viewport', () => {
   assert.deepEqual(assetArrivalFramingWindow({ overlayTopNdc: 1 }), { left: -0.62, right: 0.62, bottom: -0.62, top: 0.62 });
   assert.equal(assetArrivalFramingWindow({ overlayTopNdc: 0.5 }).top, 0.45);
+});
+
+test('arrival material profile classifies dark-metallic, specular-metallic, bright-matte, and balanced assets', () => {
+  const darkMetal = inspectArrivalMaterialProfile([{ color: [0.08, 0.09, 0.1], roughness: 0.35, metalness: 0.85, weight: 10 }]);
+  assert.equal(darkMetal.kind, 'dark-metallic');
+  const brightMatte = inspectArrivalMaterialProfile([{ color: [0.82, 0.8, 0.76], roughness: 0.82, metalness: 0.0, weight: 10 }]);
+  assert.equal(brightMatte.kind, 'bright-matte');
+  const specMetal = inspectArrivalMaterialProfile([{ color: [0.55, 0.56, 0.58], roughness: 0.25, metalness: 0.8, weight: 10 }]);
+  assert.equal(specMetal.kind, 'specular-metallic');
+  const balanced = inspectArrivalMaterialProfile([{ color: [0.42, 0.38, 0.34], roughness: 0.55, metalness: 0.05, weight: 10 }]);
+  assert.equal(balanced.kind, 'balanced');
+});
+
+test('arrival studio light rig plans warm key and cool rim spot records and applies optional material tuning', () => {
+  const bounds = { min: [-0.6, -0.85, -0.5], max: [0.6, 0.55, 0.5] };
+  const darkMetal = inspectArrivalMaterialProfile([{ color: [0.08, 0.09, 0.1], roughness: 0.35, metalness: 0.85, weight: 10 }]);
+  const brightMatte = inspectArrivalMaterialProfile([{ color: [0.82, 0.8, 0.76], roughness: 0.82, metalness: 0.0, weight: 10 }]);
+
+  const untunedDark = planArrivalStudioLights({ bounds, groundY: -0.85, materialProfile: darkMetal, materialTuning: false });
+  const untunedBright = planArrivalStudioLights({ bounds, groundY: -0.85, materialProfile: brightMatte, materialTuning: false });
+  assert.equal(untunedDark.lights.length, 2);
+  for (const record of untunedDark.lights) {
+    const checked = checkedSceneLightRecord(record);
+    assert.equal(checked.id, record.id);
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(...record.transform.rotation));
+    const aimed = new THREE.Vector3(...record.transform.position).addScaledVector(dir, record.light.aimDistance);
+    for (let axis = 0; axis < 3; axis++) {
+      assert.ok(Math.abs(aimed.getComponent(axis) - untunedDark.target[axis]) < 1e-2, `light ${record.id} aims at target axis ${axis}`);
+    }
+  }
+  assert.deepEqual(
+    untunedDark.lights.map(l => l.light.intensity),
+    untunedBright.lights.map(l => l.light.intensity),
+    'optional material tuning is inactive when materialTuning is false',
+  );
+
+  const tunedDark = planArrivalStudioLights({ bounds, groundY: -0.85, materialProfile: darkMetal, materialTuning: true });
+  const tunedBright = planArrivalStudioLights({ bounds, groundY: -0.85, materialProfile: brightMatte, materialTuning: true });
+  const darkRim = tunedDark.lights.find(l => l.id === '@studio-rim-light').light.intensity;
+  const baseRim = untunedDark.lights.find(l => l.id === '@studio-rim-light').light.intensity;
+  const brightKey = tunedBright.lights.find(l => l.id === '@studio-key-light').light.intensity;
+  const baseKey = untunedBright.lights.find(l => l.id === '@studio-key-light').light.intensity;
+  assert.ok(darkRim > baseRim, `dark-metallic tuning boosts rim grazing light (${darkRim} > ${baseRim})`);
+  assert.ok(brightKey < baseKey, `bright-matte tuning trims key light to prevent washout (${brightKey} < ${baseKey})`);
+  assert.ok(tunedDark.environmentDelta.exposureScale > 1 && tunedBright.environmentDelta.exposureScale < 1);
 });
