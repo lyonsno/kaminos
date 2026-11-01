@@ -245,7 +245,7 @@ assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition rout
 assert.match(indexSource, /transparentCanvas:\s*fingerFluidPyroCompositionRequested\(\)/, 'composition route requests transparent Pyro output explicitly');
 assert.match(indexSource, /getLiquidFireContactDescriptor\(\)/, 'the route binds the live solver-owned sparse descriptor');
 assert.match(indexSource, /volumePrototype\.setLiquidFireContactDescriptor/, 'the route hands the descriptor to the real Pyro simulator');
-assert.match(indexSource, /volumePrototype\.setActive\(true\)/, 'the route runs the Pyro simulator for visual smoke');
+assert.match(indexSource, /flameFeature\.setActive\(true\)/, 'the route runs the Pyro simulator for visual smoke');
 const compositionActivationSource = indexSource.match(/async function activateFingerFluidPyroComposition\(\)[\s\S]*?\n}\n\nasync function sampleFingerFluidPyroComposition/)?.[0] || '';
 assert.match(compositionActivationSource, /volumeScene:\s*'tall_plume'/, 'composition requests the only currently valid Pyro fire preset');
 assert.match(compositionActivationSource, /\.\.\.VOLUME_SCENE_PRESETS\.flame/, 'composition installs the complete canonical tall-plume preset instead of retaining stale compact-plume controls');

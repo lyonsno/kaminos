@@ -1,3 +1,4 @@
+import {createAuthoredFlameFeature} from '../../authored-flame-feature.mjs';
 import {createKilnRecipeStore} from '../../inference-kiln-selection.mjs';
 import {FIRE_RENDER_DEFAULTS} from '../../scene-fire-render-settings.mjs';
 import {createSceneBloom,checkedSceneBloom} from '../../scene-bloom.mjs';
@@ -24,6 +25,21 @@ const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneR
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  // Page-consumer fixture projection only. Runtime lifetime tests instantiate
+  // createAuthoredWaterFeature directly; these old fields describe domain inputs.
+  if(!context.waterFeature){
+    const water={};
+    for(const [field,legacy] of Object.entries({setup:'localLiquidSetup',host:'localLiquidHost',failure:'localLiquidFailure',generation:'localLiquidGeneration',paused:'localLiquidPaused'}))
+      Object.defineProperty(water,field,{get:()=>context[legacy]??null,set:value=>{context[legacy]=value;}});
+    water.render=options=>context.localLiquidHost?.render(options);
+    water.fail=error=>{context.localLiquidFailure=String(error?.message||error);context.localLiquidHost?.dispose();context.localLiquidHost=null;};
+    water.isLoading=()=>context.localLiquidHostMount?.isLoading()??false;
+    water.clear=()=>{context.localLiquidHost?.dispose();context.localLiquidHost=null;context.localLiquidSetup=null;context.localLiquidFailure=null;context.localLiquidPaused=false;context.localLiquidGeneration=(context.localLiquidGeneration??0)+1;};
+    water.sync=()=>{context.localLiquidHost?.setEmitters?.(context.localLiquidEmitterState?.().emitters??[]);context.localLiquidHost?.setSetup?.(context.localLiquidSetup);};
+    water.setPaused=value=>{context.localLiquidPaused=Boolean(value);context.localLiquidHost?.setPaused(value);return context.localLiquidPaused;};
+    context.waterFeature=water;
+  }
+  context.flameFeature??=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
   context.checkedBurnAppearance??=checkedBurnAppearance;
   context.createKilnRecipeStore??=createKilnRecipeStore;
   // This domain fixture does not assemble the Rendering panel. Its controls

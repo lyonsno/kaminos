@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 import numpy as np
+from checkpoint_profiles import expanded_flow_specs
 
 def digest(path):
     h=hashlib.sha256()
@@ -29,9 +30,9 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for name in ['repo-root','out','trellis-snapshot','dino-reference','sparse-reference','shape-reference','decoder-reference','occupancy-reference']:
         p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--expected-commit',required=True);a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
+    p.add_argument('--pipeline-type',choices=['512','1024_cascade'],default='1024_cascade');p.add_argument('--expected-commit',required=True);a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
     m={'schema':'trellis2.generation-inputs.v0','status':'failed','phase':'source-identity','modelCalls':0,
-       'producer':{},'tensors':{},'models':{},'references':{},'meshResolution':1024,'seed':42,
+       'producer':{},'tensors':{},'models':{},'references':{},'meshResolution':512 if a.pipeline_type=='512' else 1024,'pipelineType':a.pipeline_type,'seed':42,
        'comparison':'prepared source pixels; browser noise is not matched MLX RNG or a fidelity oracle'}
     try:
         git=lambda *args:subprocess.check_output(['git','-C',str(a.repo_root),*args],text=True).strip()
@@ -104,8 +105,7 @@ def main():
         spec=importlib.util.spec_from_file_location('flow_weight_maps',Path(__file__).with_name('export-sparse-flow.py'));maps=importlib.util.module_from_spec(spec);spec.loader.exec_module(maps)
         mapping={**{'prefix.'+k:v for k,v in maps.PREFIX_KEYS.items()},**{f'block{i}.{k}':f'blocks.{i}.{v}' for i in range(30) for k,v in maps.BLOCK_KEYS.items()},
             'terminal.weight':'out_layer.weight','terminal.bias':'out_layer.bias'}
-        for role,stem,res,sampler in [('highResolutionShape','slat_flow_img2shape_dit_1_3B_1024_bf16',64,'shape_slat_sampler'),
-            ('textureFlow','slat_flow_imgshape2tex_dit_1_3B_512_bf16',32,'tex_slat_sampler')]:
+        for role,stem,res,sampler in expanded_flow_specs(a.pipeline_type):
             f=a.trellis_snapshot/'ckpts'/(stem+'.safetensors');config=flow_config(json.loads(f.with_suffix('.json').read_text()),pipeline[sampler],res)
             rows,identity=checkpoint(f,{role+'.'+k:v for k,v in mapping.items()})
             m['models'][role]={'config':config,'identity':identity,'tensors':{k[len(role)+1:]:v for k,v in rows.items()}};m['models'][role]['tensors']['gelu']=gelu
@@ -120,6 +120,8 @@ def main():
         cfg=json.loads(f.with_suffix('.json').read_text())['args']
         m['models']['textureDecoder']={'config':{'latentChannels':cfg['latent_channels'],'channels':cfg['model_channels'],'numBlocks':cfg['num_blocks'],'mode':'texture'},
             'identity':identity,'siluTable':silu,'tensors':{k[len('textureDecoder.'):]:v for k,v in rows.items()}}
+        if a.pipeline_type=='512':
+            for role in ['shapeDecoder','textureDecoder']:m['models'][role]['config']['resolution']=32
         m['status']='succeeded';m['phase']=None
     except Exception as e:m['error']={'message':str(e),'class':type(e).__name__};print(str(e),file=sys.stderr)
     finally:(a.out/'manifest.json').write_text(json.dumps(m,indent=2)+'\n')

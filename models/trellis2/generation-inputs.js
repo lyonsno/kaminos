@@ -128,6 +128,10 @@ export async function loadGenerationCheckpoints(m,fetchTensor){
 }
 
 async function loadGenerationCheckpointPlan(m,fetchTensor,plan){
+  const textureSize=generationPipelineType(m)==='512'?512:1024,
+    expected=`slat_flow_imgshape2tex_dit_1_3B_${textureSize}_bf16.safetensors`,
+    actual=m.models.textureFlow.identity?.path?.split('/').pop();
+  if(actual!==expected)throw TypeError(`Matching texture checkpoint required for ${textureSize}: rebuild checkpoint base with pack-generation.py --pipeline-type ${generationPipelineType(m)}; image preparation cannot replace model weights`);
   const roles=generationRoles(m);
   let gelu,silu;
   // Cache only small, identity-checked activation tables. Full checkpoints

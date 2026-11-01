@@ -4,48 +4,56 @@ import {TSL} from './lib/three.webgpu.js';
 // compileAsync alone carries target/MRT, but omits AO/GI context and draw flags.
 // Caller holds scene submission for the complete asynchronous interval.
 export async function compileSceneLighting(renderer, passes) {
-  for (const pass of passes) {
-    const {scene,camera}=pass;
-    const prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
-      transparent:renderer.transparent,opaque:renderer.opaque,autoClear:renderer.autoClear,
-      material:scene.overrideMaterial,mask:camera.layers.mask,name:scene.name};
-    let receivingContext, receivingValue;
-    try {
-      renderer.setRenderTarget(pass.renderTarget);renderer.setMRT(pass._mrt);
-      renderer.transparent=pass.transparent;renderer.opaque=pass.opaque;renderer.autoClear=true;
-      if(pass._layers)camera.layers.mask=pass._layers.mask;
-      if(pass.overrideMaterial!==null)scene.overrideMaterial=pass.overrideMaterial;
-      if(pass.contextNode!==null){
-        // Match PassNode's cache identity as well as its inputs. A temporary
-        // context compiles a different RenderObject key from the next draw.
-        if(!pass._contextNodeCache || pass._contextNodeCache.version!==pass.version){
-          pass._contextNodeCache={version:pass.version,context:TSL.context({
-            ...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
+  const pipelineWork=[];
+  try {
+    for (const pass of passes) {
+      const {scene,camera}=pass;
+      const prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
+        transparent:renderer.transparent,opaque:renderer.opaque,autoClear:renderer.autoClear,
+        material:scene.overrideMaterial,mask:camera.layers.mask,name:scene.name};
+      let receivingContext, receivingValue;
+      try {
+        renderer.setRenderTarget(pass.renderTarget);renderer.setMRT(pass._mrt);
+        renderer.transparent=pass.transparent;renderer.opaque=pass.opaque;renderer.autoClear=true;
+        if(pass._layers)camera.layers.mask=pass._layers.mask;
+        if(pass.overrideMaterial!==null)scene.overrideMaterial=pass.overrideMaterial;
+        if(pass.contextNode!==null){
+          // Match PassNode's cache identity as well as its inputs. A temporary
+          // context compiles a different RenderObject key from the next draw.
+          if(!pass._contextNodeCache || pass._contextNodeCache.version!==pass.version){
+            pass._contextNodeCache={version:pass.version,context:TSL.context({
+              ...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
+          }
+          receivingContext=pass._contextNodeCache.context;
+          receivingValue=receivingContext.value;
+          const data={...receivingContext.getFlowContextData()};
+          const receiveOutput=data.getOutput;
+          const receiveAO=data.getAO;
+          // compileAsync also builds dependent fullscreen producers under this
+          // receiving context. Their MRT output structs are not surface colors:
+          // a receiving hook would collapse GI/history attachments into vec4.
+          if(receiveOutput)data.getOutput=function(node,...args){return node.isOutputStructNode?node:receiveOutput.call(this,node,...args);};
+          // NodeMaterial sets up AO even for an unlit fullscreen material. A
+          // producer compiled beneath the beauty context must not bind the very
+          // visibility attachment it is about to write (WebGPU read/write alias).
+          if(receiveAO)data.getAO=function(node,builder,...args){return builder.object?.isQuadMesh?node:receiveAO.call(this,node,builder,...args);};
+          receivingContext.value=data;
+          renderer.contextNode=receivingContext;
         }
-        receivingContext=pass._contextNodeCache.context;
-        receivingValue=receivingContext.value;
-        const data={...receivingContext.getFlowContextData()};
-        const receiveOutput=data.getOutput;
-        const receiveAO=data.getAO;
-        // compileAsync also builds dependent fullscreen producers under this
-        // receiving context. Their MRT output structs are not surface colors:
-        // a receiving hook would collapse GI/history attachments into vec4.
-        if(receiveOutput)data.getOutput=function(node,...args){return node.isOutputStructNode?node:receiveOutput.call(this,node,...args);};
-        // NodeMaterial sets up AO even for an unlit fullscreen material. A
-        // producer compiled beneath the beauty context must not bind the very
-        // visibility attachment it is about to write (WebGPU read/write alias).
-        if(receiveAO)data.getAO=function(node,builder,...args){return builder.object?.isQuadMesh?node:receiveAO.call(this,node,builder,...args);};
-        receivingContext.value=data;
-        renderer.contextNode=receivingContext;
+        scene.name=pass.name||scene.name;
+        await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0,pipelineWork});
+      } finally {
+        if(receivingContext)receivingContext.value=receivingValue;
+        renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;
+        renderer.transparent=prior.transparent;renderer.opaque=prior.opaque;renderer.autoClear=prior.autoClear;
+        scene.overrideMaterial=prior.material;camera.layers.mask=prior.mask;scene.name=prior.name;
       }
-      scene.name=pass.name||scene.name;
-      await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0});
-    } finally {
-      if(receivingContext)receivingContext.value=receivingValue;
-      renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;
-      renderer.transparent=prior.transparent;renderer.opaque=prior.opaque;renderer.autoClear=prior.autoClear;
-      scene.overrideMaterial=prior.material;camera.layers.mask=prior.mask;scene.name=prior.name;
     }
+  } finally {
+    // Drain every submitted pass even if a later graph build fails. Driver
+    // completion records are settled promises, so rejection is observed now.
+    const results=await Promise.all(pipelineWork);
+    for(const batch of results)for(const result of batch)if(result.status==='rejected')throw result.reason;
   }
 }
 

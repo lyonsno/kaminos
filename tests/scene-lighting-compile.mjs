@@ -64,3 +64,36 @@ pass._renderCallDepths=new WeakMap([[renderer,2]]);
 renderer.compileAsync=async(s,c,target,options)=>{assert.equal(options?.callDepth,2,'warm the native render context observed for this pass and renderer');};
 await compileSceneLighting(renderer,[pass]);
 console.log('PASS preparation carries observed pass nesting');
+
+// Source and receiving passes prepare ordered graphs, but share one native
+// completion barrier. Both must submit before either driver's wait finishes.
+const batchReleases=[];let batchCalls=0;
+renderer.compileAsync=async(s,c,target,options)=>{
+  batchCalls++;
+  const pending=new Promise(resolve=>batchReleases.push(resolve));
+  if(options?.pipelineWork)options.pipelineWork.push(pending);
+  else await pending;
+};
+let batchDone=false;
+const batch=compileSceneLighting(renderer,[pass,pass]).then(()=>batchDone=true);
+await new Promise(r=>setImmediate(r));
+assert.equal(batchCalls,2,'submit both passes before waiting for native pipelines');
+assert.equal(batchDone,false);
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'pass state restored during native wait');
+batchReleases[0]([]);await Promise.resolve();assert.equal(batchDone,false);
+batchReleases[1]([]);await batch;
+console.log('PASS cross-pass driver overlap with complete settlement and restored state');
+
+let failureRelease,failedCalls=0;
+renderer.compileAsync=async(s,c,target,options)=>{
+  if(++failedCalls===2)throw Error('second pass graph failed');
+  options.pipelineWork.push(new Promise(resolve=>failureRelease=()=>resolve([{status:'fulfilled'}])));
+};
+let failureDone=false;
+const failure=compileSceneLighting(renderer,[pass,pass]);
+const checkedFailure=assert.rejects(failure,/second pass graph failed/).then(()=>failureDone=true);
+await new Promise(r=>setImmediate(r));assert.equal(failureDone,false,'later graph failure must drain earlier driver work');
+failureRelease();await checkedFailure;
+renderer.compileAsync=async(s,c,target,options)=>{options.pipelineWork.push(Promise.resolve([{status:'rejected',reason:Error('native failed')}]))};
+await assert.rejects(compileSceneLighting(renderer,[pass]),/native failed/);
+console.log('PASS shared pass barrier propagates native failure and drains after graph failure');

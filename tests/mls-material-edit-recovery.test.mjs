@@ -12,14 +12,14 @@ const source=html.slice(html.indexOf('function editAuthoredWaterSimulation('),ht
 const records=[{id:'drop',type:'local-liquid-emitter',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'finite_drop',drop:{width:.5,samplesPerUnit:20}}}];
 const setup=normalizeLocalLiquidSetup({...defaultLocalLiquidSetup(),waterSampling:{spacing:.05,container:null},mlsMaterial:{pressureWaveSpeed:2,kinematicViscosity:.0005}});
 const make=new Function('setup','records','createSceneEdits','normalizeLocalLiquidSetup','resolveAuthoredWaterSampling','authoredMlsMaterial',`
- let localLiquidSetup=structuredClone(setup),authoredWaterSimulationTarget=false;
+ const waterFeature={setup:structuredClone(setup)};let authoredWaterSimulationTarget=false;
  const assertSceneConstructionAvailable=()=>{},localLiquidEmitterRecords=()=>records;
  const workingScene={objects:[]},LOCAL_LIQUID_EMITTER_TYPE='local-liquid-emitter';
  const scenePlacementTools={edits:createSceneEdits({read:()=>{},write:()=>{}})};
  const syncLocalLiquidHostEmitters=()=>{},updateAuthoringPropertySelection=()=>{},window={};
  const authoredWaterControls={refresh:()=>{}};
  ${source}
- return {edit:editAuthoredWaterSimulation,read:()=>structuredClone(localLiquidSetup),history:scenePlacementTools.edits};
+ return {edit:editAuthoredWaterSimulation,read:()=>structuredClone(waterFeature.setup),history:scenePlacementTools.edits};
 `);
 const app=make(setup,records,createSceneEdits,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsMaterial);
 for(const pressureWaveSpeed of [1e20,1e-30]){
@@ -48,7 +48,7 @@ console.log('Rejected MLS coefficients preserve shared setup, inspector reads, n
 const {normalizeLocalLiquidEmitter}=await import('../local-liquid-setup.mjs');
 const sourceEdits=html.slice(html.indexOf('const waterSettingTargets=new Set();'),html.indexOf('function replaceAuthoredWaterPreviewChildren('));
 const makeSources=new Function('setup','records','createSceneEdits','normalizeLocalLiquidSetup','normalizeLocalLiquidEmitter','resolveAuthoredWaterSampling','authoredMlsMaterial',`
- let localLiquidSetup=structuredClone(setup);
+ const waterFeature={setup:structuredClone(setup)};
  const workingScene={objects:structuredClone(records).map(r=>({...r,object:{pose:r.transform,userData:{kaminosSceneObject:{}}}}))};
  const LOCAL_LIQUID_EMITTER_TYPE='local-liquid-emitter',THREE={},window={};
  const localLiquidEmitterRecords=()=>workingScene.objects.map(({object,...r})=>r),sceneObjectTransformState=o=>o.pose;
@@ -57,7 +57,7 @@ const makeSources=new Function('setup','records','createSceneEdits','normalizeLo
  const authoredWaterControls={refresh:()=>{}};
  const scenePlacementTools={edits:createSceneEdits({read:()=>{},write:()=>{}})};
  ${sourceEdits}
- return {edit:applyAuthoredWaterSettings,read:()=>({setup:structuredClone(localLiquidSetup),records:localLiquidEmitterRecords()}),history:scenePlacementTools.edits};
+ return {edit:applyAuthoredWaterSettings,read:()=>({setup:structuredClone(waterFeature.setup),records:localLiquidEmitterRecords()}),history:scenePlacementTools.edits};
 `);
 const sourceSetup=normalizeLocalLiquidSetup({...setup,waterSampling:{spacing:.05,particleTarget:1000,container:null},mlsMaterial:{pressureWaveSpeed:2,kinematicViscosity:1e37}});
 const sources=makeSources(sourceSetup,records,createSceneEdits,normalizeLocalLiquidSetup,normalizeLocalLiquidEmitter,resolveAuthoredWaterSampling,authoredMlsMaterial);
