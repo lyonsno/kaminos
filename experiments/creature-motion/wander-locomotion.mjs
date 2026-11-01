@@ -64,7 +64,7 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
   const delta=goal.map((x,i)=>x-position[i]),error=Math.hypot(...delta)?angle(direction,heading(delta)):0;
   return {position:[...position],direction:[...direction],area:clone(area),...(areas?{zoneId}:{}),target:[...goal],distance:total,segments,status:destination&&arrived()?'arrived':inside(position,area)?'wandering':'returning-to-area',navigation:{kind:'goal-steering',bodyLength,referenceSpeed,maxYawRate,arrivalRadius:arrivalRadius(),phase:destination&&arrived()?'arrived':Math.cos(error)<=0?'turning':'walking'}};
  }
- function advance(distance,{seconds=distance/referenceSpeed,drive=null,onStep=null,maxStepSeconds=stepSeconds}={}){
+ function advance(distance,{seconds=distance/referenceSpeed,drive=null,onStep=null,turnScale=null,maxStepSeconds=stepSeconds}={}){
   if(!Number.isFinite(distance)||distance<0||!Number.isFinite(seconds)||seconds<0)throw Error('Locomotion needs finite nonnegative distance and time');
   if(!(maxStepSeconds>0)||!Number.isFinite(maxStepSeconds)||drive!==null&&typeof drive!=='function')throw Error('Invalid locomotion integration drive');
   if(!seconds){if(distance)throw Error('Positive locomotion distance requires elapsed time');intent=null;return read();}
@@ -80,8 +80,11 @@ export function createWanderLocomotion({area,areas,position,direction,seed=1,sna
    }
    const from=onStep?{position:[...position],direction:[...direction]}:null;
    const delta=goal.map((x,i)=>x-position[i]),desired=intent??heading(delta),error=angle(direction,desired);
-   const omega=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength));
-   const walkingFraction=Math.max(0,Math.cos(error))**2;
+   const support=turnScale?.({position:[...position],direction:[...direction]})??1;
+   if(!Number.isFinite(support)||support<0||support>1)throw Error('Invalid support turn scale');
+   const omega=Math.max(-maxYawRate,Math.min(maxYawRate,error*4*referenceSpeed/bodyLength))*support;
+   // Slow the motor as a whole; reducing yaw alone would enlarge its arc.
+   const walkingFraction=Math.max(0,Math.cos(error))**2*support;
    // The motion owner integrates its nonuniform source phase here, in the
    // SAME time step as steering. A source-distance plateau still consumes
    // active phase, whereas reorientation without forward walking does not.

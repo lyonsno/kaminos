@@ -70,7 +70,7 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   if(direction)path.redirect(direction);
   heldFrame=null;
   if(navigation){
-   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,onStep:feet?({from,to})=>feet.advance(from,to,elapsed):null,drive:({seconds,walkingFraction})=>{
+   path.advance(0,{seconds:delta,maxStepSeconds:1/adapter.fps/4,turnScale:feet?state=>feet.turnScale(state):null,onStep:feet?({from,to})=>feet.advance(from,to,elapsed):null,drive:({seconds,walkingFraction})=>{
     const from=elapsed,to=from+seconds*walkingFraction*distanceScale,before=timing(from).distance;
     const distance=Math.max(0,timing(to).distance-before);
     return {distance,accept(consumed){

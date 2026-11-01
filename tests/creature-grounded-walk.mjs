@@ -104,3 +104,38 @@ for(let index=1;index<60;index++){
  }
 }
 assert.ok(touchdowns>=4,'Exercise each leg landing');
+
+// A turning body must choose landing points on the leg's own side. Exercise
+// full left/right pivots, rather than accepting a short near-straight capture.
+let crossedLandings=0,landings=0,maxLateralReach=0,maxSwingSplay=0;
+for(const sign of [-1,1]){
+ const g=feature.createGroundedWalk({THREE,walking:cycle,baseFrame,forward:[0,1],speed:1,groundHeight:0,initial});let from=initial,old=g.read();
+ for(let i=1;i<=600;i++){
+  const yaw=sign*i*.01,to={position:[0,i*.002],direction:[Math.sin(yaw),Math.cos(yaw)]};
+  g.advance(from,to,i/60);const current=g.read();
+  for(const [name,foot] of Object.entries(current.feet))if(foot.stance&&!old.feet[name].stance){
+   const x=foot.target[0]-to.position[0],z=foot.target[2]-to.position[1],lateral=x*Math.cos(yaw)-z*Math.sin(yaw),side=name.endsWith('left')?1:-1;
+   if(lateral*side<.15-1e-8)crossedLandings++;landings++;maxLateralReach=Math.max(maxLateralReach,Math.abs(lateral-side*.3));
+  }
+  for(const [name,foot] of Object.entries(current.feet))if(!foot.stance){const x=foot.target[0]-to.position[0],z=foot.target[2]-to.position[1],lateral=x*Math.cos(yaw)-z*Math.sin(yaw),side=name.endsWith("left")?1:-1;maxSwingSplay=Math.max(maxSwingSplay,Math.abs(lateral-side*.3));}
+  from=to;old=current;
+ }
+}
+assert.ok(landings>20,'Exercise repeated full turning steps');
+assert.equal(crossedLandings,0,'A pivot must not place a foot across the body midline');
+
+assert.ok(maxLateralReach<=.2,`A sagittal source gait must not turn into sideways landing reaches: ${maxLateralReach}`);
+
+assert.ok(maxSwingSplay<=.25,`Swing must not swing wide sideways to reproduce a sagittal step: ${maxSwingSplay}`);
+
+assert.equal(typeof grounded.turnScale,'function','Planted support must constrain requested body rotation');
+const supportBefore=grounded.snapshot();
+const supportScale=grounded.turnScale(next);assert.ok(supportScale>0&&supportScale<=1);
+assert.deepEqual(grounded.snapshot(),supportBefore,'Reading support constraints must not advance the gait');
+const {createWanderLocomotion}=await import('../experiments/creature-motion/wander-locomotion.mjs');
+const navOptions={area:{center:[0,0],radii:[20,20],yaw:0},position:[0,0],direction:[0,1],bodyLength:2,referenceSpeed:1};
+const freeTurn=createWanderLocomotion(navOptions),supportedTurn=createWanderLocomotion(navOptions);
+for(const nav of [freeTurn,supportedTurn])nav.setDestination([10,0]);
+freeTurn.advance(0,{seconds:.001});supportedTurn.advance(0,{seconds:.001,turnScale:()=>.5});
+const yaw=p=>Math.atan2(p.direction[0],p.direction[1]);
+assert.ok(Math.abs(yaw(supportedTurn.read())-.5*yaw(freeTurn.read()))<1e-10,'Support must actually reduce the motor turn, before contact resolution');

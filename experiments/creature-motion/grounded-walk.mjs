@@ -90,6 +90,19 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   });
   if(!leg.stance.some(Boolean)||leg.stance.every(Boolean))throw Error(`No alternating support/swing interval in ${leg.name}`);
  }
+ // Workspaces come from this cast's retained gait, in its forward/lateral
+ // frame. The allowance is a tenth of the articulated leg length: room to
+ // steer, without turning the source's sagittal stride into a lateral sweep.
+ const axis=new THREE.Vector3(0,1,0),sourceYaw=Math.atan2(forward[0],forward[1]);
+ for(const [j,leg] of legs.entries()){
+  load(walking.frame(0,{mode:'cycle'}));
+  leg.reach=leg.chain.slice(1).reduce((n,b,i)=>n+at(b).distanceTo(at(leg.chain[i])),0);
+  const offsets=samples.map(row=>new THREE.Vector3(...row[j].relative).sub(new THREE.Vector3(...row[j].hip)).applyAxisAngle(axis,-sourceYaw));
+  leg.side=Math.sign(new THREE.Vector3(...leg.offset).applyAxisAngle(axis,-sourceYaw).x);
+  leg.lateral=[Math.min(...offsets.map(v=>v.x))-leg.reach*.1,Math.max(...offsets.map(v=>v.x))+leg.reach*.1];
+  leg.longitudinal=[Math.min(...offsets.map(v=>v.z))-leg.reach*.1,Math.max(...offsets.map(v=>v.z))+leg.reach*.1];
+  leg.samples=offsets;
+ }
  const sourceFloors=legs.map(l=>l.sourceGround).sort((a,b)=>a-b),sourceFloor=(sourceFloors[1]+sourceFloors[2])/2;
  let state={schema:'kaminos.grounded-walk.v1',groundHeight,frontTime:time,rearTime:time,baseTime:time,legTimes:Object.fromEntries(legs.map(l=>[l.name,time])),velocities:{},feet:{}};
  const phase=t=>{
@@ -101,53 +114,69 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   return Math.abs(raw-nearest)<=tolerance?nearest%(walking.frames-1):raw;
  };
  const localPose=(base)=>sampleLegGroups({THREE,walking,base,front:state.frontTime,rear:state.rearTime,legTimes:state.legTimes});
+ function coordinates(path,hip,target){
+  return target.clone().sub(hip).applyAxisAngle(axis,-Math.atan2(path.direction[0],path.direction[1]));
+ }
+ function feasible(path,leg,hip,target){
+  const yaw=Math.atan2(path.direction[0],path.direction[1]),local=coordinates(path,hip,target);
+  local.x=Math.max(leg.lateral[0],Math.min(leg.lateral[1],local.x));
+  local.z=Math.max(leg.longitudinal[0],Math.min(leg.longitudinal[1],local.z));
+  // Keep the landing on this attachment's side of the body's sagittal plane.
+  const root=new THREE.Vector3(path.position[0],hip.y,path.position[1]);
+  const hipSide=coordinates(path,root,hip).x;
+  if(leg.side)local.x=leg.side*Math.max(leg.side*(hipSide+local.x),Math.abs(hipSide)*.5)-hipSide;
+  // Intersect with the nonstretching leg's ground-plane reach disk. If
+  // the attachment itself is too high, leave the residual visible to IK.
+  const height=hip.y-sourceFloor,radius=Math.sqrt(Math.max(0,(leg.reach*.98)**2-height*height));
+  const horizontal=Math.hypot(local.x,local.z);
+  if(horizontal>radius){local.x*=radius/horizontal;local.z*=radius/horizontal;}
+  return local.applyAxisAngle(axis,yaw).add(hip).setY(groundHeight);
+ }
  function update(path){
   load(localPose(baseFrame(state.baseTime,path)));
   for(const leg of legs){
    let clock=state.legTimes[leg.name],f=phase(clock),index=Math.floor(f),stance=leg.stance[index],earlyLift=false;
-   const previous=state.feet[leg.name],reach=at(leg.chain[0]).distanceTo(at(leg.chain[1]))+at(leg.chain[1]).distanceTo(at(leg.chain[2]))+at(leg.chain[2]).distanceTo(at(leg.chain[3]));
-   if(stance&&previous?.stance&&at(leg.chain[0]).add(new THREE.Vector3(0,groundHeight-sourceFloor,0)).distanceTo(new THREE.Vector3(...previous.anchor))>reach*.95){
+   const previous=state.feet[leg.name],hip=at(leg.chain[0]),seatedHip=hip.clone().add(new THREE.Vector3(0,groundHeight-sourceFloor,0));
+   const anchor=previous?.stance?new THREE.Vector3(...previous.anchor):null;
+   const outside=anchor?anchor.distanceTo(feasible(path,leg,hip,anchor)):0;
+   const otherSupport=legs.some(other=>other!==leg&&state.feet[other.name]?.stance);
+   if(stance&&previous?.stance&&otherSupport&&(outside>1e-8||seatedHip.distanceTo(anchor)>leg.reach*.9)){
     let skip=0;while(leg.stance[(index+skip)%leg.stance.length])skip++;
     state.legTimes[leg.name]+=(skip-(f-index))/walking.fps;clock=state.legTimes[leg.name];f=phase(clock);index=(index+skip)%leg.stance.length;stance=false;earlyLift=true;
     load(localPose(baseFrame(state.baseTime,path)));
    }
-   const hip=at(leg.chain[0]),source=at(leg.chain[3]),axis=new THREE.Vector3(0,1,0),bodyYaw=Math.atan2(path.direction[0],path.direction[1])-Math.atan2(forward[0],forward[1]);
-   // Keep the chosen swing direction through this step. Instantaneous
-   // attachment velocity can reverse at a turn pivot while displacement tends
-   // to zero; rotating an airborne trajectory by that direction causes a jump.
-   const velocity=state.velocities[leg.name];
-   const swingDirection=(!previous?.stance?previous?.swingDirection:null)??(velocity&&Math.hypot(...velocity)>1e-12?Math.atan2(velocity[0],velocity[1]):Math.atan2(path.direction[0],path.direction[1]));
-   const mean=new THREE.Vector3(...leg.mean).applyAxisAngle(axis,bodyYaw),variation=source.clone().sub(hip).sub(mean);
-   if(!stance||!previous?.stance){const bodyDirection=Math.atan2(path.direction[0],path.direction[1]);variation.applyAxisAngle(axis,swingDirection-bodyDirection);source.copy(hip).add(mean).add(variation);}
-   source.y+=groundHeight-leg.sourceGround;
-   const old=state.feet[leg.name];let anchor=old?.anchor??null,release=old?.release??null,releaseTime=old?.releaseTime??clock;
-   if(stance&&!old?.stance){anchor=source.clone().setY(leg.ground).toArray();release=null;}
-   if(!stance&&old?.stance){release=new THREE.Vector3(...old.target).sub(source).toArray();releaseTime=clock;anchor=null;}
-   let target=source.clone();
-   if(stance)target.fromArray(anchor);
-   else if(release){
-    // Decay the release correction through this clip's measured swing interval.
-    let frames=0;const start=Math.floor(phase(releaseTime));while(frames<leg.stance.length&&!leg.stance[(start+frames)%leg.stance.length])frames++;
-    const duration=Math.max(1,frames)/walking.fps,u=Math.min(1,Math.max(0,(clock-releaseTime)/duration)),weight=1-u*u*(3-2*u);
-    target.addScaledVector(new THREE.Vector3(...release),weight);
-   }
-   if(!stance){
-    // Inferred source support can begin above the minimum source toe height.
-    // Bring the airborne height continuously to the shared plane at both ends
-    // of that swing interval instead of dropping it on the stance boundary.
-    let before=0,after=1;const count=leg.stance.length;
+   const source=at(leg.chain[3]);source.y+=groundHeight-leg.sourceGround;
+   let target,plan=previous?.step??null,release=previous?.release??null,releaseTime=previous?.releaseTime??clock;
+   const landingNow=()=>feasible(path,leg,at(leg.chain[0]),source);
+   if(stance){
+    target=previous?.stance?new THREE.Vector3(...previous.anchor):plan?landingNow():feasible(path,leg,at(leg.chain[0]),source);
+    plan=null;release=null;
+   }else{
+    const count=leg.stance.length;let before=0,after=1;
     while(!leg.stance[(index-before+count)%count])before++;
     while(!leg.stance[(index+after)%count])after++;
-    const u=(before-1+f-index)/(before-1+after);
-    target.y=leg.ground+Math.max(0,target.y-leg.ground)*Math.sin(Math.PI*u);
+    const duration=(before-1+after)/walking.fps,u=(before-1+f-index)/(before-1+after),remaining=(after-(f-index))/walking.fps;
+    const landingIndex=(index+after)%count,yaw=Math.atan2(path.direction[0],path.direction[1]);
+    const landing=leg.samples[landingIndex].clone().applyAxisAngle(axis,yaw).add(at(leg.chain[0]));
+    // Predict the attachment at touchdown from accepted travel per unit of
+    // this leg's phase; project that prediction into its current workspace.
+    const velocity=plan?.velocity??state.phaseVelocities?.[leg.name];
+    if(velocity)landing.add(new THREE.Vector3(velocity[0]*remaining,0,velocity[1]*remaining));
+    const end=feasible(path,leg,at(leg.chain[0]),landing);
+    if(!plan||previous?.stance){
+     const start=previous?new THREE.Vector3(...previous.target):source.clone().setY(groundHeight);
+     plan={start:start.toArray(),landing:end.toArray(),velocity:velocity?[...velocity]:[0,0]};release=start.clone().sub(source).toArray();releaseTime=clock-u*duration;
+    }
+    plan.landing=end.toArray();
+    const weight=u*u*(3-2*u);target=feasible(path,leg,at(leg.chain[0]),new THREE.Vector3(...plan.start).lerp(end,weight));
+    target.y=groundHeight+Math.max(0,source.y-groundHeight)*Math.sin(Math.PI*u);
    }
-   if(target.y<leg.ground)target.y=leg.ground;
-   state.feet[leg.name]={stance,earlyLift,anchor,release,releaseTime,target:target.toArray(),swingDirection,phase:f/(walking.frames-1)};
+   state.feet[leg.name]={stance,earlyLift,anchor:stance?target.toArray():null,release,releaseTime,target:target.toArray(),step:plan,phase:f/(walking.frames-1)};
   }
  }
  function restore(value){
   if(value?.schema!=='kaminos.grounded-walk.v1'||value.groundHeight!==groundHeight||!Number.isFinite(value.baseTime)||!Number.isFinite(value.frontTime)||value.frontTime<0||!Number.isFinite(value.rearTime)||value.rearTime<0||legs.some(l=>{
-   const f=value.feet?.[l.name];return !f||typeof f.stance!=='boolean'||!Number.isFinite(value.legTimes?.[l.name])||!Number.isFinite(f.releaseTime)||!Number.isFinite(f.phase)||(f.swingDirection!==undefined&&!Number.isFinite(f.swingDirection))||['target',...(f.stance?['anchor']:[]),...(f.release?['release']:[])].some(k=>!Array.isArray(f[k])||f[k].length!==3||!f[k].every(Number.isFinite));
+   const f=value.feet?.[l.name];return !f||typeof f.stance!=='boolean'||!Number.isFinite(value.legTimes?.[l.name])||!Number.isFinite(f.releaseTime)||!Number.isFinite(f.phase)||(f.swingDirection!==undefined&&!Number.isFinite(f.swingDirection))||(f.step!=null&&(['start','landing'].some(k=>!Array.isArray(f.step[k])||f.step[k].length!==3||!f.step[k].every(Number.isFinite))||!Array.isArray(f.step.velocity)||f.step.velocity.length!==2||!f.step.velocity.every(Number.isFinite)))||(value.phaseVelocities?.[l.name]!==undefined&&(!Array.isArray(value.phaseVelocities[l.name])||value.phaseVelocities[l.name].length!==2||!value.phaseVelocities[l.name].every(Number.isFinite)))||['target',...(f.stance?['anchor']:[]),...(f.release?['release']:[])].some(k=>!Array.isArray(f[k])||f[k].length!==3||!f[k].every(Number.isFinite));
   }))throw Error('Invalid grounded walk snapshot');
   state=structuredClone(value);
  }
@@ -169,7 +198,7 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
    for(const leg of legs){const v=hip(next,leg).sub(hip(previous,leg));if(v.length()>64*Number.EPSILON*Math.max(1,...next.position.map(Math.abs),...leg.offset.map(Math.abs)))state.velocities[leg.name]=[v.x,v.z];}
    for(const name of ['front','rear']){
     const pair=legs.filter(l=>l.group===name),distance=pair.reduce((sum,l)=>sum+hip(previous,l).distanceTo(hip(next,l)),0)/pair.length;
-    state[name+'Time']+=distance/speed;for(const leg of pair)state.legTimes[leg.name]+=distance/speed;
+    state[name+'Time']+=distance/speed;for(const leg of pair){state.legTimes[leg.name]+=distance/speed;if(distance>roundoff){const v=hip(next,leg).sub(hip(previous,leg));(state.phaseVelocities??={})[leg.name]=[v.x*speed/distance,v.z*speed/distance];}}
    }
    state.baseTime+=(baseTime-state.baseTime)/(steps-step+1);update(next);previous=next;
   }
@@ -180,10 +209,23 @@ export function createGroundedWalk({THREE,walking,baseFrame,forward,speed,initia
   const rows=pose.bones.map(row=>{const bone=bones.get(row.name);bone.updateMatrix();return {...row,localMatrix:bone.matrix.toArray(),worldMatrix:bone.matrixWorld.toArray()};});
   return {...pose,bones:rows,grounding:{space:'authored-placement',feet:diagnostics}};
  }
+ function turnScale(path){
+  load(localPose(baseFrame(state.baseTime,path)));
+  let strain=0;
+  for(const leg of legs){
+   const foot=state.feet[leg.name];if(!foot.stance)continue;
+   const local=coordinates(path,at(leg.chain[0]),new THREE.Vector3(...foot.anchor));
+   const lateral=(leg.lateral[0]+leg.lateral[1])/2,longitudinal=(leg.longitudinal[0]+leg.longitudinal[1])/2;
+   strain=Math.max(strain,Math.abs(local.x-lateral)/((leg.lateral[1]-leg.lateral[0])/2),Math.abs(local.z-longitudinal)/((leg.longitudinal[1]-leg.longitudinal[0])/2));
+  }
+  // Smoothly ease turning near a support boundary. A positive rate permits
+  // the release/handoff clock to progress even during an in-place pivot.
+  return 1/(1+strain**4);
+ }
  function setGroundHeight(next){
   if(!Number.isFinite(next))throw Error('Grounded walk requires an explicit flat support height');
   const delta=next-groundHeight;if(delta===0)return;groundHeight=next;state.groundHeight=next;
-  for(const leg of legs){leg.ground=next;const foot=state.feet[leg.name];foot.target[1]+=delta;if(foot.anchor)foot.anchor[1]+=delta;}
+  for(const leg of legs){leg.ground=next;const foot=state.feet[leg.name];foot.target[1]+=delta;if(foot.anchor)foot.anchor[1]+=delta;if(foot.step){foot.step.start[1]+=delta;foot.step.landing[1]+=delta;}}
  }
- return {advance,frame,restore,setGroundHeight,snapshot:()=>structuredClone(state),read:()=>({...structuredClone(state),space:'authored-placement',support:'explicit flat-ground foot targets',bodySeatingOffset:groundHeight-sourceFloor,ground:legs.map(l=>({name:l.name,height:l.ground}))})};
+ return {advance,frame,restore,setGroundHeight,turnScale,snapshot:()=>structuredClone(state),read:()=>({...structuredClone(state),space:'authored-placement',support:'explicit flat-ground foot targets',bodySeatingOffset:groundHeight-sourceFloor,ground:legs.map(l=>({name:l.name,height:l.ground}))})};
 }
