@@ -24,10 +24,11 @@ export async function probeRegionalHeat(){
   const data=new Float32Array(32),setPose=x=>{data.set(new THREE.Matrix4().elements);data.set(new THREE.Matrix4().makeTranslation(x,0,0).elements,16);};
   setPose(.7);const matrices=buffer('Probe current region poses',data);field.setRegionMotion({device,owners,matrices,count:2});
   const fluid=new Float32Array(32**3*16);for(let i=0;i<32**3;i++)if(i%32>=26)fluid[i*16+5]=4;
-  const source=buffer('Probe transported heat',fluid),collision=device.createTexture({size:[32,32,32],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(collision);
+  const source=buffer('Probe transported heat',fluid);solids=createGpuSceneSolidProducer(device,{grid:32});const collision=solids.texture;
   const frame={device,fluid:source,collision,dimensions:[32,32,32],allocationId:'regional-thermal-probe',simStepCount:0,dt:1/60,transform:{translate:[0,0,0],scale:1}};
+  function encodeSolids(encoder){solids.update([{id:'material',object:mesh}],frame.transform,{grid:32,gridHeight:32},{materialMasks:[field.materialMask('material')]});solids.encode(encoder);}
   device.pushErrorScope('validation');
-  for(let i=0;i<60;i++){frame.simStepCount=i;const e=device.createCommandEncoder();field.encode(e,frame);device.queue.submit([e.finish()]);}
+  for(let i=0;i<60;i++){frame.simStepCount=i;const e=device.createCommandEncoder();encodeSolids(e);field.encode(e,frame);device.queue.submit([e.finish()]);}
   const material=await read(field.residentState().after),summary={leftPeak:0,rightPeak:0,rightFuelLost:0};
   for(let i=0;i<owners.length;i++){if(!material.slice(i*8,i*8+8).every(Number.isFinite))throw Error('Nonfinite regional material');const key=owners[i]?'rightPeak':'leftPeak';summary[key]=Math.max(summary[key],material[i*8]);if(owners[i])summary.rightFuelLost+=1-material[i*8+5];}
   const heatedValidation=await device.popErrorScope();if(heatedValidation)throw Error(heatedValidation.message);
@@ -35,12 +36,12 @@ export async function probeRegionalHeat(){
   // Gas follows a subsequent pose without clearing or copying the material field.
   setPose(-.7);device.queue.writeBuffer(matrices,0,data);
   const sums=buffer('Probe gas accumulation',new Float32Array(32**3*2));device.pushErrorScope('validation');
-  const e=device.createCommandEncoder();field.encodeGasSource(e,frame,{enabled:true,accumulation:sums});device.queue.submit([e.finish()]);
+  const e=device.createCommandEncoder();encodeSolids(e);field.encodeGasSource(e,frame,{enabled:true,accumulation:sums});device.queue.submit([e.finish()]);
   const gas=await read(sums);let total=0,negative=0,positive=0;
   for(let i=0;i<32**3;i++){const value=gas[i*2];if(!Number.isFinite(value)||value<0)throw Error('Invalid deposited gas');total+=value;if(i%32<16)negative+=value;else positive+=value;}
   const gasValidation=await device.popErrorScope();if(gasValidation)throw Error(gasValidation.message);
   if(total<=0||positive>1e-6||negative!==total)throw Error('Gas did not follow the moved region: '+JSON.stringify({total,negative,positive}));
-  solids=createGpuSceneSolidProducer(device,{grid:32});device.pushErrorScope('validation');
+  device.pushErrorScope('validation');
   solids.update([{id:'material',object:mesh}],frame.transform,{grid:32,gridHeight:32},{materialMasks:[field.materialMask('material')]});
   const solidEncoder=device.createCommandEncoder();solids.encode(solidEncoder);device.queue.submit([solidEncoder.finish()]);
   const obstruction=await solids.snapshot(),solidSummary={movedCells:0,staleCells:0};
