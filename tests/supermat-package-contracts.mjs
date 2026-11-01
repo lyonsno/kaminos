@@ -28,7 +28,7 @@ try {
   assert.equal(await fs.readFile(path.join(output, 'keep.txt'), 'utf8'), 'caller-owned output');
   const entries = execFileSync('tar', ['-tzf', packed.tarball], { encoding: 'utf8' }).trim().split('\n').sort();
   for (const file of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js',
-    ...['app.js', 'image-view.js', 'index.html', 'build.mjs', 'package.json', 'README.md', 'sample.webp'].map(name => `examples/external-app/${name}`)]) {
+    ...['app.js', 'image-view.js', 'progress-view.js', 'index.html', 'build.mjs', 'package.json', 'README.md', 'sample.webp'].map(name => `examples/external-app/${name}`)]) {
     assert.ok(entries.includes(`package/${file}`), `package includes ${file}`);
   }
   assert.ok(!entries.some(name => /\/(node_modules|dist)\//.test(name)), 'package excludes local installs and generated bundles');

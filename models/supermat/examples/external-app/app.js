@@ -1,24 +1,26 @@
 import { createSuperMatApp, decodeImageRgba } from '@kaminos/supermat';
 import { createElement, Download, Maximize, Pause, Play, Square } from 'lucide';
 import { createImageView } from './image-view.js';
+import { createProgressView } from './progress-view.js';
 import sampleUrl from './sample.webp';
 
 const $ = id => document.getElementById(id);
+const progressView = createProgressView($);
 const tabs = [...document.querySelectorAll('[data-map]')];
 const icons = { Download, Maximize, Pause, Play, Square };
 for (const button of document.querySelectorAll('[data-icon]')) {
   button.prepend(createElement(icons[button.dataset.icon]));
 }
 let app, viewer, image, maps = {}, selected = 'input', filename = 'backpack';
-let busy = false, inferring = false, paused = false, changingPause = false;
+let busy = false, inferring = false, paused = false, changingPause = false, stopping = false;
 const show = text => { $('status').textContent = text; };
 const fail = error => { $('error').textContent = error.message || String(error); };
 function controls() {
   $('run').disabled = busy || !image;
   $('file').disabled = busy || !viewer;
   $('size').disabled = busy;
-  $('pause').disabled = !inferring || changingPause;
-  $('stop').disabled = !inferring;
+  $('pause').disabled = !inferring || changingPause || stopping;
+  $('stop').disabled = !inferring || stopping;
   $('download').disabled = selected === 'input' || !maps[selected];
   for (const tab of tabs) tab.disabled = tab.dataset.map !== 'input' && !maps[tab.dataset.map];
 }
@@ -36,6 +38,7 @@ async function loadImage(blob, name) {
   image = decoded; maps = {}; filename = name.replace(/\.[^.]+$/, '');
   $('image-name').textContent = name;
   select('input'); viewer.fit(); $('zoom').value = '1';
+  progressView.reset();
   show('Image loaded');
 }
 $('file').onchange = async () => {
@@ -56,43 +59,45 @@ $('run').onclick = async () => {
     fail(new Error('Map size must be a positive multiple of 64')); return;
   }
   busy = true; controls(); $('error').textContent = '';
+  progressView.start(app.snapshot?.().loaded);
   try {
-    show('Loading model');
     await app.load();
     inferring = true; controls();
-    const phases = { preprocess: 'Preparing image', encode: 'Encoding image', unet: 'Inferring materials',
-      'decode-albedo': 'Decoding albedo', 'decode-orm': 'Decoding surface maps', 'pack-maps': 'Finishing maps' };
-    const result = await app.infer({ image: input, size, onRunProgress: progress => {
-      if (!paused) show(phases[progress.phase] || 'Inferring materials');
-    } });
-    maps = result.maps; select('albedo'); show('Materials complete');
+    progressView.beginInference();
+    const result = await app.infer({ image: input, size, onRunProgress: progressView.inference });
+    maps = result.maps; select('albedo'); progressView.finish('Materials complete', result);
   } catch (error) {
-    if (error.name === 'AbortError') show('Inference stopped');
-    else { show('Inference failed'); fail(error); }
+    if (error.name === 'AbortError') progressView.finish('Inference stopped');
+    else { progressView.finish(inferring ? 'Inference failed' : 'Model loading failed'); fail(error); }
   } finally {
-    busy = false; inferring = false; paused = false;
+    busy = false; inferring = false; paused = false; stopping = false;
     $('pause').replaceChildren(createElement(Pause)); $('pause').title = 'Pause'; $('pause').setAttribute('aria-label', 'Pause');
     controls();
   }
 };
 $('pause').onclick = async () => {
-  if (!inferring || changingPause) return;
+  if (!inferring || changingPause || stopping) return;
   changingPause = true; controls();
+  progressView.control(paused ? 'Resuming inference' : 'Pausing inference');
   try {
     if (paused) await app.resume(); else await app.pause();
-    if (inferring) {
+    if (inferring && !stopping) {
       paused = !paused;
       $('pause').replaceChildren(createElement(paused ? Play : Pause));
       $('pause').title = paused ? 'Resume' : 'Pause';
       $('pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
-      show(paused ? 'Inference paused' : 'Inferring materials');
+      progressView.control(paused ? 'Inference paused' : null);
     }
-  } catch (error) { fail(error); }
+  } catch (error) { if (!stopping) progressView.control(paused ? 'Inference paused' : null); fail(error); }
   finally { changingPause = false; controls(); }
 };
 $('stop').onclick = async () => {
-  if (!inferring) return;
-  try { show('Stopping inference'); await app.stop(); } catch (error) { fail(error); }
+  if (!inferring || stopping) return;
+  stopping = true; controls();
+  progressView.control('Stopping inference');
+  try { await app.stop(); } catch (error) {
+    stopping = false; controls(); progressView.control(paused ? 'Inference paused' : null); fail(error);
+  }
 };
 $('download').onclick = () => {
   const map = maps[selected];
@@ -109,15 +114,14 @@ $('download').onclick = () => {
 };
 window.addEventListener('pagehide', event => {
   if (event.persisted) return;
+  progressView.destroy();
   viewer?.destroy(); app?.destroy().catch(console.error);
 });
 async function start() {
   try {
     const weightsUrl = new URLSearchParams(location.search).get('weights');
     app = await createSuperMatApp({ load: false, ...(weightsUrl ? { weightsUrl } : {}),
-      onProgress: progress => {
-        if (progress.phase === 'weights') show(`Loading model: ${progress.resourceIndex + 1} / ${progress.resourceCount}`);
-      } });
+      onProgress: progressView.loading });
     viewer = await createImageView($('image'), app.device, app.foreground, fail);
     const response = await fetch(new URL(sampleUrl, import.meta.url));
     if (!response.ok) throw new Error('Could not load the sample image');

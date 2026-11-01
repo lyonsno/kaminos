@@ -7,6 +7,7 @@ class Element extends EventTarget {
   value = ''; textContent = ''; disabled = false; dataset = {}; files = [];
   replaceChildren() {}
   setAttribute(name, value) { this[name] = value; }
+  removeAttribute(name) { delete this[name]; }
   getContext() { return { configure() {}, putImageData() {} }; }
 }
 const elements = {};
@@ -17,17 +18,19 @@ const tabs = ['input', 'albedo', 'roughness', 'metallic'].map(name => {
 });
 const calls = { load: 0, runs: [], images: [], destroyed: 0, animation: [], pause: 0, resume: 0, stop: 0 };
 const image = { width: 2, height: 2, data: new Uint8Array(16).fill(127) };
-let resolveRun, rejectRun;
+let resolveRun, rejectRun, resolveLoad, rejectLoad, resolvePause, now = 0;
+const timers = new Map();
 const model = {
   device: { addEventListener() {}, createBuffer() {}, createShaderModule() {}, createBindGroup() {},
     async createRenderPipelineAsync() { return { getBindGroupLayout() {} }; } }, foreground: {},
-  async load() { calls.load++; },
+  load() { calls.load++; return new Promise((resolve, reject) => { resolveLoad = resolve; rejectLoad = reject; }); },
   infer(options) { calls.runs.push(options); return new Promise((resolve, reject) => { resolveRun = resolve; rejectRun = reject; }); },
   async pause() { calls.pause++; }, async resume() { calls.resume++; }, async stop() { calls.stop++; },
   async destroy() { calls.destroyed++; },
 };
 const window = new EventTarget();
-const context = vm.createContext({ console, performance, URL, URLSearchParams, Event, EventTarget, setTimeout,
+const context = vm.createContext({ console, performance: { now: () => now }, URL, URLSearchParams, Event, EventTarget, setTimeout,
+  setInterval: fn => { const id = Symbol(); timers.set(id, fn); return id; }, clearInterval: id => timers.delete(id),
   document: { getElementById: $, querySelectorAll: query => query === '[data-map]' ? tabs : [] }, window,
   location: { search: '' }, navigator: { gpu: { getPreferredCanvasFormat: () => 'bgra8unorm' } },
   GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2 },
@@ -43,7 +46,7 @@ const result = await build({ entryPoints: [new URL('../models/supermat/examples/
       args.path.includes('image-view') ? 'export async function createImageView(){return {setImage(i){globalThis.__images.push(i)},fit(){},setZoom(){},destroy(){}}}' :
       args.path === 'lucide' ? 'export const Download=[],Maximize=[],Square=[],Pause=[],Play=[],Upload=[];export const createElement=()=>({});' :
       args.path.includes('sample.webp') ? 'export default "sample.webp";' :
-      'export async function createSuperMatApp(){return globalThis.__model;} export async function decodeImageRgba(){return globalThis.__image;}' }));
+      'export async function createSuperMatApp(options){globalThis.__options=options;return globalThis.__model;} export async function decodeImageRgba(){return globalThis.__image;}' }));
   } }] });
 await vm.runInContext(`(async()=>{${result.outputFiles[0].text}\n})()`, context);
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -57,26 +60,70 @@ assert.equal(tabs[1].disabled, true, 'uninferred maps must not appear as results
 const click = element => element.onclick?.(new Event('click'));
 const run = () => { click($('run')); return settle(); };
 await run();
+context.__options.onProgress({ phase: 'weights', resourceIndex: 1, resourceCount: 3, chunkIndex: 0,
+  loadedBytes: 1048576, totalBytes: 4194304 });
+assert.equal($('progress').value, .25, 'loading progress shows the current chunk, not overall model completion');
+assert.match($('progress-label').textContent, /Current chunk/);
+assert.match($('load-resource').textContent, /2 \/ 3/);
+assert.match($('transfer').textContent, /1.0 MiB \/ 4.0 MiB/);
+context.__options.onProgress({ phase: 'weights', resourceIndex: 1, resourceCount: 3, chunkIndex: 1 });
+assert.equal(Object.hasOwn($('progress'), 'value'), false, 'unknown next-chunk length must not retain the previous percentage');
+now = 2500; for (const tick of timers.values()) tick();
+assert.match($('elapsed').textContent, /2.5 s/);
+resolveLoad(); await settle();
 assert.equal(calls.runs.length, 1);
 assert.equal(calls.runs[0].image, image);
 assert.equal(calls.runs[0].size, 512);
 assert.equal($('run').disabled, true);
 assert.equal($('file').disabled, true);
+const progress = (row, runIndex = calls.runs.length - 1) => calls.runs[runIndex].onRunProgress(row);
+progress({ phase: 'encode', phaseIndex: 1, phaseCount: 6, duties: 3, dutyLabel: 'encoder.conv', completedFlops: 1e9, totalFlops: null, lastDutyMs: 12 });
+assert.equal(Object.hasOwn($('progress'), 'value'), false, 'first inference has no invented work total');
+assert.equal($('operation').textContent, 'encoder.conv');
+assert.equal($('phase-count').textContent, '2 / 6');
+assert.match($('queue-time').textContent, /12.0 ms/);
 await click($('pause')); assert.equal(calls.pause, 1);
+progress({ phase: 'unet', phaseIndex: 2, phaseCount: 6, duties: 4, dutyLabel: 'unet.conv', completedFlops: 2e9, totalFlops: null });
+assert.equal($('status').textContent, 'Inference paused', 'late work must not overwrite paused state');
+assert.equal($('progress').hidden, true, 'a parked run must not animate an indeterminate bar');
 await click($('pause')); assert.equal(calls.resume, 1);
+assert.equal($('status').textContent, 'Inferring materials');
 const maps = Object.fromEntries(['albedo', 'roughness', 'metallic'].map(name => [name, { ...image, name }]));
-resolveRun({ maps }); await settle();
+now = 7500;
+resolveRun({ maps, timings: { encodeMs: 500, unetMs: 1200 } }); await settle();
+assert.equal($('progress').value, 1);
+assert.equal($('progress-label').textContent, 'Complete');
+assert.equal($('elapsed').textContent, '7.5 s elapsed');
+assert.equal($('time-loading').textContent, '2.5 s');
+assert.equal($('time-inference').textContent, '5.0 s');
+assert.equal(timers.size, 0, 'completed elapsed time must stop ticking');
 assert.equal(calls.images.at(-1), maps.albedo);
 assert.equal(tabs[1].disabled, false);
 assert.equal(calls.destroyed, 0);
 click(tabs[2]); assert.equal(calls.images.at(-1), maps.roughness);
 await run();
+assert.equal($('operation').textContent, '--', 'new runs clear old telemetry');
+resolveLoad(); await settle();
+progress({ phase: 'unet', phaseIndex: 2, phaseCount: 6, duties: 10, completedFlops: 25e9, totalFlops: 100e9 });
+assert.equal($('progress').value, .25);
+assert.match($('progress-label').textContent, /25% of GPU work/);
+progress({ phase: 'unet', completedFlops: 101e9, totalFlops: 100e9 });
+assert.equal(Object.hasOwn($('progress'), 'value'), false, 'a mismatched prior total must not masquerade as completion');
 rejectRun(new Error('Model interrupted')); await settle();
+assert.equal($('progress').hidden, true);
+assert.equal(timers.size, 0);
 assert.match($('error').textContent, /Model interrupted/);
 assert.equal(calls.images.at(-1), maps.roughness, 'failed inference retains the previous result');
 assert.equal($('run').disabled, false);
 await run();
+resolveLoad(); await settle();
+model.pause = () => { calls.pause++; return new Promise(resolve => { resolvePause = resolve; }); };
+const parking = click($('pause'));
 await click($('stop')); assert.equal(calls.stop, 1);
+resolvePause(); await parking;
+assert.equal($('status').textContent, 'Stopping inference', 'stop must survive an earlier pause settling');
+progress({ phase: 'decode-albedo', phaseIndex: 3, phaseCount: 6, completedFlops: 25e9, totalFlops: 100e9 });
+assert.equal($('status').textContent, 'Stopping inference');
 const abort = new Error('Stopped'); abort.name = 'AbortError';
 rejectRun(abort); await settle();
 assert.equal($('run').disabled, false, 'stopping permits another run');
@@ -85,9 +132,16 @@ await $('file').onchange();
 assert.equal(calls.images.at(-1), image);
 assert.equal(tabs[1].disabled, true, 'new input must not inherit the old material maps');
 assert.equal($('download').disabled, true);
-await run(); resolveRun({ maps }); await settle();
+await run(); resolveLoad(); await settle(); resolveRun({ maps }); await settle();
 assert.equal(calls.runs.length, 4);
 assert.equal(calls.destroyed, 0);
+await run();
+rejectLoad(new Error('Weight request failed')); await settle();
+assert.equal($('status').textContent, 'Model loading failed');
+assert.equal($('progress').hidden, true);
+assert.equal(timers.size, 0, 'failed loading must retire elapsed updates');
+assert.equal($('run').disabled, false);
 window.dispatchEvent(new Event('pagehide')); await settle();
 assert.equal(calls.destroyed, 1);
+assert.equal(timers.size, 0);
 console.log('SuperMat starting application: user-driven inference, map inspection, repeat/retry, input identity and exit passed');

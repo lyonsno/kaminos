@@ -19,7 +19,13 @@ input[type=file]{width:100%;font-size:12px}input::file-selector-button{padding:8
 input[type=number]{width:100%;padding:9px;border:1px solid #b8c5bd;border-radius:4px;background:white}
 .actions{display:flex;gap:8px}.actions #run{flex:1;background:#235c42;color:#fff;border-color:#235c42}
 .icon{width:38px;height:38px;padding:8px;flex:none}.status{font-size:13px;line-height:1.5;margin:0;overflow-wrap:anywhere}
-#status{min-height:40px}#error{color:#a22b32}.file-name{font-size:13px;overflow-wrap:anywhere;color:#58655e;margin-top:10px}
+#status{min-height:20px}#error{color:#a22b32}.file-name{font-size:13px;overflow-wrap:anywhere;color:#58655e;margin-top:10px}
+[hidden]{display:none!important}#progress-area{margin-top:8px}progress{display:block;width:100%;height:6px;accent-color:#235c42;margin:10px 0}
+.progress-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;color:#58655e;font-variant-numeric:tabular-nums}
+details{border-top:1px solid #cbd2ce;padding-top:12px;font-size:12px;min-width:0}summary{cursor:pointer;font-size:13px;font-weight:600}
+dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px;line-height:1.4;margin:14px 0 0}
+dt{color:#58655e}dd{margin:0;text-align:right;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.operation{grid-column:1/-1;text-align:left;color:#252a29}
+details h2{font-size:12px;font-weight:600;margin:18px 0 0}
 .workspace{display:flex;flex-direction:column;min-width:0;padding:16px;gap:12px}
 .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;min-height:38px}
 .maps{display:flex;flex-wrap:wrap;gap:4px}.maps button{font-size:13px;padding:8px 10px;border-color:transparent;background:transparent}
@@ -38,7 +44,19 @@ input[type=number]{width:100%;padding:9px;border:1px solid #b8c5bd;border-radius
       <div><label for="size">Map size</label><input id="size" type="number" min="64" step="64" value="512" aria-label="Map size"></div>
     </div>
     <div class="actions"><button id="run" disabled>Infer materials</button><button id="pause" class="icon" data-icon="Pause" title="Pause" aria-label="Pause" disabled></button><button id="stop" class="icon" data-icon="Square" title="Stop" aria-label="Stop" disabled></button></div>
-    <div><p id="status" class="status" role="status">Starting WebGPU</p><p id="error" class="status" role="alert"></p></div>
+    <div><p id="status" class="status" role="status">Starting WebGPU</p>
+      <div id="progress-area" hidden><progress id="progress" max="1" aria-labelledby="status progress-label"></progress><div class="progress-meta"><span id="progress-label"></span><span id="elapsed"></span></div></div>
+      <p id="error" class="status" role="alert"></p>
+    </div>
+    <details id="runtime" hidden><summary>Details</summary>
+      <dl><dt>Model loading</dt><dd id="time-loading">--</dd><dt>Inference</dt><dd id="time-inference">--</dd>
+        <dt>Resource</dt><dd id="load-resource">--</dd><dt id="transfer-scope">Resource bytes</dt><dd id="transfer">--</dd>
+        <dt>Phase</dt><dd id="phase-count">--</dd><dt>GPU work (est.)</dt><dd id="work">--</dd>
+        <dt>Last queue interval</dt><dd id="queue-time">--</dd><dt class="operation">Current operation</dt><dd id="operation" class="operation">--</dd></dl>
+      <h2>Phase elapsed time</h2><dl><dt>Preparation</dt><dd id="time-preprocess">--</dd><dt>Encoding</dt><dd id="time-encode">--</dd>
+        <dt>Material inference</dt><dd id="time-unet">--</dd><dt>Albedo decoding</dt><dd id="time-decode-albedo">--</dd>
+        <dt>Surface decoding</dt><dd id="time-decode-orm">--</dd><dt>Map packing</dt><dd id="time-pack-maps">--</dd></dl>
+    </details>
   </aside>
   <section class="workspace" aria-label="Material maps">
     <div class="toolbar">
