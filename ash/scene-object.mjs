@@ -22,7 +22,7 @@ export function createAshCollisionRecords(root,readObjects){
   }return result;
  };
 }
-export async function createAshSceneObject({record:raw,renderer,readObjects,onError=()=>{},createPatch=async options=>(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
+export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],onError=()=>{},createPatch=async options=>(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
  const record=checkedAshRecord(raw),root=new Group();root.name=record.label||'Ash';
  root.position.fromArray(record.transform?.position??[0,0,0]);root.rotation.set(...(record.transform?.rotation??[0,0,0]));root.scale.fromArray(record.transform?.scale??[1,1,1]);
  let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null;
@@ -35,22 +35,22 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,onEr
  const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
  const collisionRecords=createAshCollisionRecords(root,readObjects);
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
- const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30});
+ const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2-layout.cellSize,settings.depth/2-layout.cellSize]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
- try{patch=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,sceneRecords:collisionRecords,surfaceMode:'runs'});root.add(patch.root);}
+ try{patch=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,sceneRecords:collisionRecords,surfaceMode:'runs'});root.add(patch.root);patch.setSoftNormals?.(settings.softNormals);}
  catch(error){dispose();throw error;}
  const api={root,
   async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});initialized=true;});},
   tick(timestamp,{active=true,selected=false}={}){
-   guide.visible=emitter.visible=selected;
+   guide.visible=selected;emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
    try{patch.step(null,source());if(failure){failure=null;onError(null);}return true;}catch(error){const changed=failure!==error.message;failure=error.message;if(changed)onError(failure);return false;}
   },
   set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
    for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Field dimensions and initial layer belong to creation; add a new field to change its lattice without deleting retained ash');
-   settings=next;sync();return api.read();
+   settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
   },
   async checkpoint(){return locked(async()=>{patch.syncScene();const state=await patch.snapshot();failure=null;settings={...settings,checkpoint:state};sync();return structuredClone(settings);});},
   cover(depth){return locked(()=>patch.deposit({blanketDepth:depth,groundOnly:true}));},

@@ -121,6 +121,19 @@ const vertex=THREE.TSL.wgslFn(`fn ash_face_vertex(a:vec2<u32>,uv:vec2<f32>,b:u32
  p[select(0u,2u,face<2u)]*=f32(length);return origin+(vec3<f32>(c)+p)*size;
 }`);
 const faceNormal=THREE.TSL.wgslFn(`fn ash_face_normal(f:u32)->vec3<f32>{var n=vec3<f32>(0);n[f/2u]=select(-1.0,1.0,f%2u==1u);return n;}`);
+const surfaceNormal=THREE.TSL.wgslFn(`
+fn ash_surface_normal(p:vec3<f32>,face:vec3<f32>,origin:vec3<f32>,size:f32,dims:vec3<u32>,d:ptr<storage,array<f32>,read>,soft:f32)->vec3<f32>{
+ if(soft==0.0){return face;}
+ let c=vec3<i32>(floor((p-origin)/size-face*.1));
+ let x=vec3<i32>(1,0,0);let y=vec3<i32>(0,1,0);let z=vec3<i32>(0,0,1);
+ let g=vec3<f32>(ash_sample(c-x,dims,d)-ash_sample(c+x,dims,d),ash_sample(c-y,dims,d)-ash_sample(c+y,dims,d),ash_sample(c-z,dims,d)-ash_sample(c+z,dims,d));
+ if(dot(g,g)<0.0001||dot(g,face)<0.0){return face;}
+ return normalize(mix(face,normalize(g),soft*.65));
+}fn ash_sample(c:vec3<i32>,dims:vec3<u32>,d:ptr<storage,array<f32>,read>)->f32{
+ if(any(c<vec3<i32>(0))||any(c>=vec3<i32>(dims))){return 0.0;}
+ return (*d)[u32(c.x)+dims.x*(u32(c.y)+dims.y*u32(c.z))];
+}
+`);
 export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize=16,sceneRecords=null,surfaceMode='cells'}){
  if(!renderer?.backend?.isWebGPUBackend)throw Error('Tiled ash requires shared WebGPU renderer');
  if(!['cells','runs'].includes(surfaceMode))throw Error('Unknown ash surface mode');
@@ -155,7 +168,8 @@ export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize
  const geometry=new THREE.PlaneGeometry(1,1);geometry.setIndirect(draw.attribute);
  const material=new THREE.MeshStandardNodeMaterial({color:0xb9b3a8,roughness:1});
  material.positionNode=vertex({a:addr,uv:positionGeometry.xy.add(.5),b:uint(t.width),td:uvec3(...t.dims),dims:uvec3(...p.dims),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize),density:d,solid:s});
- material.normalNode=transformNormalToView(faceNormal({f:addr.y.mod(uint(6))}));
+ const softness=THREE.TSL.uniform(0);
+ material.normalNode=transformNormalToView(THREE.TSL.varying(surfaceNormal({p:material.positionNode,face:faceNormal({f:addr.y.mod(uint(6))}),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize),dims:uvec3(...p.dims),d,soft:softness})));
  mesh=new THREE.Mesh(geometry,material);mesh.name='Tiled retained ash';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.add(fall.root);
  const params=(contact,previous,moved)=>{for(let phase=0;phase<6;phase++){const bytes=new ArrayBuffer(80),u=new Uint32Array(bytes),f=new Float32Array(bytes);u.set([...p.dims,p.count]);f.set([...p.origin,cellSize],4);f.set(contact??[0,0,0,0],8);f.set(previous??contact??[0,0,0,0],12);u.set([[1,0,2][Math.floor(phase/2)],phase%2,moved?1:0,surfaceMode==='runs'?1:0],16);device.queue.writeBuffer(uniforms[phase],0,bytes);}};
  const dispatch=(e,name,n,{phase=0,indirect=null}={})=>{const pass=e.beginComputePass({label:'ash '+name});pass.setPipeline(pipes[name]);pass.setBindGroup(0,groups[phase]);if(indirect)pass.dispatchWorkgroupsIndirect(indirect.buffer,indirect.offset);else pass.dispatchWorkgroups(n);pass.end();};
@@ -164,6 +178,7 @@ export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize
  const upload=(values,pending=null)=>{device.queue.writeBuffer(density.buffer,0,values);const h=new Uint32Array(t.count*8);for(let tile=0;tile<t.count;tile++){h[tile*8]=pending?pending.has(tile)?1:0:1;h[tile*8+2]=1;}device.queue.writeBuffer(headers,0,h);rebuild();};
  async function capture(surfaceRecords=false){check();updateScene();snapshots++;const baseSize=p.count*8+t.count*32+32,size=baseSize+(surfaceRecords?faceWords*4:0),b=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(density.buffer,0,b,0,p.count*4);e.copyBufferToBuffer(headers,0,b,p.count*4,t.count*32);e.copyBufferToBuffer(jobs,t.count*8+32,b,p.count*4+t.count*32,32);e.copyBufferToBuffer(collision.buffer,0,b,p.count*4+t.count*32+32,p.count*4);if(surfaceRecords)e.copyBufferToBuffer(faces.buffer,0,b,baseSize,faceWords*4);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const data=b.getMappedRange();return {surfaceWords:surfaceRecords?new Uint32Array(data.slice(baseSize)):null,values:new Float32Array(data.slice(0,p.count*4)),headers:new Uint32Array(data.slice(p.count*4,p.count*4+t.count*32)),stats:Array.from(new Uint32Array(data.slice(p.count*4+t.count*32,p.count*4+t.count*32+32))),solid:new Uint32Array(data.slice(p.count*4+t.count*32+32,baseSize))};}finally{b.unmap();b.destroy();}}
  return {root:mesh,layout:p,
+  setSoftNormals(value){softness.value=value?1:0;},
   syncScene(){check();if(updateScene())rebuild();},
   step(contact=null,source=null){check();updateScene();if(contact&&(!Array.isArray(contact)||contact.length!==4||!contact.every(Number.isFinite)||contact[3]<=0))throw Error('Invalid contact');const moved=JSON.stringify(contact)!==JSON.stringify(lastContact);params(contact,lastContact,moved);lastContact=contact?.slice()??null;const e=device.createCommandEncoder();if(source)fall.encode(e,{...source,contact});dispatch(e,'reset',1);dispatch(e,'admit',Math.ceil(t.count/64));dispatch(e,'clear_wake',Math.ceil(t.count/64));dispatch(e,'pack_dispatch',1);e.copyBufferToBuffer(jobs,t.count*8,work.buffer,0,12);for(let phase=0;phase<6;phase++)dispatch(e,'exchange',0,{phase,indirect:work});dispatch(e,'admit_surface',Math.ceil(t.count/64));dispatch(e,'pack_dispatch',1);e.copyBufferToBuffer(jobs,t.count*8+16,surfaceWork.buffer,0,12);dispatch(e,'build_surface',0,{indirect:surfaceWork});dispatch(e,'draw_prefix',1);device.queue.submit([e.finish()]);steps++;},
   async deposit(input){const old=await capture(),values=seedPatch(p,old.solid,input,old.values),h=old.headers.slice();

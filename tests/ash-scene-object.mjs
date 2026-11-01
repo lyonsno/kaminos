@@ -66,3 +66,26 @@ test('ash payload synchronization preserves the current authored name',async()=>
  const serializer=createSceneRecordOperations({readers:{transform:()=>record().transform,materials:()=>null}});
  assert.equal(serializer.serialize(entry).label,'Kiln aftermath');object.dispose();
 });
+
+test('independent ash sources round-trip their field association and settings',()=>{
+ const source={id:'source-1',type:'ash-source',source:'kaminos:ash-source',label:'Ash source',transform:record().transform,ashSource:{fieldId:'ash-1',enabled:true,rate:.003,spread:.12}};
+ assert.deepEqual(records.normalize(source).ashSource,source.ashSource);
+ assert.equal(records.reloadable(source),true);
+ assert.throws(()=>records.normalize({...source,ashSource:{...source.ashSource,rate:-1}}),/source/);
+});
+
+test('field advances once with all live independent sources and retains material when removed',async()=>{
+ let sources=[{position:[1,1,0],rate:.003,spread:.1},{position:[-1,1,0],rate:.006,spread:.2}],received=[],deposits=0;
+ const object=await createAshSceneObject({record:record(),readObjects:()=>[],readSources:()=>sources,createPatch:async()=>({root:new Group(),syncScene(){},deposit:async()=>{deposits++;},step(c,s){received.push(s);},read:()=>({steps:received.length}),dispose(){}})});
+ await object.initialize();object.tick(1000);assert.equal(received.length,1);assert.deepEqual(received[0].sources,sources);
+ sources=[];object.tick(1100);assert.deepEqual(received[1].sources,[]);assert.equal(deposits,1);object.dispose();
+});
+
+import {sourceInField} from '../ash/source-object.mjs';
+test('world-space source follows transforms and refuses out-of-field coverage without clamping',()=>{
+ const root=new Group();root.position.set(2,0,0);root.scale.setScalar(2);
+ const object=new Group();object.position.set(2,1,0);object.userData.kaminosSceneObject={ashSource:{fieldId:'f',enabled:true,rate:.02,spread:.2}};
+ const field={root,read:()=>({settings:{width:2,depth:2}})};
+ const inside=sourceInField({object},field);assert.deepEqual(inside.position,[0,.5,0]);assert.equal(inside.spread,.1);assert.equal(inside.rate,.02);
+ object.position.x=10;const outside=sourceInField({object},field);assert.equal(outside.inside,false);assert.equal(outside.rate,0);assert.equal(outside.position[0],4);
+});

@@ -2558,7 +2558,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Simulation</div>
-        <button type="button" role="menuitem" data-scene-add="ash">Ash</button>
+        <button type="button" role="menuitem" data-scene-add="ash-source">Ash source</button>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water</button>
         <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
       </div>
@@ -2981,6 +2981,8 @@ import {createSceneMembershipOperations, membershipEditTargetId as sceneMembersh
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {ASH_OBJECT_TYPE,ASH_OBJECT_SOURCE,defaultAshSettings,checkedAshSettings,checkedAshPose} from './ash/scene-record.mjs';
 import {createAshSceneObject} from './ash/scene-object.mjs';
+import {ASH_SOURCE_TYPE,checkedAshSource,createAshSourceObject,sourceInField} from './ash/source-object.mjs';
+import {installAshSourceInspector} from './ash/source-controls.mjs';
 import {installAshInspector,askAshSetup} from './ash/scene-controls.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
@@ -4089,7 +4091,7 @@ window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 const workingScene = createWorkingScene();
 const authoredAsh = new Map();
-let ashInspector=null;
+let ashInspector=null,ashSourceInspector=null;
 const ashEditTargets=new Set();
 const sceneRecords = createSceneRecordOperations({
   readers:{transform:object=>sceneObjectTransformState(object),materials:object=>getMaterialStateForObject(object),splatTransform:entry=>splatSceneTransformState(entry)},
@@ -4101,6 +4103,7 @@ const sceneRecords = createSceneRecordOperations({
       catch(error){room.root.removeFromParent();room.dispose();throw error;}
     },
     ash:(record,options)=>mountAuthoredAsh(record,options),
+    ashSource:(record,options)=>mountAuthoredAshSource(record,options),
     camera:record=>mountAuthoredCamera(record).object,
     light:record=>mountSceneSpotLight(record).object,
     procedural:record=>mountProceduralMesh(record).object,
@@ -7182,7 +7185,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if ([...Object.keys(GEOMETRY_DEFAULTS),'annular'].includes(action.dataset.sceneAdd)) {
     try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
-  if(action.dataset.sceneAdd==='ash')addAshFromMenu().catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='ash-source')addAuthoredAshSource().catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
@@ -11748,7 +11751,8 @@ async function initScene() {
         ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
-        command('add.ash','Add','Ash',()=>addAshFromMenu(),{aliases:['fallout','deposition','simulation']}),
+        command('add.ash-source','Add','Ash source',()=>addAuthoredAshSource(),{aliases:['emitter','fallout']}),
+        command('add.ash','Add','Ash field',()=>addAshFromMenu(),{aliases:['deposition','simulation']}),
         command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
         command('add.fire','Add','Fire & Smoke',()=>openFirstFlameFieldDialog(),{aliases:['flame','emitter','volume','source','burner']}),
         command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
@@ -25355,7 +25359,7 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
@@ -25364,6 +25368,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record);syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
+  else if(entry.type===ASH_SOURCE_TYPE)mountAuthoredAshSource(record);
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
@@ -25488,7 +25493,7 @@ function setObjectWaterCollision(id,enabled){
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
 function syncSceneDataInspector() {
-  ashInspector?.sync();
+  ashInspector?.sync();ashSourceInspector?.sync();
   sceneRepetitionInspector?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -25585,22 +25590,58 @@ async function makeSceneRepetitionReal(id){
 
 async function mountAuthoredAsh(record,{activate=true,loadRequestId=null}={}) {
  const arrival=workingScene.arrival();
- const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
+ const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId))){ash.dispose();throw Error('Ash scene load superseded');}
  try{scene.add(ash.root);authoredAsh.set(record.id,ash);registerSceneObject(ash.root,record,{activate});if(loadRequestId===null)await ash.initialize();return ash.root;}
  catch(error){if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});else{authoredAsh.delete(record.id);ash.dispose();}throw error;}
 }
-async function addAuthoredAsh(settings={}) {
+async function addAuthoredAsh(settings={},position=null) {
  assertSceneConstructionAvailable();
  const id=makeSceneObjectId('ash'),ash=checkedAshSettings({...defaultAshSettings(),...settings});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
- const record={id,type:ASH_OBJECT_TYPE,source:ASH_OBJECT_SOURCE,label:'Ash',fileName:'Ash',createdAt:new Date().toISOString(),
-  transform:{position:[controls.target.x,groundPlane.position.y,controls.target.z],rotation:[0,0,0],scale:[1,1,1]},ash};
+ const record={id,type:ASH_OBJECT_TYPE,source:ASH_OBJECT_SOURCE,label:'Ash field',fileName:'Ash field',createdAt:new Date().toISOString(),
+  transform:{position:position??[controls.target.x,groundPlane.position.y,controls.target.z],rotation:[0,0,0],scale:[1,1,1]},ash};
  await mountAuthoredAsh(record);
  try{await authoredAsh.get(id).initialize();await recordSceneObjectInsertion(id);setActiveSceneObject(id);window._kaminosDirty?.();return id;}
  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
 }
 async function addAshFromMenu(){const settings=await askAshSetup(document,defaultAshSettings());if(settings)return addAuthoredAsh(settings);}
+function mountAuthoredAshSource(record,{activate=true}={}){
+ const root=createAshSourceObject(record);scene.add(root);registerSceneObject(root,record,{activate});return root;
+}
+function readAshSources(fieldId){
+ const field=authoredAsh.get(fieldId);if(!field)return [];
+ return workingScene.objects.filter(e=>e.type===ASH_SOURCE_TYPE&&e.object.userData.kaminosSceneObject.ashSource.fieldId===fieldId&&isSceneItemVisible(e.id)).map(e=>sourceInField(e,field)).filter(s=>s.inside&&s.rate>0);
+}
+async function addAuthoredAshSource(options={}){
+ assertSceneConstructionAvailable();
+ checkedAshSource({fieldId:options.fieldId||'pending',enabled:true,rate:options.rate??.008,spread:options.spread??.24});
+ const position=options.position??[controls.target.x,groundPlane.position.y+1.15,controls.target.z];
+ if(!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite))throw Error('Invalid ash source position');
+ let fieldId=options.fieldId;
+ const probe={object:new THREE.Group()};probe.object.position.fromArray(position);probe.object.userData.kaminosSceneObject={ashSource:{fieldId:fieldId||'pending',enabled:true,rate:options.rate??.008,spread:options.spread??.24}};
+ if(fieldId&&!workingScene.find(fieldId))throw Error('Ash field is not in this scene');
+ if(!fieldId){
+  const fields=workingScene.objects.filter(e=>e.type===ASH_OBJECT_TYPE&&isSceneItemVisible(e.id)&&sourceInField(probe,authoredAsh.get(e.id)).inside);
+  const selected=fields.find(e=>e.id===workingScene.activeObjectId);
+  fieldId=(selected??fields.sort((a,b)=>a.object.getWorldPosition(new THREE.Vector3()).distanceToSquared(new THREE.Vector3(...position))-b.object.getWorldPosition(new THREE.Vector3()).distanceToSquared(new THREE.Vector3(...position)))[0])?.id;
+ }
+ if(!fieldId){
+  const defaults=defaultAshSettings(),localBox=new THREE.Box3(new THREE.Vector3(position[0]-defaults.width/2,groundPlane.position.y,position[2]-defaults.depth/2),new THREE.Vector3(position[0]+defaults.width/2,groundPlane.position.y+defaults.height,position[2]+defaults.depth/2));
+  const receiverBox=new THREE.Box3();
+  for(const e of workingScene.objects){if(!['glb','pbr','procedural-mesh','burner-bed','brazier-room'].includes(e.type)||!isSceneItemVisible(e.id))continue;const box=new THREE.Box3().setFromObject(e.object);if(localBox.containsBox(box))receiverBox.union(box);}
+  let width=defaults.width,depth=defaults.depth;
+  if(!receiverBox.isEmpty()){const quantum=defaults.cellSize*16,spread=options.spread??.24;receiverBox.expandByPoint(new THREE.Vector3(...position));width=Math.ceil((2*Math.max(Math.abs(receiverBox.min.x-position[0]),Math.abs(receiverBox.max.x-position[0]),spread)+quantum)/quantum)*quantum;depth=Math.ceil((2*Math.max(Math.abs(receiverBox.min.z-position[2]),Math.abs(receiverBox.max.z-position[2]),spread)+quantum)/quantum)*quantum;}
+  fieldId=await addAuthoredAsh({width,depth,initialDepth:0},[position[0],Math.min(groundPlane.position.y,position[1]),position[2]]);
+ }
+ const field=authoredAsh.get(fieldId);if(!field)throw Error('Select a retained ash field');
+ const settings=checkedAshSource({fieldId,enabled:true,rate:options.rate??.008,spread:options.spread??.24});
+ const id=makeSceneObjectId('ash-source');ensureSceneObjectMembershipTarget(id);
+ const record={id,type:ASH_SOURCE_TYPE,source:'kaminos:ash-source',label:'Ash source',fileName:'Ash source',createdAt:new Date().toISOString(),transform:{position,rotation:[0,0,0],scale:[1,1,1]},ashSource:settings};
+ mountAuthoredAshSource(record);
+ try{await recordSceneObjectInsertion(id);setActiveSceneObject(id);window._kaminosDirty?.();setInfo('Ash source added · select its field to edit the retained area');return id;}
+ catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+}
 async function captureAuthoredAsh(){
  for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;entry.ash=await ash.checkpoint();entry.object.userData.kaminosSceneObject.ash=entry.ash;}
 }
@@ -25615,11 +25656,17 @@ function installAuthoredAsh(){
  };
  const set=(id,patch)=>{const key=target(id),edits=scenePlacementTools.edits,value={...config(id),...patch};if(edits.state().active?.id===key)return edits.preview(value);assertSceneConstructionAvailable();return edits.apply(key,value,'Edit ash');};
  const mutate=async(id,fn)=>{assertSceneConstructionAvailable();await fn(get(id));sceneDocument.authoringChanged();window._kaminosDirty?.();ashInspector?.sync();};
- window.kaminosAsh={add:addAuthoredAsh,read:id=>get(id).read(),set,
+ window.kaminosAsh={add:addAuthoredAsh,addSource:addAuthoredAshSource,read:id=>get(id).read(),set,
   cover:(id,depth=.04)=>mutate(id,ash=>ash.cover(depth)),burst:(id,volume=.02)=>mutate(id,ash=>ash.burst(volume)),
   advance:(id,steps=1)=>mutate(id,ash=>ash.advance(steps)),diagnostics:(id,options)=>get(id).diagnostics(options),
   snapshot:async id=>{await captureAuthoredAsh();return serializeSceneObject(workingScene.objects.find(row=>row.id===id));}};
  ashInspector=installAshInspector({document,anchor:document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties'),selected,edits:scenePlacementTools.edits,target,ownHistory:session=>authoringControlSessions.push(session),read:window.kaminosAsh.read,edit:set,cover:window.kaminosAsh.cover,burst:window.kaminosAsh.burst,changed:()=>window._kaminosDirty?.(),error:setInfo});
+ const sourceEntry=id=>{const e=workingScene.find(id);if(e?.type!==ASH_SOURCE_TYPE)throw Error('Select an ash source');return e;};
+ const sourceRead=id=>{const e=sourceEntry(id),settings=checkedAshSource(e.object.userData.kaminosSceneObject.ashSource),f=workingScene.find(settings.fieldId),field=f&&authoredAsh.get(settings.fieldId);return {settings,status:!field?'Field missing · undo its removal to reconnect':!sourceInField(e,field).inside?'Outside field · move the source or field to reconnect':`${field.read().settings.paused?'Field paused':settings.enabled?'Emitting':'Source paused'} · ${f.label}`};};
+ const sourceTarget=id=>{sourceEntry(id);const key=`@ash-source:${id}`;if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>sourceRead(id).settings,check:checkedAshSource,write:value=>{const e=sourceEntry(id);e.ashSource=checkedAshSource(value);e.object.userData.kaminosSceneObject.ashSource=e.ashSource;e.object.userData.syncAshSource();window._kaminosDirty?.();sceneDocument.authoringChanged();ashSourceInspector?.sync();}});ashEditTargets.add(key);}return key;};
+ const sourceSet=(id,value)=>{const key=sourceTarget(id),settings={...sourceRead(id).settings,...value};return scenePlacementTools.edits.state().active?.id===key?scenePlacementTools.edits.preview(settings):scenePlacementTools.edits.apply(key,settings,'Edit ash source');};
+ window.kaminosAsh.readSource=sourceRead;window.kaminosAsh.setSource=sourceSet;
+ ashSourceInspector=installAshSourceInspector({document,anchor:document.getElementById('selected-ash-properties'),selected:()=>selectedSceneObjectEntry()?.type===ASH_SOURCE_TYPE?workingScene.activeObjectId:null,read:sourceRead,set:sourceSet,selectField:id=>setActiveSceneObject(sourceRead(id).settings.fieldId),edits:scenePlacementTools.edits,target:sourceTarget,ownHistory:session=>authoringControlSessions.push(session),error:setInfo});
  workbenchSceneFrames.onFrame(({timestampMs})=>{
   for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;
    if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id})){window._kaminosDirty?.();}

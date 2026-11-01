@@ -3,9 +3,10 @@ export function fallingLayout(p){
  if(!p?.dims?.every(n=>Number.isSafeInteger(n)&&n>0)||p.dims.length!==3||!(p.cellSize>0))throw Error('Invalid falling ash layout');
  const capacity=p.dims[0]*p.dims[2];return {capacity,parcelUnits:8,parcelVolume:(2*p.cellSize)**3,bytes:capacity*32};
 }
-export function sourceSettings({rate=.006,spread=.2,position=[0,1,1]}={}){
+export function sourceSettings({rate=.006,spread=.2,position=[0,1,1],halfExtents=null}={}){
  if(!Number.isFinite(rate)||rate<0||!Number.isFinite(spread)||spread<0||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite))throw Error('Invalid falling ash source');
- return {rate,spread,position:[...position]};
+ if(halfExtents!==null&&(!Array.isArray(halfExtents)||halfExtents.length!==2||!halfExtents.every(v=>Number.isFinite(v)&&v>0)))throw Error('Invalid fallout extent');
+ return {rate,spread,position:[...position],...(halfExtents?{halfExtents:[...halfExtents]}:{})};
 }
 // Reconstruct derived scheduling masks from authoritative parcel mass on load.
 export function fallingGroupState(particles,capacity){

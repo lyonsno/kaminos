@@ -2,11 +2,13 @@ import {patchLayout} from './gpu-plan.mjs';
 import {sourceSettings} from './fall-plan.mjs';
 export const ASH_OBJECT_TYPE='retained-ash';
 export const ASH_OBJECT_SOURCE='kaminos:retained-ash';
-export const defaultAshSettings=()=>({schema:'kaminos.ash-object.v1',width:7.68,depth:7.68,height:1.6,cellSize:.04,initialDepth:.08,paused:false,emitting:false,rate:.008,spread:.24,sourcePosition:[0,1.15,0],checkpoint:null});
+export const defaultAshSettings=()=>({schema:'kaminos.ash-object.v1',width:7.68,depth:7.68,height:1.6,cellSize:.04,initialDepth:.08,paused:false,softNormals:false,fallout:false,emitting:false,rate:.008,spread:.24,sourcePosition:[0,1.15,0],checkpoint:null});
 export function checkedAshSettings(raw){
  if(!raw||raw.schema!=='kaminos.ash-object.v1')throw Error('Ash object requires saved ash settings');
  for(const key of ['width','depth','height','cellSize'])if(!Number.isFinite(raw[key])||raw[key]<=0)throw Error(`Invalid ash ${key}`);
  if(!Number.isFinite(raw.initialDepth)||raw.initialDepth<0||raw.initialDepth>raw.height)throw Error('Invalid initial ash depth');
+ if(raw.softNormals!==undefined&&typeof raw.softNormals!=='boolean')throw Error('Invalid ash shading');
+ if(raw.fallout!==undefined&&typeof raw.fallout!=='boolean')throw Error('Invalid field fallout');
  for(const key of ['paused','emitting'])if(typeof raw[key]!=='boolean')throw Error(`Invalid ash ${key}`);
  sourceSettings({position:raw.sourcePosition,rate:raw.rate,spread:raw.spread});
  if(raw.sourcePosition[1]<0||Math.abs(raw.sourcePosition[0])>raw.width/2||Math.abs(raw.sourcePosition[2])>raw.depth/2)throw Error('Place the ash source over its field');
