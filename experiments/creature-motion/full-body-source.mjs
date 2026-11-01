@@ -1,5 +1,6 @@
 import {validateLiveManifest} from '../../hindquarter-live-core.mjs';
 import {validateGivenMotionSource} from './given-motion-source.mjs';
+import {loadMotionConditioning} from './motion-generation.mjs';
 
 function sourceLoader(fetchImpl) {
  const sha=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
@@ -33,4 +34,21 @@ export async function loadFullBodySources(inputs,{fetchImpl=globalThis.fetch}={}
  if(frame.schema!=='kaminos.full-given-rig-frame.v1'||frame.bones?.length!==manifest.bones.length||frame.bones.some(b=>{const target=manifest.bones.find(t=>t.name===b.name);return !target||target.parent!==b.parent||b.restMatrix.flat().some((v,i)=>Math.abs(v-target.restMatrix.flat()[i])>1e-5);}))throw Error('Retained bind frame differs from the actual full-body skin');
  return {...skin,motion,frame,
   source:{...skin.source,motionSha256:motionLoad.sha256,frameSha256:frameLoad.sha256,motionRoute:motion.route,textEncoder:motion.textEncoder,...profile}};
+}
+
+// A rest-only skin can carry generation conditioning without inventing a clip.
+export async function loadPosedSkeletonSources(inputs,{fetchImpl=globalThis.fetch}={}){
+ const skin=inputs.rest_only===true?await loadFullBodySkin(inputs,{fetchImpl}):await loadFullBodySources(inputs,{fetchImpl});
+ if(!inputs.motion_generation)return skin;
+ const {load,json}=sourceLoader(fetchImpl),loaded=await load(inputs.frame,inputs.frame_sha256),frame=json(loaded),bones=skin.manifest.bones;
+ if(frame.schema!=='kaminos.full-given-rig-frame.v1'||frame.bones?.length!==bones.length||frame.bones.some(b=>{const target=bones.find(t=>t.name===b.name);return !target||target.parent!==b.parent||b.restMatrix.flat().some((v,i)=>Math.abs(v-target.restMatrix.flat()[i])>1e-5);}))throw Error('Generation bind frame differs from the actual skin');
+ const {b,a}=await loadMotionConditioning(inputs.motion_generation,{fetchImpl}),s=b.skeleton,names=bones.map(b=>b.name),parents=bones.map(b=>b.parent===null?-1:names.indexOf(b.parent));
+ if(JSON.stringify(names)!==JSON.stringify(s.jointNames)||JSON.stringify(parents)!==JSON.stringify(s.parents))throw Error('Generation skeleton differs from the actual skin');
+ const conversion=frame.canonicalWorldToSourceNormalized;
+ if(conversion?.length!==4||conversion.some(row=>row.length!==4||!row.every(Number.isFinite))||a.restPositions?.length!==bones.length*3)throw Error('Generation rest frame is incomplete');
+ for(let j=0;j<bones.length;j++)for(let axis=0;axis<3;axis++){
+  const position=conversion[axis][3]+[0,1,2].reduce((v,k)=>v+conversion[axis][k]*a.restPositions[j*3+k],0);
+  if(Math.abs(position-bones[j].restMatrix[axis][3])>1e-4)throw Error('Generation rest positions differ from the actual skin');
+ }
+ return {...skin,frame,motionReference:{assetCondSha256:b.assetCondSha256??b.sha256,skeleton:s},source:{...skin.source,frameSha256:loaded.sha256,conditioningSha256:b.sha256}};
 }
