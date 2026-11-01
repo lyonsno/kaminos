@@ -8,11 +8,10 @@ import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {readOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 const html=readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('  const startupSceneRedirect =');
-// Include fire initialization on the old implementation, which precedes scene acquisition.
-const oldStart=html.lastIndexOf('  const fireBoot =',start);
-const begin=oldStart>=0?oldStart:start;
-const end=html.indexOf('  startupSceneRestore.catch',start);
-const code=html.slice(begin,end)+';globalThis.result=startupSceneRestore;';
+const admissionEnd=html.indexOf('let startupSceneAdmitted',start);
+const volumeStart=html.indexOf('  const volumeLoaded =',admissionEnd);
+const end=html.indexOf('  startupSceneRestore.catch',volumeStart);
+const code=html.slice(start,admissionEnd)+html.slice(volumeStart,end)+';globalThis.result=startupSceneRestore;';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};};
 const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),label:'Saved tuning',stationary:true},route:{volume_light_field:'1',volume_light_field_scene_depth:'1'},lightGainStops:0};

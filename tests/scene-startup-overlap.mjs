@@ -5,11 +5,12 @@ import vm from 'node:vm';
 import {fireAtBoot} from '../fire-boot.mjs';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=source.indexOf('  const startupSceneRedirect ='),end=source.indexOf('  startupSceneRestore.catch',start);
-assert.ok(start>=0&&end>start);
-const code=source.slice(start,end)+';globalThis.result=startupSceneRestore;';
+const start=source.indexOf('  const startupSceneRedirect ='),admissionEnd=source.indexOf('let startupSceneAdmitted',start);
+const volumeStart=source.indexOf('  const volumeLoaded =',admissionEnd),end=source.indexOf('  startupSceneRestore.catch',volumeStart);
+assert.ok(start>=0&&admissionEnd>start&&volumeStart>admissionEnd&&end>volumeStart);
+const code=source.slice(start,admissionEnd)+source.slice(volumeStart,end)+';globalThis.result=startupSceneRestore;';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-test('saved document fetch overlaps environment preparation; application waits for both owners',async()=>{
+test('saved document acquisition precedes environment preparation; application waits for both owners',async()=>{
  const environment=deferred(),volume=deferred();const events=[];
  const c={URLSearchParams,location:{hash:'#scene=chosen.kaminos.json',search:''},environmentLoaded:environment.promise,window:{},ownerVolumeReady:null,fireAtBoot,initKaminosVolumeRoute:()=>volume.promise,reportKaminosVolumeRouteInitFailure(){},
   fetch:async url=>{events.push(['fetch',url]);return {ok:true,json:async()=>({version:8,objects:[]})};},

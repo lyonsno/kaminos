@@ -26665,9 +26665,48 @@ window.addEventListener('keydown', e => {
 grInit();
 initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
-const sceneInitialization = initScene();
+  const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
+  const startupSceneHash = new URLSearchParams(location.hash.slice(1));
+  const startupRestoreRequested = !!startupSceneHash.get('scene');
+  const startupSceneFile = startupSceneHash.get('scene');
+  // Admit the saved recipe before creating either renderer. Recipe recovery
+  // navigates without allocating a 3D viewer or a fire runtime for the page
+  // that navigation will discard.
+  const startupSceneData = startupSceneFile
+    ? fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}`).then(async response => {
+        if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
+        return response.json();
+      })
+    : Promise.resolve(null);
+  const startupSceneAdmission = startupSceneData.then(data => {
+    const hash = startupSceneHash;
+    const sceneFile = startupSceneFile;
+    if (!sceneFile) return {data, plan: null};
+    sceneDocument.holdRestore();
+    const plan = planSceneRestore(data);
+    if (plan.composition) {
+      const preset = new URLSearchParams(location.search).get('settings_preset');
+      if(preset!==plan.composition.flame.presetId){
+        setInfo('Opening the saved flame recipe…');
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location),
+          {note:new URLSearchParams(location.search).get('note') ?? hash.get('note')}));
+        return startupSceneRedirect;
+      }
+    }
+    return {data, plan};
+  });
+let startupSceneAdmitted = false;
+const sceneInitialization = startupSceneAdmission.then(admission => {
+  if (admission === startupSceneRedirect) return startupSceneRedirect;
+  startupSceneAdmitted = true;
+  return initScene();
+});
 settleStartupVeil(document, sceneInitialization).catch(() => {});
 sceneInitialization.then(async () => {
+  if (!startupSceneAdmitted) {
+    rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));
+    return;
+  }
   await startupPreferencesLoaded;
   initEnvButtons();
   loadDemoButtons();
@@ -26752,36 +26791,6 @@ sceneInitialization.then(async () => {
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
   environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
-  const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
-  const startupSceneHash = new URLSearchParams(location.hash.slice(1));
-  const startupRestoreRequested = !!startupSceneHash.get('scene');
-  const startupSceneFile = startupSceneHash.get('scene');
-  // Acquire and admit the saved recipe before allocating its fluid runtime.
-  // Environment loading may overlap, but recovery must not wait for a runtime
-  // that the navigation will immediately discard.
-  const startupSceneData = startupSceneFile
-    ? fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}`).then(async response => {
-        if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
-        return response.json();
-      })
-    : Promise.resolve(null);
-  const startupSceneAdmission = startupSceneData.then(data => {
-    const hash = startupSceneHash;
-    const sceneFile = startupSceneFile;
-    if (!sceneFile) return {data, plan: null};
-    sceneDocument.holdRestore();
-    const plan = planSceneRestore(data);
-    if (plan.composition) {
-      const preset = new URLSearchParams(location.search).get('settings_preset');
-      if(preset!==plan.composition.flame.presetId){
-        setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location),
-          {note:new URLSearchParams(location.search).get('note') ?? hash.get('note')}));
-        return startupSceneRedirect;
-      }
-    }
-    return {data, plan};
-  });
   const volumeLoaded = startupSceneAdmission.then(admission => {
     if (admission === startupSceneRedirect) return null;
     const fireBoot = fireAtBoot(new URLSearchParams(location.search), startupSceneHash);
@@ -26845,6 +26854,12 @@ sceneInitialization.then(async () => {
 }).catch(err => {
   rejectWorkbenchViewerReady(err);
   console.error('initScene failed:', err);
+  if (!startupSceneAdmitted) {
+    sceneDocument.holdRestore();
+    compositionStatus(`Restore failed: ${err.message || err}`, true);
+    setInfo(`Composition restore failed: ${err.message || err}`);
+    return;
+  }
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
