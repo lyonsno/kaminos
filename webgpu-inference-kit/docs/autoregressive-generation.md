@@ -57,3 +57,42 @@ npm test -- --only tests/token-sampling.mjs,tests/autoregressive-generation.mjs,
 ```
 
 These tests establish CPU orchestration, input handling and state-accounting behavior. The model-owned witnesses separately exercise actual WebGPU affine4/hybrid kernels and composed 32-layer prefill, cached decode, full-prefix and split-prefix logits against native MLX FP32 computation over the retained Q4 weights. The composed witness also uses this token loop and sampler. A complete BFL text expansion has consumed 743 input tokens and generated 302 tokens through EOS using the shipped system prompt and settings. That application exercise is separate from these CPU tests. Vision/reference support, host integration and useful performance remain subsequent work.
+
+## Persistent conversations
+
+`createGenerationSession({ model, capacity, control })` reuses model-owned
+state across calls to `session.generate(...)`. It adds `model.append(ids,
+state, context)` to the one-request adapter contract. The caller supplies the
+**complete intended input token sequence** on every turn. An exact extension
+of the consumed prefix evaluates only the suffix; identical input reuses the
+last logits. Edited/shorter input and a changed allocation capacity rebuild
+from the complete input. No tokens are silently trimmed.
+
+The consumed prefix can lag the displayed reply by one token, and EOS is not
+consumed by the generation loop. Include the actual generated tokens and turn
+terminator in the next complete input; the session evaluates those pending
+tokens exactly once. State must include recurrent/convolution memory as well
+as attention KV. The model's returned logits must remain usable until the
+next model operation; sampling must not mutate them.
+
+Successful turns retain state. Failed/cancelled turns retire it; the next call
+replays its complete input. `reset()` cancels active work and retires state.
+`dispose()` additionally closes the session. Both settle active work before
+cleanup and preserve caller ownership of weights, device and control. Turns
+are serial; concurrent calls reject. Capacity is caller-selected and checked
+by the model/device; a new capacity can be supplied explicitly on a turn.
+This is replay-based resizing, not KV paging, trimming or snapshot restore.
+
+Results add `usage`: reused/evaluated input counts, cache action, cached length,
+capacity, first published-token latency, input/decode/total wall time and decode
+call count. Timings include admission and GPU fences; they are not GPU-only
+measurements. Keep model-loading time separate. `snapshot()` returns current
+session lifetime and cache size without exposing mutable model state.
+
+The Qwen example at `models/qwen3_5/chat.html` uses the same session API for
+streaming turns, Stop/reset/unload and export. Its incremental text format
+retains the actual generated token stream and empty thinking prefixes. It does
+not claim equivalence to re-rendering arbitrary histories with the checkpoint's
+Jinja template, which removes old thinking prefixes. The installed BFL PUP
+fine-tune remains specialized for image prompts; the example does not establish
+general assistant quality or tool/vision support.

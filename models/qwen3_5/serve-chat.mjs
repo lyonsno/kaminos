@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { startServer,sourceIdentity } from '../flux2-klein/cdp-harness.mjs';
+const [manifestFile,modelRoot,port='0',receipt]=process.argv.slice(2);
+if(!manifestFile||!modelRoot||!receipt) throw Error('Usage: node models/qwen3_5/serve-chat.mjs <weights.json> <model-root> <port-or-0> <receipt.json>');
+const manifest=fs.realpathSync(manifestFile),model=fs.realpathSync(modelRoot),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+const digest=crypto.createHash('sha256').update(fs.readFileSync(manifest)).digest('hex');
+const {server,origin}=await startServer({'/manifest/':path.dirname(manifest),'/model/':model,'/':repo},Number(port));
+const url=origin+'/models/qwen3_5/chat.html?'+new URLSearchParams({manifest:'/manifest/'+path.basename(manifest),sha:digest,model:'/model/'});
+const record={url,repo,source:sourceIdentity(repo),manifest,manifestSha256:digest,modelRoot:model,pid:process.pid,status:'serving'};
+fs.mkdirSync(path.dirname(path.resolve(receipt)),{recursive:true});fs.writeFileSync(receipt,JSON.stringify(record,null,2)+'\n');console.log(url);
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>{record.status='stopped';fs.writeFileSync(receipt,JSON.stringify(record,null,2)+'\n');process.exit(0);}));

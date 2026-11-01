@@ -91,3 +91,103 @@ export async function generateTokens({ model, inputIds, capacity, maxNewTokens,
   if (failed) throw failure;
   return result;
 }
+
+/** Persistent, caller-owned cache over the same generation loop. Each request
+ * supplies the COMPLETE intended token prefix. Only an exact extension reuses
+ * state; edits, shorter prefixes and capacity changes replay the full input.
+ * Cache identity follows tokens actually consumed by the model, not emitted
+ * tokens. In particular the final sampled token/EOS is still pending in input.
+ * The adapter must support append(ids,state,context), and state owns all hybrid
+ * memory (KV, recurrent and convolution), not just attention keys and values.
+ */
+export function createGenerationSession({ model, capacity, control = null,
+  now = () => performance.now() } = {}) {
+  for (const name of ['createState', 'prefill', 'append', 'decode', 'disposeState']) {
+    if (typeof model?.[name] !== 'function') throw new TypeError(`model.${name} is required`);
+  }
+  positiveInteger(capacity, 'capacity');
+  if (typeof now !== 'function') throw new TypeError('now must be a function');
+  let state, prefix = [], logits, active = null, controller = null, closing = null, closed = false;
+  let valid = false;
+  const lifetime = new AbortController();
+  async function retire() {
+    valid = false; prefix = []; logits = undefined;
+    if (state !== undefined) { await model.disposeState(state); state = undefined; }
+  }
+  function generate(options = {}) {
+    if (closed) return Promise.reject(new Error('generation session is closed'));
+    if (active || closing) return Promise.reject(new Error('generation session is busy'));
+    controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, lifetime.signal, ...(options.signal ? [options.signal] : [])]);
+    const started = now(), usage = { cacheAction: 'prefill', reusedInputTokens: 0, evaluatedInputTokens: 0,
+      inputMs: 0, decodeMs: 0, decodeCalls: 0, firstTokenMs: null };
+    let touched = false;
+    // Borrowing adapter prevents the one-shot loop from retiring successful
+    // request state. The session is its sole owner and retires on failure/reset.
+    const adapter = {
+      async createState({ capacity: requested, control: effectiveControl }) {
+        touched = true;
+        if (state !== undefined && (!valid || requested !== capacity)) { usage.cacheAction = 'rebuild'; await retire(); }
+        capacity = requested;
+        if (state === undefined) state = await model.createState({ capacity, signal: lifetime.signal, control: effectiveControl });
+        return state;
+      },
+      async prefill(ids, _, context) {
+        const start = now();
+        try {
+          const matches = valid && prefix.length <= ids.length && prefix.every((id,i) => id === ids[i]);
+          if (valid && !matches) {
+            usage.cacheAction = 'rebuild'; await retire();
+            state = await model.createState({ capacity, signal: lifetime.signal, control: context.control });
+          }
+          const reused = matches ? prefix.length : 0;
+          usage.reusedInputTokens = reused; usage.evaluatedInputTokens = ids.length - reused;
+          if (matches) {
+            usage.cacheAction = reused === ids.length ? 'logits' : 'append';
+            if (reused < ids.length) logits = await model.append(ids.slice(reused), state, context);
+          } else logits = await model.prefill(ids, state, context);
+          prefix = [...ids]; valid = true;
+          return logits;
+        } finally { usage.inputMs += now() - start; }
+      },
+      async decode(id, _, context) {
+        const start = now();
+        try { logits = await model.decode(id, state, context); prefix.push(id); return logits; }
+        finally { usage.decodeMs += now() - start; usage.decodeCalls++; }
+      },
+      async disposeState() {},
+    };
+    const run = async () => {
+      try {
+        const result = await generateTokens({ ...options, model: adapter, capacity: options.capacity ?? capacity,
+          control: options.control ?? control, signal,
+          onToken: async (id,index) => {
+            if (usage.firstTokenMs === null) usage.firstTokenMs = now() - started;
+            if (options.onToken) await options.onToken(id,index);
+          },
+        });
+        return { ...result, usage: { ...usage, cachedTokens: prefix.length, capacity, totalMs: now() - started } };
+      } catch (error) {
+        if (touched) {
+          try { await retire(); }
+          catch (cleanup) { throw new AggregateError([error,cleanup], 'generation session and cleanup failed'); }
+        }
+        throw error;
+      }
+    };
+    active = run().finally(() => { active = null; controller = null; });
+    return active;
+  }
+  function stop(dispose) {
+    if (dispose) { closed = true; lifetime.abort('generation session disposed'); }
+    if (closing) return closing;
+    controller?.abort(dispose ? 'generation session disposed' : 'generation session reset');
+    closing = (async () => {
+      if (active) await active.catch(() => {});
+      await retire();
+    })().finally(() => { closing = null; });
+    return closing;
+  }
+  return { generate, reset: () => stop(false), dispose: () => stop(true),
+    snapshot: () => ({ closed, busy: Boolean(active || closing), capacity, cachedTokens: valid ? prefix.length : 0 }) };
+}

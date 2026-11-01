@@ -80,3 +80,30 @@ The replay consumes every recorded prompt and generated token, including the fin
 Append `--batch-decode` to the numerical witness to exercise this option. A single serving profile accepts a request plus `--serving-profile --batch-decode`; `--compare-batching` instead runs complete unbatched/batched/unbatched expansions with the oracle projection kernel held fixed. Comparison axes and forced execution selectors cannot be combined. Reports retain actual layer-batch submissions and duty counts/times, including maximum layer duty duration. In batched layers, per-dispatch durations measure CPU encoding, while layer-duty wall times include admission and the final fence; these overlap and must not be added together. This option remains provisional pending native numerical, control/lifetime and useful latency evidence.
 
 Batched serving profiles use `kaminos.qwen35-serving-profile.v2`: leaf dispatch clocks include command encoding while layer clocks include admission and the queue fence. These overlap and must not be added. Unbatched fenced-dispatch profiles retain v1. A reader must explicitly admit v2 with batching evidence before interpreting its timing.
+
+### Persistent text chat example
+
+`createQwenTextChat` (in `pup-text.js`) composes the reusable generation session
+with incremental Qwen text framing and decoding. Successful turns retain both
+KV and recurrent state; follow-ups evaluate only new input. Request failure
+retires state; resetting retains loaded weights. The append-only transcript
+preserves actual generated IDs and empty thinking prefixes instead of
+re-rendering old turns with the Jinja template. Chat quality on the installed
+BFL PUP image-prompt fine-tune is experimental.
+
+Run the optional standalone browser example with explicit installed weights and
+an existing verified weight manifest:
+
+```sh
+node models/qwen3_5/serve-chat.mjs /path/to/weights.json /path/to/model 0 /path/to/chat-server.json
+```
+
+The command prints the chat link and writes effective source/model coordinates
+into the caller's receipt. It does not load the GPU model until **Load model**.
+The page provides streaming messages, Stop, New conversation, Unload model and
+Save conversation. A blank reply limit uses available model/device context;
+context exhaustion is reported rather than trimming history. Per-turn timing
+and reused/evaluated input counts make repeated interactions useful performance
+observations. This example owns a standalone device; Kaminos host integration
+should supply its existing model/control through the same chat API. Heavy
+local execution follows the shared GPU queue/interactive lease policy.
