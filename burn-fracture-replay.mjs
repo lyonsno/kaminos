@@ -3,6 +3,7 @@ import {createLogSurfaceMask} from './live-log-surface-mask.mjs';
 import {LOG_RESIDUE} from './log-consumption.mjs';
 import {createBurnMaterial} from './burn-table-material.mjs';
 import {createCoarseSurfaceMesh} from './fracture-coarse-surface.mjs';
+import {mapBurnRegions} from './burn-structure-core.mjs';
 
 export function readBurnReplay(raw,replayMatrix){
  const snapshot=raw?.snapshot??(raw?.snapshots?.length===1?raw.snapshots[0]:null);
@@ -38,12 +39,11 @@ export function replayRegionMasses(prepared,field){
 export function replayRegionBodies(prepared,field,density){
  if(!Number.isFinite(density)||density<=0)throw Error('Positive material density required');
  const {bounds,dimensions,initial}=field.residentState(),n=dimensions[0],size=bounds.getSize(new THREE.Vector3()).toArray(),lo=bounds.min.toArray(),material=field.input.snapshot.material;
- const total=new Uint32Array(prepared.cells.length),remaining=new Float64Array(total.length);
+ const {owners,counts:total}=mapBurnRegions(prepared,{bounds:{min:lo,max:bounds.max.toArray()},dimensions,initial}),remaining=new Float64Array(total.length);
  const contact=prepared.cells.map(()=>({min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]}));
  for(let i=0;i<initial.length;i++)if(initial[i]){
   const point=[i%n,Math.floor(i/n)%n,Math.floor(i/(n*n))].map((v,k)=>lo[k]+(v+.5)*size[k]/n);
-  let region=0,best=Infinity;for(const p of prepared.pieces){const d=point.reduce((sum,v,k)=>sum+Math.max(p.bounds.min[k]-v,0,v-p.bounds.max[k])**2,0);if(d<best){best=d;region=p.index;}}
-  total[region]++;const fuel=material[i*8+5];if(fuel>LOG_RESIDUE+1e-6){remaining[region]+=fuel;
+  const region=owners[i],fuel=material[i*8+5];if(fuel>LOG_RESIDUE+1e-6){remaining[region]+=fuel;
    for(let k=0;k<3;k++){contact[region].min[k]=Math.min(contact[region].min[k],point[k]-.5*size[k]/n);contact[region].max[k]=Math.max(contact[region].max[k],point[k]+.5*size[k]/n);}
   }
  }

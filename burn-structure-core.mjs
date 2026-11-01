@@ -3,6 +3,26 @@ import {LOG_RESIDUE,logMaterialPresent} from './log-consumption.mjs';
 
 export const BURN_STRUCTURE_IDENTITY='kaminos.burn-structure.sections.v1';
 
+// The material lattice keeps its addresses for its whole lifetime. Ownership is
+// prepared once, independently of fuel, so consuming a cell never moves its state.
+export function mapBurnRegions(prepared,{bounds,dimensions,initial}){
+ const lo=bounds?.min,hi=bounds?.max,n=dimensions?.[0],count=prepared.cells?.length;
+ if(!Number.isSafeInteger(n)||n<1||dimensions.length!==3||dimensions.some(v=>v!==n)||initial?.length!==n**3
+  ||![lo,hi].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||hi.some((v,k)=>v<=lo[k]))throw Error('Regions require a finite original cubic material field');
+ if(!count||prepared.pieces?.length!==count||prepared.pieces.some((p,i)=>p.index!==i||!p.bounds||!['min','max'].every(k=>p.bounds[k]?.length===3&&p.bounds[k].every(Number.isFinite))||p.bounds.max.some((v,k)=>v<=p.bounds.min[k])))throw Error('Regions require ordered finite prepared piece bounds');
+ const owners=new Uint32Array(initial.length),counts=new Uint32Array(count),buckets=Array.from({length:count},()=>[]);
+ for(let i=0;i<initial.length;i++){
+  if(initial[i]!==0&&initial[i]!==1)throw Error('Original material occupancy must be binary');
+  const point=[i%n,Math.floor(i/n)%n,Math.floor(i/(n*n))].map((v,k)=>lo[k]+(v+.5)*(hi[k]-lo[k])/n);
+  let region=0,best=Infinity;
+  for(const p of prepared.pieces){const distance=point.reduce((sum,v,k)=>sum+Math.max(p.bounds.min[k]-v,0,v-p.bounds.max[k])**2,0);if(distance<best){best=distance;region=p.index;}}
+  owners[i]=region;if(initial[i]){counts[region]++;buckets[region].push(i);}
+ }
+ const spans=new Uint32Array(count*2),cells=[];
+ for(let i=0;i<count;i++){spans[i*2]=cells.length;spans[i*2+1]=counts[i];cells.push(...buckets[i]);}
+ return {owners,counts,spans,cells:Uint32Array.from(cells),identity:'original-material-nearest-prepared-region-v1'};
+}
+
 // Preparation only: distribute each actual section triangle over the occupied
 // thermal cells it touches. Fuel remains in the original object's resident field.
 export function mapBurnSections(prepared,{bounds,dimensions,initial}){
