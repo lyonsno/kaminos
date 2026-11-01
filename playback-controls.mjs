@@ -68,7 +68,7 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   if(disposed)return;
   if(name==='cancel'||name==='reset'){operation++;working=0;}
   const epoch=operation;working++;error.textContent='';update();
-  try{return await invoke(name,input);}catch(e){if(epoch===operation&&!disposed)showError(e);}finally{if(epoch===operation){working--;update();}}
+  try{return await invoke(name,input);}catch(e){if(e.name!=='AbortError'&&epoch===operation&&!disposed)showError(e);}finally{if(epoch===operation){working--;update();}}
  }
  // Pointer previews may supersede earlier unstarted previews, never producer
  // operations already in flight. The final requested position is always held.
