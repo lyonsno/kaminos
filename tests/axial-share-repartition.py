@@ -36,6 +36,15 @@ with tempfile.TemporaryDirectory() as tmp:
  report=m.read(root/'valid/report.json');assert report['status']=='completed' and report['nonAxialWeightsByteIdentical']
  assert np.array_equal(np.fromfile(root/'valid/package/automatic-weights.bin',dtype='<f4').reshape(old.shape),result)
  assert (root/'valid/package/rest.bin').read_bytes()==(root/'baseline/rest.bin').read_bytes()
+ # Re-signing the manifest must not allow omission of a consumed asset.
+ source=root/'proposed/manifest.json';full=m.read(source);missing=json.loads(json.dumps(full));del missing['assets']['automatic-weights.bin'];m.write(source,missing)
+ config['proposed_sha256']=m.sha(source);m.write(inputs,config)
+ try:m.run(inputs,root/'missing-authentication')
+ except ValueError:pass
+ else:raise AssertionError('missing proposed weight authentication accepted')
+ assert m.read(root/'missing-authentication/report.json')['status']=='failed'
+ assert not (root/'missing-authentication/package/manifest.json').exists()
+ m.write(source,full)
  for label,mutate in [('wrong-manifest',lambda:config.update(proposed_sha256='wrong')),('tampered-asset',lambda:(root/'proposed/automatic-weights.bin').write_bytes(b'bad'))]:
   config['proposed_sha256']=m.sha(root/'proposed/manifest.json');mutate();m.write(inputs,config)
   try:m.run(inputs,root/label)

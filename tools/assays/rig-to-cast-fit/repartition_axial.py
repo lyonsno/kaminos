@@ -26,6 +26,8 @@ def run(inputs,out):
   for key in ['baseline','proposed']:
    root=Path(c[key]);m=read(root/'manifest.json')
    if sha(root/'manifest.json')!=c[key+'_sha256'] or m['schema']!='kaminos.live-transport.v3' or m['status']!='completed':raise ValueError('source manifest identity or state differs')
+   required={'rest.bin','triangles.bin','automatic-weights.bin','automatic-presets.bin'}
+   if not required.issubset(m['assets']):raise ValueError('authentication metadata missing for consumed asset')
    for name,spec in m['assets'].items():
     p=root/name
     if p.parent!=root or p.stat().st_size!=spec['bytes'] or sha(p)!=spec['sha256']:raise ValueError('source asset identity differs')
