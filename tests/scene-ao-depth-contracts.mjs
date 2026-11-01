@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 
@@ -14,10 +15,11 @@ const depthRT = {};
 const depthMaterial = { side: 0 };
 let computeCalls = 0, configuredDepth;
 const renderer = {
-  target: 'original-target', callback: originalCallback,
+  target: 'original-target', callback: originalCallback, lighting:{enabled:true},
   setRenderTarget(value) { this.target = value; },
   setRenderObjectFunction(value) { this.callback = value; },
   renderObject(object, activeScene, activeCamera, geometry, material, group, lights, clipping, passId) {
+    assert.equal(this.lighting.enabled,false,'AO depth does not depend on scene illumination');
     draws.push({ side: activeScene.overrideMaterial.side, material, group, passId });
     if (object.fail) throw new Error('draw failed');
   },
@@ -61,6 +63,7 @@ assert.equal(depthMaterial.side, 0);
 assert.equal(scene.overrideMaterial, originalOverride);
 assert.equal(renderer.callback, originalCallback);
 assert.equal(renderer.target, 'original-target');
+assert.equal(renderer.lighting.enabled,true,'restore lighting after success or failure');
 assert.deepEqual(materials.map(material => material.side), [2, 0, 1, 2]);
 assert.deepEqual(draws.map(draw => draw.group.index), [0, 1, 2, 3]);
 assert.ok(draws.every(draw => draw.passId === 'depth'));
@@ -76,6 +79,7 @@ assert.equal(depthMaterial.side, 0);
 assert.equal(scene.overrideMaterial, originalOverride);
 assert.equal(renderer.callback, originalCallback);
 assert.equal(renderer.target, 'original-target');
+assert.equal(renderer.lighting.enabled,true,'restore lighting after success or failure');
 console.log('scene AO material-side depth contracts passed');
 
 renderer.fail=false;

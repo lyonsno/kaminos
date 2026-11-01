@@ -6,7 +6,11 @@ export function configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, d
   aoPass.updateBefore = function(frame) {
     const { renderer } = frame;
     const state = RendererUtils.resetRendererAndSceneState(renderer, scene);
+    const lightingEnabled = renderer.lighting.enabled;
     try {
+      // Depth/coverage is independent of analytical and environment lighting.
+      // Keep its render objects reusable when a new light generation is promoted.
+      renderer.lighting.enabled = false;
       scene.overrideMaterial = depthMaterial;
       renderer.setRenderTarget(depthRT);
       renderer.setRenderObjectFunction((...args) => {
@@ -25,6 +29,7 @@ export function configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, d
       });
       renderer.render(scene, camera);
     } finally {
+      renderer.lighting.enabled = lightingEnabled;
       RendererUtils.restoreRendererAndSceneState(renderer, scene, state);
     }
     return updateBefore.call(this, frame);
