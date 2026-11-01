@@ -48,7 +48,7 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   // The pressure kernels bind the fluid-front read layout, not the full fluid layout: the target must be there too.
   const frontLayout = source.slice(source.indexOf("label: 'kaminos fluid-front read bind group layout'"), source.indexOf('});', source.indexOf("label: 'kaminos fluid-front read bind group layout'")));
   assert.match(frontLayout, /\{ binding: 19, visibility: GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'the fluid-front read layout carries the target (first look at 86801d5d failed validation without it)');
-  assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 5, 'bound in the fluid bind group and in every fluid-front read bind group');
+  assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 4, 'bound in every fluid-front read bind group');
   // The converged solver's right-hand side and the residual probe use the
   // compact divergence; the legacy wide stencil (divergenceAtCell) is the
   // legacy Jacobi's and the activity cue's and must not carry the source (the
@@ -58,8 +58,9 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   assert.doesNotMatch(wgslFunction('divergenceAtCell'), /heatReleaseExpansion/, 'the legacy stencil does not');
   assert.match(source, /pressureDst\[idx\] = vec4<f32>\(divergenceCompactAtCell\(vec3<i32>\(gid\)\), pressureDst\[idx\]\.y, 0\.0, 0\.0\);/, 'the warm right-hand side is that divergence');
   // Bindings and lifecycle.
+  assert.match(source, /expansionTexture = burnRateTexture/, 'ordinary fluid groups default to the material burn target');
   assert.match(source, /\{ binding: 19, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'layout entry, fragment-visible: the raymarch entry point reaches divergenceAtCell through the shared module (first live look failed pipeline validation on compute-only visibility)');
-  assert.match(source, /\{ binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) \}/, 'bound with the fluid state');
+  assert.match(source, /\{ binding: 19, resource: expansionTexture\.createView\(\{ dimension: '3d' \}\) \}/, 'bound with the fluid state through its selected expansion texture');
   assert.match(source, /burnRateTexture = device\.createTexture\(\{\s*\n\s*label: `kaminos fuel burn rate \$\{gridSize\}x\$\{gridHeight\}x\$\{gridSize\}`,\s*\n\s*size: \[gridSize, gridHeight, gridSize\],\s*\n\s*dimension: '3d',\s*\n\s*format: 'r32float',\s*\n\s*usage: GPUTextureUsage\.STORAGE_BINDING \| GPUTextureUsage\.COPY_DST,/, 'created with the grid');
   assert.match(source, /burnRateTexture\?\.destroy\(\);\s*\n\s*burnRateTexture = null;/, 'destroyed with the fluid state');
 });

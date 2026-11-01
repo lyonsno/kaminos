@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {sceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
@@ -25,21 +26,21 @@ function fixture({sourceRoot=null,simulationRoot=null}={}){
 console.log('Source drafts retain identity and current playback status does not overwrite pending edits');
 const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
 const application=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const frameStart=application.indexOf('  function renderSceneFrame()'),armStart=application.indexOf('    if (localLiquidHost) {',frameStart),armEnd=application.indexOf('    }));',armStart)>=0?application.indexOf('    }));',armStart):application.indexOf('    sceneFrameCount++',armStart),arm=application.slice(armStart,armEnd);
+const frameStart=application.indexOf('  function renderSceneFrame()'),armStart=application.indexOf('      if (waterFeature.host) {',frameStart),armEnd=application.indexOf('    }));',armStart)>=0?application.indexOf('    }));',armStart):application.indexOf('    sceneFrameCount++',armStart),arm=application.slice(armStart,armEnd);
 for(const mode of ['continuous','finite_drop','failure']){
  const f=fixture();f.draftWidth(.75);let step=0,present=true,footer=null;
  const host={render(){if(mode==='failure')throw Error('frame rejected');step=12;},state:()=>mode==='continuous'?{solver:{stepCount:step,simulatedTimeSeconds:step/240}}:{mode,clock:{paused:false,step,timeSeconds:step/240}},dispose(){present=false;}};
  // Keep the controls' read layer bound to the same current runtime.
  f.setRuntime({paused:false,step:0,particleCount:4096});
  const c={isSceneItemVisible:()=>true,outputCaptureExtent:null,recordingFrameSink:null,matchedCameraEffective:false,ordinarySceneTransportFrame:null,applySceneEmissiveCamera(){},outlinedSceneOutput:{},outlinedCameraOutput:{},sceneEmissiveCamera:null,document:{getElementById:()=>({checked:false})},localLiquidHost:host,localLiquidFailure:null,console:{error(){}},String,authoredWaterControls:{refreshStatus(){f.setRuntime(present?{paused:false,step,particleCount:4096}:null);f.controls.refreshStatus();}},sharedWorkbench:{update(value){footer=value;}},refreshLocalLiquidPerformance(){},renderPipeline:{render(){}},setInfo(){}};
- vm.createContext(c);vm.runInContext(arm,c);
+ sceneContext(c);vm.runInContext(arm,c);
  if(mode==='failure'){assert.equal(footer?.status,'Stopped','Footer must retire failed runtime state');assert.equal(c.localLiquidHost,null);assert.equal(f.input('[data-pause]').textContent,'Play','Host loss offers a fresh start from retained sources');assert.doesNotMatch(f.input('[data-state]').textContent,/Playing/);}
  else {assert.match(f.input('[data-state]').textContent,/tick 12/,'Both supported source modes publish the effective clock');assert.match(footer?.clock??'',/tick 12/,'Footer agrees for both supported water modes');}
  assert.equal(Number(f.input('[data-width]').value),.75,'Runtime updates preserve drafts');
 }
 {
  const a=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),b=application.indexOf('\n};',a),f=fixture();let paused=false;f.setRuntime({paused:false,step:12,particleCount:4096});
- const c={Boolean,window:{_kaminosDirty(){}},localLiquidPaused:false,localLiquidHost:{setPaused(v){paused=v;}},refreshLocalLiquidPerformance(){},authoredWaterControls:{refreshStatus(){f.setRuntime({paused,step:12,particleCount:4096});f.controls.refreshStatus();}}};vm.createContext(c);vm.runInContext(application.slice(a,b+3),c);c.window.kaminosPauseLocalLiquid(true);assert.match(f.input('[data-state]').textContent,/Paused · tick 12/);
+ const c={Boolean,window:{_kaminosDirty(){}},localLiquidPaused:false,localLiquidHost:{setPaused(v){paused=v;}},refreshLocalLiquidPerformance(){},authoredWaterControls:{refreshStatus(){f.setRuntime({paused,step:12,particleCount:4096});f.controls.refreshStatus();}}};sceneContext(c);vm.runInContext(application.slice(a,b+3),c);c.window.kaminosPauseLocalLiquid(true);assert.match(f.input('[data-state]').textContent,/Paused · tick 12/);
 }
 
 // Cross the actual finite host/facade/application/control boundary: accessor
@@ -55,7 +56,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
  const c={authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
   authoredWaterDraftPreview:null,localLiquidSetup:null,sceneObjectTransformState:()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}),describeAuthoredWaterDrop:()=>({}),resolveAuthoredWaterSampling:()=>({}),selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
- vm.createContext(c);
+ sceneContext(c);
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);

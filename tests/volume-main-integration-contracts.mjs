@@ -45,7 +45,9 @@ const resources = {
   // The wavelet turbulence coordinate textures (bindings 31/32), same closure.
   waveletTextures: [{ createView: () => ({ label: 'wavelet A view' }) }, { createView: () => ({ label: 'wavelet B view' }) }],
   // The joined boundary's lower-plane texture (binding 28), same closure.
-  joinedLowerFaceView: () => ({ label: 'joined lower planes view' }),
+  joinedLowerFaceTexture: {createView: () => ({ label: 'joined lower planes view' })},
+  worldSmoke: null, intermediateFlow: null, worldRenderUniform: buffer('world frame'),
+  worldOpticalFallback: {createView: () => ({label:'inactive world optics'})},
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
 };
 const makeGroup = new Function(...Object.keys(resources), `${helper}; return createFluidRenderBindGroup;`)(...Object.values(resources));

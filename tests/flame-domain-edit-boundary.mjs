@@ -2,11 +2,11 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createSceneEdits} from '../scene-edit-session.mjs';
-import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls} from '../scene-flame-emitter.mjs';
+import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,immersedControlsForFlamePose,flamePoseToDomain} from '../scene-flame-emitter.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 const engine={translate:[0,0,0],scale:1};let rebuilds=0,sourceWrites=0,reject=false;
-const ctx={isSceneItemVisible:()=>true,activeSceneComposition:{},THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
+const ctx={worldSourceSupplyEnabled:()=>false,isSceneItemVisible:()=>true,activeSceneComposition:{},THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
  flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameDomainDraft:null,flameDomainProxy:null,flameDomainGuide:{box:new THREE.Box3()},
  selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},styleSimulationDomainGuide(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:'flame-field',transformControls:null,document:{getElementById:()=>null},window:{},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){},
  authoredFlamePresent:true,flameEmitterPose:{position:[.2,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
@@ -26,4 +26,19 @@ edits.redo();assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSour
 assert.throws(()=>edits.apply('@flame-domain',{rotation:[0,.1,0]}),/world axes/);
 assert.throws(()=>edits.apply('@flame-domain',{scale:[1,2,1]}),/uniform/);
 assert.equal(edits.state().active,null);
+// Engine admission failure preserves the authored source and accepted box.
+ctx.immersedControlsForFlamePose=immersedControlsForFlamePose;ctx.flamePoseToDomain=flamePoseToDomain;
+ctx.window.__kaminosVolumeEmitterReceipt={requested:{sourceLaw:'immersed-source',immersedRadius:.5},effective:{family:'ring'}};
+const beforeRejected=rebuilds;
+reject=true;assert.throws(()=>edits.apply('@flame-domain',{scale:[.125,.125,.125]}),/admission failed/);reject=false;
+edits.cancel(); // The inspector's history owner performs this rollback on refusal.
+assert.equal(engine.scale,2);assert.equal(rebuilds,beforeRejected,'refused engine admission preserves the field');
+assert.deepEqual(ctx.flameEmitterPose,original,'refusal never silently shrinks the authored emitter');
+// Sources can exceed the Fine coverage; changing the detail box leaves them authored in world space.
+// Tight boxes with a fitting source are physical extents, not fewer cells.
+edits.apply('@flame-domain',{scale:[.125,.125,.125]});
+assert.equal(engine.scale,.125);
+assert.ok(Math.abs(ctx.flameDomainGuide.box.max.x-ctx.flameDomainGuide.box.min.x-.25)<1e-10);
+assert.ok(Math.abs(ctx.flameDomainGuide.box.max.y-ctx.flameDomainGuide.box.min.y-.5)<1e-10);
+edits.undo();assert.equal(engine.scale,2);
 console.log('Actual editor preview/cancel, one restart, history and source preservation pass');

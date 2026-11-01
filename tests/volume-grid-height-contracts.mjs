@@ -53,8 +53,9 @@ test('resolveGridHeight: no value or 2 is twice the width; a multiplier is clamp
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 2.5 }, 32).heightCells, 80, 'the same multiplier at another width');
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 'abc' }, 64).mode, 'auto-twice-width', 'nonfinite reads as auto');
   assert.equal(shape.resolveGridHeight({ gridHeightRatio: 0 }, 64).mode, 'auto-twice-width', 'zero reads as auto');
-  assert.throws(() => shape.resolveGridHeight({}, 0), /positive multiple of 4/);
-  assert.throws(() => shape.resolveGridHeight({}, 50), /positive multiple of 4/);
+  assert.throws(() => shape.resolveGridHeight({}, 0), /positive integer/);
+  assert.equal(shape.resolveGridHeight({}, 50).heightCells,100,'material width need not divide a workgroup');
+  assert.equal(shape.resolveGridHeight({},37).heightCells,74,'odd material width retains exact physical aspect');
   // The core re-exports the one law.
   assert.equal(core.resolveGridHeight, shape.resolveGridHeight);
 });
@@ -88,7 +89,7 @@ test('GH-01: the camera samples the whole box: the raymarch box follows GRID_Y/G
   assert.ok(tall[0] < tall[1] && Math.abs(tall[0] - 4) < 1e-9 && Math.abs(tall[1] - 6) < 1e-9, `a horizontal ray at y = 4 crosses the 192-tall box (${tall})`);
   assert.ok(!(auto[0] < auto[1]), 'and misses the auto box');
   // The shader computes the same box from its constants; the fixed y in [-1, 3] is gone.
-  assert.match(source, /let domainHalfY = f32\(GRID_Y\) \/ f32\(GRID\);\n\s+let hit = boxHit\(ro - vec3<f32>\(0\.0, domainHalfY - 1\.0, 0\.0\), rd, vec3<f32>\(1\.0, domainHalfY, 1\.0\)\);/);
+  assert.match(source, /let domainHalfY = f32\(GRID_Y\) \/ f32\(GRID\);\n\s+let nearHit = boxHit\(ro - vec3<f32>\(0\.0, domainHalfY - 1\.0, 0\.0\), rd, vec3<f32>\(1\.0, domainHalfY, 1\.0\)\);/);
   assert.ok(!source.includes('boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0))'));
   // The published raymarch bounds come from the same helper.
   assert.match(closure, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/);
@@ -261,7 +262,7 @@ test('cockpit: the height previews while edited and applies on confirm (the page
   assert.equal(previews.at(-1), null);
   fire('keydown', { key: 'Enter' });
   assert.equal(applied.at(-1), '3.25', 'and leaves nothing to confirm');
-  assert.match(index, /function writeFlameSettingsState\(state\) \{\n  supersedeVolumeRebuildHolds\(\);/);
+  assert.match(index, /function writeFlameSettingsState\(state\) \{[^]*?supersedeVolumeRebuildHolds\(\);/);
   assert.match(index, /function applyVolumeScenePreset\(scene, options = \{\}\) \{\n  supersedeVolumeRebuildHolds\(\);/);
   // The guide box follows the preview while one is pending.
   assert.match(index, /const dims = window\.__kaminosVolumeGridPreview\?\.dimensions \?\? window\.__kaminosVolumeGridDimensions;/);

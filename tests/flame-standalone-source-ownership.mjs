@@ -8,7 +8,7 @@ const start=html.indexOf('function syncAuthoredFlameSources(');assert.ok(start>=
 const source=html.slice(start,html.indexOf('\n}',start)+2);
 function replay({lightField=false,composition=null,records=[]}={}){
  const published=[],controls={emitterSourceLaw:'immersed-source'};
- const context={authoredFlamePresent:true,flameDomainFollowSource:true,activeSceneComposition:composition,
+ const context={worldSourceSupplyEnabled:()=>false,authoredFlamePresent:true,flameDomainFollowSource:true,activeSceneComposition:composition,
   isFireLightFieldRoute:()=>lightField,authoredFlameSourceRecords:()=>records,
   requirePluralFlameSourceRuntime(){},readVolumeControls:()=>controls,isSceneItemVisible:()=>true,
   flameDomainTranslation:[0,0,0],flameDomainScale:1,

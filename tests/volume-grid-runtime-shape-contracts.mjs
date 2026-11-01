@@ -106,6 +106,8 @@ test('interpolated modules: every entry point seats first except the lattice-onl
   const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
   const texts = {
+    TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
+    WORLD_SMOKE_OPTICS_WGSL: (await import('../volume-world-smoke-optics.mjs')).WORLD_SMOKE_OPTICS_WGSL,
     PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,
     FIRE_EMISSION_EXTENT_WGSL: (await import('../fire-emission-extent.mjs')).FIRE_EMISSION_EXTENT_WGSL,
     // Include helper-only modules so new entry points cannot evade this check.

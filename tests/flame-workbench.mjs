@@ -245,7 +245,7 @@ test('ordinary Enable/Disable publishes its settled state to flame subscribers i
   const observed=[],window=new EventTarget();
   window.addEventListener('kaminos-flame-controls-changed',()=>observed.push(active));
   runInNewContext(source.slice(start,end),{document:{getElementById:()=>({addEventListener:(name,fn)=>click=fn})},
-    window,Event,volumePrototype:{debugState:()=>({active}),setActive:async value=>{await Promise.resolve();active=value;}},setInfo(){},refreshVolumeReadout(){}});
+    window,Event,volumePrototype:{isActive:()=>active,debugState:()=>({active}),setActive:async value=>{await Promise.resolve();active=value;}},setInfo(){},refreshVolumeReadout(){}});
   await click();assert.deepEqual(observed,[false],'off interrupts without waiting for the fallback poll');
   await click();assert.deepEqual(observed,[false,true],'on publishes only after activation has completed');
 });
