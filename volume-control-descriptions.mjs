@@ -10,6 +10,11 @@
 // fire or the picture). Traced from the code 2026-10-20: when a control's
 // effect changes, change its entry here.
 export const VOLUME_CONTROL_KINDS = Object.freeze(['physical', 'proxy', 'artistic', 'quality', 'conditional', 'diagnostic', 'capture', 'playback', 'inert']);
+export const INTERMEDIATE_GRID_MODE_DESCRIPTIONS = Object.freeze({
+  off: 'Off: Fine feeds the World grid directly; no Intermediate grid is allocated.',
+  on: 'Flow bridge: adds an automatically sized velocity and pressure grid around Fine, using material from the World grid. The Intermediate coverage, material, velocity, pressure and iteration fields are unused in this mode.',
+  fields: 'Own fields: gives Intermediate its own material, velocity and pressure grids, pressure iterations and coverage. It transports and reacts material from Fine before feeding World.',
+});
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   'volume-display-reconstruction': {kind:'artistic',activeWhen:'Native physics beauty, single domain',tooltip:'Display only; simulation and lighting stay unchanged. Material first reconstructs soot, heat and fresh burn before emission. Optics first reconstructs emission and extinction. Zero cubic blend is linear on the display grid, not the exact Native baseline. Native bypasses the display grid.'},
   'volume-display-grid-scale': {kind:'quality',activeWhen:'Display reconstruction enabled',tooltip:'Presentation cells per simulation cell on each axis. 2x means eight times as many display cells, not eight times as many simulation cells. No new dynamics are simulated. Memory and preparation cost grow with the display grid.'},
@@ -18,6 +23,8 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   'volume-smoke-interpolation': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Independent smoke opacity kernel: Smoothing averages samples; Interpolating passes through them but can overshoot; Local cubic passes through them without new segment extrema. Does not change soot production, albedo or dynamics.'},
   'volume-emission-smoothing': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Per-axis blend from linear at 0 to the selected cubic kernel at 1. Smoothing broadens peaks; Interpolating may sharpen or overshoot; Local cubic preserves segment bounds. Independent of smoke opacity.'},
   'volume-smoke-smoothing': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Per-axis blend from linear at 0 to the selected smoke cubic kernel at 1. Independent of emission. Changes only reconstructed smoke opacity, not soot production, albedo or dynamics.'},
+  "volume-world-smoke-intermediate": { kind: "quality", activeWhen: "World is on",
+    tooltip: 'Off: Fine feeds World directly. Flow bridge: automatic velocity/pressure only; borrows World material and ignores the Intermediate numeric fields. Own fields: independently tunable material, velocity, pressure, iterations and coverage; transports and reacts material between Fine and World.' },
   "volume-swirl-jostle": { kind: "artistic", activeWhen: "always (0 is off)",
     tooltip: "Authored force that shoves gas sideways across its own swirl wherever there is heat, smoke or fresh source, making the plume ragged at small scale. Stronger with Curl. 0 is off, 1 is the original force, 2 doubles it." },
   "emitter-assay-family": { kind: "conditional", activeWhen: "Shape matters under Filled volume, Shallow primary and Inflow boundary. Under Immersed source the shape is ignored (any non-Cluster family gives the same disc slab) and Cluster is refused.",
