@@ -11,7 +11,7 @@ const start=html.indexOf('const persistTrellisPageRun=async out=>{'),end=html.in
 const source=html.slice(start,end).replaceAll('await import(','await loadModule(');
 const pagePersist=({loadModule,window})=>{let stored=0;
   const persist=new Function('persistGeneratedMesh','sha256Of','window','setInfo','console','loadModule',`${source};return persistTrellisPageRun;`)(
-    async()=>{stored++;return {sha256:'a'.repeat(64),source:'/stored-hero.glb'};},async()=>'',window,()=>{},{warn(){}},loadModule);
+    async()=>{stored++;return {sha256:'a'.repeat(64),source:'/stored-hero.glb'};},async()=>'',window,()=>{},{warn(){}},specifier=>specifier==='./trellis-reconstruction.mjs'?import('../trellis-reconstruction.mjs'):loadModule(specifier));
   return {persist,stored:()=>stored};};
 const settle=()=>new Promise(r=>setTimeout(r,0));
 
@@ -23,11 +23,11 @@ for(const [name,loadModule] of [
   test(`after the hero is stored, Generate still succeeds when ${name}; the failure is a levels report for that hero`,async()=>{
     const window={},{persist,stored}=pagePersist({loadModule,window});
     const service=createTrellisPageAuthoringGeneration({availability:()=>({status:'available'}),
-      runPage:async()=>({glb:new ArrayBuffer(12),generation:{runId:'r'},levelInputs:{}}),
+      runPage:async()=>({glb:new ArrayBuffer(12),generation:{runId:'r'},levelInputs:{decode:{vertices:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2])},materialFields:{features:new Float32Array(6),coordinates:new Int32Array([1,1,1]),resolution:1024}}}),
       persist:(glb,generation,label,extra)=>persist({glb,generation,label,...extra})});
     await service.run({source:'/selected.png',label:'shoe'});
     const state=service.read();
-    assert.equal(stored(),1);assert.equal(state.status,'complete');assert.equal(state.results.length,1);
+    assert.equal(stored(),2);assert.equal(state.status,'complete');assert.equal(state.results.length,1);
     assert.ok(!state.pending);assert.equal(service.busy(),false);
     for(let i=0;i<5;i++)await settle();
     assert.equal(window.__kaminosLastGenerationLevels?.source,'a'.repeat(64));

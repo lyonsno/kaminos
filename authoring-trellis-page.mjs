@@ -173,11 +173,12 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
   const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
   async function storePending(){
     const {glb,generation,label,surfelGlb,surfels,levelInputs,meshError}=state.pending;
-    set({status:'saving',stage:glb?'Saving mesh':'Saving surfels',progress:glb?'Saving generated mesh…':'Saving the surfels from the decoded field…'});
+    const recovery=!glb&&!surfelGlb&&!!levelInputs,kept=recovery?'raw reconstruction':'surfels';
+    set({status:'saving',stage:glb?'Saving mesh':`Saving ${kept}`,progress:glb?'Saving generated mesh…':`Saving the ${kept} from the decoded field…`});
     const saved=await persist(glb,generation,label,{surfelGlb,surfels,levelInputs});
     state.results.push(saved);state.pending=null;
     // A mesh-finishing failure stays the run's outcome; the surfels are what it kept.
-    if(meshError)set({status:'failed',error:`inference: ${meshError}; surfels saved`,stage:null,progress:'The mesh could not be finished. The surfels from the decoded field were saved.'});
+    if(meshError)set({status:'failed',error:`inference: ${meshError}; ${kept} saved`,stage:null,progress:`The mesh could not be finished. The ${kept} from the decoded field was saved.`});
     else set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
     return saved;
   }
@@ -218,11 +219,11 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         // Decoding succeeded and mesh finishing failed: keep the surfels built before cleanup, saved
         // through the same pending/retry path, with the mesh failure as the run's outcome.
         const kept=phase==='inference'&&!cancelled?error?.trellisSurfelsRun:null;
-        if(kept?.surfelGlb){
+        if(kept?.surfelGlb||kept?.levelInputs){
           const message=error?.message||String(error);
           state.pending={glb:null,generation:{...kept.generation,input:{...kept.generation?.input,source:input.source}},label:kept.label||label,
-            surfelGlb:kept.surfelGlb,surfels:kept.surfels??null,meshError:message};
-          try{await storePending();}catch(persistError){set({status:'failed',error:`inference: ${message}; surfels not saved yet: ${persistError.message}`,stage:null});}
+            surfelGlb:kept.surfelGlb,surfels:kept.surfels??null,levelInputs:kept.levelInputs??null,meshError:message};
+          try{await storePending();}catch(persistError){set({status:'failed',error:`inference: ${message}; decoded output not saved yet: ${persistError.message}`,stage:null});}
           throw error;
         }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;

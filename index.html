@@ -26932,17 +26932,26 @@ function setupAuthoringAssets(){
   const sha256Of=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
   const loadModule=specifier=>import(specifier);
   const persistTrellisPageRun=async out=>{
-    // A surfels-only run (finishMesh:false) stores the surfel asset as the result.
-    if(!out.glb){if(!out.surfelGlb)throw Error('TRELLIS run produced neither a mesh nor surfels');
-      const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',frame:'trellis-source',surfels:undefined},out.label,'TRELLIS surfels');
-      return {...saved,surfels:{...out.surfels,sha256:saved.sha256,source:saved.source}};}
+    // Preserve the exact decode and material samples before optional exports or
+    // GI workers can consume them. A normal GLB shows the raw geometry and also
+    // carries the original fields, losslessly, for recovery without inference.
+    let reconstruction=null;
+    if(out.levelInputs){
+      const {encodeTrellisReconstruction}=await loadModule('./trellis-reconstruction.mjs');
+      const raw=encodeTrellisReconstruction(out.levelInputs,{provenance:out.generation});
+      reconstruction=await persistGeneratedMesh(raw,{...out.generation,representation:'trellis-raw-reconstruction',frame:'trellis-source'},out.label,'TRELLIS raw recovery');
+    }
+    const retained=reconstruction?{source:reconstruction.source,sha256:reconstruction.sha256}:null;
+    if(!out.glb){if(!out.surfelGlb){if(reconstruction)return reconstruction;throw Error('TRELLIS run produced neither a mesh, surfels nor recovery fields');}
+      const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,reconstruction:retained,representation:'trellis-surfels',frame:'trellis-source',surfels:undefined},out.label,'TRELLIS surfels');
+      return {...saved,reconstruction:retained,surfels:{...out.surfels,sha256:saved.sha256,source:saved.source}};}
     let surfels=out.surfels??{status:'not built'};
     if(out.surfelGlb){
       try{const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',frame:'trellis-source',meshSha256:await sha256Of(out.glb),surfels:undefined},out.label,'TRELLIS surfels');
         surfels={...surfels,sha256:saved.sha256,source:saved.source};}
       catch(error){surfels={...surfels,status:'not stored',error:String(error?.message||error)};}
     }
-    const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels},out.label,'TRELLIS'),surfels};
+    const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels,reconstruction:retained},out.label,'TRELLIS'),surfels,reconstruction:retained};
     // GI proxy tiers (Stunt Doubles' prepareGenerationLevels) from this run's decode, registered as levels
     // of the stored hero. They build in a worker after the mesh is saved; the result never holds or fails it.
     if(out.levelInputs){
@@ -27024,7 +27033,7 @@ function setupAuthoringAssets(){
     }catch(error){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
       // Decoding succeeded and mesh finishing failed: the surfels built before cleanup go back with the run's identity.
-      if(error?.trellisSurfels?.surfelGlb&&!signal?.aborted)error.trellisSurfelsRun={surfelGlb:error.trellisSurfels.surfelGlb,surfels:error.trellisSurfels.surfels,label,
+      if((error?.trellisSurfels?.surfelGlb||error?.trellisSurfels?.levelInputs)&&!signal?.aborted)error.trellisSurfelsRun={surfelGlb:error.trellisSurfels.surfelGlb,surfels:error.trellisSurfels.surfels,levelInputs:error.trellisSurfels.levelInputs,label,
         generation:{schema:'kaminos.asset-generation.v1',runId,route:error.trellisSurfels.route,target:'this-page',
           input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},
           decoderActivationStorage:'f16',meshFinishing:{status:'failed',error:error.message}}};
