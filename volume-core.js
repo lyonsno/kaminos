@@ -11633,6 +11633,7 @@ export function createKaminosVolumePrototype({
   let gpuInitialized = false;
   let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
+  let fluidPipelineDevice = null;
   let pipeline = null;
   let readbackPipeline = null;
   let leanStockPipeline = null;
@@ -14254,6 +14255,9 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
+    // Shader dimensions live in uniforms. A field reset replaces buffers, not
+    // device pipelines; scene restore and basin edits must not compile them again.
+    if (fluidPipelineDevice !== device) {
     const renderPipelineConstants = { TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false, LEAN_EMISSIVE_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
     opticalSteppingPipelines.clear();
@@ -14662,6 +14666,8 @@ export function createKaminosVolumePrototype({
         primitive: { topology: 'triangle-list' },
       }),
     );
+      fluidPipelineDevice = device;
+    }
     fourArmHeldStateResidualParamsBuffer?.destroy();
     fourArmHeldStateResidualParamsBuffer = device.createBuffer({
       label: 'kaminos four-arm positive-complement residual march params',
