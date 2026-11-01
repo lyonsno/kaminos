@@ -47,7 +47,7 @@ try{
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
  for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':materialWidth,'volume-grid-height-ratio':2,'volume-fine-velocity':materialWidth/2,'volume-fine-pressure':materialWidth/4,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':12,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':12,'volume-world-smoke-intermediate':'off'}))await control(id,v);
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments);
- await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.open('material-hierarchy',{enabled:true,overlay:true,options:{budget:1,maxDetail:2}});window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[14,10,18],target:[0,4,0]});});
+ await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.open('material-hierarchy',{overlay:true});await window.kaminosWorkbenchExperiments.invoke('setOptions',{budget:1,maxDetail:2});await window.kaminosWorkbenchExperiments.invoke('setEnabled',true);window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[14,10,18],target:[0,4,0]});});
 
  const state=()=>page.evaluate(()=>{
    const d=window.__kaminosVolumePrototype.debugState(),a=window.__kaminosVolumePrototype.adaptiveMaterialState();
