@@ -11634,6 +11634,31 @@ export function createKaminosVolumePrototype({
   let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
   let fluidPipelineDevice = null;
+  let fluidPipelineTransparency = null;
+  const optionalPipelines = {
+    opticalTransportContributionPipeline: null,
+    browserResidualPipeline: null,
+    browserResidualSourcePipeline: null,
+    boundarySplatCompactPipeline: null,
+    boundarySplatFinalizePipeline: null,
+    boundarySplatRenderPipeline: null,
+    productBoundarySplatRenderPipeline: null,
+    boundarySplatReadbackPipeline: null,
+    boundarySplatBilinearRenderPipeline: null,
+    boundarySplatBilinearReadbackPipeline: null,
+    boundarySplatBilinearHdrPipeline: null,
+    boundarySplatHdrPipeline: null,
+    boundarySplatOpticalPipelines: [],
+    boundarySplatBilinearOpticalPipelines: [],
+    boundarySplatPresentationRenderPipeline: null,
+    boundarySplatPresentationReadbackPipeline: null,
+    boundarySplatOpticalPresentationRenderPipeline: null,
+    boundarySplatOpticalPresentationReadbackPipeline: null,
+    boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline: null,
+    fourArmHeldStateLinearResolvePipeline: null,
+    fourArmHeldStateResidualMarchPipelines: [],
+    fourArmHeldStateTimestampMarkerPipeline: null,
+  };
   let pipeline = null;
   let readbackPipeline = null;
   let leanStockPipeline = null;
@@ -11650,9 +11675,6 @@ export function createKaminosVolumePrototype({
   let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
-  let opticalTransportContributionPipeline = null;
-  let browserResidualPipeline = null;
-  let browserResidualSourcePipeline = null;
   let browserResidualBindGroupLayout = null;
   let browserResidualPipelineLayout = null;
   let browserResidualShader = null;
@@ -11854,32 +11876,13 @@ export function createKaminosVolumePrototype({
   let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
   let emissiveWhiteMatrix = null;
-  let boundarySplatCompactPipeline = null;
-  let boundarySplatFinalizePipeline = null;
-  let boundarySplatRenderPipeline = null;
-  let productBoundarySplatRenderPipeline = null;
-  let boundarySplatReadbackPipeline = null;
-  let boundarySplatBilinearRenderPipeline = null;
-  let boundarySplatBilinearReadbackPipeline = null;
-  let boundarySplatBilinearHdrPipeline = null;
-  let boundarySplatHdrPipeline = null;
-  let boundarySplatOpticalPipelines = [];
-  let boundarySplatBilinearOpticalPipelines = [];
   let boundarySplatPresentationShader = null;
   let boundarySplatOpticalPresentationShader = null;
   let fourArmHeldStateLinearResolveShader = null;
   let fourArmHeldStateResidualMarchShader = null;
   let fourArmHeldStateTimestampMarkerShader = null;
-  let boundarySplatPresentationRenderPipeline = null;
-  let boundarySplatPresentationReadbackPipeline = null;
-  let boundarySplatOpticalPresentationRenderPipeline = null;
-  let boundarySplatOpticalPresentationReadbackPipeline = null;
-  let boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = null;
-  let fourArmHeldStateLinearResolvePipeline = null;
   let fourArmHeldStateResidualBindGroupLayout = null;
   let fourArmHeldStateResidualPipelineLayout = null;
-  let fourArmHeldStateResidualMarchPipelines = [];
-  let fourArmHeldStateTimestampMarkerPipeline = null;
   let boundarySplatHdrTexture = null;
   let boundarySplatHdrTextureSize = '';
   let boundarySplatOpticalTexture = null;
@@ -14257,7 +14260,17 @@ export function createKaminosVolumePrototype({
     }
     // Shader dimensions live in uniforms. A field reset replaces buffers, not
     // device pipelines; scene restore and basin edits must not compile them again.
-    if (fluidPipelineDevice !== device) {
+    if (fluidPipelineDevice !== device || fluidPipelineTransparency !== transparentCanvas) {
+    // A property resolves to a real GPU pipeline on first use. Optional renderers
+    // and offline captures keep their existing callers without charging startup.
+    const deferPipeline = (name, create) => Object.defineProperty(optionalPipelines, name, {
+      configurable: true,
+      get() {
+        const value = create();
+        Object.defineProperty(optionalPipelines, name, { configurable: true, value });
+        return value;
+      },
+    });
     const renderPipelineConstants = { TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false, LEAN_EMISSIVE_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
     opticalSteppingPipelines.clear();
@@ -14318,7 +14331,7 @@ export function createKaminosVolumePrototype({
         `kaminos product lean-emissive-raymarch-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants,
       );
     }
-    opticalTransportContributionPipeline = device.createRenderPipeline({
+    deferPipeline('opticalTransportContributionPipeline', () => device.createRenderPipeline({
       label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
@@ -14333,8 +14346,8 @@ export function createKaminosVolumePrototype({
         ],
       },
       primitive: { topology: 'triangle-list' },
-    });
-    browserResidualSourcePipeline = device.createRenderPipeline({
+    }));
+    deferPipeline('browserResidualSourcePipeline', () => device.createRenderPipeline({
       label: `kaminos volume browser residual shader-material-authority source ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
@@ -14345,14 +14358,14 @@ export function createKaminosVolumePrototype({
         targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
       },
       primitive: { topology: 'triangle-list' },
-    });
-    browserResidualPipeline = device.createRenderPipeline({
+    }));
+    deferPipeline('browserResidualPipeline', () => device.createRenderPipeline({
       label: `kaminos volume browser webgpu-direct-residual postprocess ${gridShapeLabel(gridSize)}`,
       layout: browserResidualPipelineLayout,
       vertex: { module: browserResidualShader, entryPoint: 'vs' },
       fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
-    });
+    }));
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: transportPipelineLayout,
@@ -14456,16 +14469,16 @@ export function createKaminosVolumePrototype({
       layout: boundarySidecarPipelineLayout,
       compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
     });
-    boundarySplatCompactPipeline = device.createComputePipeline({
+    deferPipeline('boundarySplatCompactPipeline', () => device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
-    });
-    boundarySplatFinalizePipeline = device.createComputePipeline({
+    }));
+    deferPipeline('boundarySplatFinalizePipeline', () => device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
-    });
+    }));
     const makeBoundarySplatRenderPipeline = (
       targetFormat,
       label,
@@ -14489,9 +14502,9 @@ export function createKaminosVolumePrototype({
       },
       primitive: { topology },
     });
-    boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`);
+    deferPipeline('boundarySplatRenderPipeline', () => makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`));
     if (productFrameOwner === 'caller') {
-      productBoundarySplatRenderPipeline = device.createRenderPipeline({
+      deferPipeline('productBoundarySplatRenderPipeline', () => device.createRenderPipeline({
         label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`,
         layout: boundarySplatRenderPipelineLayout,
         vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
@@ -14512,31 +14525,31 @@ export function createKaminosVolumePrototype({
           depthWriteEnabled: false,
           depthCompare: 'less-equal',
         },
-      });
+      }));
     }
-    boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridShapeLabel(gridSize)}`);
-    boundarySplatBilinearRenderPipeline = makeBoundarySplatRenderPipeline(
+    deferPipeline('boundarySplatReadbackPipeline', () => makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridShapeLabel(gridSize)}`));
+    deferPipeline('boundarySplatBilinearRenderPipeline', () => makeBoundarySplatRenderPipeline(
       format,
       `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} raster ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
-    );
-    boundarySplatBilinearReadbackPipeline = makeBoundarySplatRenderPipeline(
+    ));
+    deferPipeline('boundarySplatBilinearReadbackPipeline', () => makeBoundarySplatRenderPipeline(
       'rgba8unorm',
       `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} witness readback ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
-    );
-    boundarySplatHdrPipeline = makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridShapeLabel(gridSize)}`);
-    boundarySplatBilinearHdrPipeline = makeBoundarySplatRenderPipeline(
+    ));
+    deferPipeline('boundarySplatHdrPipeline', () => makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridShapeLabel(gridSize)}`));
+    deferPipeline('boundarySplatBilinearHdrPipeline', () => makeBoundarySplatRenderPipeline(
       BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
       `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} hdr accumulation ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
-    );
+    ));
     const makeBoundarySplatOpticalPipelines = (
       vertexEntryPoint,
       fragmentEntryPoint,
@@ -14560,18 +14573,18 @@ export function createKaminosVolumePrototype({
       },
       primitive: { topology },
     }));
-    boundarySplatOpticalPipelines = makeBoundarySplatOpticalPipelines(
+    deferPipeline('boundarySplatOpticalPipelines', () => makeBoundarySplatOpticalPipelines(
       'boundarySplatVs',
       'boundarySplatOpticalFs',
       'triangle-list',
       'gaussian',
-    );
-    boundarySplatBilinearOpticalPipelines = makeBoundarySplatOpticalPipelines(
+    ));
+    deferPipeline('boundarySplatBilinearOpticalPipelines', () => makeBoundarySplatOpticalPipelines(
       'boundarySplatBilinearVs',
       'boundarySplatBilinearOpticalFs',
       'point-list',
       FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY,
-    );
+    ));
     const makeBoundarySplatPresentationPipeline = (targetFormat, label) => device.createRenderPipeline({
       label,
       layout: 'auto',
@@ -14583,8 +14596,8 @@ export function createKaminosVolumePrototype({
       },
       primitive: { topology: 'triangle-list' },
     });
-    boundarySplatPresentationRenderPipeline = makeBoundarySplatPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} canvas resolve`);
-    boundarySplatPresentationReadbackPipeline = makeBoundarySplatPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} witness resolve`);
+    deferPipeline('boundarySplatPresentationRenderPipeline', () => makeBoundarySplatPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} canvas resolve`));
+    deferPipeline('boundarySplatPresentationReadbackPipeline', () => makeBoundarySplatPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} witness resolve`));
     const makeBoundarySplatOpticalPresentationPipeline = (
       targetFormat,
       label,
@@ -14600,14 +14613,14 @@ export function createKaminosVolumePrototype({
       },
       primitive: { topology: 'triangle-list' },
     });
-    boundarySplatOpticalPresentationRenderPipeline = makeBoundarySplatOpticalPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} canvas resolve`);
-    boundarySplatOpticalPresentationReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} witness resolve`);
-    boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline(
+    deferPipeline('boundarySplatOpticalPresentationRenderPipeline', () => makeBoundarySplatOpticalPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} canvas resolve`));
+    deferPipeline('boundarySplatOpticalPresentationReadbackPipeline', () => makeBoundarySplatOpticalPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} witness resolve`));
+    deferPipeline('boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline', () => makeBoundarySplatOpticalPresentationPipeline(
       'rgba8unorm',
       `kaminos ${BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY} witness resolve`,
       'boundarySplatOpticalDepthOrderDiagnosticFs',
-    );
-    fourArmHeldStateLinearResolvePipeline = device.createRenderPipeline({
+    ));
+    deferPipeline('fourArmHeldStateLinearResolvePipeline', () => device.createRenderPipeline({
       label: 'kaminos four-arm held-state linear HDR resolve',
       layout: 'auto',
       vertex: { module: fourArmHeldStateLinearResolveShader, entryPoint: 'fourArmHeldStateResolveVs' },
@@ -14617,15 +14630,15 @@ export function createKaminosVolumePrototype({
         targets: [{ format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT }],
       },
       primitive: { topology: 'triangle-list' },
-    });
-    fourArmHeldStateTimestampMarkerPipeline = device.createComputePipeline({
+    }));
+    deferPipeline('fourArmHeldStateTimestampMarkerPipeline', () => device.createComputePipeline({
       label: 'kaminos four-arm held-state timestamp marker',
       layout: 'auto',
       compute: {
         module: fourArmHeldStateTimestampMarkerShader,
         entryPoint: 'fourArmHeldStateTimestampMarker',
       },
-    });
+    }));
     fourArmHeldStateResidualBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos four-arm positive-complement residual march bind group layout',
       entries: [
@@ -14645,7 +14658,7 @@ export function createKaminosVolumePrototype({
       label: 'kaminos four-arm positive-complement residual march pipeline layout',
       bindGroupLayouts: [fourArmHeldStateResidualBindGroupLayout],
     });
-    fourArmHeldStateResidualMarchPipelines = Array.from(
+    deferPipeline('fourArmHeldStateResidualMarchPipelines', () => Array.from(
       { length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
       (_, binIndex) => device.createRenderPipeline({
         label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
@@ -14665,8 +14678,9 @@ export function createKaminosVolumePrototype({
         },
         primitive: { topology: 'triangle-list' },
       }),
-    );
+    ));
       fluidPipelineDevice = device;
+      fluidPipelineTransparency = transparentCanvas;
     }
     fourArmHeldStateResidualParamsBuffer?.destroy();
     fourArmHeldStateResidualParamsBuffer = device.createBuffer({
@@ -16091,8 +16105,8 @@ export function createKaminosVolumePrototype({
       && !appearanceDecompositionActive()
       && browserResidualRequested()
       && browserResidualModel
-      && browserResidualPipeline
-      && browserResidualSourcePipeline
+      && optionalPipelines.browserResidualPipeline
+      && optionalPipelines.browserResidualSourcePipeline
       && browserResidualSampler
       && browserResidualBuffer
       && state.volumeResidualStatus === 'loaded';
@@ -16194,10 +16208,10 @@ export function createKaminosVolumePrototype({
       const bilinearRequested = state.fullSupportDepositionRequested === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
       const persistentCohortRequested = Boolean(persistentSparseCohortGpuState);
       const bilinearAvailable = persistentCohortRequested
-        ? Boolean(boundarySplatBilinearRenderPipeline) && Boolean(boundarySplatBilinearIndirectBuffer)
+        ? Boolean(optionalPipelines.boundarySplatBilinearRenderPipeline) && Boolean(boundarySplatBilinearIndirectBuffer)
         : boundarySplatMode === 'kernel_moment_full_flame_union'
           && !state.boundarySplatInstanceConsumerEffective
-          && Boolean(boundarySplatBilinearRenderPipeline)
+          && Boolean(optionalPipelines.boundarySplatBilinearRenderPipeline)
           && Boolean(boundarySplatBilinearIndirectBuffer);
       state.fullSupportDepositionEffective = bilinearRequested && bilinearAvailable
         ? FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
@@ -18815,7 +18829,7 @@ export function createKaminosVolumePrototype({
   }
 
   function uploadFourArmHeldStateResidualGrid(residualGrid) {
-    if (!device || !fourArmHeldStateResidualMarchPipelines[0] || !fourArmHeldStateResidualParamsBuffer) {
+    if (!device || !optionalPipelines.fourArmHeldStateResidualMarchPipelines[0] || !fourArmHeldStateResidualParamsBuffer) {
       throw new Error('four-arm-held-state:residual-march-admission:gpu-route-unavailable');
     }
     const gridSize = Number(residualGrid?.gridSize);
@@ -18887,7 +18901,7 @@ export function createKaminosVolumePrototype({
           storeOp: 'store',
         }],
       });
-      pass.setPipeline(fourArmHeldStateResidualMarchPipelines[binIndex]);
+      pass.setPipeline(optionalPipelines.fourArmHeldStateResidualMarchPipelines[binIndex]);
       pass.setBindGroup(0, fourArmHeldStateResidualBindGroup);
       pass.draw(3);
       pass.end();
@@ -19153,7 +19167,7 @@ export function createKaminosVolumePrototype({
         return false;
       }
       if (
-        !boundarySplatRenderPipeline
+        !optionalPipelines.boundarySplatRenderPipeline
         || !boundarySplatDrawBuffer
         || !boundarySplatIndirectBuffer
         || !boundarySplatBilinearIndirectBuffer
@@ -19205,9 +19219,9 @@ export function createKaminosVolumePrototype({
     }
     if (
       !state.boundarySidecarBuiltThisFrame
-      || !boundarySplatCompactPipeline
-      || !boundarySplatFinalizePipeline
-      || !boundarySplatRenderPipeline
+      || !optionalPipelines.boundarySplatCompactPipeline
+      || !optionalPipelines.boundarySplatFinalizePipeline
+      || !optionalPipelines.boundarySplatRenderPipeline
       || !boundarySplatDrawBuffer
       || !boundarySplatIndirectBuffer
       || !boundarySplatBilinearIndirectBuffer
@@ -19231,7 +19245,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
       ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
     });
-    compactPass.setPipeline(boundarySplatCompactPipeline);
+    compactPass.setPipeline(optionalPipelines.boundarySplatCompactPipeline);
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
@@ -19242,7 +19256,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass`,
       ...(hooks.finalizeTimestampWrites ? { timestampWrites: hooks.finalizeTimestampWrites } : {}),
     });
-    finalizePass.setPipeline(boundarySplatFinalizePipeline);
+    finalizePass.setPipeline(optionalPipelines.boundarySplatFinalizePipeline);
     finalizePass.setBindGroup(0, computeBindGroup);
     finalizePass.dispatchWorkgroups(1);
     finalizePass.end();
@@ -19258,11 +19272,11 @@ export function createKaminosVolumePrototype({
   }
 
   function resolveBoundarySplatBilinearPipeline(targetPipeline) {
-    if (targetPipeline === boundarySplatRenderPipeline) return boundarySplatBilinearRenderPipeline;
-    if (targetPipeline === boundarySplatReadbackPipeline) return boundarySplatBilinearReadbackPipeline;
-    if (targetPipeline === boundarySplatHdrPipeline) return boundarySplatBilinearHdrPipeline;
-    const opticalIndex = boundarySplatOpticalPipelines.indexOf(targetPipeline);
-    if (opticalIndex >= 0) return boundarySplatBilinearOpticalPipelines[opticalIndex] || null;
+    if (targetPipeline === optionalPipelines.boundarySplatRenderPipeline) return optionalPipelines.boundarySplatBilinearRenderPipeline;
+    if (targetPipeline === optionalPipelines.boundarySplatReadbackPipeline) return optionalPipelines.boundarySplatBilinearReadbackPipeline;
+    if (targetPipeline === optionalPipelines.boundarySplatHdrPipeline) return optionalPipelines.boundarySplatBilinearHdrPipeline;
+    const opticalIndex = optionalPipelines.boundarySplatOpticalPipelines.indexOf(targetPipeline);
+    if (opticalIndex >= 0) return optionalPipelines.boundarySplatBilinearOpticalPipelines[opticalIndex] || null;
     return null;
   }
 
@@ -19272,7 +19286,7 @@ export function createKaminosVolumePrototype({
     return next;
   }
 
-  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
+  function encodeBoundarySplatDraw(encoder, view, targetPipeline = optionalPipelines.boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
     const bilinear = state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
     const effectivePipeline = bilinear ? resolveBoundarySplatBilinearPipeline(targetPipeline) : targetPipeline;
@@ -19349,7 +19363,7 @@ export function createKaminosVolumePrototype({
       });
       return false;
     }
-    if (!boundarySplatHdrPipeline || !targetPipeline) {
+    if (!optionalPipelines.boundarySplatHdrPipeline || !targetPipeline) {
       boundarySplatPresentationModeFallbackReason = 'boundary-splat-hdr-presentation-route-unavailable';
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
@@ -19358,7 +19372,7 @@ export function createKaminosVolumePrototype({
     const accumulated = encodeBoundarySplatDraw(
       encoder,
       boundarySplatHdrTexture.createView(),
-      boundarySplatHdrPipeline,
+      optionalPipelines.boundarySplatHdrPipeline,
       {
         loadOp: 'clear',
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
@@ -19409,7 +19423,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeBoundarySplatOpticalAccumulation(encoder, options = {}) {
-    if (boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS) return false;
+    if (optionalPipelines.boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS) return false;
     ensureBoundarySplatOpticalTexture();
     for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
       const timestampWrites = {};
@@ -19428,7 +19442,7 @@ export function createKaminosVolumePrototype({
           baseArrayLayer: binIndex,
           arrayLayerCount: 1,
         }),
-        boundarySplatOpticalPipelines[binIndex],
+        optionalPipelines.boundarySplatOpticalPipelines[binIndex],
         {
           loadOp: 'clear',
           clearValue: { r: 0, g: 0, b: 0, a: 0 },
@@ -19491,7 +19505,7 @@ export function createKaminosVolumePrototype({
       });
       return false;
     }
-    if (boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS || !targetPipeline) {
+    if (optionalPipelines.boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS || !targetPipeline) {
       boundarySplatPresentationModeFallbackReason = 'boundary-splat-optical-recurrence-route-unavailable';
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
@@ -19530,10 +19544,10 @@ export function createKaminosVolumePrototype({
   function encodeBoundarySplatPresentation(encoder, targetView, additivePipeline, resolvePipeline, options = {}) {
     if (boundarySplatPresentationModeEffective === BOUNDARY_SPLAT_OPTICAL_MODE) {
       const opticalResolvePipeline = options.opticalDepthOrderDiagnostic === true
-        ? boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline
-        : (resolvePipeline === boundarySplatPresentationReadbackPipeline
-          ? boundarySplatOpticalPresentationReadbackPipeline
-          : boundarySplatOpticalPresentationRenderPipeline);
+        ? optionalPipelines.boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline
+        : (resolvePipeline === optionalPipelines.boundarySplatPresentationReadbackPipeline
+          ? optionalPipelines.boundarySplatOpticalPresentationReadbackPipeline
+          : optionalPipelines.boundarySplatOpticalPresentationRenderPipeline);
       return encodeBoundarySplatOpticalRecurrence(encoder, targetView, opticalResolvePipeline, options);
     }
     if (boundarySplatPresentationModeEffective === 'matched-presentation-v0') {
@@ -19585,7 +19599,7 @@ export function createKaminosVolumePrototype({
       label,
       timestampWrites,
     });
-    pass.setPipeline(fourArmHeldStateTimestampMarkerPipeline);
+    pass.setPipeline(optionalPipelines.fourArmHeldStateTimestampMarkerPipeline);
     pass.dispatchWorkgroups(1);
     pass.end();
   }
@@ -19658,7 +19672,7 @@ export function createKaminosVolumePrototype({
       if (!splatsEncoded) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
       }
-      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
+      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), optionalPipelines.boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
           endOfPassWriteIndex: 5,
@@ -21451,7 +21465,7 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
-    pass.setPipeline(browserResidualSourcePipeline);
+    pass.setPipeline(optionalPipelines.browserResidualSourcePipeline);
     pass.setBindGroup(0, fluidBindGroup());
     pass.draw(3);
     pass.end();
@@ -21469,7 +21483,7 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(browserResidualPipeline);
+    pass.setPipeline(optionalPipelines.browserResidualPipeline);
     pass.setBindGroup(0, bindGroup);
     pass.draw(3);
     pass.end();
@@ -21668,8 +21682,8 @@ export function createKaminosVolumePrototype({
           splatEncoded = encodeBoundarySplatPresentation(
             encoder,
             currentTexture.createView(),
-            boundarySplatRenderPipeline,
-            boundarySplatPresentationRenderPipeline,
+            optionalPipelines.boundarySplatRenderPipeline,
+            optionalPipelines.boundarySplatPresentationRenderPipeline,
             { loadOp: raymarchApplied ? 'load' : 'clear' },
           );
           splatApplied = splatEncoded;
@@ -25132,7 +25146,7 @@ export function createKaminosVolumePrototype({
       const reconstructed = encodeBoundarySplatOpticalResolve(
         encoder,
         fourArmHeldStateLinearTexture.createView(),
-        fourArmHeldStateLinearResolvePipeline,
+        optionalPipelines.fourArmHeldStateLinearResolvePipeline,
         { timestampWrites: { querySet, beginningOfPassWriteIndex: 10, endOfPassWriteIndex: 11 } },
       );
       if (!reconstructed) throw new Error('linear-hdr-reconstruction-failed');
@@ -25255,7 +25269,7 @@ export function createKaminosVolumePrototype({
 
   async function sampleSharedTransmittanceContributions(options = {}) {
     const requiredMode = 'complete-flame-under-total-extinction';
-    if (!state.active || !device || !opticalTransportContributionPipeline) {
+    if (!state.active || !device || !optionalPipelines.opticalTransportContributionPipeline) {
       return { ok: false, status: 'failed', failurePhase: 'admission', reason: 'shared-transmittance-contribution-route-inactive' };
     }
     if (appearanceDecompositionModeEffective !== requiredMode
@@ -25309,7 +25323,7 @@ export function createKaminosVolumePrototype({
           storeOp: 'store',
         })),
       });
-      pass.setPipeline(opticalTransportContributionPipeline);
+      pass.setPipeline(optionalPipelines.opticalTransportContributionPipeline);
       pass.setBindGroup(0, fluidBindGroup());
       pass.draw(3);
       pass.end();
@@ -25821,8 +25835,8 @@ export function createKaminosVolumePrototype({
         splatEncoded = encodeBoundarySplatPresentation(
           encoder,
           frameTexture.createView(),
-          boundarySplatReadbackPipeline,
-          boundarySplatPresentationReadbackPipeline,
+          optionalPipelines.boundarySplatReadbackPipeline,
+          optionalPipelines.boundarySplatPresentationReadbackPipeline,
           {
             loadOp: raymarchApplied ? 'load' : 'clear',
             opticalDepthOrderDiagnostic: options.opticalDepthOrderDiagnostic === true,
@@ -26729,8 +26743,8 @@ export function createKaminosVolumePrototype({
     });
     const targetView = presentToCanvas ? context.getCurrentTexture().createView() : frameTexture.createView();
     const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
-    const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
-    const targetSplatResolvePipeline = presentToCanvas ? boundarySplatPresentationRenderPipeline : boundarySplatPresentationReadbackPipeline;
+    const targetSplatPipeline = presentToCanvas ? optionalPipelines.boundarySplatRenderPipeline : optionalPipelines.boundarySplatReadbackPipeline;
+    const targetSplatResolvePipeline = presentToCanvas ? optionalPipelines.boundarySplatPresentationRenderPipeline : optionalPipelines.boundarySplatPresentationReadbackPipeline;
     const composition = updateSelectiveHeadLiveCompositionState();
     const timingPairs = {};
     let nextTimestampIndex = 0;
@@ -27211,8 +27225,8 @@ export function createKaminosVolumePrototype({
           splatEncoded = encodeBoundarySplatPresentation(
             encoder,
             currentTexture.createView(),
-            boundarySplatRenderPipeline,
-            boundarySplatPresentationRenderPipeline,
+            optionalPipelines.boundarySplatRenderPipeline,
+            optionalPipelines.boundarySplatPresentationRenderPipeline,
             { loadOp: raymarchEncoded ? 'load' : 'clear' },
           );
         }
@@ -27310,8 +27324,8 @@ export function createKaminosVolumePrototype({
         const retrySplatEncoded = encodeBoundarySplatPresentation(
           retryEncoder,
           retryTexture.createView(),
-          boundarySplatRenderPipeline,
-          boundarySplatPresentationRenderPipeline,
+          optionalPipelines.boundarySplatRenderPipeline,
+          optionalPipelines.boundarySplatPresentationRenderPipeline,
           { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
         );
         if (!retrySplatEncoded) {
@@ -27757,8 +27771,8 @@ export function createKaminosVolumePrototype({
     const splatApplied = encodeBoundarySplatPresentation(
       commandEncoder,
       colorView,
-      productBoundarySplatRenderPipeline,
-      boundarySplatPresentationRenderPipeline,
+      optionalPipelines.productBoundarySplatRenderPipeline,
+      optionalPipelines.boundarySplatPresentationRenderPipeline,
       { loadOp: 'load', depthView },
     );
     if (!splatApplied) {

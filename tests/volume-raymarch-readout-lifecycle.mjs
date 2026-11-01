@@ -29,7 +29,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     selectiveHeadLiveRoleGroups:()=>null,encodeBoundarySidecar:noop,encodeBoundarySplats:noop,
     context:{getCurrentTexture:()=>({createView:()=>({})})},boundarySplatRequested:()=>route==='splats',browserResidualCanApply:()=>route==='residual',
     updateSelectiveHeadLiveCompositionState:()=>({effective:'splat-only',definition:{splat:true,raymarch:false}}),
-    encodeBoundarySplatPresentation:()=>true,boundarySplatRenderPipeline:{},boundarySplatPresentationRenderPipeline:{},
+    encodeBoundarySplatPresentation:()=>true,optionalPipelines:{boundarySplatRenderPipeline:{},boundarySplatPresentationRenderPipeline:{}},
     recordSelectiveHeadLivePassReceipt:x=>x,recordVolumePresentationApplication:noop,recordBrowserResidualCost:noop,
     ensureFrameTexture:noop,ensureBrowserResidualFeatureTexture:noop,frameTexture:{createView:()=>({})},browserResidualFeatureTexture:{createView:()=>({})},
     encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,sceneTransportConsumer:null,canvasPresentationSuppressed:route==='proxy',
