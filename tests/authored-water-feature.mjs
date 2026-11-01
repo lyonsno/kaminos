@@ -27,6 +27,6 @@ console.log('Authored preview stays lazy; experiment and authored integration sh
  const feature=createAuthoredWaterFeature({services:()=>({redraw(){redraws++;}}),refresh:()=>projections.push(feature.host),emitters:()=>[],loadExperiment:options=>createFiniteFluidHost({...options,device:{},createSolver:async()=>({available:true,getDebugState:()=>({}),destroy(){destroyed++;}}),createPresentation:()=>({state:()=>({}),dispose(){}})})});
  const old=await feature.openExperiment(setup);const current=await feature.openExperiment(setup);
  const before=redraws;await old.dispose();assert.equal(redraws,before,'Obsolete closure cannot disturb the current presentation');assert.ok(feature.host);
- await current.dispose();assert.deepEqual(projections,[null],'Closing must publish absent water to controls');assert.equal(feature.host,null);assert.equal(destroyed,2);assert.equal(redraws,before+1,'Closing the current experiment must redraw its removed presentation');
+ const priorRefreshes=projections.length;await current.dispose();assert.equal(projections.length,priorRefreshes+1,'Closing must refresh controls');assert.equal(projections.at(-1),null,'Closing must publish absent water to controls');assert.equal(feature.host,null);assert.equal(destroyed,2);assert.equal(redraws,before+1,'Closing the current experiment must redraw its removed presentation');
  await current.dispose();assert.equal(redraws,before+1,'Repeated close remains inert');
 }

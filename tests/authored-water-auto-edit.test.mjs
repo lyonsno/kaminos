@@ -83,3 +83,23 @@ test('Shared spacing previews during a drag without changing source amount or hi
 test('SWC-1 pending water edit respects Undo on another scene target',async()=>{
  const f=historyFixture();let other=0;f.history.register('@other',{read:()=>({value:other}),check:v=>v,write:v=>{other=v.value;}});f.history.apply('@other',{value:1},'Other');f.draftWidth(.75);await f.history.undo();await f.settle();assert.equal(f.api.read().selected.settings.drop.width,.5);assert.equal(f.history.state().redoCount,1);await f.history.redo();assert.equal(other,1);
 });
+
+test('restart after edits is opt-in, gesture-coalesced and preserves pause',async()=>{
+ const f=fixture();let restarted=[];f.api.release=(id,options)=>restarted.push(options);
+ f.setRuntime({paused:true,pendingSourceChanges:true});
+ f.draftWidth(.6);await f.settle();assert.equal(restarted.length,0);
+ f.input('[data-restart-edits]').checked=true;
+ const drag=f.drags.get(f.input('[data-width]'));drag.onStart();f.draftWidth(.7);f.draftWidth(.8);await f.settle();assert.equal(restarted.length,0);
+ drag.onEnd();await f.controls.flush();await f.settle();assert.equal(restarted.length,1);assert.deepEqual(restarted[0],{paused:true});
+ f.setRuntime(null);f.draftWidth(.9);await f.settle();assert.equal(restarted.length,1,'Initial editing must not start water');
+});
+test('Reset accepts the visible valid draft before returning to initial state',async()=>{
+ const f=fixture();let editsAtReset=-1;f.api.reset=()=>editsAtReset=f.edits.length;f.draftWidth(.7);await f.input('[data-reset]').onclick();assert.equal(editsAtReset,1);
+});
+test('completed viewport edits schedule one restart; tentative edits and cancellation do not',async()=>{
+ const f=fixture();let restarted=0;f.api.release=()=>restarted++;f.input('[data-restart-edits]').checked=true;
+ f.setRuntime({paused:true,pendingSourceChanges:true});
+ f.historyChanged({active:{target:'A'},undoCount:0,redoCount:0});await f.settle();assert.equal(restarted,0);
+ f.historyChanged({active:null,undoCount:0,redoCount:0});await f.settle();assert.equal(restarted,0);
+ f.historyChanged({active:null,undoCount:1,redoCount:0});await f.settle();assert.equal(restarted,1);
+});

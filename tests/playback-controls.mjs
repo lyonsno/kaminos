@@ -30,3 +30,19 @@ state.duration=2;controls.update();assert.equal(controls.elements.timeline.hidde
 state.time=NaN;controls.update();assert.match(controls.elements.error.textContent,/clock/i);assert.equal(controls.elements.replay.disabled,true,'invalid effective clocks cannot look usable');
 controls.dispose();const n=calls.length;await controls.elements.replay.onclick();assert.equal(calls.length,n,'disposed controls cannot operate a former owner');assert.equal(root.children.length,0);
 console.log('Shared playback delegates real operations, holds scrubbing, preserves nodes and reports invalid/failed/disposed owners');
+{
+ const calls=[];let busy=true;
+ const c=mountPlaybackControls({document,root,read:()=>({playing:false,time:0,rate:1,duration:null,busy,canReset:true,canCancel:busy,canRate:false,replayLabel:'Restart'}),invoke:async name=>calls.push(name)});
+ assert.equal(c.elements.reset?.hidden,false,'Owner reset must stay accessible in shared transport');
+ assert.equal(c.elements.reset.disabled,false,'Reset must interrupt preparation');
+ assert.equal(c.elements.cancel.hidden,false);await c.elements.cancel.onclick();assert.equal(calls.at(-1),'cancel');
+ assert.equal(c.elements.replay.textContent,'Restart');assert.equal(c.elements.rate.hidden,true);
+ c.dispose();
+}
+{
+ let reject;let busy=false;const calls=[];
+ const c=mountPlaybackControls({document,root,read:()=>({playing:false,time:0,rate:1,duration:null,busy,canReset:true,canCancel:busy}),invoke:async name=>{calls.push(name);if(name==='replay'){busy=true;return new Promise((_,r)=>reject=r);}if(name==='cancel')busy=false;}});
+ const pending=c.elements.replay.onclick();c.update();await c.elements.cancel.onclick();
+ assert.equal(c.elements.play.disabled,false,'Cancel must release controls before obsolete preparation finishes');
+ reject(Error('Old preparation superseded'));await pending;assert.equal(c.elements.error.textContent,'','Obsolete completion must not replace cancellation');c.dispose();
+}

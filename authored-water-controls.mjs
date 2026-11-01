@@ -1,7 +1,8 @@
+import {mountPlaybackControls} from './playback-controls.mjs';
 import {normalizeAuthoredWaterDrop,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
 /** Water properties use the ordinary scene edit API. Debounce typing; finish a
  * numeric drag before committing, so Escape still cancels one whole gesture. */
-export function mountAuthoredWaterControls({document,root,sourceRoot=null,simulationRoot=null,controls,api,schedule=setTimeout,cancel=clearTimeout}) {
+export function mountAuthoredWaterControls({document,root,sourceRoot=null,simulationRoot=null,playbackRoot=null,controls,api,schedule=setTimeout,cancel=clearTimeout}) {
  const node=document.createElement('section');node.className='panel authored-water-controls';
  node.innerHTML=`<style>
  .authored-water-controls [hidden]{display:none!important}
@@ -12,20 +13,20 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  </style>
  <h2>Water sources</h2><div data-actions><button class="btn" data-add>Add water volume</button><button class="btn" data-add-flow>Add water emitter</button></div>
  <button class="btn" data-select-simulation>Select Water simulation</button>
- <p class="hint">Select a source in the scene to edit it. Playback, capacity and world bounds belong to Water simulation in the scene outline.</p>
+ <p class="hint">Select a source in the scene to edit it. Use playback below the viewport. Capacity and world bounds belong to Water simulation in the scene outline.</p>
  <div data-simulation>
-  <div data-run><div data-actions><button class="btn" data-reset>Reset to initial state</button><button class="btn" data-release>Restart</button><button class="btn" data-pause>Play</button></div>
-   <p class="hint" data-state role="status"></p><details><summary>Simulation timing</summary><p class="hint" data-cadence></p></details><p class="hint" data-play-blocked role="status"></p><button class="btn" data-fit-bounds hidden>Fit bounds to water</button><p role="alert" data-run-error></p>
+  <div data-run><div data-actions data-inspector-playback><button class="btn" data-reset>Reset to initial state</button><button class="btn" data-release>Restart</button><button class="btn" data-pause>Play</button></div>
+   <label data-restart-option><input type="checkbox" data-restart-edits>Restart after edits</label><p class="hint" data-restart-help>When enabled, a completed edit restarts changed initial setup. Paused water stays paused. Material and emitter changes apply live.</p><p class="hint" data-state role="status"></p><details><summary>Simulation timing</summary><p class="hint" data-cadence></p></details><p class="hint" data-play-blocked role="status"></p><button class="btn" data-fit-bounds hidden>Fit bounds to water</button><p role="alert" data-run-error></p>
   </div>
   <h3>Particle allocation</h3>
-  <label>Additional particle slots<input class="transform-input" type="number" step="256" min="1" data-capacity></label>
+  <label>Additional particle slots<input class="transform-input" type="number" step="256" min="1" data-capacity></label><p class="hint" data-active-capacity></p>
   <p class="hint">Added to the initial water particles to form one shared, recyclable pool. Departed initial water also frees slots for emitters. A full pool stops new emission until water leaves or retires. This changes capacity, not flow rate or particle size.</p>
-  <p class="hint" data-allocation-summary></p><div data-initial-resolution><label>Initial volume particle target<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-resolution-summary></p></div>
+  <p class="hint" data-allocation-summary></p><div data-initial-resolution><label>Initial volume particle target<input class="transform-input" type="number" step="256" min="1" data-target></label><p class="hint" data-active-target></p><p class="hint" data-resolution-summary></p></div>
   <h3>Water material</h3>
   <label><input type="checkbox" data-world-material>Keep material coefficients constant as resolution changes</label>
-  <label>Pressure wave speed · m/s<input class="transform-input" type="number" min="0" step="0.1" data-wave-speed></label>
-  <label>Kinematic viscosity · m²/s<input class="transform-input" type="number" min="0" step="0.0001" data-kinematic-viscosity></label>
-  <p class="hint">Enable to edit these values; enabling keeps their current values. With this off, the original grid coefficients stay fixed and these world values change with resolution. Numerical damping can still change. Restart applies material edits.</p>
+  <label>Pressure wave speed · m/s<input class="transform-input" type="number" min="0" step="0.1" data-wave-speed></label><p class="hint" data-active-wave-speed></p>
+  <label>Kinematic viscosity · m²/s<input class="transform-input" type="number" min="0" step="0.0001" data-kinematic-viscosity></label><p class="hint" data-active-kinematic-viscosity></p>
+  <p class="hint">Enable to edit these values; enabling keeps their current values. With this off, the original grid coefficients stay fixed and these world values change with resolution. Numerical damping can still change. Material edits apply at the next simulation update, preserving the water. Restart to compare from the beginning.</p>
   <p role="alert" data-material-error></p>
   <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
   <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
@@ -35,7 +36,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  <div data-selected hidden>
   <p class="hint" data-label></p>
   <label>Source type<select class="select-input" data-mode><option value="finite_drop">Initial water volume</option><option value="continuous">Continuous emitter</option></select></label>
-  <div data-drop><label>Initial volume width<input class="transform-input" type="number" min="0" step="0.01" data-width></label><p class="hint" data-proposed></p><p class="hint">Places water once at the start. Move and size this object in the viewport; Restart uses its new initial shape. Resolution belongs to Water simulation.</p></div>
+  <div data-drop><label>Initial volume width<input class="transform-input" type="number" min="0" step="0.01" data-width></label><p class="hint" data-active-width></p><p class="hint" data-proposed></p><p class="hint">Places water once at the start. Move and size this object in the viewport; Restart uses its new initial shape. Resolution belongs to Water simulation.</p></div>
   <div data-flow hidden>
    <label>Flow · litres/s<input class="transform-input" type="number" min="0" step="0.1" data-rate></label>
    <label>Aperture radius<input class="transform-input" type="number" min="0.035" max="0.18" step=".001" data-radius></label>
@@ -50,9 +51,11 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  node.querySelectorAll('label').forEach(label=>label.classList.add('field'));root.prepend(node);
  const sourcePanel=node.querySelector('[data-selected]'),simulationPanel=node.querySelector('[data-simulation]');
  sourcePanel.classList.add('authored-water-controls');simulationPanel.classList.add('authored-water-controls');
- const $=q=>node.querySelector(q)??sourcePanel.querySelector(q)??simulationPanel.querySelector(q);
+ const detached=new Map();
+ const $=q=>detached.get(q)??node.querySelector(q)??sourcePanel.querySelector(q)??simulationPanel.querySelector(q);
  const sourceError=$('[data-source-error]'),runError=$('[data-run-error]'),simulationError=$('[data-simulation-error]');
  let selected=null,dirty=false,simulationDirty=false,revision=0,simulationRevision=0,disposed=false,inFlight=null,ownWrite=null,acceptedSource=null,acceptedSimulation=null,runRevision=0,previewInfo=null;
+ let playback=null,suppressAuto=0;
  const timers=new Map(),gestures=new Set(),scrubs=[];
  const stopTimer=kind=>{if(timers.has(kind)){cancel(timers.get(kind));timers.delete(kind);}};
  const current=(id,version)=>!disposed&&selected?.id===id&&revision===version;
@@ -103,15 +106,25 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
     if(disposed)return false;
     if(kind==='source'&&current(id,version))dirty=false;
     if(kind==='simulation'&&simulationRevision===simVersion)simulationDirty=false;
-    refresh();return true;
+    refresh();
+    queueRestart();
+    return true;
    }catch(e){if(!disposed&&(kind!=='source'||current(id,version)))error.textContent=e.message;return false;}
   })();
   inFlight=operation;try{return await operation;}finally{if(inFlight===operation)inFlight=null;}
  }
+ function queueRestart(){
+  if(suppressAuto||!$('[data-restart-edits]').checked||!api.read().runtime?.pendingSourceChanges)return;
+  stopTimer('restart');
+  timers.set('restart',schedule(()=>{timers.delete('restart');const r=api.read().runtime;
+   if(!disposed&&!dirty&&!simulationDirty&&!gestures.size&&$('[data-restart-edits]').checked&&r?.pendingSourceChanges)
+    return call(()=>api.release(selected?.id??api.read().sources?.[0]?.id,{paused:r.paused}));
+  },0));
+ }
  function queue(kind){stopTimer(kind);if(!disposed&&!gestures.has(kind))timers.set(kind,schedule(()=>{timers.delete(kind);return flush(kind);},250));}
  function showResolutionSummary(simulation=api.read().simulation){
   const preview=previewInfo?.draft?previewInfo:null,sampling=preview?.sampling??simulation?.sampling,count=preview?.particleCount??simulation?.proposedParticleCount,error=preview?.relativeVolumeError??simulation?.relativeVolumeError;
-  $('[data-resolution-summary]').textContent=sampling?`${count?.toLocaleString()??'—'} ${preview?'preview':'initial'} particles · derived spacing ${sampling.spacing.toPrecision(4)} · ${(error*100).toFixed(2)}% total volume error. Target is shared across all drops; adding water makes resolution coarser at the same target. Applies on Restart; this changes initial sampling, not the volume of water.`:'';
+  $('[data-resolution-summary]').textContent=sampling?`${count?.toLocaleString()??'—'} ${preview?'preview':'initial'} particles · derived spacing ${sampling.spacing.toPrecision(4)} · ${(error*100).toFixed(2)}% total volume error. Target is shared across all drops; adding water makes resolution coarser at the same target. ${api.read().runtime?'Restart applies this sampling.':'Preview updates now; Play uses this sampling.'} The water volume stays unchanged.`:'';
  }
  function showProposal(){
   const w=Number($('[data-width]').value),shared=previewInfo?.sampling??api.read().simulation?.sampling;let d=null;try{d=selected?describeAuthoredWaterDrop({...selected.settings.drop,width:w},selected.transform??{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},shared):null;}catch{}
@@ -137,9 +150,10 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  $('[data-stop]').onclick=()=>{stopTimer('source');revision++;dirty=false;return call(()=>api.edit(selected.id,{mode:'continuous',volumeRate:0}),{error:sourceError});};
  $('[data-match]').onclick=()=>call(()=>api.match(selected?.id??api.read().simulation?.compatibility?.match?.referenceId),{error:$('[data-match-error]')});
  $('[data-fit-bounds]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.fitBounds();});
- $('[data-reset]').onclick=()=>call(()=>api.reset());
- $('[data-release]').onclick=()=>call(async()=>{if(await flush('source')&&await flush('simulation'))await api.release(selected?.id??api.read().sources?.[0]?.id);});
- $('[data-pause]').onclick=()=>call(async()=>{if(api.read().runtime)return api.pause();if(await flush('source')&&await flush('simulation'))return api.release(selected?.id??api.read().sources?.[0]?.id);});
+ async function runAction(action){suppressAuto++;stopTimer('restart');try{if(await flush('source')&&await flush('simulation'))await action();}finally{suppressAuto--;}}
+ $('[data-reset]').onclick=()=>call(()=>runAction(()=>api.reset()));
+ $('[data-release]').onclick=()=>call(()=>runAction(()=>api.release(selected?.id??api.read().sources?.[0]?.id)));
+ $('[data-pause]').onclick=()=>call(()=>runAction(()=>api.read().runtime?api.pause():api.release(selected?.id??api.read().sources?.[0]?.id)));
  function refresh(){
   if(disposed)return;const s=api.read();
   const sourceSignature=JSON.stringify(s.selected?.settings),simulationSignature=JSON.stringify(s.simulation?.settings);
@@ -152,7 +166,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   if(!simulation?.present){stopTimer('simulation');simulationDirty=false;simulationRevision++;}
   if(simulation?.settings&&!simulationDirty){$('[data-capacity]').value=simulation.settings.particleCount??12000;if(simulation.sampling){$('[data-target]').value=simulation.sampling.particleTarget??Math.round(simulation.requestedVolume/simulation.sampling.spacing**3);$('[data-container]').checked=simulation.sampling.container!==null;const b=simulation.sampling.container??simulation.sampling.worldBounds;$('[data-bounds]').hidden=false;for(const input of simulationPanel.querySelectorAll('[data-bound]'))input.value=b[input.dataset.bound][Number(input.dataset.axis)];}}
   if(!simulationDirty){const m=simulation?.settings?.mlsMaterial??simulation?.material;$('[data-world-material]').checked=!!simulation?.settings?.mlsMaterial;for(const [selector,key]of [['wave-speed','pressureWaveSpeed'],['kinematic-viscosity','kinematicViscosity']]){$('[data-'+selector+']').value=m?.[key]??'';$('[data-'+selector+']').disabled=!$('[data-world-material]').checked;}}
-  $('[data-material-error]').textContent=simulation?.material?.error?`Cannot restart with this material at the current resolution: ${simulation.material.error}. Adjust material or resolution; the current water is unchanged.`:'';
+  $('[data-material-error]').textContent=s.runtime?.materialError?`Material edit could not apply: ${s.runtime.materialError}`:simulation?.material?.error?`Cannot restart with this material at the current resolution: ${simulation.material.error}. Adjust material or resolution; the current water is unchanged.`:'';
   $('[data-allocation-summary]').textContent=simulation?.present?`On Restart: ${(simulation.proposedParticleCount??0).toLocaleString()} initial + ${(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0).toLocaleString()} additional = ${((simulation.proposedParticleCount??0)+(s.sources?.some(r=>r.mode!=='finite_drop')?(simulation.settings?.particleCount??12000):0)).toLocaleString()} total slots.`:'';
   showResolutionSummary(simulation);$('[data-initial-resolution]').hidden=!s.sources?.some(r=>r.mode==='finite_drop')&&selected?.settings?.mode!=='finite_drop';
   $('[data-release]').disabled=!(s.sources?.length||selected);
@@ -177,33 +191,49 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  }
  function refreshStatus(s=api.read()){
   const runtime=s.runtime,population=runtime?.population,capacity=runtime?.capacity??runtime?.particleCount;
-  const text=runtime?`${runtime.paused?'Paused':'Playing'} · tick ${runtime.clock?.completedStep??runtime.step??0} · ${population?.active!=null?population.active.toLocaleString()+' live':'live count pending'} / ${capacity?.toLocaleString()??'unknown'} capacity`:s.failure?`Water stopped: ${s.failure}`:'Initial state. Play starts water; Restart begins again from the sources.';
+  const text=s.preparing?'Preparing water… Current water is retained until replacement completes.':runtime?`${runtime.paused?'Paused':'Playing'} · tick ${runtime.clock?.completedStep??runtime.step??0} · ${population?.active!=null?population.active.toLocaleString()+' live':'live count pending'} / ${capacity?.toLocaleString()??'unknown'} capacity`:s.failure?`Water stopped: ${s.failure}`:'Initial state. Play starts water; Restart begins again from the sources.';
   const timing=runtime?.cadence,clock=runtime?.clock;
   $('[data-cadence]').textContent=timing?`Fluid updates ${timing.completedBatches} · last batch ${timing.lastBatchSteps} steps (${(timing.lastBatchSteps*(clock?.dt??1/240)*1000).toFixed(0)} ms simulated) · ${(1000*(clock?.backlogSeconds??0)).toFixed(0)} ms waiting. Scene FPS is independent of fluid updates.`:'';
   const blocker=!s.runtime&&s.simulation?.compatibility?.compatible===false?s.simulation.compatibility.message:'';
   $('[data-play-blocked]').textContent=blocker?`Play unavailable: ${blocker}`:'';
   const fit=s.simulation?.boundsFit;$('[data-fit-bounds]').hidden=!fit?.changed||s.simulation?.sampling?.container===null;$('[data-fit-bounds]').disabled=dirty||simulationDirty;
   $('[data-fit-bounds]').title=fit?.changed?'Enlarge the shared box to include the placed water. Drop positions, sizes and particle target stay unchanged. Undo restores the previous box.':'';
-  const status=text+(s.runtime?.pendingSourceChanges?' · Initial setup changed. Restart to apply it; displayed water is from the current run.':'');if($('[data-state]').textContent!==status)$('[data-state]').textContent=status;
+  const status=text+(runtime?.pendingSourceChanges?' · Restart applies: '+(runtime.pendingChanges?.map(c=>c.label).join(', ')||'initial setup changes')+'.':'')+(runtime?.pendingMaterial?' · Material applies on next simulation update.':'');if($('[data-state]').textContent!==status)$('[data-state]').textContent=status;
   if(!dirty){
    const inlet=runtime?.liveInlets?.inlets.find(row=>row.id===s.selected?.id);
    const reason=inlet?.blockedReason;
    const message=reason==='capacity'?'Particle capacity is full. New emission is blocked; existing water continues moving. Select Water simulation to increase capacity and Restart, or let water leave open bounds.':
     reason==='outside_domain'||reason==='aperture_outside_domain'?'Emitter is outside the simulation bounds, or its aperture crosses them. Move it inside or enlarge the bounds and Restart.':
     reason==='stale_input'?'Emitter input is stale; new emission is stopped.':reason==='stopped'?'Flow is stopped. Existing water continues moving.':'';
-   $('[data-source-status]').textContent=message+(runtime?.pendingSourceChanges?' Initial setup changed. Select Water simulation and Restart to apply it.':'');
+   $('[data-source-status]').textContent=message+(runtime?.pendingSourceChanges?' Initial setup changed. Restart below to apply it.':'');
   }
+  const active=runtime?.activeSetup,material=runtime?.material?.world;
+  const activeSource=runtime?.activeSources?.find(r=>r.id===s.selected?.id);
+  const pairs=[['capacity',active?.particleCount,s.simulation?.settings?.particleCount],['target',active?.waterSampling?.particleTarget,s.simulation?.sampling?.particleTarget],['width',activeSource?.localLiquidEmitter?.drop?.width,s.selected?.settings?.drop?.width],['wave-speed',material?.pressureWaveSpeed,s.simulation?.material?.pressureWaveSpeed],['kinematic-viscosity',material?.kinematicViscosity,s.simulation?.material?.kinematicViscosity]];
+  for(const [key,running,edited]of pairs){const hint=$('[data-active-'+key+']');hint.textContent=runtime&&running!==undefined&&edited!==undefined&&running!==edited?`Running: ${running} · Edited: ${edited}${key==='wave-speed'||key==='kinematic-viscosity'?' · next update':' · Restart applies'}`:'';}
+  playback?.update();if(playback)playback.node.hidden=!s.simulation?.present;
   const hasSources=Boolean(s.sources?.length||s.selected);
   $('[data-reset]').disabled=!s.runtime&&!hasSources;$('[data-release]').disabled=!hasSources||s.simulation?.compatibility?.compatible===false;$('[data-release]').textContent='Restart';$('[data-pause]').disabled=!s.runtime&&(!hasSources||s.simulation?.compatibility?.compatible===false);$('[data-pause]').textContent=s.runtime&&!s.runtime.paused?'Pause':'Play';
  }
  let historyState={undoCount:0,redoCount:0};
  const unsubscribe=api.subscribeEdits?.(state=>{
   const historyBoundary=state.replaying||state.undoCount<historyState.undoCount||state.redoCount!==historyState.redoCount;
+  const completed=!state.active&&!state.replaying&&(state.undoCount!==historyState.undoCount||state.redoCount!==historyState.redoCount);
   historyState=state;
   if(!disposed&&!ownWrite&&historyBoundary){
    restorePreview();stopTimer('source');stopTimer('simulation');dirty=false;simulationDirty=false;revision++;simulationRevision++;sourceError.textContent='';simulationError.textContent='';refresh();
   }
+  if(!disposed&&!ownWrite&&completed)queueRestart();
  });
+ if(playbackRoot){
+  $('[data-inspector-playback]').hidden=true;
+  for(const q of ['[data-restart-option]','[data-restart-help]','[data-restart-edits]','[data-state]','[data-play-blocked]','[data-fit-bounds]'])detached.set(q,$(q));
+  playback=mountPlaybackControls({document,root:playbackRoot,label:'Water playback',extra:$('[data-restart-option]'),read:()=>{
+   const s=api.read(),r=s.runtime;return {playing:!!r&&!r.paused,time:(r?.clock?.completedStep??r?.step??0)*(r?.clock?.dt??1/240),duration:null,rate:1,canRate:false,canSeek:false,canStep:false,canReset:!!s.sources?.length||!!r||!!s.preparing,canPlay:!!r||(!!s.sources?.length&&s.simulation?.compatibility?.compatible!==false),canReplay:!!s.sources?.length&&s.simulation?.compatibility?.compatible!==false,canCancel:!!s.preparing,busy:!!s.preparing,replayLabel:'Restart'};
+  },invoke:async name=>{if(name==='cancel'){runRevision++;runError.textContent='';return api.cancelPreparation?.();}if(name==='reset')return $('[data-reset]').onclick();if(name==='replay')return $('[data-release]').onclick();return $('[data-pause]').onclick();}});
+  playback.elements.more.append($('[data-restart-help]'));
+  playback.node.append($('[data-state]'),$('[data-play-blocked]'),$('[data-fit-bounds]'),runError);
+ }
  if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot)simulationRoot.append(simulationPanel);
- refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
+ refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){restorePreview();disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');stopTimer('restart');playback?.dispose();for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
 }

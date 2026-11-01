@@ -1,3 +1,4 @@
+import {authoredWaterChanges} from './authored-water-changes.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {texture,vec4,positionView} from './lib/three.tsl.js';
 import {createFluidSceneEnvironment} from './fluid-scene-environment.mjs';
@@ -22,20 +23,23 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
  const depthMaterial=new THREE.NodeMaterial();depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);depthMaterial.blending=THREE.NoBlending;depthMaterial.toneMapped=false;
  const scenePasses=createLocalLiquidScenePasses({renderer,composedOutput:texture(output.texture),getDisplayPolicy,decorateOutput});
  let frameCount=0,paused=false,disposed=false,failure=null,lastFrame=null,mode='full',sourceGeneration=1,records=structuredClone(emitters),pendingSetup=structuredClone(setup),proxyStepEvery=1;
+ let materialError=null;
  const gpuError=event=>{failure=event.error?.message??'MLS GPU error';};device.addEventListener('uncapturederror',gpuError);
  device.lost.then(info=>{if(!disposed)failure=info.message||'MLS device lost';});
  const native=target=>renderer.backend.get(target.texture).texture.createView();
  function publishInlets(){solver.setPacket(makePacket(records,Date.now(),sourceGeneration));}
  const state=()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,registered:true,mounted:!disposed,mode:initial.mode,sourceIds:[...new Set([...initial.sourceIds,...records.filter(r=>r.localLiquidEmitter.mode!=='finite_drop').map(r=>r.id)])],sourceGeneration,
   frameCount,paused,presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
-  pendingSourceChanges:(initial.mode==='finite_drop'&&records.some(r=>r.localLiquidEmitter.mode==='continuous'))||JSON.stringify(records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(({id,type,transform,localLiquidEmitter})=>({id,type,transform,localLiquidEmitter})))!==JSON.stringify(initial.sourceRecords.filter(r=>r.localLiquidEmitter.mode==='finite_drop'))||JSON.stringify(setup)!==JSON.stringify(pendingSetup),
+  activeSetup:structuredClone(setup),activeSources:structuredClone(initial.sourceRecords),
+  materialError,pendingChanges:authoredWaterChanges(setup,pendingSetup,initial.sourceRecords,records),
+  pendingSourceChanges:authoredWaterChanges(setup,pendingSetup,initial.sourceRecords,records).length>0,
   ...scenePasses.state(),...environment.state(),fallbackRoute:null});
  return {supportsVolumeTransport:true,get paused(){return paused;},get presentation(){return mode;},get proxyStepEvery(){return proxyStepEvery;},
   setPresentation(value){localLiquidPresentationPlan(value);mode=value;return mode;},
   setProxyStepEvery(value){if(!Number.isSafeInteger(value)||value<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=value;return value;},
   setPaused(value){paused=Boolean(value);solver.setPaused(paused);return paused;},
   setEmitters(next){makePacket(next);records=structuredClone(next);sourceGeneration++;publishInlets();return true;},
-  setSetup(next){pendingSetup=structuredClone(next);},
+  setSetup(next){if(JSON.stringify(next.mlsMaterial??null)!==JSON.stringify(pendingSetup.mlsMaterial??null)){try{solver.setMaterial(next.mlsMaterial??null);materialError=null;}catch(error){materialError=error.message;}}pendingSetup=structuredClone(next);},
   interfaceRecordDescriptor:()=>disposed?null:proxy.descriptor(),
   snapshot:()=>solver.snapshot(),
   async advanceTo(step){paused=true;publishInlets();const result=await solver.advanceTo(step);redraw();return result;},

@@ -20,9 +20,10 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
  `;
  const actions=make('div');actions.className='playback-actions';
  const button=(text,title,cls='')=>{const n=make('button',text,{type:'button',title});n.className=cls;return n;};
+ const reset=button('Reset','Return to initial state and pause'),cancel=button('Cancel','Cancel preparation');
  const replay=button('↻ Replay','Start over and play','playback-replay'),play=button('▶ Play','Play or pause','playback-play');
  const back=button('‹','Previous frame or simulation tick','playback-step'),forward=button('›','Next frame or simulation tick','playback-step');
- back.setAttribute('aria-label','Previous step');forward.setAttribute('aria-label','Next step');actions.append(replay,play,back,forward);
+ back.setAttribute('aria-label','Previous step');forward.setAttribute('aria-label','Next step');actions.append(reset,play,replay,back,forward,cancel);
  const track=make('div');track.className='playback-timeline';
  const timeline=make('input',undefined,{type:'range',min:0,step:'any','aria-label':'Playback position'}),time=make('output');track.append(timeline,time);
  const options=make('div');options.className='playback-options';
@@ -34,8 +35,8 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
  if(extra)more.append(extra);details.append(summary,more);options.append(rate,details);
  const error=make('div',undefined,{role:'alert'});error.className='playback-error';error.textContent='';
  node.append(style,actions,track,options,error);root.append(node);
- let disposed=false,working=0,scrubbing=false,pendingSeek=null,seekTask=null;
- const buttons=[replay,play,back,forward,rate,go];
+ let disposed=false,working=0,operation=0,scrubbing=false,pendingSeek=null,seekTask=null;
+ const buttons=[reset,cancel,replay,play,back,forward,rate,go];
  const state=()=>{
   const s=read();if(!s||typeof s.playing!=='boolean'||!Number.isFinite(s.time)||s.time<0||!Number.isFinite(s.rate)||s.rate<=0||(s.duration!=null&&(!Number.isFinite(s.duration)||s.duration<0)))throw Error('Effective playback clock is unavailable');return s;
  };
@@ -44,7 +45,12 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   if(disposed)return;
   try{
    const s=state();
-   replay.disabled=play.disabled=rate.disabled=Boolean(s.busy||working);
+   reset.hidden=s.canReset!==true;reset.disabled=s.canReset!==true;
+   cancel.hidden=s.canCancel!==true;cancel.disabled=s.canCancel!==true;
+   rate.hidden=s.canRate===false;back.hidden=forward.hidden=s.canStep===false;
+   replay.textContent=s.replayLabel??'↻ Replay';
+   replay.disabled=Boolean(s.busy||working||s.canReplay===false);play.disabled=Boolean(s.busy||working||s.canPlay===false);rate.disabled=Boolean(s.busy||working);
+   seek.hidden=s.canSeek===false;
    back.disabled=forward.disabled=Boolean(s.busy||working||s.canStep===false);
    timeline.disabled=go.disabled=Boolean(s.busy||s.canSeek===false);
    timeline.hidden=s.duration==null||s.canSeek===false;
@@ -59,8 +65,10 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   }catch(e){showError(e);for(const c of [...buttons,timeline])c.disabled=true;}
  }
  async function call(name,input){
-  if(disposed)return;working++;error.textContent='';update();
-  try{return await invoke(name,input);}catch(e){showError(e);}finally{working--;update();}
+  if(disposed)return;
+  if(name==='cancel'||name==='reset'){operation++;working=0;}
+  const epoch=operation;working++;error.textContent='';update();
+  try{return await invoke(name,input);}catch(e){if(epoch===operation&&!disposed)showError(e);}finally{if(epoch===operation){working--;update();}}
  }
  // Pointer previews may supersede earlier unstarted previews, never producer
  // operations already in flight. The final requested position is always held.
@@ -77,6 +85,7 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
   })();
   return seekTask;
  }
+ reset.onclick=()=>call('reset');cancel.onclick=()=>call('cancel');
  replay.onclick=()=>call('replay');play.onclick=()=>{try{return call(state().playing?'pause':'play');}catch(e){showError(e);return Promise.resolve();}};
  back.onclick=()=>call('step',{direction:-1});forward.onclick=()=>call('step',{direction:1});
  rate.onchange=()=>call('rate',{rate:Number(rate.value)});go.onclick=()=>seekTo(seconds.value);
@@ -85,5 +94,5 @@ export function mountPlaybackControls({document,root,read,invoke,extra=null,labe
  timeline.onpointerup=e=>{scrubbing=false;timeline.releasePointerCapture?.(e.pointerId);return seekTo(timeline.value);};
  timeline.onpointercancel=()=>{scrubbing=false;update();};
  update();
- return {node,elements:{replay,play,back,forward,timeline,time,rate,seconds,go,error,details,more},update,dispose(){disposed=true;pendingSeek=null;node.remove();}};
+ return {node,elements:{reset,cancel,replay,play,back,forward,timeline,time,rate,seconds,go,error,details,more},update,dispose(){disposed=true;pendingSeek=null;node.remove();}};
 }
