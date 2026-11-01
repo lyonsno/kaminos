@@ -1,5 +1,5 @@
 import {createUniMateConsumer} from '../../models/unimate/unimate-consumer.js';
-import {bundleArrays} from '../../models/unimate/unimate-generator.js';
+import {bundleArrays,UNIMATE_ROUTE_ID} from '../../models/unimate/unimate-generator.js';
 import {checkMotion} from './motion-collection.mjs';
 let consumer=null,host=null,route=null,busy=false,cancelled=false;
 export async function loadMotionConditioning(spec,{fetchImpl=fetch}={}){
@@ -22,8 +22,9 @@ export async function generateSkeletonMotion({spec,reference,prompt,seed,onProgr
   if(cancelled)throw Error('Generation stopped');
   if(!consumer){host=await getHost();if(cancelled)throw Error('Generation stopped');if(!host)throw Error('The scene GPU host is unavailable');const tracked={...host,beginRun:async(id,config)=>{const run=await host.beginRun(id,config);route={id,...config};return run;}};consumer=createUniMateConsumer(tracked,options);}
   route=null;const out=await consumer.run({asset:{skeletonData:data},prompt:prompt.trim(),seed,onProgress});
-  if(route?.routeId!=='unimate.text-to-motion.webgpu-local.v0'||out.report.textEncoder!=='browser T5')throw Error('Generation did not use the requested motion route');
-  const motion={status:'completed',route:route.routeId,textEncoder:out.report.textEncoder,cooperative:true,controllerNorm:'valid-joints',sampling:'dopri5-valid-joints',cfgScale:3,prompt:out.report.prompt,seed:out.report.seed,assetCondSha256:reference.assetCondSha256,skeleton:out.skeleton,...out.motion,restFrame:out.restFrame,consumerReport:out.report,generation:{route,bundleSha256:spec.sha256,createdAt:new Date().toISOString()}};
+  const suffix=route?.routeId?.slice(UNIMATE_ROUTE_ID.length);
+  if(!(route?.routeId===UNIMATE_ROUTE_ID||(route?.routeId?.startsWith(UNIMATE_ROUTE_ID)&&/^:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(suffix)))||out.report.textEncoder!=='browser T5')throw Error('Generation did not use the requested motion route');
+  const motion={status:'completed',route:UNIMATE_ROUTE_ID,textEncoder:out.report.textEncoder,cooperative:true,controllerNorm:'valid-joints',sampling:'dopri5-valid-joints',cfgScale:3,prompt:out.report.prompt,seed:out.report.seed,assetCondSha256:reference.assetCondSha256,skeleton:out.skeleton,...out.motion,restFrame:out.restFrame,consumerReport:out.report,generation:{route,bundleSha256:spec.sha256,createdAt:new Date().toISOString()}};
   checkMotion(motion);return motion;
  }finally{busy=false;}
 }

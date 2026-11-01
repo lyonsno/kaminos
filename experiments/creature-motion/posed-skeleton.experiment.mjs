@@ -15,7 +15,7 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSourc
  const data=await loadSources(inputs),session=await host.scene.open();
  const root=new THREE.Group();root.name=inputs.label??'Creature · pose skeleton';
  const proxy=new THREE.Object3D(),target='@posed-bone:'+root.uuid,whole='@posed-rig:'+root.uuid;
- let runtime,asset,floorAsset,floor,seat,controls,unsubscribe,disposed=false,editing=false,selected=inputs.joint??'forelimb-left-shoulder',refresh=()=>{},model,reachEdit,reachProperty,motionOwner,workspace,playback;
+ let runtime,asset,floorAsset,floor,seat,controls,unsubscribe,disposed=false,editing=false,selected=inputs.joint??'forelimb-left-shoulder',refresh=()=>{},model,reachEdit,reachProperty,motionOwner,workspace,playback,poseRevision=0;
  const markers=new Map(),base={kind:'rest',frame:0};let restoreGround=()=>{};
  function active(){if(disposed||!root.parent)throw Error('Posed creature is no longer mounted');}
  function putProxy(){if(!runtime)return;const p=boneWorldPose(runtime.bones.get(selected));proxy.position.fromArray(p.position);proxy.rotation.set(...p.rotation);proxy.scale.fromArray(p.scale);proxy.updateMatrixWorld(true);}
@@ -39,7 +39,7 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSourc
   if(data.motionReference||data.motion?.assetCondSha256)motionOwner=await createPosedMotion({THREE,data,model,session,changed,canAdvance:()=>!edits.state().active});
   const snapshot=()=>({...model.snapshot(),limbAttachmentReach:runtime.read().binding.limbAttachmentReach,...(motionOwner?{motionState:motionOwner.snapshot()}:{} )});
   const read=()=>({objectId:asset.id,status:editing?'posing-joints':'object',joint:selected,source:structuredClone(data.source),base:{...base},playback:motionOwner?.read()??null,motionWorkspace:workspace?.read()??null,joints:[...runtime.bones].map(([name,b])=>({name,parent:b.parent?.isBone?b.parent.name:null,world:boneWorldPose(b)})),deformation:runtime.read().deformation,binding:runtime.read().binding,view:session.readView(),pose:snapshot()});
-  function changed(){runtime.group.updateMatrixWorld(true);drawLines();update();}
+  function changed(){poseRevision++;runtime.group.updateMatrixWorld(true);drawLines();update();}
   const checkSaved=value=>{const checked=model.check(value);motionOwner?.check(value.motionState);checked.limbAttachmentReach=checkLimbAttachmentReach(value.limbAttachmentReach);if(checked.limbAttachmentReach!==0&&!runtime.read().binding.supported)throw Error('Limb attachment reach requires mapped limb and body bones');return checked;};
   const applySaved=value=>{const checked=checkSaved(value);motionOwner?.restore(value.motionState);runtime.setLimbAttachmentReach(checked.limbAttachmentReach);model.restore(checked);changed();};
   edits.register(whole,{read:snapshot,check:checkSaved,write:applySaved});
@@ -66,14 +66,14 @@ export async function createPosedSkeleton({host,inputs,record=()=>{}},{loadSourc
    base({kind,frame=20}){active();motionOwner?.pause();if(kind==='motion'&&!motion)throw Error('No retained motion supplied for this binding');const before=snapshot();let pose;if(kind==='rest'){model.neutral();base.kind='rest';}else if(kind==='motion'){const p=motion.frame(frame);pose={actor:p.actorMatrix,bones:p.bones.map(b=>({name:b.name,matrix:b.localMatrix}))};model.setBase(pose,'Animation frame '+(frame+1));base.kind='motion';base.frame=frame;}else throw Error('Unknown pose base');const after=snapshot();model.restore(before);edits.apply(whole,after,'Set creature pose');changed();return read();},
    reset(){active();motionOwner?.pause();const before=snapshot();model.neutral();const after=snapshot();model.restore(before);edits.apply(whole,after,'Reset creature pose');return read();},
    resetJoint(){active();motionOwner?.pause();const before=snapshot(),rest=data.manifest.bones.find(b=>b.name===selected),parent=rest.parent&&data.manifest.bones.find(b=>b.name===rest.parent),m=new THREE.Matrix4().set(...rest.restMatrix.flat());if(parent)m.premultiply(new THREE.Matrix4().set(...parent.restMatrix.flat()).invert());const b=runtime.bones.get(selected);m.decompose(b.position,b.quaternion,b.scale);model.captureBase('Authored pose');const after=snapshot();model.restore(before);edits.apply(whole,after,'Reset joint pose');return read();},
-   restore(value){active();edits.apply(whole,{...value,limbAttachmentReach:checkLimbAttachmentReach(value.limbAttachmentReach)},'Open creature pose');return read();},snapshot(){active();return {...snapshot(),view:session.readView(),joint:selected};},
+   restore(value){active();const checked=checkSaved(value),revision=poseRevision;return Promise.resolve(motionOwner?.retain(checked.motionState)).then(()=>{active();if(revision!==poseRevision)return {status:'superseded'};edits.apply(whole,checked,'Open creature pose');return read();});},snapshot(){active();return {...snapshot(),view:session.readView(),joint:selected};},
    inspect(){active();changed();return {...read(),vertices:Array.from(runtime.syncCpuGeometry().attributes.position.array),boneWorld:[...runtime.bones].map(([name,b])=>({name,matrix:b.matrixWorld.toArray()})),rootMatrix:runtime.group.matrixWorld.toArray()};},
    async gpu(){active();const r=await runtime.readGpuGeometry();return {...read(),vertices:Array.from(r.positions),normals:Array.from(r.normals)};},
    frame(){active();const box=runtime.syncCpuGeometry().boundingBox.clone().applyMatrix4(runtime.group.matrixWorld),c=box.getCenter(new THREE.Vector3()),d=box.getSize(new THREE.Vector3()).length();session.setView({position:c.clone().add(new THREE.Vector3(d*1.5,d*.45,d*.8)).toArray(),target:c.toArray()});return read();},
   };
   if(motionOwner){for(const [name,operation]of Object.entries(motionOwner.operations))operations[name]=input=>{active();const result=operation(input);changed();record({kind:'creature.motion.'+name,input});return result;};operations.generateMotion=input=>{active();if(!workspace)throw Error('Mount the creature motion workspace first');return workspace.generate(input);};}
   if(data.motion&&motionOwner)motionOwner.operations.seek({frame:0});
-  changed();if(inputs.pose)operations.restore(inputs.pose);if(inputs.view)session.setView(inputs.view);else operations.frame();win.kaminosSelection.set([asset.id],asset.id);
+  changed();if(inputs.pose)await operations.restore(inputs.pose);if(inputs.view)session.setView(inputs.view);else operations.frame();win.kaminosSelection.set([asset.id],asset.id);
   return {read,operations,mount({root:panel,document,invoke}){
    panel.textContent='Select the creature. Tab edits its pose; click a cyan joint, then use the viewport rotate or move tool. F frames the selected joint.';
    const properties=document.createElement('section'),heading=document.createElement('h3'),status=document.createElement('p');heading.textContent='Skeleton pose';properties.style.cssText='font:12px system-ui;line-height:1.5';properties.append(heading,status);
