@@ -11535,7 +11535,7 @@ async function initScene() {
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
-      if(event.id==='@water-domain'){setInfo(localLiquidHost?'Water bounds changed · Restart applies them; current water is preserved':'Water bounds changed · Play uses this volume');return;}
+      if(event.id==='@water-domain'){setInfo(waterFeature.host?'Water bounds changed · Restart applies them; current water is preserved':'Water bounds changed · Play uses this volume');return;}
       if(event.id==='@flame-domain'){settleAuthoredFlameDomain(event);return;}
       if(event.id==='@selection-transform'&&Object.keys(event.after.roots).some(id=>id===FLAME_EMITTER_ID||workingScene.groups.find(g=>'@group:'+g.id===id)?.objectIds.includes(FLAME_EMITTER_ID)))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (workingScene.groups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
@@ -11735,7 +11735,7 @@ async function initScene() {
   function syncAuthoredWaterFlameTransport() {
     syncWaterProxy();
     const prototype=volumePrototype;
-    const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
+    const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')!=='0'
       &&ordinaryDepthEnabled
       &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
       &&waterFeature.host?.supportsVolumeTransport===true&&waterFeature.host.presentation==='full'&&viewportDisplay.fire==='full'
@@ -11760,7 +11760,7 @@ async function initScene() {
     authoredFlameHDRActive=!!transportPrototype&&wantedHDR;
     if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
   }
-  window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
+  window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')!=='0',
     registered:!!transportPrototype,effective:!!transportPrototype&&!!waterFeature.host?.state().lastFrame?.volumeTransport,
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
@@ -12745,11 +12745,11 @@ function updateWaterSourceGuides(){for(const row of workingScene.objects.filter(
 function setAuthoredWaterPreviewVisible(visible){for(const row of workingScene.objects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object.children)if(child.userData.kaminosWaterPreview)child.visible=visible;updateWaterSourceGuides();}
 function selectedWaterSource(){const row=selectedSceneObjectEntry();return row?.type===LOCAL_LIQUID_EMITTER_TYPE?row:null;}
 function acceptedWaterDomainPose(){
- if(!localLiquidSetup)throw Error('Add water first');
- return waterDomainPose(resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup));
+ if(!waterFeature.setup)throw Error('Add water first');
+ return waterDomainPose(resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup));
 }
 function checkWaterDomainPose(pose){
- return checkedWaterDomainPose(pose,authoredMlsCellSize(localLiquidEmitterRecords(),localLiquidSetup??{}));
+ return checkedWaterDomainPose(pose,authoredMlsCellSize(localLiquidEmitterRecords(),waterFeature.setup??{}));
 }
 function waterDomainEditObject(){
  if(!waterDomainProxy){waterDomainProxy=new THREE.Object3D();waterDomainProxy.userData.kaminosEditorHelper=true;waterDomainProxy.userData.kaminosSceneObject={label:'Water simulation volume'};scene.add(waterDomainProxy);}
@@ -12757,16 +12757,16 @@ function waterDomainEditObject(){
  return waterDomainProxy;
 }
 function waterDomainBounds(){
- const sampling=resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{});
+ const sampling=resolveAuthoredWaterSampling(localLiquidEmitterRecords(),waterFeature.setup??{});
  return sampling.container??sampling.worldBounds;
 }
 function writeWaterDomainPose(pose){
- if(!localLiquidSetup)throw Error('Water simulation is absent');
- const sources=localLiquidEmitterRecords(),sampling=resolveAuthoredWaterSampling(sources,localLiquidSetup);
- localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:waterDomainSampling(sampling,pose,authoredMlsCellSize(sources,localLiquidSetup))});
+ if(!waterFeature.setup)throw Error('Water simulation is absent');
+ const sources=localLiquidEmitterRecords(),sampling=resolveAuthoredWaterSampling(sources,waterFeature.setup);
+ waterFeature.setup=normalizeLocalLiquidSetup({...waterFeature.setup,waterSampling:waterDomainSampling(sampling,pose,authoredMlsCellSize(sources,waterFeature.setup))});
  // Bounds are authored setup, like the existing numeric bounds controls. Keep
  // evolved water intact; Restart allocates the changed grid explicitly.
- localLiquidHost?.setSetup(localLiquidSetup);
+ waterFeature.host?.setSetup(waterFeature.setup);
  if(waterDomainProxy)applySceneObjectTransformState(waterDomainProxy,acceptedWaterDomainPose());
  syncWaterDomainGuide();authoredWaterControls?.refresh();window._kaminosDirty?.();
 }
@@ -12782,7 +12782,7 @@ const waterSettingTargets=new Set();
 function applyAuthoredWaterSettings(id,patch){
  assertSceneConstructionAvailable();const row=workingScene.objects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
  if(Object.hasOwn(patch,'rate')&&!Object.hasOwn(patch,'volumeRate')){
-  const cell=localLiquidHost?.state().solver?.domain?.cellSize??authoredMlsCellSize(localLiquidEmitterRecords(),localLiquidSetup??{});
+  const cell=waterFeature.host?.state().solver?.domain?.cellSize??authoredMlsCellSize(localLiquidEmitterRecords(),waterFeature.setup??{});
   patch={...patch,volumeRate:patch.rate*authoredMlsParticleVolume(cell)};
  }
  const target='@authored-water:'+id;
