@@ -2,6 +2,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 import {installRenderOutput} from '../render-output-ui.mjs';
 import {captureStill} from '../render-output.mjs';
+import SceneGIHistory from '../scene-gi-history.mjs';
 const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 function heldFixture(){
  const at=source.indexOf('    async holdPresentationForStill('),end=source.indexOf('    setSelectiveHeadLiveCapturePaused(',at);
@@ -65,17 +66,18 @@ for(const outcome of ['success','failure','cancel'])test(`host-composed still ke
 
 // Execute the actual page output owner: it must request the composed frame
 // during GI refinement and never overlay the stale private flame canvas.
-test('page still output consumes held transport frames and captures only the host',async()=>{
+for(const asynchronous of [false,true])test(`page still output captures presented host pixels after ${asynchronous?'asynchronous refinement':'responsive history'}`,async()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const start=html.indexOf('  const renderOutput=captureStill('),end=html.indexOf('  const viewportRecording=',start);
  const f=heldFixture(),released=[];let ratio=2,frames=0,canvasCurrent=false;
- const ctx={captureStill,recordingExtent:null,vantageBusy:()=>null,sceneDocument:{state:()=>({})},workingScene:{objects:[]},sceneCameras:{read:()=>({cameras:[]})},activeSceneComposition:{},isSceneItemVisible:()=>true,isFireLightFieldRoute:()=>true,viewportDisplay:{fire:'full'},camera:{aspect:1,zoom:1,updateProjectionMatrix(){}},readAuthoredCameraView:()=>({}),writeAuthoredCameraView(){},viewProjection:{state:()=>({orthographic:false}),setOrthographic(){}},controls:{enabled:true},holdViewportForVantage:()=>()=>released.push('viewport'),suspendEditorDrawingForVantage:()=>()=>released.push('drawing'),window:{__kaminosBeginSceneInspection:()=>()=>released.push('inspection')},outputCaptureExtent:null,outputCaptureFrame:null,manualInspectionRender:false,sceneFrameCount:0,syncViewportRendererSize(){},markDirty(){},sceneGI:{resetHistory(){},needsHistoryFrame:()=>frames<2,debugState:()=>({})},fireLightFieldPass:null,transportPrototype:{},ordinarySceneTransportFrame:{},waterFeature:{host:{state:()=>({})}},requestAnimationFrame:fn=>fn(),document:{},renderer:{backend:{device:{limits:{maxTextureDimension2D:4096}}},getPixelRatio:()=>ratio,setPixelRatio:v=>ratio=v,domElement:{id:'host'}},renderSceneFrame(){throw Error('scene draw outside held source frame');},captureComposedCanvases({host,volumeRaster}){assert.ok(canvasCurrent,'canvas must be copied in its presenting task');assert.equal(host.id,'host');assert.equal(volumeRaster,null);return {image:'data:image/png;base64,AAAA',width:320,height:240,layers:['host']};}};
+ const history=Object.assign(Object.create(SceneGIHistory.prototype),{refine:asynchronous,converged:false,checkFailure:null,pendingFrames:2});
+ const ctx={captureStill,recordingExtent:null,vantageBusy:()=>null,sceneDocument:{state:()=>({})},workingScene:{objects:[]},sceneCameras:{read:()=>({cameras:[]})},activeSceneComposition:{},isSceneItemVisible:()=>true,isFireLightFieldRoute:()=>true,viewportDisplay:{fire:'full'},camera:{aspect:1,zoom:1,updateProjectionMatrix(){}},readAuthoredCameraView:()=>({}),writeAuthoredCameraView(){},viewProjection:{state:()=>({orthographic:false}),setOrthographic(){}},controls:{enabled:true},holdViewportForVantage:()=>()=>released.push('viewport'),suspendEditorDrawingForVantage:()=>()=>released.push('drawing'),window:{__kaminosBeginSceneInspection:()=>()=>released.push('inspection')},outputCaptureExtent:null,outputCaptureFrame:null,manualInspectionRender:false,sceneFrameCount:0,syncViewportRendererSize(){},markDirty(){},sceneGI:{resetHistory(){},needsHistoryFrame:()=>history.needsFrame(),debugState:()=>({})},fireLightFieldPass:null,transportPrototype:{},ordinarySceneTransportFrame:{},waterFeature:{host:{state:()=>({})}},requestAnimationFrame:fn=>fn(),document:{},renderer:{backend:{device:{limits:{maxTextureDimension2D:4096}}},getPixelRatio:()=>ratio,setPixelRatio:v=>ratio=v,domElement:{id:'host'}},renderSceneFrame(){throw Error('scene draw outside held source frame');},captureComposedCanvases({host,volumeRaster}){assert.ok(canvasCurrent,'canvas must be copied in its presenting task');assert.equal(host.id,'host');assert.equal(volumeRaster,null);return {image:'data:image/png;base64,AAAA',width:320,height:240,layers:['host']};}};
  f.scope.sceneTransportConsumer=()=>{};
- f.scope.sampleFrame=async()=>{frames++;ctx.sceneFrameCount++;canvasCurrent=true;ctx.outputCaptureFrame?.();await Promise.resolve();canvasCurrent=false;return {ok:true};};
+ f.scope.sampleFrame=async()=>{frames++;ctx.sceneFrameCount++;history.pendingFrames--;canvasCurrent=true;ctx.outputCaptureFrame?.();await Promise.resolve();canvasCurrent=false;if(asynchronous&&frames>=2)history.converged=true;return {ok:true};};
  ctx.volumePrototype={holdPresentationForStill:options=>f.scope.hold(options)};
  vm.runInNewContext(html.slice(start,end)+'\nglobalThis.capture=renderOutput;',ctx);
  const result=await ctx.capture({width:320,height:240});
- assert.equal(frames,2);assert.equal(result.rendering.fire.presentation,'host-composed');
+ assert.equal(frames,asynchronous?3:2);assert.equal(result.rendering.fire.presentation,'host-composed');
  assert.equal(ctx.outputCaptureExtent,null);assert.equal(ctx.outputCaptureFrame,null);assert.equal(ctx.controls.enabled,true);assert.equal(ratio,2);
  assert.deepEqual(released,['drawing','inspection','viewport']);assert.equal(f.scope.stillPresentationHeld,false);
 });
