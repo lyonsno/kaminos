@@ -189,13 +189,13 @@ test('scene frames are served while checkpoints load and while the mesh is clean
 // A run whose asset consumer cleans a real (tiny) raw dual-grid mesh, with readable geometry and material tensors.
 const rawFixture=()=>{const coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
   return {vertices:new Float32Array(coords.flatMap(c=>c.map(v=>(v+.5)/8-.5))),triangles:new Uint32Array([0,1,3,0,3,2])};};
-function surfelRun({failMaterial=false}={}){
-  const f=fixture(),res=8,coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
+function surfelRun({failMaterial=false,res=8,failGeometry=false}={}){
+  const f=fixture(),coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
   const {vertices,triangles}=rawFixture();
   const tensors={gc:new Int32Array(coords.flat()).buffer,mc:new Int32Array(coords.flat()).buffer,
     mf:new Float32Array(coords.flatMap(()=>[1,-1,-1,-1,.8,1])).buffer};
   const outputs={geometry:{coordinates:{id:'gc'},resolution:res},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:res}};
-  const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');return tensors[t.id].slice(0);}};
+  const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');if(failGeometry&&t.id==='gc')throw Error('optional geometry readback lost');return tensors[t.id].slice(0);}};
   const host=f.deps.createTrellisSharedHost;
   f.deps.createTrellisSharedHost=async args=>{const h=await host(args);const begin=h.beginRun;h.beginRun=async o=>{const r=await begin(o);r.route={...r.route,runtime};return r;};return h;};
   f.deps.createTrellisImageGenerationAdapter=()=>({outputs,async run(){return outputs;},dispose(){}});
@@ -254,4 +254,18 @@ test('the page forwards both caller pixel arrays and preserves the actual stage 
   f.deps.createTrellisAssetAdapter=options=>{assert.deepEqual(options.provenance.conditioningShapes,shapes);return {async run(){return {glb};},dispose(){}};};
   const result=await call(f,{pixelValues:low,highResolutionPixelValues:high});
   assert.deepEqual(result.conditioningShapes,shapes);
+});
+
+for(const options of [{res:1024},{failGeometry:true}])test(`raw fields survive optional surfel failure ${JSON.stringify(options)}`,async()=>{
+  const f=surfelRun(options),adapter=f.deps.createTrellisAssetAdapter;
+  f.deps.createTrellisAssetAdapter=opts=>({...adapter(opts),async run(){
+    const raw=rawFixture();await opts.postprocessMesh(raw);raw.vertices.fill(0);raw.triangles.fill(0);return {glb};
+  }});
+  const result=await call(f);
+  assert.equal(result.glb,glb);assert.equal(result.surfels.status,'failed');
+  assert.ok(result.levelInputs,'raw fields must not depend on optional surfel construction');
+  assert.deepEqual(result.levelInputs.decode.vertices,rawFixture().vertices);
+  assert.deepEqual(result.levelInputs.decode.triangles,rawFixture().triangles);
+  assert.equal(result.levelInputs.materialFields.resolution,options.res??8);
+  assert.equal(result.levelInputs.materialFields.features.length,30);
 });

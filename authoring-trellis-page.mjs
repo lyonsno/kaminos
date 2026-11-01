@@ -287,19 +287,23 @@ export async function describeTrellisInput({image,cutout,label,fetch=globalThis.
 }
 
 async function buildRunSurfels({runtime,out,rawMesh,withForeground,provenance}){
+  let levelInputs;
   try{
     if(!rawMesh)throw Error('the asset consumer did not hand over the raw mesh');
-    const [gc,mc,mf]=await Promise.all([out.geometry.coordinates,out.material.coordinates,out.material.features].map(t=>runtime.readTensor(t)));
+    // Retain reconstruction inputs independently of optional surfel support.
+    // Copy the raw mesh before a cleanup worker can transfer its buffers away.
+    const decode={vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice()};
+    const [mc,mf]=await Promise.all([out.material.coordinates,out.material.features].map(t=>runtime.readTensor(t)));
+    levelInputs={decode,materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
+    const gc=await runtime.readTensor(out.geometry.coordinates);
+    decode.coordinates=new Int32Array(gc);
     const {buildSurfelField,encodeSurfelGLB}=await import('./trellis-surfels.mjs');
     return await withForeground('trellis-surfels',()=>{
       const field=buildSurfelField({...rawMesh,geometryCoordinates:new Int32Array(gc),
         material:{coordinates:new Int32Array(mc),features:new Float32Array(mf),resolution:out.material.resolution}});
       const surfelGlb=encodeSurfelGLB(field,{provenance});
-      // The decode and material, as copies the cleanup cannot take away, for the GI proxy tiers built
-      // once the finished mesh is stored (generation-levels-runner.mjs).
-      const levelInputs={decode:{vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice(),coordinates:new Int32Array(gc)},
-        materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
+
       return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution},levelInputs};
     });
-  }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)}};}
+  }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)},...(levelInputs?{levelInputs}:{})};}
 }
