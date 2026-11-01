@@ -11239,7 +11239,7 @@ async function initScene() {
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneLightingPreparation=createLightingPreparation({
     compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass])),
-    liveCompile:()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,visibility:()=>borrowViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible)}),
+    liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:()=>borrowViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible)}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:value=>volumePrototype?.setSceneLightingRebuildPending(value),
     onStatus:state=>{

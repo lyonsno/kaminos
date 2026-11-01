@@ -149,3 +149,11 @@ assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),true);
 assert.deepEqual(retirements,[active,rejected.node]);
 effectiveRenderer.releaseRetainedLighting(effectiveScene);assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),false);
 console.log('PASS effective native renderer lighting generation commit, discard, release and retirement');
+
+// A newer request between source and beauty must leave accepted drawing intact.
+let current=true,passes=0;
+const committedBefore=committed,discardedBefore=discarded;
+renderer.compileAsync=async(s,c,target,options)=>{if(++passes===1)await options.yieldToMain(async()=>{current=false;});};
+await compileSceneLighting(renderer,[pass,pass],{live:true,isCurrent:()=>current});
+assert.equal(committed,committedBefore,'superseded topology cannot be promoted');
+assert.equal(discarded,discardedBefore+1,'retire only the superseded candidate');

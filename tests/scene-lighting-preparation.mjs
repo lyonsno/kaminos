@@ -81,3 +81,11 @@ const graph=escalated.request(()=>{graphMutated=true;});
 finishLive();await new Promise(r=>setImmediate(r));
 assert.equal(graphMutated,false,'escalation waits for the newly requested foreground drain');
 finishDrain();await Promise.all([ordinary,graph]);assert.equal(graphMutated,true);
+
+// The owner supplies a revision-bound promotion check to each live iteration.
+const tickets=[];let finishFirst;
+const revisions=lighting.createLightingPreparation({hold(){},compile:async()=>{},liveCompile:async ticket=>{tickets.push(ticket);if(tickets.length===1)await new Promise(r=>finishFirst=r);}});
+const oldRequest=revisions.request();await new Promise(r=>setImmediate(r));
+assert.equal(tickets[0]?.isCurrent?.(),true,'current preparation owns promotion');
+const newRequest=revisions.request();assert.equal(tickets[0].isCurrent(),false,'newer request revokes old promotion');
+finishFirst();await Promise.all([oldRequest,newRequest]);assert.equal(tickets[1].isCurrent(),true);

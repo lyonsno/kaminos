@@ -4,7 +4,7 @@ import {yieldToMain} from './lib/three.core.js';
 // Match this bundled Three version's PassNode.updateBefore context. Its
 // compileAsync alone carries target/MRT, but omits AO/GI context and draw flags.
 // Held preparation owns submission; live preparation restores draw state at every yield.
-export async function compileSceneLighting(renderer, passes, {live=false,visibility=()=>()=>{}}={}) {
+export async function compileSceneLighting(renderer, passes, {live=false,visibility=()=>()=>{},isCurrent=()=>true}={}) {
   const generations=new Map();
   if(live)for(const {scene} of passes)if(!generations.has(scene))generations.set(scene,renderer.beginLightingPreparation(scene));
   if(!live)for(const {scene} of passes)renderer.releaseRetainedLighting?.(scene);
@@ -70,7 +70,10 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
     const results=await Promise.all(pipelineWork);
     for(const batch of results)for(const result of batch)if(result.status==='rejected')throw result.reason;
   }
-  for(const generation of generations.values())generation.commit();
+  // A newer edit may arrive while native pipelines settle. Its predecessor
+  // must never publish a mixture of source and beauty light topologies.
+  const promote=isCurrent();
+  for(const generation of generations.values())promote?generation.commit():generation.discard();
   }catch(error){for(const generation of generations.values())generation.discard();throw error;}
 }
 
@@ -100,7 +103,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
         await drain; // A live edit can acquire an exclusive hold during its compile.
         const current=revision;
         for(const apply of changes.splice(0))await apply();
-        await (exclusive||external?compile:liveCompile)();
+        await (exclusive||external?compile:liveCompile)({isCurrent:()=>revision===current});
         completed=current;
       }
           for(const dispose of disposals.splice(0))dispose();
