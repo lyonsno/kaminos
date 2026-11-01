@@ -44,15 +44,22 @@ export async function loadChatExample({ manifestUrl, manifestSha256, modelUrl, s
 }
 
 // Reuse Kaminos page admission. Idle weights/cache retain no execution lease.
-export async function withChatAdmission({post,runId=crypto.randomUUID(),signal=null,onWait=()=>{},unsettledWork=async()=>[]}={},work) {
-  const result=await withGreenroomLease({post,runId,route:'qwen35.text-chat.webgpu.v0',admission:'queue',signal,onWait,unsettledWork,
+export async function withChatAdmission({post,runId=crypto.randomUUID(),signal=null,onWait=()=>{},onAdmitted=()=>{},unsettledWork=async()=>[]}={},work) {
+  let admittedLease;
+  try { const result=await withGreenroomLease({post,runId,route:'qwen35.text-chat.webgpu.v0',admission:'queue',signal,onWait,unsettledWork,
     sleep:(ms,signal)=>new Promise((resolve,reject)=>{
       const cleanup=()=>signal?.removeEventListener('abort',abort);
       const timer=setTimeout(()=>{cleanup();resolve();},ms);
       const abort=()=>{clearTimeout(timer);cleanup();reject(Object.assign(Error('GPU wait stopped'),{name:'AbortError'}));};
       signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
-    })},work);
+    })},async lease=>{admittedLease=lease;onAdmitted(lease);return work(lease);});
   if(result.lease.releaseError||result.lease.state==='kept-blocking'||result.lease.renewError)
     throw Object.assign(Error('Chat GPU handback failed: '+(result.lease.releaseError??result.lease.renewError)),result);
   return result;
+  }catch(error){
+    if(admittedLease&&!error.lease){
+      error.lease={...admittedLease,...(error.greenroomHandback??{state:admittedLease.status==='held'?'released':'unconfigured'})};
+    }
+    throw error;
+  }
 }

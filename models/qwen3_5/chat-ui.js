@@ -3,13 +3,14 @@ const $=id=>document.getElementById(id), query=new URLSearchParams(location.sear
 let runtime=null, active=null, loading=false, controller=null;
 const history=[];
 const admissions=[];
+let admissionState=null;
 async function admitted(work,signal){
- try { const held=await withChatAdmission({signal,post:async body=>{
+ try { const held=await withChatAdmission({signal,onAdmitted:lease=>{admissionState=lease;status('Starting model work…');},post:async body=>{
   const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await r.json();if(!r.ok)throw Error(data.error??'GPU admission unavailable');return data;
  },onWait:w=>status(`Waiting for GPU · ${w.position?'queue position '+w.position:'another run is active'}`),
  unsettledWork:async()=>runtime?.model.active||runtime?.model.loading?['chat model']:[]},work);
- admissions.push(held.lease);if(held.lease.status==='unconfigured')status('Server has no GPU queue configured.');return held.result;
+ admissions.push(held.lease);return held.result;
  }catch(e){if(e.lease??e.greenroomHandback)admissions.push(e.lease??e.greenroomHandback);throw e;}
 }
 async function modelSettings(){
@@ -18,7 +19,7 @@ async function modelSettings(){
  if(!m?.mounted)throw Error(c.modelAvailability?.qwen35?.reason??'Native Qwen model is not installed.');
  return {manifestUrl:new URL(m.manifestUrl,location.href),manifestSha256:m.manifestSha256,modelUrl:new URL(m.modelUrl.replace(/\/$/,'')+'/',location.href)};
 }
-function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function status(text,error=false){$('status').textContent=(admissionState?.status==='unconfigured'?'No GPU queue configured · ':'')+text;$('status').classList.toggle('error',error);}
 function controls(){const busy=loading||Boolean(active);$('load').disabled=busy||Boolean(runtime);$('system').disabled=busy||Boolean(runtime);$('send').disabled=busy||!runtime;$('reset').disabled=busy||!runtime;$('unload').disabled=busy||!runtime;$('stop').disabled=!busy;}
 function message(role,text){const article=document.createElement('article');article.className=role;const name=document.createElement('strong');name.textContent=role;const body=document.createElement('div');body.textContent=text;article.append(name,body);$('conversation').append(article);return body;}
 async function load(){if(loading||runtime)throw Error('Model already loaded or loading');loading=true;controller=new AbortController();controls();status('Loading model weights…');
