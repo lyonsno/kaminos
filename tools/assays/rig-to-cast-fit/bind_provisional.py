@@ -48,6 +48,9 @@ def run(config_path,out):
   roles=config['roles'];inactive=set(config['inactive'])
   if set(roles)!=set(names) or not inactive.issubset(names) or len(set(roles.values()))!=len(names):raise ValueError('incomplete/aliased role mapping')
   if any(p and p not in names for p in parents):raise ValueError('unresolved parent')
+  support=config.get('axial_support')
+  if support is not None:
+   if not isinstance(support,list) or len(support)<2 or any(not isinstance(n,str) or n not in names or n in inactive for n in support) or len(set(support))!=len(support) or support[0]!=config['root'] or any(parents[names.index(n)]!=p for p,n in zip(support,support[1:])):raise ValueError('axial support must be an explicit active chain from the root')
   root=names.index(config['root']);leg_a,leg_b=[names.index(x) for x in config['lengthReference']];unit=float(np.linalg.norm(q[leg_a]-q[leg_b]))
   if not np.isfinite(q).all() or unit<=0:raise ValueError('invalid joint frame')
   basis=np.diag([-1.,1.,-1.]);conversion=np.eye(4);conversion[:3,:3]=basis/unit;conversion[:3,3]=-basis@q[root]/unit
@@ -60,7 +63,14 @@ def run(config_path,out):
   control={'paintedWeightsIncluded':False,'joints':{b['name']:np.array(b['restMatrix'])[:3,3].tolist() for b in semantic},'bounds':{'min':points.min(0).tolist(),'max':points.max(0).tolist()},'domainMethod':'surface','surfaceConnectivity':'coincident','articulated':True}
   report.update(phase='binding',sources=config['expected_sources'],vertices=len(points),triangles=len(triangles),unit=unit,nativeWorldToBinding=conversion.tolist(),inactive=sorted(inactive));write(out/'report.json',report)
   sys.path[:0]=[config['binder'],config['trunk']];full=module('existing_full_binder',Path(config['binder'])/'full-creature-binding.py')
-  rear=full.bind_geometry(points,triangles,control);result=full.distributed_trunk_weights(points,triangles,rear['edges'],rear['jointWeights'],semantic)
+  rear=full.bind_geometry(points,triangles,control)
+  if support is None:result=full.distributed_trunk_weights(points,triangles,rear['edges'],rear['jointWeights'],semantic)
+  else:
+   # Caller-selected support through the unchanged transverse-ray seed rule.
+   anchors=module('provisional_axial_anchors',Path(config['trunk'])/'trunk_anchors.py');anchors.AXIAL=tuple(roles[n] for n in support)
+   seeds,receipt=anchors.derive_trunk_anchors(points,triangles,semantic)
+   result=full.extend_weights(points,rear['edges'],rear['jointWeights'],semantic,seed_overrides=seeds)
+   result['trunkAnchors']={**receipt,'controls':support,'semanticControls':list(anchors.AXIAL),'sourceSha256':sha(Path(config['trunk'])/'trunk_anchors.py')}
   weights=np.zeros((len(points),len(names)+1),dtype='<f4');weights[:,0]=result['weights'][:,0]
   for i,name in enumerate(names,1):
    if name not in inactive:weights[:,i]=result['weights'][:,result['channels'].index(roles[name])]

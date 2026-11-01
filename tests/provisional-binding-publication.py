@@ -91,3 +91,24 @@ if(loaded.source.poseRoute!=='static-bind'||loaded.manifest.vertices!==3)throw E
 console.log('successful package loads through real static consumer');
 """
     subprocess.run(['node','--input-type=module','-e',consumer,str(valid/'package')],cwd=script.parents[3],check=True)
+
+    # An explicit additional axial chain must be consumed, not silently ignored.
+    fake_anchors=types.SimpleNamespace(AXIAL=('pelvis','spine-lumbar','spine-chest'))
+    fake_anchors.derive_trunk_anchors=lambda points,triangles,bones: ({}, {'observedControls':list(fake_anchors.AXIAL)})
+    fake.extend_weights=lambda points,edges,weights,bones,seed_overrides: fake.distributed_trunk_weights(points,None,edges,weights,bones)
+    m.module=lambda name,path: fake_anchors if Path(path).name=='trunk_anchors.py' else fake
+    config['axial_support']=['Hips','Leg']
+    inputs.write_text(json.dumps(config))
+    variant=r/'axial'
+    m.run(inputs,variant)
+    receipt=json.loads((variant/'package/manifest.json').read_text())['bindingRule']['trunkAnchors']
+    assert receipt['controls']==['Hips','Leg']
+    assert receipt['observedControls']==['pelvis','hindlimb-left-hip']
+    for i,chain in enumerate([['Hips','missing'],['Leg','Hips'],['Hips','Hips'],[]]):
+        config['axial_support']=chain;inputs.write_text(json.dumps(config));failed=r/f'bad-chain-{i}'
+        try:m.run(inputs,failed)
+        except ValueError as e:assert 'axial support' in str(e)
+        else:raise AssertionError('Invalid explicit axial chain was accepted')
+        assert json.loads((failed/'report.json').read_text())['phase']=='inputs'
+        assert not (failed/'package/manifest.json').exists()
+    print('explicit axial support chain consumed; malformed chains rejected before binding')
