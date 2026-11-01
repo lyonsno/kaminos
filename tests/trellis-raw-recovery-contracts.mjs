@@ -31,6 +31,6 @@ test('recovery copies offset array views losslessly and rejects unknown schemas'
  const glb=encodeTrellisReconstruction(original,{provenance:{runId:'retained-run'}});const restored=decodeTrellisReconstruction(glb);
  assert.deepEqual(restored.levelInputs,original);assert.equal(restored.provenance.runId,'retained-run');
  original.decode.vertices.fill(7);assert.equal(restored.levelInputs.decode.vertices[0],0);
- const bytes=new Uint8Array(glb),text=new TextDecoder().decode(bytes);const index=text.indexOf('kaminos.trellis-reconstruction.v1');assert.ok(index>0);bytes[index]='x'.charCodeAt(0);
+ const bytes=new Uint8Array(glb),index=Buffer.from(glb).indexOf('kaminos.trellis-reconstruction.v1');assert.ok(index>0);bytes[index]='x'.charCodeAt(0);
  assert.throws(()=>decodeTrellisReconstruction(glb),/unsupported reconstruction schema/);
 });
