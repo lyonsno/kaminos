@@ -12308,11 +12308,14 @@ function readEnvironmentRecipe() {return sceneEnvironment.recipe();}
 function applyEnvironmentRecipe(recipe) {return sceneEnvironment.patch(recipe);}
 function applyEnvironmentParameters(value=sceneEnvironment.read()) {
   if(!renderer||!scene)return;
-  renderer.toneMappingExposure=value.exposure;
-  scene.environmentIntensity=value.intensity;
-  scene.environmentRotation=new THREE.Euler(0,value.rotation,0);
+  const activeDelta = typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled && arrivalLightingState?.plan?.environmentDelta
+    ? arrivalLightingState.plan.environmentDelta
+    : { exposureScale: 1, envIntensityScale: 1, envRotationOffset: 0 };
+  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale;
+  scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
+  scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
   for(const {object} of workingScene.objects)object.traverse(child=>{
-    for(const material of [].concat(child.material||[]))material.envMapIntensity=value.intensity;
+    for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
   });
   sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
 }
@@ -12363,8 +12366,9 @@ async function loadEnvironment(name, { remember = true } = {}) {
 }
 
 function applyEnvMap(envMap, intensity) {
+  const effectiveIntensity = intensity * (typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled ? (arrivalLightingState.plan?.environmentDelta?.envIntensityScale ?? 1) : 1);
   scene.environment = envMap;
-  scene.environmentIntensity = intensity;
+  scene.environmentIntensity = effectiveIntensity;
   currentEnvMap = envMap;
   updateBackground();
 
@@ -12372,7 +12376,7 @@ function applyEnvMap(envMap, intensity) {
   workingScene.objects.forEach(({ object }) => {
     object.traverse(child => {
       for (const material of [].concat(child.material || [])) {
-        material.envMapIntensity = intensity;
+        material.envMapIntensity = effectiveIntensity;
         material.needsUpdate = true;
       }
     });
@@ -12451,6 +12455,12 @@ function clearSceneDomains(){
   for(const ash of authoredAsh.values())ash.dispose();authoredAsh.clear();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
+  if (typeof arrivalLightingState !== 'undefined') {
+    arrivalLightingState.bounds = null;
+    arrivalLightingState.materialProfile = inspectArrivalMaterialProfile([]);
+    arrivalLightingState.promotedIds = [];
+  }
+  if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
 }
 function clearSceneTransient(registeredObjects){
   if (greenroomPreviewState) {
@@ -13201,7 +13211,6 @@ async function showOBJ(objFile, mtlFile, options = {}) {
     objLoader.load(objUrl, obj => {
       URL.revokeObjectURL(objUrl);
       glbSourceScene = obj;
-      const arrivalPlacement = applyAssetArrival(obj, arrival);
       obj.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -13219,6 +13228,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
           }
         }
       });
+      const arrivalPlacement = applyAssetArrival(obj, arrival);
       scene.add(obj);
       registerSceneObject(obj, {
         ...(options.metadata || {}),
@@ -22571,7 +22581,8 @@ const arrivalLightingState = {
 };
 
 function applySpotRecordToThreeLight(light, record, enabled) {
-  if (!light || !record) return;
+  if (!light || !record) return false;
+  const wasVisible = light.visible;
   light.visible = Boolean(enabled && record.light.enabled);
   light.color.set(record.light.color);
   light.intensity = record.light.intensity;
@@ -22582,6 +22593,7 @@ function applySpotRecordToThreeLight(light, record, enabled) {
   light.target.position.copy(light.position).addScaledVector(direction, record.light.aimDistance * (record.transform.scale?.[2] ?? 1));
   light.target.updateMatrixWorld();
   light.shadow?.camera?.updateProjectionMatrix?.();
+  return wasVisible !== light.visible;
 }
 
 function installStartupStudioLights(targetScene) {
@@ -22651,7 +22663,11 @@ function extractObjectMaterialSamples(object) {
   object.traverse(child => {
     if (!child.isMesh || !child.material) return;
     let weight = 1;
-    if (child.geometry) {
+    box.setFromObject(child);
+    if (!box.isEmpty()) {
+      box.getSize(size);
+      weight = Math.max(0.05, size.length());
+    } else if (child.geometry) {
       if (!child.geometry.boundingBox) child.geometry.computeBoundingBox?.();
       if (child.geometry.boundingBox && !child.geometry.boundingBox.isEmpty()) {
         box.copy(child.geometry.boundingBox).getSize(size);
@@ -22693,16 +22709,9 @@ function syncArrivalStudioLighting() {
   const routeAllowsStudioRig = typeof isFireLightFieldRoute === 'function' ? !isFireLightFieldRoute() : true;
   const activeStageRig = arrivalLightingState.studioLightsEnabled && routeAllowsStudioRig && !hasPromotedOrSavedLights;
   const [keyRecord, rimRecord] = plan.lights;
-  applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
-  applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
-
-  if (typeof workingScene !== 'undefined' && typeof mountSceneSpotLight === 'function') {
-    for (const record of plan.lights) {
-      if (workingScene.objects.some(o => o.id === record.id && o.type === 'light')) {
-        mountSceneSpotLight(record);
-      }
-    }
-  }
+  const keyChanged = applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
+  const rimChanged = applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
+  if (keyChanged || rimChanged) sceneLightingPreparation?.request();
 
   if (renderer && scene && typeof sceneEnvironment !== 'undefined') {
     const env = sceneEnvironment.read();
@@ -22752,7 +22761,7 @@ function autoCalibrateSceneGIFromScene(extraObject = null) {
       }
     }
   }
-  if (extraObject && (!typeof workingScene !== 'undefined' || !workingScene.objects.some(e => e.object === extraObject))) {
+  if (extraObject && (typeof workingScene === 'undefined' || !workingScene.objects.some(e => e.object === extraObject))) {
     pushBox(extraObject);
   }
   if (!boxes.length) return null;
@@ -22776,19 +22785,49 @@ function recordAssetArrivalLightingAndGI(object, mode) {
   if (!object || !mode) return;
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
-  if (!box.isEmpty()) {
-    arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
-  }
-  const samples = extractObjectMaterialSamples(object);
-  if (samples.length) {
-    arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(samples);
-  }
   if (mode === 'fresh') {
+    if (!box.isEmpty()) {
+      arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
+    }
+    const samples = extractObjectMaterialSamples(object);
+    if (samples.length) {
+      arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(samples);
+    }
     sceneGIManuallyConfigured = false;
     syncArrivalStudioLighting();
   } else if (mode === 'append') {
+    if (!box.isEmpty()) {
+      if (arrivalLightingState.bounds) {
+        const union = new THREE.Box3(
+          new THREE.Vector3().fromArray(arrivalLightingState.bounds.min),
+          new THREE.Vector3().fromArray(arrivalLightingState.bounds.max),
+        ).union(box);
+        arrivalLightingState.bounds = { min: union.min.toArray(), max: union.max.toArray() };
+      } else {
+        arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
+      }
+    }
+    syncArrivalStudioLighting();
     queueMicrotask(() => autoCalibrateSceneGIFromScene(object));
   }
+}
+
+function refreshArrivalLightingFromWorkingScene() {
+  const union = new THREE.Box3();
+  const allSamples = [];
+  if (typeof workingScene !== 'undefined') {
+    for (const entry of workingScene.objects) {
+      if (entry.object && entry.object.visible !== false && !['camera', 'light'].includes(entry.type)) {
+        entry.object.updateWorldMatrix?.(true, true);
+        const box = new THREE.Box3().setFromObject(entry.object, true);
+        if (!box.isEmpty()) union.union(box);
+        allSamples.push(...extractObjectMaterialSamples(entry.object));
+      }
+    }
+  }
+  arrivalLightingState.bounds = union.isEmpty() ? null : { min: union.min.toArray(), max: union.max.toArray() };
+  arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(allSamples);
+  syncArrivalStudioLighting();
 }
 
 function syncArrivalLightingAndGI(object) {
@@ -22801,10 +22840,20 @@ function promoteArrivalStudioLightsToScene() {
   const plan = syncArrivalStudioLighting();
   const ids = [];
   for (const record of plan.lights) {
+    if (typeof workingScene !== 'undefined' && workingScene.objects.some(o => o.id === record.id && o.type === 'light')) {
+      ids.push(record.id);
+      continue;
+    }
+    const target = typeof ensureSceneObjectMembershipTarget === 'function' ? ensureSceneObjectMembershipTarget(record.id) : null;
+    if (target && scenePlacementTools?.edits) scenePlacementTools.edits.assertCanRecordApplied(target);
     mountSceneSpotLight({ ...record, createdAt: new Date().toISOString() });
+    if (typeof recordSceneObjectInsertion === 'function' && scenePlacementTools?.edits) {
+      recordSceneObjectInsertion(record.id);
+    }
     ids.push(record.id);
   }
   arrivalLightingState.promotedIds = ids;
+  if (ids.length && typeof setActiveSceneObject === 'function') setActiveSceneObject(ids[0]);
   syncArrivalStudioLighting();
   renderSceneObjectList?.();
   updateTransformInspector?.();
@@ -23062,7 +23111,7 @@ function removeBackdrop() {
     backdropMesh.material.dispose();
   }
   backdropMesh = null;
-  if (groundPlane) groundPlane.visible = true;
+  if (groundPlane) groundPlane.visible = document.getElementById('composition-ground-visible')?.checked ?? true;
 }
 
 document.getElementById('backdrop-toggle').addEventListener('change', e => {
@@ -25653,6 +25702,7 @@ function mountSceneSpotLight(raw) {
   light.shadow.camera.updateProjectionMatrix();
   if(!entry){entry={...record,object:marker};sceneMembership.admit(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   marker.userData.kaminosSceneObject={...record};
+  if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   if(topologyChanged)sceneLightingPreparation?.request();
   window._kaminosDirty?.();return entry;
 }
@@ -25662,6 +25712,7 @@ function disposeSceneSpotLight(id) {
   binding.light.removeFromParent();binding.light.target.removeFromParent();
   if(sceneLightingPreparation)sceneLightingPreparation.deferDisposal(()=>binding.light.dispose?.());else binding.light.dispose?.();
   sceneSpotLights.delete(id);
+  if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   sceneLightingPreparation?.request();
 }
 
@@ -27143,6 +27194,8 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
   // Scenes without a saved GI record use defaults, independent of prior tuning.
   setSceneGIControls(data.postprocessing?.sceneGI ?? {});
+  if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
+  if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {sceneAO.restoreDocument(ao);saveSettings();}

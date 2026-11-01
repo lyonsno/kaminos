@@ -49,4 +49,26 @@ const roomCalibrated = calibrateSceneGISettingsForBounds({
 });
 assert.ok(roomCalibrated.radius > singleObjectCalibrated.radius * 2, `multi-object room scene expands GI horizon radius, got ${roomCalibrated.radius}`);
 assert.ok(roomCalibrated.thickness < 0.6, `multi-object room scene keeps thickness anchored to local prop scale, got ${roomCalibrated.thickness}`);
+assert.match(
+  shader,
+  /vec4\(output\.rgb\.add\(reflected\)\.mul\(output\.a\),\s*1\)/,
+  'SSGI source pass must weight surface radiance by output.a with alpha 1 so feathered CustomBlending floors do not blend skybox into GI transport',
+);
+assert.match(
+  shader,
+  /vec4\(received\.mul\(output\.a\),\s*1\),\s*float\(viewMode\.equal\(2\)\)/,
+  'SSGI received-bounce diagnostic view (viewMode === 2) must weight received bounce by output.a with alpha 1 so CustomBlending floors do not display skybox background',
+);
+assert.ok(
+  !html.includes('!typeof workingScene'),
+  'autoCalibrateSceneGIFromScene must not use !typeof workingScene operator-precedence bug that duplicates extraObject',
+);
+const applyDocStart = html.indexOf('async function applySceneDocument(');
+const applyDocEnd = html.indexOf('// File input handler for Load Scene', applyDocStart);
+const applyDocBody = html.slice(applyDocStart, applyDocEnd);
+assert.match(
+  applyDocBody,
+  /setSceneGIControls\(data\.postprocessing\?\.sceneGI \?\? \{\}\);\s*(?:if \(typeof autoCalibrateSceneGIFromScene === 'function'\) )?autoCalibrateSceneGIFromScene\(\);/,
+  'applySceneDocument must auto-calibrate SSGI after restoring sceneGI controls when the scene has no explicit radius/thickness',
+);
 console.log('scene GI settings and receiver contracts passed');

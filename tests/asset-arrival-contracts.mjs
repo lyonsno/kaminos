@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from '../lib/three.core.js';
 import {
   ASSET_ARRIVAL_TARGET_DIAGONAL,
@@ -153,4 +154,41 @@ test('arrival studio light rig plans warm key and cool rim spot records and appl
   assert.ok(darkRim > baseRim, `dark-metallic tuning boosts rim grazing light (${darkRim} > ${baseRim})`);
   assert.ok(brightKey < baseKey, `bright-matte tuning trims key light to prevent washout (${brightKey} < ${baseKey})`);
   assert.ok(tunedDark.environmentDelta.exposureScale > 1 && tunedBright.environmentDelta.exposureScale < 1);
+});
+
+test('startup studio light lifecycle yields on scene spot lights, preserves promoted light edits, and records undo history', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const syncStart = html.indexOf('function syncArrivalStudioLighting()');
+  const syncEnd = html.indexOf('function autoCalibrateSceneGIFromScene(', syncStart);
+  const syncBody = html.slice(syncStart, syncEnd);
+  assert.ok(
+    !syncBody.includes('mountSceneSpotLight(record)'),
+    'syncArrivalStudioLighting must not overwrite promoted @studio-key-light / @studio-rim-light records in workingScene.objects',
+  );
+  assert.match(
+    syncBody,
+    /sceneLightingPreparation\?\.request\(\)/,
+    'syncArrivalStudioLighting must request sceneLightingPreparation when stage light visibility changes',
+  );
+  const mountStart = html.indexOf('function mountSceneSpotLight(raw)');
+  const mountEnd = html.indexOf('function disposeSceneSpotLight(id)', mountStart);
+  assert.match(
+    html.slice(mountStart, mountEnd),
+    /syncArrivalStudioLighting\(\)/,
+    'mountSceneSpotLight must sync arrival studio lighting so stage lights yield immediately when any scene spot light is added',
+  );
+  const disposeEnd = html.indexOf('function groupPivotPose(', mountEnd);
+  assert.match(
+    html.slice(mountEnd, disposeEnd),
+    /syncArrivalStudioLighting\(\)/,
+    'disposeSceneSpotLight must sync arrival studio lighting when a scene spot light is removed',
+  );
+  const promoteStart = html.indexOf('function promoteArrivalStudioLightsToScene()');
+  const promoteEnd = html.indexOf('function readSceneGIControls()', promoteStart);
+  const promoteBody = html.slice(promoteStart, promoteEnd);
+  assert.match(
+    promoteBody,
+    /recordSceneObjectInsertion\(/,
+    'promoteArrivalStudioLightsToScene must record scene object insertion for undo/redo history and dirty state',
+  );
 });
