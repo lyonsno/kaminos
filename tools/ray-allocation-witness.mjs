@@ -12,7 +12,7 @@ assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
 await fs.mkdir(out,{recursive:true});
 const materialWidth=Number(process.argv.find(a=>a.startsWith('--material-width='))?.split('=')[1]??32);
 const root=process.cwd(),report={status:'failed',phase:'setup',root,errors:[],arms:[]};
-let server,browser,page;
+let server,browser,page,serverError;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let sourceFiles;
 const discoverSources=()=>execFileSync('git',['ls-files','-co','--exclude-standard'],{encoding:'utf8'}).trim().split('\n').filter(f=>/^(volume-|activity-grid-witness|fine-grid-witness|flame-authoring|index.html|scene-fire-schema|tools\/(three-grid-scene|grid-editor|fine-grid-witness|ray-allocation-witness))/.test(f));
@@ -30,10 +30,15 @@ try{
  const socket=net.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));
  const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('KAMINOS_')));
  report.server={port,args:['-u','serve.py',String(port),'--volume-settings-store',dirs.settings,'--no-shared-basin-store','--volume-basin-session-store',dirs.sessions,'--volume-cockpit-layout-store',dirs.layouts]};
+ report.phase='server-start';await save();
  const log=await fs.open(path.join(out,'server.log'),'a');
- server=spawn('python3',report.server.args,{cwd:root,env:{...env,HOME:dirs.home,KAMINOS_BIND_HOST:'127.0.0.1',KAMINOS_SCENES_DIR:dirs.scenes},stdio:['ignore',log.fd,log.fd]});report.server.pid=server.pid;await log.close();
- report.phase='server';await save();const origin='http://127.0.0.1:'+port;report.origin=origin;
- for(;;){if(server.exitCode!==null)throw Error('Server exited '+server.exitCode);try{const r=await fetch(origin+'/api/runtime-config');if(r.ok){report.runtime=await r.json();break;}}catch{}await new Promise(r=>setTimeout(r,100));}
+ try{
+  server=spawn('python3',report.server.args,{cwd:root,env:{...env,HOME:dirs.home,KAMINOS_BIND_HOST:'127.0.0.1',KAMINOS_SCENES_DIR:dirs.scenes},stdio:['ignore',log.fd,log.fd]});
+  server.on('error',error=>{serverError=error;});
+  report.server.pid=server.pid;
+ }finally{await log.close();}
+ const origin='http://127.0.0.1:'+port;report.origin=origin;
+ for(;;){if(serverError)throw serverError;if(server.exitCode!==null)throw Error('Server exited '+server.exitCode);try{const r=await fetch(origin+'/api/runtime-config');if(r.ok){report.runtime=await r.json();break;}}catch{}await new Promise(r=>setTimeout(r,100));}
  assert.equal(report.runtime.source.repoRoot,root);assert.equal(report.runtime.sharedBasinStore,null);
  report.executable=process.env.CHROME_EXECUTABLE;assert.ok(report.executable?.includes('Google Chrome for Testing'));
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
@@ -109,5 +114,5 @@ try{
 
  assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;if(page)try{report.failureState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());await page.screenshot({path:path.join(out,'failure.png')});}catch(c){report.captureError=String(c);}process.exitCode=1;}
-finally{await browser?.close();if(server&&server.exitCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}report.browserClosed=true;report.serverClosed=true;await save();}
+finally{await browser?.close();if(server?.pid&&server.exitCode===null&&server.signalCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}report.browserClosed=true;report.serverClosed=true;await save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));
