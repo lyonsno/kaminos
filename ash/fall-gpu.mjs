@@ -10,7 +10,7 @@ struct Params {dims:vec4<u32>,origin:vec4<f32>,source:vec4<f32>,contact:vec4<f32
 @group(0) @binding(3) var<storage,read_write> state:array<atomic<u32>>;
 @group(0) @binding(4) var<storage,read_write> wake:array<atomic<u32>>;
 @group(0) @binding(5) var<uniform> p:Params;
-@group(0) @binding(10) var<storage,read> sources:array<vec4<f32>>;
+fn ash_source_row(i:u32)->vec4<f32>{let j=4u+i*4u;return vec4<f32>(bitcast<f32>(atomicLoad(&state[j])),bitcast<f32>(atomicLoad(&state[j+1u])),bitcast<f32>(atomicLoad(&state[j+2u])),bitcast<f32>(atomicLoad(&state[j+3u])));}
 fn random(seed:u32)->f32{var h=seed;h=(h^(h>>16u))*0x7feb352du;h=(h^(h>>15u))*0x846ca68bu;return f32(h^(h>>16u))/4294967296.0;}
 fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}
 fn take_budget()->f32{
@@ -30,7 +30,7 @@ fn put(i:u32,amount:f32)->f32{
  if(amount==0.0){
   amount=take_budget();if(amount==0.0){return;}let seed=i+atomicLoad(&state[2])*747796405u;
   var source=p.source;var extent=vec2<f32>(0);
-  let choice=random(seed+67u);for(var j=0u;j<u32(p.clock.z);j++){if(choice<sources[j*2u+1u].x){source=sources[j*2u];extent=sources[j*2u+1u].yz;break;}}
+  let choice=random(seed+67u);for(var j=0u;j<u32(p.clock.z);j++){if(choice<ash_source_row(j*2u+1u).x){source=ash_source_row(j*2u);extent=ash_source_row(j*2u+1u).yz;break;}}
   let angle=random(seed)*6.2831853;let r=sqrt(random(seed+13u))*source.w;
   var offset=vec3<f32>(cos(angle)*r,random(seed+27u)*p.origin.w,sin(angle)*r);
   if(extent.x>0.0){offset.x=(random(seed+71u)*2.0-1.0)*extent.x;offset.z=(random(seed+73u)*2.0-1.0)*extent.y;}
@@ -71,9 +71,9 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
  const {capacity}=description;const tiled=tileHeaders!==null;let airGroups,airArgs,visibleAttr,drawAttr;const extraAttrs=[];if(description.bytes>device.limits.maxStorageBufferBindingSize||description.bytes>device.limits.maxBufferSize)throw Error('Falling ash transport exceeds effective GPU buffer capacity');
  const attr=new THREE.StorageBufferAttribute(new Float32Array(capacity*8),8);renderer.backend.createStorageAttribute(attr);const particles=renderer.backend.get(attr).buffer;
  const make=(label,size,usage)=>{const b=device.createBuffer({label,size,usage});owned.push(b);return b;};
- const state=make('ash retained source and airborne count',16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);
+ let state=make('ash retained source and airborne count',48,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);
  const uniform=make('ash falling source',80,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
- let sourceBuffer=make('ash source distribution',32,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);
+
  let root,geometry,material;try{
  let code=SHADER;
  if(tiled){
@@ -97,9 +97,9 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
   airGroups=make('ash airborne masks lists and dispatch',groups*12+16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);airArgs=make('ash airborne indirect dispatch',16,GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_DST);
  }
  const module=device.createShaderModule({code,label:'falling ash conservative deposition'});const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('; '));
- const bgl=device.createBindGroupLayout({entries:[0,1,2,3,10,...(tiled?[6,7,8,9]:[4])].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===1||binding===10?'read-only-storage':'storage'}})).concat([{binding:5,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}])});
+ const bgl=device.createBindGroupLayout({entries:[0,1,2,3,...(tiled?[6,7,8,9]:[4])].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===1?'read-only-storage':'storage'}})).concat([{binding:5,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}])});
  const pl=device.createPipelineLayout({bindGroupLayouts:[bgl]});const pipelines=await Promise.all(['prepare_fall','fall'].map(entryPoint=>device.createComputePipelineAsync({layout:pl,compute:{module,entryPoint}})));
- const makeGroup=()=>device.createBindGroup({layout:bgl,entries:[density,collision,particles,state,wake,uniform,...(tiled?[tileHeaders,airGroups,renderer.backend.get(visibleAttr).buffer,renderer.backend.get(drawAttr).buffer]:[])].map((buffer,binding)=>({binding,resource:{buffer}})).filter(entry=>!tiled||entry.binding!==4).concat([{binding:10,resource:{buffer:sourceBuffer}}])});
+ const makeGroup=()=>device.createBindGroup({layout:bgl,entries:[density,collision,particles,state,wake,uniform,...(tiled?[tileHeaders,airGroups,renderer.backend.get(visibleAttr).buffer,renderer.backend.get(drawAttr).buffer]:[])].map((buffer,binding)=>({binding,resource:{buffer}})).filter(entry=>!tiled||entry.binding!==4)});
  let group=makeGroup();
  // Two vec4 values per parcel: position/remaining mass, then velocity.
  const {storage,instanceIndex,positionGeometry,vec3}=THREE.TSL;
@@ -115,11 +115,11 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
    if(disposed)throw Error('Falling ash disposed');sourceSettings({position,spread,rate});if(!Number.isFinite(dt)||dt<=0)throw Error('Invalid ash timestep');
    const distribution=[{position,spread,rate},...sources].map(sourceSettings).filter(s=>s.rate>0),totalRate=distribution.reduce((sum,s)=>sum+s.rate,0);
    const sourceBytes=Math.max(32,distribution.length*32);
-   if(sourceBytes>device.limits.maxStorageBufferBindingSize||sourceBytes>device.limits.maxBufferSize)throw Error('Ash sources exceed effective GPU capacity');
-   if(sourceBytes>sourceBuffer.size){const previous=sourceBuffer;sourceBuffer=make('ash source distribution',sourceBytes,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);group=makeGroup();previous.destroy();owned.splice(owned.indexOf(previous),1);}
+   if(sourceBytes+16>device.limits.maxStorageBufferBindingSize||sourceBytes+16>device.limits.maxBufferSize)throw Error('Ash sources exceed effective GPU capacity');
+   if(sourceBytes+16>state.size){const previous=state;state=make('ash source ledger and distribution',sourceBytes+16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);const copy=device.createCommandEncoder();copy.copyBufferToBuffer(previous,0,state,0,16);device.queue.submit([copy.finish()]);group=makeGroup();previous.destroy();owned.splice(owned.indexOf(previous),1);}
    const sourceData=new Float32Array(sourceBytes/4);let cumulative=0;
    for(let i=0;i<distribution.length;i++){const item=distribution[i];sourceData.set([...item.position,item.spread],i*8);cumulative+=item.rate/totalRate;sourceData[i*8+4]=i===distribution.length-1?1:cumulative;if(item.halfExtents)sourceData.set(item.halfExtents,i*8+5);}
-   device.queue.writeBuffer(sourceBuffer,0,sourceData);
+   device.queue.writeBuffer(state,16,sourceData);
    const extra=totalRate*dt,addition=queuedVolume+extra;if(!Number.isFinite(Math.fround(addition/layout.cellSize**3)))throw Error('Ash source budget exceeds GPU float capacity');requestedVolume+=extra;queuedVolume=0;
    const bytes=new ArrayBuffer(80),u=new Uint32Array(bytes),f=new Float32Array(bytes);u.set([...layout.dims,capacity]);f.set([...layout.origin,layout.cellSize],4);f.set([...position,spread],8);f.set(contact??[0,0,0,0],12);f.set([dt,addition/layout.cellSize**3,distribution.length,0],16);device.queue.writeBuffer(uniform,0,bytes);
    let pass=encoder.beginComputePass({label:'ash source budget',...(timestampWrites?{timestampWrites}:{})});pass.setPipeline(pipelines[0]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();
