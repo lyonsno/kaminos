@@ -1,3 +1,4 @@
+import {authoredWaterChanges} from '../../authored-water-changes.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createMlsClock,MLS_ROUTE,MLS_SOURCE} from '../../mls-juice-contract.mjs';
@@ -21,7 +22,7 @@ export async function createAuthoredMlsHostFixture() {
   const device={addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),
     createCommandEncoder:()=>({finish:()=>({})}),queue:{submit(){}}};
   renderer.backend.device=device;
-  const context={THREE,texture:()=>({}),positionView:{z:{negate:()=>0}},vec4:()=>({}),
+  const context={authoredWaterChanges,THREE,texture:()=>({}),positionView:{z:{negate:()=>0}},vec4:()=>({}),
     createLocalLiquidScenePasses:()=>({update(){},state:()=>({camera:{transform:'test'}}),capture:new Pipeline(),presentation:new Pipeline(),dispose(){}}),
     createMlsJuiceSolver:async options=>{solverOptions=options;return solver;},createMlsJuiceRenderer:async()=>({encode(){},read:()=>({}),dispose(){}}),createMlsWaterProxy:async()=>({dispose(){}}),
     createFluidSceneEnvironment:()=>({render(){},view:()=>({}),state:()=>({}),dispose(){}}),

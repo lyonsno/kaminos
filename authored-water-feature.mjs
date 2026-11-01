@@ -16,7 +16,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   generation++;request++;pending=null;admitted=null;
   const previous=host;host=null;previous?.dispose();
  }
- async function acquire({replace=false,experiment=null,recovery=false}={}){
+ async function acquire({replace=false,experiment=null,recovery=false,paused:requestedPaused=false}={}){
   if(!setup&&!experiment)return false;
   if(!replace&&host)return true;
   if(!replace&&pending)return pending.promise;
@@ -24,6 +24,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   const ticket={generation,request:++request};
   const isCurrent=()=>ticket.generation===generation&&(admitted===ticket||ticket.request===request);
   const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone((recovery?recoveryEmitters:replace?enabledEmitters:emitters)())};
+  ticket.signature=JSON.stringify([inputs.setup,inputs.emitters]);
   if(replace&&!experiment&&!inputs.emitters.length)throw Error('Show a water emitter before releasing water');
   const run=async()=>{
    let candidate=null,published=false;
@@ -37,7 +38,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     if(!isCurrent())throw superseded();
     if(!candidate){if(replace)throw Error('Water replacement did not create an available host');return false;}
     if(!replace)candidate.setEmitters(runtimeEmitters());
-    const nextPaused=experiment?true:replace?false:candidate.state().mode==='finite_drop'?true:viewerPaused()??paused;
+    const nextPaused=experiment?true:replace?requestedPaused:candidate.state().mode==='finite_drop'?true:viewerPaused()??paused;
     candidate.setPaused(nextPaused||(!replace&&!visible()));
     if(!isCurrent())throw superseded();
     const previous=host;host=candidate;admitted=ticket;published=true;failure=null;paused=nextPaused;
@@ -49,9 +50,9 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     if(replace)throw error;
     if(isCurrent()){failure=error.message||String(error);report(`Water emitter saved in the scene; host water unavailable: ${failure}`);}
     return false;
-   }finally{if(pending?.ticket===ticket)pending=null;}
+   }finally{if(pending?.ticket===ticket){pending=null;refresh();}}
   };
-  const promise=Promise.resolve().then(run);pending={ticket,promise};return promise;
+  const promise=Promise.resolve().then(run);pending={ticket,promise};refresh();return promise;
  }
  const feature={
   get setup(){return setup;},set setup(value){setup=value;},
@@ -76,7 +77,8 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
    if(mounted){paused=Boolean(wasPaused);host.setPaused(paused||!visible());}
    return mounted;
   },
-  release:()=>acquire({replace:true}),
+  release:(options={})=>acquire({replace:true,paused:!!options.paused}),
+  cancelPreparation(){if(pending){request++;pending=null;refresh();}},
   async openExperiment(value){
    if(setup)throw Error('Close authored water before opening a numerical experiment');
    const candidate=await acquire({replace:true,experiment:value});
@@ -94,7 +96,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   restart(next){retire();setup=next;failure=null;return generation;},
   fail(error){retire();failure=String(error?.message||error);},
   setPaused(value){paused=Boolean(value);host?.setPaused(paused);return paused;},
-  sync(){if(host&&setup){host.setEmitters(runtimeEmitters());host.setSetup?.(setup);}},
+  sync(){if(pending&&pending.ticket.signature!==JSON.stringify([setup,enabledEmitters()]))feature.cancelPreparation();if(host&&setup){host.setEmitters(runtimeEmitters());host.setSetup?.(setup);}},
   render(options){return host?.render(options);},
   get active(){return !!host&&!host.paused;},
  };
