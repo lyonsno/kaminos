@@ -11628,7 +11628,7 @@ async function initScene() {
   window.kaminosSceneCameras=sceneCameras;
   // Orthographic views (Blender's Auto Perspective): an axis view from the pie turns orthographic
   // and orbiting away returns to perspective; Numpad 5 toggles it explicitly.
-  viewProjection=createViewProjection({camera,target:()=>controls.target});
+  viewProjection=createViewProjection({camera,target:()=>controls.target,onChange:()=>syncAuthoredWaterFlameTransport()});
   window.kaminosViewProjection={state:()=>viewProjection.state(),read:()=>({...viewProjection.state(),position:camera.position.toArray(),target:controls.target.toArray(),near:camera.near,far:camera.far,projection:[...camera.projectionMatrix.elements]}),setOrthographic:(on,options)=>viewProjection.setOrthographic(on,options),toggle:()=>viewProjection.toggle()};
   const cameraViewAction=id=>{if(id==='camera'){viewProjection.setOrthographic(false);sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);viewProjection.setOrthographic(true,{auto:true});};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
@@ -11736,12 +11736,12 @@ async function initScene() {
     syncWaterProxy();
     const prototype=volumePrototype;
     const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')!=='0'
-      &&ordinaryDepthEnabled
+      &&ordinaryDepthEnabled&&camera.isPerspectiveCamera===true
       &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
       &&waterFeature.host?.supportsVolumeTransport===true&&waterFeature.host.presentation==='full'&&viewportDisplay.fire==='full'
       &&prototype?.isActive?.()===true;
     const wantedHDR=typeof sceneBloom!=='undefined'&&sceneBloom.read().settings.composeFlame&&!waterFeature.host
-      &&ordinaryDepthEnabled&&isSceneItemVisible('flame-field')&&viewportDisplay.fire==='full'&&prototype?.isActive?.()===true
+      &&ordinaryDepthEnabled&&camera.isPerspectiveCamera===true&&isSceneItemVisible('flame-field')&&viewportDisplay.fire==='full'&&prototype?.isActive?.()===true
       &&(typeof sceneGISettings==='undefined'||sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene');
     if(transportPrototype&&(!(wanted||wantedHDR)||transportPrototype!==prototype)) {
       transportPrototype.setSceneTransportConsumer(null);
@@ -11762,6 +11762,7 @@ async function initScene() {
   }
   window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')!=='0',
     registered:!!transportPrototype,effective:!!transportPrototype&&!!waterFeature.host?.state().lastFrame?.volumeTransport,
+    projection:camera.isPerspectiveCamera?'perspective':'orthographic',transportProjectionSupported:camera.isPerspectiveCamera===true,
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   let foregroundServiceActive = false;
@@ -12046,12 +12047,16 @@ async function initScene() {
           do{
             signal?.throwIfAborted();const before=sceneFrameCount;
             fireLightFieldPass?.update();
-            if(renderSceneFrame()===false||before===sceneFrameCount)throw Error('Scene presentation is changing; retry output after it settles');
+            // Shared transport draws the complete scene inside the held fire
+            // frame; calling the scene alone has no current volume inputs.
+            if(fire&&transportPrototype){const frame=await fire.draw();fireReceipt=frame.receipt;if(fireReceipt.presentation!=='host-composed')throw Error('Shared fire output lost host presentation');}
+            else if(renderSceneFrame()===false)throw Error('Scene presentation is changing; retry output after it settles');
+            if(before===sceneFrameCount)throw Error('Scene output did not redraw');
             drawnFrames++;await new Promise(resolve=>requestAnimationFrame(resolve));
           }while(sceneGI.needsHistoryFrame());
-          if(fire){const frame=await fire.draw();fireReceipt=frame.receipt;const image=frame.image;if(!image||image.width!==fireReceipt.width||image.height!==fireReceipt.height||image.rgba.length!==image.width*image.height*4)throw Error('Held fire image is incomplete');fireRaster=document.createElement('canvas');fireRaster.width=image.width;fireRaster.height=image.height;fireRaster.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(image.rgba),image.width,image.height),0,0);}
+          if(fire&&!transportPrototype){const frame=await fire.draw();fireReceipt=frame.receipt;const image=frame.image;if(!image||image.width!==fireReceipt.width||image.height!==fireReceipt.height||image.rgba.length!==image.width*image.height*4)throw Error('Held fire image is incomplete');fireRaster=document.createElement('canvas');fireRaster.width=image.width;fireRaster.height=image.height;fireRaster.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(image.rgba),image.width,image.height),0,0);}
           // Present the held mesh/water once more in the same capture task.
-          if(renderSceneFrame()===false)throw Error('Scene output was skipped');
+          if(!transportPrototype&&renderSceneFrame()===false)throw Error('Scene output was skipped');
         }finally{manualInspectionRender=false;}
       },capture(){
         const shot=captureComposedCanvases({host:renderer.domElement,volumeRaster:fireRaster,document,label:settings.filename});

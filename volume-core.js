@@ -28322,7 +28322,7 @@ export function createKaminosVolumePrototype({
     },
     async holdPresentationForStill(renderControls = {}) {
       if (!state.active || !device) throw new Error('Flame renderer is inactive');
-      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed || sceneTransportConsumer) throw new Error('Still output requires the ordinary flame canvas route');
+      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed) throw new Error('Still output requires ordinary flame presentation');
       if (sceneLightingRebuildPending || selectiveHeadLiveExactPause || stillPresentationHeld) throw new Error('Finish the pending flame presentation change');
       const pausedBefore = selectiveHeadLiveCapturePaused, controlsBefore = controlsSnapshot;
       // Stop new admissions; an already-admitted service still owns its frame.
@@ -28351,9 +28351,12 @@ export function createKaminosVolumePrototype({
         const now = performance.now();
         return {release, async draw() {
           if (released) throw new Error('Still presentation was released');
-          const frame = await sampleFrame({advanceSim:false,now,includeRgba:true});
+          // sampleFrame invokes the same synchronous host consumer while the
+          // solver remains held. Its private flame raster is not the composed image.
+          const composed = !!sceneTransportConsumer;
+          const frame = await sampleFrame({advanceSim:false,now,includeRgba:!composed});
           if (!frame.ok) throw new Error(frame.reason || 'Flame output failed');
-          return {image:frame.image,receipt:{width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
+          return {image:composed?undefined:frame.image,receipt:{presentation:composed?'host-composed':'volume-raster',width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
         }};
       } catch (error) { release(); throw error; }
     },
