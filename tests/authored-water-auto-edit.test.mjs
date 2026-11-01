@@ -103,3 +103,14 @@ test('completed viewport edits schedule one restart; tentative edits and cancell
  f.historyChanged({active:null,undoCount:0,redoCount:0});await f.settle();assert.equal(restarted,0);
  f.historyChanged({active:null,undoCount:1,redoCount:0});await f.settle();assert.equal(restarted,1);
 });
+
+for(const kind of ['source','simulation'])test('SWEP-1 Pause preserves an incomplete '+kind+' draft',async()=>{
+ const f=kind==='source'?fixture():sharedFixture();let pauses=0;f.api.pause=()=>pauses++;
+ f.setRuntime({paused:false});f.controls.refresh();
+ const field=f.input(kind==='source'?'[data-width]':'[data-target]');field.value='';field.listeners.input();await f.settle();
+ const diagnostic=f.input(kind==='source'?'[data-source-error]':'[data-simulation-error]').textContent;
+ assert.match(diagnostic,/Complete/);await f.input('[data-pause]').onclick();
+ assert.equal(pauses,1,'An invalid edit cannot prevent pausing existing water');assert.equal(field.value,'');
+ assert.equal(f.input(kind==='source'?'[data-source-error]':'[data-simulation-error]').textContent,diagnostic);
+ f.controls.dispose();
+});

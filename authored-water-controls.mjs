@@ -59,7 +59,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  const timers=new Map(),gestures=new Set(),scrubs=[];
  const stopTimer=kind=>{if(timers.has(kind)){cancel(timers.get(kind));timers.delete(kind);}};
  const current=(id,version)=>!disposed&&selected?.id===id&&revision===version;
- const call=async(action,{error=runError}={})=>{if(disposed)return;const id=selected?.id,version=revision,runVersion=error===runError?++runRevision:runRevision;try{error.textContent='';await action();if(!disposed)refresh();return true;}catch(e){if(!disposed&&(error!==sourceError||current(id,version))&&(error!==runError||runVersion===runRevision))error.textContent=e.message;return false;}};
+ const call=async(action,{error=runError}={})=>{if(disposed)return;const id=selected?.id,version=revision,runVersion=error===runError?++runRevision:runRevision;try{error.textContent='';await action();if(!disposed)refresh();return true;}catch(e){if(e.name==='AbortError')return false;if(!disposed&&(error!==sourceError||current(id,version))&&(error!==runError||runVersion===runRevision))error.textContent=e.message;return false;}};
  for(const name of ['min','max']){
   const row=document.createElement('label');row.textContent=name==='min'?'Min XYZ':'Max XYZ';
   for(let k=0;k<3;k++){const input=document.createElement('input');input.type='number';input.className='transform-input';input.step='.1';input.dataset.bound=name;input.dataset.axis=k;input.setAttribute('aria-label',`${name} ${'XYZ'[k]}`);row.append(input);}
@@ -153,7 +153,8 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  async function runAction(action){suppressAuto++;stopTimer('restart');try{if(await flush('source')&&await flush('simulation'))await action();}finally{suppressAuto--;}}
  $('[data-reset]').onclick=()=>call(()=>runAction(()=>api.reset()));
  $('[data-release]').onclick=()=>call(()=>runAction(()=>api.release(selected?.id??api.read().sources?.[0]?.id)));
- $('[data-pause]').onclick=()=>call(()=>runAction(()=>api.read().runtime?api.pause():api.release(selected?.id??api.read().sources?.[0]?.id)));
+ // Existing water remains controllable while a property draft is incomplete.
+ $('[data-pause]').onclick=()=>call(()=>api.read().runtime?api.pause():runAction(()=>api.release(selected?.id??api.read().sources?.[0]?.id)));
  function refresh(){
   if(disposed)return;const s=api.read();
   const sourceSignature=JSON.stringify(s.selected?.settings),simulationSignature=JSON.stringify(s.simulation?.settings);

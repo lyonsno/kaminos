@@ -11,7 +11,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
    return createFiniteFluidHost({...options,createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
   }}) {
  let setup=null,host=null,failure=null,paused=false,generation=0,request=0,admitted=null,pending=null;
- const superseded=()=>Error('Water release superseded or scene changed');
+ const superseded=()=>Object.assign(Error('Water release superseded or scene changed'),{name:'AbortError'});
  function retire(){
   generation++;request++;pending=null;admitted=null;
   const previous=host;host=null;previous?.dispose();
@@ -51,7 +51,10 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     return false;
    }finally{if(pending?.ticket===ticket){pending=null;refresh();}}
   };
-  const promise=Promise.resolve().then(run);pending={ticket,promise};refresh();return promise;
+  // Cancellation settles the caller immediately; the factory keeps its existing
+  // admission checks and disposes any candidate that finishes afterward.
+  const cancelled=new Promise((_,reject)=>{ticket.cancel=()=>reject(superseded());});
+  const promise=Promise.race([Promise.resolve().then(run),cancelled]);pending={ticket,promise};refresh();return promise;
  }
  const feature={
   get setup(){return setup;},set setup(value){setup=value;},
@@ -70,7 +73,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
    return mounted;
   },
   release:(options={})=>acquire({replace:true,paused:!!options.paused}),
-  cancelPreparation(){if(pending){request++;pending=null;refresh();}},
+  cancelPreparation(){if(pending){request++;pending.ticket.cancel();pending=null;refresh();}},
   async openExperiment(value){
    if(setup)throw Error('Close authored water before opening a numerical experiment');
    const candidate=await acquire({replace:true,experiment:value});
