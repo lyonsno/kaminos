@@ -233,3 +233,36 @@ test('sampleSurfelNormals replaces surfel normals from a world-space sampler thr
   }
   assert.deepEqual([...back.subarray(12,15)],[...orig.subarray(12,15)],'unsampled surfel keeps its own normal');
 });
+
+test('review M1: surfelTriangles builds the exact instance triangles that createSurfelObject draws at level 1',async()=>{
+  const {surfelTriangles}=await import('../trellis-surfels.mjs');
+  const {MeshBVH}=await import('three-mesh-bvh');
+  const {measureGeometricError}=await import('../mesh-lod-ladder.mjs');
+  const field=buildSurfelField(fixture());
+  const object=createSurfelObject(THREE,field,{levels:[1],chunkVoxels:64,proxyFactor:1});
+  const instanced=[];
+  const v=new THREE.Vector3(),m=new THREE.Matrix4();
+  object.traverse(o=>{
+    if(!o.isInstancedMesh)return;
+    const pos=o.geometry.getAttribute('position');
+    for(let j=0;j<o.count;j++){
+      o.getMatrixAt(j,m);
+      for(let k=0;k<3;k++){
+        v.fromBufferAttribute(pos,k).applyMatrix4(m);
+        instanced.push(v.x,v.y,v.z);
+      }
+    }
+  });
+  const drawn=new Float32Array(instanced),tri=surfelTriangles(field).positions;
+  assert.equal(drawn.length,tri.length);
+  for(let i=0;i<drawn.length;i++)assert.ok(Math.abs(drawn[i]-tri[i])<1e-6,`vertex float ${i}: drawn ${drawn[i]} vs surfelTriangles ${tri[i]}`);
+  const faces=Uint32Array.from({length:field.count*3},(_,i)=>i);
+  const closestFor=(V,F)=>{
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(V,3));g.setIndex(new THREE.BufferAttribute(F,1));
+    const bvh=new MeshBVH(g),p=new THREE.Vector3(),hit={};
+    return (x,y,z)=>{bvh.closestPointToPoint(p.set(x,y,z),hit);return {point:[hit.point.x,hit.point.y,hit.point.z],normal:[0,0,1]};};
+  };
+  const err=measureGeometricError({source:{vertices:drawn,faces},level:{vertices:tri,faces},
+    closestSource:closestFor(drawn,faces),closestLevel:closestFor(tri,faces),reference:{kind:'test'}});
+  assert.ok(err.max<1e-6,`error against rendered surfels should be ~0, got ${err.max}`);
+});

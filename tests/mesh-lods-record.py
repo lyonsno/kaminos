@@ -168,6 +168,22 @@ with tempfile.TemporaryDirectory() as directory:
         # Registered surfel levels stay hidden from the top-level authoring asset catalog.
         listed = {Path(e['source'].split('path=')[-1]).stem for e in serve.authoring_asset_catalog('generated-meshes')['entries']}
         assert not listed & set(surfel_shas.values()), 'surfel levels hidden from the asset list'
+        # Review M3: mixing mergeFactor and non-mergeFactor records on the same route (or omitting mergeFactor on
+        # a surfel route) must return HTTP 400 (ValueError), never an unhandled KeyError (HTTP 500), in both orders.
+        m_shas = {}
+        for mname in ('m1', 'm2', 'm3', 'm4'):
+            mdata = glb(mname); m_shas[mname] = hashlib.sha256(mdata).hexdigest()
+            assert request('POST', '/api/ingest-mesh', mdata)[0] == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m1'], 'faces': 200, 'route': 'trellis-surfels+hero-normals'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
+        st, _ = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m1'], 'faces': 200, 'route': 'custom-mixed-route'}})
+        assert st == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m2'], 'faces': 100, 'mergeFactor': 4, 'route': 'custom-mixed-route'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
+        st, _ = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m3'], 'faces': 100, 'mergeFactor': 4, 'route': 'custom-mixed-route-reverse'}})
+        assert st == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m4'], 'faces': 200, 'route': 'custom-mixed-route-reverse'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
     finally:
         server.shutdown()
         server.server_close()

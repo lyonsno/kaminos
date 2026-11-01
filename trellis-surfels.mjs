@@ -194,10 +194,11 @@ function fieldFromViews(extension,viewBytes){
 // one triangle per surfel with the area of a disc of radius r (side 2.45 r), turned to face the normal
 export function surfelTriangles(field){
   const pos=surfelPositions(field),nor=surfelNormals(field),r=field.radiusVoxels/field.resolution,R=2.45*r/Math.sqrt(3);
+  const tmpl=[[0,R],[-Math.sin(Math.PI/3)*R,-.5*R],[Math.sin(Math.PI/3)*R,-.5*R]];
   const positions=new Float32Array(field.count*9),colors=new Uint8Array(field.count*12);
   for(let i=0;i<field.count;i++){
-    const [tx,ty,tz]=tangentFrame(nor[i*3],nor[i*3+1],nor[i*3+2],i);
-    for(let k=0;k<3;k++){const a=Math.PI/2+k*2*Math.PI/3,cu=Math.cos(a)*R,su=Math.sin(a)*R;
+    const [tx,ty]=tangentFrame(nor[i*3],nor[i*3+1],nor[i*3+2],i);
+    for(let k=0;k<3;k++){const [cu,su]=tmpl[k];
       for(let ax=0;ax<3;ax++)positions[i*9+k*3+ax]=pos[i*3+ax]+tx[ax]*cu+ty[ax]*su;
       colors.set([linearByte(field.color[i*3]),linearByte(field.color[i*3+1]),linearByte(field.color[i*3+2]),255],i*12+k*4);}
   }
@@ -205,12 +206,14 @@ export function surfelTriangles(field){
 }
 // glTF COLOR_0 is linear; the field stores sRGB bytes.
 function linearByte(srgb){const c=srgb/255;return Math.round((c<=.04045?c/12.92:((c+.055)/1.055)**2.4)*255);}
+// Matches createSurfelObject's Quaternion.setFromUnitVectors(+Z, n).multiply(setFromAxisAngle(+Z, hashAngle(seed))).
 function tangentFrame(nx,ny,nz,seed){
-  const ref=Math.abs(nz)<.9?[0,0,1]:[1,0,0];
-  let t=[ny*ref[2]-nz*ref[1],nz*ref[0]-nx*ref[2],nx*ref[1]-ny*ref[0]];const l=Math.hypot(...t)||1;t=t.map(v=>v/l);
-  const b=[ny*t[2]-nz*t[1],nz*t[0]-nx*t[2],nx*t[1]-ny*t[0]];
+  const r=nz+1;let ex,ey;
+  if(r<Number.EPSILON){ex=[-1,0,0];ey=[0,1,0];}
+  else{const l=Math.hypot(-ny,nx,r)||1,qx=-ny/l,qy=nx/l,qw=r/l;
+    ex=[1-2*qy*qy,2*qx*qy,-2*qy*qw];ey=[2*qx*qy,1-2*qx*qx,2*qx*qw];}
   const roll=hashAngle(seed),c=Math.cos(roll),s=Math.sin(roll);
-  return [t.map((v,i)=>v*c+b[i]*s),b.map((v,i)=>v*c-t[i]*s)];
+  return [ex.map((v,i)=>v*c+ey[i]*s),ey.map((v,i)=>v*c-ex[i]*s)];
 }
 function hashAngle(i){let x=(i+1)*2654435761>>>0;x^=x>>>15;x=Math.imul(x,2246822519)>>>0;x^=x>>>13;return (x/4294967296)*Math.PI*2;}
 

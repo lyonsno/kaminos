@@ -174,3 +174,39 @@ test('--replace true supersedes a taken slot instead of refusing it', async () =
   assert.equal(status, 0);
   assert.equal(server.registered[0].supersede, true);
 });
+
+test('review M2: --surfel-factors reads geometry.coordinates.i32 independently of shuffled material.coordinates.i32 and refuses missing geometry coordinates', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-surfel-cli-')), report = path.join(dir, 'report.json');
+  const res = 32, geomCoords = [[2,2,16],[29,2,16],[2,29,16],[29,29,16]];
+  const vertices = new Float32Array(geomCoords.flatMap(c => c.map(v => (v + 0.5) / res - 0.5))), triangles = new Uint32Array([0,1,3, 0,3,2]);
+  // Shuffled material coordinates + an extra material voxel.
+  const matOrder = [3, 1, 0, 2];
+  const matCoords = new Int32Array([...matOrder.flatMap(i => geomCoords[i]), 10, 10, 16]);
+  const matFeats = new Float32Array([...matOrder.flatMap(i => [0.2 + i * 0.1, -0.2, 0.4, -1, 0.6, 1]), -1, -1, -1, -1, -1, 1]);
+  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({materialResolution: res}));
+  for (const [n, a] of [['vertices.f32', vertices], ['triangles.u32', triangles], ['material.features.f32', matFeats], ['material.coordinates.i32', matCoords]])
+    fs.writeFileSync(path.join(dir, n), Buffer.from(a.buffer));
+  const nrm = new Float32Array(geomCoords.flatMap(() => [0, 0, 1])), parts = [vertices, triangles, nrm];
+  const bin = new Uint8Array(parts.reduce((n, a) => n + a.byteLength, 0)); let at = 0; const bufferViews = [];
+  for (const a of parts) { bin.set(new Uint8Array(a.buffer), at); bufferViews.push({buffer: 0, byteOffset: at, byteLength: a.byteLength}); at += a.byteLength; }
+  const doc = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix: [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, NORMAL: 2}, indices: 1}]}], buffers: [{byteLength: bin.length}], bufferViews,
+    accessors: [{bufferView: 0, componentType: 5126, count: 4, type: 'VEC3'}, {bufferView: 1, componentType: 5125, count: 6, type: 'SCALAR'}, {bufferView: 2, componentType: 5126, count: 4, type: 'VEC3'}]};
+  const text = new TextEncoder().encode(JSON.stringify(doc)), tl = Math.ceil(text.length / 4) * 4, hero = new Uint8Array(28 + tl + bin.length), dv = new DataView(hero.buffer);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, hero.length, true); dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true);
+  hero.fill(32, 20, 20 + tl); hero.set(text, 20); dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true); hero.set(bin, 28 + tl);
+  // Without geometry.coordinates.i32, --surfel-factors fails loud instead of substituting material.coordinates.i32.
+  const server1 = await standIn({hero: Buffer.from(hero)});
+  const status1 = await runTool(['--input', dir, '--source', 'a'.repeat(64), '--server', server1.url, '--targets', 'none', '--surfel-factors', '2', '--report', report]);
+  server1.close();
+  assert.notEqual(status1, 0);
+  assert.match(JSON.parse(fs.readFileSync(report, 'utf8')).error.message, /decode\.coordinates/);
+  // With geometry.coordinates.i32 present, --surfel-factors succeeds on shuffled/superset material rows.
+  fs.writeFileSync(path.join(dir, 'geometry.coordinates.i32'), Buffer.from(new Int32Array(geomCoords.flat()).buffer));
+  const server2 = await standIn({hero: Buffer.from(hero)});
+  const status2 = await runTool(['--input', dir, '--source', 'a'.repeat(64), '--server', server2.url, '--targets', 'none', '--surfel-factors', '2', '--report', report]);
+  server2.close();
+  assert.equal(status2, 0, JSON.stringify(JSON.parse(fs.readFileSync(report, 'utf8')).error));
+  assert.equal(server2.registered.length, 1);
+  assert.equal(server2.registered[0].level.mergeFactor, 2);
+});

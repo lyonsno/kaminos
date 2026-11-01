@@ -1,7 +1,7 @@
 // GI proxy tiers for a stored TRELLIS hero (lod-generation-levels.mjs prepareGenerationLevels), built from
 // the run's raw decode and material fields in a module worker so tens of seconds of remesh and bake
 // never hold the page's main thread. Always resolves with a report; a failure names its phase.
-export function runGenerationLevels({decode,materialFields,source,input=null,route=null,targets,surfelFactors=decode?.coordinates?[4,8,16]:undefined,
+export function runGenerationLevels({decode,materialFields,source,input=null,route=null,reference='hero',targets,surfelFactors=(reference==='hero'&&decode?.coordinates)?[4,8,16]:undefined,
   WorkerClass=globalThis.Worker,workerUrl=new URL('./generation-levels-worker.mjs',import.meta.url),onPhase=()=>{}}){
   if(!source)return Promise.resolve({phase:'skipped',reason:'no stored hero mesh to attach tiers to (surfels-only run)'});
   if(!WorkerClass)return Promise.resolve({phase:'skipped',reason:'no Worker in this environment'});
@@ -14,7 +14,7 @@ export function runGenerationLevels({decode,materialFields,source,input=null,rou
       else if(data?.kind==='done')finish(data.report);
     });
     worker.addEventListener('error',event=>finish({phase:'worker',error:String(event?.data?.message||event?.message||'the levels worker failed to load or threw before reporting (a module load failure carries no message)')}));
-    const message={decode,materialFields,source,input,route,...(targets?{targets}:{}),...(surfelFactors?{surfelFactors}:{})};
+    const message={decode,materialFields,source,input,route,...(reference!==undefined&&reference!=='hero'?{reference}:{}),...(targets?{targets}:{}),...(surfelFactors?{surfelFactors}:{})};
     worker.postMessage(message,[decode.vertices.buffer,decode.triangles.buffer,...(decode.coordinates?[decode.coordinates.buffer]:[]),materialFields.features.buffer,materialFields.coordinates.buffer]);
   });
 }

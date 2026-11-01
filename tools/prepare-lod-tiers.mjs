@@ -40,9 +40,11 @@ try {
   const meta = JSON.parse(fs.readFileSync(path.join(input, 'meta.json'), 'utf8'));
   report.inputMeta = meta;
   const vertices = read('vertices.f32', Float32Array), triangles = read('triangles.u32', Uint32Array);
+  const geomCoordFile = ['geometry.coordinates.i32', 'coordinates.i32'].find(n => fs.existsSync(path.join(input, n)));
+  const coordinates = geomCoordFile ? read(geomCoordFile, Int32Array) : undefined;
   const materialFields = {features: read('material.features.f32', Float32Array), coordinates: read('material.coordinates.i32', Int32Array), resolution: meta.materialResolution};
   // The same steps the page runs at Generate (lod-generation-levels.mjs), with Node's worker and fetch.
-  await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source, server, THREE, MeshBVH, finish: finishTrellisMesh,
+  await prepareGenerationLevels({decode: {vertices, triangles, ...(coordinates ? {coordinates} : {})}, materialFields, source, server, THREE, MeshBVH, finish: finishTrellisMesh,
     unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, surfelFactors, replace, normalMaps, input: meta.source ?? input, route: meta.route,
     reference, report, onPhase: save});
   if (report.error) throw Object.assign(Error(report.error.message), {stack: report.error.stack});

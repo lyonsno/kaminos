@@ -2809,6 +2809,8 @@ def save_mesh_lod_level(payload):
         raise ValueError('Level textureSize must be a positive integer')
     if 'mergeFactor' in level and (type(level['mergeFactor']) is not int or level['mergeFactor'] < 1):
         raise ValueError('Level mergeFactor must be a positive integer')
+    if (level.get('representation') == 'trellis-surfels' or level['route'].startswith('trellis-surfels')) and 'mergeFactor' not in level:
+        raise ValueError('Surfel level mergeFactor required')
     if level['sha256'] == source:
         raise ValueError('A mesh cannot be its own level')
     if 'error' in level:
@@ -2826,8 +2828,10 @@ def save_mesh_lod_level(payload):
         previous = next((l for l in data['levels'] if l['sha256'] == level['sha256']), None)
         if previous is not None and previous != level:
             raise ValueError('Registered level is immutable')
+        if any(l['sha256'] != level['sha256'] and l['route'] == level['route'] and (('mergeFactor' in l) != ('mergeFactor' in level)) for l in data['levels']):
+            raise ValueError(f"Route {level['route']} cannot mix mergeFactor and face-count levels")
         same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256'] and l['route'] == level['route']
-                          and (l.get('mergeFactor') == level['mergeFactor'] if 'mergeFactor' in level or 'mergeFactor' in l else l['faces'] == level['faces'])), None)
+                          and (l.get('mergeFactor') == level.get('mergeFactor') if 'mergeFactor' in level else l['faces'] == level['faces'])), None)
         retired_now = []
         if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
             raise ValueError('That level was retired from this source')

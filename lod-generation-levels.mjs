@@ -34,6 +34,8 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
     if (!GENERATION_LEVEL_REFERENCES.includes(reference)) throw Error(`reference must be one of ${GENERATION_LEVEL_REFERENCES.join(', ')}`);
     if (reference === 'raw-decode' && heroGLB) throw Error('a raw-decode reference takes no hero; levels are measured against the decode');
     if (surfelFactors.length && reference !== 'hero') throw Error('merged surfel levels with hero normals require reference: hero');
+    if (surfelFactors.length && (!(decodeCoordinates instanceof Int32Array) || decodeCoordinates.length !== vertices.length))
+      throw Error('decode.coordinates (Int32Array[N,3]) are required when surfelFactors are requested');
     report.reference = reference;
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored mesh the levels belong to');
     if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
@@ -140,7 +142,7 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
     if (surfelFactors.length) {
       phase('surfels');
       if (!report.referenceHasNormals) throw Error('hero has no shading normals to sample onto surfels');
-      const fullField = buildSurfelField({vertices, triangles, geometryCoordinates: decodeCoordinates ?? materialFields.coordinates, material: materialFields});
+      const fullField = buildSurfelField({vertices, triangles, geometryCoordinates: decodeCoordinates, material: materialFields});
       for (const factor of surfelFactors) {
         const t0 = performance.now(), {field: merged} = mergeSurfelLevel(fullField, factor);
         const reach = 2 / merged.resolution;

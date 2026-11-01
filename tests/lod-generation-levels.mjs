@@ -204,7 +204,7 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
     if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registered.push(body); return goodRegister(body, json); }
     return new Response('unexpected', {status: 500});
   };
-  const report = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
+  const report = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
     fetch, THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [2, 4]});
   assert.equal(report.phase, 'done', report.error?.message);
   assert.equal(registered.length, 2);
@@ -217,4 +217,34 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
     const ext = readSurfelGLBExtension(stored[i].buffer.slice(stored[i].byteOffset, stored[i].byteOffset + stored[i].byteLength));
     assert.equal(ext.field.count, r.level.faces);
   }
+  // Review M2: shuffled material rows and a material-coordinate superset must produce identical surfel positions and colors,
+  // and missing decode.coordinates must be refused when surfelFactors are requested.
+  const shuffledOrder = [3, 1, 0, 2];
+  const supersetCoords = new Int32Array([...shuffledOrder.flatMap(i => coords[i]), 10, 10, 16]);
+  const supersetFeatures = new Float32Array([...shuffledOrder.flatMap(i => [0.2 + i * 0.1, -0.2, 0.4, -1, 0.6, 1]), -1, -1, -1, -1, -1, 1]);
+  const unshuffledFeatures = new Float32Array([0, 1, 2, 3].flatMap(i => [0.2 + i * 0.1, -0.2, 0.4, -1, 0.6, 1]));
+  const storedA = [], storedB = [];
+  const makeFetch = bucket => async (url, init = {}) => {
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/ingest-mesh')) { const bytes = new Uint8Array(await new Response(init.body).arrayBuffer()); bucket.push(bytes); return goodIngest(bytes, json); }
+    if (url.startsWith('/api/mesh-lods')) return goodRegister(JSON.parse(init.body), json);
+    return new Response('unexpected', {status: 500});
+  };
+  const repA = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
+    materialFields: {resolution, coordinates: new Int32Array(coords.flat()), features: unshuffledFeatures},
+    source: 'd'.repeat(64), heroGLB: hero.buffer, fetch: makeFetch(storedA), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [1]});
+  const repB = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
+    materialFields: {resolution, coordinates: supersetCoords, features: supersetFeatures},
+    source: 'd'.repeat(64), heroGLB: hero.buffer, fetch: makeFetch(storedB), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [1]});
+  assert.equal(repA.phase, 'done', repA.error?.message);
+  assert.equal(repB.phase, 'done', repB.error?.message);
+  const extA = readSurfelGLBExtension(storedA[0].buffer.slice(storedA[0].byteOffset, storedA[0].byteOffset + storedA[0].byteLength));
+  const extB = readSurfelGLBExtension(storedB[0].buffer.slice(storedB[0].byteOffset, storedB[0].byteOffset + storedB[0].byteLength));
+  assert.deepEqual([...extB.field.cells], [...extA.field.cells]);
+  assert.deepEqual([...extB.field.offsets], [...extA.field.offsets]);
+  assert.deepEqual([...extB.field.color], [...extA.field.color]);
+  const missingCoords = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
+    fetch: makeFetch([]), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [2]});
+  assert.notEqual(missingCoords.phase, 'done');
+  assert.match(missingCoords.error.message, /decode\.coordinates/);
 });
