@@ -26434,7 +26434,13 @@ sceneInitialization.then(async () => {
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
   if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
   const initialEnvironment = restoreSettings();
-  // Load HDR environment first, then auto-load deep-linked splat if present
+  // An image plane is unlit and can appear while the HDR environment downloads.
+  // Combined asset routes keep their ordered replacement behavior below.
+  const startupAssetParams = new URLSearchParams(window.location.search);
+  const startupImageRoute = kaminosImageAssetRouteFromSearch(startupAssetParams);
+  const earlyImageLoaded = startupImageRoute && !startupAssetParams.get('load')
+    && !kaminosMeshAssetRouteFromSearch(startupAssetParams) && !kaminosSplatAssetRouteFromSearch(startupAssetParams)
+    ? loadKaminosImageAssetRoute(startupImageRoute) : null;
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
       const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
@@ -26486,7 +26492,7 @@ sceneInitialization.then(async () => {
     }
     const imageRoute = kaminosImageAssetRouteFromSearch(params);
     if (imageRoute) {
-      await loadKaminosImageAssetRoute(imageRoute);
+      await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
