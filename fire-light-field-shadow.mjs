@@ -1,6 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {radialSoftVisibility,createShadowFilterPattern} from './fire-shadow-filter.mjs';
-import {validateShadowQuality} from './fire-shadow-quality.mjs';
+import {validateShadowQuality,validateRuntimeShadowQuality,shadowStrata} from './fire-shadow-quality.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 import {residentLightCoverage,validateResidentLightCoverage} from './scene-resident-coverage.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
@@ -114,10 +114,15 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits)}) {
-  validateShadowQuality({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false}) {
+  (runtimeQuality?validateRuntimeShadowQuality:validateShadowQuality)({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
+  filterPattern??=runtimeQuality?{count:filterSamples,route:'runtime-arithmetic',reason:null,bytes:0,node:null}:createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits);
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
+  if(typeof shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');
+  const strata=shadowStrata(filterSamples),qualityNodes=runtimeQuality?{blockerSamples:uniform(blockerSamples,'int'),filterSamples:uniform(filterSamples,'int'),bands:uniform(strata.bands,'int'),sectors:uniform(strata.sectors,'int')}:null;
+  const resolutionNode=runtimeQuality?uniform(resolution):resolution;
+  const edgeFilter=uniform(shadowEdgeFilter,'bool');
   const softness=uniform(validateSoftness(shadowSoftness));
   const complementary=uniform(validateShadowSampling(shadowSampling)==='complementary','bool');
   if(shadowSoftness>0&&sourceSizeNode===null)throw Error('soft shadows require a source size node');
@@ -143,11 +148,11 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
   // Offset along the receiver plane's light-facing normal by one cube texel.
   // Radial-only bias fails on a floor viewed by the light at grazing angles.
-  const receiverOffset=normalNode.mul(faceSign).mul(sourceDistance.mul(2/resolution).max(.001));
+  const receiverOffset=normalNode.mul(faceSign).mul(sourceDistance.mul(float(2).div(resolutionNode)).max(.001));
   const delta=receiverNode.add(receiverOffset).sub(sourceNode),distance=delta.length();
   const direction=delta.div(distance.max(.00001));
   // Bias follows the radial texel footprint, not viewer depth or light gain.
-  const bias=distance.mul(2/resolution).max(.001);
+  const bias=distance.mul(float(2).div(resolutionNode)).max(.001);
   const sampleDepth=ray=>{
   // Explicit LOD is necessary inside spatially divergent source branches.
   // These radial depth cubes have exactly one mip level.
@@ -161,19 +166,19 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
   const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern});
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution:resolutionNode,runtimeQuality:qualityNodes});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
   // Hard visibility of the same cube from any world point (no screen
   // derivatives), for world-point light probes such as creature senses.
   const visibilityAt=(pointNode,pointNormalNode)=>{
     const toSource=sourceNode.sub(pointNode),sign=mix(float(-1),float(1),step(float(0),pointNormalNode.dot(toSource)));
-    const offset=pointNormalNode.mul(sign).mul(toSource.length().mul(2/resolution).max(.001));
+    const offset=pointNormalNode.mul(sign).mul(toSource.length().mul(float(2).div(resolutionNode)).max(.001));
     const pointDelta=pointNode.add(offset).sub(sourceNode),pointDistance=pointDelta.length();
     const radial=THREE.TSL.nodeObject(new RadialDistanceCubeNode(target.texture,pointDelta.div(pointDistance.max(.00001)))).level(0).r;
-    const hard=step(pointDistance.sub(pointDistance.mul(2/resolution).max(.001)),radial);
+    const hard=step(pointDistance.sub(pointDistance.mul(float(2).div(resolutionNode)).max(.001)),radial);
     return mix(float(1),hard,enabled.mul(effective));
   };
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,
@@ -207,9 +212,18 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         status.triangleCount=casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0);
       } catch(error) {status.reason=String(error.message);throw error;}
     },
+    setQuality(value){
+      if(!runtimeQuality)throw Error('runtime shadow quality unavailable');
+      const next=validateRuntimeShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
+      if(next.resolution!==resolution){target.setSize(next.resolution,next.resolution);resolutionNode.value=next.resolution;}
+      resolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
+      qualityNodes.blockerSamples.value=blockerSamples;qualityNodes.filterSamples.value=filterSamples;qualityNodes.bands.value=strata.bands;qualityNodes.sectors.value=strata.sectors;
+      Object.assign(status,{resolution,blockerSamples,filterSamples});
+    },
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
+    setEdgeFilter(value) {if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');edgeFilter.value=value;status.shadowEdgeFilter=value;},
     setSoftness(value) {validateSoftness(value);if(sourceSizeNode===null&&value>0)throw Error('soft shadows require a source size node');softness.value=value;status.shadowSoftness=value;status.filter=value===0?'hard':'radial-pcss';return {...status};},
-    debugState:()=>({...status,filterPattern:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
+    debugState:()=>({...status,filterPattern:runtimeQuality?{route:'runtime-arithmetic',reason:null,bytes:0,retainedUnusedBytes:filterPattern.bytes}:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
     dispose() {target.dispose();material.dispose();for(const row of coverageMaterials.values())row.material.dispose();coverageMaterials.clear();},
   };
 }

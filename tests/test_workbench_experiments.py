@@ -43,6 +43,18 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class CatalogueTests(unittest.TestCase):
+    def test_adaptive_material_is_in_served_catalogue(self):
+        spec = importlib.util.spec_from_file_location('discovery', MODULE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        root = MODULE.parent
+        rows = module.experiment_catalogue(root, module.discover_experiments(root, 'experiments'))
+        matches = [row for row in rows if row['moduleUrl'] == '/experiments/material-hierarchy.experiment.mjs']
+        self.assertEqual(len(matches), 1)
+        self.assertNotIn('error', matches[0])
+        self.assertEqual(matches[0]['id'], 'material-hierarchy')
+        self.assertTrue(matches[0]['title'].strip())
+
     def test_metadata_is_independent_of_broken_code_and_refreshes(self):
         spec = importlib.util.spec_from_file_location('discovery', MODULE)
         module = importlib.util.module_from_spec(spec)

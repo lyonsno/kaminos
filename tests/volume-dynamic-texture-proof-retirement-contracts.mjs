@@ -105,6 +105,14 @@ function assertDynamicTextureProofRetired({ exactHarnessExists, contractSource, 
     'broad contracts must not require or advertise the retired synthetic proof identity',
   );
   for (const path of liveExecutablePaths({ packageSource: packageText, executableSources })) {
+    if (path === 'navigation-bvh.worker.bundle.mjs') {
+      // Ordinary authored sources now reach scene geometry/navigation. This
+      // bundled CPU BVH worker includes Three's rotation math; it does not
+      // produce simulation textures or run a periodic field clock.
+      assert.doesNotMatch(executableSources.get(path), /\b(?:Date\.now|performance\.now|requestAnimationFrame|setInterval|createTexture|writeTexture)\b|device\s*\.\s*(?:queue|create)/,
+        'the navigation geometry worker must not become a timed GPU field producer');
+      continue;
+    }
     if (path === 'scene-flame-emitter.mjs') {
       assert.doesNotMatch(executableSources.get(path), /\b(?:Date\.now|performance\.now|requestAnimationFrame|setInterval|createTexture|writeTexture)\b|device\s*\.\s*(?:queue|create)/,
         'the separately tested authored pose mapper must not author a GPU field or run a periodic clock');
@@ -122,6 +130,11 @@ assert.throws(()=>assertDynamicTextureProofRetired({exactHarnessExists:false,con
  ['volume-proof-wrapper.mjs',"import './scene-flame-emitter.mjs';"],
  ['scene-flame-emitter.mjs','device.queue.writeTexture(target, Math.sin(y));'],
 ])}),/pose mapper/, 'authored-pose classification cannot hide GPU texture authorship');
+
+assert.throws(()=>assertDynamicTextureProofRetired({exactHarnessExists:false,contractSource:broadContracts,packageSource:'{}',executableSources:new Map([
+ ['volume-proof-wrapper.mjs',"import './navigation-bvh.worker.bundle.mjs';"],
+ ['navigation-bvh.worker.bundle.mjs','device.queue.writeTexture(target, Math.sin(y));'],
+])}),/geometry worker/, 'geometry classification cannot hide GPU texture authorship');
 
 assertDynamicTextureProofRetired({
   exactHarnessExists: existsSync(retiredHarnessUrl),

@@ -11,6 +11,12 @@ export function validateShadowQuality(value,{maxTextureDimension2D=Infinity}={})
   if(value.resolution>maxTextureDimension2D)throw Error('shadow resolution exceeds device texture dimension');
   return {...value};
 }
+// The live shader uses signed 32-bit loop counters, not expanded JS arrays.
+export function validateRuntimeShadowQuality(value,limits){
+  const result=validateShadowQuality(value,limits);
+  for(const key of ['blockerSamples','filterSamples'])if(result[key]>0x7fffffff)throw Error(`${key} exceeds signed GPU loop counter capacity`);
+  return result;
+}
 // Integer factorization preserves equal-area polar strata at every budget.
 // Sixteen retains the original four radial bands by four angular sectors.
 export function shadowStrata(count){

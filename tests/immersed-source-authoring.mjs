@@ -1,4 +1,6 @@
 // kaminos-test: node
+import {GRID_TUNING_FIELDS} from '../volume-grid-tuning.mjs';
+import {readAdaptiveMaterialControls,ADAPTIVE_MATERIAL_FIELDS} from '../volume-adaptive-material-controls.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyVolumeEmitterFamilyRuntime, resolveVolumeCoreEmitterSource } from '../volume-emitter-runtime.mjs';
@@ -88,10 +90,11 @@ test('whole-settings check clamps apertures outside the scaled source contract a
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const grab=name=>html.slice(html.indexOf(`function ${name}(`)).split('\n}')[0]+'\n}';
   let current;const controls={'volume-emitter-source-law':{tagName:'SELECT',options:[{value:'immersed-source'}]},'volume-immersed-radius':{tagName:'INPUT',type:'range',min:'.02',max:'.5'}};
-  const context=vm.createContext({document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusClamp,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
+  Object.assign(controls,Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
+  const context=vm.createContext({GRID_TUNING_FIELDS,readAdaptiveMaterialControls,document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusClamp,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
   vm.runInContext(grab('flameSettingsStateProblems')+'\n'+grab('flameSettingsStateClamps')+'\n'+grab('checkFlameSettingsState')+'\nthis.check=checkFlameSettingsState;this.clamps=flameSettingsStateClamps;',context);
   for(const [scale,valid,outside,applied] of [[.8,.5,.02,.02],[2,.2,.3,null],[1,.2,135.764753512356,null]]){
-    current={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:valid}},rendererControls:{},presentationControls:{},sourcePose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]}};
+    current={domControls:{...Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{value:f.value}])), 'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:valid}},rendererControls:{},presentationControls:{},sourcePose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]}};
     assert.equal(context.check(current),current);
     assert.deepEqual(JSON.parse(JSON.stringify(context.clamps(current))),[]);
     const wide=structuredClone(current);wide.domControls['volume-immersed-radius'].value=outside;

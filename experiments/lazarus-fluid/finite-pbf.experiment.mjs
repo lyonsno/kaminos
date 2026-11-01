@@ -14,7 +14,7 @@ export default {
    cadence:mode=>recorded('cadence',mode,()=>{const next=updateLazarusFiniteControls(setup,{playbackMode:mode});water.setPlaybackMode(mode);setup=next;return read();}),
    paused:value=>recorded('paused',value,()=>{water.setPaused(value);return read();}),
    material:patch=>recorded('material',patch,()=>{const next=updateLazarusFiniteControls(setup,patch);const receipt=water.applyMaterial(patch);setup=next;return receipt;}),
-   advance:seconds=>recorded('advance',seconds,()=>{water.setPaused(true);const n=targetStep(seconds,setup.dt,water.read().clock.step);if(n>water.read().clock.step)water.advanceTo(n);return read();}),
+   advance:seconds=>recorded('advance',seconds,async()=>{water.setPaused(true);const n=targetStep(seconds,setup.dt,water.read().clock.step);if(n>water.read().clock.step)await water.advanceTo(n);return read();}),
    reset:patch=>recorded('reset',patch??{},async()=>{read();const next=lazarusFiniteSetup({...setup.inputs,...patch});if(JSON.stringify(next.inputs)===JSON.stringify(setup.inputs))await water.restart();else water=await host.fluid.open(next,{restoreReplay:false});setup=next;return read();}),
   };
   const transport=createSimulationTransport({

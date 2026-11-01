@@ -104,9 +104,9 @@ export function immersedRadiusBounds(value) {
 // Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
 // The authored object's local +Y is its nozzle axis; roll remains authored
 // even though the circular supply does not depend on it.
-export function immersedControlsForFlamePose(controls, value, sourceEnabled = true,domainControls=controls) {
+export function immersedControlsForFlamePose(controls, value, sourceEnabled = true,domainControls=controls,{worldSource=false}={}) {
   const frame = flameEmitterFrame(value);
-  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,domainControls)) {
+  if (sourceEnabled && !worldSource && !flamePoseInDomain(frame.pose, [0, 0, 0],1,domainControls)) {
     throw new Error('Immersed source centre is outside the current domain');
   }
   const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;

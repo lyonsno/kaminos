@@ -64,3 +64,96 @@ pass._renderCallDepths=new WeakMap([[renderer,2]]);
 renderer.compileAsync=async(s,c,target,options)=>{assert.equal(options?.callDepth,2,'warm the native render context observed for this pass and renderer');};
 await compileSceneLighting(renderer,[pass]);
 console.log('PASS preparation carries observed pass nesting');
+
+// Source and receiving passes prepare ordered graphs, but share one native
+// completion barrier. Both must submit before either driver's wait finishes.
+const batchReleases=[];let batchCalls=0;
+renderer.compileAsync=async(s,c,target,options)=>{
+  batchCalls++;
+  const pending=new Promise(resolve=>batchReleases.push(resolve));
+  if(options?.pipelineWork)options.pipelineWork.push(pending);
+  else await pending;
+};
+let batchDone=false;
+const batch=compileSceneLighting(renderer,[pass,pass]).then(()=>batchDone=true);
+await new Promise(r=>setImmediate(r));
+assert.equal(batchCalls,2,'submit both passes before waiting for native pipelines');
+assert.equal(batchDone,false);
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'pass state restored during native wait');
+batchReleases[0]([]);await Promise.resolve();assert.equal(batchDone,false);
+batchReleases[1]([]);await batch;
+console.log('PASS cross-pass driver overlap with complete settlement and restored state');
+
+let failureRelease,failedCalls=0;
+renderer.compileAsync=async(s,c,target,options)=>{
+  if(++failedCalls===2)throw Error('second pass graph failed');
+  options.pipelineWork.push(new Promise(resolve=>failureRelease=()=>resolve([{status:'fulfilled'}])));
+};
+let failureDone=false;
+const failure=compileSceneLighting(renderer,[pass,pass]);
+const checkedFailure=assert.rejects(failure,/second pass graph failed/).then(()=>failureDone=true);
+await new Promise(r=>setImmediate(r));assert.equal(failureDone,false,'later graph failure must drain earlier driver work');
+failureRelease();await checkedFailure;
+renderer.compileAsync=async(s,c,target,options)=>{options.pipelineWork.push(Promise.resolve([{status:'rejected',reason:Error('native failed')}]))};
+await assert.rejects(compileSceneLighting(renderer,[pass]),/native failed/);
+console.log('PASS shared pass barrier propagates native failure and drains after graph failure');
+
+// A live preparation yields with the exact active draw context restored, and
+// promotes the pending light set only after every pass's native work settles.
+let entered=0,committed=0,discarded=0,yielded=0,liveRelease;
+renderer.beginLightingPreparation=()=>({node:{candidate:true},commit(){committed++;},discard(){discarded++;}});
+renderer.compileAsync=async(s,c,target,options)=>{
+  assert.equal(options.lightsNode?.candidate,true,'live compilation uses an isolated pending lighting node');
+  assert.equal(renderer.target,pass.renderTarget);
+  await options.yieldToMain(async()=>{
+    yielded++;for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'drawing context restored while compiler yields');
+    assert.equal(camera.layers.mask,1);assert.equal(scene.overrideMaterial,null);
+  });
+  entered++;assert.equal(renderer.target,pass.renderTarget,'compile context restored after yielding');
+  options.pipelineWork.push(new Promise(r=>liveRelease=()=>r([])));
+};
+const live=compileSceneLighting(renderer,[pass],{live:true});
+await new Promise(r=>setImmediate(r));
+assert.equal(yielded,1);assert.equal(entered,1);assert.equal(committed,0);
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
+liveRelease();await live;assert.equal(committed,1);assert.equal(discarded,0);
+renderer.compileAsync=async()=>{throw Error('pending failed');};
+await assert.rejects(compileSceneLighting(renderer,[pass],{live:true}),/pending failed/);
+assert.equal(committed,1);assert.equal(discarded,1);
+console.log('PASS live preparation restores drawing context at yields and promotes only complete lighting');
+
+// Exercise the effective renderer API, not only the pass-coordinator fake.
+const {WebGPURenderer,Scene,SpotLight}=await import('../lib/three.webgpu.js');
+assert.equal(typeof WebGPURenderer.prototype.beginLightingPreparation,'function','live preparation is an API on the native renderer');
+const retired=[],activeNode={},candidateNode={};
+const generation={node:candidateNode};
+const nativeOwner={lighting:{_retained:new Map([[scene,activeNode]]),prepare(s,retire){assert.equal(s,scene);retire(activeNode);return generation;}},_objects:{disposeLightsNode:n=>retired.push(n)}};
+assert.equal(WebGPURenderer.prototype.beginLightingPreparation.call(nativeOwner,scene),generation);
+assert.deepEqual(retired,[activeNode]);
+WebGPURenderer.prototype.releaseRetainedLighting.call(nativeOwner,scene);assert.equal(nativeOwner.lighting._retained.has(scene),false);
+
+const effectiveRenderer=new WebGPURenderer({canvas:{width:1,height:1,style:{},addEventListener(){}}});
+const effectiveScene=new Scene(),retirements=[];
+effectiveRenderer._objects={disposeLightsNode:n=>retirements.push(n)};
+const active=effectiveRenderer.lighting.getNode(effectiveScene),light=new SpotLight();
+active.setLights([light]);
+const pending=effectiveRenderer.beginLightingPreparation(effectiveScene);
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),active);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),true);
+assert.notEqual(pending.node,active);pending.node.setLights([]);pending.commit();pending.commit();
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),pending.node);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),false);assert.deepEqual(retirements,[active]);
+const rejected=effectiveRenderer.beginLightingPreparation(effectiveScene);rejected.discard();
+assert.equal(effectiveRenderer.lighting.getNode(effectiveScene),pending.node);
+assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),true);
+assert.deepEqual(retirements,[active,rejected.node]);
+effectiveRenderer.releaseRetainedLighting(effectiveScene);assert.equal(effectiveRenderer.lighting.isRetained(effectiveScene),false);
+console.log('PASS effective native renderer lighting generation commit, discard, release and retirement');
+
+// A newer request between source and beauty must leave accepted drawing intact.
+let current=true,passes=0;
+const committedBefore=committed,discardedBefore=discarded;
+renderer.compileAsync=async(s,c,target,options)=>{if(++passes===1)await options.yieldToMain(async()=>{current=false;});};
+await compileSceneLighting(renderer,[pass,pass],{live:true,isCurrent:()=>current});
+assert.equal(committed,committedBefore,'superseded topology cannot be promoted');
+assert.equal(discarded,discardedBefore+1,'retire only the superseded candidate');

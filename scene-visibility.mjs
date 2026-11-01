@@ -69,3 +69,11 @@ export function installSceneVisibility({document,viewport,outliner,edits,scene,r
  document.addEventListener('pointermove',pointer,true);document.addEventListener('keydown',keydown,true);
  return api;
 }
+
+// A compiler slice borrows visibility synchronously and restores it before
+// yielding to actual viewport drawing.
+export function borrowViewportVisibility(objects,visible) {
+ const restored=[];
+ for(const entry of objects)if(entry.object&&!visible(entry.id)){restored.push([entry.object,entry.object.visible]);entry.object.visible=false;}
+ return ()=>{for(const [object,prior] of restored)object.visible=prior;};
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildTriangleVisibility } from '../scene-light-visibility.mjs';
-import { integrateVolumeRay, lightingDirections, receiverDispatch } from '../scene-volume-gather.mjs';
+import { integrateVolumeRay, lightingDirections, receiverDispatch, volumeGatherPlan } from '../scene-volume-gather.mjs';
 
 assert.deepEqual(receiverDispatch(65535*64+1,65535),[65535,2]);
 assert.deepEqual(receiverDispatch(65,65535),[2,1]);
@@ -31,3 +31,8 @@ for(let i=0;i<12;i+=2) {
   assert.ok(rotated[i].every((v,a)=>Math.abs(v+rotated[i+1][a])<1e-12));
 }
 console.log('distributed volume ray and static cache contracts passed');
+
+const limits={maxTextureDimension3D:256,maxTextureDimension2D:8192,maxStorageBufferBindingSize:134217728,maxComputeWorkgroupsPerDimension:65535};
+assert.throws(()=>volumeGatherPlan({volumeGrid:80,sourceDimensions:[48,48,48],directions:96,smokeRefinement:1},limits),/cached first solid distance/);
+assert.deepEqual(volumeGatherPlan({volumeGrid:32,sourceDimensions:[48,48,48],directions:96,smokeRefinement:1},limits).volumeDimensions,[32,32,32]);
+assert.throws(()=>volumeGatherPlan({volumeGrid:32,sourceDimensions:[48,48,48],directions:96,smokeRefinement:1,sceneLightCount:2048},limits),/scene-light first solid distances/);

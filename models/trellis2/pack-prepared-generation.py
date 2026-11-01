@@ -12,6 +12,7 @@ import time
 import numpy as np
 from PIL import Image
 from source_attestation import git_source_identity
+from checkpoint_profiles import require_texture_checkpoint
 
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['repo-root','base','out']:p.add_argument('--'+name,type=Path,required=True)
@@ -68,6 +69,7 @@ try:
     base_bytes=(base/'manifest.json').read_bytes();original=json.loads(base_bytes)
     if original.get('schema')!='trellis2.generation-inputs.v0' or original.get('status')!='succeeded' or original.get('modelCalls')!=0:
         raise ValueError('complete model-free retained checkpoint base required')
+    require_texture_checkpoint(original,a.pipeline_type)
     if a.image:
         report['phase']='automatic-foreground-preparation';persist()
         if not a.expected_image_sha256 or not a.preprocess_source_root or not a.expected_preprocess_source_commit:

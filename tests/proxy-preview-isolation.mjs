@@ -7,7 +7,7 @@ import {fireSweepArmAdmission,waterCadenceWindowAdmission} from '../proxy-eviden
 
 test('an active proxy mesh stays out of the AO depth draw while ordinary meshes enter it',()=>{
  const drawn=[];
- const renderer={target:null,objectFunction:null,
+ const renderer={target:null,objectFunction:null,lighting:{enabled:true},
   setRenderTarget(t){this.target=t;},setRenderObjectFunction(fn){this.objectFunction=fn;},renderObject(object){drawn.push(object.name);},
   render(scene){for(const object of scene.children)this.objectFunction(object,scene,null,null,{side:0},null);}};
  const aoPass={setDepthPass(){},updateBefore(){return 'ao';}};

@@ -1,3 +1,4 @@
+export {authoredSourceRegions} from './scene-source-regions.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-light-geometry.mjs';
@@ -9,11 +10,11 @@ import {validateSceneSourceTransform,sceneSourceLocalPoint,sceneSourceDomain,sce
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
-import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
+import {createSceneSmokeEnvironment,validateSmokeEnvironmentBlur} from './scene-smoke-environment.mjs';
 import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,onStatus=()=>{}}) {
-  const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,getSourceRegions=null,smokeEnvironmentBlur=0,onStatus=()=>{}}) {
+  const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device,blur:smokeEnvironmentBlur});
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
@@ -113,7 +114,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(receiverSpacing)clone.setAttribute('sceneReceiverWeight',new THREE.BufferAttribute(layout.weights,4));
       originals.set(mesh,{material:mesh.material,geometry,clone,layout,receiverOffset:offset,receiverAttribute:geometry.getAttribute('sceneReceiverIndex'),receiverWeightAttribute:geometry.getAttribute('sceneReceiverWeight')});mesh.geometry=clone;
     });
-    handle=createVolumeGather(device,{geometry:packed,receivers,surfaceTriangles:new Uint32Array(surfaceTriangles),volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,angularPattern,angularRotation});
+    handle=createVolumeGather(device,{geometry:packed,receivers,surfaceTriangles:new Uint32Array(surfaceTriangles),volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,angularPattern,angularRotation,samplingNoise:prototype.sceneLightSamplingTexture?.()});
     handle.setRetainComparisons(retainComparisons);
     external=new THREE.ExternalTexture(handle.surface);
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
@@ -194,9 +195,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
         handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
       }
+      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');handle.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
-      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment,sceneLights});
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
       onStatus({...status});throw error;
@@ -211,6 +213,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   prototype.setSceneMediumSource(null);
   prototype.setSceneSourceFrameConsumer(prepare);
   return {
+    setSmokeEnvironmentBlur(value){smokeEnvironmentBlur=validateSmokeEnvironmentBlur(value);smokeEnvironment.setBlur(smokeEnvironmentBlur);},
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
     setSurfaceGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative surface gain required');surfaceGain.value=value;},
     setSurfaceScattering(value){surfaceScattering=!!value;},
@@ -219,10 +222,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
     setReceiverSpacing(value){value=validateReceiverSpacing(value);if(value!==receiverSpacing){receiverSpacing=value;status.receiverSpacingRequested=value;editCommitted=true;rebuildAnnounced=false;}},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
-    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
-    debugState(){return {...status,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,smokeEnvironmentBlur,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     inspectionMeshes(){return [...originals.keys()];},
     async inspectSurface({mesh,face,point,cameraPosition}){

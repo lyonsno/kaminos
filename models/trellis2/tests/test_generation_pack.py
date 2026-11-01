@@ -24,6 +24,7 @@ class GenerationPack(unittest.TestCase):
 
     def test_checkpoint_precision_and_complete_coverage(self):
         script=Path(__file__).parents[1]/'pack-generation.py';self.assertTrue(script.is_file())
+        sys.path.insert(0,str(script.parent))
         spec=importlib.util.spec_from_file_location('generation_pack',script);pack=importlib.util.module_from_spec(spec);spec.loader.exec_module(pack)
         np.testing.assert_array_equal(pack.decode_tensor(bytes.fromhex('803f813f'),'BF16',[2]),[1,1.0078125])
         np.testing.assert_array_equal(pack.decode_tensor(np.array([.25,-.5],dtype='<f2').tobytes(),'F16',[2]),[.25,-.5])
