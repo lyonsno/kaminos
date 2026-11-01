@@ -105,7 +105,7 @@ export default {
     const pour=element('button','Pour','btn');pour.type='button';pour.title='Open or close this spigot. Stopping preserves the water already poured.';
     pour.addEventListener('click',()=>call(source()?.localLiquidEmitter.emissionEnabled?'stopPour':'pour',undefined,sourceStatus));
     const top=element('header');top.append(element('span','Spigot','operating-title'),pour);
-    const flowLabel=element('label','Flow · L/s'),flow=element('input',null,'transform-input');flow.type='number';flow.min='0';flow.step='.1';flow.setAttribute('aria-label','Spigot flow in litres per second');flowLabel.append(flow);
+    const flowLabel=element('label','Flow · L/s'),flow=element('input',null,'transform-input');flow.type='number';flow.min='0';flow.step='.1';flow.setAttribute('aria-label','Spigot flow in litres per second');flow.title='Flow in litres per second. Drag to adjust; click to type. Shift for fine adjustment; Escape cancels.';flowLabel.append(flow);
     spigot.append(top,flowLabel,element('p','Drag the value · click to type','operating-hint'),sourceStatus);
     const moldHeader=element('header');moldHeader.append(element('span','Mold','operating-title'));
     wordField=element('input',null,'transform-input');wordField.type='text';wordField.value=read().label;wordField.setAttribute('aria-label','Mold word');wordField.title='Edit the lettering; press Enter to rebuild its channels. Placement, material and the spigot stay attached. Reset water first if it has been released.';
