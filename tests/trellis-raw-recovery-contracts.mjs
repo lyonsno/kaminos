@@ -34,3 +34,12 @@ test('recovery copies offset array views losslessly and rejects unknown schemas'
  const bytes=new Uint8Array(glb),index=Buffer.from(glb).indexOf('kaminos.trellis-reconstruction.v1');assert.ok(index>0);bytes[index]='x'.charCodeAt(0);
  assert.throws(()=>decodeTrellisReconstruction(glb),/unsupported reconstruction schema/);
 });
+
+test('raw recovery stays a viewable GLB for the existing Three loader',async()=>{
+ const {encodeTrellisReconstruction}=await import('../trellis-reconstruction.mjs');
+ const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+ const glb=encodeTrellisReconstruction(fields());
+ const parsed=await new GLTFLoader().parseAsync(glb,'');let mesh;parsed.scene.traverse(o=>{if(o.isMesh)mesh=o;});
+ assert.ok(mesh);assert.equal(mesh.geometry.attributes.position.count,3);assert.equal(mesh.geometry.index.count,3);
+ assert.deepEqual([...mesh.geometry.attributes.position.array], [...fields().decode.vertices]);
+});
