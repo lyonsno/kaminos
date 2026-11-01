@@ -11,6 +11,8 @@ const edits=createSceneEdits({read(){throw Error('unexpected ordinary edit');},w
 const host={scene:{objects:()=>entries,select(id){selected=id;},async open(){return {async attach(){return {id:'mechanism',root};},redraw(){},readView(){return {};},async dispose(){}};}},controls:{components:{register:(id,value)=>{adapter=value;return components.register(id,value);}},document:{defaultView:{kaminosSceneEdits:edits}}}};
 const c=await createMechanismController({host,inputs:{root}}),original=JSON.stringify(c.read().recipe),position=cube.position.toArray();
 try {
+ assert.equal(c.read().tool,'select','editing starts with selection, not accidental construction');
+ c.operations.tool({value:'draw'});components.exit();components.toggle('mechanism');assert.equal(c.read().tool,'select','Tab re-entry returns to selection');
  c.operations.tool({value:'connect'});assert.equal(components.active(),true,'Connect must enter native component editing');
  c.operations.connectEnd({objectId:'cube',position:[-.5,0,0],rotation:[0,Math.PI/2,0]});
  c.operations.connectEnd({joint:1,position:[0,0,0],rotation:[0,Math.PI/2,0]});
