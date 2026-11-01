@@ -12066,6 +12066,13 @@ async function initScene() {
             if(before===sceneFrameCount)throw Error('Scene output did not redraw');
             drawnFrames++;await new Promise(resolve=>requestAnimationFrame(resolve));
           }while(sceneGI.needsHistoryFrame());
+          // GI can converge in its asynchronous readback, after the preceding
+          // frame was presented. Present once more to copy those final pixels.
+          if(fire&&transportPrototype&&!composedShot){
+            signal?.throwIfAborted();const frame=await fire.draw();fireReceipt=frame.receipt;
+            if(fireReceipt.presentation!=='host-composed')throw Error('Shared fire output lost host presentation');
+            drawnFrames++;
+          }
           if(fire&&!transportPrototype){const frame=await fire.draw();fireReceipt=frame.receipt;const image=frame.image;if(!image||image.width!==fireReceipt.width||image.height!==fireReceipt.height||image.rgba.length!==image.width*image.height*4)throw Error('Held fire image is incomplete');fireRaster=document.createElement('canvas');fireRaster.width=image.width;fireRaster.height=image.height;fireRaster.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(image.rgba),image.width,image.height),0,0);}
           // Present the held mesh/water once more in the same capture task.
           if(!transportPrototype&&renderSceneFrame()===false)throw Error('Scene output was skipped');
