@@ -13,7 +13,7 @@ test('selecting the water field exposes its native placement target',()=>{
  assert.equal(target?.id,'@water-domain','Water simulation must be editable with native Move/Scale');assert.equal(target.object,root);
 });
 test('water guide follows authored bounds instead of the retired playground',()=>{
- const bounds={min:[1,2,3],max:[4,6,8]},c={THREE,localLiquidSetup:{},localLiquidDomainGuide:null,localLiquidRunningDomainGuide:null,waterDomainProxy:null,waterDomainDraft:null,localLiquidHost:null,
+ const bounds={min:[1,2,3],max:[4,6,8]},c={THREE,waterFeature:{setup:{},host:null},localLiquidDomainGuide:null,localLiquidRunningDomainGuide:null,waterDomainProxy:null,waterDomainDraft:null,localLiquidHost:null,
  waterDomainBounds:()=>bounds,acceptedWaterDomainPose:()=>({position:[2.5,4,5.5],rotation:[0,0,0],scale:[3,4,5]}),
  fingerFluidAnalyticalSupportGeometry:()=>({boundsMin:[-10,-10,-10],boundsMax:[10,10,10]}),
  transformControls:null,scene:new THREE.Scene(),isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:1},styleSimulationDomainGuide(){},styleHelperLines(){},applySceneObjectTransformState(){}};
@@ -32,17 +32,17 @@ const source={id:'inlet',type:'local-liquid-emitter',transform:{position:[.25,.5
 test('native pose history edits only bounds, preserving sources, sampling and evolved run',()=>{
  const sampling={spacing:1/48,particleTarget:1234,container:{min:[-.5,0,-.5],max:[.5,1,.5]}};
  const initial={...defaultLocalLiquidSetup(),waterSampling:sampling},running=authoredMlsSetup([source],initial),pending=[];
- const c={localLiquidSetup:structuredClone(initial),localLiquidEmitterRecords:()=>[source],normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsCellSize,waterDomainPose,checkedWaterDomainPose,waterDomainSampling,
- waterDomainProxy:null,localLiquidHost:{setSetup:value=>pending.push(structuredClone(value))},syncWaterDomainGuide(){},authoredWaterControls:null,window:{},structuredClone};
+ const c={waterFeature:{setup:structuredClone(initial),host:{setSetup:value=>pending.push(structuredClone(value))}},localLiquidEmitterRecords:()=>[source],normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsCellSize,waterDomainPose,checkedWaterDomainPose,waterDomainSampling,
+ waterDomainProxy:null,syncWaterDomainGuide(){},authoredWaterControls:null,window:{},structuredClone};
  vm.createContext(c);vm.runInContext(['acceptedWaterDomainPose','checkWaterDomainPose','writeWaterDomainPose'].map(grab).join('\n'),c);
  const edits=createSceneEdits({read(){},write(){}});edits.register('@water-domain',{read:c.acceptedWaterDomainPose,write:c.writeWaterDomainPose,check:c.checkWaterDomainPose});
- edits.begin('@water-domain');edits.preview({position:[2,3,4],scale:[2,3,4]});edits.cancel();assert.deepEqual(c.localLiquidSetup,initial);
+ edits.begin('@water-domain');edits.preview({position:[2,3,4],scale:[2,3,4]});edits.cancel();assert.deepEqual(c.waterFeature.setup,initial);
  edits.apply('@water-domain',{position:[.25,.6,0],scale:[2,1.5,3]});
- for(const [side,values] of Object.entries({min:[-.75,-.15,-1.5],max:[1.25,1.35,1.5]}))values.forEach((v,i)=>assert.ok(Math.abs(c.localLiquidSetup.waterSampling.container[side][i]-v)<1e-12));
- assert.equal(c.localLiquidSetup.waterSampling.particleTarget,1234);assert.equal(c.localLiquidSetup.particleCount,12000);
+ for(const [side,values] of Object.entries({min:[-.75,-.15,-1.5],max:[1.25,1.35,1.5]}))values.forEach((v,i)=>assert.ok(Math.abs(c.waterFeature.setup.waterSampling.container[side][i]-v)<1e-12));
+ assert.equal(c.waterFeature.setup.waterSampling.particleTarget,1234);assert.equal(c.waterFeature.setup.particleCount,12000);
  assert.deepEqual(source.transform.position,[.25,.5,0]);assert.deepEqual(running.solver.originWorld,[-.6,-.1,-.6],'existing run remains unchanged');
- assert.equal(edits.state().undoCount,1);edits.undo();assert.deepEqual(c.localLiquidSetup,initial);edits.redo();
- const saved=JSON.parse(JSON.stringify(c.localLiquidSetup)),next=authoredMlsSetup([source],saved),grid=mlsConfig(next.solver);
+ assert.equal(edits.state().undoCount,1);edits.undo();assert.deepEqual(c.waterFeature.setup,initial);edits.redo();
+ const saved=JSON.parse(JSON.stringify(c.waterFeature.setup)),next=authoredMlsSetup([source],saved),grid=mlsConfig(next.solver);
  for(let axis=0;axis<3;axis++)assert.ok(Math.abs(grid.bounds.min[axis]-saved.waterSampling.container.min[axis])<1e-12);
  assert.deepEqual(grid.dimensions,[45,35,65]);assert.ok(pending.length>0);
  assert.throws(()=>edits.apply('@water-domain',{rotation:[0,.1,0]}),/world axes/);assert.equal(edits.state().active,null);
