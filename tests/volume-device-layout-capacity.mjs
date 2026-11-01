@@ -67,6 +67,7 @@ const counts = pipelines.flatMap(layout => Object.entries(stages).map(([stage, b
 })));
 const minimumCapacity = Math.max(...counts.map(row => row.count));
 assert.ok(minimumCapacity > 0, 'the production layouts contain storage bindings');
+assert.ok(minimumCapacity <= 10, 'composed camera layout must fit the observed native adapter capacity10');
 
 const requestDeviceForCapacity = async capacity => {
   let receivedDescriptor;

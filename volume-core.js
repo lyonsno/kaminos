@@ -187,9 +187,9 @@ const BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES = 32;
 const BOUNDARY_SPLAT_MAX_INSTANCES = 128;
 const BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH = 1;
 const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = 10;
-// Guided camera integration has nine storage bindings; distributed smoke
-// lighting adds two. Device admission covers the composed render layout too.
-const VOLUME_STORAGE_BUFFER_BINDING_COUNT = Math.max(BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT, 11);
+// Guided camera integration has nine storage bindings; packed distributed
+// smoke geometry adds one. Both complete pipelines fit ten native slots.
+const VOLUME_STORAGE_BUFFER_BINDING_COUNT = BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT;
 const FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY = 'flow-tangent-five-tap-bilinear-v0';
 const FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
 const FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY = 'per-splat-self-extinction-additive-rgb-v0';
