@@ -11257,6 +11257,7 @@ export function createKaminosVolumePrototype({
     analyticEmitterFullGridEquivalentPasses: 0,
     scalarActivityReceiver: null,
     fluidStateResetCount: 0,
+    residualFieldGeneration: 0,
     fluidStateResetReason: 'initial',
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
     boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
@@ -11923,7 +11924,8 @@ export function createKaminosVolumePrototype({
   let residualPartialsConsumer = null;
   // The latest readback's partials, kept so a consumer attaching while the sim
   // is paused gets the held field without advancing it; cleared whenever the
-  // fluid state is recreated (field generation = state.fluidStateResetCount).
+  // fluid state or its coordinate frame changes. This identity is independent
+  // of allocation/reset counters because live coverage can move in place.
   let lastResidualPartials = null;
   // A scene proxy stands in for the fire (viewport Fire Proxy): the sim, light
   // field and probes keep running, and the canvas raymarch is not drawn.
@@ -12285,6 +12287,7 @@ export function createKaminosVolumePrototype({
     // Keep a pending map's buffer and guard alive until it unmaps. The remap
     // count invalidates its result independently of buffer retirement.
     pressureResidualCopyPending = false;
+    lastResidualPartials = null;
     state.pressureSolver.residual = null;
     state.frontFieldReadIndex = currentFront; state.frontFieldWriteIndex = 1-currentFront;
     state.frontFieldProjectionPassthrough = false;
@@ -12307,6 +12310,8 @@ export function createKaminosVolumePrototype({
     const previous=[...productTransform.translate];productTransform.translate=[...plan.translation];
     try{const primitives=owner.onTranslation?.([...plan.translation]);if(primitives)volumePrimitives=primitives.map(normalizePrimitiveRecord);}
     catch(error){productTransform.translate=previous;throw error;}
+    state.residualFieldGeneration = (state.residualFieldGeneration || 0) + 1;
+    lastResidualPartials = null;
     owner.pending=plan.cells.map((v,i)=>v+(owner.pending?.[i]??0));owner.shifts++;owner.cells=plan.cells;
     state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...plan.translation],cellSize:plan.cellSize,shifts:owner.shifts,lastShift:[...plan.cells],rotation:'world-aligned',transport:'exact-overlap-open-ambient',runtimeReadbacks:0};
     publishVolumePrimitiveState();getPrimitiveSource();
@@ -14888,6 +14893,7 @@ export function createKaminosVolumePrototype({
     state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
+    state.residualFieldGeneration = (state.residualFieldGeneration || 0) + 1;
     state.fluidStateResetReason = reason;
     lastResidualPartials = null;
     updateSimCostLedger();
@@ -17742,6 +17748,7 @@ export function createKaminosVolumePrototype({
     encoder.copyBufferToBuffer(pressureResidualPartialsBuffer, 0, pressureResidualReadbackBuffer, 0, pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT);
     pressureResidualCopyPending = true;
     pressureResidualCopyStep = state.simStepCount;
+    state.pressureResidualCopyFieldGeneration = state.residualFieldGeneration;
     pressureResidualCopyFrame = state.frameCount;
     // The full grid shape (grid × gridHeight × grid), snapshotted with the copy (IS-06).
     pressureResidualCopyCells = gridSize * gridHeight * gridSize;
@@ -17757,6 +17764,7 @@ export function createKaminosVolumePrototype({
     pressureResidualMapStartedFrame = state.frameCount;
     const generation = pressureResidualMapGeneration;
     const domainRemapCount = state.domainRemap?.count || 0;
+    const fieldGeneration = state.pressureResidualCopyFieldGeneration;
     const buffer = pressureResidualReadbackBuffer;
     const workgroupCount = pressureResidualWorkgroupCount;
     const step = pressureResidualCopyStep;
@@ -17784,6 +17792,7 @@ export function createKaminosVolumePrototype({
         return;
       }
       if (domainRemapCount !== (state.domainRemap?.count || 0)) { buffer.unmap(); return; }
+      if (fieldGeneration !== state.residualFieldGeneration) { buffer.unmap(); return; }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
       // typeof: source-extraction contract harnesses run this body without the
@@ -17791,13 +17800,13 @@ export function createKaminosVolumePrototype({
       if (typeof residualPartialsConsumer === 'function') {
         const info = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
           workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
-          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration };
         lastResidualPartials = info;
         try { residualPartialsConsumer(info); } catch (error) { console.warn('Residual partials consumer failed', error); }
       } else if (typeof lastResidualPartials !== 'undefined') {
         lastResidualPartials = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
           workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
-          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration };
       }
       const reduceOperator = offset => {
         let sumBefore = 0;
@@ -17863,6 +17872,7 @@ export function createKaminosVolumePrototype({
       clearTimeout(timeoutTimer);
       if (generation !== pressureResidualMapGeneration) return;
       if (domainRemapCount !== (state.domainRemap?.count || 0)) return;
+      if (fieldGeneration !== state.residualFieldGeneration) return;
       if (error?.message === PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR) {
         retirePressureResidualMap('residual-map-timeout-reset');
         return;
@@ -27900,6 +27910,8 @@ export function createKaminosVolumePrototype({
       if (scale === productTransform.scale && next.every((value, index) => value === productTransform.translate[index])) return false;
       const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
       if (device && !pendingDomainRemap) pendingDomainRemap = structuredClone(productTransform);
+      state.residualFieldGeneration = (state.residualFieldGeneration || 0) + 1;
+      lastResidualPartials = null;
       productTransform.translate = next;
       productTransform.scale = scale;
       volumePrimitives = normalizedPrimitives;
@@ -27930,12 +27942,12 @@ export function createKaminosVolumePrototype({
       residualPartialsConsumer = typeof fn === 'function' ? fn : null;
       // Replay the held field (current generation only) to a new consumer.
       const held = lastResidualPartials;
-      if (residualPartialsConsumer && held && held.fieldGeneration === state.fluidStateResetCount) {
-        queueMicrotask(() => { if (residualPartialsConsumer === fn) { try { fn(held); } catch (error) { console.warn('Residual partials consumer failed', error); } } });
+      if (residualPartialsConsumer && held && held.fieldGeneration === state.residualFieldGeneration) {
+        queueMicrotask(() => { if (residualPartialsConsumer === fn && held === lastResidualPartials && held.fieldGeneration === state.residualFieldGeneration) { try { fn(held); } catch (error) { console.warn('Residual partials consumer failed', error); } } });
       }
       return Boolean(residualPartialsConsumer);
     },
-    getResidualFieldGeneration() { return state.fluidStateResetCount; },
+    getResidualFieldGeneration() { return state.residualFieldGeneration; },
     isActive() { return state.active === true; },
     // Skip the ordinary canvas raymarch while a scene proxy stands in for the
     // fire. Other presentation routes (boundary splats, browser residual) keep

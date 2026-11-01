@@ -14,7 +14,7 @@ const root=process.cwd(),report={status:'failed',phase:'setup',root,errors:[],ar
 let server,browser,page;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let sourceFiles;
-const discoverSources=()=>execFileSync('git',['ls-files','-co','--exclude-standard'],{encoding:'utf8'}).trim().split('\n').filter(f=>/^(volume-|experiments\/material-hierarchy|tools\/live-domain|index.html|scene-edit-session)/.test(f));
+const discoverSources=()=>execFileSync('git',['ls-files','-co','--exclude-standard'],{encoding:'utf8'}).trim().split('\n').filter(f=>/^(volume-|experiments\/material-hierarchy|tools\/(live-domain|domain-remap)|index.html|scene-edit-session)/.test(f));
 const hashes=async()=>Object.fromEntries(await Promise.all(sourceFiles.map(async f=>[f,createHash('sha256').update(await fs.readFile(path.join(root,f))).digest('hex')])));
 try{
  assert.ok(Number.isInteger(materialWidth)&&materialWidth>=16&&materialWidth%16===0,'Material width must be a multiple of sixteen');
@@ -42,6 +42,11 @@ try{
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=authoring');if(report.errors.length)throw Error(report.errors.join('\n'));
 
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
+ report.phase='native-transfer';await save();
+ const transfer=await page.evaluate(async()=>await(await import('/tools/domain-remap-fixture.mjs')).runDomainRemapConformance());
+ await fs.writeFile(path.join(out,'native-transfer.json'),JSON.stringify(transfer));
+ report.nativeTransfer={status:transfer.status,adapter:transfer.adapter,cases:transfer.rows?.length,errors:transfer.errors};
+ assert.equal(transfer.status,'passed',transfer.error);assert.equal(transfer.rows.length,28);assert.deepEqual(transfer.errors,[]);
  report.phase='scene-create';await save();
  await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id),path.basename(presetFile,'.json'));
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
@@ -56,10 +61,20 @@ try{
      pose:window.kaminosFlameDomain.read(),sources:window.kaminosSceneAuthoring.read().objects.filter(x=>x.type==='flame-emitter'),
      world:d.worldSmoke,adaptive:a,controls:d.controls,timing:d.timing};
  });
- const check=(s,prior)=>{
+ const check=(s,prior,{advancing=false}={})=>{
    assert.match(s.backend,/^webgpu:apple/i);assert.equal(s.active,true);assert.ok(!s.error,s.error);
    assert.ok(s.adaptive.effective);assert.ok(!s.adaptive.error);
-   if(prior){assert.equal(s.allocation,prior.allocation,'must retain Fine allocation');assert.equal(s.resets,prior.resets,'must not reset Fine');assert.ok(s.step>=prior.step,'clock must continue');assert.ok(s.world.steps>=prior.world.steps,'World must continue');}
+   assert.equal(s.world.worldAnchored,true);
+   if(prior){
+     assert.equal(s.allocation,prior.allocation,'must retain Fine allocation');assert.equal(s.resets,prior.resets,'must not reset Fine');
+     assert.deepEqual(s.world.anchor,prior.world.anchor,'World anchor must stay fixed');
+     assert.deepEqual(s.adaptive.effective.anchor,prior.adaptive.effective.anchor,'adaptive anchor must stay fixed');
+     assert.equal(s.world.identity,prior.world.identity);assert.equal(s.adaptive.effective.identity,prior.adaptive.effective.identity);
+     for(const [name,now,then] of [['Fine',s.step,prior.step],['World',s.world.steps,prior.world.steps],['adaptive',s.adaptive.effective.steps,prior.adaptive.effective.steps]]){
+       assert.ok(Number.isFinite(now)&&Number.isFinite(then),`${name} step receipt required`);
+       assert.ok(advancing?now>then:now>=then,`${name} must ${advancing?'advance':'not restart'}`);
+     }
+   }
  };
  const capture=async name=>{const s=await state();check(s);report.arms.push({name,...s});await save();await page.screenshot({path:path.join(out,name+'.png')});return s;};
  const waitSteps=async n=>{const s=await state();await page.waitForFunction(({step,n})=>{const d=window.__kaminosVolumePrototype.debugState();if(d.error)throw Error(d.error);return d.simStepCount>=step+n;},{step:s.step,n});};
@@ -100,9 +115,12 @@ try{
      const pose=moving?edits.begin('@flame-domain','Continuous coverage move and scale').active.before:null;
      const rows=[];let previous;
      for(let i=0;i<90;i++){
-       const now=await new Promise(requestAnimationFrame),d=proto.debugState();
+       const now=await new Promise(requestAnimationFrame),d=proto.debugState(),a=proto.adaptiveMaterialState();
        if(d.error)throw Error(d.error);
-       rows.push({at:now,dt:previous===undefined?null:now-previous,frame:d.frameCount,step:d.simStepCount,allocation:d.thermalFluidAllocationId,resets:d.fluidStateResetCount,remapCount:d.domainRemap?.count||0});previous=now;
+       rows.push({at:now,dt:previous===undefined?null:now-previous,frame:d.frameCount,step:d.simStepCount,allocation:d.thermalFluidAllocationId,resets:d.fluidStateResetCount,remapCount:d.domainRemap?.count||0,
+         backend:d.backend,active:d.active,error:d.error,
+         world:{steps:d.worldSmoke.steps,anchor:d.worldSmoke.anchor,identity:d.worldSmoke.identity,worldAnchored:d.worldSmoke.worldAnchored},
+         adaptive:{effective:{steps:a.effective?.steps,anchor:a.effective?.anchor,identity:a.effective?.identity},error:a.error}});previous=now;
        if(moving){const phase=i/89*2*Math.PI;edits.preview({...pose,position:pose.position.map((v,a)=>v+(a===0?.25*Math.sin(phase):0)),scale:pose.scale.map(v=>v*(1+.12*Math.sin(phase)))});}
      }
      if(moving)edits.commit();return rows;
@@ -110,15 +128,30 @@ try{
    return {before:await run(false),moving:await run(true),after:await run(false)};
  });
  const live=await capture('after-live-drag');check(live,initial);
- for(const rows of Object.values(report.cadence)){assert.equal(rows.length,90);for(const r of rows){assert.equal(r.allocation,initial.allocation);assert.equal(r.resets,initial.resets);}assert.ok(rows.at(-1).step>rows[0].step);}
+ for(const rows of Object.values(report.cadence)){assert.equal(rows.length,90);for(const r of rows)check(r,initial);check(rows.at(-1),rows[0],{advancing:true});}
  assert.ok(report.cadence.moving.at(-1).remapCount-report.cadence.moving[0].remapCount>60,'drag must exercise remapping across frames');
+ // Appearance capture is separate from cadence: screenshots can slow the
+ // browser. Retain the gesture itself rather than only its end state.
+ report.phase='moving-appearance';report.appearance=[];await save();
+ const appearancePose=await page.evaluate(()=>window.kaminosSceneEdits.begin('@flame-domain','Retained moving appearance').active.before);
+ for(let i=0;i<24;i++){
+   await page.evaluate(async({pose,i})=>{const phase=i/23*2*Math.PI,proto=window.__kaminosVolumePrototype;
+     const frame=proto.debugState().frameCount;
+     window.kaminosSceneEdits.preview({...pose,position:pose.position.map((v,a)=>v+(a===0?.25*Math.sin(phase):0)),scale:pose.scale.map(v=>v*(1+.12*Math.sin(phase)))});
+     while(proto.debugState().frameCount<frame+2){if(proto.debugState().error)throw Error(proto.debugState().error);await new Promise(requestAnimationFrame);}
+   },{pose:appearancePose,i});
+   const s=await state();check(s,i?report.appearance[i-1].state:live,{advancing:true});
+   const image=`moving-${String(i).padStart(2,'0')}.png`;
+   report.appearance.push({image,state:s});await save();await page.screenshot({path:path.join(out,image)});
+ }
+ await page.evaluate(()=>window.kaminosSceneEdits.commit());
  // Non-overlap jump, scale, normal history and paused rendering path.
  report.phase='jump-and-history';await save();
  await page.evaluate(pose=>window.kaminosSceneEdits.apply('@flame-domain',{...pose,position:pose.position.map((v,i)=>v+(i===0?8:0)),scale:pose.scale.map(v=>v*1.3)},'Coverage jump'),pose);
- await waitSteps(8);const jumped=await capture('jumped');check(jumped,initial);
- await page.evaluate(()=>window.kaminosSceneEdits.undo());await waitSteps(8);check(await capture('undo-jump'),initial);
- await page.evaluate(()=>window.kaminosSceneEdits.redo());await waitSteps(8);check(await capture('redo-jump'),initial);
- await page.evaluate(()=>window.kaminosSceneEdits.undo());await waitSteps(8);check(await capture('restored'),initial);
+ await waitSteps(8);const jumped=await capture('jumped');check(jumped,report.appearance.at(-1).state,{advancing:true});
+ await page.evaluate(()=>window.kaminosSceneEdits.undo());await waitSteps(8);const undone=await capture('undo-jump');check(undone,jumped,{advancing:true});
+ await page.evaluate(()=>window.kaminosSceneEdits.redo());await waitSteps(8);const redone=await capture('redo-jump');check(redone,undone,{advancing:true});
+ await page.evaluate(()=>window.kaminosSceneEdits.undo());await waitSteps(8);check(await capture('restored'),redone,{advancing:true});
  report.final=await state();assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;if(page)try{report.failureState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());await page.screenshot({path:path.join(out,'failure.png')});}catch(c){report.captureError=String(c);}process.exitCode=1;}
 finally{await browser?.close();report.browserClosed=true;if(server&&server.exitCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}report.serverClosed=true;await save();}
