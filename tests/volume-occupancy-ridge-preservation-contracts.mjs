@@ -10,7 +10,7 @@ function assertOccupancyRidgeContract(source) {
   const raymarchStart = source.indexOf('let expensiveSampleBudget =');
   assert.ok(raymarchStart >= 0, 'production raymarch budget is discoverable');
   const allRaymarch = balancedWgslBlock(source.slice(raymarchStart), 'loop {', { label: 'production raymarch loop' });
-  // These two arms consume supported samples through their own transfer/trace
+  // These arms consume supported samples through their own transfer/trace
   // law. Remove only the complete, verified arms from the ordinary occupancy
   // analysis; an extra discard in any arm still fails its continuation count.
   const opticalStepArm = balancedWgslBlock(allRaymarch,
@@ -28,15 +28,18 @@ function assertOccupancyRidgeContract(source) {
   assert.match(opticalTraceArm,
     /nonRidgeOpticalCaptureRows\[base\+16u\] = select\(0.0, sigma, supported\);[\s\S]*atomicAdd\(&nonRidgeOpticalCaptureHeader.rowCount, 1u\);[\s\S]*continue;/,
     'the trace arm publishes its supported-material row before continuing');
-  for (const arm of [opticalStepArm, opticalTraceArm]) {
+  const worldArm = balancedWgslBlock(allRaymarch, 'if(worldActive && !fineRayInterval){', { label: 'World transfer arm' });
+  assert.match(worldArm, /color\s*\+=\s*trans\s*\*\s*\(medium\.emission\s*\+\s*scatteredSource\)\s*\*\s*emissionIntegral\(sigma,ds\);\s*trans\s*\*=\s*exp\(-sigma\*ds\);\s*t\s*\+=\s*ds;\s*continue;/,
+    'World transfer consumes emission, scattering and extinction before continuing');
+  for (const arm of [opticalStepArm, opticalTraceArm, worldArm]) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }
-  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '');
+  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(worldArm, '');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -81,6 +84,13 @@ function assertOccupancyRidgeContract(source) {
 }
 
 assertOccupancyRidgeContract(core);
+
+for (const consumed of ['color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);', 'trans*=exp(-sigma*ds);']) {
+  const omitted = core.replace(consumed, '/* omitted World transfer */');
+  assert.notEqual(omitted, core, 'World transfer mutation reaches the live arm');
+  assert.throws(() => assertOccupancyRidgeContract(omitted), /World transfer/,
+    'World continuation cannot silently drop emission or extinction');
+}
 
 for (const write of [
   'nonRidgeOpticalCaptureRows[base+16u] = select(0.0, sigma, supported);',

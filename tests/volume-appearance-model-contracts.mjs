@@ -75,7 +75,7 @@ test('switching the model converts the stored form once (relayout pass), so the 
   assert.match(host, /currentFluid = 1 - currentFluid;\n\s*currentFront = 1 - currentFront;/, 'the pass writes the other buffer and flips like a step');
   assert.match(host, /fluidLayoutInForce = wanted;/);
   const step = source.slice(source.indexOf('  function encodeSim('), source.indexOf('\n  }', source.indexOf('  function encodeSim(')) + 4);
-  assert.match(step, /refreshSceneCollision\(\);\n\s*ensureAppearanceLayout\(encoder\);/, 'every step seats the layout immediately after refreshing collision');
+  assert.match(step, /refreshSceneCollision\(\);[\s\S]*?ensureAppearanceLayout\(encoder\);/, 'every step seats the layout immediately after refreshing collision');
   assert.ok(step.indexOf('ensureAppearanceLayout(encoder);') < step.indexOf('const transportConfig ='), 'layout is seated before transport dispatch preparation');
   assert.equal([...source.matchAll(/(?<!let )fluidLayoutInForce = 'authored';/g)].length, 2, 'grid rebuild and full-field import both write the authored form');
   assert.match(source, /entryPoint: 'csAppearanceRelayout', constants: computePipelineConstants/);

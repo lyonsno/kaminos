@@ -21,6 +21,7 @@ async function exercise(index,result,{fail=false}={}) {
   elements.get('flame-basin-label').value='Fire';
   const applied=[],errors=[];
   vm.runInNewContext(handler,{
+    gridTuning:null,
     document:{getElementById:id=>elements.get(id),createElement:()=>({})},
     listBasins:async()=>index,saveBasin:async()=>{if(fail)throw Error('Save failed');return result;},
     applyBasin:async id=>{applied.push(id);return {};},

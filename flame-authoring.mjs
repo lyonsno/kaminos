@@ -228,7 +228,7 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
   {name:'Flame appearance',quick:true,open:true,fields:[
     ['volume-physical-exposure','Exposure (EV)'],['volume-physical-kelvin-per-heat','Kelvin per heat'],
     ['volume-physical-white','White balance (K)'],
-    ['volume-density','Density'],['volume-physical-smoke-extinction','Smoke extinction'],['volume-physical-smoke-albedo','Smoke albedo'],
+    ['volume-density','Display gain'],['volume-physical-smoke-extinction','Smoke extinction'],['volume-physical-smoke-albedo','Smoke albedo'],
     ['volume-physical-clean','Blue / clean emission'],
   ]},
   {name:'Reaction & cooling',quick:true,open:true,fields:[

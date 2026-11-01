@@ -1,4 +1,6 @@
 // kaminos-test: node
+import {GRID_TUNING_FIELDS} from '../volume-grid-tuning.mjs';
+import {readAdaptiveMaterialControls} from '../volume-adaptive-material-controls.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {immersedControlsForFlamePose,immersedRadiusClamp,immersedRadiusBounds,defaultFlameEmitterPose} from '../scene-flame-emitter.mjs';
@@ -42,7 +44,7 @@ test('cold route setter preserves a large saved radius before native sanitizatio
  const fn=html.slice(html.indexOf('function setVolumeControlValue(')).split('\n}')[0]+'\n}';
  const input={id:'volume-immersed-radius',type:'range',max:'.5',
   set value(v){this.raw=String(Math.min(Number(this.max),Number(v)));},get value(){return this.raw;}};
- const set=vm.runInNewContext(fn+';setVolumeControlValue',{document:{getElementById:()=>input}});
+ const set=vm.runInNewContext(fn+';setVolumeControlValue',{GRID_TUNING_FIELDS,document:{getElementById:()=>input}});
  set(input.id,'135.764753512356');
  assert.equal(Number(input.value),135.764753512356);
 });
