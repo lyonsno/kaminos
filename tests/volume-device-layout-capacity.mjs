@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { createDistributedSmokeBindings } from '../scene-smoke-reconstruction.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const ensureGpuStart = source.indexOf('async function ensureGpu()');
@@ -29,7 +30,9 @@ const requestPath = source.slice(requestStart, suppliedDeviceStart)
 const layouts = section('bindGroupLayout = device.createBindGroupLayout({', "device.pushErrorScope('validation');");
 const stages = { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
 const pipelines = [];
-runInNewContext(layouts, {
+const context = {
+  state: {},
+  TRANSPORT_SCHEME_IDENTITY: 'transport',
   GPUShaderStage: stages,
   BOUNDARY_SIDECAR_IDENTITY: 'boundary-sidecar',
   BOUNDARY_SPLAT_RENDERER_IDENTITY: 'boundary-splats',
@@ -40,7 +43,19 @@ runInNewContext(layouts, {
       return descriptor;
     },
   },
-});
+};
+runInNewContext(layouts, context);
+// Include the actual lazily composed smoke layout that failed native startup.
+globalThis.GPUShaderStage = stages;
+globalThis.GPUBufferUsage = {UNIFORM:1,COPY_DST:2};
+const distributedLayout = createDistributedSmokeBindings({...context.device,createBuffer:()=>({})}).layout;
+const smokeLayout = source.match(/const layout=device.createPipelineLayout\(\{bindGroupLayouts:\[bindGroupLayout,multisampled\?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout\]\}\);/);
+assert.ok(smokeLayout, 'exercise the actual distributed smoke composition');
+for (const multisampled of [false,true]) runInNewContext(smokeLayout[0], {...context,distributedLayout,multisampled});
+const computeCapacity=Number(source.match(/const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = (\d+);/)[1]);
+const volumeRequirement=source.match(/const VOLUME_STORAGE_BUFFER_BINDING_COUNT = ([^;]+);/);
+const actualRequirements={BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT:computeCapacity};
+if(volumeRequirement) actualRequirements.VOLUME_STORAGE_BUFFER_BINDING_COUNT=runInNewContext(volumeRequirement[1],actualRequirements);
 assert.ok(pipelines.some(layout => layout.label === 'kaminos pressure tiered jacobi pipeline layout'),
   'include the pipeline that failed native startup');
 
@@ -69,7 +84,7 @@ const requestDeviceForCapacity = async capacity => {
     ${requestPath}
     return { deviceDescriptor, device };
   })()`, { adapter, maxRequestedStorageBufferBytes: 134217728,
-    BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT: minimumCapacity });
+    ...actualRequirements });
   assert.equal(receivedDescriptor, result.deviceDescriptor,
     'the descriptor assembled from production limits is the one sent to adapter.requestDevice');
   const granted = result.device.limits.maxStorageBuffersPerShaderStage;
@@ -89,6 +104,6 @@ for (const capacity of [minimumCapacity, 32]) {
 
 const insufficientCapacity = minimumCapacity - 1;
 await assert.rejects(requestDeviceForCapacity(insufficientCapacity),
-  /boundary-splat-compute-layout-storage-buffer-limit/,
+  /(?:boundary-splat-compute|volume)-layout-storage-buffer-limit/,
   `an adapter with ${insufficientCapacity} slots must reject the production ${minimumCapacity}-binding layout`);
 console.log(`PASS: ${pipelines.length} production layouts and requestDevice handoff at capacities ${minimumCapacity}/32; capacity ${insufficientCapacity} rejects before device request; maximum storage bindings ${minimumCapacity}`);

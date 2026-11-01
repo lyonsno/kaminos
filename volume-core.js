@@ -187,6 +187,9 @@ const BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES = 32;
 const BOUNDARY_SPLAT_MAX_INSTANCES = 128;
 const BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH = 1;
 const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = 10;
+// Guided camera integration has nine storage bindings; distributed smoke
+// lighting adds two. Device admission covers the composed render layout too.
+const VOLUME_STORAGE_BUFFER_BINDING_COUNT = Math.max(BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT, 11);
 const FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY = 'flow-tangent-five-tap-bilinear-v0';
 const FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
 const FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY = 'per-splat-self-extinction-additive-rgb-v0';
@@ -1473,14 +1476,13 @@ export async function requestKaminosSharedWebGpuDevice({
     raise('maxStorageBufferBindingSize', volumeStorageBytes);
   }
   // Request the adapter's own per-stage storage-buffer capacity: the fluid
-  // pipeline layouts declare 10 compute-visible storage buffers, and newer
-  // Chrome validates layout counts strictly, so a hardcoded 9 is a silent cap
-  // that breaks pipeline creation.
+  // pipeline layouts include both compute work and composed smoke lighting.
+  // A device must admit the entire pipeline, not only its largest bind group.
   const storageBuffersPerStage = adapterLimit('maxStorageBuffersPerShaderStage');
-  if (storageBuffersPerStage < BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT) {
+  if (storageBuffersPerStage < VOLUME_STORAGE_BUFFER_BINDING_COUNT) {
     throw new Error(
-      `boundary-splat-compute-layout-storage-buffer-limit:`
-      + `required=${BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT}:supported=${storageBuffersPerStage}`,
+      `volume-layout-storage-buffer-limit:`
+      + `required=${VOLUME_STORAGE_BUFFER_BINDING_COUNT}:supported=${storageBuffersPerStage}`,
     );
   }
   raise('maxStorageBuffersPerShaderStage', storageBuffersPerStage);
@@ -14877,13 +14879,13 @@ export function createKaminosVolumePrototype({
       requiredLimits.maxStorageBufferBindingSize = requestedStorageBufferBytes;
     }
     const maxStorageBuffersPerShaderStage = adapter.limits?.maxStorageBuffersPerShaderStage ?? 0;
-    if (maxStorageBuffersPerShaderStage < BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT) {
+    if (maxStorageBuffersPerShaderStage < VOLUME_STORAGE_BUFFER_BINDING_COUNT) {
       throw new Error(
-        `boundary-splat-compute-layout-storage-buffer-limit:`
-        + `required=${BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT}:supported=${maxStorageBuffersPerShaderStage}`,
+        `volume-layout-storage-buffer-limit:`
+        + `required=${VOLUME_STORAGE_BUFFER_BINDING_COUNT}:supported=${maxStorageBuffersPerShaderStage}`,
       );
     }
-    requiredLimits.maxStorageBuffersPerShaderStage = BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT;
+    requiredLimits.maxStorageBuffersPerShaderStage = VOLUME_STORAGE_BUFFER_BINDING_COUNT;
     if (suppliedDevice) {
       device = suppliedDevice;
       const supportedStorageBufferBytes = Math.min(
