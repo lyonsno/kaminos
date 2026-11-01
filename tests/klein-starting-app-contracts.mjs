@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { build } from 'esbuild';
+import { createWebGpuInferenceControl } from '../webgpu-inference-kit/src/inference-control.js';
 
 class Element extends EventTarget {
   value = ''; textContent = ''; disabled = false; hidden = false;
@@ -24,7 +25,7 @@ const model = {
   load() { calls.load++; return new Promise(resolve => { resolveLoad = () => { loaded = true; resolve(); }; }); },
   generate(options) { calls.runs.push(options); return new Promise((resolve, reject) => { resolveRun = resolve; rejectRun = reject; }); },
   async destroy() { calls.destroyed++; }, stop() {},
-  pause() { return new Promise(resolve => { resolvePause = resolve; }); }, async resume() { return 'running'; },
+  pause() { return new Promise(resolve => { resolvePause = resolve; }); }, async resume() { return { status: 'running' }; },
   snapshot() { return { loaded }; },
 };
 const window = new EventTarget();
@@ -72,6 +73,14 @@ assert.equal(elements['progress-label'].textContent, 'Sampling step 1 of 3');
 calls.runs[0].scheduling.onDuty({ label: 'transformer.block.0', queueMs: 8, estimatedFlops: 2e9 });
 assert.equal(elements.operation.textContent, 'transformer.block.0');
 assert.equal(elements['queue-time'].textContent, '8.0 ms');
+elements.pause.dispatchEvent(new Event('click')); await settle();
+const control = createWebGpuInferenceControl({ queue: { onSubmittedWorkDone: async () => {} } });
+resolvePause(await control.pause()); await settle();
+assert.equal(elements.status.textContent, 'Generation paused', 'Klein pause returns the control snapshot, not UniMate toggle text');
+assert.equal(elements.pause.ariaLabel, 'Resume generation');
+elements.pause.dispatchEvent(new Event('click')); await settle();
+assert.equal(elements.status.textContent, 'Generating image');
+await control.resume(); await control.close();
 now = 6000; calls.runs[0].onStep(3, 3); calls.runs[0].onPhase('decode');
 assert.equal(elements.progress.value, null, 'finishing sampling is not image completion');
 assert.equal(elements.status.textContent, 'Decoding image');
@@ -108,7 +117,7 @@ assert.equal(elements.status.textContent, 'Pausing generation');
 calls.runs[2].onPhase('decode');
 assert.equal(elements.status.textContent, 'Pausing generation', 'telemetry must not overwrite control state');
 elements.stop.dispatchEvent(new Event('click'));
-resolvePause('paused'); await settle();
+resolvePause({ status: 'paused' }); await settle();
 assert.equal(elements.status.textContent, 'Stopping generation', 'a late pause must not replace Stop');
 rejectRun(Object.assign(new Error('stopped'), { name: 'AbortError' })); await settle();
 assert.equal(elements.status.textContent, 'Stopped');

@@ -83,7 +83,7 @@ get('pause').addEventListener('click', async () => {
   try {
     const state = await (wasPaused ? klein.resume() : klein.pause());
     if (!running || stopping || current !== request) return;
-    paused = state === 'paused';
+    paused = state?.status === 'paused';
     get('pause').replaceChildren(createElement(paused ? Play : Pause));
     get('pause').title = get('pause').ariaLabel = paused ? 'Resume generation' : 'Pause generation';
     progress.control(paused ? 'Generation paused' : null);
