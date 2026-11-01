@@ -84,6 +84,22 @@ export function surfelNormals(field){
   return out;
 }
 
+// Replace a surfel field's normals with world-space normals sampled at each surfel's world position
+// (for example from the run's hero mesh via createHeroNormalSampler). Where sampleWorldNormal(p, n, diameter)
+// returns null, the surfel keeps its own normal; normals facing away from the surfel's side are turned back.
+export function sampleSurfelNormals(field,sampleWorldNormal){
+  const pos=surfelPositions(field),nor=surfelNormals(field),diameter=2*field.radiusVoxels/field.resolution;
+  const normals=new Uint8Array(field.count*2);let sampled=0,unsampled=0;
+  for(let i=0;i<field.count;i++){
+    const p=[pos[i*3],pos[i*3+2],-pos[i*3+1]],n=[nor[i*3],nor[i*3+2],-nor[i*3+1]];
+    let h=sampleWorldNormal(p,n,diameter);
+    const l=h&&Math.hypot(h[0],h[1],h[2]);
+    if(!(l>0)){h=n;unsampled++;}else{h=[h[0]/l,h[1]/l,h[2]/l];if(h[0]*n[0]+h[1]*n[1]+h[2]*n[2]<0)h=[-h[0],-h[1],-h[2]];sampled++;}
+    octEncode(h[0],-h[2],h[1],normals,i*2);
+  }
+  return {field:{...field,normals},sampled,unsampled,diameter};
+}
+
 // Average each k-cube of surfels into one. parent[i] is the merged surfel source surfel i belongs to.
 export function mergeSurfelLevel(field,factor){
   if(!Number.isSafeInteger(factor)||factor<1)throw RangeError('integer merge factor required');
@@ -176,7 +192,7 @@ function fieldFromViews(extension,viewBytes){
 }
 
 // one triangle per surfel with the area of a disc of radius r (side 2.45 r), turned to face the normal
-function surfelTriangles(field){
+export function surfelTriangles(field){
   const pos=surfelPositions(field),nor=surfelNormals(field),r=field.radiusVoxels/field.resolution,R=2.45*r/Math.sqrt(3);
   const positions=new Float32Array(field.count*9),colors=new Uint8Array(field.count*12);
   for(let i=0;i<field.count;i++){

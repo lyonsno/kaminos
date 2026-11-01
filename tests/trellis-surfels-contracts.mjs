@@ -210,3 +210,26 @@ test('a surfel GLB names its frame: TRELLIS source space, placed by the same nod
   assert.deepEqual(json.nodes[0].matrix,extension.frame.nodeMatrix,'the node carries the matrix the frame names');
   assert.equal(extension.occupancy,'surface','the cells are the decoded surface shell, not filled mass');
 });
+
+test('sampleSurfelNormals replaces surfel normals from a world-space sampler through the TRELLIS node matrix and keeps unsampled surfels on their own normal',async()=>{
+  const {sampleSurfelNormals}=await import('../trellis-surfels.mjs');
+  const field=buildSurfelField(fixture()),seen=[];
+  // The sheet faces +z in source space, which is -y in world space under (x,y,z) -> (x,z,-y).
+  // Supply a world normal tilted toward +x and -y (or reversed to +y to verify sign alignment), and null on the 5th surfel.
+  const worldTarget=[0.6,-0.8,0];
+  const {field:sampled,sampled:hitCount,unsampled}=sampleSurfelNormals(field,(p,n,diameter)=>{
+    seen.push({p,n,diameter});
+    if(seen.length===5)return null;
+    return seen.length%2?worldTarget:worldTarget.map(v=>-v);
+  });
+  assert.equal(hitCount,4);assert.equal(unsampled,1);
+  assert.ok(Math.abs(seen[0].diameter-2*field.radiusVoxels/field.resolution)<1e-9);
+  const back=surfelNormals(sampled),orig=surfelNormals(field);
+  // World (0.6, -0.8, 0) corresponds to source (0.6, 0, 0.8) (or (-0.6, 0, -0.8) depending on sheet normal sign).
+  for(let i=0;i<4;i++){
+    const nx=back[i*3],ny=back[i*3+1],nz=back[i*3+2],w=[nx,nz,-ny];
+    const dot=Math.abs(w[0]*worldTarget[0]+w[1]*worldTarget[1]+w[2]*worldTarget[2]);
+    assert.ok(dot>0.995,`surfel ${i} world normal ${w} matches target ${worldTarget}`);
+  }
+  assert.deepEqual([...back.subarray(12,15)],[...orig.subarray(12,15)],'unsampled surfel keeps its own normal');
+});

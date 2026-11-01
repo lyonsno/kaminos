@@ -31,3 +31,11 @@ test('no hero, no tiers: a surfels-only run is skipped with a reason',async()=>{
   const report=await runGenerationLevels({...inputs(),source:null,WorkerClass:FakeWorker});
   assert.equal(report.phase,'skipped');assert.match(report.reason,/no stored hero mesh/);
 });
+
+test('when decode.coordinates is present, the runner requests x4, x8, x16 surfel levels and transfers the coordinate buffer',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',surfelFactors:m.surfelFactors}});};
+  const inp=inputs();inp.decode.coordinates=new Int32Array(9);
+  const report=await runGenerationLevels({...inp,source:'c'.repeat(64),WorkerClass:FakeWorker});
+  assert.deepEqual(report.surfelFactors,[4,8,16]);
+  assert.ok(FakeWorker.last.transfer.includes(inp.decode.coordinates.buffer));
+});

@@ -297,7 +297,7 @@ async function buildRunSurfels({runtime,out,rawMesh,withForeground,provenance}){
       const surfelGlb=encodeSurfelGLB(field,{provenance});
       // The decode and material, as copies the cleanup cannot take away, for the GI proxy tiers built
       // once the finished mesh is stored (generation-levels-runner.mjs).
-      const levelInputs={decode:{vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice()},
+      const levelInputs={decode:{vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice(),coordinates:new Int32Array(gc)},
         materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
       return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution},levelInputs};
     });

@@ -83,96 +83,58 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   return {pixels, tangents, coveredPixels, unsampled, maxDegrees, texelSize};
 }
 
-// Eigenvector of the largest eigenvalue of a symmetric 3x3 [a00 a01 a02 a11 a12 a22], in closed form
-// (trigonometric eigenvalues, then the strongest cross product of the rows of A - lambda I): no seed,
-// so nothing about face order can steer it. Null when A is zero.
-function dominantAxis(a00, a01, a02, a11, a12, a22) {
-  const p1 = a01*a01 + a02*a02 + a12*a12, trace = a00 + a11 + a22;
-  if (!(trace > 0)) return null;
-  let lambda;
-  if (p1 <= 1e-30 * trace * trace) lambda = Math.max(a00, a11, a22);
-  else {
-    const q = trace / 3, p = Math.sqrt(((a00-q)**2 + (a11-q)**2 + (a22-q)**2 + 2*p1) / 6);
-    const b00 = (a00-q)/p, b11 = (a11-q)/p, b22 = (a22-q)/p, b01 = a01/p, b02 = a02/p, b12 = a12/p;
-    const r = Math.max(-1, Math.min(1, (b00*(b11*b22-b12*b12) - b01*(b01*b22-b12*b02) + b02*(b01*b12-b11*b02)) / 2));
-    lambda = q + 2 * p * Math.cos(Math.acos(r) / 3);
-  }
-  const r0 = [a00-lambda, a01, a02], r1 = [a01, a11-lambda, a12], r2 = [a02, a12, a22-lambda];
-  const cr = (u, v) => [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
-  let best = null, size = 0;
-  for (const c of [cr(r0, r1), cr(r0, r2), cr(r1, r2)]) { const l = Math.hypot(...c); if (l > size) { size = l; best = c; } }
-  if (best && size > 1e-12 * trace * trace) return best.map(x => x / size);
-  // A repeated largest eigenvalue: every row of A - lambda I is nearly parallel, or zero; take the
-  // unit axis whose diagonal entry is largest (any vector in that eigenspace is equally dominant).
-  const k = a00 >= a11 && a00 >= a22 ? 0 : a11 >= a22 ? 1 : 2, v = [0, 0, 0]; v[k] = 1; return v;
-}
-
-// Shading normals for a surface whose winding is not consistent (TRELLIS's raw decode): each vertex
-// takes the dominant axis of its faces' area-weighted normal outer products, which neither the
-// winding nor the face order can change. The result is an axis: its sign is arbitrary per vertex, so
-// sample it with createHeroNormalSampler({unoriented: true}).
-export function windingFreeVertexNormals(vertices, faces) {
-  const n = vertices.length / 3, m = new Float32Array(n * 6);
-  for (let t = 0; t < faces.length; t += 3) {
-    const a = faces[t]*3, b = faces[t+1]*3, c = faces[t+2]*3;
-    const ux = vertices[b]-vertices[a], uy = vertices[b+1]-vertices[a+1], uz = vertices[b+2]-vertices[a+2], wx = vertices[c]-vertices[a], wy = vertices[c+1]-vertices[a+1], wz = vertices[c+2]-vertices[a+2];
-    let x = uy*wz-uz*wy, y = uz*wx-ux*wz, z = ux*wy-uy*wx; const l = Math.hypot(x, y, z); if (!(l > 0)) continue;
-    const area = l / 2; x /= l; y /= l; z /= l;
-    for (const v of [faces[t], faces[t+1], faces[t+2]]) {
-      const o = v * 6; m[o] += area*x*x; m[o+1] += area*x*y; m[o+2] += area*x*z; m[o+3] += area*y*y; m[o+4] += area*y*z; m[o+5] += area*z*z;
-    }
-  }
-  const out = new Float32Array(n * 3);
-  for (let v = 0; v < n; v++) { const o = v * 6, axis = dominantAxis(m[o], m[o+1], m[o+2], m[o+3], m[o+4], m[o+5]); if (axis) out.set(axis, v * 3); }
-  return out;
-}
-
-// The source's interpolated shading normal for a level point: the nearest source surface hit by a
-// ray along the level normal (both ways) within `reach`, else the closest source point. Looking
-// along the normal keeps a nearby strand or sheet beside the point (fur, fins) from standing in
-// for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
+// The source's normal for a level point: the nearest source surface hit by a ray along the level
+// normal (both ways) within `reach` (and within `maxTexels * texelSize` when `texelSize > 0`), or
+// null when nothing is within reach so the texel keeps the level's own smooth normal instead of
+// projecting an unrelated nearby detail across an air gap. Looking along the normal keeps a nearby
+// strand or sheet beside the point (fur, fins) from standing in for the surface the level approximates
+// there. THREE and MeshBVH are passed in by the caller.
 // With `footprint`, the normal is averaged over a 3x3 grid across the texel in the surface plane,
-// so detail finer than a texel (fur) shades as its average rather than as one aliased sample.
-// With `unoriented`, vertex normals are axes (windingFreeVertexNormals): each is turned to the hit
-// face's side before they are blended.
-export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false, bvh: prebuilt = null, unoriented = false}) {
-  if (!normals) throw Error('source has no shading normals');
-  if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
+// so detail finer than a texel (fur, or raw-decode facets) shades as its average rather than as one
+// aliased sample. With `faceNormals`, hit triangles supply their geometric face normals directly
+// (for TRELLIS's raw decode, whose face winding is inconsistent), turned toward the level normal.
+export function createHeroNormalSampler({hero: {vertices, faces, normals = null}, THREE, MeshBVH, reach = Infinity, maxTexels = reach === Infinity ? 2 : Infinity, footprint = false, bvh: prebuilt = null, faceNormals = false}) {
+  if (!normals && !faceNormals) throw Error('source has no shading normals');
+  if (!(reach >= 0) || !(maxTexels > 0)) throw Error('reach must be non-negative and maxTexels positive');
   // A caller that already built a BVH over these same vertices and faces passes it as `bvh`.
   let bvh = prebuilt;
   if (!bvh) { const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1)); bvh = new MeshBVH(geometry); }
-  const ray = new THREE.Ray(), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
+  const ray = new THREE.Ray(), tri = new THREE.Triangle(), weights = new THREE.Vector3();
   const corner = i => new THREE.Vector3(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
   const normalAt = (face, at) => {
     const v = [0, 1, 2].map(k => faces[face * 3 + k]);
-    tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(at, weights);
+    tri.set(corner(v[0]), corner(v[1]), corner(v[2]));
+    if (faceNormals) {
+      tri.getNormal(weights);
+      return (weights.x || weights.y || weights.z) ? [weights.x, weights.y, weights.z] : null;
+    }
+    tri.getBarycoord(at, weights);
     const w = [weights.x, weights.y, weights.z];
     if (!w.every(Number.isFinite)) return null;
-    let sign = [1, 1, 1];
-    if (unoriented) { const f = new THREE.Vector3(); tri.getNormal(f);
-      sign = v.map(vi => normals[vi*3]*f.x + normals[vi*3+1]*f.y + normals[vi*3+2]*f.z < 0 ? -1 : 1); }
-    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + sign[k] * w[k] * normals[vi * 3 + a], 0));
+    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * normals[vi * 3 + a], 0));
   };
-  const sample = (p, n) => {
+  const sample = (p, n, texelSize = 0) => {
+    const limit = Math.min(reach, maxTexels < Infinity && texelSize > 0 ? maxTexels * texelSize : Infinity);
+    if (!n || !(limit > 0 && limit < Infinity)) return null;
     let best = null;
-    if (n && reach > 0) for (const side of [1, -1]) {
+    for (const side of [1, -1]) {
       ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
       const h = bvh.raycastFirst(ray, THREE.DoubleSide);
-      if (h && h.distance <= reach && (!best || h.distance < best.distance)) best = h;
+      if (h && h.distance <= limit && (!best || h.distance < best.distance)) best = h;
     }
-    if (best) return normalAt(best.faceIndex, best.point);
-    bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
-    return normalAt(hit.faceIndex, hit.point);
+    if (!best) return null;
+    const out = normalAt(best.faceIndex, best.point);
+    return out && faceNormals && dot(out, n) < 0 ? [-out[0], -out[1], -out[2]] : out;
   };
-  const method = 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal';
+  const method = `ray along the level normal within reach (both ways, nearest hit), else level normal; ${faceNormals ? 'face geometric normal' : 'interpolated shading normal'}`;
   if (!footprint) { sample.method = method; return sample; }
   const averaged = (p, n, texelSize) => {
-    if (!(texelSize > 0) || !n) return sample(p, n);
+    if (!(texelSize > 0) || !n) return sample(p, n, texelSize);
     const u = unit(cross(n, Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])), v = cross(n, u), sum = [0, 0, 0], step = texelSize / 3;
     let any = false;
     for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
-      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n), hn = h && unit(h);
+      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n, texelSize), hn = h && unit(h);
       if (!hn) continue;
       const side = dot(hn, n) < 0 ? -1 : 1; for (let a = 0; a < 3; a++) sum[a] += side * hn[a]; any = true;
     }

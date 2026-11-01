@@ -132,10 +132,14 @@ test('hero sampler looks along the level normal: a nearby strand does not stand 
   const sample = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.02});
   const n = sample([0, 0, 0.004], [0, 0, 1]); // the strand is 3 mm away, the body 4 mm below
   assert.ok(n[2] > 0.99, `body normal expected, got ${n}`);
-  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal');
-  // Out of reach along the normal: falls back to the closest point (here the strand).
+  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else level normal; interpolated shading normal');
+  // Out of reach along the normal: returns null (texel keeps the level's own normal) instead of grabbing the nearby strand via closest-point.
   const far = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.001})([0, 0, 0.004], [0, 0, 1]);
-  assert.ok(far[0] > 0.99, `closest-point fallback expected, got ${far}`);
+  assert.equal(far, null);
+  // Default 2-texel distance gate: hits within 2 * texelSize are sampled; beyond 2 * texelSize returns null.
+  const gated = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH});
+  assert.ok(gated([0, 0, 0.004], [0, 0, 1], 0.003)?.[2] > 0.99, 'within 2 texels (6 mm >= 4 mm)');
+  assert.equal(gated([0, 0, 0.004], [0, 0, 1], 0.0015), null, 'beyond 2 texels (3 mm < 4 mm): no cross-gap projection');
 });
 
 test('the bake tells the sampler how large a texel is on the surface', () => {
@@ -164,53 +168,28 @@ test('with a footprint the hero sampler averages detail finer than a texel inste
   assert.match(footprint.method, /averaged over the texel footprint/);
 });
 
-// Raw-decode winding is not consistent: shading normals must not depend on it (review of ed5c25f7f, M1).
-test('decode shading normals survive inconsistent winding: a shallow fold samples the same up to sign', async () => {
-  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
-  const a = Math.PI / 18, vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,-Math.cos(a),Math.sin(a)]);
-  const sample = faces => createHeroNormalSampler({hero: {vertices, faces, normals: windingFreeVertexNormals(vertices, faces)}, THREE, MeshBVH, reach: 0.1, footprint: true, unoriented: true})([0.3, 0.01, 0], [0, 0, 1], 0.001);
-  const consistent = unit(sample(new Uint32Array([0,1,2, 1,0,3]))), reversed = unit(sample(new Uint32Array([0,1,2, 0,1,3])));
-  assert.ok(degrees(consistent, reversed) < 0.5, `${consistent} vs ${reversed}`);
-  assert.ok(degrees(consistent, unit([0, Math.sin(a / 2), Math.cos(a / 2)])) < 2, `${consistent}`);
+// Raw-decode winding is not consistent: face geometric normals averaged over the 3x3 texel footprint
+// (turned toward the level normal before summing) neither cancel across opposite windings nor depend on face order.
+test('decode face normals + 3x3 footprint survive inconsistent winding and face order, with no per-vertex eigensolve', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), mod = await import('../lod-normal-bake.mjs');
+  assert.equal(mod.windingFreeVertexNormals, undefined, 'per-vertex normal eigensolve removed');
+  const {createHeroNormalSampler} = mod;
+  const a = Math.PI / 18, vertices = new Float32Array([-1,0,0, 1,0,0, 0,1,0, 0,-Math.cos(a),Math.sin(a)]);
+  // Point near the fold at y = 0 with a texel footprint spanning both triangles across y = 0.
+  const sample = faces => createHeroNormalSampler({hero: {vertices, faces}, THREE, MeshBVH, reach: 0.1, footprint: true, faceNormals: true})([0, 0.001, 0.01], [0, 0, 1], 0.02);
+  const consistent = unit(sample(new Uint32Array([0,1,2, 1,0,3]))), reversed = unit(sample(new Uint32Array([0,1,2, 0,1,3]))), swapped = unit(sample(new Uint32Array([0,1,3, 0,1,2])));
+  assert.ok(degrees(consistent, reversed) < 1e-6, `${consistent} vs ${reversed}`);
+  assert.ok(degrees(consistent, swapped) < 1e-6, `${consistent} vs ${swapped}`);
+  // 6 of 9 footprint samples hit y >= 0 (normal [0, 0, 1]) and 3 hit y < 0 (normal [0, sin a, cos a]).
+  const expected = unit([0, 3 * Math.sin(a), 6 + 3 * Math.cos(a)]);
+  assert.ok(degrees(consistent, expected) < 0.2, `${consistent} vs ${expected}`);
 });
 
-test('decode shading normals: a flat edge between oppositely wound faces does not cancel', async () => {
-  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
-  const vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,-1,0]), faces = new Uint32Array([0,1,2, 0,1,3]); // second face reversed
-  const normals = windingFreeVertexNormals(vertices, faces);
-  for (let v = 0; v < 4; v++) assert.ok(Math.abs(Math.abs(normals[v*3+2]) - 1) < 1e-6, `vertex ${v}: ${normals.subarray(v*3, v*3+3)}`);
-  const n = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.1, footprint: true, unoriented: true})([0.01, 0.01, 0.001], [0, 0, 1], 0.001);
-  assert.ok(n && degrees(unit(n), [0, 0, 1]) < 0.5, `${n}`);
-});
-
-test('decode shading normals take the dominant axis whatever the face order (confirmation review M2)', async () => {
-  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
-  const vertices = new Float32Array([0,0,0, 0,0,1, 0,-1,0, 1.6,-1.2,0, -1.6,-1.2,0, 3.2,-2.4,-1, -3.2,-2.4,-1]);
-  const run = order => { const faces = new Uint32Array(order), normals = windingFreeVertexNormals(vertices, faces);
-    const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1));
-    const s = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, bvh: new MeshBVH(geometry), reach: 0.1, footprint: true, unoriented: true})([0.0001, -0.001, 0.001], [1, 0, 0], 0.0001);
-    return {axis: [...normals.subarray(0, 3)], sample: unit(s)}; };
-  const a = run([0,1,2, 0,1,3, 0,1,4, 0,3,5, 0,4,6]), b = run([0,1,3, 0,1,4, 0,1,2, 0,3,5, 0,4,6]);
-  // Vertex 0's accumulated matrix is diag(1.94, 2.56, 0): its dominant axis is y.
-  for (const r of [a, b]) assert.ok(degrees(r.axis, [0, 1, 0]) < 0.5, `axis ${r.axis}`);
-  assert.ok(degrees(a.sample, b.sample) < 0.5, `${a.sample} vs ${b.sample}`);
-});
-
-test('decode axes are the dominant direction of random vertex fans, under any face order', async () => {
-  const {windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
-  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  for (let trial = 0; trial < 200; trial++) {
-    const k = 3 + Math.floor(rnd() * 6), vertices = new Float32Array((k + 1) * 3), order = [];
-    for (let i = 1; i <= k; i++) { vertices.set([rnd() * 2 - 1, rnd() * 2 - 1, (rnd() * 2 - 1) * 0.6], i * 3); }
-    for (let i = 1; i <= k; i++) order.push(rnd() < 0.5 ? [0, i, i % k + 1] : [0, i % k + 1, i]); // random winding
-    const axis = [...windingFreeVertexNormals(vertices, new Uint32Array(order.flat())).subarray(0, 3)];
-    const shuffled = [...order].sort(() => rnd() - 0.5), again = [...windingFreeVertexNormals(vertices, new Uint32Array(shuffled.flat())).subarray(0, 3)];
-    assert.ok(degrees(axis, again) < 0.5, `trial ${trial}: order changed the axis`);
-    // Rayleigh quotient of the accumulated matrix: the axis must beat every sampled direction.
-    const q = d => order.reduce((sum, [a, b, c]) => { const p = i => [...vertices.subarray(i * 3, i * 3 + 3)];
-      const u = p(b).map((x, j) => x - p(a)[j]), w = p(c).map((x, j) => x - p(a)[j]), n = [u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]], l = Math.hypot(...n);
-      return l ? sum + (l / 2) * ((n[0]*d[0] + n[1]*d[1] + n[2]*d[2]) / l) ** 2 : sum; }, 0);
-    const best = q(axis);
-    for (let s = 0; s < 300; s++) { const d = unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]); assert.ok(q(d) <= best * (1 + 1e-4) + 1e-9, `trial ${trial}: a direction beats the axis`); }
-  }
+test('decode face normals: a flat edge between oppositely wound coplanar faces never cancels', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
+  const vertices = new Float32Array([-1,0,0, 1,0,0, 0,1,0, 0,-1,0]), faces = new Uint32Array([0,1,2, 0,1,3]); // second face reversed
+  const sampler = createHeroNormalSampler({hero: {vertices, faces}, THREE, MeshBVH, reach: 0.1, footprint: true, faceNormals: true});
+  const n = sampler([0, 0, 0.001], [0, 0, 1], 0.02);
+  assert.ok(n && degrees(unit(n), [0, 0, 1]) < 1e-5, `${n}`);
+  assert.match(sampler.method, /face geometric normal.*averaged over the texel footprint/);
 });

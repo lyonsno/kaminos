@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {SCHEMA, compareView, aggregate, viewDirections} from '/lod-image-compare.mjs';
+import {trellisSurfelsGLTFPlugin} from '/trellis-surfels.mjs';
 const q = new URLSearchParams(location.search), res = +(q.get('res') || 512), sameSurface = +(q.get('same') || 0.01), panel = +(q.get('panel') || 192);
 const refSha = q.get('ref'), levelSha = q.get('level');
 if (!/^[a-f0-9]{64}$/.test(refSha || '') || !/^[a-f0-9]{64}$/.test(levelSha || '')) throw Error('ref and level must be sha256 of meshes in generated-meshes');
@@ -34,13 +35,20 @@ const load = async sha => {
   const bytes = await response.arrayBuffer();
   const got = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
   if (got !== sha) throw Error(`mesh ${sha} read back with sha256 ${got}`);
-  return (await new GLTFLoader().parseAsync(bytes, '')).scene;
+  const loader = new GLTFLoader().register(trellisSurfelsGLTFPlugin(THREE, {levels: [1], viewportHeight: res}));
+  return (await loader.parseAsync(bytes, '')).scene;
 };
 const [ref, lvl] = await Promise.all([load(refSha), load(levelSha)]);
 const box = new THREE.Box3().setFromObject(ref), center = box.getCenter(new THREE.Vector3()), diagonal = box.getSize(new THREE.Vector3()).length(), r = diagonal / 2;
 // Depth pass: linear view depth in r (0 where nothing is drawn).
 const depthMat = new THREE.ShaderMaterial({side: THREE.DoubleSide,
-  vertexShader: `varying vec3 vView; void main(){ vec4 v = modelViewMatrix * vec4(position,1.0); vView = v.xyz; gl_Position = projectionMatrix * v; }`,
+  vertexShader: `varying vec3 vView; void main(){
+#ifdef USE_INSTANCING
+  vec4 v = modelViewMatrix * instanceMatrix * vec4(position,1.0);
+#else
+  vec4 v = modelViewMatrix * vec4(position,1.0);
+#endif
+  vView = v.xyz; gl_Position = projectionMatrix * v; }`,
   fragmentShader: `varying vec3 vView; void main(){ gl_FragColor = vec4(-vView.z, 0.0, 0.0, 1.0); }`});
 const depthOf = root => { const s = new THREE.Scene(); s.overrideMaterial = depthMat; s.add(root.clone(true)); return s; };
 // Normal pass: three's own MeshNormalMaterial, so a level's normal map and tangents are decoded

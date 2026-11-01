@@ -81,13 +81,28 @@ test('p95 is the nearest-rank 95th percentile', () => {
   assert.deepEqual(stats([]), {max: 0, p95: 0, mean: 0, count: 0});
 });
 
-test('26 distinct unit view directions; aggregate keeps one entry per channel', () => {
+test('26 distinct unit view directions; aggregate keeps one entry per channel, including within-gate vs projected normals', () => {
   const dirs = viewDirections();
   assert.equal(dirs.length, 26);
   assert.equal(new Set(dirs.map(d => d.map(v => v.toFixed(3)).join())).size, 26);
   for (const d of dirs) assert.ok(Math.abs(Math.hypot(...d) - 1) < 1e-12);
   const {view} = compareView({reference: frame(2, surface([0])), level: frame(2, surface([0, 1])), res: 2, diagonal: 1});
   const agg = aggregate([view, view]);
-  assert.deepEqual(Object.keys(agg), ['silhouetteMismatch', 'differentSurface', 'depthP95', 'normalP95Degrees', 'normalMeanDegrees', 'albedoP95']);
+  assert.deepEqual(Object.keys(agg), ['silhouetteMismatch', 'differentSurface', 'depthP95', 'normalP95Degrees', 'normalMeanDegrees', 'normalWithinGateMeanDegrees', 'normalProjectedMeanDegrees', 'albedoP95']);
   assert.equal(agg.silhouetteMismatch.mean, 0.5);
+});
+
+test('same-surface normal error partitions into within-gate (<= closeSurface) and projected (closeSurface..sameSurface)', () => {
+  // Pixel 0: depth error 0.001 (<= 0.0025 closeSurface), normal error 0 deg.
+  // Pixel 1: depth error 0.006 (between 0.0025 and 0.01 sameSurface: remesh bulge), normal error 90 deg.
+  // Pixel 2: depth error 0.02 (> 0.01 sameSurface: different surface), excluded from all normal buckets.
+  const ref = frame(2, {0: {depth: 5, normal: [0, 0, 1]}, 1: {depth: 5, normal: [0, 0, 1]}, 2: {depth: 5, normal: [0, 0, 1]}});
+  const lvl = frame(2, {0: {depth: 5.01, normal: [0, 0, 1]}, 1: {depth: 5.06, normal: [0, 1, 0]}, 2: {depth: 5.2, normal: [1, 0, 0]}});
+  const {view} = compareView({reference: ref, level: lvl, res: 2, diagonal: 10, sameSurface: 0.01, closeSurface: 0.0025});
+  assert.equal(view.normalDegrees.count, 2);
+  assert.equal(view.normalWithinGateDegrees.count, 1);
+  assert.equal(view.normalProjectedDegrees.count, 1);
+  assert.equal(view.normalWithinGateDegrees.count + view.normalProjectedDegrees.count, view.normalDegrees.count);
+  assert.ok(view.normalWithinGateDegrees.mean < 1e-4);
+  assert.ok(Math.abs(view.normalProjectedDegrees.mean - 90) < 1e-4);
 });

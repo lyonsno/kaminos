@@ -17,12 +17,15 @@ import path from 'node:path';
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const input = args.get('--input'), source = args.get('--source'), server = args.get('--server'), reportPath = args.get('--report');
-const targets = (args.get('--targets') || '5000,1000,500').split(',').map(Number), replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero';
-const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, server, targets, startedAt: new Date().toISOString(), tiers: []};
+const rawTargets = args.get('--targets'), targets = rawTargets === 'none' ? [] : (rawTargets || '5000,1000,500').split(',').filter(Boolean).map(Number);
+const surfelFactors = (args.get('--surfel-factors') || '').split(',').filter(Boolean).map(Number);
+const replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero';
+const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, server, targets, ...(surfelFactors.length ? {surfelFactors} : {}), startedAt: new Date().toISOString(), tiers: []};
 const save = () => reportPath && fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
 try {
   if (!input || !server || !reportPath || !/^[a-f0-9]{64}$/.test(source || '')) throw Error('--input, --source <sha256>, --server and --report are required');
-  if (!targets.every(t => Number.isSafeInteger(t) && t > 0)) throw Error('--targets must be positive integers');
+  if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
+    throw Error('--targets / --surfel-factors must be positive integers');
   save();
   // Loaded here so a missing dependency still ends in a written failure report.
   report.phase = 'load-modules'; save();
@@ -40,7 +43,7 @@ try {
   const materialFields = {features: read('material.features.f32', Float32Array), coordinates: read('material.coordinates.i32', Int32Array), resolution: meta.materialResolution};
   // The same steps the page runs at Generate (lod-generation-levels.mjs), with Node's worker and fetch.
   await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source, server, THREE, MeshBVH, finish: finishTrellisMesh,
-    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, replace, normalMaps, input: meta.source ?? input, route: meta.route,
+    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, surfelFactors, replace, normalMaps, input: meta.source ?? input, route: meta.route,
     reference, report, onPhase: save});
   if (report.error) throw Object.assign(Error(report.error.message), {stack: report.error.stack});
 } catch (error) {

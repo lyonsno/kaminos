@@ -176,3 +176,45 @@ test('the module declares the references it accepts, and that declaration is wha
     THREE, MeshBVH, finish: () => {}, targets: [200], reference: 'surfels', fetch: async () => { throw Error('no request expected'); }});
   assert.match(report.error.message, /reference must be one of hero, raw-decode/);
 });
+
+test('surfelFactors builds, measures and registers merged surfel levels with hero normals under SURFEL_TIER_ROUTE', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh');
+  const {prepareGenerationLevels, SURFEL_TIER_ROUTE} = await import('../lod-generation-levels.mjs');
+  const {readSurfelGLBExtension} = await import('../trellis-surfels.mjs');
+  assert.equal(SURFEL_TIER_ROUTE, 'trellis-surfels+hero-normals');
+  // A sheet across a 32-grid at z=16, matching a hero mesh at the same world bounds.
+  const resolution = 32, coords = [[2,2,16],[29,2,16],[2,29,16],[29,29,16]];
+  const vertices = new Float32Array(coords.flatMap(c => c.map(v => (v + 0.5) / resolution - 0.5)));
+  const triangles = new Uint32Array([0,1,3, 0,3,2]);
+  const materialFields = {resolution, coordinates: new Int32Array(coords.flat()), features: new Float32Array(coords.flatMap(() => [0.2, -0.2, 0.4, -1, 0.6, 1]))};
+  // Hero GLB covering the same sheet in source space under the TRELLIS node matrix, with tilted shading normals.
+  const nrm = new Float32Array(coords.flatMap(() => [0.6, 0, 0.8])), parts = [vertices, triangles, nrm];
+  const bin = new Uint8Array(parts.reduce((n, a) => n + a.byteLength, 0)); let at = 0; const bufferViews = [];
+  for (const a of parts) { bin.set(new Uint8Array(a.buffer), at); bufferViews.push({buffer: 0, byteOffset: at, byteLength: a.byteLength}); at += a.byteLength; }
+  const doc = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix: [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, NORMAL: 2}, indices: 1}]}], buffers: [{byteLength: bin.length}], bufferViews,
+    accessors: [{bufferView: 0, componentType: 5126, count: 4, type: 'VEC3'}, {bufferView: 1, componentType: 5125, count: 6, type: 'SCALAR'}, {bufferView: 2, componentType: 5126, count: 4, type: 'VEC3'}]};
+  const text = new TextEncoder().encode(JSON.stringify(doc)), tl = Math.ceil(text.length / 4) * 4, hero = new Uint8Array(28 + tl + bin.length), dv = new DataView(hero.buffer);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, hero.length, true); dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true);
+  hero.fill(32, 20, 20 + tl); hero.set(text, 20); dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true); hero.set(bin, 28 + tl);
+  const stored = [], registered = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
+  const fetch = async (url, init = {}) => {
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/ingest-mesh')) { const bytes = new Uint8Array(await new Response(init.body).arrayBuffer()); stored.push(bytes); return goodIngest(bytes, json); }
+    if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registered.push(body); return goodRegister(body, json); }
+    return new Response('unexpected', {status: 500});
+  };
+  const report = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
+    fetch, THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [2, 4]});
+  assert.equal(report.phase, 'done', report.error?.message);
+  assert.equal(registered.length, 2);
+  assert.deepEqual(registered.map(r => r.level.mergeFactor), [2, 4]);
+  for (const [i, r] of registered.entries()) {
+    assert.equal(r.level.route, SURFEL_TIER_ROUTE);
+    assert.equal(r.level.representation, 'trellis-surfels');
+    assert.equal(r.level.error.reference.kind, 'hero');
+    assert.equal(r.level.normalMap.source.sha256, 'd'.repeat(64));
+    const ext = readSurfelGLBExtension(stored[i].buffer.slice(stored[i].byteOffset, stored[i].byteOffset + stored[i].byteLength));
+    assert.equal(ext.field.count, r.level.faces);
+  }
+});

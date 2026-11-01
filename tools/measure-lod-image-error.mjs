@@ -68,6 +68,8 @@ function viewAccounts(v, direction, res) {
   if (!v || !Array.isArray(v.direction) || v.direction.length !== 3 || v.direction.some((x, k) => !(Math.abs(x - direction[k]) <= 1e-3))) return false;
   if (![v.referenceCoverage, v.silhouetteMismatch, v.differentSurface].every(fraction)) return false;
   if (!statOf(v.depth, n) || !statOf(v.normalDegrees, n) || !statOf(v.albedo, n) || !count(v.normalUndefined?.reference) || !count(v.normalUndefined?.level)) return false;
+  if (!statOf(v.normalWithinGateDegrees, n) || !statOf(v.normalProjectedDegrees, n)) return false;
+  if (v.normalWithinGateDegrees.count + v.normalProjectedDegrees.count !== v.normalDegrees.count) return false;
   const reference = Math.round(v.referenceCoverage * n), both = v.depth.count, same = v.albedo.count;
   // Shared pixels lie within the reference; same-surface pixels within the shared; normals within the same-surface.
   if (both > reference || same > both || v.normalDegrees.count > same || v.normalUndefined.reference > same || v.normalUndefined.level > same) return false;
@@ -120,7 +122,7 @@ export async function measure(args, {browserFor = launchBrowser} = {}) {
       if (!describesMeasurement(r, {source, level: sha, resolution: +(args.res ?? 512), normals: normalMaps ? 'shading+normal-map' : 'shading'}))
         throw Error(`level ${sha}: page result does not describe the requested measurement`);
       // A registered normal map that the render did not use would measure the level without its relief.
-      if (normalMaps && current.get(sha).normalMap && r.normalMapped?.level !== true) throw Error(`level ${sha}: registered normal map was not used by the render`);
+      if (normalMaps && current.get(sha).normalMap && current.get(sha).representation !== 'trellis-surfels' && r.normalMapped?.level !== true) throw Error(`level ${sha}: registered normal map was not used by the render`);
       if (!page.png?.length) throw Error(`level ${sha}: no sheet captured`);
       entry.result = path.join(out, `${sha}.image-error.json`); entry.sheet = path.join(out, `${sha}.image-error.png`);
       fs.writeFileSync(entry.result, JSON.stringify(r, null, 2) + '\n'); fs.writeFileSync(entry.sheet, page.png);
