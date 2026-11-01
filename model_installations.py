@@ -13,6 +13,7 @@ import tempfile
 
 SCHEMA = 'kaminos.model-installations.v1'
 MODELS = {
+    'qwen35': {'env': 'KAMINOS_QWEN35_WEIGHTS_ROOT', 'url': '/qwen35-weights', 'urlField': 'modelUrl', 'label': 'Qwen3.5 native text'},
     'klein': {'env': 'KAMINOS_KLEIN_WEIGHTS_ROOT', 'url': '/klein-weights', 'urlField': 'weightsUrl', 'label': 'FLUX.2 Klein'},
     'flux3': {'env': 'KAMINOS_FLUX3_WEIGHTS_ROOT', 'url': '/flux3-weights', 'urlField': 'weightsUrl', 'label': 'FLUX.3'},
     'pup': {'env': 'KAMINOS_PUP_WEIGHTS_ROOT', 'url': '/pup-weights', 'urlField': 'modelUrl', 'label': 'PUP prompt expansion'},
@@ -136,6 +137,22 @@ def _pup_package(root):
 def check_package(name, root):
     if name in ('klein', 'flux3'):
         _image_package(root, 'flux2' if name == 'klein' else 'flux3')
+    elif name == 'qwen35':
+        manifest = _manifest(root, 'weights.json', 'kaminos.qwen35-text-weights.v1')
+        if not isinstance(manifest.get('config'), dict) or not manifest.get('tensors'):
+            raise ValueError('Native Qwen manifest requires config and tensor records')
+        source = manifest.get('source', {})
+        files = source.get('files')
+        if not isinstance(files, dict) or not files:
+            raise ValueError('Native Qwen manifest requires source files')
+        for filename, record in files.items():
+            if Path(filename).name != filename:
+                raise ValueError('Native Qwen source file must be a basename')
+            _payload(root, filename, record['bytes'])
+        _payload(root, 'tokenizer.json')
+        _payload(root, 'config.json')
+        if hashlib.sha256((root / 'config.json').read_bytes()).hexdigest() != source.get('configSha256'):
+            raise ValueError('Native Qwen config identity mismatch')
     elif name == 'pup':
         _pup_package(root)
     elif name == 'trellisPage':
@@ -201,7 +218,7 @@ class ModelInstallations:
             except (OSError, ValueError, TypeError, AttributeError, KeyError, UnicodeError, RuntimeError) as error:
                 status, reason = 'unavailable', str(error)
         return {'root': str(root) if root else None, 'source': source, 'status': status, 'reason': reason,
-                'installationFile': str(self.path), 'requestedRoot': choice['requested'], 'validation': 'manifest' if name in ('sam3', 'trellisPage') else 'loader-layout'}
+                'installationFile': str(self.path), 'requestedRoot': choice['requested'], 'validation': 'manifest' if name in ('sam3', 'trellisPage', 'qwen35') else 'loader-layout'}
 
     def browser_config(self):
         reports = {name: self.availability(name) for name in MODELS}
@@ -213,8 +230,10 @@ class ModelInstallations:
                 entry['manifestUrl'] += '/tensor-manifest.json'
             if entry is not None and name == 'pup':
                 entry['keepLoadedDefault'] = self.environ.get('KAMINOS_PUP_KEEP_LOADED', '').lower() in ('1', 'true', 'yes')
-            if entry is not None and name == 'trellisPage':
-                manifest = root / 'manifest.json'
+            if entry is not None and name in ('trellisPage', 'qwen35'):
+                manifest = root / ('weights.json' if name == 'qwen35' else 'manifest.json')
+                if name == 'qwen35':
+                    entry['manifestUrl'] = spec['url'] + '/weights.json'
                 try:
                     entry['manifestSha256'] = hashlib.sha256(manifest.read_bytes()).hexdigest() if manifest.is_file() else None
                 except OSError as error:

@@ -1,0 +1,11 @@
+// kaminos-test: node
+import {test} from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../models/qwen3_5/chat-ui.js',import.meta.url),'utf8').replace(/^import .*\n/,'');
+function harness(){
+ const elements=new Map();const element=()=>({value:'',textContent:'',disabled:false,classList:{toggle(){}},append(){},replaceChildren(){}});
+ let fail=false,disposed=false;const rt={identity:{capacity:100,loadMs:1},model:{},errors:[],chat:{send:async()=>({text:'answer',tokenIds:[1],usage:{totalMs:1,reusedInputTokens:0,evaluatedInputTokens:1,firstTokenMs:1}}),snapshot:()=>({committed:true})},dispose:async()=>{disposed=true;}};
+ const window={addEventListener(){}};vm.runInNewContext(source,{window,document:{getElementById:id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element},location:{search:'',href:'http://localhost/'},URL,URLSearchParams,AbortController,structuredClone,fetch:async()=>({ok:true,json:async()=>({qwen35:{mounted:true,modelUrl:'/weights',manifestUrl:'/weights/weights.json',manifestSha256:'sha'}})}),loadChatExample:async()=>rt,withChatAdmission:async(_,work)=>{const result=await work(),lease={status:'held',leaseId:'test'};if(fail)throw Object.assign(Error('handback failed'),{result,lease});return {result,lease};}});
+ return {api:window.qwenChat,fail:()=>{fail=true;},disposed:()=>disposed,status:()=>elements.get('status').textContent};
+}
+test('loaded model remains disposable when admission handback fails',async()=>{const h=harness();h.fail();await assert.rejects(h.api.load(),/handback/);assert.ok(h.api.runtime,'loaded model lost before cleanup');await h.api.unload();assert.equal(h.disposed(),true);assert.equal(h.api.snapshot().admissions.length,1);});
+test('completed turn stays committed when only handback fails',async()=>{const h=harness();await h.api.load();h.fail();await assert.rejects(h.api.send('hello'),/handback/);const r=h.api.snapshot().history[0];assert.equal(r.status,'complete-handback-failed');assert.equal(r.result.text,'answer');assert.doesNotMatch(h.status(),/not been added/);assert.equal(h.api.snapshot().admissions.length,2);});

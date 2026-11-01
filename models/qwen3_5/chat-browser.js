@@ -1,3 +1,4 @@
+import { withGreenroomLease } from '../../greenroom-lease.mjs';
 import { Qwen35TextModel } from './text-model.js';
 import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
 import { createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/inference-control.js';
@@ -40,4 +41,18 @@ export async function loadChatExample({ manifestUrl, manifestSha256, modelUrl, s
       singleTokenKernel:model.singleTokenKernel,decodeAttention:model.decodeAttention,batchDecode:model.batchDecode,
       capacity,loadMs:performance.now()-started}};
   } catch(e) { try { await dispose(); } catch(cleanup) { throw new AggregateError([e,cleanup],'chat load and cleanup failed'); } throw e; }
+}
+
+// Reuse Kaminos page admission. Idle weights/cache retain no execution lease.
+export async function withChatAdmission({post,runId=crypto.randomUUID(),signal=null,onWait=()=>{},unsettledWork=async()=>[]}={},work) {
+  const result=await withGreenroomLease({post,runId,route:'qwen35.text-chat.webgpu.v0',admission:'queue',signal,onWait,unsettledWork,
+    sleep:(ms,signal)=>new Promise((resolve,reject)=>{
+      const cleanup=()=>signal?.removeEventListener('abort',abort);
+      const timer=setTimeout(()=>{cleanup();resolve();},ms);
+      const abort=()=>{clearTimeout(timer);cleanup();reject(Object.assign(Error('GPU wait stopped'),{name:'AbortError'}));};
+      signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
+    })},work);
+  if(result.lease.releaseError||result.lease.state==='kept-blocking'||result.lease.renewError)
+    throw Object.assign(Error('Chat GPU handback failed: '+(result.lease.releaseError??result.lease.renewError)),result);
+  return result;
 }

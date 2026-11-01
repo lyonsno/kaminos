@@ -91,19 +91,25 @@ preserves actual generated IDs and empty thinking prefixes instead of
 re-rendering old turns with the Jinja template. Chat quality on the installed
 BFL PUP image-prompt fine-tune is experimental.
 
-Run the optional standalone browser example with explicit installed weights and
-an existing verified weight manifest:
+Register the existing verified model package (with its matching `weights.json`
+manifest) through Kaminos's shared installation catalog:
 
 ```sh
-node models/qwen3_5/serve-chat.mjs /path/to/weights.json /path/to/model 0 /path/to/chat-server.json
+python3 model_installations.py register qwen35 --root /path/to/model
+python3 serve.py
 ```
 
-The command prints the chat link and writes effective source/model coordinates
-into the caller's receipt. It does not load the GPU model until **Load model**.
+Open `/models/qwen3_5/chat.html` on that Kaminos server. The page resolves the
+registered package through `/api/runtime-config`; the separate `pup` ONNX
+installation remains available. Load and each Send use the server's queued GPU
+admission, releasing the execution lease between turns while retaining weights
+and conversation state. A server without Greenroom reports unconfigured
+admission; an unreachable or broken admission service fails visibly.
+
 The page provides streaming messages, Stop, New conversation, Unload model and
 Save conversation. A blank reply limit uses available model/device context;
 context exhaustion is reported rather than trimming history. Per-turn timing
 and reused/evaluated input counts make repeated interactions useful performance
-observations. This example owns a standalone device; Kaminos host integration
-should supply its existing model/control through the same chat API. Heavy
-local execution follows the shared GPU queue/interactive lease policy.
+observations. Saved conversations include admission receipts. This example
+owns a standalone device; embedding apps can supply their existing model/control
+through the same chat API.
