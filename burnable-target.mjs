@@ -1,7 +1,11 @@
 export function resolveBurnableTarget(objects,id){
  const entry=objects.find(item=>item.id===id);
  if(!entry?.object?.isObject3D)throw Error('Select an existing mesh to make burnable');
- const meshes=[];entry.object.traverse(node=>{if(node.isMesh)meshes.push(node);});
+ const meshes=[];entry.object.traverse(node=>{
+  if(!node.isMesh)return;
+  for(let p=node;p;p=p.parent)if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosEditorHelper||p.userData?.kaminosEditorOnly)return;
+  meshes.push(node);
+ });
  if(meshes.length!==1)throw Error('Burnable wood currently supports one volumetric mesh per object');
  const mesh=meshes[0];
  if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.length)throw Error('Burnable wood requires a static mesh');

@@ -1,7 +1,7 @@
 // Prepare low LOD tiers for one TRELLIS generation and publish them to a Kaminos server.
 //
 //   node tools/prepare-lod-tiers.mjs --input <dir> --source <sha256> --server http://127.0.0.1:8484 \
-//     [--targets 5000,1000,500] [--replace true] [--normal-maps false] [--reference raw-decode] --report <path>
+//     [--targets 25000,10000,5000,1000,500] [--replace true] [--normal-maps false] [--reference raw-decode] --report <path>
 //
 // <dir> holds the generation's raw mesh and material field: vertices.f32, triangles.u32,
 // material.features.f32, material.coordinates.i32 and meta.json {materialResolution}.
@@ -17,7 +17,7 @@ import path from 'node:path';
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const input = args.get('--input'), source = args.get('--source'), server = args.get('--server'), reportPath = args.get('--report');
-const rawTargets = args.get('--targets'), targets = rawTargets === 'none' ? [] : (rawTargets || '5000,1000,500').split(',').filter(Boolean).map(Number);
+const rawTargets = args.get('--targets'), targets = rawTargets === 'none' ? [] : (rawTargets || '25000,10000,5000,1000,500').split(',').filter(Boolean).map(Number);
 const surfelFactors = (args.get('--surfel-factors') || '').split(',').filter(Boolean).map(Number);
 const replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero';
 const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, server, targets, ...(surfelFactors.length ? {surfelFactors} : {}), startedAt: new Date().toISOString(), tiers: []};

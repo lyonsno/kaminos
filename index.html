@@ -11854,6 +11854,7 @@ async function initScene() {
     // current inputs; do not submit retired medium resources or unlit fill.
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
+    updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     sceneBeautyLods ??= createSceneBeautyLodController({
@@ -11864,13 +11865,6 @@ async function initScene() {
       parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
       onUpdate: () => window._kaminosDirty?.(),
     });
-    sceneBeautyLods.update(camera, {
-      viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
-      pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
-        ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
-        : null,
-    });
-    updateSelectionFeedback();
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -11893,9 +11887,15 @@ async function initScene() {
     } else waterFeature.host?.setSceneCamera?.(false);
     syncWaterProxy();
     syncFireProxy();
-    // Shadow passes above see authored casters; only the viewport render sees
-    // wire materials.
-    const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
+    // Shadow passes and collider sync above see authored casters; only the
+    // viewport beauty render pass mounts screen-footprint beauty LODs and wire materials.
+    const beautyFrameOpts = {
+      viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
+      pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
+        ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
+        : null,
+    };
+    const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>sceneBeautyLods.withFrame(camera,beautyFrameOpts,()=>renderWithViewportShading(() => {
       if (waterFeature.host) {
         if(!isSceneItemVisible('water-field')) {
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
@@ -11920,7 +11920,7 @@ async function initScene() {
         sceneFlameHDR.render({frame:ordinarySceneTransportFrame,input:rawSceneOutput,emissionInput:sceneEmissionSource,depthInput:activeSceneDepth,
           matched:document.getElementById('rendering-match-flame-camera').checked,physical:volumePrototype.emissiveCameraState()});
       } else renderPipeline.render();
-    }));
+    })));
     // Copy the surface records this frame's step wrote; queue order puts the
     // copy after the step.
     if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();

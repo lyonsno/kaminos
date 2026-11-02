@@ -229,7 +229,7 @@ export function allocateSceneBeautyLods(candidates = [], {
     const boxes = c.instanceBoxes?.length ? c.instanceBoxes : (c.worldBox ? [c.worldBox] : []);
     const visibleBoxes = boxes.filter(b => boxIntersectsFrustum(b, planes));
     const inFrustum = c.inFrustum != null ? Boolean(c.inFrustum) : (boxes.length === 0 ? true : visibleBoxes.length > 0);
-    const instanceCount = Math.max(1, c.instanceCount ?? (boxes.length || 1));
+    const instanceCount = Math.max(1, c.instanceCount ?? (inFrustum ? (visibleBoxes.length || boxes.length || 1) : (boxes.length || 1)));
     if (!inFrustum) {
       const sorted = [...(c.levels ?? [])].filter(l => Number.isFinite(l?.faces)).sort((a, b) => b.faces - a.faces);
       const coarsest = sorted.at(-1);
@@ -242,6 +242,7 @@ export function allocateSceneBeautyLods(candidates = [], {
         instanceCount,
         heroFaces: c.heroFaces ?? 0,
         activeTier: c.activeTier ?? null,
+        footprintTier: c.footprintTier ?? tierId,
         rungs: [{id: tierId, sha: tierId, faces: coarsest?.faces ?? c.heroFaces ?? 0, pixelError: 0}],
         chosenIndex: 0,
         demotedByBudget: false,
@@ -266,9 +267,10 @@ export function allocateSceneBeautyLods(candidates = [], {
       maxPixelError,
       stat,
       texelWeight,
-      activeTier: c.activeTier,
+      activeTier: c.footprintTier ?? c.activeTier,
       hysteresis,
     });
+    const effectiveFootprintIdx = c.pinned ? 0 : chosenIndex;
     return {
       id: c.id ?? String(order),
       order,
@@ -277,8 +279,9 @@ export function allocateSceneBeautyLods(candidates = [], {
       instanceCount,
       heroFaces: c.heroFaces,
       activeTier: c.activeTier ?? null,
+      footprintTier: rungs[effectiveFootprintIdx].id,
       rungs,
-      chosenIndex: c.pinned ? 0 : chosenIndex,
+      chosenIndex: effectiveFootprintIdx,
       demotedByBudget: false,
     };
   });
@@ -322,6 +325,7 @@ export function allocateSceneBeautyLods(candidates = [], {
     allocations[item.id] = {
       id: item.id,
       tier: rung.id,
+      footprintTier: item.footprintTier,
       faces: rung.faces,
       totalFaces: item.inFrustum ? item.instanceCount * rung.faces : 0,
       instanceCount: item.instanceCount,
@@ -462,7 +466,7 @@ export function allocateShadowCasterLods(candidates = [], {
 }
 
 function cloneBorrowedRung(THREE, node) {
-  const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.material) : new THREE.Group();
+  const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
   copy.position.copy(node.position);
   copy.quaternion.copy(node.quaternion);
   copy.scale.copy(node.scale);
@@ -543,40 +547,49 @@ export function createSceneBeautyLodController({
     delete root.userData.kaminosBeautyLodRestore;
   }
 
+  function releaseRepCopies(entry) {
+    for (const holder of entry.repCopies) {
+      holder.userData?.kaminosReleaseLighting?.();
+      holder.removeFromParent();
+    }
+    entry.repCopies = [];
+  }
+
   function applyDisplayedRung(root, entry) {
     if (entry.displayedTier === 'hero' || !entry.rungs.has(entry.displayedTier)) {
       restoreRootToHero(root, entry);
       return;
     }
     const rungRecord = entry.rungs.get(entry.displayedTier);
-    if (!entry.savedHeroVisibility.size) {
-      for (const child of root.children) {
-        if (isHeroChild(child)) {
+    for (const child of root.children) {
+      if (isHeroChild(child)) {
+        if (!entry.savedHeroVisibility.has(child)) {
           entry.savedHeroVisibility.set(child, child.visible);
-          child.visible = false;
         }
-      }
-    } else {
-      for (const [child] of entry.savedHeroVisibility) {
-        if (child.parent === root) child.visible = false;
+        child.visible = false;
       }
     }
     if (!entry.wrapper || entry.mountedRungSha !== entry.displayedTier) {
+      releaseRepCopies(entry);
       if (entry.wrapper?.parent === root) root.remove(entry.wrapper);
       const wrapper = new THREE.Group();
       wrapper.name = `beauty-lod-${entry.displayedTier.slice(0, 8)}`;
       wrapper.userData.kaminosBeautyLodProxy = true;
       wrapper.add(rungRecord.root);
       entry.wrapper = wrapper;
-      entry.repCopies = [];
       entry.mountedRungSha = entry.displayedTier;
     }
     const repSources = root.children.filter(c => c.userData?.kaminosRepetitionCopy === true && (entry.savedHeroVisibility.get(c) ?? c.visible));
-    while (entry.repCopies.length > repSources.length) entry.repCopies.pop().removeFromParent();
+    while (entry.repCopies.length > repSources.length) {
+      const removed = entry.repCopies.pop();
+      removed.userData?.kaminosReleaseLighting?.();
+      removed.removeFromParent();
+    }
     while (entry.repCopies.length < repSources.length) {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.add(cloneBorrowedRung(THREE, rungRecord.root));
+      holder.userData.kaminosReleaseLighting = surfaceLighting?.registerProxyRoot?.(holder) ?? null;
       entry.repCopies.push(holder);
       entry.wrapper.add(holder);
     }
@@ -607,6 +620,7 @@ export function createSceneBeautyLodController({
           if (m.isMesh) {
             m.castShadow = true;
             m.receiveShadow = true;
+            m.userData.kaminosOriginalMaterial = m.material;
           }
         });
         if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
@@ -662,6 +676,7 @@ export function createSceneBeautyLodController({
     if (!entry) return;
     entry.generation++;
     restoreRootToHero(root, entry);
+    releaseRepCopies(entry);
     for (const r of entry.rungs.values()) {
       r.releaseLighting?.();
       disposeTree(r.root);
@@ -685,6 +700,7 @@ export function createSceneBeautyLodController({
       if (!config.enabled) {
         for (const [root, entry] of entries) {
           entry.activeTier = 'hero';
+          entry.footprintTier = 'hero';
           entry.displayedTier = 'hero';
           restoreRootToHero(root, entry);
         }
@@ -702,9 +718,18 @@ export function createSceneBeautyLodController({
 
       for (const handle of handles) {
         const root = handle.root;
-        if (!root?.parent || !root.visible) continue;
+        if (!root?.parent) continue;
         seenRoots.add(root);
         let entry = entries.get(root);
+        if (!root.visible) {
+          if (entry) {
+            entry.activeTier = 'hero';
+            entry.footprintTier = 'hero';
+            entry.displayedTier = 'hero';
+            restoreRootToHero(root, entry);
+          }
+          continue;
+        }
         if (!entry) {
           const {heroFaces, localBox} = inspectHeroRoot(root);
           entry = {
@@ -714,6 +739,7 @@ export function createSceneBeautyLodController({
             rungs: new Map(),
             inFlight: new Set(),
             activeTier: 'hero',
+            footprintTier: 'hero',
             displayedTier: 'hero',
             mountedRungSha: null,
             wrapper: null,
@@ -750,6 +776,7 @@ export function createSceneBeautyLodController({
           worldDiag: boxDiagonal(instanceBoxes[0]),
           pinned,
           activeTier: entry.activeTier,
+          footprintTier: entry.footprintTier,
         });
       }
 
@@ -760,6 +787,7 @@ export function createSceneBeautyLodController({
       if (!config.enabled) {
         for (const {root, entry} of candidates) {
           entry.activeTier = 'hero';
+          entry.footprintTier = 'hero';
           entry.displayedTier = 'hero';
           restoreRootToHero(root, entry);
         }
@@ -781,6 +809,7 @@ export function createSceneBeautyLodController({
       for (const c of candidates) {
         const alloc = budgetResult.allocations[c.id];
         const targetTier = alloc.tier;
+        c.entry.footprintTier = alloc.footprintTier ?? targetTier;
         c.entry.activeTier = targetTier;
 
         if (targetTier === 'hero') {
@@ -826,6 +855,21 @@ export function createSceneBeautyLodController({
       };
       return lastState;
     },
+    withFrame(camera, options, fn) {
+      const callback = typeof options === 'function' ? options : fn;
+      const opts = typeof options === 'function' ? {} : options;
+      this.update(camera, opts);
+      try {
+        return callback?.(lastState);
+      } finally {
+        this.restoreAllHeroes();
+      }
+    },
+    restoreAllHeroes() {
+      for (const [root, entry] of entries) {
+        restoreRootToHero(root, entry);
+      }
+    },
     withHeroes(fn) {
       const restores = [];
       for (const [root, entry] of entries) {
@@ -848,6 +892,7 @@ export function createSceneBeautyLodController({
       const entry = entries.get(root);
       if (!entry) return;
       entry.activeTier = 'hero';
+      entry.footprintTier = 'hero';
       entry.displayedTier = 'hero';
       restoreRootToHero(root, entry);
     },

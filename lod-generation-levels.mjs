@@ -26,7 +26,7 @@ const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA
   .map(b => b.toString(16).padStart(2, '0')).join('');
 
 export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, server = '', fetch = globalThis.fetch,
-  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
+  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
   reference = 'hero', report = {}, onPhase = () => {}}) {
   const fromHeroGLB = !decode;
   let {vertices, triangles, coordinates: decodeCoordinates} = decode ?? {};

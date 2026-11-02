@@ -330,7 +330,7 @@ test('createSceneBeautyLodController caches resident rungs, never blanks while l
   const objState2 = stateLoaded.objects.find(o => o.id === 'obj-1');
   assert.equal(objState2.displayedTier, objState2.targetTier, 'switches to the coarse tier once loaded');
   assert.equal(heroMesh.visible, false, 'hero mesh is hidden while beauty LOD wrapper is displayed');
-  assert.equal(lightingInstalled.size, 1, 'registered beauty LOD rung with surfaceLighting');
+  assert.equal(lightingInstalled.size, 2, 'registered primary beauty LOD rung and repetition copy holder with surfaceLighting');
 
   // Check repetition copy inside the beauty LOD wrapper
   const wrapper = root.children.find(c => c.userData?.kaminosBeautyLodProxy);
@@ -359,7 +359,7 @@ test('createSceneBeautyLodController caches resident rungs, never blanks while l
 
   // Release disposes cached rungs and unregisters surfaceLighting
   controller.release(root);
-  assert.equal(lightingReleased.size, 1, 'released surfaceLighting registration on disposal');
+  assert.equal(lightingReleased.size, 2, 'released primary and repetition copy surfaceLighting registrations on disposal');
   assert.equal(heroMesh.visible, true, 'restores hero visibility when released');
   casters.dispose();
 });
@@ -403,4 +403,289 @@ test('attachStoredSurfelLevels upgrades x4 to hero normals and adds x8 and x16 l
   chunk.update(camFar);
   const chosenIdx = chunk.levels.findIndex(l => l.object.visible);
   assert.equal(chunk.surfelFactors[chosenIdx], 16, 'far camera selects the newly attached x16 hero-normal surfel level');
+
+  // Review N3: secondary shadow/probe camera calling chunk.update(secondaryCam) must not clobber camFar's hysteresis deadband state
+  const camBand = makeCamera({z: 195, fov: 50}); // factor 16 projects between 1.5 and 1.725 px (inside +15% deadband if active level is x16)
+  const secondaryNearCam = makeCamera({z: 2, fov: 50});
+  chunk.update(secondaryNearCam);
+  assert.equal(chunk.surfelFactors[chunk.levels.findIndex(l => l.object.visible)], 1, 'secondary near camera sees x1');
+  chunk.update(camBand);
+  // Wait: for camFar specifically, let's move camFar from z=220 to z=195 (within +15% deadband of x16) after secondaryNearCam updated the chunk!
+  camFar.position.set(0, 0, 195);
+  camFar.updateMatrixWorld(true);
+  camFar.matrixWorldInverse.copy(camFar.matrixWorld).invert();
+  chunk.update(camFar);
+  assert.equal(chunk.surfelFactors[chunk.levels.findIndex(l => l.object.visible)], 16, 'camFar retains its x16 hysteresis state despite intervening secondaryNearCam update');
+});
+
+test('review M1: createFireShadowCasters allocates and selects GI proxy shadow tiers by flame-domain solid angle under shadowFaceBudget', async () => {
+  const HERO_NEAR = 'd'.repeat(64);
+  const HERO_FAR = 'e'.repeat(64);
+  const scene = new THREE.Scene();
+
+  const kilnWall = new THREE.Group();
+  kilnWall.userData.kaminosSceneObject = {id: 'kiln-wall', type: 'glb', source: `/api/read?root=generated-meshes&path=${HERO_NEAR}.glb`};
+  const nearMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+  nearMesh.castShadow = true;
+  kilnWall.add(nearMesh);
+  kilnWall.position.set(0, 0.5, 0);
+  scene.add(kilnWall);
+
+  const distantPillar = new THREE.Group();
+  distantPillar.userData.kaminosSceneObject = {id: 'distant-pillar', type: 'glb', source: `/api/read?root=generated-meshes&path=${HERO_FAR}.glb`};
+  const farMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial());
+  farMesh.castShadow = true;
+  distantPillar.add(farMesh);
+  distantPillar.position.set(12, 1, 0);
+  scene.add(distantPillar);
+  scene.updateMatrixWorld(true);
+
+  const levels = SAMPLE_LEVELS.slice(2).map(t => ({
+    ...t,
+    sha256: t.sha,
+    source: `/api/read?root=generated-meshes&path=${t.sha}.glb`,
+  })); // [5000, 1000, 500]
+
+  const selectCalls = [];
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async url => {
+      const u = new URL(url, 'http://kaminos.local');
+      const src = u.searchParams.get('source');
+      const reqFaces = Number(u.searchParams.get('faces') || 1000);
+      selectCalls.push({source: src, faces: reqFaces});
+      const choice = levels.find(l => l.faces <= reqFaces) ?? levels.at(-1);
+      return {schema: 'kaminos.lod-set.v0', source: src, levels, choice, withinBudget: true};
+    },
+    fetchBytes: async url => new TextEncoder().encode(url).buffer,
+    digest: async bytes => {
+      const m = /([0-9a-f]{64})\.glb/.exec(new TextDecoder().decode(bytes));
+      return m[1];
+    },
+    parseGlb: async bytes => {
+      const m = /([0-9a-f]{64})\.glb/.exec(new TextDecoder().decode(bytes));
+      const sha = m[1];
+      const tier = levels.find(l => l.sha === sha);
+      const segs = tier.faces === 5000 ? 6 : tier.faces === 1000 ? 3 : 1;
+      const g = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, segs, segs, segs), new THREE.MeshStandardMaterial());
+      mesh.castShadow = true;
+      g.add(mesh);
+      return g;
+    },
+  });
+
+  await giProxies.attach(kilnWall);
+  await giProxies.attach(distantPillar);
+  assert.equal(giProxies.get(kilnWall).effective.faces, 1000, 'starts at default 1000-face GI proxy');
+  assert.equal(giProxies.get(distantPillar).effective.faces, 1000, 'starts at default 1000-face GI proxy');
+
+  const casters = createFireShadowCasters({scene, giProxies, shadowFaceBudget: 6000});
+  const flameBox = {min: [-0.5, 0, -0.5], max: [0.5, 1, 0.5]};
+  casters.withCapture(() => {}, {flameBox});
+
+  const debug1 = casters.debugState();
+  assert.ok(debug1.shadowBudget, 'casters.debugState() reports shadowBudget allocation');
+  assert.equal(debug1.shadowBudget.allocations['kiln-wall'].faces, 5000, 'kiln-wall enclosing the flame is allocated 5000 faces');
+  assert.ok(debug1.shadowBudget.allocations['distant-pillar'].faces <= 1000, 'distant-pillar is allocated <= 1000 faces');
+  assert.ok(debug1.shadowBudget.totalFaces <= 6000);
+
+  await casters.whenShadowBudgetSettled();
+  casters.withCapture(() => {}, {flameBox});
+  assert.equal(giProxies.get(kilnWall).effective.faces, 5000, 'kilnWall GI proxy upgraded to 5000-face tier for shadow capture');
+  assert.ok(giProxies.get(distantPillar).effective.faces <= 1000, 'distantPillar GI proxy stays at <= 1000 faces');
+
+  const selectCountBeforeOrbit = selectCalls.length;
+  casters.withCapture(() => {}, {flameBox});
+  assert.equal(selectCalls.length, selectCountBeforeOrbit, 'subsequent captures with unchanged flameBox trigger zero GI proxy re-selections');
+  casters.dispose();
+});
+
+test('review M2, N1, N2: withFrame restores heroes after render; colliders, burnable, export, and repetition remain uncorrupted even while beauty LOD is mounted; hidden roots keep cache; partial-frustum and budget-relief hysteresis behave accurately', async () => {
+  const {createSceneColliderCollection} = await import('../scene-collider.mjs');
+  const {FIRE_DOMAIN_ID} = await import('../scene-fire-domain.mjs');
+  const {resolveBurnableTarget} = await import('../burnable-target.mjs');
+  const {exportCloneInWorld} = await import('../scene-export.mjs');
+  const {withoutRepetitionCopies, createRepetitionView} = await import('../scene-repetition.mjs');
+
+  const HERO = 'f'.repeat(64);
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  root.userData.kaminosSceneObject = {id: 'obj-m2', type: 'glb', source: `/api/read?root=generated-meshes&path=${HERO}.glb`};
+  const heroMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 50, 50, 50), new THREE.MeshStandardMaterial());
+  heroMesh.castShadow = true;
+  root.add(heroMesh);
+
+  const repView = createRepetitionView();
+  const repSettings = {schema: 'kaminos.repetition.v1', mode: 'line', count: 2, axis: 'y', angle: 360, step: [2, 0, 0], space: 'world', center: [0, 0, 0], mirror: [false, false, false]};
+  const repFrame = {position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1]};
+  repView.sync(root, repSettings, repFrame);
+  scene.add(root);
+  scene.updateMatrixWorld(true);
+
+  const tier25000 = SAMPLE_LEVELS[0];
+  const tier5000 = SAMPLE_LEVELS[2];
+  const tier1000 = SAMPLE_LEVELS[3];
+  const lightingInstalled = new Set();
+  const lightingReleased = new Set();
+  const fetchCounts = new Map();
+
+  const surfaceLighting = {
+    registerProxyRoot(proxyRoot) {
+      lightingInstalled.add(proxyRoot);
+      return () => lightingReleased.add(proxyRoot);
+    },
+  };
+
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async () => ({
+      schema: 'kaminos.lod-set.v0',
+      source: HERO,
+      levels: [tier25000, tier5000, tier1000].map(t => ({...t, sha256: t.sha, source: `/api/read?root=generated-meshes&path=${t.sha}.glb`})),
+      choice: {...tier1000, sha256: tier1000.sha, source: `/api/read?root=generated-meshes&path=${tier1000.sha}.glb`},
+      withinBudget: true,
+    }),
+    fetchBytes: async url => new TextEncoder().encode(url).buffer,
+    digest: async () => tier1000.sha,
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), new THREE.MeshStandardMaterial()));
+      return g;
+    },
+  });
+  await giProxies.attach(root);
+
+  const controller = createSceneBeautyLodController({
+    THREE,
+    scene,
+    giProxies,
+    surfaceLighting,
+    fetchBytes: async url => {
+      const s = /([0-9a-f]{64})\.glb/.exec(url)[1];
+      fetchCounts.set(s, (fetchCounts.get(s) ?? 0) + 1);
+      return new TextEncoder().encode(s).buffer;
+    },
+    digest: async bytes => new TextDecoder().decode(bytes),
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), new THREE.MeshStandardMaterial());
+      g.add(m);
+      return g;
+    },
+  });
+
+  const farCamera = makeCamera({z: 20, fov: 50});
+  controller.update(farCamera, {viewportHeight: 1080});
+  await controller.whenIdle();
+
+  // 1. withFrame mounts the beauty LOD during the render callback and restores canonical hero state immediately after
+  let wrapperSeenInFrame = false;
+  controller.withFrame(farCamera, {viewportHeight: 1080}, () => {
+    wrapperSeenInFrame = root.children.some(c => c.userData?.kaminosBeautyLodProxy && c.visible);
+    assert.equal(heroMesh.visible, false, 'heroMesh hidden during beauty render callback');
+  });
+  assert.equal(wrapperSeenInFrame, true, 'beauty LOD wrapper was mounted during withFrame callback');
+  assert.equal(heroMesh.visible, true, 'heroMesh is immediately restored after withFrame completes');
+  assert.equal(root.children.some(c => c.userData?.kaminosBeautyLodProxy), false, 'beauty LOD wrapper is detached after withFrame completes');
+
+  // 2. Even if controller.update leaves a beauty LOD mounted:
+  controller.update(farCamera, {viewportHeight: 1080});
+  assert.equal(lightingInstalled.size, 2, 'both primary beauty rung and repetition copy holder are registered with surfaceLighting');
+
+  // 2a. Scene colliders see only the canonical hero meshes (heroMesh + repetition copy), never the beauty LOD wrapper
+  const colliders = createSceneColliderCollection(THREE);
+  const colResult = colliders.update([{id: 'obj-m2', type: 'glb', object: root, collision: {domainId: FIRE_DOMAIN_ID, enabled: true}}]);
+  assert.equal(colResult.objects.length, 1);
+  assert.equal(colliders.state().meshCount, 2, 'collider collection has primary hero mesh + 1 repetition copy mesh');
+
+  // 2b. Export and withoutRepetitionCopies never include the beauty LOD wrapper or hidden hero meshes
+  const exported = exportCloneInWorld(root);
+  assert.equal(exported.children.some(c => c.userData?.kaminosBeautyLodProxy), false, 'exported clone excludes beauty LOD wrapper');
+  let exportedHeroMesh = null;
+  exported.traverse(m => { if (m.isMesh && !exportedHeroMesh) exportedHeroMesh = m; });
+  assert.equal(exportedHeroMesh?.visible, true, 'exported hero mesh is visible');
+
+  const duplicated = withoutRepetitionCopies(root, () => root.clone(true));
+  assert.equal(duplicated.children.some(c => c.userData?.kaminosBeautyLodProxy), false, 'withoutRepetitionCopies clone excludes beauty LOD wrapper');
+  assert.equal(duplicated.children.find(c => c.isMesh)?.visible, true, 'duplicated hero mesh is visible');
+
+  // 2c. Updating repetition count while beauty LOD is mounted keeps new repetition copies visible when restored to hero
+  repView.sync(root, {...repSettings, count: 3}, repFrame);
+  controller.update(farCamera, {viewportHeight: 1080});
+  const wrapperNow = root.children.find(c => c.userData?.kaminosBeautyLodProxy);
+  assert.equal(wrapperNow.children.length, 3, 'beauty LOD wrapper synced to 3 total instances (primary + 2 copies)');
+  assert.equal(lightingInstalled.size, 3, 'new repetition copy holder also registered with surfaceLighting');
+
+  // 2d. resolveBurnableTarget succeeds on a single-mesh object even while its beauty LOD is mounted
+  repView.sync(root, {...repSettings, mode: 'none'}, repFrame);
+  controller.update(farCamera, {viewportHeight: 1080});
+  const burnEntry = resolveBurnableTarget([{id: 'obj-m2', type: 'glb', object: root}], 'obj-m2');
+  assert.equal(burnEntry.id, 'obj-m2', 'resolveBurnableTarget finds the single canonical hero mesh despite mounted beauty LOD wrapper');
+
+  // 3. Review N1: temporarily hiding root.visible = false restores hero without evicting resident rungs
+  const fetchesBeforeHide = [...fetchCounts.values()].reduce((a, b) => a + b, 0);
+  root.visible = false;
+  controller.update(farCamera, {viewportHeight: 1080});
+  assert.equal(heroMesh.visible, true, 'hidden root has its internal hero children restored');
+  root.visible = true;
+  const stateAfterUnhide = controller.update(farCamera, {viewportHeight: 1080});
+  const fetchesAfterUnhide = [...fetchCounts.values()].reduce((a, b) => a + b, 0);
+  assert.equal(fetchesAfterUnhide, fetchesBeforeHide, 'resident rungs were NOT evicted while root.visible was false');
+  assert.ok(stateAfterUnhide.objects[0].residentRungs >= 1);
+
+  // 4. Review N2: partial-frustum repetition group counts only visible in-frustum instances, and relieving budget pressure is not trapped by budget-forced tier hysteresis
+  const partialAlloc = allocateSceneBeautyLods([
+    {
+      id: 'partial-rep',
+      heroFaces: 10000,
+      levels: SAMPLE_LEVELS,
+      instanceBoxes: [
+        {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]}, // in frustum
+        {min: [0.5, -0.5, -0.5], max: [1.5, 0.5, 0.5]},  // in frustum
+        {min: [0, 0, 50], max: [1, 1, 51]},              // behind camera (z = 2.5)
+        {min: [0, 0, 60], max: [1, 1, 61]},              // behind camera
+      ],
+    },
+  ], {camera: makeCamera({z: 2.5, fov: 50}), viewportHeight: 1080, faceBudget: Infinity});
+  assert.equal(partialAlloc.allocations['partial-rep'].instanceCount, 2, 'counts only the 2 in-frustum instances of the repetition group');
+
+  // Budget-relief hysteresis check: find distance where 25k tier error is ~1.65 px (above 1.5 maxPixelError, so footprint selects 'hero', but below 1.725 refine threshold if 25k were mistaken for the footprint-selected tier)
+  const box = {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]};
+  // At z = 3.2, let's check screenPixelError of SAMPLE_LEVELS[0] (25k, p95=0.0022):
+  // diag = sqrt(3) = 1.732, d = 2.7, pixelsPerUnit = 540 * 2.1445 / 2.7 = 428.9, err = 1.732 * 428.9 * 0.0022 = 1.634 px!
+  const reliefCam = makeCamera({z: 2.0, fov: 50});
+  const err25k = screenPixelError(SAMPLE_LEVELS[0], {worldBox: box, camera: reliefCam, viewportHeight: 1080});
+  assert.ok(err25k > 1.5 && err25k < 1.725, `expected 25k error in (1.5, 1.725), got ${err25k}`);
+
+  controller.setSettings({faceBudget: 500, maxPixelError: 1.5}); // force budget demotion
+  const demotedState = controller.update(reliefCam, {viewportHeight: 1080});
+  assert.notEqual(demotedState.objects[0].targetTier, 'hero', 'demoted under tight faceBudget');
+
+  controller.setSettings({faceBudget: Infinity, maxPixelError: 1.5}); // relieve budget pressure
+  const relievedState = controller.update(reliefCam, {viewportHeight: 1080});
+  assert.equal(relievedState.objects[0].targetTier, 'hero', 'immediately returns to footprint-selected hero tier when budget pressure is relieved');
+
+  controller.dispose();
+  assert.equal(lightingReleased.size, 3, 'all primary and repetition copy lighting registrations released on dispose');
+});
+
+test('review M3: prepareLowTiers, prepareGenerationLevels, and tools/prepare-lod-tiers.mjs default to [25000, 10000, 5000, 1000, 500]', async () => {
+  const {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
+  const fs = await import('node:fs');
+  const cliSource = fs.readFileSync(new URL('../tools/prepare-lod-tiers.mjs', import.meta.url), 'utf8');
+  assert.match(cliSource, /25000,10000,5000,1000,500/, 'CLI tool defaults --targets to 25000,10000,5000,1000,500');
+
+  const report = {};
+  await prepareGenerationLevels({
+    decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])},
+    materialFields: {},
+    source: 'a'.repeat(64),
+    fetch: async () => new Response('stop', {status: 500}),
+    THREE,
+    MeshBVH: class {},
+    finish: () => {},
+    report,
+  });
+  assert.deepEqual(report.targets, [25000, 10000, 5000, 1000, 500], 'prepareGenerationLevels defaults targets to [25000, 10000, 5000, 1000, 500]');
 });

@@ -248,8 +248,8 @@ function surfelClasses(THREE){
     }
   }
   class SurfelChunk extends THREE.LOD{
-    constructor(){super();this.surfelFactors=[];this.localBox=null;this._hasSelectedLevel=false;}
-    copy(source,recursive){super.copy(source,recursive);this.surfelFactors=source.surfelFactors.slice();this.localBox=source.localBox?source.localBox.clone():null;this._hasSelectedLevel=false;return this;}
+    constructor(){super();this.surfelFactors=[];this.localBox=null;this._hasSelectedLevel=false;this._cameraLevels=new WeakMap();}
+    copy(source,recursive){super.copy(source,recursive);this.surfelFactors=source.surfelFactors.slice();this.localBox=source.localBox?source.localBox.clone():null;this._hasSelectedLevel=false;this._cameraLevels=new WeakMap();return this;}
     raycast(){}
     update(camera){
       const factors=this.surfelFactors;if(!factors.length)return;
@@ -264,9 +264,10 @@ function surfelClasses(THREE){
       const pixelsPerUnit=camera.isOrthographicCamera?height*camera.zoom/(camera.top-camera.bottom):
         height/2*camera.projectionMatrix.elements[5]/dist;
       const target=options.targetPixels??1.5,hyst=options.hysteresis??0.15;
-      // the coarsest level whose surfels stay within targetPixels (with +/-hysteresis deadband around the active level)
+      // the coarsest level whose surfels stay within targetPixels (with +/-hysteresis deadband around the active level per camera)
       let chosen=0;
-      const prev=this._hasSelectedLevel&&this._currentLevel>=0&&this._currentLevel<factors.length?this._currentLevel:null;
+      const camLevel=camera?this._cameraLevels.get(camera):null;
+      const prev=camLevel!==undefined&&camLevel>=0&&camLevel<factors.length?camLevel:null;
       if(prev===null){
         for(let i=factors.length-1;i>=0;i--)if(factors[i]*voxel*pixelsPerUnit<=target){chosen=i;break;}
       }else{
@@ -277,7 +278,9 @@ function surfelClasses(THREE){
           chosen=0;for(let i=prev-1;i>=0;i--)if(factors[i]*voxel*pixelsPerUnit<=target){chosen=i;break;}
         }else chosen=prev;
       }
-      this.levels.forEach((l,i)=>{l.object.visible=i===chosen;});this._currentLevel=chosen;this._hasSelectedLevel=true;
+      this.levels.forEach((l,i)=>{l.object.visible=i===chosen;});
+      if(camera)this._cameraLevels.set(camera,chosen);
+      this._currentLevel=chosen;this._hasSelectedLevel=true;
     }
   }
   class SurfelChunkMesh extends THREE.InstancedMesh{raycast(){}}
@@ -368,6 +371,7 @@ export function attachStoredSurfelLevels(THREE,root,storedLevels=[]){
         entries.forEach((e,i)=>lod.levels.push({distance:i,hysteresis:0,object:e.object}));
       }
       lod._hasSelectedLevel=false;
+      lod._cameraLevels=new WeakMap();
       lod.levels.forEach((l,i)=>{l.object.visible=i===(lod._currentLevel??0);});
     }
   }
