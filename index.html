@@ -25333,6 +25333,12 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
   await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  if(window.__kaminosLastGenerationLevels?.source!==digest){
+    window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
+      window.__kaminosLastGenerationLevels={source:digest,...report};
+      if(report?.phase==='done')setInfo(`GI proxy levels ready for ${label||file.name}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+    }).catch(()=>{});
+  }
   setInfo(`Imported ${file.name}`);return id;
 }
 const meshDataTargets=new Set();

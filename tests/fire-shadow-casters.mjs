@@ -149,6 +149,39 @@ import {createSurfelObject} from '../trellis-surfels.mjs';
   assert.equal(giCasters.debugState().targets,1);
   assert.equal(giCasters.debugState().originalTriangles,125472);
   assert.ok(giCasters.debugState().captureTriangles<12000);
+
+  // Review M2: repeated copies (kaminosRepetitionCopy) under a GI-proxy or burner root also receive reduced shadow casters at their repetition transforms
+  handles.set(meshRoot,{
+    state:'loaded',representation:'mesh',proxyRoot:proxy1k,
+    effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+    error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.0012}},
+    placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(meshRoot.updateWorldMatrix(true,false)??meshRoot.matrixWorld),
+  });
+  const repCopy=new THREE.Mesh(meshHero.geometry,meshHero.material);
+  repCopy.castShadow=true;repCopy.userData.kaminosRepetitionCopy=true;
+  repCopy.matrixAutoUpdate=false;repCopy.matrix.makeTranslation(5,0,0);
+  meshRoot.add(repCopy);
+  giScene.remove(burner.group);
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(p.casters.length,2,'primary proxy + repeated copy proxy must both cast shadows');
+    assert.equal(p.triangleCount,8,'4 triangles for primary proxy + 4 triangles for repetition copy');
+    const expectedCopyWorld=meshRoot.matrixWorld.clone().multiply(repCopy.matrix).multiply(proxy1k.matrix).multiply(proxyMesh1k.matrix);
+    assert.deepEqual(p.casters[1].matrixWorld.elements,expectedCopyWorld.elements,'repeated proxy copy placed at root * copy.matrix * proxy');
+  }}]});
+  assert.equal(giCasters.debugState().originalTriangles,24,'12 triangles on hero + 12 on repetition copy');
+  assert.equal(giCasters.debugState().captureTriangles,8);
+  meshRoot.remove(repCopy);
+
+  // Review N3: burner stand-in remains active even when level is '10k' or '5k', and SmokeVisibility capture mode leaves explicit-kiln untouched while substituting GI proxies and burners
+  giScene.add(burner.group);
+  const casterWithKiln=createFireShadowCasters({scene:giScene,giProxies,load:async()=>proxy});
+  await casterWithKiln.setLevel('10k');
+  renderFireShadowBatch({scene:giScene,casterScene:casterWithKiln,shadows:[{render(p){
+    assert.equal(burner.group.visible,false,'burner still uses coarse stand-in when level is 10k');
+    assert.ok(p.triangleCount<12000);
+  }}]});
+  casterWithKiln.dispose();
+
   burner.dispose();
   giCasters.dispose();
   assert.deepEqual([...consumers],[],'dispose releases GI proxy consumer');

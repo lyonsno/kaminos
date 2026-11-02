@@ -21,6 +21,14 @@ const release=root=>root.traverse(m=>{if(m.isMesh){m.geometry.dispose();for(cons
 const matches=root=>{const s=root.userData?.kaminosSceneObject?.source;if(typeof s!=='string')return false;const u=new URL(s,'http://kaminos.local');return u.pathname==='/api/read'&&u.searchParams.get('root')==='generated-meshes'&&u.searchParams.get('path')===`${KILN_CASTER_SOURCE}.glb`;};
 const isSurfelMesh=m=>{let p=m;while(p){if(p.isTrellisSurfelRoot)return true;p=p.parent;}return false;};
 const burnerRecipeOf=r=>r.userData?.kaminosAnnularBurnerRecipe??(r.userData?.kaminosSceneObject?.geometry?.kind==='annular'?r.userData.kaminosSceneObject.geometry.parameters:null);
+const cloneBorrowedProxy=node=>{
+  const copy=node.isMesh?new THREE.Mesh(node.geometry,node.material):new THREE.Group();
+  copy.position.copy(node.position);copy.quaternion.copy(node.quaternion);copy.scale.copy(node.scale);
+  copy.matrix.copy(node.matrix);copy.matrixAutoUpdate=node.matrixAutoUpdate;
+  copy.visible=node.visible;copy.castShadow=node.castShadow;copy.receiveShadow=node.receiveShadow;
+  for(const child of node.children)copy.add(cloneBorrowedProxy(child));
+  return copy;
+};
 export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=null,enabled=true}){
   let level='original',requested='original',generation=0,disposed=false,error=null,active=false,consumerRelease=null;
   const proxies=()=>giProxies??globalThis.window?.kaminosGiProxies??null;
@@ -29,7 +37,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
   const assets=new Map(),instances=new Map(),fingerprints=new WeakMap(),bufferIds=new WeakMap(),state={targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false};
   let nextBufferId=0;
   const bufferKey=a=>{if(!a)return null;if(!bufferIds.has(a))bufferIds.set(a,++nextBufferId);return [bufferIds.get(a),a.version,a.count];};
-  const disposeInstance=inst=>{if(!inst)return;inst.wrapper.removeFromParent();inst.ownGeometry?.dispose();inst.wrapper.traverse(m=>{if(m.isMesh)m.material.dispose();});};
+  const disposeInstance=inst=>{if(!inst)return;inst.wrapper.removeFromParent();inst.ownGeometry?.dispose();inst.proxy.traverse(m=>{if(m.isMesh)m.material.dispose();});};
   const clear=()=>{for(const inst of instances.values())disposeInstance(inst);instances.clear();};
   return {
     setEnabled(v){if(disposed)throw Error('fire caster consumer disposed');syncConsumer(!!v);},
@@ -39,22 +47,26 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       try{if(!assets.has(v)){const asset=await load(v);if(disposed||version!==generation){release(asset);return;}assets.set(v,asset);}if(version===generation){level=v;clear();Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false});}}
       catch(e){if(version===generation)error=String(e.message);throw e;}
     },
-    withCapture(fn){
+    withCapture(fn,{smokeVisibility=false}={}){
       if(disposed)throw Error('fire caster consumer disposed');if(active)return fn();
       scene.updateMatrixWorld(true);
       const candidates=[],reg=proxies();
       const visit=node=>{
         if(!node.visible)return;
-        if(level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
+        if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
         const handle=reg?.handleFor?.(node);
         if(handle?.state==='loaded'&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}
-        const recipe=level==='original'?burnerRecipeOf(node):null;
+        const recipe=burnerRecipeOf(node);
         if(recipe){candidates.push({root:node,kind:'annular-burner',recipe});return;}
         for(const child of node.children)visit(child);
       };
       visit(scene);
-      Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false});
-      if(!candidates.length)return fn();
+      if(!smokeVisibility)Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false});
+      const seenRoots=new Set();
+      if(!candidates.length){
+        if(!smokeVisibility)for(const [k,inst]of instances){disposeInstance(inst);instances.delete(k);}
+        return fn();
+      }
       const hidden=[];
       try{active=true;for(const {root,kind,handle,recipe}of candidates){
         const meshes=[];root.traverseVisible(m=>{if(m.isMesh&&m.castShadow)meshes.push(m);});if(!meshes.length)continue;
@@ -69,14 +81,14 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
         let instance=instances.get(root);
         if(kind==='explicit-kiln'){
           const key=`explicit:${level}`;
-          if(instance?.key!==key){disposeInstance(instance);const wrapper=new THREE.Group(),proxy=assets.get(level).clone(true);proxy.traverse(m=>{if(m.isMesh)m.material=m.material.clone();});wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy,key,measured:false};instances.set(root,instance);}
+          if(instance?.key!==key){disposeInstance(instance);const wrapper=new THREE.Group(),proxy=assets.get(level).clone(true);proxy.traverse(m=>{if(m.isMesh)m.material=m.material.clone();});wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy,repCopies:[],key,measured:false};instances.set(root,instance);}
         }else if(kind==='gi-proxy'){
           if(instance?.sourceAsset!==handle.proxyRoot){
             disposeInstance(instance);
             const wrapper=new THREE.Group(),proxy=handle.proxyRoot.clone(true);
             proxy.traverse(m=>{if(m.isMesh){m.castShadow=true;m.material=(Array.isArray(m.material)?m.material[0]:m.material)?.clone()??new THREE.MeshBasicMaterial();}});
             wrapper.matrixAutoUpdate=false;wrapper.add(proxy);
-            instance={wrapper,proxy,sourceAsset:handle.proxyRoot,key:'gi-proxy',measured:!!handle.error};
+            instance={wrapper,proxy,repCopies:[],sourceAsset:handle.proxyRoot,key:'gi-proxy',measured:!!handle.error};
             instances.set(root,instance);
           }else instance.measured=!!handle.error;
         }else if(kind==='annular-burner'){
@@ -85,18 +97,30 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
             disposeInstance(instance);
             const caster=createAnnularBurnerCaster(THREE,mergeGeometries,recipe),wrapper=new THREE.Group(),proxy=new THREE.Mesh(caster.geometry,new THREE.MeshStandardMaterial());
             proxy.castShadow=true;wrapper.matrixAutoUpdate=false;wrapper.add(proxy);
-            instance={wrapper,proxy,key,ownGeometry:caster.geometry,measured:true};
+            instance={wrapper,proxy,repCopies:[],key,ownGeometry:caster.geometry,measured:true};
             instances.set(root,instance);
           }
         }
-        const {wrapper,proxy}=instance;
+        seenRoots.add(root);
+        const {wrapper,proxy,repCopies}=instance;
+        const repSources=root.children.filter(c=>c.visible&&c.userData?.kaminosRepetitionCopy===true);
+        while(repCopies.length>repSources.length)repCopies.pop().removeFromParent();
+        while(repCopies.length<repSources.length){const holder=new THREE.Group();holder.matrixAutoUpdate=false;holder.add(cloneBorrowedProxy(proxy));repCopies.push(holder);wrapper.add(holder);}
+        for(let i=0;i<repSources.length;i++){repCopies[i].matrix.copy(repSources[i].matrix);repCopies[i].matrixWorldNeedsUpdate=true;}
         if(kind==='gi-proxy'&&typeof handle.placement==='function')wrapper.matrix.copy(handle.placement(scene));
         else wrapper.matrix.copy(scene.matrixWorld).invert().multiply(root.matrixWorld);
-        proxy.traverse(m=>{if(m.isMesh){m.material.side=[...sides][0];state.captureTriangles+=(m.geometry.index?.count??m.geometry.attributes.position.count)/3;}});
-        state.originalTriangles+=meshes.reduce((n,m)=>n+((m.geometry.index?.count??m.geometry.attributes.position.count)/3)*(m.isInstancedMesh?m.count:1),0);
-        if(instance.measured)state.errorMeasured=true;
-        hidden.push([root,root.visible]);root.visible=false;scene.add(wrapper);state.targets++;
-      }return fn();}finally{for(const [root,visible]of hidden)root.visible=visible;for(const {wrapper}of instances.values())wrapper.removeFromParent();active=false;}
+        let capTris=0;
+        wrapper.traverse(m=>{if(m.isMesh){m.material.side=[...sides][0];capTris+=(m.geometry.index?.count??m.geometry.attributes.position.count)/3;}});
+        if(!smokeVisibility){
+          state.captureTriangles+=capTris;
+          state.originalTriangles+=meshes.reduce((n,m)=>n+((m.geometry.index?.count??m.geometry.attributes.position.count)/3)*(m.isInstancedMesh?m.count:1),0);
+          if(instance.measured)state.errorMeasured=true;
+          state.targets++;
+        }
+        hidden.push([root,root.visible]);root.visible=false;scene.add(wrapper);
+      }
+      if(!smokeVisibility)for(const [k,inst]of instances)if(!seenRoots.has(k)){disposeInstance(inst);instances.delete(k);}
+      return fn();}finally{for(const [root,visible]of hidden)root.visible=visible;for(const {wrapper}of instances.values())wrapper.removeFromParent();active=false;}
     },
     debugState:()=>({level,requested,error,...state,asset:KILN_CASTERS[level]??null,source:KILN_CASTER_SOURCE,scope:'point-shadow-captures-only'}),
     dispose(){if(disposed)return;disposed=true;syncConsumer(false);generation++;clear();for(const a of assets.values())release(a);assets.clear();},

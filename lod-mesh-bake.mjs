@@ -18,11 +18,12 @@ export async function decodePNGBytes(input) {
   if (bytes.byteLength < 33 || bytes[0] !== 137 || bytes[1] !== 80 || bytes[2] !== 78 || bytes[3] !== 71)
     throw Error('invalid PNG signature');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let width = 0, height = 0, bitDepth = 0, colorType = 0, interlace = 0, plte = null, trns = null;
+  let width = 0, height = 0, bitDepth = 0, colorType = 0, interlace = 0, plte = null, trns = null, sawIend = false;
   const idatParts = [];
   let offset = 8;
   while (offset + 8 <= bytes.byteLength) {
     const len = view.getUint32(offset, false);
+    if (offset + 12 + len > bytes.byteLength) throw Error('truncated PNG chunk');
     const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
     const data = bytes.subarray(offset + 8, offset + 8 + len);
     offset += 12 + len;
@@ -33,8 +34,9 @@ export async function decodePNGBytes(input) {
     } else if (type === 'PLTE') plte = data;
     else if (type === 'tRNS') trns = data;
     else if (type === 'IDAT') idatParts.push(data);
-    else if (type === 'IEND') break;
+    else if (type === 'IEND') { sawIend = true; break; }
   }
+  if (!sawIend) throw Error('truncated PNG chunk');
   if (width < 1 || height < 1 || bitDepth !== 8 || interlace !== 0 || ![0, 2, 3, 4, 6].includes(colorType))
     throw Error(`unsupported PNG format (${width}x${height}, bitDepth=${bitDepth}, colorType=${colorType}, interlace=${interlace})`);
   const totalIdat = idatParts.reduce((s, p) => s + p.byteLength, 0);
@@ -47,6 +49,7 @@ export async function decodePNGBytes(input) {
   const prev = new Uint8Array(stride), cur = new Uint8Array(stride), rgba = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
     const rowStart = y * (stride + 1), filter = raw[rowStart];
+    if (filter > 4) throw Error(`invalid PNG filter ${filter}`);
     for (let x = 0; x < stride; x++) {
       const v = raw[rowStart + 1 + x];
       const a = x >= channels ? cur[x - channels] : 0, b = prev[x], c = x >= channels ? prev[x - channels] : 0;
@@ -88,6 +91,7 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
   const decodedImages = new Map();
   const loadTextureImage = async texInfo => {
     if (!texInfo || typeof texInfo.index !== 'number') return null;
+    if ((texInfo.texCoord ?? 0) !== 0) throw Error('only TEXCOORD_0 is supported by the mesh baker');
     const tex = json.textures?.[texInfo.index];
     if (!tex || typeof tex.source !== 'number') return null;
     if (decodedImages.has(tex.source)) return decodedImages.get(tex.source);
@@ -114,7 +118,9 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
   }
 
   const readAttr = (index, expectedTypes) => {
-    const a = json.accessors[index], bv = json.bufferViews[a.bufferView];
+    const a = json.accessors[index];
+    if (a.sparse) throw Error('sparse glTF accessors are not supported by the mesh baker');
+    const bv = json.bufferViews[a.bufferView];
     const width = {SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4}[a.type];
     if (!expectedTypes.includes(a.type)) throw Error(`unexpected accessor type ${a.type}`);
     const T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array}[a.componentType];
@@ -137,6 +143,8 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     if (!mesh) continue;
     const flip = det3(world) < 0;
     for (const primitive of mesh.primitives) {
+      if (primitive.extensions?.KHR_draco_mesh_compression || primitive.extensions?.EXT_meshopt_compression)
+        throw Error('compressed glTF primitives are not supported by the mesh baker');
       if (primitive.mode !== undefined && primitive.mode !== 4) continue;
       if (primitive.attributes.POSITION === undefined) continue;
       const posAcc = json.accessors[primitive.attributes.POSITION];
@@ -193,9 +201,11 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     for (const c of chunks) { out.set(c, at); at += c.length; }
     return out;
   };
+  const vertices = concat(posChunks, Float32Array), triangles = concat(triChunks, Uint32Array);
+  if (!vertices.length || !triangles.length) throw Error('source GLB has no triangle surface');
   return {
-    vertices: concat(posChunks, Float32Array),
-    triangles: concat(triChunks, Uint32Array),
+    vertices,
+    triangles,
     uvs: concat(uvChunks, Float32Array),
     colors: concat(colChunks, Float32Array),
     faceMaterials: concat(matChunks, Int32Array),
@@ -222,6 +232,9 @@ const sampleBilinear = (img, u, v) => {
 };
 
 const clampByte = v => Math.max(0, Math.min(255, Math.round(v)));
+const srgbToLinear = u => u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4;
+const linearToSrgb = l => l <= 0.0031308 ? 12.92 * l : 1.055 * (l ** (1 / 2.4)) - 0.055;
+const bakeSrgbChannel = (srgbByte, linearScale) => linearScale === 1 ? clampByte(srgbByte) : clampByte(linearToSrgb(Math.max(0, Math.min(1, srgbToLinear(srgbByte / 255) * linearScale))) * 255);
 
 export function createGLBMeshMaterialBaker(surface, {THREE, MeshBVH, bvh = null} = {}) {
   if (!bvh) {
@@ -274,9 +287,9 @@ export function createGLBMeshMaterialBaker(surface, {THREE, MeshBVH, bvh = null}
       const cb = w0 * C[i0 * 4 + 2] + w1 * C[i1 * 4 + 2] + w2 * C[i2 * 4 + 2];
 
       const texBase = mat.baseColorImage && hasUV ? sampleBilinear(mat.baseColorImage, u, v) : [255, 255, 255, 255];
-      baseColor[p * 4] = clampByte(texBase[0] * mat.baseColorFactor[0] * cr);
-      baseColor[p * 4 + 1] = clampByte(texBase[1] * mat.baseColorFactor[1] * cg);
-      baseColor[p * 4 + 2] = clampByte(texBase[2] * mat.baseColorFactor[2] * cb);
+      baseColor[p * 4] = bakeSrgbChannel(texBase[0], mat.baseColorFactor[0] * cr);
+      baseColor[p * 4 + 1] = bakeSrgbChannel(texBase[1], mat.baseColorFactor[1] * cg);
+      baseColor[p * 4 + 2] = bakeSrgbChannel(texBase[2], mat.baseColorFactor[2] * cb);
       baseColor[p * 4 + 3] = 255;
 
       const texMR = mat.metallicRoughnessImage && hasUV ? sampleBilinear(mat.metallicRoughnessImage, u, v) : [0, 255, 255, 255];

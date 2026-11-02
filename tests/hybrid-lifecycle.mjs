@@ -273,3 +273,41 @@ await (owner.retry?.()??owner.request());
 assert.equal(owner.state().held,false,'public retry must release the failed flame owner hold');
 consume(field);assert.equal(composed.canRender(),true,'retry must consume the current source');
 composed.dispose();
+
+// Parallel wrong-object check: a TRELLIS surfel object with a loaded GI proxy must succeed in hybrid prepare(field)
+// (including localVisibility.snapshot(scene)) and build smoke visibility from the stunt-double proxy rather than
+// throwing static-light-dynamic-caster on SurfelChunkMesh (InstancedMesh).
+const {createSurfelObject}=await import('../trellis-surfels.mjs');
+const surfelHolder=new THREE.Group();
+const surfelRoot=createSurfelObject(THREE,{
+  resolution:16,radiusVoxels:1.5,count:2,
+  cells:new Uint32Array([1|(2<<10)|(3<<20),4|(5<<10)|(6<<20)]),
+  offsets:new Int8Array(6),normals:new Int8Array([0,0,127,0,0,127]),
+  color:new Uint8Array([200,100,50,200,100,50]),metalRough:new Uint8Array([0,200,0,200]),
+},{levels:[1]});
+surfelHolder.add(surfelRoot);scene.add(surfelHolder);
+const surfelProxy=new THREE.Group(),surfelProxyMesh=new THREE.Mesh(new THREE.TetrahedronGeometry(),new THREE.MeshStandardMaterial());
+surfelProxy.add(surfelProxyMesh);
+globalThis.window={
+  kaminosGiProxies:{
+    handleFor:r=>r===surfelHolder?{
+      state:'loaded',representation:'surfels',proxyRoot:surfelProxy,
+      effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+      error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.002}},
+      placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(surfelHolder.updateWorldMatrix(true,false)??surfelHolder.matrixWorld),
+    }:null,
+    registerConsumer(){return ()=>{};},
+  },
+};
+try{
+  const surfelMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+  field.source.generation++;field.source.frame++;
+  consume(field);
+  assert.equal(surfelMount.canRender(),true,'hybrid lighting must succeed when a TRELLIS surfel object has a loaded GI proxy');
+  assert.equal(surfelMount.debugState().staticTriangles,16,'12 box triangles + 4 tetrahedron GI proxy triangles in smoke visibility');
+  surfelMount.dispose();
+}finally{
+  scene.remove(surfelHolder);
+  delete globalThis.window;
+}
+

@@ -323,4 +323,39 @@ test('arbitrary GLB (no decode or materialFields): remeshes, bakes PBR textures 
   const bakedMR = await decodePNGBytes(imgBytes(1));
   assert.deepEqual([...bakedBase.rgba.subarray(0, 4)], [40, 180, 90, 255]);
   assert.deepEqual([...bakedMR.rgba.subarray(0, 4)], [0, 140, 60, 255]);
+
+  // Review M1: linear baseColorFactor and COLOR_0 vertex colors must be multiplied in linear light and encoded to sRGB
+  const {readGLBLocalSurfaceAndMaterials, createGLBMeshMaterialBaker} = await import('../lod-mesh-bake.mjs');
+  const col = new Float32Array([0.5, 1.0, 0.25, 1, 0.5, 1.0, 0.25, 1, 0.5, 1.0, 0.25, 1, 0.5, 1.0, 0.25, 1]);
+  const colChunks = [pos, nrm, uv, idx, col].map(pad4);
+  const colBin = new Uint8Array(colChunks.reduce((s, c) => s + c.padded.length, 0));
+  const colViews = []; let colAt = 0;
+  for (const c of colChunks) { colBin.set(c.padded, colAt); colViews.push({buffer: 0, byteOffset: colAt, byteLength: c.raw.length}); colAt += c.padded.length; }
+  const colDoc = {
+    asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}],
+    nodes: [{name: 'factor-and-color-node', mesh: 0}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, NORMAL: 1, TEXCOORD_0: 2, COLOR_0: 4}, indices: 3, material: 0}]}],
+    materials: [{pbrMetallicRoughness: {baseColorFactor: [0.5, 0.25, 1.0, 1.0], metallicFactor: 0.4, roughnessFactor: 0.6}}],
+    buffers: [{byteLength: colBin.length}], bufferViews: colViews,
+    accessors: [
+      {bufferView: 0, componentType: 5126, count: 4, type: 'VEC3'},
+      {bufferView: 1, componentType: 5126, count: 4, type: 'VEC3'},
+      {bufferView: 2, componentType: 5126, count: 4, type: 'VEC2'},
+      {bufferView: 3, componentType: 5125, count: 6, type: 'SCALAR'},
+      {bufferView: 4, componentType: 5126, count: 4, type: 'VEC4'},
+    ],
+  };
+  const colText = new TextEncoder().encode(JSON.stringify(colDoc)), colTl = Math.ceil(colText.length / 4) * 4;
+  const colGlb = new Uint8Array(28 + colTl + colBin.length), colDv = new DataView(colGlb.buffer);
+  colDv.setUint32(0, 0x46546c67, true); colDv.setUint32(4, 2, true); colDv.setUint32(8, colGlb.length, true);
+  colDv.setUint32(12, colTl, true); colDv.setUint32(16, 0x4e4f534a, true); colGlb.fill(32, 20, 20 + colTl); colGlb.set(colText, 20);
+  colDv.setUint32(20 + colTl, colBin.length, true); colDv.setUint32(24 + colTl, 0x004e4942, true); colGlb.set(colBin, 28 + colTl);
+  const colSurface = await readGLBLocalSurfaceAndMaterials(colGlb);
+  const colBaker = createGLBMeshMaterialBaker(colSurface, {THREE, MeshBVH});
+  const colBaked = colBaker({vertices: colSurface.vertices, triangles: colSurface.triangles, uvs: uv, textureSize: 4});
+  // Linear RGB is [0.5 * 0.5, 0.25 * 1.0, 1.0 * 0.25] = [0.25, 0.25, 0.25]. In sRGB, 0.25 -> round((1.055 * 0.25^(1/2.4) - 0.055) * 255) = 137 (NOT 64!)
+  assert.deepEqual([...colBaked.baseColor.subarray(0, 4)], [137, 137, 137, 255]);
+
+  // Review N1: truncated PNG chunks and empty/sparse/compressed GLB surfaces fail loud with explicit messages
+  await assert.rejects(() => decodePNGBytes(basePng.subarray(0, basePng.length - 6)), /truncated PNG chunk/);
 });

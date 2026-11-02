@@ -1,7 +1,7 @@
 // kaminos-test: node — each TRELLIS-derived scene object gets a GI proxy handle: a stored low tier of its hero, loaded
 // outside the frame loop, never in the scene, placed exactly where the object draws; surfel assets also point at their
 // own coarse surfels. Pass policy is the GI renderer's; this only resolves, loads and places.
-import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {createHash} from 'node:crypto';
 import * as THREE from '../lib/three.core.js';
 import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
 
@@ -162,3 +162,13 @@ test('the registry knows whether any GI pass consumes proxies, so a setting that
   release();assert.deepEqual(registry.consumers(),[]);
   assert.throws(()=>registry.registerConsumer(''),/name/);
 });
+
+test('Review N4: index.html wires window.kaminosGiProxies.prepare and importSceneMesh background tier preparation', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /prepare:\s*async\s*\(rootOrSha,\s*options\s*=\s*\{\}\)\s*=>/, 'window.kaminosGiProxies exposes prepare(rootOrSha, options)');
+  const importStart = html.indexOf('async function importSceneMesh(');
+  assert.ok(importStart > 0);
+  const importBody = html.slice(importStart, importStart + 2500);
+  assert.match(importBody, /window\.kaminosGiProxies\?\.prepare\?\.\(digest,\s*\{heroGLB:/, 'importSceneMesh triggers background GI proxy tier preparation on imported GLBs');
+});
+

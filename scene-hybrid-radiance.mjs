@@ -178,7 +178,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       sourceRadius=Math.hypot(...sourceDomain.hi.map((x,a)=>Math.max(Math.abs(x),Math.abs(sourceDomain.lo[a]))));
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
       installAllMaterials();
-      const started=performance.now(),snapshot=localVisibility.snapshot(scene),{revision,geometry:packed}=snapshot;
+      const started=performance.now(),snapshot=casterScene.withCapture(()=>localVisibility.snapshot(scene),{smokeVisibility:true}),{revision,geometry:packed}=snapshot;
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
         status.status='building-smoke-world-visibility';onStatus({...status});
