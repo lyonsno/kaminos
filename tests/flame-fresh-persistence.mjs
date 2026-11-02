@@ -15,7 +15,7 @@ function mount({fire=true,existing=false,refused=true}={}) {
  const writes=[],messages=[],fields=new Map(),runtime={active:true,simGridDimensions:[96,192,96],gridHeight:{admitted:!refused,heightCells:384}};
  const preset={domControls:{'volume-resolution':{value:96},'volume-grid-height-ratio':{value:refused?4:2}},rendererControls:{},presentationControls:{},route:{}};
  const c=sceneContext({window:{},authoringWorkspace:null,readOwnerExperimentAddress,fireShadowSceneRoute,URLSearchParams,structuredClone,authoringBusy:false,vantageCaptureHeld:false,currentSceneFile:null,
-  activeSceneComposition:existing?{}:null,volumePrototype:{debugState:()=>runtime},scenePlacementTools:null,
+  activeSceneComposition:existing?{}:null,volumePrototype:{debugState:()=>runtime,isActive:()=>runtime.active,setActive:async value=>{runtime.active=value;}},scenePlacementTools:null,
   sceneSaveBlockedByFailedRestore:false,planSceneRestore:data=>({objects:data.objects}),greenroomPreviewIsActive:()=>false,isFireLightFieldRoute:()=>fire,
   sceneObjects:[{id:'kiln',type:'glb'}],volumePrimitives:[],localLiquidSetup:null,sceneCameras:null,
   document:{getElementById:id=>{if(!fields.has(id))fields.set(id,{value:id==='composition-label'?'Fresh fire':'0',checked:false,disabled:false,dataset:{}});return fields.get(id);}},
@@ -54,4 +54,19 @@ test('an admitted replacement restores fire persistence and an unrelated mesh ro
  assert.equal((await m.c.window.saveScene({result:true})).ok,true);assert.deepEqual(m.writes.map(x=>x.kind),['basin','scene']);
  const mesh=mount({fire:false});assert.equal((await mesh.c.window.saveSceneAs({result:true})).ok,true);
  assert.deepEqual(mesh.writes.map(x=>x.kind),['scene']);assert.equal(mesh.writes[0].body.composition,null);
+});
+
+test('a cleared flame route saves replacement meshes without collecting a retired field',async()=>{
+ for(const refused of[false,true])for(const method of['saveScene','saveSceneAs']){
+  const m=mount({refused});await m.c.flameFeature.clear();
+  const result=await m.c.window[method]({result:true});
+  assert.equal(result.ok,true,JSON.stringify(result));
+  assert.deepEqual(m.writes.map(x=>x.kind),['scene']);
+  assert.equal(m.writes[0].body.composition,null);
+ }
+});
+test('retirement does not waive persistence validation for a retained composition',async()=>{
+ const m=mount({existing:true,refused:false});await m.c.flameFeature.clear();
+ assert.equal((await m.c.window.saveScene({result:true})).ok,false);
+ assert.deepEqual(m.writes,[]);
 });

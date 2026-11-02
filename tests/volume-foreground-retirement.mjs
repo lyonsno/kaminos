@@ -201,3 +201,18 @@ test('scene replacement retains render inputs until admitted foreground work fin
   await clearing;assert.deepEqual(destroyed,[object]);
  }finally{await f.close();}
 });
+
+test('dispose keeps the world geometry buffer alive through fluid cleanup',async()=>{
+ const f=await fixture();try{
+  let destroyed=false,writes=0;
+  f.scope.worldRenderUniform={destroy(){destroyed=true;}};
+  f.scope.device.queue.writeBuffer=buffer=>{assert.equal(destroyed,false,'fluid cleanup writes world geometry before its buffer is destroyed');assert.equal(buffer,f.scope.worldRenderUniform);writes++;};
+  for(const key of ['fineVelocity','worldSmoke','worldSolidProducer'])f.scope[key]=null;
+  f.scope.retireIntermediateFlow=()=>{};
+  // Execute the production cleanup prefix containing the world-geometry write;
+  // later fluid allocations are irrelevant to this lifetime invariant.
+  const start=source.indexOf('  function destroyFluidState('),end=source.indexOf('    separatedPressure?.destroy();',start);
+  vm.runInContext(source.slice(start,end)+'}',f.scope);
+  await f.api.dispose();assert.equal(writes,1);assert.equal(destroyed,true);
+ }finally{await f.close();}
+});

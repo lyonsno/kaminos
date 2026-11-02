@@ -146,3 +146,18 @@ test('clearing during preview releases the detached authored roots',async()=>{
  assert.equal(disposed,1,'whole-scene clear must release authored roots parked outside the preview');
  assert.equal(state.greenroomPreviewState,null);assert.equal(await state.restoreAuthoredSceneFromPreview(),false);
 });
+
+for(const kind of ['mesh','splat','preview'])test(`superseded preview return aborts ${kind} import`,async()=>{
+ const state=context();await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ let finish,started;const retiring=new Promise(resolve=>started=resolve);
+ state.restoreAuthoredSceneFromPreview=()=>{started();return new Promise(resolve=>{finish=resolve;});};
+ state.createSceneObjectPublicationGuard=()=>()=>true;
+ state.shouldClearSceneForImport=()=>false;
+ state.greenroomSplatMetadata=()=>{throw Error('Superseded splat import continued');};
+ vm.runInContext(source('async function greenroomImportSplat(', 'window.greenroomImportSplat ='),state);
+ const pending=kind==='mesh'?state.greenroomImportMesh('/stale.glb','stale.glb',{}):kind==='splat'?state.greenroomImportSplat('/stale.ply','stale.ply',{}):state.importGreenroomPreviewToScene();
+ await retiring;state.workingScene.loads.invalidate();state.workingScene.discardSuspendedMembership();finish(false);
+ assert.ok(!await pending);
+ assert.deepEqual(state.recordedInsertions,[]);
+ assert.equal(state.sceneObjects.length,0,'no stale asset in the replacement document');
+});

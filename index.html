@@ -23737,7 +23737,7 @@ async function recordImportedSceneObject(object) {
 
 async function greenroomImportMesh(url, fileName, display) {
   if (greenroomPreviewIsActive()) {
-    await restoreAuthoredSceneFromPreview({ silent: true });
+    if(!await restoreAuthoredSceneFromPreview({ silent: true }))return null;
   }
   glbFileName = fileName;
   const imported = await showGLB(url, {
@@ -23973,7 +23973,7 @@ function greenroomSplatMetadata(display, fileName, url, metadata = {}) {
 
 async function greenroomImportSplat(url, fileName, display, options = {}) {
   if (greenroomPreviewIsActive()) {
-    await restoreAuthoredSceneFromPreview({ silent: true });
+    if(!await restoreAuthoredSceneFromPreview({ silent: true }))return null;
     if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
   }
   if (shouldClearSceneForImport(options)&&!await clearScene()) return null;
@@ -24048,7 +24048,7 @@ async function importGreenroomPreviewToScene() {
   }
   const preview = greenroomPreviewState.preview;
   const transformState = previewTransformState(greenroomPreviewState.previewObject);
-  await restoreAuthoredSceneFromPreview({ silent: true });
+  if(!await restoreAuthoredSceneFromPreview({ silent: true }))return false;
   glbFileName = preview.fileName;
   const imported = await showGLB(preview.url, {
     clear: false,
@@ -24974,6 +24974,7 @@ function compositionStatus(message, failed = false) {
 }
 
 async function collectSceneComposition() {
+  if(flameFeature.retired&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
   const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
@@ -26380,7 +26381,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
-  if((activeSceneComposition||isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
+  if((activeSceneComposition||!flameFeature.retired&&isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;

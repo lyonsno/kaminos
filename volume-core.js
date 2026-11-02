@@ -29136,7 +29136,7 @@ export function createKaminosVolumePrototype({
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
       rayStartNoiseTexture?.destroy();
-      worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
+      worldOpticalFallback?.destroy();
       rayAllocationHistory?.dispose();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
@@ -29154,6 +29154,7 @@ export function createKaminosVolumePrototype({
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;
       destroyFluidState();
+      worldRenderUniform?.destroy();worldRenderUniform=null;
       canvas.remove();
     },
   };

@@ -16,7 +16,7 @@ test('actual Add Water refuses preview before setup, construction, selection or 
  const membership=createSceneMembershipOperations({scene:workingScene,records:{},roots:{}});membership.attachHistory(edits);
  const h=vm.createContext({sceneLightingPreparation:null,THREE,structuredClone,workingScene,scene,createSceneObjectRecord,sceneMembership:membership,
  LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,defaultLocalLiquidSetup,normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,createLocalLiquidEmitterSceneRecord,createLocalLiquidEmitterObject,
- localLiquidSetup:null,authoringBusy:false,sceneSaveBlockedByFailedRestore:false,scenePlacementTools:{edits},controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[],selectedWaterSource:()=>null,makeSceneObjectId:()=> 'water',
+ localLiquidSetup:null,sceneLifecycle:{clearing:false},authoringBusy:false,sceneSaveBlockedByFailedRestore:false,scenePlacementTools:{edits},controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[],selectedWaterSource:()=>null,makeSceneObjectId:()=> 'water',
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',FLAME_EMITTER_TYPE:'flame',sceneNavigation:null,sceneObjectDisplayLabel:row=>row.label,
  setActiveSceneObject:id=>workingScene.select([id]),sceneCameras:null,renderSceneObjectList(){},updateTransformInspector(){},applyGiProxySetting(){},setInfo(){},window:{}});
  install(h,'assertSceneConstructionAvailable');install(h,'registerSceneObject');install(h,'addAuthoredWaterDrop',true);

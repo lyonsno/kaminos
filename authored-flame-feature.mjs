@@ -23,6 +23,7 @@ export function createAuthoredFlameFeature({runtime,visible,composed}) {
    retired=!present;
    return setActive(present&&(!composition||visible()),{isCurrent});
   },
+  get retired(){return retired;},
   get active(){return !!runtime()?.isActive();},
  });
 }
