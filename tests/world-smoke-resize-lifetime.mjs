@@ -15,7 +15,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
     controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
-    encodeDomainRemap(){},encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,prepareFineVelocity(){return null;},
+    refreshWorldRenderMapping(){},encodeDomainRemap(){},encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,prepareFineVelocity(){return null;},
     state:{reactantCombustion:{effective:{admitted:true}},simStepCount:1},gridSize:32,gridHeight:64,
     device:{queue:{writeBuffer(){}}},createWorldSmoke,resolveWorldRegions,worldSmokeMapping,productTransform:anchor,
     createGpuSceneSolidProducer:()=>({destroy(){}}),getSceneCollision:()=>null,
