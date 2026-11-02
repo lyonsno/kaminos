@@ -128,7 +128,21 @@ function boxIntersectsFrustum(box, planes) {
   return true;
 }
 
-export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1} = {}) {
+export function effectiveRelativeGeomError(tier, {stat = 'p95', tailWeight = 0.3} = {}) {
+  const err = tier?.error;
+  if (!err) return 0;
+  const baseRel = Number(err.relative?.[stat] ?? err.relative?.p95 ?? 0) || 0;
+  if (stat !== 'p95') return baseRel;
+  const diag = Number(err.diagonal) > 0 ? Number(err.diagonal) : 0;
+  const srcP95 = diag > 0 && Number(err.sourceToLevel?.p95) > 0 ? Number(err.sourceToLevel.p95) / diag : 0;
+  const srcMax =
+    diag > 0 && Number(err.sourceToLevel?.max) > 0
+      ? Number(err.sourceToLevel.max) / diag
+      : (Number(err.relative?.max) || 0);
+  return Math.max(baseRel, srcP95, (Number(tailWeight) || 0) * srcMax);
+}
+
+export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1, tailWeight = 0.3} = {}) {
   if (!tier || tier === 'hero' || tier.isHero) return 0;
   const camPos = cameraWorldPosition(camera);
   const near = Math.max(camera?.near ?? 0.01, 1e-6);
@@ -144,7 +158,7 @@ export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHei
   }
   const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
   const stretch = Math.max(1, Number(texelStretch) || 1);
-  const geomRel = Number(tier.error?.relative?.[stat] ?? tier.error?.relative?.p95 ?? 0) || 0;
+  const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight});
   const texelSize = (Number(tier.normalMap?.texelSize ?? (tier.textureSize > 0 ? 1 / tier.textureSize : 0)) || 0) * stretch;
   const combinedRel = Math.max(geomRel, texelWeight * texelSize);
   return diag * pixelsPerUnit * combinedRel;
@@ -167,7 +181,7 @@ export function selectFootprintTier(levels = [], {
     .filter(l => Number.isFinite(l?.faces) && l.faces > 0 && (!Number.isFinite(heroFaces) || l.faces < heroFaces))
     .sort((a, b) => b.faces - a.faces);
   const rungs = [
-    {id: 'hero', sha: 'hero', isHero: true, faces: heroFaces, pixelError: 0, level: null},
+    {id: 'hero', sha: 'hero', isHero: true, faces: heroFaces, pixelError: 0, geomPixelError: 0, level: null},
     ...sorted.map(l => {
       const id = l.sha ?? l.sha256;
       return {
@@ -176,6 +190,7 @@ export function selectFootprintTier(levels = [], {
         isHero: false,
         faces: l.faces,
         pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight, texelStretch}),
+        geomPixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight: 0, texelStretch}),
         level: l,
       };
     }),
@@ -307,7 +322,10 @@ export function allocateSceneBeautyLods(candidates = [], {
       const next = item.rungs[item.chosenIndex + 1];
       const deltaFaces = item.instanceCount * (cur.faces - next.faces);
       if (deltaFaces <= 0) continue;
-      const deltaError = Math.max(0, next.pixelError - cur.pixelError);
+      const deltaTexOrGeom = Math.max(0, next.pixelError - cur.pixelError);
+      const deltaGeomOnly = Math.max(0, (next.geomPixelError ?? 0) - (cur.geomPixelError ?? 0));
+      const deltaError =
+        deltaTexOrGeom + ((next.geomPixelError ?? 0) < next.pixelError - 1e-9 ? deltaGeomOnly : 0);
       const stickiness = cur.id === item.activeTier ? 1 + hysteresis : 1;
       const cost = (deltaError / deltaFaces) * stickiness;
       if (cost < bestCost - 1e-12 || (Math.abs(cost - bestCost) <= 1e-12 && deltaFaces > bestDeltaFaces)) {
@@ -365,7 +383,7 @@ export function allocateShadowCasterLods(candidates = [], {
       .sort((a, b) => b.faces - a.faces);
     const rungs = sorted.map(l => {
       const id = l.sha ?? l.sha256;
-      const rel = Number(l.error?.relative?.[stat] ?? l.error?.relative?.p95 ?? 0) || 0;
+      const rel = effectiveRelativeGeomError(l, {stat});
       return {id, sha: id, faces: l.faces, solidAngleError: (diag * rel) / dFlame, level: l};
     });
     const instanceCount = Math.max(1, c.instanceCount ?? (boxes.length || 1));

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import * as THREE from '../lib/three.core.js';
 import {
+  effectiveRelativeGeomError,
   screenPixelError,
   selectFootprintTier,
   allocateSceneBeautyLods,
@@ -1204,4 +1205,180 @@ test('Stockroom surfelSource: prepareGenerationLevels builds hero-normal surfel 
   assert.equal(registered[0].route, 'trellis-surfels+hero-normals');
   assert.equal(registered[0].mergeFactor, 4);
 });
+
+test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators penalize dropped silhouette features and coarsen prismatic beams first', async () => {
+  const {measureGeometricError} = await import('../mesh-lod-ladder.mjs');
+
+  // Helper to build an axis-aligned box mesh [x0..x1, y0..y1, z0..z1]
+  function appendBox(verts, faces, [x0, y0, z0], [x1, y1, z1]) {
+    const base = verts.length / 3;
+    for (let i = 0; i < 8; i++) {
+      verts.push(i & 1 ? x1 : x0, (i >> 1) & 1 ? y1 : y0, (i >> 2) & 1 ? z1 : z0);
+    }
+    for (const [a, b, c, d] of [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]) {
+      faces.push(base + a, base + b, base + c, base + a, base + c, base + d);
+    }
+  }
+  function closestOnBox([x0, y0, z0], [x1, y1, z1]) {
+    return (x, y, z) => {
+      const p = [x, y, z];
+      const c = [Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y)), Math.min(z1, Math.max(z0, z))];
+      if (c[0] !== x || c[1] !== y || c[2] !== z) {
+        const d = [x - c[0], y - c[1], z - c[2]];
+        const axis = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])].indexOf(Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])));
+        const n = [0, 0, 0];
+        n[axis] = Math.sign(d[axis]) || 1;
+        return {point: c, normal: n};
+      }
+      const opts = [
+        [x - x0, 0, x0, -1], [x1 - x, 0, x1, 1],
+        [y - y0, 1, y0, -1], [y1 - y, 1, y1, 1],
+        [z - z0, 2, z0, -1], [z1 - z, 2, z1, 1],
+      ].sort((a, b) => a[0] - b[0])[0];
+      c[opts[1]] = opts[2];
+      const n = [0, 0, 0];
+      n[opts[1]] = opts[3];
+      return {point: c, normal: n};
+    };
+  }
+
+  // 1. Synthetic geometric fixture:
+  //    - Kiln hero: [0, 1]^3 chamber + right-side stand-off pipe [1.0, 1.16] x [0.25, 0.75] x [0.45, 0.55]
+  //      (~4% of hero surface area). Its 1,000-face rung drops the right-side pipe completely.
+  //    - Beam hero: [0, 1]^3 block whose 1,000-face rung has a uniform 0.004 crack/chamfer smoothing on all faces.
+  const kilnHeroV = [], kilnHeroF = [];
+  appendBox(kilnHeroV, kilnHeroF, [0, 0, 0], [1, 1, 1]);
+  appendBox(kilnHeroV, kilnHeroF, [1.0, 0.25, 0.45], [1.16, 0.75, 0.55]);
+  const kilnHero = {vertices: new Float32Array(kilnHeroV), faces: new Uint32Array(kilnHeroF)};
+
+  const kilnCoarseV = [], kilnCoarseF = [];
+  appendBox(kilnCoarseV, kilnCoarseF, [0.0005, 0.0005, 0.0005], [0.9995, 0.9995, 0.9995]);
+  const kilnCoarse = {vertices: new Float32Array(kilnCoarseV), faces: new Uint32Array(kilnCoarseF)};
+
+  const closestKilnHero = (x, y, z) => {
+    const a = closestOnBox([0, 0, 0], [1, 1, 1])(x, y, z);
+    const b = closestOnBox([1.0, 0.25, 0.45], [1.16, 0.75, 0.55])(x, y, z);
+    const da = Math.hypot(a.point[0] - x, a.point[1] - y, a.point[2] - z);
+    const db = Math.hypot(b.point[0] - x, b.point[1] - y, b.point[2] - z);
+    return da <= db ? a : b;
+  };
+  const kilnPipeDropError = measureGeometricError({
+    source: kilnHero,
+    level: kilnCoarse,
+    closestSource: closestKilnHero,
+    closestLevel: closestOnBox([0.0005, 0.0005, 0.0005], [0.9995, 0.9995, 0.9995]),
+    samples: 10000,
+    seed: 11,
+  });
+
+  const beamHeroV = [], beamHeroF = [], beamCoarseV = [], beamCoarseF = [];
+  appendBox(beamHeroV, beamHeroF, [0, 0, 0], [1, 1, 1]);
+  appendBox(beamCoarseV, beamCoarseF, [0.003, 0.003, 0.003], [0.997, 0.997, 0.997]);
+  const beamCrackSealError = measureGeometricError({
+    source: {vertices: new Float32Array(beamHeroV), faces: new Uint32Array(beamHeroF)},
+    level: {vertices: new Float32Array(beamCoarseV), faces: new Uint32Array(beamCoarseF)},
+    closestSource: closestOnBox([0, 0, 0], [1, 1, 1]),
+    closestLevel: closestOnBox([0.003, 0.003, 0.003], [0.997, 0.997, 0.997]),
+    samples: 10000,
+    seed: 11,
+  });
+
+  // Notice the pooled-p95 dilution trap: because the side pipe is ~4% of the kiln's area and absent from
+  // levelToSource, pooled kilnPipeDropError.relative.p95 (< 0.001) is smaller than beamCrackSealError.relative.p95 (~0.0017),
+  // even though kilnPipeDropError.sourceToLevel.max is ~0.16 (the dropped pipe) vs ~0.005 on the beam!
+  assert.ok(
+    kilnPipeDropError.relative.p95 < beamCrackSealError.relative.p95,
+    `pooled p95 alone under-weights the <5%-area dropped pipe (${kilnPipeDropError.relative.p95} < ${beamCrackSealError.relative.p95})`,
+  );
+  assert.ok(
+    kilnPipeDropError.sourceToLevel.max > 20 * beamCrackSealError.sourceToLevel.max,
+    `sourceToLevel.max captures the dropped pipe (${kilnPipeDropError.sourceToLevel.max} vs ${beamCrackSealError.sourceToLevel.max})`,
+  );
+
+  const unitBox = new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5));
+  const diag = Math.sqrt(3);
+  const cam = makeCamera({z: 4, fov: 50});
+  const kiln1kTier = {sha: sha('kiln-1k-pipe-drop'), faces: 1000, textureSize: 256, error: kilnPipeDropError, normalMap: {texelSize: 1 / 256}};
+  const beam1kTier = {sha: sha('beam-1k-crack-seal'), faces: 1000, textureSize: 256, error: beamCrackSealError, normalMap: {texelSize: 1 / 256}};
+  const kilnPx = screenPixelError(kiln1kTier, {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080});
+  const beamPx = screenPixelError(beam1kTier, {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080});
+  assert.ok(
+    kilnPx > 10 * beamPx,
+    `screenPixelError must penalize the pipe-dropping kiln tier far more than the crack-sealing beam tier (${kilnPx} vs ${beamPx})`,
+  );
+
+  // When both objects have a 5,000-face tier that preserves their shape and a 1,000-face tier where the kiln drops its pipe:
+  const shared5kError = {
+    diagonal: diag,
+    relative: {p95: 0.0012, max: 0.0025, mean: 0.0005},
+    levelToSource: {p95: 0.0012 * diag, max: 0.0022 * diag, mean: 0.0005 * diag},
+    sourceToLevel: {p95: 0.0012 * diag, max: 0.0025 * diag, mean: 0.0005 * diag},
+  };
+  const kilnLevels = [
+    {sha: sha('kiln-5k-keep-pipe'), faces: 5000, textureSize: 512, error: shared5kError, normalMap: {texelSize: 1 / 512}},
+    kiln1kTier,
+  ];
+  const beamLevels = [
+    {sha: sha('beam-5k'), faces: 5000, textureSize: 512, error: shared5kError, normalMap: {texelSize: 1 / 512}},
+    beam1kTier,
+  ];
+
+  // Under a 6,000-face budget (only one object can stay at 5,000 faces; the other must drop to 1,000 faces):
+  // Both beauty and shadow allocators MUST demote the beam to 1,000 faces and keep the kiln at 5,000 faces!
+  const beautySynthetic = allocateSceneBeautyLods([
+    {id: 'kiln', heroFaces: 200000, levels: kilnLevels, worldBox: unitBox, worldDiag: diag},
+    {id: 'beam', heroFaces: 200000, levels: beamLevels, worldBox: unitBox, worldDiag: diag},
+  ], {camera: makeCamera({z: 5.5, fov: 50}), viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 6000});
+  assert.equal(beautySynthetic.withinBudget, true);
+  assert.equal(beautySynthetic.allocations.kiln.faces, 5000, 'beauty budget preserves the kiln at 5,000 faces so its side pipe is not dropped');
+  assert.equal(beautySynthetic.allocations.beam.faces, 1000, 'beauty budget demotes the beam to 1,000 faces instead');
+
+  const shadowSynthetic = allocateShadowCasterLods([
+    {id: 'kiln', heroFaces: 200000, levels: kilnLevels, worldBox: unitBox, worldDiag: diag},
+    {id: 'beam', heroFaces: 200000, levels: beamLevels, worldBox: unitBox, worldDiag: diag},
+  ], {flameBox: new THREE.Box3(new THREE.Vector3(-0.1, -0.1, -0.1), new THREE.Vector3(0.1, 0.1, 0.1)), shadowFaceBudget: 6000});
+  assert.equal(shadowSynthetic.withinBudget, true);
+  assert.equal(shadowSynthetic.allocations.kiln.faces, 5000, 'shadow budget preserves the kiln at 5,000 faces');
+  assert.equal(shadowSynthetic.allocations.beam.faces, 1000, 'shadow budget demotes the beam to 1,000 faces');
+
+  // 2. Real baked error curves from Refractory Kiln (f8e6ce91) and Weathered Timber Beam (7be0be28) at equal bounds & distance:
+  const realKilnLevels = [
+    {sha: '57b5a750', faces: 25000, textureSize: 1024, normalMap: {texelSize: 0.004260175}, error: {diagonal: 1.487462, relative: {max: 0.011843, p95: 0.002828, mean: 0.000579}, levelToSource: {max: 0.011467, p95: 0.003489, mean: 0.000678}, sourceToLevel: {max: 0.017617, p95: 0.004823, mean: 0.001044}}},
+    {sha: '414cca4f', faces: 10000, textureSize: 512, normalMap: {texelSize: 0.007478695}, error: {diagonal: 1.487462, relative: {max: 0.025876, p95: 0.005484, mean: 0.001108}, levelToSource: {max: 0.015106, p95: 0.005359, mean: 0.001028}, sourceToLevel: {max: 0.038490, p95: 0.011303, mean: 0.002268}}},
+    {sha: '7dbc98d3', faces: 5000, textureSize: 512, normalMap: {texelSize: 0.006812807}, error: {diagonal: 1.487462, relative: {max: 0.025906, p95: 0.009047, mean: 0.001854}, levelToSource: {max: 0.024469, p95: 0.008665, mean: 0.001704}, sourceToLevel: {max: 0.038534, p95: 0.016442, mean: 0.003811}}},
+    {sha: '6858aec1', faces: 1000, textureSize: 256, normalMap: {texelSize: 0.009611729}, error: {diagonal: 1.487462, relative: {max: 0.061201, p95: 0.026436, mean: 0.006755}, levelToSource: {max: 0.051067, p95: 0.019752, mean: 0.004896}, sourceToLevel: {max: 0.091034, p95: 0.044281, mean: 0.015200}}},
+    {sha: 'f5889e96', faces: 500, textureSize: 256, normalMap: {texelSize: 0.009764150}, error: {diagonal: 1.487462, relative: {max: 0.063995, p95: 0.027777, mean: 0.007391}, levelToSource: {max: 0.042772, p95: 0.020955, mean: 0.005821}, sourceToLevel: {max: 0.095191, p95: 0.046434, mean: 0.016168}}},
+  ];
+  const realBeamLevels = [
+    {sha: 'bae07caf', faces: 25000, textureSize: 1024, normalMap: {texelSize: 0.001788627}, error: {diagonal: 1.051690, relative: {max: 0.005581, p95: 0.000292, mean: 0.000076}, levelToSource: {max: 0.003203, p95: 0.000397, mean: 0.000101}, sourceToLevel: {max: 0.005870, p95: 0.000218, mean: 0.000059}}},
+    {sha: '05a311ac', faces: 10000, textureSize: 512, normalMap: {texelSize: 0.003357881}, error: {diagonal: 1.051690, relative: {max: 0.005951, p95: 0.000538, mean: 0.000132}, levelToSource: {max: 0.005335, p95: 0.000733, mean: 0.000180}, sourceToLevel: {max: 0.006259, p95: 0.000378, mean: 0.000098}}},
+    {sha: '8045c108', faces: 5000, textureSize: 512, normalMap: {texelSize: 0.003273525}, error: {diagonal: 1.051690, relative: {max: 0.005407, p95: 0.000832, mean: 0.000202}, levelToSource: {max: 0.005687, p95: 0.001112, mean: 0.000277}, sourceToLevel: {max: 0.005344, p95: 0.000560, mean: 0.000147}}},
+    {sha: 'adb066b2', faces: 1000, textureSize: 256, normalMap: {texelSize: 0.006745198}, error: {diagonal: 1.051690, relative: {max: 0.011962, p95: 0.001910, mean: 0.000537}, levelToSource: {max: 0.012580, p95: 0.002616, mean: 0.000735}, sourceToLevel: {max: 0.007859, p95: 0.001374, mean: 0.000395}}},
+    {sha: '7208b932', faces: 500, textureSize: 256, normalMap: {texelSize: 0.004554675}, error: {diagonal: 1.051690, relative: {max: 0.013912, p95: 0.001645, mean: 0.000598}, levelToSource: {max: 0.014632, p95: 0.001640, mean: 0.000603}, sourceToLevel: {max: 0.008618, p95: 0.001854, mean: 0.000654}}},
+  ];
+
+  // At medium distance (z = 5.5m) with identical worldBox and worldDiag, footprint selection drops the beam to 500 faces
+  // while holding the kiln at 25,000 faces:
+  const medCam = makeCamera({z: 5.5, fov: 50});
+  const kilnFoot = selectFootprintTier(realKilnLevels, {heroFaces: 287407, worldBox: unitBox, worldDiag: diag, camera: medCam, viewportHeight: 1080, maxPixelError: 1.5});
+  const beamFoot = selectFootprintTier(realBeamLevels, {heroFaces: 239716, worldBox: unitBox, worldDiag: diag, camera: medCam, viewportHeight: 1080, maxPixelError: 1.5});
+  assert.equal(beamFoot.selected.faces, 500, 'at z = 5.5m, beam coarsens all the way to 500 faces by screen footprint');
+  assert.equal(kilnFoot.selected.faces, 25000, 'at z = 5.5m, kiln stays at 25,000 faces by screen footprint');
+
+  // At close range (z = 1.8m) where both want high detail, a tight 10,500-face budget demotes the beam all the way to 500 faces
+  // while keeping the kiln at 10,000 faces (never dropping the kiln into its pipe-losing 1,000 or 500 tiers):
+  const closeCam = makeCamera({z: 1.8, fov: 50});
+  const realBudget = allocateSceneBeautyLods([
+    {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
+    {id: 'beam', heroFaces: 239716, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
+  ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 10500});
+  assert.equal(realBudget.withinBudget, true);
+  assert.equal(realBudget.allocations.beam.faces, 500, 'beam is demoted all the way to 500 faces first');
+  assert.equal(realBudget.allocations.kiln.faces, 10000, 'kiln stays at 10,000 faces and avoids its pipe-dropping 1k/500 tiers');
+  assert.ok(
+    effectiveRelativeGeomError(realKilnLevels[3]) > 10 * effectiveRelativeGeomError(realBeamLevels[3]),
+    'effectiveRelativeGeomError at 1,000 faces is >10x higher on the kiln than on the beam',
+  );
+});
+
 
