@@ -287,7 +287,7 @@ Each physical timestamp pair is used once per query set. Exhausted sets retire a
 
 MIT. See [LICENSE](LICENSE).
 
-The [Qwen browser-module export](../models/qwen3_5/README.md#use-the-model-outside-kaminos)
+The [Qwen browser-module export](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5#use-the-model-outside-kaminos)
 shows an outside application consuming the installed kit's `/generation` and
 `/core` exports alongside a bundled model adapter. This source-branch workflow
 uses a local kit tarball until the corresponding kit release is published.
