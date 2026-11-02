@@ -11,7 +11,14 @@ export async function runFrameYieldProbe(config){
  let host,run,block,input,modulation,drawing=true;const errors=[];
  const redraw=()=>{if(drawing){window._kaminosDirty?.();requestAnimationFrame(redraw);}};
  try{
-  await save();const app=await window.kaminosAppGpu();const info=app.adapter.info;
+  await save();
+  if(config.scene){
+   const link=window.kaminosAssetSmokeLinkDebugState?.();
+   const r=await fetch(link?.effectiveUrl??'/missing-scene');if(!r.ok)throw Error('scene bytes unavailable');
+   state.scene={state:link,objects:window.kaminosSceneObjectDebugState?.()??[],sha256:await hash(await r.arrayBuffer())};
+   if(state.scene.sha256!==config.scene.sha256)throw Error('scene asset bytes changed');
+  }
+  const app=await window.kaminosAppGpu();const info=app.adapter.info;
   state.backend={vendor:info.vendor,architecture:info.architecture,isFallbackAdapter:app.adapter.isFallbackAdapter??info.isFallbackAdapter};
   if(info.vendor!=='apple'||!info.architecture.includes('metal')||state.backend.isFallbackAdapter!==false)throw Error('actual nonfallback Apple Metal required');
   const actualSession=await app.session();

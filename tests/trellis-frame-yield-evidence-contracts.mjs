@@ -13,3 +13,10 @@ for(const [name,change]of [
  ['missing drain',s=>s.runs[2].policy.gpuDrains=0],['no frames',s=>s.runs[2].frames=[]],['no foreground renders',s=>s.runs[2].sceneFramesAfter=2],
  ['stale frame',s=>s.runs[2].frames=[-5]],['Stop not observed',s=>s.stop.status='succeeded'],['unreleased',s=>s.release.status='held']
 ])test('false closure rejected: '+name,()=>{const s=fixture();change(s);assert.throws(()=>validateFrameYieldState(s,expected));});
+const scene={root:'generated-meshes',path:'retained.glb',sha256:'c'.repeat(64)};
+const loadedScene=()=>({state:{schema:'kaminos.asset-smoke-link.v0',status:'loaded',assetType:'mesh',requestedRoot:scene.root,requestedPath:scene.path,effectiveUrl:'/api/read?root=generated-meshes&path=retained.glb',registeredObjectId:'mesh-1'},objects:[{id:'mesh-1',type:'glb',source:'/api/read?root=generated-meshes&path=retained.glb'}],sha256:scene.sha256});
+test('loaded scene preserves requested asset and its actual registration',()=>{const s=fixture();s.scene=loadedScene();assert.equal(validateFrameYieldState(s,{...expected,scene}),true);});
+for(const[name,change]of [
+ ['missing scene',s=>delete s.scene],['wrong asset',s=>s.scene.state.requestedPath='other.glb'],
+ ['wrong bytes',s=>s.scene.sha256='d'.repeat(64)],['unregistered asset',s=>s.scene.objects=[]],['wrong registered source',s=>s.scene.objects[0].source='/other']
+])test('loaded-scene false closure rejected: '+name,()=>{const s=fixture();s.scene=loadedScene();change(s);assert.throws(()=>validateFrameYieldState(s,{...expected,scene}));});

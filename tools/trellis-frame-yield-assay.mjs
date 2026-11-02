@@ -67,13 +67,16 @@ try{
  while(true){if(browser.exitCode!==null)throw Error('owned browser exited');try{const r=await fetch('http://127.0.0.1:'+cfg.debugPort+'/json/version');if(r.ok){report.browserVersion=await r.json();break;}}catch{}await sleep(125);}
  const pages=await(await fetch('http://127.0.0.1:'+cfg.debugPort+'/json/list')).json();cdp=await connect(pages.find(p=>p.type==='page').webSocketDebuggerUrl);
  const evaluate=async expression=>{const r=await cdp.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
- await cdp.call('Page.enable');const loaded=cdp.once('Page.loadEventFired');report.url=url+'/index.html?notes=0&vantage=0';await cdp.call('Page.navigate',{url:report.url});await loaded;
+ await cdp.call('Page.enable');const loaded=cdp.once('Page.loadEventFired');
+ const query=new URLSearchParams({notes:'0',vantage:'0',...(cfg.scene?{mesh_root:cfg.scene.root,mesh_path:cfg.scene.path}:{})});
+ report.url=url+'/index.html?'+query;await cdp.call('Page.navigate',{url:report.url});await loaded;
  await evaluate('(async()=>{while(!window.kaminosAppGpu)await new Promise(r=>requestAnimationFrame(r));await window.kaminosAppGpu();return true})()');
- report.phase='retained-model-block';await persist();const inputs={fixtures:report.fixtures,frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame};
+ if(cfg.scene)await evaluate('(async()=>{while(true){const s=window.kaminosAssetSmokeLinkDebugState?.();if(s?.status==="loaded")return s;if(s?.status==="failed")throw Error(JSON.stringify(s));await new Promise(r=>requestAnimationFrame(r));}})()');
+ report.phase='retained-model-block';await persist();const inputs={fixtures:report.fixtures,frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame,scene:cfg.scene};
  report.result=await evaluate('import("/models/trellis2/frame-yield-probe.js").then(m=>m.runFrameYieldProbe('+JSON.stringify(inputs)+'))');
  report.primary=JSON.parse(await fs.readFile(path.join(out,'state.json'),'utf8'));
  if(report.result.status!=='completed'||report.primary.status!=='completed')throw Error(report.primary.error?.message??'block comparison failed');
- const b=report.fixtures.block.config;validateFrameYieldState(report.primary,{shape:[b.tokenRows??b.resolution**3,b.channels],frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame});
+ const b=report.fixtures.block.config;validateFrameYieldState(report.primary,{shape:[b.tokenRows??b.resolution**3,b.channels],frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame,scene:cfg.scene});
  for(const run of report.primary.runs){const raw=await fs.readFile(path.join(out,run.output.file));if(raw.byteLength!==run.output.byteLength||sha(raw)!==run.output.sha256)throw Error('raw output mismatch '+run.mode);const a=new Float32Array(raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength));if(!a.every(Number.isFinite)||!a.some(x=>x!==0))throw Error('blank/nonfinite raw output '+run.mode);}
  report.afterScreenshot=path.join(out,'after.png');await fs.writeFile(report.afterScreenshot,Buffer.from((await cdp.call('Page.captureScreenshot',{format:'png'})).data,'base64'));
  report.status='completed';report.phase='complete';

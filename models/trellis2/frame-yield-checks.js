@@ -1,9 +1,14 @@
 // Offline evidence admission; a successful subprocess alone cannot close the comparison.
-export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYieldsPerFrame}){
+export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYieldsPerFrame,scene}){
  const need=(ok,message)=>{if(!ok)throw Error(message);};
  need(state?.status==='completed'&&state.phase==='complete','complete retained-block report required');
  need(state.backend?.vendor==='apple'&&state.backend.architecture?.includes('metal')&&state.backend.isFallbackAdapter===false,'actual nonfallback Apple Metal required');
  need(state.effectiveRoute==='trellis2.image-generation.webgpu.v0','actual app model route required');
+ if(scene){
+  const observed=state.scene,link=observed?.state,object=observed?.objects?.find(o=>o.id===link?.registeredObjectId);
+  const url=new URL(link?.effectiveUrl??'/','http://assay.invalid');
+  need(link?.schema==='kaminos.asset-smoke-link.v0'&&link.status==='loaded'&&link.assetType==='mesh'&&link.requestedRoot===scene.root&&link.requestedPath===scene.path&&observed.sha256===scene.sha256&&url.pathname==='/api/read'&&url.searchParams.get('root')===scene.root&&url.searchParams.get('path')===scene.path&&object?.type==='glb'&&object.source===link.effectiveUrl,'actual requested scene asset and registration required');
+ }
  need(state.release?.status==='released'&&!state.cleanupError&&Array.isArray(state.errors)&&!state.errors.length,'released error-free route required');
  need(Array.isArray(state.runs)&&state.runs.length===3,'warmup and complete matched pair required');
  for(const [i,mode]of ['warmup','baseline','frame-aware'].entries()){
