@@ -85,7 +85,7 @@ try{
  const patch=async options=>page.evaluate(options=>window.kaminosFineCoverage.set(options),options);
  await patch({mode:'sources',margin:.15,headroom:.75,lookahead:0,interval:.25,hysteresis:.05});
  const move=async p=>page.evaluate(({id,p})=>window.kaminosSetSceneObjectTransform(id,p),{id,p});
- const elevated={...pose,position:pose.position.map((x,a)=>x+(a===1?scale*1.6:0))};
+ const elevated={...pose,position:pose.position.map((x,a)=>x+(a===1?scale*3.6:0))};
  report.phase='upward-source';await save();await move(elevated);await waitSteps(30);
  const up=await capture('upward-source');check(up,initial,{advancing:true});
  assert.ok(up.pose.translation[1]>initial.pose.translation[1]+scale*.5,'Fine must follow the source upward');
