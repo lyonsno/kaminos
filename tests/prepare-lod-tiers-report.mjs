@@ -210,3 +210,18 @@ test('review M2: --surfel-factors reads geometry.coordinates.i32 independently o
   assert.equal(server2.registered.length, 1);
   assert.equal(server2.registered[0].level.mergeFactor, 2);
 });
+
+test('omitting --input prepares and registers mesh LOD tiers directly from the stored source GLB on the server', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-from-glb-')), report = path.join(dir, 'report.json');
+  const server = await standIn({hero: triangleGLB()});
+  const status = await runTool(['--source', 'a'.repeat(64), '--server', server.url, '--targets', '200', '--report', report]);
+  server.close();
+  const r = JSON.parse(fs.readFileSync(report, 'utf8'));
+  assert.equal(status, 0, JSON.stringify(r.error));
+  assert.equal(r.phase, 'done');
+  assert.equal(r.raw.fromHeroGLB, true);
+  assert.equal(server.registered.length, 1);
+  assert.deepEqual(server.registered[0].level.error.reference, {kind: 'hero', sha256: 'a'.repeat(64), faces: 1});
+  assert.equal(server.registered[0].level.errorAgainstRawDecode, undefined);
+  assert.equal(server.registered[0].level.normalMap.source.sha256, 'a'.repeat(64));
+});

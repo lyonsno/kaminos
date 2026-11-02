@@ -13,6 +13,7 @@
 // `report` is updated at every phase and returned, including on failure (with `error`).
 import {prepareLowTiers, readGLBWorldMesh, measureGeometricError, glbNodeWorldMatrices} from './mesh-lod-ladder.mjs';
 import {addNormalMapToGLB, createHeroNormalSampler} from './lod-normal-bake.mjs';
+import {readGLBLocalSurfaceAndMaterials, createGLBMeshMaterialBaker} from './lod-mesh-bake.mjs';
 import {buildSurfelField, mergeSurfelLevel, surfelPositions, sampleSurfelNormals, surfelTriangles, encodeSurfelGLB} from './trellis-surfels.mjs';
 
 export const LOW_TIER_ROUTE = 'closed-remesh+projection+trellis-simplify';
@@ -24,23 +25,25 @@ export const GENERATION_LEVEL_REFERENCES = Object.freeze(['hero', 'raw-decode'])
 const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(array.buffer, array.byteOffset, array.byteLength)))]
   .map(b => b.toString(16).padStart(2, '0')).join('');
 
-export async function prepareGenerationLevels({decode, materialFields, source, heroGLB = null, server = '', fetch = globalThis.fetch,
-  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [5000, 1000, 500], surfelFactors = [], replace = false, normalMaps = true, input = null, route = null,
+export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, server = '', fetch = globalThis.fetch,
+  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
   reference = 'hero', report = {}, onPhase = () => {}}) {
-  const {vertices, triangles, coordinates: decodeCoordinates} = decode;
+  const fromHeroGLB = !decode;
+  let {vertices, triangles, coordinates: decodeCoordinates} = decode ?? {};
   Object.assign(report, {schema: 'kaminos.lod-tiers-report.v0', source, targets, ...(surfelFactors.length ? {surfelFactors} : {}), tiers: report.tiers ?? []});
   const phase = name => { report.phase = name; onPhase(report); };
   try {
     if (!GENERATION_LEVEL_REFERENCES.includes(reference)) throw Error(`reference must be one of ${GENERATION_LEVEL_REFERENCES.join(', ')}`);
     if (reference === 'raw-decode' && heroGLB) throw Error('a raw-decode reference takes no hero; levels are measured against the decode');
+    if (fromHeroGLB && reference !== 'hero') throw Error('decode is required when reference is not hero');
     if (surfelFactors.length && reference !== 'hero') throw Error('merged surfel levels with hero normals require reference: hero');
-    if (surfelFactors.length && (!(decodeCoordinates instanceof Int32Array) || decodeCoordinates.length !== vertices.length))
+    if (surfelFactors.length && (fromHeroGLB || !(decodeCoordinates instanceof Int32Array) || decodeCoordinates.length !== vertices.length))
       throw Error('decode.coordinates (Int32Array[N,3]) are required when surfelFactors are requested');
     report.reference = reference;
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored mesh the levels belong to');
     if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
       throw Error('at least one target face count or surfel merge factor is required, each a positive integer');
-    report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3};
+    if (!fromHeroGLB) report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3};
     // Refuse taken slots before storing anything (unless replacing): the server keeps one level per
     // (faces, route) or (mergeFactor, route), and a tier stored but then refused would linger as an unregistered mesh.
     phase('preflight');
@@ -56,7 +59,14 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
       if (!response.ok) throw Error(`source mesh ${source} is not stored (HTTP ${response.status})`);
       heroGLB = await response.arrayBuffer();
     }
-    const inputDigests = {'vertices.f32': await sha256(vertices), 'triangles.u32': await sha256(triangles)};
+    let glbSurface = null;
+    if (fromHeroGLB) {
+      glbSurface = await readGLBLocalSurfaceAndMaterials(heroGLB);
+      vertices = glbSurface.vertices;
+      triangles = glbSurface.triangles;
+      report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3, fromHeroGLB: true};
+    }
+    const inputDigests = fromHeroGLB ? null : {'vertices.f32': await sha256(vertices), 'triangles.u32': await sha256(triangles)};
     phase('bvh');
     // Closest point plus that face's normal on a surface, through a BVH over it.
     const closestFor = (V, F) => {
@@ -73,10 +83,13 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
     };
     const closestSource = closestFor(vertices, triangles);
     const closestPoint = (x, y, z) => closestSource(x, y, z).point;
+    const bakeMaterial = fromHeroGLB ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
     phase('tiers');
     const started = performance.now();
-    const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, targets, closestPoint, finish, unwrapMesh, WorkerClass,
-      measure: {closestSource, closestFor, reference: {kind: 'raw-decode', input, digests: inputDigests, faces: triangles.length / 3}}, provenance: {input, route}}) : [];
+    const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, bakeMaterial, targets, closestPoint, finish, unwrapMesh, WorkerClass,
+      ...(textureSizeFor ? {textureSizeFor} : {}),
+      measure: fromHeroGLB ? null : {closestSource, closestFor, reference: {kind: 'raw-decode', input, digests: inputDigests, faces: triangles.length / 3}},
+      provenance: {input: input ?? (fromHeroGLB ? `glb:${source}` : null), route: route ?? (fromHeroGLB ? 'glb-mesh-bake' : null)}}) : [];
     report.tierSeconds = (performance.now() - started) / 1000;
     // Error against the hero, in the world frame both are drawn in. A frame mismatch is refused
     // before anything is stored.
@@ -97,7 +110,7 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
       for (const tier of tiers) {
         const world = readGLBWorldMesh(tier.glb);
         checkFrame(tier, drift(bounds(world.vertices), hb, heroDiagonal));
-        tier.errorAgainstRawDecode = tier.error;
+        if (tier.error) tier.errorAgainstRawDecode = tier.error;
         tier.error = measureGeometricError({source: hero, level: world, closestSource: heroClosest, closestLevel: closestFor(world.vertices, world.faces),
           reference: {kind: 'hero', sha256: source, faces: hero.faces.length / 3}});
       }
@@ -180,7 +193,8 @@ export async function prepareGenerationLevels({decode, materialFields, source, h
         ...(tier.mergeFactor !== undefined ? {mergeFactor: tier.mergeFactor, resolution: tier.resolution, representation: tier.representation} : {}),
         ...(tier.closed !== undefined ? {closed: tier.closed} : {}),
         ...(tier.boundaryEdges !== undefined ? {boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges} : {}),
-        frameDrift: tier.frameDrift, error: tier.error, errorAgainstRawDecode: tier.errorAgainstRawDecode,
+        frameDrift: tier.frameDrift, error: tier.error,
+        ...(tier.errorAgainstRawDecode ? {errorAgainstRawDecode: tier.errorAgainstRawDecode} : {}),
         ...(tier.normalMap ? {normalMap: tier.normalMap} : {})};
       let register, registered;
       // A request or response lost in transport leaves the outcome unknown: stored, maybe registered.

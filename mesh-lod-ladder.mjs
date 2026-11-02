@@ -199,7 +199,7 @@ export function dedupCorners({positions, normals, uvs}) {
 // closed remesh projected onto the raw TRELLIS surface, then the caller's TRELLIS finisher
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
-export async function prepareLowTiers({mesh, materialFields, closestPoint, finish, unwrapMesh, WorkerClass,
+export async function prepareLowTiers({mesh, materialFields, bakeMaterial, closestPoint, finish, unwrapMesh, WorkerClass,
   targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
   const tiers = [];
@@ -207,7 +207,7 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
     const level = remeshLevel({vertices: mesh.vertices, faces: mesh.triangles}, target, {closestPoint});
     const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
     const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
-      {WorkerClass, unwrapMesh, textureSize, materialFields, provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
+      {WorkerClass, unwrapMesh, textureSize, materialFields, ...(bakeMaterial ? {bakeMaterial} : {}), provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
     // measure: {closestSource(x,y,z) -> {point, normal}, closestFor(vertices, faces) -> same for a level, samples?}
     const error = measure ? measureGeometricError({source: {vertices: mesh.vertices, faces: mesh.triangles}, level,
       closestSource: measure.closestSource, closestLevel: measure.closestFor(level.vertices, level.faces), samples: measure.samples ?? 20000,

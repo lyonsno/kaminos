@@ -248,3 +248,79 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
   assert.notEqual(missingCoords.phase, 'done');
   assert.match(missingCoords.error.message, /decode\.coordinates/);
 });
+
+test('arbitrary GLB (no decode or materialFields): remeshes, bakes PBR textures + gated normal map from the source GLB in its world frame', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh');
+  const {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
+  const {finishTrellisMesh, encodeTrellisTexturePNG} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  const {decodePNGBytes} = await import('../lod-mesh-bake.mjs');
+
+  const bakeMod = fs.readFileSync(new URL('../lod-mesh-bake.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(bakeMod, /from ['"]node:|require\(|\bprocess\.|\bBuffer\b|import\(['"]node:/);
+
+  // Build an arbitrary GLB with identity node matrix (not TRELLIS -90 deg X), embedded 4x4 PNG baseColor and metallicRoughness textures, UV0 and vertex normals.
+  const basePng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(16 * 4).map((_, i) => [40, 180, 90, 255][i % 4]), width: 4, height: 4}));
+  const mrPng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(16 * 4).map((_, i) => [0, 140, 60, 255][i % 4]), width: 4, height: 4}));
+  const pos = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0]);
+  const nrm = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
+  const uv = new Float32Array([0,0, 1,0, 1,1, 0,1]);
+  const idx = new Uint32Array([0,1,2, 0,2,3]);
+  const pad4 = b => { const u = new Uint8Array(b.buffer ?? b, b.byteOffset ?? 0, b.byteLength); const out = new Uint8Array(Math.ceil(u.length / 4) * 4); out.set(u); return {raw: u, padded: out}; };
+  const chunks = [pos, nrm, uv, idx, basePng, mrPng].map(pad4);
+  const bin = new Uint8Array(chunks.reduce((s, c) => s + c.padded.length, 0));
+  const bufferViews = []; let at = 0;
+  for (const c of chunks) { bin.set(c.padded, at); bufferViews.push({buffer: 0, byteOffset: at, byteLength: c.raw.length}); at += c.padded.length; }
+  const doc = {
+    asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}],
+    nodes: [{name: 'arbitrary-world-node', mesh: 0}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, NORMAL: 1, TEXCOORD_0: 2}, indices: 3, material: 0}]}],
+    materials: [{pbrMetallicRoughness: {baseColorTexture: {index: 0}, metallicRoughnessTexture: {index: 1}, baseColorFactor: [1, 1, 1, 1], metallicFactor: 1, roughnessFactor: 1}}],
+    textures: [{source: 0}, {source: 1}],
+    images: [{bufferView: 4, mimeType: 'image/png'}, {bufferView: 5, mimeType: 'image/png'}],
+    buffers: [{byteLength: bin.length}], bufferViews,
+    accessors: [
+      {bufferView: 0, componentType: 5126, count: 4, type: 'VEC3'},
+      {bufferView: 1, componentType: 5126, count: 4, type: 'VEC3'},
+      {bufferView: 2, componentType: 5126, count: 4, type: 'VEC2'},
+      {bufferView: 3, componentType: 5125, count: 6, type: 'SCALAR'},
+    ],
+  };
+  const text = new TextEncoder().encode(JSON.stringify(doc)), tl = Math.ceil(text.length / 4) * 4;
+  const glb = new Uint8Array(28 + tl + bin.length), dv = new DataView(glb.buffer);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, glb.length, true);
+  dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true); glb.fill(32, 20, 20 + tl); glb.set(text, 20);
+  dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true); glb.set(bin, 28 + tl);
+
+  const source = 'e'.repeat(64), stored = [], registered = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
+  const fetch = async (url, init = {}) => {
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/read')) return new Response(glb.buffer);
+    if (url.startsWith('/api/ingest-mesh')) { const bytes = new Uint8Array(await new Response(init.body).arrayBuffer()); stored.push(bytes); return goodIngest(bytes, json); }
+    if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registered.push(body); return goodRegister(body, json); }
+    return new Response('unexpected', {status: 500});
+  };
+  const report = await prepareGenerationLevels({
+    source, fetch, THREE, MeshBVH, finish: finishTrellisMesh,
+    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets: [200], textureSizeFor: () => 32,
+  });
+  assert.equal(report.phase, 'done', report.error?.message);
+  assert.equal(report.raw.fromHeroGLB, true);
+  assert.equal(report.tiers.length, 1);
+  const tier = report.tiers[0];
+  assert.ok(tier.frameDrift <= 0.1, `expected frameDrift <= 0.1 on non-TRELLIS node transform, got ${tier.frameDrift}`);
+  assert.deepEqual(tier.error.reference, {kind: 'hero', sha256: source, faces: 2});
+  assert.equal(tier.errorAgainstRawDecode, undefined);
+  assert.deepEqual(tier.normalMap.source, {kind: 'hero', sha256: source});
+
+  // Verify the baked baseColor and metallicRoughness PNGs in the published tier GLB match the source GLB's textures
+  const tierBytes = stored[0], tierDv = new DataView(tierBytes.buffer, tierBytes.byteOffset, tierBytes.byteLength);
+  const tierJsonLen = tierDv.getUint32(12, true), tierDoc = JSON.parse(new TextDecoder().decode(tierBytes.subarray(20, 20 + tierJsonLen)));
+  const tierBin = 28 + tierJsonLen;
+  const imgBytes = idx => { const bv = tierDoc.bufferViews[tierDoc.images[idx].bufferView]; return tierBytes.subarray(tierBin + (bv.byteOffset || 0), tierBin + (bv.byteOffset || 0) + bv.byteLength); };
+  const bakedBase = await decodePNGBytes(imgBytes(0));
+  const bakedMR = await decodePNGBytes(imgBytes(1));
+  assert.deepEqual([...bakedBase.rgba.subarray(0, 4)], [40, 180, 90, 255]);
+  assert.deepEqual([...bakedMR.rgba.subarray(0, 4)], [0, 140, 60, 255]);
+});

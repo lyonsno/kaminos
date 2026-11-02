@@ -36,8 +36,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     if(surfels){
       const levels=surfels.surfelOptions?.levels??[1];
       const heroSha=object.generation?.meshSha256??null;
-      return {representation:'surfels',assetSha,heroSha,surfels:{root:surfels,levels:[...levels],coarsest:Math.max(...levels)},
-        ...(heroSha?{}:{state:'no-tiers',reason:'a surfels-only asset has no hero mesh to take tiers from'})};
+      return {representation:'surfels',assetSha,heroSha,surfels:{root:surfels,levels:[...levels],coarsest:Math.max(...levels)}};
     }
     return {representation:'mesh',assetSha,heroSha:assetSha};
   }
@@ -52,12 +51,12 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     if(base.state)return settle(base);
     handles.set(root,{...(handles.get(root)??base),state:'resolving'});
     try{
-      const query=new URLSearchParams({source:base.heroSha});
+      const query=new URLSearchParams({source:base.heroSha??base.assetSha});
       if(selection.faces!=null)query.set('faces',String(selection.faces));
       if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
       const set=await fetchJson(`/api/mesh-lods?${query}`);
       const levels=(set.levels??[]).map(l=>({sha:l.sha256,faces:l.faces,closed:l.closed??null}));
-      if(!set.choice)return settle({...base,levels,state:'no-tiers',reason:'no stored tiers for this hero'});
+      if(!set.choice)return settle({...base,levels,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
       const choice=set.choice,bytes=await fetchBytes(choice.source);
       if(await digest(bytes)!==choice.sha256)throw Error('GI proxy content does not match its sha');
       const proxyRoot=await parseGlb(bytes);proxyRoot.matrixAutoUpdate=false;proxyRoot.updateMatrix?.();

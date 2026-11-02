@@ -39,3 +39,13 @@ test('when decode.coordinates is present, the runner requests x4, x8, x16 surfel
   assert.deepEqual(report.surfelFactors,[4,8,16]);
   assert.ok(FakeWorker.last.transfer.includes(inp.decode.coordinates.buffer));
 });
+
+test('the runner also runs for an arbitrary stored GLB without decode or materialFields, transferring heroGLB when given',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',source:m.source,tiers:[{faces:1000}]}});};
+  const heroGLB=new Uint8Array([1,2,3,4]).buffer;
+  const report=await runGenerationLevels({source:'d'.repeat(64),heroGLB,input:'imported.glb',WorkerClass:FakeWorker});
+  assert.equal(report.phase,'done');
+  assert.equal(FakeWorker.last.message.decode,undefined);
+  assert.equal(FakeWorker.last.message.materialFields,undefined);
+  assert.ok(FakeWorker.last.transfer.includes(heroGLB));
+});

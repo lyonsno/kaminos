@@ -55,6 +55,27 @@ test('a surfel asset resolves its hero tiers through meshSha256 and points at it
   assert.equal(h.surfels.root,surfels);assert.deepEqual(h.surfels.levels,[1,2,4]);assert.equal(h.surfels.coarsest,4);
 });
 
+test('a surfels-only asset with raw-decode tiers registered under its own assetSha loads those tiers as its GI proxy',async()=>{
+  const {calls,loaded}=world();
+  const registry=createGiProxyRegistry({
+    THREE,
+    fetchJson:async url=>{
+      calls.push(url);const q=new URL(url,'http://k');const faces=Number(q.searchParams.get('faces'));
+      const levels=q.searchParams.get('source')===SURF?TIERS.map(t=>({...t,source:`/api/read?root=generated-meshes&path=${t.sha256}.glb`})):[];
+      const fitting=levels.filter(l=>l.faces<=faces);
+      return {schema:'kaminos.lod-set.v0',source:q.searchParams.get('source'),levels,choice:fitting[0]??levels.at(-1)??null,withinBudget:!!fitting.length};
+    },
+    fetchBytes:async url=>tierBytes(TIERS.find(t=>url.includes(t.sha256)).faces),
+    parseGlb:async bytes=>{const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial()));loaded.push(g);return g;},
+  });
+  const {root}=sceneObject(`/api/read?root=generated-meshes&path=${SURF}.glb`,{representation:'trellis-surfels'});
+  const surfels=new THREE.Group();surfels.isTrellisSurfelRoot=true;surfels.surfelOptions={levels:[1,4,8,16]};root.add(surfels);
+  const h=await registry.attach(root);
+  assert.equal(h.state,'loaded');assert.equal(h.representation,'surfels');assert.equal(h.assetSha,SURF);assert.equal(h.heroSha,null);
+  assert.equal(h.effective.faces,1000);assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.surfels.coarsest,16);
+  assert.match(calls[0],new RegExp(`/api/mesh-lods\\?source=${SURF}&faces=1000`));
+});
+
 test('objects with no TRELLIS tiers say why, and nothing is loaded',async()=>{
   const {registry,loaded}=world({tiers:[]});
   assert.equal((await registry.attach(sceneObject(heroSource).root)).state,'no-tiers');

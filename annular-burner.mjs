@@ -77,6 +77,7 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
   const recipe = normalizeBurner(value);
   const group = new THREE.Group();
   group.name = 'Annular burner';
+  group.userData.kaminosAnnularBurnerRecipe = recipe;
   const materials = [];
   const makeMaterial = parameters => {
     const material = new THREE.MeshStandardMaterial(parameters);

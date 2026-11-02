@@ -4105,6 +4105,19 @@ window.kaminosGiProxies = {
   registerConsumer: name => { const release = sceneGiProxies.registerConsumer(name); syncSceneDataInspector(); return () => { release(); syncSceneDataInspector(); }; },
   consumers: () => sceneGiProxies.consumers(),
   select: (root, selection) => sceneGiProxies.select(root, selection),
+  prepare: async (rootOrSha, options = {}) => {
+    const entry = typeof rootOrSha === 'string' && !/^[0-9a-f]{64}$/i.test(rootOrSha) ? workingScene.objects.find(o => o.id === rootOrSha) : workingScene.objects.find(o => o.object === rootOrSha);
+    const handle = sceneGiProxies.get(entry?.object ?? rootOrSha);
+    const source = typeof rootOrSha === 'string' && /^[0-9a-f]{64}$/i.test(rootOrSha) ? rootOrSha.toLowerCase() : (handle?.heroSha ?? handle?.assetSha);
+    if (!source) throw Error('Provide a stored generated-meshes sha256 or a registered scene object');
+    const { runGenerationLevels } = await import('./generation-levels-runner.mjs');
+    const report = await runGenerationLevels({ source, ...options });
+    if (report.phase === 'done') for (const obj of workingScene.objects) {
+      const h = sceneGiProxies.get(obj.object);
+      if (h?.heroSha === source || h?.assetSha === source) applyGiProxySetting(obj);
+    }
+    return report;
+  },
   state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
     proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
   // On demand: each loaded proxy's world bounds as placed, beside the drawn object's (should agree to tier error).
@@ -25354,8 +25367,8 @@ const giProxyEditTargets=new Set();
 // off, no proxy held. The setting is the stored state; the load just follows it.
 function applyGiProxySetting(entry){
   if(!entry?.giProxy||!entry.object)return;
-  if(entry.giProxy.enabled)sceneGiProxies.select(entry.object,entry.giProxy.selection).then(()=>syncSceneDataInspector());
-  else sceneGiProxies.disable(entry.object);
+  if(entry.giProxy.enabled)sceneGiProxies.select(entry.object,entry.giProxy.selection).then(()=>{syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();});
+  else{sceneGiProxies.disable(entry.object);window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();}
 }
 function writeObjectGiProxy(id,value){
   const entry=workingScene.objects.find(record=>record.id===id)||workingScene.retained(id);
@@ -26904,7 +26917,10 @@ function setupAuthoringAssets(){
         return runGenerationLevels({...inputs,source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
       })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(report=>{
         window.__kaminosLastGenerationLevels={source,...report};
-        if(report.phase==='done')setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+        if(report.phase==='done'){
+          for(const obj of workingScene.objects){const h=sceneGiProxies.get(obj.object);if(h?.heroSha===source||h?.assetSha===source)applyGiProxySetting(obj);}
+          setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+        }
         else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
     }
     return saved;
