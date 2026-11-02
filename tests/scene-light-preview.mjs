@@ -19,7 +19,7 @@ function source(start, end) {
 function context() {
   const scene = new THREE.Scene();
   const state = sceneContext({
-    THREE, checkedSceneLightRecord, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
+    activeSceneComposition:null,THREE, checkedSceneLightRecord, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
     scene, sceneObjects: [], sceneGroups: [], rimLight: new THREE.SpotLight(), RIM_LIGHT_ID: '@rim-light',
     window: { _kaminosDirty() {} }, document: { getElementById: () => ({ checked: false, classList: { remove() {} } }) },
     sceneMutationToken: 0, greenroomPreviewGeneration: 0, greenroomPreviewState: null,
@@ -124,6 +124,7 @@ test('failed View and a late completion after Back preserve original light ident
   let complete;
   state.showGLB = () => new Promise(resolve => { complete = resolve; });
   const loading = state.greenroomViewMesh('/late.glb', 'late.glb', {});
+  await new Promise(resolve=>setImmediate(resolve));
   assertDetached(state);
   await state.restoreAuthoredSceneFromPreview();
   const late = new THREE.Group(); state.scene.add(late); complete(late);

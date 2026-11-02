@@ -92,7 +92,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),burnableEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),flameSourceDataTargets:new Set(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},giProxyEditTargets:new Set(),applyGiProxySetting(){},giProxySettingFor:()=>null,rimLight:null,
+  const context={activeSceneComposition:{flame:{presetId:'old'}},authoredFlamePresent:true,volumePrimitives:{primitives:[{id:'old'}]},VOLUME_PRIMITIVE_SCHEMA:'kaminos.volume-primitives.v0',setVolumePrimitivesState(value){context.volumePrimitives=value;},isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),burnableEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),flameSourceDataTargets:new Set(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},giProxyEditTargets:new Set(),applyGiProxySetting(){},giProxySettingFor:()=>null,rimLight:null,
     authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],localLiquidDomainGuide:null,flameDomainGuide:null,
     sceneLoadRequests:(await import('../scene-load-generation.mjs')).createSceneLoadRequests(),sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
@@ -103,6 +103,8 @@ test('clearing a scene removes its old flame member before the next scene saves'
   await composePageSceneLifecycle(context,html);await context.clearScene();
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
+  assert.equal(context.activeSceneComposition,null,'whole-scene clear must end the old flame domain presence');
+  assert.equal(context.authoredFlamePresent,false);assert.equal(context.volumePrimitives.primitives.length,0);
 });
 
 test('switching to cluster removes the analytic member from scene membership', () => {

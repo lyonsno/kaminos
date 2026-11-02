@@ -171,6 +171,8 @@ export async function composePageMembershipBatch(context, html) {
 export async function composePageSceneLifecycle(context,html){
  const {createSceneLifecycle}=await import('../../scene-lifecycle.mjs');sceneContext(context);
  context.workingScene.loads??=context.sceneLoadRequests;
+ context.VOLUME_PRIMITIVE_SCHEMA??='kaminos.volume-primitives.v0';
+ context.setVolumePrimitivesState??=value=>{context.volumePrimitives=value;};
  context.workingScene.suspendedObjects??=()=>[];
  context.workingScene.discardSuspendedMembership??=()=>null;
  for(const name of ['setSceneObjectMounted','setSceneGroupsFromRecords','setSceneSelection','setActiveSceneObject','setActiveSceneGroup'])context[name]??=()=>{};

@@ -5357,7 +5357,7 @@ function setSceneObjectMounted(entry, mounted) {
 }
 
 function detachAuthoredSceneForPreview() {
-  sceneLifecycle.suspendPreview();
+  return sceneLifecycle.suspendPreview();
 }
 
 function updateGreenroomPreviewControls() {
@@ -6237,10 +6237,12 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   if (!greenroomPreviewState) return false;
   const state = greenroomPreviewState;
   const authored = state.authored;
+  await flameFeature.clear();
+  if(greenroomPreviewState!==state)return false;
   removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
   greenroomPreviewState = null;
   updateGreenroomPreviewControls();
-  sceneLifecycle.resumePreview(authored);
+  if(!await sceneLifecycle.resumePreview(authored))return false;
   if (!options.silent) setInfo('Returned to scene');
   return true;
 }
@@ -12324,15 +12326,15 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:()=>flameFeature.clear(),beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
-      capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},loaded:async setup=>{if(setup.water)await mountLocalLiquidHost();},
+      capturePreview:()=>({flamePresent:!!activeSceneComposition||!!volumePrototype?.isActive(),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
         renderSceneObjectList();updateTransformInspector();
       },
       restorePreview(authored){sceneDocument.resume(authored.documentSession);modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
-      previewResumed(){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}},
+      async previewResumed(authored,{isCurrent}){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}await flameFeature.restore({present:authored.flamePresent,composition:!!activeSceneComposition,isCurrent});},
     },
   });
 }
@@ -12364,6 +12366,9 @@ function clearSceneEditingState(){
   sceneMembership.clearHistoryTargets();
 }
 function clearSceneDomains(){
+  activeSceneComposition=null;authoredFlamePresent=false;
+  volumePrototype?.setSceneCompositionPresentation?.(false);
+  setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
   waterFeature.clear();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
@@ -23676,7 +23681,7 @@ async function greenroomViewMesh(url, fileName, display) {
   if (greenroomPreviewState) {
     removeGreenroomPreviewObject();
   } else {
-    detachAuthoredSceneForPreview(authored);
+    if(!await detachAuthoredSceneForPreview(authored))return;
   }
   const previewGeneration = nextGreenroomPreviewGeneration();
   greenroomPreviewState = {
@@ -24854,7 +24859,7 @@ function restoreLoadedSceneRecord(entry,record){
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
 async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:liquidSetup,loadRequestId});
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent}},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -26562,7 +26567,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 
   // The pinned basin is already mounted. Reapplying identical primitives would
   // rebuild its GPU field and invalidate textures held by the lighting pass.
-  if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
+  if (!activeSceneComposition || JSON.stringify(getVolumePrimitiveState()) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
   const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition||new URLSearchParams(location.search).get('kaminos_volume_smoke')==='1');

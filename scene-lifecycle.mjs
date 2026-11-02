@@ -45,19 +45,30 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     }catch(error){if(!current(loadRequestId))return false;await clear({loadRequestId});throw error;}
   }
   function capturePreview(){return context.capturePreview?.()??{};}
-  function suspendPreview(){
-    scene.invalidateArrivals();const snapshot=scene.suspendMembership();
+  async function previewTransition(change){
+    const request=scene.loads.current(),generation=scene.invalidateArrivals();
+    const isCurrent=()=>scene.loads.isCurrent(request)&&scene.generation===generation;
+    pendingClears++;
+    try{
+      await context.retire?.();
+      if(!isCurrent())return false;
+      await change(isCurrent);
+      return isCurrent();
+    }finally{pendingClears--;}
+  }
+  function suspendPreview(){return previewTransition(()=>{
+    const snapshot=scene.suspendMembership();
     for(const entry of snapshot.objects)roots.mount(entry,false);
     context.previewDetached?.();
-  }
-  function resumePreview(saved){
-    scene.invalidateArrivals();const snapshot=scene.resumeMembership();
+  });}
+  function resumePreview(saved){return previewTransition(async isCurrent=>{
+    const snapshot=scene.resumeMembership();
     for(const entry of scene.objects){roots.mount(entry,true);roots.resumed?.(entry);}
     context.restorePreview?.(saved);
     if(snapshot.selection.ids.length)selection.set(snapshot.selection.ids,snapshot.selection.activeId);
     else if(saved.activeSceneFieldId)selection.set([saved.activeSceneFieldId],saved.activeSceneFieldId);
     else selection.object(null);
-    context.previewResumed?.();return true;
-  }
+    await context.previewResumed?.(saved,{isCurrent});
+  });}
   return Object.freeze({get clearing(){return pendingClears>0;},clear,replace,capturePreview,suspendPreview,resumePreview});
 }
