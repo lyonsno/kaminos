@@ -2,7 +2,7 @@ import * as THREE from './lib/three.webgpu.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {annularBurnerCasterKey,createAnnularBurnerCaster} from './annular-burner.mjs';
-import {allocateShadowCasterLods} from './scene-lod-budget.mjs';
+import {allocateShadowCasterLods,applyRootVertexWarpToRung} from './scene-lod-budget.mjs';
 // Explicit provisional Stunt Doubles mapping, 2026-10-17T14:43:30Z; no measured-error selection.
 export const KILN_CASTER_SOURCE='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 export const KILN_CASTERS=Object.freeze({'5k':'1050a1d34389366eac0161ea002176fece47c7eeaac53a7795bae63ed4807456','10k':'11319add7e7593d80f33ec9c25b6f43c531122d423b9a25ef06b86b71b2d7470'});
@@ -47,13 +47,26 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     if(b.isEmpty())b.set(new THREE.Vector3(-0.5,-0.5,-0.5),new THREE.Vector3(0.5,0.5,0.5));
     localBoxCache.set(proxyRoot,b);return b;
   };
+  const rootLocalBoxOf=root=>{
+    const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),b=new THREE.Box3(),sb=new THREE.Box3(),sm=new THREE.Matrix4();
+    for(const ch of root.children){
+      if(!ch.visible||ch.userData?.kaminosRepetitionCopy)continue;
+      ch.traverse(m=>{
+        if(!m.isMesh||!m.geometry)return;
+        if(!m.geometry.boundingBox)m.geometry.computeBoundingBox?.();
+        if(m.geometry.boundingBox){sm.copy(inv).multiply(m.matrixWorld);sb.copy(m.geometry.boundingBox).applyMatrix4(sm);b.union(sb);}
+      });
+    }
+    if(b.isEmpty())b.set(new THREE.Vector3(-0.5,-0.5,-0.5),new THREE.Vector3(0.5,0.5,0.5));
+    return b;
+  };
   const proxies=()=>giProxies??globalThis.window?.kaminosGiProxies??null;
   const syncConsumer=on=>{if(on&&!disposed){if(!consumerRelease)consumerRelease=proxies()?.registerConsumer?.('fire-shadow-casters')??null;}else{consumerRelease?.();consumerRelease=null;}};
   syncConsumer(enabled);
   const assets=new Map(),instances=new Map(),fingerprints=new WeakMap(),bufferIds=new WeakMap(),state={targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false};
   let nextBufferId=0;
   const bufferKey=a=>{if(!a)return null;if(!bufferIds.has(a))bufferIds.set(a,++nextBufferId);return [bufferIds.get(a),a.version,a.count];};
-  const disposeInstance=inst=>{if(!inst)return;inst.wrapper.removeFromParent();inst.ownGeometry?.dispose();inst.proxy.traverse(m=>{if(m.isMesh)m.material.dispose();});};
+  const disposeInstance=inst=>{if(!inst)return;inst.wrapper.removeFromParent();inst.ownGeometry?.dispose();inst.proxy.traverse(m=>{if(m.isMesh){if(m.userData?.kaminosOwnsWarpedGeometry)m.geometry.dispose();m.material.dispose();}});};
   const clear=()=>{for(const inst of instances.values())disposeInstance(inst);instances.clear();};
   return {
     setEnabled(v){if(disposed)throw Error('fire caster consumer disposed');syncConsumer(!!v);},
@@ -92,7 +105,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       const copyMat=new THREE.Matrix4();
       for(const c of candidates){
         if(c.kind!=='gi-proxy'||!c.handle?.levels?.length)continue;
-        const lb=localBoxOf(c.handle.proxyRoot);
+        const lb=typeof c.root.userData?.kaminosVertexWarp==='function'?rootLocalBoxOf(c.root):localBoxOf(c.handle.proxyRoot);
         const repSources=c.root.children.filter(ch=>ch.visible&&ch.userData?.kaminosRepetitionCopy===true);
         const instanceBoxes=[new THREE.Box3().copy(lb).applyMatrix4(c.root.matrixWorld)];
         for(const rep of repSources){copyMat.multiplyMatrices(c.root.matrixWorld,rep.matrix);instanceBoxes.push(new THREE.Box3().copy(lb).applyMatrix4(copyMat));}
@@ -149,14 +162,24 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
           const key=`explicit:${level}`;
           if(instance?.key!==key){disposeInstance(instance);const wrapper=new THREE.Group(),proxy=assets.get(level).clone(true);proxy.traverse(m=>{if(m.isMesh)m.material=m.material.clone();});wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy,repCopies:[],key,measured:false};instances.set(root,instance);}
         }else if(kind==='gi-proxy'){
+          const warpFn=typeof root.userData?.kaminosVertexWarp==='function'?root.userData.kaminosVertexWarp:null;
+          const warpRev=root.userData?.kaminosVertexWarpRevision??0;
           if(instance?.sourceAsset!==handle.proxyRoot){
             disposeInstance(instance);
             const wrapper=new THREE.Group(),proxy=handle.proxyRoot.clone(true);
-            proxy.traverse(m=>{if(m.isMesh){m.castShadow=true;m.material=(Array.isArray(m.material)?m.material[0]:m.material)?.clone()??new THREE.MeshBasicMaterial();}});
+            proxy.traverse(m=>{if(m.isMesh){m.castShadow=true;if(warpFn){m.geometry=m.geometry.clone();m.userData.kaminosOwnsWarpedGeometry=true;}m.material=(Array.isArray(m.material)?m.material[0]:m.material)?.clone()??new THREE.MeshBasicMaterial();}});
+            if(warpFn)applyRootVertexWarpToRung(THREE,proxy,warpFn);
             wrapper.matrixAutoUpdate=false;wrapper.add(proxy);
-            instance={wrapper,proxy,repCopies:[],sourceAsset:handle.proxyRoot,key:'gi-proxy',measured:!!handle.error};
+            instance={wrapper,proxy,repCopies:[],sourceAsset:handle.proxyRoot,key:'gi-proxy',measured:!!handle.error,warpFn,warpRev};
             instances.set(root,instance);
-          }else instance.measured=!!handle.error;
+          }else{
+            instance.measured=!!handle.error;
+            if(instance.warpFn!==warpFn||instance.warpRev!==warpRev){
+              if(warpFn)instance.proxy.traverse(m=>{if(m.isMesh&&!m.userData?.kaminosOwnsWarpedGeometry){m.geometry=m.geometry.clone();m.userData.kaminosOwnsWarpedGeometry=true;}});
+              applyRootVertexWarpToRung(THREE,instance.proxy,warpFn);
+              instance.warpFn=warpFn;instance.warpRev=warpRev;
+            }
+          }
         }else if(kind==='annular-burner'){
           const key=annularBurnerCasterKey(recipe);
           if(instance?.key!==key){

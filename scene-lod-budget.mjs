@@ -479,6 +479,158 @@ function cloneBorrowedRung(THREE, node) {
   return copy;
 }
 
+export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
+  if (!rungRoot) return;
+  rungRoot.updateMatrixWorld?.(true);
+  const invRung = new THREE.Matrix4().copy(rungRoot.matrixWorld).invert();
+  const meshToRoot = new THREE.Matrix4();
+  const rootToMesh = new THREE.Matrix4();
+  const normalMeshToRoot = new THREE.Matrix3();
+  const normalRootToMesh = new THREE.Matrix3();
+  const v3 = new THREE.Vector3();
+  const n0 = new THREE.Vector3();
+  const n1 = new THREE.Vector3();
+  const t0 = new THREE.Vector3();
+  const qRot = new THREE.Quaternion();
+
+  rungRoot.traverse(m => {
+    if (!m.isMesh || !m.geometry) return;
+    const geom = m.geometry;
+    const posAttr = geom.getAttribute('position');
+    if (!posAttr?.array) return;
+    const normAttr = geom.getAttribute('normal');
+    const tanAttr = geom.getAttribute('tangent');
+    meshToRoot.multiplyMatrices(invRung, m.matrixWorld);
+    rootToMesh.copy(meshToRoot).invert();
+    normalMeshToRoot.getNormalMatrix(meshToRoot);
+    normalRootToMesh.getNormalMatrix(rootToMesh);
+
+    if (!geom.userData) geom.userData = {};
+    let base = geom.userData.kaminosWarpBase;
+    if (!base) {
+      const origMeshPos = new Float32Array(posAttr.array);
+      const origMeshNorm = normAttr?.array ? new Float32Array(normAttr.array) : null;
+      const origMeshTan = tanAttr?.array ? new Float32Array(tanAttr.array) : null;
+      const rootPos = new Float32Array(origMeshPos.length);
+      for (let i = 0; i < origMeshPos.length; i += 3) {
+        v3.set(origMeshPos[i], origMeshPos[i + 1], origMeshPos[i + 2]).applyMatrix4(meshToRoot);
+        rootPos[i] = v3.x;
+        rootPos[i + 1] = v3.y;
+        rootPos[i + 2] = v3.z;
+      }
+      let rootNorm = null;
+      if (origMeshNorm) {
+        rootNorm = new Float32Array(origMeshNorm.length);
+        for (let i = 0; i < origMeshNorm.length; i += 3) {
+          v3.set(origMeshNorm[i], origMeshNorm[i + 1], origMeshNorm[i + 2]).applyMatrix3(normalMeshToRoot).normalize();
+          rootNorm[i] = v3.x;
+          rootNorm[i + 1] = v3.y;
+          rootNorm[i + 2] = v3.z;
+        }
+      }
+      let rootTan = null;
+      if (origMeshTan) {
+        rootTan = new Float32Array(origMeshTan.length);
+        for (let i = 0; i < origMeshTan.length; i += 4) {
+          v3.set(origMeshTan[i], origMeshTan[i + 1], origMeshTan[i + 2]).transformDirection(meshToRoot);
+          rootTan[i] = v3.x;
+          rootTan[i + 1] = v3.y;
+          rootTan[i + 2] = v3.z;
+          rootTan[i + 3] = origMeshTan[i + 3];
+        }
+      }
+      base = {origMeshPos, origMeshNorm, origMeshTan, rootPos, rootNorm, rootTan};
+      geom.userData.kaminosWarpBase = base;
+    }
+
+    if (typeof warpFn !== 'function') {
+      if (geom.userData.kaminosWarpApplied) {
+        posAttr.array.set(base.origMeshPos);
+        posAttr.needsUpdate = true;
+        if (normAttr && base.origMeshNorm) {
+          normAttr.array.set(base.origMeshNorm);
+          normAttr.needsUpdate = true;
+        }
+        if (tanAttr && base.origMeshTan) {
+          tanAttr.array.set(base.origMeshTan);
+          tanAttr.needsUpdate = true;
+        }
+        geom.computeBoundingBox?.();
+        geom.computeBoundingSphere?.();
+        geom.userData.kaminosWarpApplied = false;
+      }
+      return;
+    }
+
+    const res = warpFn(base.rootPos, base.rootNorm);
+    const warpedRootPos = res?.positions ?? res;
+    const warpedRootNorm = res?.normals ?? null;
+    if (!(warpedRootPos instanceof Float32Array) || warpedRootPos.length !== base.rootPos.length) return;
+
+    const dstPos = posAttr.array;
+    for (let i = 0; i < warpedRootPos.length; i += 3) {
+      v3.set(warpedRootPos[i], warpedRootPos[i + 1], warpedRootPos[i + 2]).applyMatrix4(rootToMesh);
+      dstPos[i] = v3.x;
+      dstPos[i + 1] = v3.y;
+      dstPos[i + 2] = v3.z;
+    }
+    posAttr.needsUpdate = true;
+
+    if (normAttr) {
+      if (warpedRootNorm instanceof Float32Array && warpedRootNorm.length === normAttr.array.length) {
+        const dstNorm = normAttr.array;
+        for (let i = 0; i < warpedRootNorm.length; i += 3) {
+          v3.set(warpedRootNorm[i], warpedRootNorm[i + 1], warpedRootNorm[i + 2]).applyMatrix3(normalRootToMesh).normalize();
+          dstNorm[i] = v3.x;
+          dstNorm[i + 1] = v3.y;
+          dstNorm[i + 2] = v3.z;
+        }
+        normAttr.needsUpdate = true;
+      } else {
+        geom.computeVertexNormals?.();
+      }
+    }
+
+    if (tanAttr && base.rootTan) {
+      const dstTan = tanAttr.array;
+      const dstNorm = normAttr?.array ?? null;
+      const count = posAttr.count;
+      for (let v = 0; v < count; v++) {
+        const i3 = v * 3;
+        const i4 = v * 4;
+        t0.set(base.rootTan[i4], base.rootTan[i4 + 1], base.rootTan[i4 + 2]);
+        if (base.rootNorm && warpedRootNorm) {
+          n0.set(base.rootNorm[i3], base.rootNorm[i3 + 1], base.rootNorm[i3 + 2]).normalize();
+          n1.set(warpedRootNorm[i3], warpedRootNorm[i3 + 1], warpedRootNorm[i3 + 2]).normalize();
+          if (n0.dot(n1) > -0.9999) {
+            qRot.setFromUnitVectors(n0, n1);
+            t0.applyQuaternion(qRot);
+          }
+        }
+        t0.transformDirection(rootToMesh);
+        if (dstNorm) {
+          n1.set(dstNorm[i3], dstNorm[i3 + 1], dstNorm[i3 + 2]).normalize();
+          t0.addScaledVector(n1, -t0.dot(n1));
+          if (t0.lengthSq() < 1e-10) {
+            if (Math.abs(n1.x) < 0.9) t0.set(1, 0, 0).addScaledVector(n1, -n1.x);
+            else t0.set(0, 1, 0).addScaledVector(n1, -n1.y);
+          }
+        }
+        t0.normalize();
+        dstTan[i4] = t0.x;
+        dstTan[i4 + 1] = t0.y;
+        dstTan[i4 + 2] = t0.z;
+        dstTan[i4 + 3] = base.rootTan[i4 + 3];
+      }
+      tanAttr.needsUpdate = true;
+    }
+
+    geom.computeBoundingBox?.();
+    geom.computeBoundingSphere?.();
+    geom.userData.kaminosWarpApplied = true;
+  });
+}
+
 export function createSceneBeautyLodController({
   THREE,
   scene,
@@ -627,8 +779,11 @@ export function createSceneBeautyLodController({
           disposeTree(rungRoot);
           return;
         }
+        if (typeof entry.warpFn === 'function') {
+          applyRootVertexWarpToRung(THREE, rungRoot, entry.warpFn);
+        }
         const releaseLighting = surfaceLighting?.registerProxyRoot?.(rungRoot) ?? null;
-        entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, releaseLighting});
+        entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, releaseLighting, warpFn: entry.warpFn, warpRevision: entry.warpRevision});
         onUpdate?.();
       } catch {
         // Keep displaying the existing resident rung if a tier fails to load
@@ -748,8 +903,25 @@ export function createSceneBeautyLodController({
             generation: 1,
             surfelLevelsAttached: false,
             surfelLevelsInFlight: false,
+            warpFn: typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null,
+            warpRevision: root.userData?.kaminosVertexWarpRevision ?? 0,
           };
           entries.set(root, entry);
+        } else {
+          const curWarpFn = typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null;
+          const curWarpRev = root.userData?.kaminosVertexWarpRevision ?? 0;
+          if (entry.warpFn !== curWarpFn || entry.warpRevision !== curWarpRev) {
+            entry.warpFn = curWarpFn;
+            entry.warpRevision = curWarpRev;
+            const {heroFaces, localBox} = inspectHeroRoot(root);
+            entry.heroFaces = heroFaces;
+            entry.localBox = localBox;
+            for (const rungRecord of entry.rungs.values()) {
+              applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn);
+              rungRecord.warpFn = curWarpFn;
+              rungRecord.warpRevision = curWarpRev;
+            }
+          }
         }
         if (handle.representation === 'surfels') {
           ensureSurfelLevelsLoaded(root, entry, handle);

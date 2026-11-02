@@ -689,3 +689,249 @@ test('review M3: prepareLowTiers, prepareGenerationLevels, and tools/prepare-lod
   });
   assert.deepEqual(report.targets, [25000, 10000, 5000, 1000, 500], 'prepareGenerationLevels defaults targets to [25000, 10000, 5000, 1000, 500]');
 });
+
+test('Stockroom kaminosVertexWarp: beauty LOD rungs and fire shadow casters deform in root-local coordinates across TRELLIS node transforms and revision updates', async () => {
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  root.userData.kaminosSceneObject = {id: 'stock-trough', source: '/api/read?root=generated-meshes&path=' + sha('trough-hero') + '.glb'};
+  const heroGeom = new THREE.BoxGeometry(0.4, 0.3, 1.0, 20, 20, 40);
+  const baseHeroPos = new Float32Array(heroGeom.attributes.position.array);
+  const baseHeroNor = new Float32Array(heroGeom.attributes.normal.array);
+  const heroMesh = new THREE.Mesh(heroGeom, new THREE.MeshStandardMaterial());
+  heroMesh.castShadow = true;
+  root.add(heroMesh);
+
+  // Parametric stretch + lateral bend in root-local Y-up coordinates (Z is longitudinal)
+  let stretch = 2.0;
+  const warpFn = (positions, normals) => {
+    const outP = new Float32Array(positions.length);
+    const outN = new Float32Array(normals.length);
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+      outP[i] = x + 0.25 * z * z;
+      outP[i + 1] = y;
+      outP[i + 2] = z * stretch;
+      const nx = normals[i] - 0.5 * z * normals[i + 1], ny = normals[i + 1], nz = (normals[i + 2] - 0.5 * z * normals[i]) / stretch;
+      const l = Math.hypot(nx, ny, nz) || 1;
+      outN[i] = nx / l;
+      outN[i + 1] = ny / l;
+      outN[i + 2] = nz / l;
+    }
+    return {positions: outP, normals: outN};
+  };
+  const applyHeroWarp = () => {
+    const res = warpFn(baseHeroPos, baseHeroNor);
+    heroGeom.attributes.position.array.set(res.positions);
+    heroGeom.attributes.normal.array.set(res.normals);
+    heroGeom.attributes.position.needsUpdate = true;
+    heroGeom.attributes.normal.needsUpdate = true;
+    heroGeom.computeBoundingBox();
+  };
+  applyHeroWarp();
+  root.userData.kaminosVertexWarp = warpFn;
+  root.userData.kaminosVertexWarpRevision = 1;
+  scene.add(root);
+
+  const tier1000Sha = sha('trough-tier-1000');
+  const levels = [
+    {sha256: tier1000Sha, faces: 1000, textureSize: 256, error: {p95: 0.002}, normalMap: {texelSize: 0.003}},
+  ];
+
+  // Build a proxy/rung scene whose child mesh has a -90 deg X node transform (like encodeTrellisGeometryGLB)
+  // so local (lx, ly, lz) maps to root-local (wx, wy, wz) = (lx, lz, -ly)
+  function makeTrellisTierScene() {
+    const group = new THREE.Group();
+    const node = new THREE.Group();
+    node.rotation.x = -Math.PI / 2;
+    node.updateMatrix();
+    const geom = new THREE.BufferGeometry();
+    // A vertex at root-local (0, 0, 0.5) has TRELLIS local (0, -0.5, 0) before -90 deg X rotation
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      0, -0.5, 0,
+      0.2, 0.5, 0,
+      -0.2, 0.5, 0,
+    ]), 3));
+    geom.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([
+      0, 0, 1,
+      0, 0, 1,
+      0, 0, 1,
+    ]), 3));
+    geom.setAttribute('tangent', new THREE.BufferAttribute(new Float32Array([
+      1, 0, 0, 1,
+      1, 0, 0, 1,
+      1, 0, 0, 1,
+    ]), 4));
+    geom.setIndex([0, 1, 2]);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial());
+    node.add(mesh);
+    group.add(node);
+    return group;
+  }
+
+  const shadowProxyRoot = makeTrellisTierScene();
+  const handle = {
+    root,
+    levels,
+    representation: 'mesh',
+    state: 'loaded',
+    effective: {sha: tier1000Sha, faces: 1000},
+    proxyRoot: shadowProxyRoot,
+  };
+  const giProxies = {
+    list: () => [handle],
+    get: r => (r === root ? handle : null),
+    onRelease: () => () => {},
+    registerConsumer: () => () => {},
+    select: () => {},
+  };
+
+  const controller = createSceneBeautyLodController({
+    THREE,
+    scene,
+    giProxies,
+    fetchBytes: async () => new TextEncoder().encode('trough-tier-1000').buffer,
+    parseGlb: async () => makeTrellisTierScene(),
+    digest: async b => createHash('sha256').update(Buffer.from(b)).digest('hex'),
+    settings: {maxPixelError: 5.0, faceBudget: Infinity},
+  });
+
+  const cam = makeCamera({z: 8, fov: 50});
+  controller.update(cam, {viewportHeight: 1080});
+  await controller.whenIdle();
+  controller.update(cam, {viewportHeight: 1080});
+
+  let mountedMesh = null;
+  root.traverse(o => {
+    if (o.userData?.kaminosBeautyLodProxy) {
+      o.traverse(m => { if (m.isMesh) mountedMesh = m; });
+    }
+  });
+  assert.ok(mountedMesh, 'warped beauty LOD rung mesh is mounted');
+  root.updateMatrixWorld(true);
+  const v0World = new THREE.Vector3().fromBufferAttribute(mountedMesh.geometry.attributes.position, 0).applyMatrix4(mountedMesh.matrixWorld);
+  // Vertex 0 started at root-local (0, 0, 0.5). With stretch = 2.0 and x += 0.25 * z^2:
+  // warped root-local should be (0.0625, 0, 1.0)!
+  assert.ok(Math.abs(v0World.x - 0.0625) < 1e-4, `expected warped x = 0.0625, got ${v0World.x}`);
+  assert.ok(Math.abs(v0World.z - 1.0) < 1e-4, `expected warped z = 1.0, got ${v0World.z}`);
+  const nArr = mountedMesh.geometry.attributes.normal.array;
+  const tArr = mountedMesh.geometry.attributes.tangent.array;
+  const dotNT = nArr[0] * tArr[0] + nArr[1] * tArr[1] + nArr[2] * tArr[2];
+  assert.ok(Math.abs(dotNT) < 1e-4, `expected tangent orthogonal to warped normal, got dot=${dotNT}`);
+
+  // Bump revision with stretch = 3.0 and verify resident rung updates in-place without reloading
+  stretch = 3.0;
+  applyHeroWarp();
+  root.userData.kaminosVertexWarpRevision = 2;
+  controller.update(cam, {viewportHeight: 1080});
+  root.updateMatrixWorld(true);
+  const v0Updated = new THREE.Vector3().fromBufferAttribute(mountedMesh.geometry.attributes.position, 0).applyMatrix4(mountedMesh.matrixWorld);
+  assert.ok(Math.abs(v0Updated.z - 1.5) < 1e-4, `expected re-warped z = 1.5 after revision bump, got ${v0Updated.z}`);
+  controller.restoreAllHeroes();
+
+  // Verify fire-shadow-casters also applies kaminosVertexWarp to the GI proxy during withCapture
+  const casters = createFireShadowCasters({
+    scene,
+    giProxies,
+    shadowFaceBudget: 50000,
+  });
+  casters.setEnabled(true);
+  casters.withCapture(() => {
+    scene.updateMatrixWorld(true);
+    let shadowMesh = null;
+    scene.traverseVisible(m => { if (m.isMesh) shadowMesh = m; });
+    assert.ok(shadowMesh, 'warped shadow caster mesh is visible during withCapture');
+    const sv0 = new THREE.Vector3().fromBufferAttribute(shadowMesh.geometry.attributes.position, 0).applyMatrix4(shadowMesh.matrixWorld);
+    assert.ok(Math.abs(sv0.x - 0.0625) < 1e-4, `expected shadow caster proxy vertex x = 0.0625, got ${sv0.x}`);
+    assert.ok(Math.abs(sv0.z - 1.5) < 1e-4, `expected shadow caster proxy vertex z = 1.5, got ${sv0.z}`);
+  }, {flameBox: {min: [-1, 0, -1], max: [1, 2, 1]}});
+
+  casters.dispose();
+  controller.dispose();
+});
+
+test('Stockroom surfelSource: prepareGenerationLevels builds hero-normal surfel levels from a stored surfel GLB alongside a hero GLB without raw voxel fields', async () => {
+  const {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
+  const {encodeSurfelGLB} = await import('../trellis-surfels.mjs');
+  const {MeshBVH} = await import('three-mesh-bvh');
+
+  const resolution = 32, coords = [[2, 2, 16], [29, 2, 16], [2, 29, 16], [29, 29, 16]];
+  const vertices = new Float32Array(coords.flatMap(c => c.map(v => (v + 0.5) / resolution - 0.5)));
+  const triangles = new Uint32Array([0, 1, 3, 0, 3, 2]);
+  const field = buildSurfelField({
+    vertices,
+    triangles,
+    geometryCoordinates: new Int32Array(coords.flat()),
+    material: {
+      resolution,
+      coordinates: new Int32Array(coords.flat()),
+      features: new Float32Array(coords.flatMap(() => [0.2, -0.2, 0.4, -1, 0.6, 1])),
+    },
+  });
+  const surfelGLB = encodeSurfelGLB(field, {fallbackFactor: 4});
+  // Stored hero GLB with TRELLIS -90 deg X node and shading normals
+  const pos = vertices, idx = triangles, nrm = new Float32Array(coords.flatMap(() => [0.6, 0, 0.8]));
+  const parts = [pos, idx, nrm], bin = new Uint8Array(parts.reduce((n, a) => n + a.byteLength, 0));
+  let at = 0;
+  const bufferViews = [];
+  for (const a of parts) {
+    bin.set(new Uint8Array(a.buffer), at);
+    bufferViews.push({buffer: 0, byteOffset: at, byteLength: a.byteLength});
+    at += a.byteLength;
+  }
+  const json = {
+    asset: {version: '2.0'},
+    scene: 0,
+    scenes: [{nodes: [0]}],
+    nodes: [{mesh: 0, matrix: [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1]}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, NORMAL: 2}, indices: 1}]}],
+    buffers: [{byteLength: bin.length}],
+    bufferViews,
+    accessors: [
+      {bufferView: 0, componentType: 5126, count: 4, type: 'VEC3'},
+      {bufferView: 1, componentType: 5125, count: 6, type: 'SCALAR'},
+      {bufferView: 2, componentType: 5126, count: 4, type: 'VEC3'},
+    ],
+  };
+  const text = new TextEncoder().encode(JSON.stringify(json)), tl = Math.ceil(text.length / 4) * 4;
+  const out = new Uint8Array(28 + tl + bin.length), dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+  dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true);
+  out.fill(32, 20, 20 + tl); out.set(text, 20);
+  dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true);
+  out.set(bin, 28 + tl);
+  const heroGLB = out.buffer;
+
+  const registered = [];
+  const report = await prepareGenerationLevels({
+    decode: null,
+    materialFields: null,
+    heroGLB,
+    surfelGLB,
+    source: 'b'.repeat(64),
+    targets: [],
+    surfelFactors: [4],
+    THREE,
+    MeshBVH,
+    finish: () => {},
+    fetch: async (url, opts) => {
+      if (String(url).includes('/api/mesh-lods?source=')) {
+        return new Response(JSON.stringify({levels: []}), {status: 200});
+      }
+      if (String(url).includes('/api/ingest-mesh')) {
+        const digest = createHash('sha256').update(Buffer.from(opts.body)).digest('hex');
+        return new Response(JSON.stringify({sha256: digest}), {status: 200});
+      }
+      if (String(url).includes('/api/mesh-lods') && opts?.method === 'POST') {
+        const body = JSON.parse(opts.body);
+        registered.push(body.level);
+        return new Response(JSON.stringify({source: body.source, level: body.level}), {status: 200});
+      }
+      return new Response('not found', {status: 404});
+    },
+  });
+  assert.equal(report.phase, 'done', `expected phase done, got ${report.phase} (${report.error?.message})`);
+  assert.equal(registered.length, 1, 'registered 1 merged hero-normal surfel level from surfelGLB + heroGLB');
+  assert.equal(registered[0].route, 'trellis-surfels+hero-normals');
+  assert.equal(registered[0].mergeFactor, 4);
+});
+
