@@ -33,11 +33,11 @@ assert.equal(state.sharedDeviceFailureReason, 'WebGPU adapter unavailable');
 const restore = slice('  const startupSceneRedirect = ', 'let startupSceneAdmitted')
   + slice('  const volumeLoaded = ', '  // An owner enters the effective authored starting scene,');
 async function runRestore(hash, environmentLoaded) {
-  const calls = { info: [], composition: [], console: [] };
+  const calls = { info: [], composition: [], console: [], fire: 0 };
   const context = sceneContext({
     Promise, URLSearchParams, location: { hash, search: '' }, document: { body: { classList: { add() {} } } },
     environmentLoaded, window: {}, ownerVolumeReady: null, fireAtBoot,
-    initKaminosVolumeRoute() { assert.fail('neither failed admission nor an ordinary route should start fire'); },
+    initKaminosVolumeRoute() { calls.fire += 1; return Promise.resolve(); },
     reportKaminosVolumeRouteInitFailure() {},
     sceneSaveBlockedByFailedRestore: false,
     setActiveTab() {}, setInfo: message => calls.info.push(message),
@@ -47,6 +47,7 @@ async function runRestore(hash, environmentLoaded) {
   });
   vm.runInContext(restore, context);
   for (let turn = 0; turn < 10; turn += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.fire, 0, 'neither failed admission nor an ordinary route should start fire');
   return { blocked: context.sceneDocument.state().blocked, calls };
 }
 const ordinary = await runRestore('', Promise.reject(new Error('mesh route failed')));
