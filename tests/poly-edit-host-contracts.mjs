@@ -102,6 +102,8 @@ assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[true,true,true]);
 
 api.armFaceSnap();
 pointer('pointerdown',200,200);pointer('pointerup',200,200);
+const trailingClick=pointer('click',200,200);
+assert.ok(trailingClick.defaultPrevented,'the browser click event following pointerup is consumed so Object Mode does not re-pick or deselect');
 assert.equal(snappedFaces.length,1,'clicking a face invokes snapFace with that polygon plane');
 assert.equal(snappedFaces[0].faceCount,1);
 assert.ok(Math.abs(snappedFaces[0].normal[2]-1)<1e-6,'picked the front (+Z) face of the cube');

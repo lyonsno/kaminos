@@ -8,7 +8,7 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
 export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null,snapFace=null,ownerComponents=null}) {
-  let separating=false,cutLine=null,faceSnap=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
+  let separating=false,cutLine=null,faceSnap=null,suppressClick=false,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
     setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · K slice · Shift+S origin · Alt+Z x-ray`);
@@ -134,7 +134,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
         if(!state?.counts?.faces){setInfo('Use Face as Base · click a polygon on the mesh to snap to the ground · Escape cancels');return;}
         const plane=attempt(()=>edit.selectedFacePlane()),exitAfter=faceSnap.exitAfter;
         faceSnap=null;
-        if(exitAfter)exit();
+        if(exitAfter){suppressClick=true;exit();}
         if(plane&&snapFace)attempt(()=>snapFace(plane));
         return;
       }
@@ -144,6 +144,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{
     if(!insideCanvas(event)||overlayHit(event))return;
+    if(suppressClick){if(type==='click')suppressClick=false;steal(event);return;}
     if(edit.active())steal(event);
     else if(ownerComponents?.active()){
       if(type==='click'&&!gizmo?.dragging&&!gizmo?.axis)attempt(()=>ownerComponents.pick(event,{camera,canvas}));
