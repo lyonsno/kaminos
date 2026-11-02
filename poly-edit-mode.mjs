@@ -87,6 +87,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
 
   // A world-space ray from a client point, expressed in the mesh's own frame.
   function localRay(x,y){
+    edit.object.updateMatrixWorld(true);
     const rect=canvas.getBoundingClientRect(),nx=(x-rect.left)/rect.width*2-1,ny=-((y-rect.top)/rect.height)*2+1;
     // Orthographic rays are parallel, each starting at its own pixel; perspective rays leave the eye.
     // (unproject changes the vector it is called on, so each ray gets a fresh one.)
@@ -108,6 +109,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     return best===null?null:{kind:'edge',index:best};
   }
   function projection(){
+    edit.object.updateMatrixWorld(true);
     const {kernel,mesh}=edit,rect=canvas.getBoundingClientRect(),q=kernel.vertexPositions,projected=new Float32Array(kernel.vertexCount*2),v=new Vector3();
     for(let i=0;i<kernel.vertexCount;i++){
       v.set(q[3*i],q[3*i+1],q[3*i+2]).applyMatrix4(mesh.matrixWorld).project(camera);
@@ -117,6 +119,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   }
   // A vertex is visible when the first surface along the view ray is the vertex itself.
   function visibility(projected,rect){
+    edit.object.updateMatrixWorld(true);
     const {kernel,mesh}=edit,q=kernel.vertexPositions,visible=new Uint8Array(kernel.vertexCount);
     const inverse=new Matrix4().copy(mesh.matrixWorld).invert(),eye=new Vector3().setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inverse);
     // Orthographic views look along one direction: each vertex is tested from straight in front of it.
@@ -136,7 +139,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   return {
     active:()=>!!edit,
     read:()=>result(),
-    enter(object,{objectId=null}={}){
+    enter(object,{objectId=null,mode='vertex'}={}){
       if(edit)this.exit();
       const meshes=triangleMeshes(object);if(!meshes.length)throw Error('Edit Mode needs an object with a triangle mesh');
       const mesh=meshes[0];object.updateMatrixWorld(true);
@@ -144,7 +147,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const ready=prepare(meshes),{arrays,kernel,wirePositions}=ready,overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
-      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel)};
+      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel,{mode})};
       rebuildOverlay();return result();
     },
     exit(){
@@ -207,11 +210,38 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     },
     // What Separate needs: the selected faces, and the triangles they were selected on.
     selectedFaceMask:()=>Uint8Array.from(need().selection.faces),
+    // World-space plane of the selected face(s) for Snap Ground: outward area-weighted normal,
+    // area-weighted centroid, and the selected polygon vertices as the floor contact points.
+    selectedFacePlane(){
+      const {selection,kernel,mesh,object}=need(),q=kernel.vertexPositions,cv=kernel.cornerVertex,faces=selection.faces;
+      object.updateMatrixWorld(true);
+      const sign=Math.sign(mesh.matrixWorld.determinant())||1;
+      const a=new Vector3(),b=new Vector3(),c=new Vector3(),e1=new Vector3(),e2=new Vector3(),normal=new Vector3(),center=new Vector3(),points=[],seen=new Set();
+      let faceCount=0,totalArea=0;
+      for(let f=0;f<kernel.faceCount;f++)if(faces[f]){
+        faceCount++;
+        const va=cv[3*f],vb=cv[3*f+1],vc=cv[3*f+2];
+        a.fromArray(q,3*va).applyMatrix4(mesh.matrixWorld);
+        b.fromArray(q,3*vb).applyMatrix4(mesh.matrixWorld);
+        c.fromArray(q,3*vc).applyMatrix4(mesh.matrixWorld);
+        const cross=e1.subVectors(b,a).cross(e2.subVectors(c,a)).multiplyScalar(sign);
+        const area=cross.length()/2;
+        normal.add(cross);
+        center.addScaledVector(a,area/3).addScaledVector(b,area/3).addScaledVector(c,area/3);
+        totalArea+=area;
+        for(const [v,p] of [[va,a],[vb,b],[vc,c]])if(!seen.has(v)){seen.add(v);points.push(p.x,p.y,p.z);}
+      }
+      if(!faceCount)return null;
+      if(!(totalArea>0)||!(normal.length()>0))throw Error('Selected faces have no usable surface normal');
+      normal.normalize();center.divideScalar(totalArea);
+      return {normal:normal.toArray(),center:center.toArray(),tiltDeg:Math.acos(Math.max(-1,Math.min(1,-normal.y)))*180/Math.PI,faceCount,points};
+    },
     geometry(){const {positions,indices}=need().arrays;return {positions,indices};},
     selectedVertices(){const s=need().selection.vertices;return [...s.keys()].filter(i=>s[i]);},
     vertexPosition(v){const q=need().kernel.vertexPositions;return [q[3*v],q[3*v+1],q[3*v+2]];},
     screenOf(point){
-      need();const rect=canvas.getBoundingClientRect(),v=new Vector3(...point).applyMatrix4(edit.mesh.matrixWorld).project(camera);
+      need();edit.object.updateMatrixWorld(true);
+      const rect=canvas.getBoundingClientRect(),v=new Vector3(...point).applyMatrix4(edit.mesh.matrixWorld).project(camera);
       return {x:rect.left+(v.x+1)/2*rect.width,y:rect.top+(1-v.y)/2*rect.height,inView:v.z>=-1&&v.z<=1};
     },
   };

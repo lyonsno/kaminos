@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Matrix4, Vector3 } from '../lib/three.core.js';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import * as THREE from '../lib/three.core.js';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from '../asset-resting-plane.mjs';
+const { Matrix4, Vector3 } = THREE;
 
 // A chair-like cloud: four thin legs under a seat, back rising at the rear.
 function chairPoints() {
@@ -79,10 +82,117 @@ test('Snap Ground levels a tilted chair and grounds it through the same entry po
   assert.ok(Math.abs(lowestY(leveled)) < 1e-9);
 });
 
+test('Snap Ground with a selected basePlane levels an arbitrarily tilted object onto that face', () => {
+  const tilt = new Matrix4().makeRotationX(65 * Math.PI / 180).premultiply(new Matrix4().makeTranslation(0.4, 1.1, -0.3));
+  const tilted = transformed(chairPoints(), tilt);
+  assert.equal(snapGroundWorldDelta({ points: tilted, groundY: -0.85 }).choice.reason, 'no-obvious-base');
+  const legCorners = transformed([-0.4, 0, -0.4, 0.4, 0, -0.4, 0.4, 0, 0.4, -0.4, 0, 0.4], tilt);
+  const normal = new Vector3(0, -1, 0).transformDirection(tilt).toArray();
+  const center = new Vector3(0, 0, 0).applyMatrix4(tilt).toArray();
+  const { delta, choice } = snapGroundWorldDelta({
+    points: tilted,
+    groundY: -0.85,
+    basePlane: { normal, center, points: legCorners, faceCount: 2 },
+  });
+  assert.equal(choice.reason, 'selected-face');
+  assert.equal(choice.plane.faceCount, 2);
+  assert.ok(Math.abs(choice.plane.tiltDeg - 65) < 1e-6);
+  const leveled = transformed(tilted, delta);
+  const leveledLegs = transformed(legCorners, delta);
+  assert.equal(chooseLevelingPlane(findRestingPlanes(leveled)).reason, 'already-level');
+  for (let i = 1; i < leveledLegs.length; i += 3) {
+    assert.ok(Math.abs(leveledLegs[i] + 0.85) < 1e-6, `selected base vertex rests on groundY: ${leveledLegs[i]}`);
+  }
+});
+
+test('Snap Ground with a selected basePlane uses the selected polygon as the snap point on groundY', () => {
+  // Mesh with a selected base polygon at y=0 in local space, plus a lower bulge at y=-0.3.
+  const baseFace = [-0.5, 0, -0.5, 0.5, 0, -0.5, 0, 0, 0.5];
+  const withBulge = [...baseFace, 0, -0.3, 0, 0, 1.0, 0];
+  const tilt = new Matrix4().makeRotationZ(120 * Math.PI / 180).premultiply(new Matrix4().makeTranslation(0, 2, 0));
+  const tilted = transformed(withBulge, tilt);
+  const tiltedBase = transformed(baseFace, tilt);
+  const normal = new Vector3(0, -1, 0).transformDirection(tilt).toArray();
+  const center = new Vector3(0, 0, -1 / 6).applyMatrix4(tilt).toArray();
+  const { delta, choice } = snapGroundWorldDelta({
+    points: tilted,
+    groundY: -0.5,
+    basePlane: { normal, center, points: tiltedBase, faceCount: 1 },
+  });
+  assert.equal(choice.reason, 'selected-face');
+  const snappedBase = transformed(tiltedBase, delta);
+  for (let i = 1; i < snappedBase.length; i += 3) {
+    assert.ok(Math.abs(snappedBase[i] + 0.5) < 1e-6, `selected face vertex sits at groundY (-0.5), got ${snappedBase[i]}`);
+  }
+  assert.throws(() => snapGroundWorldDelta({ points: tilted, groundY: 0, basePlane: { normal: [0, 0, 0], center: [0, 0, 0] } }), /normal/i);
+});
+
 test('saved arrival leveling is restored only when well formed', () => {
   const valid = { storedQuaternion: [0.0868, 0, 0, 0.9962], leveledQuaternion: [0, 0, 0, 1], tiltDeg: 9.9 };
   assert.deepEqual(normalizeArrivalLeveling(valid), valid);
   for (const bad of [undefined, null, {}, { ...valid, tiltDeg: 'x' }, { ...valid, storedQuaternion: [0, 0, 1] }, { ...valid, leveledQuaternion: [0, 0, 0, 0] }, { ...valid, storedQuaternion: [NaN, 0, 0, 1] }]) {
     assert.equal(normalizeArrivalLeveling(bad), null, JSON.stringify(bad));
   }
+});
+
+test('index.html snapToGround and snapFaceToGround route selected Edit Mode faces and arm one-click face picking', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const start = html.indexOf('window.snapToGround = function');
+  const end = html.indexOf('// Export the selection', start);
+  assert.ok(start >= 0 && end > start);
+  const object = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+  object.add(mesh);
+  object.rotation.x = 65 * Math.PI / 180;
+  object.position.set(0, 1.5, 0);
+  object.updateMatrixWorld(true);
+  const faceCorners = transformed([-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5], object.matrixWorld);
+  const normal = new Vector3(0, -1, 0).transformDirection(object.matrixWorld).toArray();
+  const center = new Vector3(0, -0.5, 0).applyMatrix4(object.matrixWorld).toArray();
+  let selectedPlane = { normal, center, tiltDeg: 65, faceCount: 2, points: faceCorners };
+  let armed = 0;
+  const infos = [];
+  let committed = null;
+  const ctx = {
+    THREE,
+    window: {},
+    currentMesh: object,
+    groundPlane: { position: { y: -0.85 } },
+    polyEdit: {
+      active: () => true,
+      api: {
+        selectedFacePlane: () => selectedPlane,
+        armFaceSnap: () => { armed++; return true; },
+      },
+    },
+    sceneObjectWorldGeometry: () => ({ points: faceCorners, triangles: [0, 1, 2, 0, 2, 3] }),
+    snapGroundWorldDelta,
+    toolbarPoseFromWorld(target, world) {
+      const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+      world.decompose(p, q, s);
+      const r = new THREE.Euler().setFromQuaternion(q, target.rotation.order);
+      return { position: p.toArray(), rotation: [r.x, r.y, r.z], scale: s.toArray() };
+    },
+    commitToolbarPose(target, pose) {
+      committed = pose;
+      target.position.fromArray(pose.position);
+      target.rotation.set(...pose.rotation);
+      target.scale.fromArray(pose.scale);
+      return true;
+    },
+    syncLevelingButton() {},
+    setInfo(msg) { infos.push(msg); },
+  };
+  vm.runInNewContext(html.slice(start, end), ctx);
+  assert.equal(typeof ctx.window.snapFaceToGround, 'function', 'snapFaceToGround is defined');
+  ctx.window.snapToGround();
+  assert.ok(committed, 'pose was committed');
+  assert.match(infos.at(-1), /Snapped 2 selected faces \(65\.0°\) to ground/);
+  const afterCorners = transformed([-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5], object.matrixWorld);
+  for (let i = 1; i < afterCorners.length; i += 3) {
+    assert.ok(Math.abs(afterCorners[i] + 0.85) < 1e-6, `selected face rests at groundY (-0.85): ${afterCorners[i]}`);
+  }
+  selectedPlane = null;
+  ctx.window.snapFaceToGround();
+  assert.equal(armed, 1, 'with no face selected, snapFaceToGround arms one-click face picking');
 });

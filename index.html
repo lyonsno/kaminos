@@ -2741,7 +2741,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
-    <button class="tb-btn" onclick="snapToGround()" title="Level onto its base if it is clearly a few degrees off, then rest on the ground plane">Snap Ground</button>
+    <button class="tb-btn" onclick="snapToGround()" title="Level onto its base (or the selected Edit Mode face), then rest on the ground plane">Snap Ground</button>
+    <button class="tb-btn" id="tb-snap-face-ground" onclick="snapFaceToGround()" title="Click a polygon on the mesh to use as the base and snap to the ground">Use Face as Base</button>
     <button class="tb-btn" id="tb-undo-leveling" onclick="undoLeveling()" hidden>Undo Leveling</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
@@ -6548,7 +6549,7 @@ function updateTransformInspector() {
   inspector.hidden=!!workingScene.activeFieldId;
   inspector.dataset.componentEditing=String(!!sceneComponents?.active());
   document.body.dataset.componentEditing=inspector.dataset.componentEditing;
-  for(const button of document.querySelectorAll('#transform-bar button[onclick]'))if(/snapToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
+  for(const button of document.querySelectorAll('#transform-bar button[onclick], #authoring-transform-slot button[onclick]'))if(/snapToGround|snapFaceToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
@@ -11693,7 +11694,7 @@ async function initScene() {
     objectFor:id=>{const record=workingScene.objects.find(item=>item.id===id);if(record?.object)sceneBeautyLods?.restoreHero?.(record.object);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
-    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection});
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection,snapFace:plane=>window.snapToGround({basePlane:plane})});
   window.kaminosPolyEdit=polyEdit.api;
   const sceneCommandBlocked=()=>{
       const edit=scenePlacementTools.edits.state();
@@ -11727,6 +11728,8 @@ async function initScene() {
         command('add.fire','Add','Fire & Smoke',()=>openFirstFlameFieldDialog(),{aliases:['flame','emitter','volume','source','burner']}),
         command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
         ...[['translate','Move','G'],['rotate','Rotate','R'],['scale','Scale','S']].map(([mode,label,shortcut])=>command('transform.'+mode,'Transform',label,()=>{if(!scenePlacementTools.start(mode))throw Error('Could not start transform');},{shortcut,aliases:mode==='translate'?['translate','grab']:mode==='rotate'?['rotation','turn']:['resize','size'],disabled:transformReason})),
+        command('transform.snap-ground','Transform','Snap Ground',()=>window.snapToGround(),{aliases:['floor','ground','level','drop'],disabled:()=>currentMesh?null:'Select a mesh object first'}),
+        command('transform.snap-face-ground','Transform','Use Face as Base',()=>window.snapFaceToGround(),{aliases:['snap to floor','base face','polygon','align face to ground'],disabled:()=>currentMesh?null:'Select a mesh object first'}),
         command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:duplicateReason}),
         ...[['circle','Circular Array',['radial','ring','repeat']],['line','Linear Array',['repeat','spacing']]].map(([mode,label,aliases])=>command('repetition.'+mode,'Object',label,()=>addSceneArray(mode),{aliases,disabled:()=>repetitionInspectorTarget()?null:'Select a static mesh or mesh group'})),
         command('repetition.mirror','Object','Mirror X',()=>{const target=repetitionInspectorTarget();setSceneRepetition(target.id,{...(checkedRepetition(target.settings)||repetitionDefaults()),mirror:[true,false,false]});},{aliases:['symmetry','reflect'],disabled:()=>repetitionInspectorTarget()?null:'Select a static mesh or mesh group'}),
@@ -21890,8 +21893,8 @@ function updateAuthoringPropertySelection() {
   const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${waterFeature.host?'Current simulation':'Initial setup'} · Density passes ${state.settings.densityIterations} for all ${state.sourceCount} sources`;}
   syncBurnerInspector();
   syncSceneDataInspector();
-  document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
+  document.querySelectorAll('#transform-bar button[onclick], #authoring-transform-slot button[onclick]').forEach(button=>{
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround|snapFaceToGround/.test(button.getAttribute('onclick'))) button.hidden=workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
   });
 }
 let flameInspector = null;
@@ -23184,17 +23187,35 @@ window.kaminosRestingPlaneDebugState = function(id) {
   return { reason: choice.reason, tiltDeg: choice.plane?.tiltDeg ?? null, relArea: choice.plane?.relArea ?? null, stableMargin: choice.plane?.stableMargin ?? null };
 };
 
-window.snapToGround = function() {
-  if (!currentMesh) return;
-  const { points, triangles } = sceneObjectWorldGeometry(currentMesh, { triangles: true });
-  if (!points.length) return;
-  const { delta, choice } = snapGroundWorldDelta({ points, triangles, groundY: groundPlane.position.y });
+window.snapToGround = function({ basePlane = null } = {}) {
+  if (!currentMesh) return false;
+  const selectedPlane = basePlane ?? (polyEdit?.active() ? polyEdit.api.selectedFacePlane() : null);
+  const { points, triangles } = sceneObjectWorldGeometry(currentMesh, { triangles: !selectedPlane });
+  if (!points.length) return false;
+  const { delta, choice } = snapGroundWorldDelta({ points, triangles, groundY: groundPlane.position.y, basePlane: selectedPlane });
   currentMesh.updateWorldMatrix(true, false);
-  if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return;
+  if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return false;
+  currentMesh.updateWorldMatrix(true, true);
   syncLevelingButton();
-  if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
+  if (choice.reason === 'selected-face') {
+    const count = choice.plane.faceCount ?? 1;
+    setInfo(`Snapped ${count > 1 ? `${count} selected faces` : 'selected face'} (${choice.plane.tiltDeg.toFixed(1)}°) to ground`);
+  } else if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
   else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
-  else setInfo('Snapped to ground (no clear base to level onto)');
+  else setInfo('Snapped to ground (no clear base within 15° · click Use Face as Base to pick a base polygon)');
+  return true;
+};
+
+window.snapFaceToGround = function() {
+  if (!currentMesh) { setInfo('Select a mesh object first'); return false; }
+  try {
+    const plane = polyEdit?.active() ? polyEdit.api.selectedFacePlane() : null;
+    if (plane) return window.snapToGround({ basePlane: plane });
+    return !!polyEdit?.api.armFaceSnap();
+  } catch (error) {
+    setInfo(error.message);
+    return false;
+  }
 };
 
 // Export the selection (one object, or every member of a selected group) as a

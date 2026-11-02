@@ -138,7 +138,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     else if (/saveScene|scene-file-input|openSavedScene/.test(action)) move(button, 'authoring-document-actions');
     else if (/setGizmoMode/.test(action)) move(button, 'authoring-gizmo-slot');
     // Grounding sits with the transform it changes, visible without opening Object tools.
-    else if (/snapToGround|undoLeveling/.test(action)) move(button, 'authoring-transform-slot');
+    else if (/snapToGround|snapFaceToGround|undoLeveling/.test(action)) move(button, 'authoring-transform-slot');
   }
   if (exportButton) move(exportButton, 'authoring-document-actions');
   move(byId('composition-capture'), 'authoring-document-actions');

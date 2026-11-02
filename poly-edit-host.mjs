@@ -7,8 +7,8 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
-export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null,ownerComponents=null}) {
-  let separating=false,cutLine=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
+export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null,snapFace=null,ownerComponents=null}) {
+  let separating=false,cutLine=null,faceSnap=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
     setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · K slice · Shift+S origin · Alt+Z x-ray`);
@@ -17,9 +17,9 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   const rect=document.createElement?.('div');
   if(rect){rect.hidden=true;Object.assign(rect.style,{position:'absolute',border:'1px dashed #ff9a1f',background:'rgba(255,154,31,.08)',pointerEvents:'none',zIndex:20});viewport.appendChild?.(rect);}
 
-  function enter(id=selectedId()){
+  function enter(id=selectedId(),{mode='vertex'}={}){
     const object=id&&objectFor(id);if(!object)throw Error('Select a mesh object, then press Tab to edit it');
-    const state=edit.enter(object,{objectId:id});objectId=id;
+    const state=edit.enter(object,{objectId:id,mode});objectId=id;
     // TransformControls draws through a separate helper object in current Three; stand both down.
     const helper=gizmo?.getHelper?.();
     if(gizmo&&!gizmoState){gizmoState={visible:gizmo.visible,enabled:gizmo.enabled,helperVisible:helper?.visible};gizmo.visible=false;gizmo.enabled=false;if(helper)helper.visible=false;}
@@ -35,7 +35,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // The cut line for Slice (K): drawn like Blender's bisect line, shown as a dashed rule.
   const line=document.createElement?.('div');
   if(line){line.hidden=true;Object.assign(line.style,{position:'absolute',height:'0',borderTop:'2px dashed #ff9a1f',transformOrigin:'0 0',pointerEvents:'none',zIndex:20});viewport.appendChild?.(line);}
-  function armCut(){cancelBox();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
+  function armCut(){cancelBox();cancelFaceSnap();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
   function cancelCut(){cutLine=null;if(line)line.hidden=true;if(ring)ring.hidden=true;}
   const ring=document.createElement?.('div');
   if(ring){ring.hidden=true;Object.assign(ring.style,{position:'absolute',border:'2px dashed #ff9a1f',borderRadius:'50%',pointerEvents:'none',zIndex:20});viewport.appendChild?.(ring);}
@@ -44,9 +44,20 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(cutLine.circle){if(ring){Object.assign(ring.style,{left:cutLine.start.x-r-v.left+'px',top:cutLine.start.y-r-v.top+'px',width:2*r+'px',height:2*r+'px'});ring.hidden=false;}return;}
     if(line){Object.assign(line.style,{left:cutLine.start.x-v.left+'px',top:cutLine.start.y-v.top+'px',width:r+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});line.hidden=false;}
   }
-  function armBox(){cancelCut();box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
+  function armBox(){cancelCut();cancelFaceSnap();box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
   function cancelBox(){box=null;pointer=null;if(rect)rect.hidden=true;}
-  function cancelAll(){cancelBox();cancelCut();}
+  function armFaceSnap(){
+    cancelBox();cancelCut();
+    if(faceSnap){const exitAfter=faceSnap.exitAfter;faceSnap=null;if(exitAfter)exit();else hud();return false;}
+    const wasActive=live();
+    if(!wasActive)enter(selectedId(),{mode:'face'});
+    else edit.setMode('face');
+    faceSnap={exitAfter:!wasActive};
+    setInfo('Use Face as Base · click a polygon to snap it flat onto the ground · Escape cancels');
+    return true;
+  }
+  function cancelFaceSnap(){faceSnap=null;}
+  function cancelAll(){cancelBox();cancelCut();cancelFaceSnap();}
   const insideCanvas=event=>{const r=canvas.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;};
   const isText=target=>target?.closest?.('input,textarea,select,[contenteditable="true"]');
   const scoped=()=>document.activeElement===document.body||viewport.contains?.(document.activeElement)||viewport.matches?.(':hover');
@@ -64,7 +75,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
       return;
     }
     if(!live())return;
-    if((box||cutLine)&&event.key==='Escape'){steal(event);cancelAll();hud();return;}
+    if((box||cutLine||faceSnap)&&event.key==='Escape'){steal(event);const exitAfter=faceSnap?.exitAfter;cancelAll();if(exitAfter)exit();else hud();return;}
     if(event.ctrlKey||event.metaKey){if(event.code==='KeyL'){steal(event);attempt(()=>edit.linked());}return;}
     if(MODE_KEYS[event.code]&&!event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setMode(MODE_KEYS[event.code]));return;}
     if(event.code==='KeyA'&&!event.shiftKey){steal(event);attempt(()=>edit.selectAll(event.altKey?'deselect':'select'));return;}
@@ -116,7 +127,19 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
       const mode=event.ctrlKey||event.metaKey?'subtract':event.shiftKey?'extend':'set';
       attempt(()=>edit.box({x0:down.x,y0:down.y,x1:event.clientX,y1:event.clientY},{mode}));return;
     }
-    if(insideCanvas(event)&&!overlayHit(event))attempt(()=>edit.click(event.clientX,event.clientY,{extend:event.shiftKey}));
+    if(insideCanvas(event)&&!overlayHit(event)){
+      if(faceSnap){
+        steal(event);
+        const state=attempt(()=>edit.click(event.clientX,event.clientY));
+        if(!state?.counts?.faces){setInfo('Use Face as Base · click a polygon on the mesh to snap to the ground · Escape cancels');return;}
+        const plane=attempt(()=>edit.selectedFacePlane()),exitAfter=faceSnap.exitAfter;
+        faceSnap=null;
+        if(exitAfter)exit();
+        if(plane&&snapFace)attempt(()=>snapFace(plane));
+        return;
+      }
+      attempt(()=>edit.click(event.clientX,event.clientY,{extend:event.shiftKey}));
+    }
   },true);
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{
@@ -140,7 +163,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
     box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),circleFromDrag:(x0,y0,x1,y1)=>edit.circleFromDrag(x0,y0,x1,y1),
-    selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
+    selectedFaceMask:()=>edit.selectedFaceMask(),selectedFacePlane:()=>edit.selectedFacePlane(),armFaceSnap,geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),
     canvasRect:()=>{const r=canvas.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height};},

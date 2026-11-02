@@ -155,10 +155,33 @@ export function levelingWorldDelta({ plane = null, hullPoints, groundY }) {
   return delta;
 }
 
-// Snap Ground: level onto a clear base when there is one, and always rest the
-// lowest point on groundY. Geometry without a hull (a lone triangle, collapsed
-// scale) is grounded from its own points.
-export function snapGroundWorldDelta({ points, triangles = null, groundY }) {
+function checkedBasePlane(basePlane) {
+  if (!basePlane || !Array.isArray(basePlane.normal) || basePlane.normal.length !== 3 || !basePlane.normal.every(Number.isFinite)
+    || !Array.isArray(basePlane.center) || basePlane.center.length !== 3 || !basePlane.center.every(Number.isFinite)) {
+    throw new Error('Selected base face needs a finite 3D normal and center');
+  }
+  const n = new Vector3().fromArray(basePlane.normal);
+  if (!(n.length() > 0)) throw new Error('Selected base face normal must be non-zero');
+  n.normalize();
+  return {
+    normal: n.toArray(),
+    center: [...basePlane.center],
+    tiltDeg: Math.acos(Math.max(-1, Math.min(1, -n.y))) * 180 / Math.PI,
+    ...(Number.isInteger(basePlane.faceCount) ? { faceCount: basePlane.faceCount } : {}),
+  };
+}
+
+// Snap Ground: level onto a selected base face when one is supplied, or onto a
+// clear resting base when there is one, and rest the snap points on groundY.
+// Geometry without a hull (a lone triangle, collapsed scale) is grounded from
+// its own points.
+export function snapGroundWorldDelta({ points, triangles = null, groundY, basePlane = null }) {
+  if (basePlane) {
+    const plane = checkedBasePlane(basePlane);
+    const hullPoints = basePlane.points?.length >= 3 ? basePlane.points : points;
+    const delta = levelingWorldDelta({ plane, hullPoints, groundY });
+    return { delta, choice: { reason: 'selected-face', plane }, analysis: null };
+  }
   const analysis = findRestingPlanes(points, triangles);
   const choice = chooseLevelingPlane(analysis);
   const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis ? analysis.hullPoints : points, groundY });

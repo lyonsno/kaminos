@@ -13,8 +13,9 @@ const canvas={getBoundingClientRect:()=>({left:0,top:0,right:400,bottom:400,widt
 const helper={visible:true},gizmo={visible:true,enabled:true,getHelper:()=>helper},infos=[];let blocked=false,selected='mesh-1',present=true,separations=0,finishSeparate=null,separateFails=false;
 let origins=0;const origin=()=>{origins++;return Promise.resolve();};
 const slices=[];const slice=plane=>{slices.push(plane);return Promise.resolve();};
+const snappedFaces=[];const snapFace=plane=>{snappedFaces.push(plane);};
 const separate=()=>{separations++;if(separateFails)return Promise.reject(Error('Select faces to separate'));return new Promise(resolve=>{finishSeparate=resolve;});};
-const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate,slice,origin});
+const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate,slice,origin,snapFace});
 const key=(code,init={})=>{
   const event=new Event('keydown',{cancelable:true}),fields={key:code==='Tab'?'Tab':code==='Escape'?'Escape':code.replace(/^(Key|Digit)/,'').toLowerCase(),code,target:body,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,...init};
   for(const [name,value] of Object.entries(fields))Object.defineProperty(event,name,{value});
@@ -86,6 +87,34 @@ event=key('KeyS',{shiftKey:true});assert.ok(!event.defaultPrevented,'outside Edi
 key('Tab');event=key('KeyS',{shiftKey:true});await new Promise(r=>setTimeout(r));
 assert.ok(event.defaultPrevented);assert.equal(origins,1,'Shift+S sets the origin once');
 key('KeyS');assert.equal(origins,1,'plain S is not Origin to Selection');
+key('Tab');
+
+// Use Face as Base: arming from Object Mode enters Face mode for a one-click polygon pick,
+// snaps on click, and returns to Object Mode (or cancels on Escape).
+assert.equal(active(),false);
+api.armFaceSnap();
+assert.equal(active(),true,'arming face snap from Object Mode enters Edit Mode');
+assert.equal(api.read().mode,'face','and switches straight to Face mode');
+assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[false,false,false]);
+key('Escape');
+assert.equal(active(),false,'Escape cancels a one-shot face pick and returns to Object Mode');
+assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[true,true,true]);
+
+api.armFaceSnap();
+pointer('pointerdown',200,200);pointer('pointerup',200,200);
+assert.equal(snappedFaces.length,1,'clicking a face invokes snapFace with that polygon plane');
+assert.equal(snappedFaces[0].faceCount,1);
+assert.ok(Math.abs(snappedFaces[0].normal[2]-1)<1e-6,'picked the front (+Z) face of the cube');
+assert.equal(active(),false,'and returns to Object Mode after snapping');
+assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[true,true,true]);
+
+// When already in Edit Mode, armFaceSnap switches to Face mode and stays in Edit Mode after snapping.
+key('Tab');assert.equal(active(),true);
+api.armFaceSnap();assert.equal(api.read().mode,'face');
+pointer('pointerdown',200,200);pointer('pointerup',200,200);
+assert.equal(snappedFaces.length,2);
+assert.equal(active(),true,'remains in Edit Mode when started from Edit Mode');
+assert.equal(api.selectedFacePlane().faceCount,1,'selectedFacePlane is exposed on the host API');
 key('Tab');
 
 selected=null;key('Tab');assert.equal(active(),false);assert.match(infos.at(-1),/Select a mesh/);

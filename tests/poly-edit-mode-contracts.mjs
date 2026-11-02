@@ -165,3 +165,50 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   flat.exit();
 }
 
+// Selected face plane for Snap Ground: outward world-space normal, area-weighted centroid,
+// and selected polygon vertices, including under arbitrary rotation and negative-scale flips.
+{
+  const tilted=new THREE.Group(),cubeMesh=new THREE.Mesh(seamCube(),new THREE.MeshStandardMaterial());
+  tilted.add(cubeMesh);
+  tilted.position.set(0.4,0.6,-0.5);
+  tilted.rotation.set(30*Math.PI/180,-20*Math.PI/180,25*Math.PI/180);
+  tilted.updateMatrixWorld(true);
+  const faceEdit=createPolyEditMode({camera,canvas});
+  const entered=faceEdit.enter(tilted,{objectId:'tilted-cube',mode:'face'});
+  assert.equal(entered.mode,'face','can enter Edit Mode directly in face selection mode');
+  assert.equal(faceEdit.selectedFacePlane(),null,'no faces selected yields null');
+
+  // Select the two triangles of the local +Z side (faces 8 and 9).
+  const p0=faceEdit.screenOf([0.5,-0.5,1]),p1=faceEdit.screenOf([-0.5,0.5,1]);
+  faceEdit.click(p0.x,p0.y);
+  const single=faceEdit.selectedFacePlane();
+  assert.equal(single.faceCount,1);
+  assert.equal(single.points.length,9,'three world-space vertices for one selected triangle');
+  const expectedNormal=new THREE.Vector3(0,0,1).transformDirection(cubeMesh.matrixWorld);
+  assert.ok(new THREE.Vector3(...single.normal).distanceTo(expectedNormal)<1e-6,`outward world normal matches rotated +Z face: ${single.normal}`);
+
+  faceEdit.click(p1.x,p1.y,{extend:true});
+  const both=faceEdit.selectedFacePlane();
+  assert.equal(both.faceCount,2);
+  assert.equal(both.points.length,12,'four distinct welded vertices for the two triangles of the square face');
+  const expectedCenter=new THREE.Vector3(0,0,1).applyMatrix4(cubeMesh.matrixWorld);
+  assert.ok(new THREE.Vector3(...both.center).distanceTo(expectedCenter)<1e-6,`area-weighted centroid sits at the square face centre: ${both.center}`);
+
+  // A negative scale on one axis (toolbar Flip X) flips handedness in matrixWorld;
+  // selectedFacePlane must still report the outward normal rather than pointing inward.
+  tilted.scale.set(-1,1,1);
+  const flipped=faceEdit.selectedFacePlane();
+  const flippedNormal=new THREE.Vector3(0,0,1).transformDirection(cubeMesh.matrixWorld);
+  assert.ok(new THREE.Vector3(...flipped.normal).distanceTo(flippedNormal)<1e-6,'negative-determinant transform preserves outward face normal');
+  tilted.scale.set(1,1,1);
+
+  // Rotating the object in place so the selected face points straight down (0,-1,0)
+  // updates selectedFacePlane and screenOf without leaving Edit Mode.
+  const turn=new THREE.Quaternion().setFromUnitVectors(expectedNormal,new THREE.Vector3(0,-1,0));
+  tilted.quaternion.premultiply(turn);
+  const leveled=faceEdit.selectedFacePlane();
+  assert.ok(Math.abs(leveled.normal[1]+1)<1e-6&&Math.abs(leveled.tiltDeg)<1e-4,`leveled face points straight down: ${leveled.normal}, tilt ${leveled.tiltDeg}`);
+  faceEdit.exit();
+}
+
+
