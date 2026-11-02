@@ -32,6 +32,7 @@ export async function createPosedMotion({THREE,data,model,session,changed,canAdv
  function check(value){
   if(value===undefined)return null; // Static poses remain compatible.
   if(value?.schema!=='kaminos.posed-motion.v1'||!Number.isFinite(value.rate)||value.rate<=0)throw Error('Invalid saved creature motion');
+  for(const row of [value.assigned,value.displayed])if(row!=null&&(typeof row.id!=='string'||!/^[a-f0-9]{64}$/.test(row.id)))throw Error('Saved motion row requires a valid content id');
   model.check(value.startingPose);
   const a=value.assigned?prepare(value.assigned):null,d=value.displayed?prepare(value.displayed):null;
   if(!Number.isInteger(value.frame)||value.frame<0||(d?value.frame>=d.palette.frames:value.frame!==0))throw Error('Saved motion frame is outside retained motion');

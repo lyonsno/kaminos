@@ -35,6 +35,14 @@ try{
  const importedMotion={...motion,prompt:'An independently reopened take',seed:742},importedId=await motionDigest(motionText(importedMotion)),imported=structuredClone(held);imported.motionState.assigned={id:importedId,motion:importedMotion};const previewMotion={...motion,prompt:'A separately reopened preview',seed:743},previewId=await motionDigest(motionText(previewMotion));imported.motionState.displayed={id:previewId,motion:previewMotion};
  assert.equal(sessionMotions.get(importedId),undefined);await entry.operations.restore(imported);assert(sessionMotions.get(importedId),'Opening a saved pose restores its take into the reusable motion collection');assert(sessionMotions.get(previewId));assert(sessionMotions.export().motions.some(r=>r.id===previewId));entry.operations.previewMotion({id:importedId});entry.operations.assignMotion({id:previewId});const stable=entry.operations.snapshot(),badDigest=structuredClone(stable);badDigest.motionState.assigned.id='f'.repeat(64);await assert.rejects(entry.operations.restore(badDigest),/digest/);assert.deepEqual(entry.operations.snapshot(),stable);
  const newA={...motion,prompt:'Rejected first unregistered take',seed:9031},newB={...motion,prompt:'Rejected second unregistered take',seed:9032},invalid=structuredClone(stable),beforeCollection=sessionMotions.export();invalid.motionState.assigned={id:await motionDigest(motionText(newA)),motion:newA};invalid.motionState.displayed={id:'9'.repeat(64),motion:newB};await assert.rejects(entry.operations.restore(invalid),/digest/);assert.deepEqual(sessionMotions.export(),beforeCollection,'Rejected pose restore must not publish embedded rows');assert.deepEqual(entry.operations.snapshot(),stable);
+ let notifications=0;const unsubscribe=sessionMotions.subscribe(()=>notifications++);
+ for(const role of ['assigned','displayed'])for(const id of [undefined,null,'','wrong',17,'g'.repeat(64)]){
+  const rejected=structuredClone(stable);if(id===undefined)delete rejected.motionState[role].id;else rejected.motionState[role].id=id;
+  const collectionBefore=sessionMotions.export(),countBefore=notifications;
+  await assert.rejects(async()=>entry.operations.restore(rejected),/saved motion.*id/i);
+  assert.deepEqual(entry.operations.snapshot(),stable);assert.deepEqual(sessionMotions.export(),collectionBefore);assert.equal(notifications,countBefore);
+ }
+ unsubscribe();
  entry.operations.replay();for(const fn of [...callbacks])fn({deltaSeconds:1});assert.equal(entry.read().playback.frame,2);assert.equal(callbacks.size,0,'Source endpoint holds and releases clock');
 }finally{await entry.dispose();}assert.equal(callbacks.size,0);assert.equal(scene.children.length,0);
 console.log('Native posed creature plays, pauses into editing, saves and restores actual motion, rejects wrong sources and releases its clock');
