@@ -34,11 +34,11 @@ const context = vm.createContext({ console, performance, URL, URLSearchParams, E
 });
 const result = await build({ entryPoints: [new URL('../models/u2net/examples/external-app/app.js', import.meta.url).pathname],
   bundle: true, write: false, format: 'iife', define: { 'import.meta.url': '"https://studio.example/dist/app.js"' }, plugins: [{ name: 'application-dependencies', setup(builder) {
-    builder.onResolve({ filter: /^@kaminos\/u2net$|^lucide$|image-view\.js$|image-io\.js$|sample\.webp$/ }, args => ({ path: args.path, namespace: 'fixture' }));
+    builder.onResolve({ filter: /^@kaminos\/u2net$|^lucide$|image-view\.js$|image-io\.js$|sample\.png$/ }, args => ({ path: args.path, namespace: 'fixture' }));
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents:
       args.path.includes('image-view') ? 'export async function createImageView(){return {setImages(s,r){__calls.images.push({source:s,result:r})},setMode(){},setSplit(){},setBackground(){},setZoom(){},fit(){},destroy(){}}}' :
       args.path.includes('image-io') ? 'export async function readImage(input){__calls.input=input;return __source} export function downloadPng(r,n){__calls.downloads.push({r,n})}' :
-      args.path.includes('sample.webp') ? 'export default "sample.webp";' :
+      args.path.includes('sample.png') ? 'export default "sample.png";' :
       args.path === 'lucide' ? 'export const Download=[],Maximize=[],Square=[],Pause=[],Play=[],Upload=[];export const createElement=()=>({});' :
       'export async function createU2NetApp(opts){return __create(opts)}' }));
   } }] });
@@ -49,7 +49,7 @@ await settle();
 assert.equal(calls.loads, 0, 'opening the app does not download weights');
 assert.equal(calls.runs.length, 0, 'removal is user driven');
 assert.equal(calls.images.at(-1).source, source);
-assert.equal(calls.input, 'https://studio.example/dist/sample.webp', 'bundled asset resolves beside the module');
+assert.equal(calls.input, 'https://studio.example/dist/sample.png', 'bundled asset resolves beside the module');
 click('remove'); await settle();
 assert.equal(calls.runs.length, 1);
 assert.equal(calls.runs[0].pixels, source.rgba);

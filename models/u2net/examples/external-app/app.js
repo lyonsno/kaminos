@@ -3,13 +3,13 @@ import { createElement, Download, Maximize, Square, Pause, Play, Upload } from '
 import { createImageView } from './image-view.js';
 import { readImage, downloadPng } from './image-io.js';
 import { createProgressView } from './progress-view.js';
-import sampleUrl from './sample.webp';
+import sampleUrl from './sample.png';
 
 const get = id => document.getElementById(id);
 const icons = { Download, Maximize, Square, Pause, Play, Upload };
 for (const button of document.querySelectorAll('[data-icon]')) button.replaceChildren(createElement(icons[button.dataset.icon]));
 const progress = createProgressView(get);
-let app, view, source, result, name = 'Backpack', loaded = false, busy = true, selecting = false;
+let app, view, source, result, name = 'Sneaker', loaded = false, busy = true, selecting = false;
 let stopped = false, paused = false, closed = false, controlSerial = 0;
 function controls() {
   get('remove').disabled = busy || selecting || !app || !source;

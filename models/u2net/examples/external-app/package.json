@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "esbuild app.js --bundle --format=esm --loader:.webp=file --outfile=dist/app.js --servedir=. --serve=127.0.0.1:5176",
-    "build": "esbuild app.js --bundle --format=esm --loader:.webp=file --outfile=dist/app.js"
+    "dev": "esbuild app.js --bundle --format=esm --loader:.png=file --outfile=dist/app.js --servedir=. --serve=127.0.0.1:5176",
+    "build": "esbuild app.js --bundle --format=esm --loader:.png=file --outfile=dist/app.js"
   },
   "dependencies": { "@kaminos/u2net": "^0.1.0", "lucide": "^0.468.0" },
   "devDependencies": { "esbuild": "^0.28.2" }

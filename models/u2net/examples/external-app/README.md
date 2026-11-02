@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by the server. The included backpack appears immediately; weights download on the first removal. Subsequent removals reuse the loaded model. This folder is self-contained and can be moved out of the Kaminos checkout.
+Open the local URL printed by the server. The included sneaker appears immediately; weights download on the first removal. Subsequent removals reuse the loaded model. This folder is self-contained and can be moved out of the Kaminos checkout.
 
 ## Adapt
 
@@ -20,7 +20,7 @@ Open the local URL printed by the server. The included backpack appears immediat
 - `progress-view.js` displays existing preparation/mask phases and elapsed time. Unknown download and inference totals stay indeterminate.
 - `image-io.js` decodes browser-supported images and exports the returned RGBA bytes as PNG.
 
-The application preserves existing transparency without invoking U2Net. For opaque images it uses the package's unmodified rembg-compatible output, including the maximum 1024-pixel source resize. Output dimensions appear with the cutout. Background swatches affect only the preview, not the downloaded alpha channel. The included backpack is the same sample used by Kaminos Material Photograph.
+The application preserves existing transparency without invoking U2Net. For opaque images it uses the package's unmodified rembg-compatible output, including the maximum 1024-pixel source resize. Output dimensions appear with the cutout. Background swatches affect only the preview, not the downloaded alpha channel. The included sneaker is the same sample used by Kaminos TRELLIS.
 
 Run `npm run build` and serve `index.html` and `dist/` over HTTPS or localhost. To use your own weight host, supply `weightsUrl` in `app.js` or open `?weights=https://your-host/path/`. The loader still checks package byte count and SHA-256.
 
