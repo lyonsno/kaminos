@@ -65,6 +65,19 @@ try{
   assert.equal(await page.evaluate(()=>window.stockUnrelated.value),0);
   report.phase='grouped-close';await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
   await page.evaluate(async()=>{const family=await window.kaminosWorkbenchExperiments.read(),ids=family.variants.slice(0,2).map(v=>v.objectId);window.kaminosSelection.set(ids,ids[0]);window.kaminosSelection.group('Owned stock group');window.kaminosSelection.transform({position:[0,.4,0]});await window.kaminosWorkbenchExperiments.close();while(window.kaminosSceneEdits.state().undoCount)await window.kaminosSceneEdits.undo();});
+  report.phase='group-selection-close';await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
+  await page.evaluate(async()=>{const family=await window.kaminosWorkbenchExperiments.read(),external=window.kaminosSceneAuthoring.addMesh('box'),ids=family.variants.slice(0,2).map(v=>v.objectId);window.kaminosSceneEdits.apply('@stock-witness-unrelated',{value:1},'Unrelated before group selection');window.kaminosSelection.set(ids,ids[0]);window.kaminosSelection.group('Transient stock group');window.kaminosSelection.set([external],external);await window.kaminosWorkbenchExperiments.close();while(window.kaminosSceneEdits.state().undoCount)await window.kaminosSceneEdits.undo();});
+  assert.equal(await page.evaluate(()=>window.stockUnrelated.value),0);
+  for(const mode of ['replace','remove']){
+    report.phase='group-selection-'+mode;await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
+    const grouped=await page.evaluate(async()=>{const family=await window.kaminosWorkbenchExperiments.read(),external=window.kaminosSceneAuthoring.addMesh('box'),ids=family.variants.slice(0,2).map(v=>v.objectId);window.kaminosSceneEdits.apply('@stock-witness-unrelated',{value:1},'Unrelated before grouped retirement');window.kaminosSelection.set(ids,ids[0]);window.kaminosSelection.group('Retired stock group');window.kaminosSelection.set([external],external);return ids;});
+    if(mode==='replace')await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
+    else for(const id of grouped)await page.locator(`[data-scene-object-remove-id="${id}"]`).click();
+    await page.evaluate(async()=>{while(window.kaminosSceneEdits.state().undoCount)await window.kaminosSceneEdits.undo();});assert.equal(await page.evaluate(()=>window.stockUnrelated.value),0);
+  }
+  report.phase='surviving-group-selection';await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
+  report.survivingGroup=await page.evaluate(async()=>{const family=await window.kaminosWorkbenchExperiments.read(),member=family.variants[0].objectId,external=window.kaminosSceneAuthoring.addMesh('box'),other=window.kaminosSceneAuthoring.addMesh('box');window.kaminosSelection.set([member,external],member);window.kaminosSelection.group('Mixed stock group');const group=window.kaminosSelection.read().activeId;window.kaminosSelection.set([other],other);await window.kaminosWorkbenchExperiments.close();await window.kaminosSceneEdits.undo();return {expected:group,actual:window.kaminosSelection.read().activeId,members:window.kaminosSceneAuthoring.read().groups.find(g=>'@group:'+g.id===group)?.objectIds,external};});
+  assert.equal(report.survivingGroup.actual,report.survivingGroup.expected);assert.deepEqual(report.survivingGroup.members,[report.survivingGroup.external]);
   report.phase='source-refusal';const bad=structuredClone(recipe);bad.source.sha256='0'.repeat(64);
   report.badSource=await page.evaluate(async recipe=>{try{await window.kaminosWorkbenchExperiments.open('stock-family',{recipe});return null;}catch(e){return e.message;}},bad);
   assert.match(report.badSource,/digest mismatch/);await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());

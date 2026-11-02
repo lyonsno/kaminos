@@ -12,6 +12,12 @@ export function disposeStockMaterial(material){
   material.dispose();
 }
 
+export function stockRetirementIds(objectIds,groups){
+  const ids=new Set(objectIds);
+  for(const group of groups)if(group.objectIds.length&&group.objectIds.every(id=>ids.has(id)))ids.add('@group:'+group.id);
+  return ids;
+}
+
 // A compound edit is atomic: retire the whole transaction if it contains a
 // destroyed root, not unrelated earlier edits or incidental selection context.
 export function stockHistoryReferences(entry,ids){
