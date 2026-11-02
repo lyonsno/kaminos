@@ -849,6 +849,276 @@ test('Stockroom kaminosVertexWarp: beauty LOD rungs and fire shadow casters defo
   controller.dispose();
 });
 
+test('Stockroom deformStock contract: domain clamping handles remeshed LOD frameDrift, texelStretch scales free-span error, blocked variants do not loop or leak, and repetition copies stay synchronized', async () => {
+  const {applyRootVertexWarpToRung} = await import('../scene-lod-budget.mjs');
+  const {runGenerationLevels} = await import('../generation-levels-runner.mjs');
+
+  // Stockroom Shocktroops' exact fitted half-pipe-trough profile & deformStock implementation
+  const profile = {
+    min: -0.4999839663505554,
+    max: 0.5002454519271851,
+    xMin: -0.1665765643119812,
+    xMax: 0.16658924520015717,
+    locks: [[-0.4999839663505554, -0.45], [-0.43, -0.23], [0.22, 0.39], [0.45, 0.5002454519271851]],
+  };
+  function createStockWarp(p, v) {
+    const angle = (v.bend * Math.PI) / 180;
+    const locks = v.protect ? p.locks : [];
+    const locked = locks.reduce((s, b) => s + b[1] - b[0], 0);
+    const free = p.max - p.min - locked;
+    if (free <= 0 || v.length <= locked) throw Error('Length cannot contain the protected bands and positive free spans');
+    const stretch = (v.length - locked) / free;
+    const k = angle / (v.length - locked);
+    const minFactor = Math.min(1 - k * p.xMin, 1 - k * p.xMax);
+    if (minFactor <= 0) throw Error('Inner channel would fold: increase length or reduce bend');
+    const breaks = [...new Set([p.min, p.max, ...locks.flat()])].sort((a, b) => a - b);
+    const segments = [];
+    let x = 0, z = 0, theta = -angle / 2;
+    function at(s, value) {
+      const distance = (value - s.a) * s.rate;
+      const turn = s.curvature * distance;
+      const half = turn / 2;
+      const sinc = Math.abs(half) < 1e-8 ? 1 - (half * half) / 6 : Math.sin(half) / half;
+      return {
+        x: s.x + distance * sinc * Math.sin(s.theta + half),
+        z: s.z + distance * sinc * Math.cos(s.theta + half),
+        theta: s.theta + turn,
+        segment: s,
+      };
+    }
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const a = breaks[i], b = breaks[i + 1];
+      const rigid = locks.some(([lo, hi]) => (a + b) / 2 >= lo && (a + b) / 2 <= hi);
+      const rate = rigid ? 1 : stretch;
+      const curvature = rigid ? 0 : k;
+      const segment = {a, b, x, z, theta, rate, curvature, rigid};
+      segments.push(segment);
+      const q = at(segment, b);
+      x = q.x; z = q.z; theta = q.theta;
+    }
+    const locate = value => {
+      if (!Number.isFinite(value) || value < p.min - 1e-6 || value > p.max + 1e-6) {
+        throw Error('Vertex outside fitted longitudinal profile');
+      }
+      const s = segments.find(seg => value < seg.b) ?? segments.at(-1);
+      return at(s, value);
+    };
+    const midpoint = locate((p.min + p.max) / 2);
+    const point = a => {
+      if (a.length !== 3 || !a.every(Number.isFinite) || a[0] < p.xMin - 1e-6 || a[0] > p.xMax + 1e-6) {
+        throw Error('Vertex outside fitted cross-section');
+      }
+      const q = locate(a[2]), c = Math.cos(q.theta), s = Math.sin(q.theta);
+      const axial = q.segment.rate * (1 - q.segment.curvature * a[0]);
+      return {position: [q.x - midpoint.x + a[0] * c, a[1], q.z - midpoint.z + (p.min + p.max) / 2 - a[0] * s], axial, theta: q.theta};
+    };
+    const normal = (n, a) => {
+      const q = point(a), c = Math.cos(q.theta), s = Math.sin(q.theta), t = n[2] / q.axial;
+      const out = [c * n[0] + s * t, n[1], -s * n[0] + c * t];
+      const length = Math.hypot(...out);
+      return length ? out.map(val => val / length) : out;
+    };
+    return {
+      point,
+      normal,
+      metrics: {
+        freeStretch: stretch,
+        maxAxialStretch: Math.max(locks.length ? 1 : 0, stretch * Math.max(1 - k * p.xMin, 1 - k * p.xMax)),
+      },
+    };
+  }
+  function deformStock(positions, normals, p, v) {
+    const warp = createStockWarp(p, v);
+    const out = new Float32Array(positions.length);
+    const n = new Float32Array(normals.length);
+    for (let i = 0; i < positions.length; i += 3) {
+      const pt = Array.from(positions.subarray(i, i + 3));
+      out.set(warp.point(pt).position, i);
+      n.set(warp.normal(Array.from(normals.subarray(i, i + 3)), pt), i);
+    }
+    return {positions: out, normals: n, metrics: warp.metrics};
+  }
+
+  // Hero within exact fitted profile + a kaminosRepetitionCopy child sharing the same BufferGeometry (M2)
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  root.userData.kaminosSceneObject = {id: 'stock-trough-real'};
+  const heroGeom = new THREE.BoxGeometry(profile.xMax - profile.xMin, 0.18, profile.max - profile.min, 12, 12, 24);
+  heroGeom.translate((profile.xMin + profile.xMax) / 2, 0, (profile.min + profile.max) / 2);
+  heroGeom.computeTangents?.();
+  if (!heroGeom.getAttribute('tangent')) {
+    const tArr = new Float32Array((heroGeom.attributes.position.count) * 4);
+    for (let i = 0; i < tArr.length; i += 4) { tArr[i] = 1; tArr[i + 3] = 1; }
+    heroGeom.setAttribute('tangent', new THREE.BufferAttribute(tArr, 4));
+  }
+  const heroMesh = new THREE.Mesh(heroGeom, new THREE.MeshStandardMaterial());
+  heroMesh.castShadow = true;
+  root.add(heroMesh);
+
+  // Add a kaminosRepetitionCopy child whose Mesh shares heroGeom (like scene-repetition.mjs cloneBorrowed)
+  const repGroup = new THREE.Group();
+  repGroup.userData.kaminosRepetitionCopy = true;
+  repGroup.position.set(1.5, 0, 0);
+  repGroup.updateMatrix();
+  const repMesh = new THREE.Mesh(heroGeom, heroMesh.material);
+  repMesh.castShadow = true;
+  repGroup.add(repMesh);
+  root.add(repGroup);
+  scene.add(root);
+
+  // Remeshed LOD rung whose vertices exceed profile.xMax and profile.max by frameDrift (~0.0014) (M1)
+  function makeDriftedLodRung() {
+    const g = new THREE.Group();
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      profile.xMin - 0.0005, -0.1, profile.min - 0.0007,
+      profile.xMax + 0.0014, -0.1, profile.min - 0.0004,
+      0, 0.09, profile.max + 0.0011,
+    ]), 3));
+    geom.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([
+      0, 1, 0,
+      0, 1, 0,
+      0, 1, 0,
+    ]), 3));
+    geom.setAttribute('tangent', new THREE.BufferAttribute(new Float32Array([
+      1, 0, 0, 1,
+      1, 0, 0, 1,
+      1, 0, 0, 1,
+    ]), 4));
+    geom.setIndex([0, 1, 2]);
+    const m = new THREE.Mesh(geom, new THREE.MeshStandardMaterial());
+    m.castShadow = true;
+    g.add(m);
+    return g;
+  }
+
+  let currentVariant = {length: 1.5, bend: 80, protect: true};
+  const warpFn = (pos, nrm) => deformStock(pos, nrm, profile, currentVariant);
+
+  // 1. Capture shadow casters BEFORE kaminosVertexWarp is set, then attach warp and verify repCopies update (M2)
+  const tierSha = sha('drifted-lod-1000');
+  const levels = [{sha256: tierSha, faces: 1000, textureSize: 256, error: {relative: {p95: 0.001}}, normalMap: {texelSize: 1 / 256}}];
+  const shadowProxyRoot = makeDriftedLodRung();
+  const handle = {root, levels, representation: 'mesh', state: 'loaded', effective: {sha: tierSha, faces: 1000}, proxyRoot: shadowProxyRoot};
+  const giProxies = {
+    list: () => [handle],
+    get: r => (r === root ? handle : null),
+    onRelease: () => () => {},
+    registerConsumer: () => () => {},
+    select: () => {},
+  };
+  const casters = createFireShadowCasters({scene, giProxies, shadowFaceBudget: 50000});
+  casters.setEnabled(true);
+  // First capture with no warp
+  casters.withCapture(() => {}, {flameBox: {min: [-1, 0, -1], max: [1, 2, 1]}});
+
+  // Now attach warp to root and deform hero via applyRootVertexWarpToRung (verifying repGroup does NOT double-warp heroGeom)
+  root.userData.kaminosVertexWarp = warpFn;
+  root.userData.kaminosVertexWarpRevision = 1;
+  const heroWarpRes = applyRootVertexWarpToRung(THREE, root, warpFn);
+  assert.equal(heroWarpRes.ok, true, 'hero warp succeeded');
+  assert.ok(heroWarpRes.maxStretch > 2.3, `expected maxStretch > 2.3, got ${heroWarpRes.maxStretch}`);
+  assert.ok(heroWarpRes.texelStretch > 1.4, `expected texelStretch > 1.4, got ${heroWarpRes.texelStretch}`);
+
+  // Verify heroGeom was warped exactly once (not overwritten by repGroup's x=1.5 offset!)
+  const expectedHero = deformStock(heroGeom.userData.kaminosWarpBase.rootPos, heroGeom.userData.kaminosWarpBase.rootNorm, profile, currentVariant);
+  assert.ok(Math.abs(heroGeom.attributes.position.array[0] - expectedHero.positions[0]) < 1e-5, 'heroGeom was not corrupted by kaminosRepetitionCopy child');
+
+  // Second capture after attaching warp: verify BOTH primary shadow proxy AND its repetition copy have warped geometry (M1 + M2)
+  casters.withCapture(() => {
+    const visibleShadowMeshes = [];
+    scene.traverseVisible(m => { if (m.isMesh) visibleShadowMeshes.push(m); });
+    assert.equal(visibleShadowMeshes.length, 2, 'both primary and repetition shadow caster meshes are visible');
+    assert.equal(
+      visibleShadowMeshes[0].geometry,
+      visibleShadowMeshes[1].geometry,
+      'repetition shadow copy references the warped proxy geometry after warpFn was attached'
+    );
+    assert.ok(
+      Math.abs(visibleShadowMeshes[0].geometry.attributes.position.array[2] - deformStock(
+        new Float32Array([profile.xMin, -0.1, profile.min]),
+        new Float32Array([0, 1, 0]),
+        profile,
+        currentVariant
+      ).positions[2]) < 1e-3,
+      'drifted shadow proxy rung was clamped to hero profile bounds and warped cleanly by deformStock'
+    );
+  }, {flameBox: {min: [-1, 0, -1], max: [1, 2, 1]}});
+
+  // 2. Verify beauty LOD controller clamps drifted rungs, propagates texelStretch, and handles blocked variants without looping (M1 + WO2)
+  let fetchCount = 0;
+  const controller = createSceneBeautyLodController({
+    THREE,
+    scene,
+    giProxies,
+    fetchBytes: async () => {
+      fetchCount++;
+      return new TextEncoder().encode('drifted-lod-1000').buffer;
+    },
+    parseGlb: async () => makeDriftedLodRung(),
+    digest: async b => createHash('sha256').update(Buffer.from(b)).digest('hex'),
+    settings: {maxPixelError: 50.0, faceBudget: Infinity},
+  });
+  const cam = makeCamera({z: 6, fov: 50});
+  controller.update(cam, {viewportHeight: 1080});
+  await controller.whenIdle();
+  const stateBent = controller.update(cam, {viewportHeight: 1080});
+  assert.equal(fetchCount, 1, 'fetched rung once');
+  assert.equal(stateBent.objects[0].displayedTier, tierSha, 'drifted beauty LOD rung loaded and warped cleanly under deformStock');
+
+  // Switch to Stockroom's blocked tight variant ({length: 0.6, bend: 180, protect: true}) and bump revision
+  currentVariant = {length: 0.6, bend: 180, protect: true};
+  const blockedRes = applyRootVertexWarpToRung(THREE, root, warpFn);
+  assert.equal(blockedRes.ok, false, 'blocked tight variant reports ok: false without throwing');
+  assert.match(blockedRes.error, /Inner channel would fold/, 'records Stockroom fold error message');
+  root.userData.kaminosVertexWarpRevision = 2;
+  controller.update(cam, {viewportHeight: 1080});
+  controller.update(cam, {viewportHeight: 1080});
+  assert.equal(fetchCount, 1, 'blocked warpFn does not trigger repeated fetch/parse loops');
+  casters.withCapture(() => {}, {flameBox: {min: [-1, 0, -1], max: [1, 2, 1]}});
+
+  // 3. Verify tangent rotation when warpFn omits normals (N2) and runGenerationLevels forwarding (N1)
+  const posOnlyWarp = pos => {
+    const out = new Float32Array(pos.length);
+    for (let i = 0; i < pos.length; i += 3) {
+      out[i] = pos[i];
+      out[i + 1] = -pos[i + 2];
+      out[i + 2] = pos[i + 1];
+    }
+    return out;
+  };
+  const rungNoNorm = makeDriftedLodRung();
+  applyRootVertexWarpToRung(THREE, rungNoNorm, posOnlyWarp);
+  const meshNoNorm = rungNoNorm.children[0];
+  const nA = meshNoNorm.geometry.attributes.normal.array;
+  const tA = meshNoNorm.geometry.attributes.tangent.array;
+  const dotNoNorm = nA[0] * tA[0] + nA[1] * tA[1] + nA[2] * tA[2];
+  assert.ok(Math.abs(dotNoNorm) < 1e-4, `tangent remains orthogonal when warpFn omits normals (dot=${dotNoNorm})`);
+
+  let postedMsg = null;
+  let postedTransfers = null;
+  class MockWorker {
+    addEventListener(type, fn) { if (type === 'message') this._onMsg = fn; }
+    postMessage(msg, transfers) { postedMsg = msg; postedTransfers = transfers; this._onMsg?.({data: {kind: 'done', report: {phase: 'done'}}}); }
+    terminate() {}
+  }
+  const surfelBuf = new ArrayBuffer(16);
+  await runGenerationLevels({
+    source: 'a'.repeat(64),
+    surfelGLB: surfelBuf,
+    surfelSource: 'b'.repeat(64),
+    replace: true,
+    WorkerClass: MockWorker,
+  });
+  assert.equal(postedMsg.surfelGLB, surfelBuf, 'runGenerationLevels forwards surfelGLB');
+  assert.equal(postedMsg.surfelSource, 'b'.repeat(64), 'runGenerationLevels forwards surfelSource');
+  assert.equal(postedMsg.replace, true, 'runGenerationLevels forwards replace');
+  assert.ok(postedTransfers.includes(surfelBuf), 'runGenerationLevels transfers surfelGLB ArrayBuffer');
+
+  casters.dispose();
+  controller.dispose();
+});
+
 test('Stockroom surfelSource: prepareGenerationLevels builds hero-normal surfel levels from a stored surfel GLB alongside a hero GLB without raw voxel fields', async () => {
   const {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const {encodeSurfelGLB} = await import('../trellis-surfels.mjs');

@@ -67,7 +67,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       surfelGLB = await sResp.arrayBuffer();
     }
     let glbSurface = null;
-    if (fromHeroGLB) {
+    if (fromHeroGLB && targets.length) {
       glbSurface = await readGLBLocalSurfaceAndMaterials(heroGLB);
       vertices = glbSurface.vertices;
       triangles = glbSurface.triangles;
@@ -88,9 +88,9 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
         return {point: [hit.point.x, hit.point.y, hit.point.z], normal: [nx/l, ny/l, nz/l]};
       }, {bvh});
     };
-    const closestSource = closestFor(vertices, triangles);
-    const closestPoint = (x, y, z) => closestSource(x, y, z).point;
-    const bakeMaterial = fromHeroGLB ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
+    const closestSource = (!fromHeroGLB || targets.length) ? closestFor(vertices, triangles) : null;
+    const closestPoint = closestSource ? (x, y, z) => closestSource(x, y, z).point : null;
+    const bakeMaterial = (fromHeroGLB && targets.length) ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
     phase('tiers');
     const started = performance.now();
     const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, bakeMaterial, targets, closestPoint, finish, unwrapMesh, WorkerClass,
@@ -113,6 +113,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       // Error against the hero, in the world frame both are drawn in. A frame mismatch is refused
       // before anything is stored.
       hero = readGLBWorldMesh(heroGLB);
+      if (fromHeroGLB && !report.raw) report.raw = {vertices: hero.vertices.length / 3, faces: hero.faces.length / 3, fromHeroGLB: true};
       hb = bounds(hero.vertices); heroDiagonal = Math.hypot(...hb.hi.map((h, a) => h - hb.lo[a])); heroClosest = closestFor(hero.vertices, hero.faces);
       for (const tier of tiers) {
         const world = readGLBWorldMesh(tier.glb);

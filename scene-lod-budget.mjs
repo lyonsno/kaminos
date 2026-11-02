@@ -128,7 +128,7 @@ function boxIntersectsFrustum(box, planes) {
   return true;
 }
 
-export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5} = {}) {
+export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1} = {}) {
   if (!tier || tier === 'hero' || tier.isHero) return 0;
   const camPos = cameraWorldPosition(camera);
   const near = Math.max(camera?.near ?? 0.01, 1e-6);
@@ -143,8 +143,9 @@ export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHei
     pixelsPerUnit = (height * 0.5 * projY) / d;
   }
   const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
+  const stretch = Math.max(1, Number(texelStretch) || 1);
   const geomRel = Number(tier.error?.relative?.[stat] ?? tier.error?.relative?.p95 ?? 0) || 0;
-  const texelSize = Number(tier.normalMap?.texelSize ?? (tier.textureSize > 0 ? 1 / tier.textureSize : 0)) || 0;
+  const texelSize = (Number(tier.normalMap?.texelSize ?? (tier.textureSize > 0 ? 1 / tier.textureSize : 0)) || 0) * stretch;
   const combinedRel = Math.max(geomRel, texelWeight * texelSize);
   return diag * pixelsPerUnit * combinedRel;
 }
@@ -158,6 +159,7 @@ export function selectFootprintTier(levels = [], {
   maxPixelError = 1.5,
   stat = 'p95',
   texelWeight = 0.5,
+  texelStretch = 1,
   activeTier = null,
   hysteresis = 0.15,
 } = {}) {
@@ -173,7 +175,7 @@ export function selectFootprintTier(levels = [], {
         sha: id,
         isHero: false,
         faces: l.faces,
-        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight}),
+        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight, texelStretch}),
         level: l,
       };
     }),
@@ -267,6 +269,7 @@ export function allocateSceneBeautyLods(candidates = [], {
       maxPixelError,
       stat,
       texelWeight,
+      texelStretch: c.texelStretch ?? 1,
       activeTier: c.footprintTier ?? c.activeTier,
       hysteresis,
     });
@@ -479,8 +482,52 @@ function cloneBorrowedRung(THREE, node) {
   return copy;
 }
 
-export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
-  if (!rungRoot) return;
+function normalizeWarpBounds(bounds) {
+  if (!bounds) return null;
+  if (Array.isArray(bounds.min) && Array.isArray(bounds.max)) {
+    return {min: vec3Array(bounds.min), max: vec3Array(bounds.max)};
+  }
+  if (bounds.min?.isVector3 || (bounds.min && typeof bounds.min.x === 'number')) {
+    return {min: vec3Array(bounds.min), max: vec3Array(bounds.max)};
+  }
+  if (Number.isFinite(bounds.min) && Number.isFinite(bounds.max)) {
+    const xMin = Number.isFinite(bounds.xMin) ? bounds.xMin : -Infinity;
+    const xMax = Number.isFinite(bounds.xMax) ? bounds.xMax : Infinity;
+    return {min: [xMin, -Infinity, bounds.min], max: [xMax, Infinity, bounds.max]};
+  }
+  return null;
+}
+
+function clampPositionsToBounds(src, bounds) {
+  const b = normalizeWarpBounds(bounds);
+  if (!b) return src;
+  const out = new Float32Array(src.length);
+  const [minX, minY, minZ] = b.min;
+  const [maxX, maxY, maxZ] = b.max;
+  for (let i = 0; i < src.length; i += 3) {
+    const x = src[i], y = src[i + 1], z = src[i + 2];
+    out[i] = x < minX ? minX : (x > maxX ? maxX : x);
+    out[i + 1] = y < minY ? minY : (y > maxY ? maxY : y);
+    out[i + 2] = z < minZ ? minZ : (z > maxZ ? maxZ : z);
+  }
+  return out;
+}
+
+function arrayBounds(pos) {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < pos.length; i += 3) {
+    for (let c = 0; c < 3; c++) {
+      if (pos[i + c] < min[c]) min[c] = pos[i + c];
+      if (pos[i + c] > max[c]) max[c] = pos[i + c];
+    }
+  }
+  return min[0] <= max[0] ? {min, max} : {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]};
+}
+
+export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn, {bounds = null} = {}) {
+  if (!rungRoot) return {ok: false, error: 'missing rungRoot', maxStretch: 1, texelStretch: 1};
+  if (!rungRoot.userData) rungRoot.userData = {};
   rungRoot.updateMatrixWorld?.(true);
   const invRung = new THREE.Matrix4().copy(rungRoot.matrixWorld).invert();
   const meshToRoot = new THREE.Matrix4();
@@ -493,11 +540,39 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
   const t0 = new THREE.Vector3();
   const qRot = new THREE.Quaternion();
 
-  rungRoot.traverse(m => {
-    if (!m.isMesh || !m.geometry) return;
+  const seenGeometries = new Set();
+  const meshes = [];
+  const visit = node => {
+    if (!node) return;
+    if (
+      node !== rungRoot &&
+      (node.userData?.kaminosRepetitionCopy ||
+        node.userData?.kaminosBeautyLodProxy ||
+        node.userData?.kaminosEditorHelper ||
+        node.userData?.kaminosEditorOnly)
+    ) {
+      return;
+    }
+    if (node.isMesh && node.geometry && !seenGeometries.has(node.geometry)) {
+      seenGeometries.add(node.geometry);
+      meshes.push(node);
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(rungRoot);
+
+  const unwarpedMin = [Infinity, Infinity, Infinity];
+  const unwarpedMax = [-Infinity, -Infinity, -Infinity];
+  const warpedMin = [Infinity, Infinity, Infinity];
+  const warpedMax = [-Infinity, -Infinity, -Infinity];
+  let maxStretch = 1;
+  let lastError = null;
+  const effectiveBounds = normalizeWarpBounds(bounds ?? rungRoot.userData?.kaminosVertexWarpBounds ?? null);
+
+  for (const m of meshes) {
     const geom = m.geometry;
     const posAttr = geom.getAttribute('position');
-    if (!posAttr?.array) return;
+    if (!posAttr?.array) continue;
     const normAttr = geom.getAttribute('normal');
     const tanAttr = geom.getAttribute('tangent');
     meshToRoot.multiplyMatrices(invRung, m.matrixWorld);
@@ -528,22 +603,16 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
           rootNorm[i + 2] = v3.z;
         }
       }
-      let rootTan = null;
-      if (origMeshTan) {
-        rootTan = new Float32Array(origMeshTan.length);
-        for (let i = 0; i < origMeshTan.length; i += 4) {
-          v3.set(origMeshTan[i], origMeshTan[i + 1], origMeshTan[i + 2]).transformDirection(meshToRoot);
-          rootTan[i] = v3.x;
-          rootTan[i + 1] = v3.y;
-          rootTan[i + 2] = v3.z;
-          rootTan[i + 3] = origMeshTan[i + 3];
-        }
-      }
-      base = {origMeshPos, origMeshNorm, origMeshTan, rootPos, rootNorm, rootTan};
+      const rootBounds = arrayBounds(rootPos);
+      base = {origMeshPos, origMeshNorm, origMeshTan, rootPos, rootNorm, rootBounds};
       geom.userData.kaminosWarpBase = base;
     }
+    for (let c = 0; c < 3; c++) {
+      if (base.rootBounds.min[c] < unwarpedMin[c]) unwarpedMin[c] = base.rootBounds.min[c];
+      if (base.rootBounds.max[c] > unwarpedMax[c]) unwarpedMax[c] = base.rootBounds.max[c];
+    }
 
-    if (typeof warpFn !== 'function') {
+    const restoreMeshToBase = () => {
       if (geom.userData.kaminosWarpApplied) {
         posAttr.array.set(base.origMeshPos);
         posAttr.needsUpdate = true;
@@ -559,13 +628,57 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
         geom.computeBoundingSphere?.();
         geom.userData.kaminosWarpApplied = false;
       }
-      return;
+    };
+
+    if (typeof warpFn !== 'function') {
+      restoreMeshToBase();
+      continue;
     }
 
-    const res = warpFn(base.rootPos, base.rootNorm);
+    let res = null;
+    let inputPos = effectiveBounds ? clampPositionsToBounds(base.rootPos, effectiveBounds) : base.rootPos;
+    try {
+      res = warpFn(inputPos, base.rootNorm);
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (/outside fitted (longitudinal profile|cross-section)/i.test(msg)) {
+        const rb = base.rootBounds;
+        const marginX = (rb.max[0] - rb.min[0]) * 0.005;
+        const marginZ = (rb.max[2] - rb.min[2]) * 0.005;
+        const insetBounds = {
+          min: [rb.min[0] + marginX, rb.min[1], rb.min[2] + marginZ],
+          max: [rb.max[0] - marginX, rb.max[1], rb.max[2] - marginZ],
+        };
+        inputPos = clampPositionsToBounds(base.rootPos, effectiveBounds ?? insetBounds);
+        try {
+          res = warpFn(inputPos, base.rootNorm);
+        } catch (err2) {
+          lastError = String(err2?.message ?? err2);
+          restoreMeshToBase();
+          continue;
+        }
+      } else {
+        lastError = msg;
+        restoreMeshToBase();
+        continue;
+      }
+    }
+
     const warpedRootPos = res?.positions ?? res;
     const warpedRootNorm = res?.normals ?? null;
-    if (!(warpedRootPos instanceof Float32Array) || warpedRootPos.length !== base.rootPos.length) return;
+    if (!(warpedRootPos instanceof Float32Array) || warpedRootPos.length !== base.rootPos.length) {
+      lastError = 'warpFn must return a matching Float32Array of positions';
+      restoreMeshToBase();
+      continue;
+    }
+
+    const reportedStretch = Number(res?.metrics?.maxAxialStretch ?? res?.maxStretch);
+    if (Number.isFinite(reportedStretch) && reportedStretch > maxStretch) maxStretch = reportedStretch;
+    const wb = arrayBounds(warpedRootPos);
+    for (let c = 0; c < 3; c++) {
+      if (wb.min[c] < warpedMin[c]) warpedMin[c] = wb.min[c];
+      if (wb.max[c] > warpedMax[c]) warpedMax[c] = wb.max[c];
+    }
 
     const dstPos = posAttr.array;
     for (let i = 0; i < warpedRootPos.length; i += 3) {
@@ -591,25 +704,23 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
       }
     }
 
-    if (tanAttr && base.rootTan) {
+    if (tanAttr && base.origMeshTan) {
       const dstTan = tanAttr.array;
       const dstNorm = normAttr?.array ?? null;
       const count = posAttr.count;
       for (let v = 0; v < count; v++) {
         const i3 = v * 3;
         const i4 = v * 4;
-        t0.set(base.rootTan[i4], base.rootTan[i4 + 1], base.rootTan[i4 + 2]);
-        if (base.rootNorm && warpedRootNorm) {
-          n0.set(base.rootNorm[i3], base.rootNorm[i3 + 1], base.rootNorm[i3 + 2]).normalize();
-          n1.set(warpedRootNorm[i3], warpedRootNorm[i3 + 1], warpedRootNorm[i3 + 2]).normalize();
-          if (n0.dot(n1) > -0.9999) {
-            qRot.setFromUnitVectors(n0, n1);
-            t0.applyQuaternion(qRot);
-          }
-        }
-        t0.transformDirection(rootToMesh);
+        t0.set(base.origMeshTan[i4], base.origMeshTan[i4 + 1], base.origMeshTan[i4 + 2]);
         if (dstNorm) {
           n1.set(dstNorm[i3], dstNorm[i3 + 1], dstNorm[i3 + 2]).normalize();
+          if (base.origMeshNorm) {
+            n0.set(base.origMeshNorm[i3], base.origMeshNorm[i3 + 1], base.origMeshNorm[i3 + 2]).normalize();
+            if (n0.dot(n1) > -0.9999) {
+              qRot.setFromUnitVectors(n0, n1);
+              t0.applyQuaternion(qRot);
+            }
+          }
           t0.addScaledVector(n1, -t0.dot(n1));
           if (t0.lengthSq() < 1e-10) {
             if (Math.abs(n1.x) < 0.9) t0.set(1, 0, 0).addScaledVector(n1, -n1.x);
@@ -620,7 +731,7 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
         dstTan[i4] = t0.x;
         dstTan[i4 + 1] = t0.y;
         dstTan[i4 + 2] = t0.z;
-        dstTan[i4 + 3] = base.rootTan[i4 + 3];
+        dstTan[i4 + 3] = base.origMeshTan[i4 + 3];
       }
       tanAttr.needsUpdate = true;
     }
@@ -628,7 +739,21 @@ export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn) {
     geom.computeBoundingBox?.();
     geom.computeBoundingSphere?.();
     geom.userData.kaminosWarpApplied = true;
-  });
+  }
+
+  if (unwarpedMin[0] <= unwarpedMax[0]) {
+    rungRoot.userData.kaminosUnwarpedRootBox = {min: unwarpedMin, max: unwarpedMax};
+  }
+  let texelStretch = 1;
+  if (typeof warpFn === 'function' && !lastError && unwarpedMin[0] <= unwarpedMax[0] && warpedMin[0] <= warpedMax[0]) {
+    const unwarpedDiag = boxDiagonal({min: unwarpedMin, max: unwarpedMax});
+    const warpedDiag = boxDiagonal({min: warpedMin, max: warpedMax});
+    texelStretch = Math.max(1, (unwarpedDiag * maxStretch) / Math.max(warpedDiag, 1e-6));
+  }
+  rungRoot.userData.kaminosVertexWarpError = lastError;
+  rungRoot.userData.kaminosVertexWarpMaxStretch = maxStretch;
+  rungRoot.userData.kaminosVertexWarpTexelStretch = texelStretch;
+  return {ok: !lastError, error: lastError, maxStretch, texelStretch};
 }
 
 export function createSceneBeautyLodController({
@@ -668,6 +793,7 @@ export function createSceneBeautyLodController({
   function inspectHeroRoot(root) {
     let heroFaces = 0;
     const localBox = new THREE.Box3();
+    const unwarpedBox = new THREE.Box3();
     const invRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
     const scratchMat = new THREE.Matrix4();
     const scratchBox = new THREE.Box3();
@@ -683,10 +809,27 @@ export function createSceneBeautyLodController({
           scratchBox.copy(m.geometry.boundingBox).applyMatrix4(scratchMat);
           localBox.union(scratchBox);
         }
+        const rb = m.geometry.userData?.kaminosWarpBase?.rootBounds;
+        if (rb?.min && rb?.max) {
+          unwarpedBox.expandByPoint(new THREE.Vector3(...rb.min));
+          unwarpedBox.expandByPoint(new THREE.Vector3(...rb.max));
+        }
       });
     }
     if (localBox.isEmpty()) localBox.set(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5));
-    return {heroFaces: Math.max(1, Math.round(heroFaces)), localBox};
+    const unwarpedBounds = normalizeWarpBounds(root.userData?.kaminosVertexWarpBounds ?? root.userData?.kaminosUnwarpedRootBox) ??
+      (!unwarpedBox.isEmpty()
+        ? {min: unwarpedBox.min.toArray(), max: unwarpedBox.max.toArray()}
+        : (!root.userData?.kaminosVertexWarp ? {min: localBox.min.toArray(), max: localBox.max.toArray()} : null));
+    if (unwarpedBounds && root.userData && !root.userData.kaminosUnwarpedRootBox) {
+      root.userData.kaminosUnwarpedRootBox = unwarpedBounds;
+    }
+    return {
+      heroFaces: Math.max(1, Math.round(heroFaces)),
+      localBox,
+      unwarpedBounds,
+      texelStretch: Math.max(1, Number(root.userData?.kaminosVertexWarpTexelStretch) || 1),
+    };
   }
 
   function restoreRootToHero(root, entry) {
@@ -764,10 +907,11 @@ export function createSceneBeautyLodController({
     const gen = entry.generation;
     const url = level.source ?? `/api/read?root=generated-meshes&path=${sha}.glb`;
     const task = (async () => {
+      let rungRoot = null;
       try {
         const bytes = await fetchBytes(url);
         if (await digest(bytes) !== sha) throw Error(`beauty LOD content mismatch for ${sha}`);
-        const rungRoot = await parseGlb(bytes);
+        rungRoot = await parseGlb(bytes);
         rungRoot.traverse(m => {
           if (m.isMesh) {
             m.castShadow = true;
@@ -777,16 +921,19 @@ export function createSceneBeautyLodController({
         });
         if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
           disposeTree(rungRoot);
+          rungRoot = null;
           return;
         }
         if (typeof entry.warpFn === 'function') {
-          applyRootVertexWarpToRung(THREE, rungRoot, entry.warpFn);
+          const warpRes = applyRootVertexWarpToRung(THREE, rungRoot, entry.warpFn, {bounds: entry.unwarpedBounds});
+          if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
         }
         const releaseLighting = surfaceLighting?.registerProxyRoot?.(rungRoot) ?? null;
         entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, releaseLighting, warpFn: entry.warpFn, warpRevision: entry.warpRevision});
+        rungRoot = null;
         onUpdate?.();
       } catch {
-        // Keep displaying the existing resident rung if a tier fails to load
+        if (rungRoot) disposeTree(rungRoot);
       } finally {
         entry.inFlight.delete(sha);
         pendingLoads.delete(task);
@@ -886,11 +1033,13 @@ export function createSceneBeautyLodController({
           continue;
         }
         if (!entry) {
-          const {heroFaces, localBox} = inspectHeroRoot(root);
+          const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
           entry = {
             id: root.userData?.kaminosSceneObject?.id ?? root.uuid,
             heroFaces,
             localBox,
+            unwarpedBounds,
+            texelStretch,
             rungs: new Map(),
             inFlight: new Set(),
             activeTier: 'hero',
@@ -913,11 +1062,14 @@ export function createSceneBeautyLodController({
           if (entry.warpFn !== curWarpFn || entry.warpRevision !== curWarpRev) {
             entry.warpFn = curWarpFn;
             entry.warpRevision = curWarpRev;
-            const {heroFaces, localBox} = inspectHeroRoot(root);
+            const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
             entry.heroFaces = heroFaces;
             entry.localBox = localBox;
+            if (unwarpedBounds) entry.unwarpedBounds = unwarpedBounds;
+            entry.texelStretch = texelStretch;
             for (const rungRecord of entry.rungs.values()) {
-              applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn);
+              const warpRes = applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn, {bounds: entry.unwarpedBounds});
+              if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
               rungRecord.warpFn = curWarpFn;
               rungRecord.warpRevision = curWarpRev;
             }
@@ -946,6 +1098,7 @@ export function createSceneBeautyLodController({
           levels: handle.levels,
           instanceBoxes,
           worldDiag: boxDiagonal(instanceBoxes[0]),
+          texelStretch: entry.texelStretch,
           pinned,
           activeTier: entry.activeTier,
           footprintTier: entry.footprintTier,
@@ -1057,6 +1210,7 @@ export function createSceneBeautyLodController({
       }
     },
     state: () => lastState,
+    applyWarp: (root, warpFn, options) => applyRootVertexWarpToRung(THREE, root, warpFn, options),
     whenIdle: async () => {
       while (pendingLoads.size) await Promise.all([...pendingLoads]);
     },

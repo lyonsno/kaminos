@@ -48,16 +48,19 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     localBoxCache.set(proxyRoot,b);return b;
   };
   const rootLocalBoxOf=root=>{
-    const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),b=new THREE.Box3(),sb=new THREE.Box3(),sm=new THREE.Matrix4();
+    const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),b=new THREE.Box3(),ub=new THREE.Box3(),sb=new THREE.Box3(),sm=new THREE.Matrix4();
     for(const ch of root.children){
-      if(!ch.visible||ch.userData?.kaminosRepetitionCopy)continue;
+      if(!ch.visible||ch.userData?.kaminosRepetitionCopy||ch.userData?.kaminosBeautyLodProxy||ch.userData?.kaminosEditorHelper||ch.userData?.kaminosEditorOnly)continue;
       ch.traverse(m=>{
         if(!m.isMesh||!m.geometry)return;
         if(!m.geometry.boundingBox)m.geometry.computeBoundingBox?.();
         if(m.geometry.boundingBox){sm.copy(inv).multiply(m.matrixWorld);sb.copy(m.geometry.boundingBox).applyMatrix4(sm);b.union(sb);}
+        const rb=m.geometry.userData?.kaminosWarpBase?.rootBounds;
+        if(rb?.min&&rb?.max){ub.expandByPoint(new THREE.Vector3(...rb.min));ub.expandByPoint(new THREE.Vector3(...rb.max));}
       });
     }
     if(b.isEmpty())b.set(new THREE.Vector3(-0.5,-0.5,-0.5),new THREE.Vector3(0.5,0.5,0.5));
+    if(!ub.isEmpty()&&root.userData&&!root.userData.kaminosUnwarpedRootBox)root.userData.kaminosUnwarpedRootBox={min:ub.min.toArray(),max:ub.max.toArray()};
     return b;
   };
   const proxies=()=>giProxies??globalThis.window?.kaminosGiProxies??null;
@@ -164,19 +167,22 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
         }else if(kind==='gi-proxy'){
           const warpFn=typeof root.userData?.kaminosVertexWarp==='function'?root.userData.kaminosVertexWarp:null;
           const warpRev=root.userData?.kaminosVertexWarpRevision??0;
+          const warpBounds=root.userData?.kaminosVertexWarpBounds??root.userData?.kaminosUnwarpedRootBox??null;
           if(instance?.sourceAsset!==handle.proxyRoot){
             disposeInstance(instance);
             const wrapper=new THREE.Group(),proxy=handle.proxyRoot.clone(true);
             proxy.traverse(m=>{if(m.isMesh){m.castShadow=true;if(warpFn){m.geometry=m.geometry.clone();m.userData.kaminosOwnsWarpedGeometry=true;}m.material=(Array.isArray(m.material)?m.material[0]:m.material)?.clone()??new THREE.MeshBasicMaterial();}});
-            if(warpFn)applyRootVertexWarpToRung(THREE,proxy,warpFn);
+            if(warpFn)applyRootVertexWarpToRung(THREE,proxy,warpFn,{bounds:warpBounds});
             wrapper.matrixAutoUpdate=false;wrapper.add(proxy);
             instance={wrapper,proxy,repCopies:[],sourceAsset:handle.proxyRoot,key:'gi-proxy',measured:!!handle.error,warpFn,warpRev};
             instances.set(root,instance);
           }else{
             instance.measured=!!handle.error;
             if(instance.warpFn!==warpFn||instance.warpRev!==warpRev){
-              if(warpFn)instance.proxy.traverse(m=>{if(m.isMesh&&!m.userData?.kaminosOwnsWarpedGeometry){m.geometry=m.geometry.clone();m.userData.kaminosOwnsWarpedGeometry=true;}});
-              applyRootVertexWarpToRung(THREE,instance.proxy,warpFn);
+              let clonedNewGeom=false;
+              if(warpFn)instance.proxy.traverse(m=>{if(m.isMesh&&!m.userData?.kaminosOwnsWarpedGeometry){m.geometry=m.geometry.clone();m.userData.kaminosOwnsWarpedGeometry=true;clonedNewGeom=true;}});
+              applyRootVertexWarpToRung(THREE,instance.proxy,warpFn,{bounds:warpBounds});
+              if(clonedNewGeom)while(instance.repCopies.length)instance.repCopies.pop().removeFromParent();
               instance.warpFn=warpFn;instance.warpRev=warpRev;
             }
           }
