@@ -243,6 +243,7 @@ test('a run hands back its raw decode and material fields for GI tiers, as copie
   const {decode,materialFields}=result.levelInputs;
   assert.deepEqual([...decode.vertices.subarray(0,3)],[...rawFixture().vertices.subarray(0,3)]);
   assert.equal(decode.triangles.length,6);assert.equal(materialFields.resolution,8);
+  assert.deepEqual([...decode.coordinates],[2,2,3,3,2,3,2,3,3,3,3,3,6,6,6]);
   assert.equal(materialFields.features.length,5*6);assert.equal(materialFields.coordinates.length,5*3);
 });
 
@@ -268,4 +269,6 @@ for(const options of [{res:1024},{failGeometry:true}])test(`raw fields survive o
   assert.deepEqual(result.levelInputs.decode.triangles,rawFixture().triangles);
   assert.equal(result.levelInputs.materialFields.resolution,options.res??8);
   assert.equal(result.levelInputs.materialFields.features.length,30);
+  if(options.failGeometry)assert.equal(result.levelInputs.decode.coordinates,undefined);
+  else assert.equal(result.levelInputs.decode.coordinates.length,15);
 });
