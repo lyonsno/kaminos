@@ -1,22 +1,29 @@
 import {Vector3,Euler,Quaternion,Matrix4} from './lib/three.core.js';
 import {checkedGeometry} from './scene-geometry.mjs';
 export const SCENE_LIQUID_SUPPORT_ROUTE='kaminos/fluid/authored-primitive-support-v0';
+export const canCollideWithWater=record=>record?.type==='procedural-mesh'&&['plane','sphere','bowl','box'].includes(record.geometry?.kind);
 export function sceneLiquidCollider(record) {
- if(record?.type!=='procedural-mesh'||record.waterCollision===false||!['plane','sphere','bowl'].includes(record.geometry?.kind))return null;
+ if(!canCollideWithWater(record)||record.waterCollision===false)return null;
  const {kind,parameters:p}=checkedGeometry(record.geometry);
  let world;
  if(record.object){record.object.updateWorldMatrix(true,false);world=record.object.matrixWorld;}
  else world=new Matrix4().compose(new Vector3(...record.transform.position),new Quaternion().setFromEuler(new Euler(...record.transform.rotation)),new Vector3(...record.transform.scale));
  const e=world.elements,scale=[0,4,8].map(i=>Math.hypot(e[i],e[i+1],e[i+2]));
- if(!(scale[0]>0)||scale.some(v=>Math.abs(v-scale[0])>1e-6*scale[0]))throw Error(`Water collider ${record.id} requires nonzero uniform scale`);
+ if(!scale.every(v=>Number.isFinite(v)&&v>0)||kind!=='box'&&scale.some(v=>Math.abs(v-scale[0])>1e-6*scale[0]))throw Error(`Water collider ${record.id} requires nonzero uniform scale`);
  const position=new Vector3().setFromMatrixPosition(world),axes=[0,4,8].map((start,i)=>[e[start]/scale[i],e[start+1]/scale[i],e[start+2]/scale[i]]);
  if(Math.abs(new Vector3(...axes[0]).dot(new Vector3(...axes[1])))>1e-6||Math.abs(new Vector3(...axes[0]).dot(new Vector3(...axes[2])))>1e-6||Math.abs(new Vector3(...axes[1]).dot(new Vector3(...axes[2])))>1e-6)throw Error(`Water collider ${record.id} has a sheared frame`);
- return {id:record.id,kind,parameters:p,position:position.toArray(),scale:scale[0],axes};
+ // Orthogonal box extents absorb nonuniform scale; the distance stays in world metres.
+ return {id:record.id,kind,parameters:kind==='box'?{...p,width:p.width*scale[0],height:p.height*scale[1],depth:p.depth*scale[2]}:p,position:position.toArray(),scale:kind==='box'?1:scale[0],axes};
 }
 export function sceneLiquidDistance(c,world) {
  const v=world.map((x,i)=>(x-c.position[i])/c.scale),q=c.axes.map(a=>a.reduce((s,x,i)=>s+x*v[i],0));
  const r=Math.hypot(...q),radial=r>1e-10?q.map(v=>v/r):[0,1,0];let distance,normal;
- if(c.kind==='sphere'){distance=r-c.parameters.radius;normal=radial;}
+ if(c.kind==='box'){
+  const delta=q.map((v,i)=>Math.abs(v)-[c.parameters.width,c.parameters.height,c.parameters.depth][i]/2),outside=delta.map(v=>Math.max(0,v)),length=Math.hypot(...outside);
+  distance=length+Math.min(Math.max(...delta),0);
+  if(length>0)normal=outside.map((v,i)=>v/length*(q[i]<0?-1:1));
+  else{const axis=delta.indexOf(Math.max(...delta));normal=q.map((v,i)=>i===axis?(v<0?-1:1):0);}
+ }else if(c.kind==='sphere'){distance=r-c.parameters.radius;normal=radial;}
  else if(c.kind==='bowl'){
   const wall=Math.abs(r-c.parameters.radius)-c.parameters.thickness/2;
   if(q[1]>wall){distance=q[1];normal=[0,1,0];}else{distance=wall;normal=radial.map(v=>v*(r>=c.parameters.radius?1:-1));}
@@ -30,8 +37,8 @@ export function sceneLiquidDistance(c,world) {
 export function packSceneLiquidColliders(colliders) {
  const result=new Float32Array(colliders.length*20);
  colliders.forEach((c,i)=>result.set([
-  ['sphere','plane','bowl'].indexOf(c.kind),c.parameters.radius??0,c.parameters.width??0,c.parameters.depth??0,
-  ...c.position,c.scale,...c.axes[0],c.parameters.thickness??0,...c.axes[1],0,...c.axes[2],0,
+  ['sphere','plane','bowl','box'].indexOf(c.kind),c.parameters.radius??0,c.parameters.width??0,c.parameters.depth??0,
+  ...c.position,c.scale,...c.axes[0],c.parameters.thickness??0,...c.axes[1],c.parameters.height??0,...c.axes[2],0,
  ],i*20));return result;
 }
 export function createSceneLiquidSupport(device,records=[]) {
@@ -60,12 +67,20 @@ fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let kind=textureLoad(sceneSupportSamples,vec2<i32>(0,i32(i)),0,0);
  let pose=textureLoad(sceneSupportSamples,vec2<i32>(1,i32(i)),0,0);
  let ax=textureLoad(sceneSupportSamples,vec2<i32>(2,i32(i)),0,0);
- let ay=textureLoad(sceneSupportSamples,vec2<i32>(3,i32(i)),0,0).xyz;
+ let heightAxis=textureLoad(sceneSupportSamples,vec2<i32>(3,i32(i)),0,0);let ay=heightAxis.xyz;
  let az=textureLoad(sceneSupportSamples,vec2<i32>(4,i32(i)),0,0).xyz;
  let v=(p-pose.xyz)/pose.w;let q=vec3<f32>(dot(v,ax.xyz),dot(v,ay),dot(v,az));
  let r=length(q);var n=vec3<f32>(0,1,0);if(r>1e-10){n=q/r;}
  var d=r-kind.y;
- if(kind.x>1.5){d=abs(r-kind.y)-ax.w*.5;n*=select(-1.0,1.0,r>=kind.y);if(q.y>d){d=q.y;n=vec3<f32>(0,1,0);}}
+ if(kind.x>2.5){
+  let delta=abs(q)-vec3<f32>(kind.z,heightAxis.w,kind.w)*.5;let outside=max(delta,vec3<f32>(0));let len=length(outside);
+  d=len+min(max(max(delta.x,delta.y),delta.z),0.0);
+  let direction=select(vec3<f32>(1),vec3<f32>(-1),q<vec3<f32>(0));
+  if(len>0.0){n=direction*outside/len;}
+  else if(delta.x>=delta.y&&delta.x>=delta.z){n=vec3<f32>(direction.x,0,0);}
+  else if(delta.y>=delta.z){n=vec3<f32>(0,direction.y,0);}else{n=vec3<f32>(0,0,direction.z);}
+ }
+ else if(kind.x>1.5){d=abs(r-kind.y)-ax.w*.5;n*=select(-1.0,1.0,r>=kind.y);if(q.y>d){d=q.y;n=vec3<f32>(0,1,0);}}
  else if(kind.x>.5){let outside=max(abs(q.xz)-kind.zw*.5,vec2<f32>(0));d=q.y;n=vec3<f32>(0,1,0);if(any(outside>vec2<f32>(0))){let delta=vec3<f32>(sign(q.x)*outside.x,q.y,sign(q.z)*outside.y);d=length(delta);n=delta/max(d,1e-10);}}
  return vec4<f32>(ax.xyz*n.x+ay*n.y+az*n.z,d*pose.w);
 }

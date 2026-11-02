@@ -25439,7 +25439,7 @@ function ensureObjectCollisionTarget(id) {
 }
 function setObjectWaterCollision(id,enabled){
   assertSceneConstructionAvailable();if(typeof enabled!=='boolean')throw Error('Water collision must be Boolean');
-  const entry=workingScene.objects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres and bowls');
+  const entry=workingScene.objects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl','box'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres, bowls and boxes');
   const record=serializeSceneObject(entry);record.waterCollision=enabled;
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
@@ -25477,7 +25477,7 @@ function syncSceneDataInspector() {
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...workingScene.groups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
-    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
+    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl','box'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
     for(const input of primitive.querySelectorAll('[data-geometry-param]')){const key=input.dataset.geometryParam;input.closest('label').hidden=!(key in GEOMETRY_DEFAULTS[entry.geometry.kind]);if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[key]??'';}
     for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
   }
@@ -25561,7 +25561,7 @@ function installSceneConstruction() {
   field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
   field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
   field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
-  const waterCollisionRow=document.createElement('label');waterCollisionRow.className='slider-row';waterCollisionRow.innerHTML='<span class="slider-label">Water collision</span><input type="checkbox" id="object-water-collision"><span class="flame-scope">Plane, sphere or bowl · uniform scale</span>';panel.append(waterCollisionRow);
+  const waterCollisionRow=document.createElement('label');waterCollisionRow.className='slider-row';waterCollisionRow.innerHTML='<span class="slider-label">Water collision</span><input type="checkbox" id="object-water-collision"><span class="flame-scope">Box: independent axis scale; other shapes: uniform scale</span>';panel.append(waterCollisionRow);
   const waterCollisionInput=waterCollisionRow.querySelector('input');
   waterCollisionInput.addEventListener('change',()=>{try{setObjectWaterCollision(workingScene.activeObjectId,waterCollisionInput.checked);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   const lightPanel=document.createElement('section');lightPanel.id='selected-spot-properties';lightPanel.hidden=true;lightPanel.innerHTML='<h3>Light · Spot</h3>';panel.after(lightPanel);
