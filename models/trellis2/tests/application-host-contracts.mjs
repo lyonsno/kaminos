@@ -102,3 +102,20 @@ test('another application run remains caller-owned after admission refusal',asyn
   const next=await bridge.beginRun({runId:'after-other'});await next.finish();
   await bridge.dispose();await f.close();
 });
+
+test('opt-in per-duty scheduling reaches the real kit runtime and ordinary scheduling stays explicit',async()=>{
+ const f=await fixture(),bridge=await createTrellisSharedHost({appGpu:f.appGpu});
+ const normal=await bridge.beginRun({runId:'normal-schedule'});
+ assert.equal(normal.scheduling?.().kind,'current-timer-zero-delay');await normal.finish();
+ const run=await bridge.beginRun({runId:'fenced-schedule',scheduling:'per-duty-fence-task'});
+ const job=run.route.enqueue({jobId:'fenced-duty',execute:i=>run.route.runtime.runKernel(kernel,{dispatch:[1],schedulerInvocation:i,yieldAfter:true})});
+ assert.equal((await job.completion).status,'succeeded');
+ assert.equal(run.scheduling().kind,'per-duty-fence-task');assert.equal(run.scheduling().gpuDrains,1);assert.equal(run.scheduling().taskYields,1);
+ await run.finish();await bridge.dispose();await f.close();
+});
+
+test('unknown scheduling refuses before the app run is admitted',async()=>{
+ const f=await fixture(),bridge=await createTrellisSharedHost({appGpu:f.appGpu});
+ await assert.rejects(bridge.beginRun({runId:'bad-schedule',scheduling:'silent-fallback'}),/scheduling/);
+ assert.equal(f.begins,0);await bridge.dispose();await f.close();
+});

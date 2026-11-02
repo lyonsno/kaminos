@@ -69,3 +69,8 @@ test('per-duty fence propagates queue loss without posting a task or private fra
  const lost=Error('observed device loss'),f=fixture({perDutyFence:true,queue:{async onSubmittedWorkDone(){throw lost;}}});
  await assert.rejects(f.sleep(0),e=>e===lost);assert.deepEqual(f.events,[]);
 });
+test('Stop during a per-duty drain preserves AbortError even with a caller string reason',async()=>{
+ let release;const gate=new Promise(r=>release=r),f=fixture({perDutyFence:true,queue:{onSubmittedWorkDone:()=>gate}});
+ const pending=f.sleep(0),observed=pending.catch(e=>e);f.signal.abort('operator Stop');release();
+ assert.equal((await observed).name,'AbortError');assert.deepEqual(f.events,[]);
+});

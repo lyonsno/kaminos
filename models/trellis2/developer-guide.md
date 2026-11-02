@@ -183,6 +183,20 @@ call the run's `finish()` to wait for model/foreground work and release it.
 The host retains ownership of its device. The
 [shared-generation example](shared-generation-smoke.js) shows that connection.
 
+An experimental scheduling option is available as
+`beginRun({runId, signal, scheduling: 'per-duty-fence-task'})`. It waits for each
+GPU duty to complete, then yields through a browser task; the existing app frame
+source keeps ownership of scene rendering. `run.scheduling()` returns the
+effective policy and counters. Omit `scheduling` to keep the current timer policy.
+Unknown policy names fail before run admission.
+
+The same option passes through `runTrellisInPage` and
+`window.kaminosTrellisPage`; add `scheduling: 'per-duty-fence-task'` to the
+options for an otherwise wanted generation. The returned timing and saved
+generation receipt retain the effective scheduling snapshot. Retained-block
+checks preserve output and scene service, but do not establish full-generation
+speed or interactive comfort; use the option provisionally on useful work.
+
 ## Memory and performance
 
 Model weights are float32 and load one stage at a time. Keep the weight package

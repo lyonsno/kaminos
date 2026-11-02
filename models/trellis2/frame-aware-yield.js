@@ -10,16 +10,17 @@ export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYield
  now=()=>performance.now(),task=postedTask,timer=ms=>new Promise(r=>setTimeout(r,ms)),
  requestFrame=globalThis.requestAnimationFrame?.bind(globalThis),
  cancelFrame=globalThis.cancelAnimationFrame?.bind(globalThis)}={}){
- if(typeof queue?.onSubmittedWorkDone!=='function'||typeof requestFrame!=='function'||typeof cancelFrame!=='function')
+ if(typeof queue?.onSubmittedWorkDone!=='function'||(!perDutyFence&&(typeof requestFrame!=='function'||typeof cancelFrame!=='function')))
   throw TypeError('actual queue completion and cancellable frame callbacks required');
  if(!Number.isSafeInteger(maxTaskYieldsPerFrame)||maxTaskYieldsPerFrame<1)throw RangeError('positive integer task duty budget required');
  if(!Number.isFinite(frameBudgetMs)||frameBudgetMs<=0)throw RangeError('positive finite frame budget required');
  const counts={kind:perDutyFence?'per-duty-fence-task':'frame-aware',frameBudgetMs,maxTaskYieldsPerFrame,taskYields:0,frameYields:0,positiveWaits:0,gpuDrains:0};
- const stopped=()=>{if(signal?.aborted)throw signal.reason??new DOMException('TRELLIS stopped','AbortError');};
+ const stopError=()=>signal?.reason instanceof Error&&signal.reason.name==='AbortError'?signal.reason:new DOMException(String(signal?.reason?.message??signal?.reason??'TRELLIS stopped'),'AbortError');
+ const stopped=()=>{if(signal?.aborted)throw stopError();};
  let lastFrame=now(),tasksSinceFrame=0;
  const frame=()=>new Promise((resolve,reject)=>{
   let id;const remove=()=>signal?.removeEventListener('abort',abort);
-  const abort=()=>{cancelFrame(id);remove();reject(signal.reason??new DOMException('TRELLIS stopped','AbortError'));};
+  const abort=()=>{cancelFrame(id);remove();reject(stopError());};
   signal?.addEventListener('abort',abort,{once:true});
   try{id=requestFrame(()=>{remove();try{stopped();lastFrame=now();tasksSinceFrame=0;counts.frameYields++;resolve();}catch(error){reject(error);}});}
   catch(error){remove();reject(error);}

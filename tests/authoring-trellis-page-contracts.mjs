@@ -27,6 +27,13 @@ function fixture({jobStatus='succeeded',release='released'}={}){
 const call=(f,extra={})=>runTrellisInPage({appGpu:f.appGpu,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),
   pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps:f.deps,...extra});
 
+test('requested scheduling reaches the host and its effective snapshot is retained in timing',async()=>{
+ const f=fixture(),original=f.deps.createTrellisSharedHost;let observed;
+ f.deps.createTrellisSharedHost=async options=>{const host=await original(options),begin=host.beginRun;return {...host,async beginRun(input){observed=input.scheduling;return {...await begin(input),scheduling:()=>({kind:'per-duty-fence-task',gpuDrains:3,taskYields:3})};}};};
+ const result=await call(f,{scheduling:'per-duty-fence-task'});assert.equal(observed,'per-duty-fence-task');
+ assert.deepEqual(result.timing.scheduling,{kind:'per-duty-fence-task',gpuDrains:3,taskYields:3});
+});
+
 test('the selected pixels run on the app host and the GLB is finished before the run releases the GPU route',async()=>{
   const f=fixture();const result=await call(f);
   assert.equal(result.glb,glb);

@@ -1,5 +1,6 @@
 import {createWebGpuInferenceSession,createWebGpuForegroundService} from '../../webgpu-inference-kit/src/core.js';
 import {GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
+import {createTrellisFrameAwareSleep} from './frame-aware-yield.js';
 
 const boundOwners=new WeakSet();
 const throwIfStopped=signal=>{
@@ -79,11 +80,13 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
     snapshot(){return{session:session.snapshot(),foreground:foreground?.snapshot()??null,
       foregroundOwnership:application?'application':'bridge',disposed,
       activeRun:active?{runId:active.runId,status:active.status,error:active.error}:null};},
-    async beginRun({runId,signal}={}){
+    async beginRun({runId,signal,scheduling}={}){
       assertOpen();if(active)throw Error('TRELLIS host has an active or held run');
+      if(scheduling!==undefined&&scheduling!=='per-duty-fence-task')throw Error('unsupported TRELLIS scheduling policy');
       if(typeof runId!=='string'||!runId.trim())throw Error('explicit TRELLIS run id required');
       if(signal!==undefined&&typeof signal?.aborted!=='boolean')throw Error('actual abort signal required');
       throwIfStopped(signal);
+      const sleep=scheduling==='per-duty-fence-task'?createTrellisFrameAwareSleep({queue,signal,perDutyFence:true}):null;
       const state={runId,status:'starting',error:null};active=state;
       let frameRun,route;
       try{
@@ -93,6 +96,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
           throw Error('application foreground run must carry the actual TRELLIS model route identity');
         const opportunities=frameRun.foregroundOpportunities;
         route=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{
+          ...(sleep?{sleep}:{}),
           kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:{...opportunities,
             async serviceAtBoundary(boundary){
               const report=await opportunities.serviceAtBoundary(boundary);
@@ -163,6 +167,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
       state.status='active';let finishing;
       return Object.freeze({
         runId,route:Object.freeze({...route,runtime,enqueue}),
+        scheduling:()=>sleep?.snapshot()??{kind:'current-timer-zero-delay'},
         withForeground(phase,work){
           throwIfStopped(signal);return frameRun.withForeground(phase,work);
         },
