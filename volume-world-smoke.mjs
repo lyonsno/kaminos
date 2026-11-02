@@ -440,6 +440,10 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       adaptive=createMaterialHierarchyGPU(device,plan,WORLD_SMOKE_WGSL,options);return adaptive.read();
     },
     adaptiveMaterialState(){const state=adaptive?.read();return state?{...state,anchor}:null;},
+    fineCoverageDemand(){
+      const m=adaptive?.coverageDemand();if(!m)return {status:'adaptive-material-off',boxes:[]};
+      return {...m,boxes:m.boxes.map(b=>({...b,lo:b.lo.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:b.hi.map((x,a)=>x*anchor.scale+anchor.translate[a]),motionMin:b.motionMin.map(x=>x*anchor.scale),motionMax:b.motionMax.map(x=>x*anchor.scale)}))};
+    },
     adaptiveMaterialSnapshot(){return adaptive?.snapshot()??null;},
     encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},sources={parcels:[],supports:[],count:0}}){
       if(flowOnly)m=materialIndex;

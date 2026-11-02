@@ -1,3 +1,4 @@
+import {FINE_COVERAGE_FIELDS} from './volume-fine-coverage-controls.mjs';
 import {ADAPTIVE_MATERIAL_FIELDS} from './volume-adaptive-material-controls.mjs';
 import {resolveRaymarchAdaptivity} from './volume-optical-native.mjs';
 import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
@@ -125,6 +126,7 @@ export const FLAME_INSPECTOR_VIEWS = [
   {id:'look',label:'Material'},{id:'motion',label:'Flow'},{id:'quality',label:'Quality'},
 ];
 export const FLAME_PROPERTY_GROUPS = [
+  {name:'Fine coverage',view:'quality',scope:'Move fixed-size Fine coverage around sources and evolving fire. World bounds stay fixed. Manual box edits hold following until a source or policy changes.',fields:FINE_COVERAGE_FIELDS.map(field=>[field.id,field.label])},
   {name:'Adaptive material',view:'quality',scope:'Allocation follows fire throughout the world field. Settings are saved with scenes and basins.',fields:ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.label])},
   { name:'Ray marching', view:'quality', open:true, fields:[
     ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],

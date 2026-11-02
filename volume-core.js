@@ -1,3 +1,4 @@
+import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
 import {checkedWorldFrame} from './volume-world-frame.mjs';
 import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
@@ -28811,6 +28812,14 @@ export function createKaminosVolumePrototype({
       const effective=worldSmoke?.configureAdaptiveMaterial(requested)??null;
       adaptiveMaterialOptions=requested;adaptiveMaterialError=null;
       return {requested,effective,status:worldSmoke?'configured':'awaiting-world-field'};
+    },
+    fineCoverageInputs({activity=false}={}){
+      const frame={translate:[...productTransform.translate],scale:productTransform.scale},dims=[gridSize,gridHeight,gridSize];
+      if(!device||!worldSmoke||productFrameOwner!=='prototype'||followingDomain||controlsSnapshot.emitterSourceLaw!=='immersed-source')return {status:'requires-ordinary-world-sources'};
+      if(pendingDomainRemap)return {status:'awaiting-remap'};
+      const {anchor,plan}=worldSmoke;
+      const demand=activity?worldSmoke.fineCoverageDemand():{status:'source-only',boxes:[]};
+      return {status:'active',frame,dims,world:{lo:plan.min.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:plan.max.map((x,a)=>x*anchor.scale+anchor.translate[a])},sources:sourceCoverageBounds(immersedCollectionPrepared,{dims,frame}),demand:demand.boxes,demandStatus:demand.status,demandSampledAt:demand.sampledAt,demandRevision:demand.revision};
     },
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
     worldFrame(){const anchor=worldFrameRestore!==undefined?worldFrameRestore:worldSmoke?.anchor;return anchor?{translate:[...anchor.translate],scale:anchor.scale,referenceDims:[...(worldReferenceDims??[gridSize,gridHeight,gridSize])]}:null;},

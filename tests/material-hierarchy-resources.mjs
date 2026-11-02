@@ -73,3 +73,16 @@ test('diagnostic snapshot keeps topology from its GPU copy while allocation adva
   assert.ok(snapshot.nodes.every(n=>(n.slot+1)*64*8<=snapshot.values.length));
  }finally{f.release();f.hierarchy.destroy();await flush();}
 });
+test('coverage demand reuses measured leaves with matching geometry and no extra GPU work',async()=>{
+ const f=fixture();try{
+  f.step();await flush();const count=f.passes.length;
+  assert.equal(typeof f.hierarchy.coverageDemand,'function','coverage must consume the existing demand measurement');
+  const demand=f.hierarchy.coverageDemand();
+  assert.equal(demand.boxes.length,2);assert.deepEqual(demand.boxes[0].lo,[0,0,0]);assert.deepEqual(demand.boxes[1].hi,[8,4,4]);assert.ok(demand.boxes.every(b=>b.weight>0));
+  assert.equal(f.passes.length,count,'CPU demand lookup cannot dispatch');
+  f.hold();f.step();await flush();const previous=f.hierarchy.coverageDemand();
+  f.hierarchy.configure({budget:8});f.step();await flush();
+  assert.equal(f.hierarchy.coverageDemand().revision,previous.revision,'retained signal keeps its own geometry revision');
+  f.release();await flush();
+ }finally{f.release();f.hierarchy.destroy();await flush();}
+});

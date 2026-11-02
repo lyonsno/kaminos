@@ -1,5 +1,5 @@
 import {depositHierarchySources,createSourceAtlas,sourceDemandAt} from './volume-world-sources.mjs';
-import {MaterialHierarchy,validateAllocation,predictDemand} from './volume-material-hierarchy.mjs';
+import {MaterialHierarchy,validateAllocation,predictDemand,materialImportance} from './volume-material-hierarchy.mjs';
 
 // Material remains resident. Only one compact demand record per leaf brick
 // crosses to the CPU, asynchronously, for the replaceable allocation policy.
@@ -142,6 +142,7 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
 
 export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  const sourceAtlas=createSourceAtlas(device,'adaptive material source supply');
+ let coverageMeasurement=null;
  let sourceKey=null,sourceUploadKey=null,sourceView=null;
  const topology=new MaterialHierarchy({dims:plan.materialDims,options});
  admission(topology.capacity);
@@ -225,19 +226,29 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
    if(!reading){
     dispatch(encoder,'measureBricks',lastPlan.leaves.length,world,[[0,storage.meta],[1,storage.fields[current]],[3,lists.leaves],[5,storage.demand],[6,params]]);
     if(readback?.size!==storage.capacity*48){readback?.destroy();readback=buffer('material demand readback',storage.capacity*48,D|GPUBufferUsage.MAP_READ);}
-    const bytes=lastPlan.leaves.length*48,staging=readback,snapshot=lastPlan.leaves.map(n=>n.key),epoch=revision,sampleClock=transportClock,sampleStep=Math.abs(backtraceScale);
+    const bytes=lastPlan.leaves.length*48,staging=readback,snapshot=lastPlan.leaves.map(n=>({key:n.key,lo:[...n.lo],hi:n.lo.map((x,a)=>Math.min(plan.max[a],x+4*n.pitch))})),epoch=revision,sampleClock=transportClock,sampleStep=Math.abs(backtraceScale),sampleTime=performance.now()/1000;
     encoder.copyBufferToBuffer(storage.demand,0,staging,0,bytes);reading=true;
     // mapAsync must follow submission; a microtask is sufficient for the normal
     // synchronous encode/submit caller and does not block the simulation loop.
     queueMicrotask(async()=>{let mapped=false;try{
      await staging.mapAsync(GPUMapMode.READ);mapped=true;const data=new Float32Array(staging.getMappedRange());
      if(!destroyed&&epoch===revision){
-      const measured=new Map(snapshot.map((key,i)=>[key,{reaction:data[i*12],mixing:data[i*12+1],thermal:data[i*12+2],smoke:data[i*12+3],motionMin:Array.from(data.subarray(i*12+4,i*12+7)),motionMax:Array.from(data.subarray(i*12+8,i*12+11))}]));
+      const measured=new Map(snapshot.map(({key},i)=>[key,{reaction:data[i*12],mixing:data[i*12+1],thermal:data[i*12+2],smoke:data[i*12+3],motionMin:Array.from(data.subarray(i*12+4,i*12+7)),motionMax:Array.from(data.subarray(i*12+8,i*12+11))}]));
       for(const signal of measured.values())if(Object.values(signal).flat().some(v=>!Number.isFinite(v)))throw Error('Non-finite GPU allocation demand');
+      const previous=coverageMeasurement;
+      coverageMeasurement={revision:epoch,nodes:snapshot,signals:measured,sampledAt:sampleTime,clock:sampleClock,transportRate:previous&&sampleTime>previous.sampledAt?(sampleClock-previous.clock)/(sampleTime-previous.sampledAt):0};
       latestSignals=measured;demandLag=Math.max(sampleStep,transportClock-sampleClock+sampleStep);pending=true;
      }
     }catch(e){if(!destroyed)error=e.message;if(readback===staging)readback=null;}finally{if(mapped)staging.unmap();if(destroyed||readback!==staging)staging.destroy();reading=false;}});
    }
+  },
+  coverageDemand(){
+   const m=coverageMeasurement;
+   if(!m||error)return {boxes:[],status:error?'measurement-error':'awaiting-measurement',error};
+   return {status:'measured',revision:m.revision,sampledAt:m.sampledAt,boxes:m.nodes.map(n=>{
+    const signal=m.signals.get(n.key),volume=n.hi.reduce((v,x,a)=>v*Math.max(0,x-n.lo[a]),1);
+    return {id:n.key,lo:n.lo,hi:n.hi,weight:materialImportance(signal,topology.options.weights)*volume,motionMin:signal.motionMin.map(x=>x*m.transportRate),motionMax:signal.motionMax.map(x=>x*m.transportRate)};
+   })};
   },
   async snapshot(){
    if(!storage)return null;
