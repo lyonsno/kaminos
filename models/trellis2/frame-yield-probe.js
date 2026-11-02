@@ -41,7 +41,7 @@ export async function runFrameYieldProbe(config){
   block=createTrellisSparseBlockAdapter({route,config:config.fixtures.block.config,weights,conditioning,phases,inputs:{projected:input,modulation}});
   state.plan=plan;requestAnimationFrame(redraw);
   const execute=async mode=>{
-   const sleeper=mode==='frame-aware'?createTrellisFrameAwareSleep({queue:app.queue,frameBudgetMs:config.frameBudgetMs,signal:controller.signal}):ms=>new Promise(r=>setTimeout(r,ms));
+   const sleeper=mode==='frame-aware'?createTrellisFrameAwareSleep({queue:app.queue,frameBudgetMs:config.frameBudgetMs,maxTaskYieldsPerFrame:config.maxTaskYieldsPerFrame,signal:controller.signal}):ms=>new Promise(r=>setTimeout(r,ms));
    policy.sleep=sleeper;state.phase=mode;await save();const frames=[];let recording=true;
    const tick=()=>{if(recording){frames.push(performance.now());requestAnimationFrame(tick);}};
    const before=window.kaminosViewportShadingDebugState?.()?.lastRender?.sceneFrameCount??null;

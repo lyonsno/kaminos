@@ -69,11 +69,11 @@ try{
  const evaluate=async expression=>{const r=await cdp.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
  await cdp.call('Page.enable');const loaded=cdp.once('Page.loadEventFired');report.url=url+'/index.html?notes=0&vantage=0';await cdp.call('Page.navigate',{url:report.url});await loaded;
  await evaluate('(async()=>{while(!window.kaminosAppGpu)await new Promise(r=>requestAnimationFrame(r));await window.kaminosAppGpu();return true})()');
- report.phase='retained-model-block';await persist();const inputs={fixtures:report.fixtures,frameBudgetMs:cfg.frameBudgetMs};
+ report.phase='retained-model-block';await persist();const inputs={fixtures:report.fixtures,frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame};
  report.result=await evaluate('import("/models/trellis2/frame-yield-probe.js").then(m=>m.runFrameYieldProbe('+JSON.stringify(inputs)+'))');
  report.primary=JSON.parse(await fs.readFile(path.join(out,'state.json'),'utf8'));
  if(report.result.status!=='completed'||report.primary.status!=='completed')throw Error(report.primary.error?.message??'block comparison failed');
- const b=report.fixtures.block.config;validateFrameYieldState(report.primary,{shape:[b.tokenRows??b.resolution**3,b.channels],frameBudgetMs:cfg.frameBudgetMs});
+ const b=report.fixtures.block.config;validateFrameYieldState(report.primary,{shape:[b.tokenRows??b.resolution**3,b.channels],frameBudgetMs:cfg.frameBudgetMs,maxTaskYieldsPerFrame:cfg.maxTaskYieldsPerFrame});
  for(const run of report.primary.runs){const raw=await fs.readFile(path.join(out,run.output.file));if(raw.byteLength!==run.output.byteLength||sha(raw)!==run.output.sha256)throw Error('raw output mismatch '+run.mode);const a=new Float32Array(raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength));if(!a.every(Number.isFinite)||!a.some(x=>x!==0))throw Error('blank/nonfinite raw output '+run.mode);}
  report.afterScreenshot=path.join(out,'after.png');await fs.writeFile(report.afterScreenshot,Buffer.from((await cdp.call('Page.captureScreenshot',{format:'png'})).data,'base64'));
  report.status='completed';report.phase='complete';
@@ -82,6 +82,6 @@ finally{
  if(cdp){await cdp.call('Browser.close').catch(()=>{});cdp.close();}
  if(browser&&browser.exitCode===null){await Promise.race([new Promise(r=>browser.once('exit',r)),sleep(1000)]);if(browser.exitCode===null){browser.kill('SIGTERM');await new Promise(r=>browser.once('exit',r));}}
  if(server&&server.exitCode===null){server.kill('SIGTERM');await new Promise(r=>server.once('exit',r));}
- report.cleanup={ownedBrowserClosed:!browser||browser.exitCode!==null,ownedServerClosed:!server||server.exitCode!==null};await persist();
+ report.cleanup={ownedBrowserClosed:!browser||browser.exitCode!==null||browser.signalCode!==null,ownedServerClosed:!server||server.exitCode!==null||server.signalCode!==null};await persist();
  console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error}));
 }

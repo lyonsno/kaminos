@@ -19,7 +19,7 @@ test('zero delay posts tasks inside the frame budget, then drains and yields an 
  assert.deepEqual(f.events,['task','drain','request-frame']);assert.equal(f.frames.size,1);
  const [id,frame]=f.frames.entries().next().value;f.frames.delete(id);f.setClock(17);frame(17);await pending;
  await f.sleep(0);assert.deepEqual(f.events,['task','drain','request-frame','task']);
- assert.deepEqual(f.sleep.snapshot(),{frameBudgetMs:8,taskYields:2,frameYields:1,positiveWaits:0,gpuDrains:1});
+ assert.deepEqual(f.sleep.snapshot(),{frameBudgetMs:8,maxTaskYieldsPerFrame:8,taskYields:2,frameYields:1,positiveWaits:0,gpuDrains:1});
 });
 
 test('positive requested delays retain the caller timer',async()=>{
@@ -46,4 +46,13 @@ test('Stop during a drain prevents the next frame and model duty',async()=>{
 test('missing real frame/queue capabilities and invalid policy are refused',()=>{
  for(const change of [{queue:{}},{requestFrame:null},{cancelFrame:null},{frameBudgetMs:0},{frameBudgetMs:NaN}])
   assert.throws(()=>fixture(change));
+});
+
+
+test('submission-count boundary yields a frame even when the CPU clock has not reached its budget',async()=>{
+ const f=fixture({maxTaskYieldsPerFrame:2});await f.sleep(0);await f.sleep(0);
+ const p=f.sleep(0);await new Promise(r=>setImmediate(r));
+ assert.deepEqual(f.events,['task','task','drain','request-frame']);
+ const [id,frame]=f.frames.entries().next().value;f.frames.delete(id);frame(0);await p;
+ assert.equal(f.sleep.snapshot().frameYields,1);await f.sleep(0);assert.equal(f.sleep.snapshot().taskYields,3);
 });

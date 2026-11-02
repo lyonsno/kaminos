@@ -1,5 +1,5 @@
 // Offline evidence admission; a successful subprocess alone cannot close the comparison.
-export function validateFrameYieldState(state,{shape,frameBudgetMs}){
+export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYieldsPerFrame}){
  const need=(ok,message)=>{if(!ok)throw Error(message);};
  need(state?.status==='completed'&&state.phase==='complete','complete retained-block report required');
  need(state.backend?.vendor==='apple'&&state.backend.architecture?.includes('metal')&&state.backend.isFallbackAdapter===false,'actual nonfallback Apple Metal required');
@@ -13,7 +13,7 @@ export function validateFrameYieldState(state,{shape,frameBudgetMs}){
   need(Array.isArray(run.frames)&&run.frames.every((t,j)=>Number.isFinite(t)&&t>=run.startMs&&t<=run.endMs&&(!j||t>=run.frames[j-1])),'complete frame timeline required');
  }
  const a=state.runs[1],b=state.runs[2];need(a.output.sha256===b.output.sha256,'scheduling changed final output');
- need(b.policy?.frameBudgetMs===frameBudgetMs&&b.policy.frameYields>0&&b.policy.gpuDrains>0&&b.frames.length>0,'effective frame-aware policy required');
+ need(b.policy?.frameBudgetMs===frameBudgetMs&&b.policy.maxTaskYieldsPerFrame===maxTaskYieldsPerFrame&&b.policy.frameYields>0&&b.policy.gpuDrains>0&&b.frames.length>0,'effective frame-aware policy required');
  need(Number.isFinite(b.sceneFramesBefore)&&b.sceneFramesAfter>b.sceneFramesBefore,'actual foreground render progress required');
  need(Number.isFinite(state.stop?.requestedAt)&&state.stop.observedAt>=state.stop.requestedAt&&state.stop.status!=='succeeded'&&state.stop.failure?.name==='AbortError','observed route Stop required');
  return true;
