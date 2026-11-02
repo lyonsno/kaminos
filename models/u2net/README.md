@@ -2,6 +2,8 @@
 
 Turn an opaque RGB or RGBA image into a cutout on your application's WebGPU device. `createU2NetApp` handles model loading, queued execution, pause/resume, cancellation and cleanup through the inference kit's shared application runner. Its output retains the existing rembg-compatible RGBA bytes, dimensions and provenance.
 
+Start with [Cutout Studio](examples/external-app/): a self-contained application for your own images, source/cutout comparison, pan/zoom, progress and transparent PNG export. Install its dependencies and run its local development server; it uses the published package below.
+
 Install the browser application package:
 
 ```sh

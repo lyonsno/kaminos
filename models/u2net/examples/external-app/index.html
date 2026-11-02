@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>U2Net Cutout Studio</title>
+<style>
+  * { box-sizing: border-box; letter-spacing: 0; }
+  body { margin: 0; color: #202627; background: #f5f6f5; font: 15px/1.5 system-ui, sans-serif; }
+  main { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100dvh; }
+  aside { padding: 28px 24px; border-right: 1px solid #d9ddda; }
+  h1 { margin: 0 0 28px; font-size: 24px; line-height: 1.2; }
+  button, input { font: inherit; }
+  button { min-height: 40px; padding: 8px 12px; border: 1px solid #bec7c2; border-radius: 4px; background: white; cursor: pointer; color: inherit; }
+  button:hover { background: #e7ede8; } button:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 2px solid #16825e; outline-offset: 3px; }
+  [hidden] { display: none !important; }
+  .icon { display: inline-grid; place-items: center; width: 40px; padding: 8px; flex: 0 0 40px; }
+  svg { width: 19px; height: 19px; flex-shrink: 0; }
+  #upload { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
+  #remove { flex: 1; background: #186b4c; border-color: #186b4c; color: white; font-weight: 650; }
+  .actions { display: flex; gap: 8px; } #stop { color: #a13d49; }
+  #status, #error { overflow-wrap: anywhere; margin: 16px 0 4px; font-size: 13px; }
+  #error { color: #a52d3e; } #elapsed, #progress-label { font-size: 12px; color: #596560; }
+  progress { width: 100%; height: 6px; display: block; accent-color: #186b4c; margin: 14px 0 6px; }
+  details { margin-top: 22px; font-size: 12px; } summary { cursor: pointer; color: #52605a; }
+  dl { display: grid; grid-template-columns: 1fr minmax(0, 1fr); gap: 8px; }
+  dt { color: #596560; } dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+  .workspace { display: flex; min-width: 0; flex-direction: column; padding: 20px; gap: 12px; height: 100dvh; }
+  .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 40px; }
+  .modes { display: flex; } .modes button { border-radius: 0; }
+  .modes button:first-child { border-radius: 4px 0 0 4px; } .modes button:last-child { border-radius: 0 4px 4px 0; }
+  .modes button + button { border-left: 0; } .modes button[aria-pressed=true] { background: #dae9e0; color: #14503b; }
+  .swatches { display: flex; gap: 8px; margin-left: auto; }
+  .swatch { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 50%; }
+  .swatch[aria-pressed=true] { outline: 2px solid #407bb6; outline-offset: 2px; }
+  #image { display: block; width: 100%; min-height: 0; flex: 1; touch-action: none; cursor: grab; }
+  #image:active { cursor: grabbing; }
+  .view-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  label { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; }
+  input[type=range] { width: 120px; accent-color: #186b4c; }
+  #image-label { font-size: 12px; color: #596560; min-height: 20px; overflow-wrap: anywhere; }
+  @media(max-width:700px) {
+    main { display: flex; flex-direction: column; }
+    aside { padding: 18px; border-right: 0; border-bottom: 1px solid #d9ddda; }
+    h1 { font-size: 22px; margin-bottom: 16px; }
+    #upload { max-width: 260px; } details { margin-top: 12px; }
+    .workspace { height: 65dvh; min-height: 440px; padding: 16px; }
+    .toolbar { gap: 8px; } .modes button { padding: 8px 10px; }
+    .swatches { margin-left: 0; } .view-controls { gap: 8px; }
+    input[type=range] { width: 96px; }
+  }
+</style>
+<main>
+  <aside>
+    <h1>U2Net Cutout Studio</h1>
+    <input id="file" type="file" accept="image/*" hidden>
+    <button id="upload" disabled><span data-icon="Upload"></span>Choose image</button>
+    <div class="actions">
+      <button id="remove" disabled>Remove background</button>
+      <button id="pause" class="icon" data-icon="Pause" title="Pause removal" aria-label="Pause removal" disabled></button>
+      <button id="stop" class="icon" data-icon="Square" title="Stop removal" aria-label="Stop removal" disabled></button>
+    </div>
+    <p id="status" role="status">Connecting to WebGPU</p>
+    <span id="elapsed"></span>
+    <progress id="progress" max="1" hidden aria-label="Background removal progress"></progress>
+    <div id="progress-label"></div>
+    <p id="error" role="alert"></p>
+    <details><summary>Details</summary><dl>
+      <dt>Model loading</dt><dd id="load-time">--</dd>
+      <dt>Removal</dt><dd id="run-time">--</dd>
+      <dt>Last phase</dt><dd id="operation">--</dd>
+      <dt>Cutout</dt><dd id="dimensions">--</dd>
+    </dl></details>
+  </aside>
+  <section class="workspace" aria-label="Cutout workspace">
+    <div class="toolbar">
+      <div class="modes" aria-label="View">
+        <button id="original" aria-pressed="true">Original</button>
+        <button id="cutout" aria-pressed="false" disabled>Cutout</button>
+        <button id="compare" aria-pressed="false" disabled>Compare</button>
+      </div>
+      <div class="swatches" aria-label="Preview background">
+        <button class="swatch" data-background="checker" style="background:conic-gradient(#ccc 25%,#eee 0 50%,#ccc 0 75%,#eee 0) 0 0 / 12px 12px" aria-pressed="true" title="Transparency grid" aria-label="Transparency grid"></button>
+        <button class="swatch" data-background="light" style="background:#f5f5f5" aria-pressed="false" title="Light background" aria-label="Light background"></button>
+        <button class="swatch" data-background="dark" style="background:#202123" aria-pressed="false" title="Dark background" aria-label="Dark background"></button>
+      </div>
+      <button id="download" class="icon" data-icon="Download" title="Download transparent PNG" aria-label="Download transparent PNG" disabled></button>
+    </div>
+    <canvas id="image" aria-label="Image and cutout preview"></canvas>
+    <div class="view-controls">
+      <label>Zoom<input id="zoom" type="range" min="0.5" max="4" step="0.05" value="1"></label>
+      <button id="fit" class="icon" data-icon="Maximize" title="Fit image" aria-label="Fit image"></button>
+      <label id="split-control" hidden>Compare<input id="split" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+    </div>
+    <span id="image-label"></span>
+  </section>
+</main>
+<script type="module" src="./dist/app.js"></script>
+</html>
