@@ -10,6 +10,15 @@ try{
 const {sessionMotions}=await import('../experiments/creature-motion/motion-collection.mjs');
 const {mountMotionWorkspace}=await import('../experiments/creature-motion/motion-workspace.mjs');
 const motion={status:'completed',route:'unimate.text-to-motion.webgpu-local.v0',textEncoder:'browser T5',cooperative:true,controllerNorm:'valid-joints',assetCondSha256:'a'.repeat(64),prompt:'retained walk',seed:1,frames:2,joints:2,skeleton:{jointNames:['root','foot'],parents:[-1,0],fps:30},positions:Array(12).fill(0),localRotations:[0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1]};await sessionMotions.add(motion);
+const importedWorkspace=mountMotionWorkspace({document,reference:motion,spec:{bundle:'test'},options:{},onPreview:()=>{},onApply:()=>{},onRestore:()=>{},onFrame:()=>()=>{}});
+let notifications=0;const unsub=sessionMotions.subscribe(()=>notifications++);
+for(const kind of ['history','motion'])for(const prompt of [{},42,[]]){
+ const archive={schema:'kaminos.skeleton-motion-collection.v1',motions:[{motion:{...motion,seed:909}}],generations:[]};
+ if(kind==='history')archive.generations.push({id:'malformed',status:'stopped',prompt,seed:1,skeletonKey:JSON.stringify([motion.assetCondSha256,motion.skeleton.jointNames,motion.skeleton.parents]),solver:{rtol:.001,atol:.000001,cfgScale:3},samples:[]});else archive.motions[0].motion.prompt=prompt;
+ const before=structuredClone(sessionMotions.export()),n=notifications;
+ await assert.rejects(sessionMotions.import(archive),/prompt.*string/i);assert.deepEqual(sessionMotions.export(),before);assert.equal(notifications,n);assert.doesNotThrow(()=>importedWorkspace.open());
+}
+unsub();const beforeQuality=structuredClone(sessionMotions.export());await assert.rejects(importedWorkspace.generate({prompt:'walk',seed:1,quality:1}),/quality.*standard/i);assert.deepEqual(sessionMotions.export(),beforeQuality);importedWorkspace.dispose();
 for(const name of ['Preview','Use on creature','Restore assigned motion'])for(const beginsBeforeStop of [false,true]){
  let releaseAction;const action=()=>new Promise(resolve=>{releaseAction=resolve;});
  const workspace=mountMotionWorkspace({document,reference:motion,spec:{bundle:'test'},options:{},onPreview:action,onApply:action,onRestore:action,onFrame:()=>()=>{}});

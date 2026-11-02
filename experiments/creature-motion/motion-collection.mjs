@@ -5,7 +5,9 @@ export function skeletonMotionKey(motion){
  if(!/^[a-f0-9]{64}$/i.test(motion.assetCondSha256??''))throw Error('Motion needs verified conditioning identity');
  return JSON.stringify([motion.assetCondSha256,motion.skeleton.jointNames,motion.skeleton.parents]);
 }
+function checkPrompt(prompt){if(prompt!=null&&typeof prompt!=='string')throw Error('Motion prompt must be a string when present');}
 function checkGeometry(m){
+ checkPrompt(m.prompt);
  if(!Number.isInteger(m.frames)||m.frames<1||!Number.isInteger(m.joints)||m.joints<1||!Number.isFinite(m.skeleton?.fps)||m.skeleton.fps<=0||m.skeleton.jointNames?.length!==m.joints||m.skeleton.parents?.length!==m.joints)throw Error('Incomplete motion skeleton or frames');
  if(new Set(m.skeleton.jointNames).size!==m.joints||m.skeleton.parents.some((p,i)=>!Number.isInteger(p)||p< -1||p>=i))throw Error('Invalid motion hierarchy');
  for(const [key,width] of [['positions',3],['localRotations',4]])if(m[key]?.length!==m.frames*m.joints*width||!m[key].every(Number.isFinite))throw Error('Incomplete motion '+key);
@@ -18,6 +20,7 @@ export function checkPartial(m){
  return checkGeometry(m);
 }
 function checkGeneration(run){
+ checkPrompt(run?.prompt);
  if(!run?.id||!['running','completed','stopped','failed','interrupted'].includes(run.status)||!Array.isArray(run.samples))throw Error('Invalid generation history');
  if(!run.solver||![run.solver.rtol,run.solver.atol].every(v=>Number.isFinite(v)&&v>0)||!Number.isFinite(run.solver.cfgScale))throw Error('Invalid generation solver settings');
  let t=-Infinity;for(const sample of run.samples){if(checkPartial(sample)!==run.skeletonKey||sample.refinement.t<=t)throw Error('Generation sample identity/order differs');t=sample.refinement.t;}
