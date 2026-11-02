@@ -2,6 +2,12 @@
 import assert from 'node:assert/strict';
 import * as core from '../burn-fracture-core.mjs';
 const {burnJointState}=core;
+assert.equal(typeof core.burnMechanicsLocalScale,'function');
+const local=core.burnMechanicsLocalScale({cells:[{volume:2}],bonds:[{linearStiffness:100,rotationalStiffness:80}]},.25,{density:500,tension:3000000,compression:12000000,shear:2400000,charStrength:.1});
+assert.equal(local.material.density,500*.25**3);assert.equal(local.material.tension,3000000*.25);
+assert.equal(local.prepared.bonds[0].linearStiffness,25);assert.equal(local.prepared.bonds[0].rotationalStiffness,20);
+assert.equal(local.prepared.cells[0].volume,2,'Local source coordinates do not change');
+assert.throws(()=>core.burnMechanicsLocalScale({},0),/scale/);
 const bond={id:'cut:0',area:2,linearStiffness:120,rotationalStiffness:80};
 const half=burnJointState(bond,{mapped:true,fraction:.5});
 assert.equal(half.area,1,'Consumed material must reduce the material area carrying a joint');

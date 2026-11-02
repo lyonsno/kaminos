@@ -53,18 +53,24 @@ export function replayRegionBodies(prepared,field,density){
  return {masses,prepared:{...prepared,cells,bonds},contactModel:'surviving-material-aabb-no-cavity-contact',massModel:'frozen-region-mean-fuel-density-box-inertia',unmapped:prepared.cells.filter((_,i)=>!total[i]).map(c=>c.index)};
 }
 
-export function createBurnFractureSurface({renderer,prepared,materials,field,dynamics}){
- const vertices=prepared.pieces.reduce((s,p)=>s+p.arrays.positions.length/3,0),faces=prepared.pieces.reduce((s,p)=>s+p.arrays.indices.length/3,0);
- const arrays={positions:new Float32Array(vertices*3),normals:new Float32Array(vertices*3),uvs:new Float32Array(vertices*2),indices:new Uint32Array(faces*3),faceMaterial:new Uint8Array(faces)},owners=new Float32Array(vertices);
- let v=0,f=0;for(const p of prepared.pieces){const a=p.arrays;arrays.positions.set(a.positions,v*3);arrays.normals.set(a.normals,v*3);arrays.uvs.set(a.uvs,v*2);owners.fill(p.index,v,v+a.positions.length/3);
-  for(let i=0;i<a.indices.length;i++)arrays.indices[f*3+i]=a.indices[i]+v;arrays.faceMaterial.set(a.faceMaterial,f);v+=a.positions.length/3;f+=a.indices.length/3;
- }
+export function packBurnFractureSurface(prepared){
+ const vertices=prepared.pieces.reduce((s,p)=>s+p.arrays.indices.length,0),faces=vertices/3;
+ const arrays={positions:new Float32Array(vertices*3),normals:new Float32Array(vertices*3),uvs:new Float32Array(vertices*2),indices:Uint32Array.from({length:vertices},(_,i)=>i),faceMaterial:new Uint8Array(faces)},owners=new Float32Array(vertices),caps=new Float32Array(vertices);
+ let v=0,f=0;for(const p of prepared.pieces){const a=p.arrays;
+  for(let i=0;i<a.indices.length;i++){const source=a.indices[i],face=Math.floor(i/3);arrays.positions.set(a.positions.subarray(source*3,source*3+3),v*3);arrays.normals.set(a.normals.subarray(source*3,source*3+3),v*3);arrays.uvs.set(a.uvs.subarray(source*2,source*2+2),v*2);owners[v]=p.index;caps[v]=p.faceInterfaces?.[face]?p.faceBonds[face]+1:0;v++;}
+  arrays.faceMaterial.set(a.faceMaterial,f);f+=a.indices.length/3;
+ }return {arrays,owners,caps,faces};
+}
+
+export function createBurnFractureSurface({renderer,prepared,materials,field,dynamics,stateIdentity='retained-native-material-observation'}){
+ const {arrays,owners,caps,faces}=packBurnFractureSurface(prepared);
  const cap=new THREE.MeshStandardMaterial({color:0x18120d,roughness:.75}),original=[...materials];original[prepared.capMaterial]=cap;
- const {bounds}=field.residentState(),bindings=original.map(material=>createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity:'retained-native-material-observation',presenceNode:field.stateNode.w}));
- const {textureLoad,ivec2,attribute,mat4,mat3,vec4,positionGeometry,normalGeometry,transformNormalToView}=THREE.TSL,region=attribute('burnPiece','float').toInt();
+ const {bounds}=field.residentState(),bindings=original.map(material=>createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity,presenceNode:field.stateNode.w}));
+ const {textureLoad,ivec2,attribute,mat4,mat3,vec4,positionGeometry,normalGeometry,normalLocal,Fn}=THREE.TSL,region=attribute('burnPiece','float').toInt(),connection=attribute('burnCap','float').toInt();
  const pose=mat4(...[0,1,2,3].map(col=>textureLoad(dynamics.wrapper,ivec2(col,region))));
- for(const binding of bindings){binding.material.positionNode=pose.mul(vec4(positionGeometry,1)).xyz;binding.material.normalNode=transformNormalToView(mat3(pose).mul(normalGeometry)).normalize();}
- const mesh=createCoarseSurfaceMesh(arrays,bindings.map(b=>b.material));mesh.geometry.setAttribute('burnPiece',new THREE.Float32BufferAttribute(owners,1));mesh.frustumCulled=false;mesh.castShadow=false;mesh.name='Burned material regions';
- return {mesh,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',runtimeReadbacks:0,lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
+ const alive=textureLoad(dynamics.wrapper,ivec2(0,connection.sub(1).max(0).add(prepared.cells.length))).x;
+ for(const binding of bindings){binding.material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz;})();binding.material.maskNode=connection.equal(0).or(alive.lessThan(.5));}
+ const mesh=createCoarseSurfaceMesh(arrays,bindings.map(b=>b.material));mesh.geometry.setAttribute('burnPiece',new THREE.Float32BufferAttribute(owners,1));mesh.geometry.setAttribute('burnCap',new THREE.Float32BufferAttribute(caps,1));mesh.frustumCulled=false;mesh.castShadow=false;mesh.name='Burned material regions';mesh.raycast=()=>{};
+ return {mesh,bindings,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',stateIdentity,capVisibility:'resident-broken-connection',runtimeReadbacks:0,lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
   dispose(){mesh.removeFromParent();mesh.geometry.dispose();for(const b of bindings)b.dispose();cap.dispose();}};
 }

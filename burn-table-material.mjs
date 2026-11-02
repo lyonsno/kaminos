@@ -82,7 +82,7 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   const inspection=uniform(0);let view='beauty';
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw new Error('Burn material requires volumetric local bounds');
-  const p=positionLocal.sub(vec3(...bounds.min.toArray())).div(vec3(...size.toArray()));
+  const p=THREE.TSL.positionGeometry.sub(vec3(...bounds.min.toArray())).div(vec3(...size.toArray()));
   const facets=facetsNode({p,n:normalLocal}).toVar('burnFacetData');
   if(stateNode&&!stateIdentity)throw Error('GPU material state requires source identity');
   const sample=(stateNode?liveSurfaceNode({state:stateNode,facets,clock}):surfaceNode({p:coverage==='whole'?vec3(1,p.y,p.z):p,facets,controls,metalProfile:profile,clock})).toVar('burnSurfaceData');

@@ -7,3 +7,7 @@ assert.equal(checkedBurnable(record).structure,true,'The ordinary burn property 
 assert.equal(planSceneRestore(buildSceneDocument({objects:[record]})).objects[0].burnable.structure,true);
 assert.throws(()=>checkedBurnable(record,{...record.burnable,structure:'yes'}),/structure/i);
 assert.deepEqual(checkedBurnable(record,{enabled:true,material:'wood'}),{enabled:true,material:'wood'},'Existing burn settings preserve their meaning');
+const fracture={...record,burnable:{...record.burnable,fracture:true}};
+assert.equal(checkedBurnable(fracture).fracture,true,'Live fracture must be an ordinary persisted object property');
+assert.equal(planSceneRestore(buildSceneDocument({objects:[fracture]})).objects[0].burnable.fracture,true);
+assert.throws(()=>checkedBurnable(record,{...record.burnable,fracture:'yes'}),/fracture/i);

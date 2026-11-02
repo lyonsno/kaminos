@@ -1,3 +1,20 @@
+import {LOG_RESIDUE,LOG_MATERIAL_EPSILON} from './log-consumption.mjs';
+
+// CPU reference for the resident remaining-material reduction. Contact and
+// inertia use a coarse surviving-material box, not the original hollow shell.
+export function remainingBurnBody({points,fuel,pitch,mass}){
+ if(!Array.isArray(points)||!points.length||points.some(p=>p.length!==3||!p.every(Number.isFinite))||fuel.length!==points.length||!fuel.every(x=>Number.isFinite(x)&&x>=0&&x<=1)||pitch.length!==3||!pitch.every(x=>Number.isFinite(x)&&x>0)||!Number.isFinite(mass)||mass<=0)throw Error('Complete finite remaining material required');
+ const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let remaining=0;
+ points.forEach((p,i)=>{if(fuel[i]<=LOG_RESIDUE+LOG_MATERIAL_EPSILON)return;remaining+=fuel[i];for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]-pitch[k]/2);hi[k]=Math.max(hi[k],p[k]+pitch[k]/2);}});
+ if(!remaining)return null;
+ const currentMass=mass*remaining/points.length,halfExtents=lo.map((v,k)=>(hi[k]-v)/2);
+ return {mass:currentMass,center:lo.map((v,k)=>(hi[k]+v)/2),halfExtents,inverseInertia:halfExtents.map((_,k)=>3/(currentMass*(halfExtents[(k+1)%3]**2+halfExtents[(k+2)%3]**2)))};
+}
+export function recenterBurnBody({position,quaternion,oldCenter,newCenter}){
+ const [x,y,z,w]=quaternion,v=newCenter.map((a,k)=>a-oldCenter[k]),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],q=[x,y,z],c=cross(q,v),d=cross(q,c.map((a,k)=>a+w*v[k]));
+ return position.map((a,k)=>a+v[k]+2*d[k]);
+}
+
 export function burnJointState(bond,section){
  if(![bond.area,bond.linearStiffness,bond.rotationalStiffness].every(x=>Number.isFinite(x)&&x>0))throw Error('Finite positive material section coefficients required');
  if(typeof section?.mapped!=='boolean')throw Error('Material section mapping must be explicit');
@@ -14,6 +31,14 @@ export function checkedBurnMaterial(material=BURN_MATERIAL){
  if(!['tension','compression','shear','density'].every(k=>Number.isFinite(material[k])&&material[k]>0)
   ||!Number.isFinite(material.charStrength)||material.charStrength<=0||material.charStrength>1)throw Error('Finite positive material strengths/density and residual char strength in (0,1] required');
  return Object.fromEntries(Object.keys(BURN_MATERIAL).map(k=>[k,material[k]]));
+}
+export function burnMechanicsLocalScale(prepared,scale,material){
+ if(!Number.isFinite(scale)||scale<=0)throw Error('Positive uniform mechanical scale required');
+ material=checkedBurnMaterial(material);
+ // Keep the solver in source coordinates: F_local=F_world/s and
+ // torque_local=torque_world/s^2. Source geometry itself is unchanged.
+ return {material:{...material,tension:material.tension*scale,compression:material.compression*scale,shear:material.shear*scale,density:material.density*scale**3},
+  prepared:{...prepared,bonds:prepared.bonds.map(b=>({...b,linearStiffness:b.linearStiffness*scale,rotationalStiffness:b.rotationalStiffness*scale}))}};
 }
 const vector=(value,n)=>Array.isArray(value)&&value.length===n&&value.every(Number.isFinite);
 export function burnConnectionResponse({area,fraction,char,normal,force,torque},material=BURN_MATERIAL){

@@ -35,7 +35,12 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
           resizeGrid:dimensions=>gas.resize(dimensions),
           materialMasks:()=>active().map(row=>row.body.materialMask()),
           prepareSource(encoder,frame){gas.begin(encoder);for(const row of active())row.body.encodeGasSource(encoder,frame,gas);gas.resolve(encoder);},
-          encode(encoder,frame){for(const row of active())row.body.encode(encoder,frame);dirty();},
+          get requiresSubmittedSteps(){return active().some(row=>row.body.requiresSubmittedSteps===true);},
+          encode(encoder,frame){
+            const rows=active();for(const row of rows)row.body.encode(encoder,frame);dirty();
+            if(!rows.some(row=>row.body.afterSubmit))return;
+            return ()=>{for(const row of rows)if(bodies.get(row.entry.object)===row&&mounted(row.entry))row.body.afterSubmit?.(frame);dirty();};
+          },
           read:()=>({identity:'kaminos.scene-burning.v1',objects:active().map(row=>row.body.read()),gasSource:gas.read()}),
         };
         binding={host,gas,detach:host.bindGpuThermalConsumer(consumer)};

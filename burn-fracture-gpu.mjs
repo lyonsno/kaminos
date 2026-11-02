@@ -3,6 +3,8 @@ import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {coarseRestFrame} from './fracture-coarse-rest-frame.mjs';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
 import {BURN_FRACTURE_IDENTITY,checkBurnFractureInput,checkedBurnMaterial,checkedBurnSupport} from './burn-fracture-core.mjs';
+import {createBurnRegionBodiesGpu} from './burn-region-bodies-gpu.mjs';
+import {batchCoarseCompute} from './fracture-compute-batch.mjs';
 
 export const BURN_STRESS_WGSL=`
 fn burnStress(area:f32,normal:vec3f,force:vec3f,torque:vec3f)->vec3f {
@@ -66,7 +68,9 @@ fn weaken(@builtin(global_invocation_id) gid:vec3u){
 }
 @compute @workgroup_size(64)
 fn present(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=p.counts.x){return;}let q=normalize(rotations[i]);
+ let i=gid.x;if(i>=p.counts.x+p.counts.y){return;}
+ if(i>=p.counts.x){textureStore(image,vec2i(0,i32(i)),vec4f(f32(bitcast<vec4u>(joints[(i-p.counts.x)*11u]).w),0,0,0));return;}
+ let q=normalize(rotations[i]);
  let a=rotate(q,vec3f(1,0,0));let b=rotate(q,vec3f(0,1,0));let c=rotate(q,vec3f(0,0,1));
  let t=positions[i].xyz+p.origin.xyz-rotate(q,rest[i].xyz);
  let m=mat4x4f(vec4f(a,0),vec4f(b,0),vec4f(c,0),vec4f(t,1));matrices[i]=m;
@@ -74,7 +78,7 @@ fn present(@builtin(global_invocation_id) gid:vec3u){
 }`;
 
 // Source AVBD dynamics are reused, but pose presentation never maps their buffers.
-export async function createBurnFractureGpu({renderer,prepared,sections,supports=[],finiteSupports=[],material,regionMasses,gravity=[0,-9.81,0]}){
+export async function createBurnFractureGpu({renderer,prepared,sections,supports=[],finiteSupports=[],material,regionMasses,gravity=[0,-9.81,0],field=null,regionMapping=null}){
  checkBurnFractureInput(prepared,sections,supports);
  material=checkedBurnMaterial(material);finiteSupports=finiteSupports.map(checkedBurnSupport);
  if(!sections.damageBuffer)throw Error('Resident section char damage required');
@@ -82,10 +86,11 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
  const device=renderer.backend.device;if(!renderer.backend.isWebGPUBackend||sections.device!==device)throw Error('Same-device native WebGPU mechanics required');
  if(gravity.length!==3||!gravity.every(Number.isFinite))throw Error('Finite gravity required');
  if(regionMasses.length!==prepared.cells.length||!regionMasses.every(m=>Number.isFinite(m)&&m>=0))throw Error('Finite nonnegative current region masses required');
+ if(field&&(!regionMapping||supports.length||field.device!==device))throw Error('Live material requires same-device region mapping and physical contact instead of pinned pieces');
  const n=prepared.cells.length,m=prepared.bonds.length,owned=[],restFrame=coarseRestFrame(prepared),h=prepared.config.timeStep;
- let engine,wrapper,disposed=false,steps=0,seconds=0,remainder=0,contactsEnabled=true;
+ let engine,wrapper,liveBodies,disposed=false,steps=0,seconds=0,remainder=0,contactsEnabled=true;
  const own=x=>{owned.push(x);return x;};
- function dispose(){if(disposed)return;disposed=true;if(wrapper){delete renderer.backend.get(wrapper).texture;wrapper.dispose();}engine?.dispose(renderer);for(const x of owned)x.destroy();}
+ function dispose(){if(disposed)return;disposed=true;liveBodies?.dispose();if(wrapper){delete renderer.backend.get(wrapper).texture;wrapper.dispose();}engine?.dispose(renderer);for(const x of owned)x.destroy();}
  try{
   device.pushErrorScope('validation');
   const shader=device.createShaderModule({label:'Resident consumed-section mechanics',code:BURN_FRACTURE_WGSL});
@@ -104,19 +109,19 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
    if(regionMasses[b.a]===0||regionMasses[b.b]===0)engine.setInitialJointActive(j,false);
   }
   // The source engine's first zero-gravity step uploads and allocates its state.
-  engine.step(h,renderer);engine.setGravity(gravity);
+  batchCoarseCompute(renderer,()=>engine.step(h,renderer));engine.setGravity(gravity);
   const attrs=engine.getResidentAttributes(),resident=name=>{const b=renderer.backend.get(attrs[name]).buffer;if(!b)throw Error('Missing resident mechanics '+name);return b;};
   const buffer=(label,data,usage=GPUBufferUsage.STORAGE)=>{const b=own(device.createBuffer({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC}));device.queue.writeBuffer(b,0,data);return b;};
   const geometryData=new Float32Array(m*12),coefficientsData=new Float32Array(m*4);
   restFrame.bonds.forEach((b,i)=>{geometryData.set([b.area,...b.normal,...b.anchorA,1,...b.anchorB,0],i*12);coefficientsData.set([b.area,b.linearStiffness,b.rotationalStiffness,0],i*4);});
   const geometry=buffer('Current burn-bearing material sections',geometryData),coefficients=buffer('Original material section coefficients',coefficientsData);
-  const rest=buffer('Original region centers',Float32Array.from(prepared.cells.flatMap(c=>[...c.position,0]))),matrices=buffer('Resident original-to-current region matrices',new Float32Array(n*16));
-  const texture=own(device.createTexture({label:'Resident fracture pose presentation',size:[4,n],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}));
+  const rest=buffer('Current material centers and original masses',Float32Array.from(prepared.cells.flatMap(c=>[...c.position,regionMasses[c.index]]))),matrices=buffer('Resident original-to-current region matrices',new Float32Array(n*16));
+  const texture=own(device.createTexture({label:'Resident fracture pose and connection visibility',size:[4,n+m],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING}));
   wrapper=new THREE.ExternalTexture(texture);wrapper.type=THREE.FloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=wrapper.magFilter=THREE.NearestFilter;
   const parameters=buffer('Burn fracture counts and origin',new Uint32Array(8),GPUBufferUsage.UNIFORM);
   const data=new ArrayBuffer(32);new Uint32Array(data).set([n,m,0,0]);new Float32Array(data).set([...restFrame.origin,0],4);device.queue.writeBuffer(parameters,0,data);
   const groups={weaken:device.createBindGroup({layout:pipelines.weaken.getBindGroupLayout(0),entries:[resident('joints'),sections.buffer,coefficients,geometry].map((b,binding)=>({binding,resource:{buffer:b}})).concat([{binding:9,resource:{buffer:parameters}}])}),
-   present:device.createBindGroup({layout:pipelines.present.getBindGroupLayout(0),entries:[{binding:4,resource:{buffer:resident('positions')}},{binding:5,resource:{buffer:resident('quaternions')}},{binding:6,resource:{buffer:rest}},{binding:7,resource:{buffer:matrices}},{binding:8,resource:texture.createView()},{binding:9,resource:{buffer:parameters}}]})};
+   present:device.createBindGroup({layout:pipelines.present.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:resident('joints')}},{binding:4,resource:{buffer:resident('positions')}},{binding:5,resource:{buffer:resident('quaternions')}},{binding:6,resource:{buffer:rest}},{binding:7,resource:{buffer:matrices}},{binding:8,resource:texture.createView()},{binding:9,resource:{buffer:parameters}}]})};
   const damage=buffer('Material fracture reaction and events',new Float32Array(m*12));
   const fractureParams=buffer('Material fracture strength',new Float32Array(16),GPUBufferUsage.UNIFORM),fractureData=new ArrayBuffer(64),fu=new Uint32Array(fractureData),ff=new Float32Array(fractureData);
   fu.set([n,m,0,0],4);ff.set([prepared.config.strength,h,0,0],8);
@@ -126,21 +131,26 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
   const fracturePipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module:fractureModule,entryPoint:'burnFailure'}});
   const fractureResources={0:resident('positions'),1:resident('quaternions'),4:resident('joints'),5:geometry,6:damage,8:fractureParams,10:sections.damageBuffer,11:strengths};
   const fractureGroup=device.createBindGroup({layout:fracturePipeline.getBindGroupLayout(0),entries:Object.entries(fractureResources).map(([binding,b])=>({binding:Number(binding),resource:{buffer:b}}))});
-  function dispatch(name){const e=device.createCommandEncoder(),p=e.beginComputePass({label:'Burn fracture '+name});p.setPipeline(pipelines[name]);p.setBindGroup(0,groups[name]);p.dispatchWorkgroups(Math.ceil((name==='weaken'?m:n)/64));p.end();device.queue.submit([e.finish()]);}
+  if(field)liveBodies=await createBurnRegionBodiesGpu({device,field,mapping:regionMapping,rest,positions:resident('positions'),rotations:resident('quaternions'),boxes:renderer.backend.get(engine.shapesAttr).buffer,inertia:renderer.backend.get(engine.inverseInertiaAttr).buffer,velocities:resident('velocities'),angular:resident('angularVelocities'),joints:resident('joints'),contacts:renderer.backend.get(engine.pairContactsAttr).buffer});
+  function updateMaterial(){if(!liveBodies)return;const e=device.createCommandEncoder();liveBodies.encode(e);device.queue.submit([e.finish()]);}
+  function dispatch(name){const e=device.createCommandEncoder(),p=e.beginComputePass({label:'Burn fracture '+name});p.setPipeline(pipelines[name]);p.setBindGroup(0,groups[name]);p.dispatchWorkgroups(Math.ceil((name==='weaken'?m:n+m)/64));p.end();device.queue.submit([e.finish()]);}
+  updateMaterial();
   dispatch('present');
   return {texture,wrapper,matrices,
+   setGravity(value){engine.setGravity(value);gravity=[...value];},
    setContactsEnabled(value){if(disposed)throw Error('Burn fracture is disposed');if(typeof value!=='boolean')throw Error('Boolean support contact required');if(value===contactsEnabled)return;for(const body of supportBodies)engine.setBodyCollisionFilter(body,2,value?1:0);contactsEnabled=value;},
    setSupport(index,next){if(disposed)throw Error('Burn fracture is disposed');if(!Number.isInteger(index)||index<0||index>=supportBodies.length)throw Error('Unknown finite support');const s=checkedBurnSupport(next),old=finiteSupports[index];if(s.friction!==old.friction||s.halfExtents.some((v,k)=>v!==old.halfExtents[k]))throw Error('Support resizing requires reconstruction');engine.setBodyPose(supportBodies[index],s.position.map((v,k)=>v-restFrame.origin[k]),s.quaternion,[0,0,0],[0,0,0]);finiteSupports[index]=s;},
    advance(dt){if(disposed)throw Error('Burn fracture is disposed');if(!Number.isFinite(dt)||dt<0)throw Error('Finite nonnegative mechanics duration required');remainder+=dt;
-    while(remainder+Number.EPSILON>=h){dispatch('weaken');engine.step(h,renderer);steps++;seconds+=h;fu[6]=steps;device.queue.writeBuffer(fractureParams,0,fractureData);
+    updateMaterial();
+    while(remainder+Number.EPSILON>=h){dispatch('weaken');batchCoarseCompute(renderer,()=>engine.step(h,renderer));steps++;seconds+=h;fu[6]=steps;device.queue.writeBuffer(fractureParams,0,fractureData);
      const e=device.createCommandEncoder(),p=e.beginComputePass({label:'Remaining-area mechanical failure'});p.setPipeline(fracturePipeline);p.setBindGroup(0,fractureGroup);p.dispatchWorkgroups(Math.ceil(m/64));p.end();device.queue.submit([e.finish()]);remainder=Math.max(0,remainder-h);
     }dispatch('present');
    },
-   read:()=>({identity:BURN_FRACTURE_IDENTITY,engine:ENGINE_REVISION,steps,seconds,remainder,regions:n,connections:m,supports:[...supports],finiteSupports:finiteSupports.map(s=>structuredClone(s)),contactsEnabled,regionMasses:[...regionMasses],gravity:[...gravity],material:{...material},failureModel:'equivalent-circular-section-brittle-max-stress-char-strength',runtimeReadbacks:0,contact:'finite-support-boxes-no-piece-self-contact',clock:'fixed-step-with-retained-remainder',residency:'same-device-pose-buffer-and-texture',massModel:'frozen-region-mean-fuel-density-box-inertia'}),
-   async snapshot(){if(disposed)throw Error('Burn fracture is disposed');const buffers=[matrices,resident('positions'),resident('quaternions'),resident('velocities'),resident('angularVelocities'),resident('joints'),geometry,damage,renderer.backend.get(engine.shapesAttr).buffer];
+   read:()=>({identity:BURN_FRACTURE_IDENTITY,engine:ENGINE_REVISION,steps,seconds,remainder,regions:n,connections:m,supports:[...supports],finiteSupports:finiteSupports.map(s=>structuredClone(s)),contactsEnabled,regionMasses:[...regionMasses],gravity:[...gravity],material:{...material},failureModel:'equivalent-circular-section-brittle-max-stress-char-strength',runtimeReadbacks:0,contact:'finite-support-boxes-no-piece-self-contact',clock:'fixed-step-with-retained-remainder',residency:'same-device-pose-buffer-and-texture',massModel:liveBodies?'live-region-fuel-surviving-box-inertia':'frozen-region-mean-fuel-density-box-inertia'}),
+   async snapshot(){if(disposed)throw Error('Burn fracture is disposed');const buffers=[matrices,resident('positions'),resident('quaternions'),resident('velocities'),resident('angularVelocities'),resident('joints'),geometry,damage,renderer.backend.get(engine.shapesAttr).buffer,rest,renderer.backend.get(engine.inverseInertiaAttr).buffer];if(liveBodies)buffers.push(liveBodies.shape);
     const bytes=buffers.reduce((s,b)=>s+b.size,0),staging=device.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{const e=device.createCommandEncoder();let offset=0;for(const b of buffers){e.copyBufferToBuffer(b,0,staging,offset,b.size);offset+=b.size;}device.queue.submit([e.finish()]);await staging.mapAsync(GPUMapMode.READ);const raw=new Uint8Array(staging.getMappedRange()),arrays=[];offset=0;for(const b of buffers){arrays.push(Array.from(new Float32Array(raw.slice(offset,offset+b.size).buffer)));offset+=b.size;}
-     const jointWords=new Uint32Array(Float32Array.from(arrays[5]).buffer),shapeWords=new Uint32Array(Float32Array.from(arrays[8]).buffer);return {state:this.read(),matrices:arrays[0],positions:arrays[1].slice(0,n*4),quaternions:arrays[2].slice(0,n*4),velocities:arrays[3].slice(0,n*4),angularVelocities:arrays[4].slice(0,n*4),supportPositions:arrays[1].slice(n*4),supportQuaternions:arrays[2].slice(n*4),supportCollisionMasks:supportBodies.map(i=>shapeWords[i*4]>>>24),joints:arrays[5],alive:prepared.bonds.map((_,i)=>jointWords[i*44+3]===1),geometry:arrays[6],damage:arrays[7],origin:restFrame.origin};
+     const jointWords=new Uint32Array(Float32Array.from(arrays[5]).buffer),shapeWords=new Uint32Array(Float32Array.from(arrays[8]).buffer);return {state:this.read(),matrices:arrays[0],positions:arrays[1].slice(0,n*4),quaternions:arrays[2].slice(0,n*4),velocities:arrays[3].slice(0,n*4),angularVelocities:arrays[4].slice(0,n*4),supportPositions:arrays[1].slice(n*4),supportQuaternions:arrays[2].slice(n*4),supportCollisionMasks:supportBodies.map(i=>shapeWords[i*4]>>>24),joints:arrays[5],alive:prepared.bonds.map((_,i)=>jointWords[i*44+3]===1),geometry:arrays[6],damage:arrays[7],boxes:arrays[8],centers:arrays[9],inverseInertia:arrays[10],remainingBodies:arrays[11]??null,origin:restFrame.origin};
     }finally{staging.unmap();staging.destroy();}
    },dispose};
  }catch(error){dispose();throw error;}

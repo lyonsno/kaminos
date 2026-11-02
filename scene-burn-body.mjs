@@ -8,6 +8,7 @@ import {resolveBurnableTarget} from './burnable-target.mjs';
 import {bindResidentLightCoverage} from './scene-resident-coverage.mjs';
 import {sceneRadianceSourceMaterial} from './scene-radiance.mjs';
 import {createSceneBurnStructure} from './scene-burn-structure.mjs';
+import {createSceneBurnFracture} from './scene-burn-fracture.mjs';
 
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
@@ -17,12 +18,12 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
   let mesh;entry.object.traverse(node=>{if(node.isMesh)mesh=node;});
   const appearance=()=>checkedBurnAppearance(entry.burnable?.appearance??{profile:mesh.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
   const original=Array.isArray(mesh.material)?mesh.material.map(originalBurnMaterial):originalBurnMaterial(mesh.material),bindings=[],releases=[];
-  let field,debris,structure,elapsed=0,disposed=false,lastSettings,lastKelvin;
+  let field,debris,structure,fracture,elapsed=0,disposed=false,lastSettings,lastKelvin;
   function syncAppearance(){let kelvin;try{kelvin=checkedSurfaceKelvin(kelvinPerHeat());}catch{kelvin=lastKelvin??SURFACE_KELVIN_PER_HEAT;}if(entry.burnable!==lastSettings||kelvin!==lastKelvin){const next=appearance();for(const binding of bindings)binding.setAppearance({...next,kelvinPerHeat:kelvin});lastSettings=entry.burnable;lastKelvin=kelvin;}}
   function dispose(){
     if(disposed)return;disposed=true;
     for(const release of releases)release();
-    structure?.dispose();mesh.material=original;debris?.dispose();
+    fracture?.dispose();structure?.dispose();mesh.material=original;debris?.dispose();
     for(const binding of bindings)binding.dispose();field?.dispose();
   }
   try{
@@ -41,24 +42,28 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
     debris.root.userData.kaminosEditorHelper=true;scene.add(debris.root);
     structure=createSceneBurnStructure({renderer,field,parent:debris.root});
     void structure.configure(entry.burnable.structure===true);
+    fracture=createSceneBurnFracture({renderer,field,structure,debris,parent:debris.root,ground,materials:Array.isArray(original)?original:[original]});
+    void fracture.configure(entry.burnable.fracture===true);
     // Authored surface edits also apply while the fluid is paused; lighting may
     // have installed an outer clone, whose scalar inputs need the same update.
     releases.push(onFrame(()=>{
-      structure.present();syncAppearance();
+      structure.present();fracture.present();syncAppearance();fracture.update(elapsed,{...appearance(),kelvinPerHeat:lastKelvin});
       const displayed=Array.isArray(mesh.material)?mesh.material:[mesh.material];
       bindings.forEach((binding,i)=>binding.update(elapsed,displayed[i]));
     }));
     return {
       object:entry.object,
-      setSettings:settings=>{void structure.configure(settings?.structure===true);},
+      setSettings:settings=>{void structure.configure(settings?.structure===true);void fracture.configure(settings?.fracture===true);},
+      get requiresSubmittedSteps(){return fracture.active;},
+      afterSubmit:frame=>fracture.afterSubmit(frame),
       setAppearance(value){if(bindings.some(binding=>!binding.read().appearanceSelectable))throw Error('No incineration appearance on this material');for(const binding of bindings)binding.setAppearance(value);},
       setMounted(value){debris.root.visible=value;},
       materialMask:()=>field.materialMask(entry.id),
       encodeGasSource:(encoder,frame,gas)=>field.encodeGasSource(encoder,frame,gas),
       encode(encoder,frame){field.encode(encoder,frame);structure.encode(encoder);debris.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);},
-      read:()=>({objectId:entry.id,fields:[field.read()],structure:structure.read(),debris:debris.read(),elapsed,physicalWoodCalibration:false,appearance:bindings.map(binding=>binding.read()),
+      read:()=>({objectId:entry.id,fields:[field.read()],structure:structure.read(),fracture:fracture.read(),debris:debris.read(),elapsed,physicalWoodCalibration:false,appearance:bindings.map(binding=>binding.read()),
         materials:(Array.isArray(mesh.material)?mesh.material:[mesh.material]).map(m=>({color:m.color.getHexString(),roughness:m.roughness,metalness:m.metalness}))}),
-      snapshot:async()=>({...await debris.snapshot(),structure:await structure.snapshot()}),
+      snapshot:async()=>({...await debris.snapshot(),structure:await structure.snapshot(),fracture:await fracture.snapshot()}),
       dispose,
     };
   }catch(error){dispose();throw error;}
