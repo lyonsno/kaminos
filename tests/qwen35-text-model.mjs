@@ -276,3 +276,34 @@ test('single-query attention is explicit and only selected for one-token work', 
     model.active = Promise.resolve(); assert.throws(() => { model.decodeAttention = 'single-query'; }, /active/); model.active = null;
   } finally { await model.destroy(); }
 });
+
+// Resource reuse is observed through the device, independently of pool internals.
+test('cached decode reuses uniforms only after the previous layer fence and retires them at token end', async () => {
+ const {manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture();
+ const control=createWebGpuInferenceControl({queue:device.queue}), model=new Qwen35TextModel(device,manifest,{control,batchDecode:true});
+ const uniforms=new Set(), writes=new Map();let epoch=0,reuses=0;
+ const create=device.createBuffer.bind(device);device.createBuffer=options=>{const b=create(options);if(options.usage & GPUBufferUsage.UNIFORM)uniforms.add(b);return b;};
+ device.queue.onSubmittedWorkDone=async()=>{epoch++;};
+ device.queue.writeBuffer=(b,offset,data)=>{if(uniforms.has(b)){assert.equal(b.destroyed,false);if(writes.has(b)){assert.ok(epoch>writes.get(b),'cannot overwrite a uniform before its consuming layer completes');reuses++;}writes.set(b,epoch);}};
+ try {
+  await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:6});await model.prefill([1,2],state);
+  const before=buffers.length;reuses=0;await model.decode(3,state);
+  assert.ok(reuses>0,'cached layers must reuse uniform allocations');
+  assert.ok(buffers.slice(before).every(b=>b.destroyed),'token-local resources must be retired');
+  const previous=new Set(writes.keys());await model.decode(4,state);
+  assert.ok([...previous].every(b=>b.destroyed),'no retired buffer may be revived on the next token');
+ }finally{await model.destroy();await control.close();}
+});
+test('cached decode retires reused uniforms on validation, fence, and cancellation failures', async () => {
+ for(const failure of ['validation','fence','abort']){
+  const {manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue});
+  const model=new Qwen35TextModel(device,manifest,{control,batchDecode:true}),abort=new AbortController();
+  try{
+   await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:4});await model.prefill([1,2],state);
+   const before=buffers.length;
+   model.onLayer=async({index})=>{if(index===0){if(failure==='validation')device.popErrorScope=async()=>({message:'bad reused binding'});else if(failure==='fence')device.queue.onSubmittedWorkDone=async()=>{throw Error('lost queue');};else abort.abort('stop decode');}};
+   await assert.rejects(model.decode(3,state,{signal:abort.signal}),/binding|queue|stop decode/);
+   assert.equal(state.failed,true);assert.ok(buffers.slice(before).every(b=>b.destroyed));
+  }finally{device.queue.onSubmittedWorkDone=async()=>{};await model.destroy();await control.close();}
+ }
+});

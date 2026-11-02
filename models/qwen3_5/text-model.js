@@ -100,7 +100,10 @@ export class Qwen35TextModel {
     const pipeline = await this.pipeline(name, code); checkAbort(ctx.signal);
     if (ctx.batch) {
       if (!ctx.batch.encoding) throw new Error('layer batch encoding is closed');
-      const uniform = this.buffer(params.byteLength, ctx.batch.uniforms, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      const size = Math.max(16, Math.ceil(params.byteLength / 4) * 4);
+      const uniform = ctx.uniformPool?.available.get(size)?.pop()
+        ?? this.buffer(size, ctx.uniformPool?.owned ?? ctx.batch.uniforms, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      ctx.batch.uniforms.add(uniform);
       this.device.queue.writeBuffer(uniform, 0, params);
       this.device.pushErrorScope('validation');
       try {
@@ -146,7 +149,16 @@ export class Qwen35TextModel {
         // Also fence uniform uploads when an aborted/failed encoder is discarded.
         try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
         if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'layer batch failed: ' + errors.map(error => error.message).join('; '));
-      } finally { batch.encoding = false; for (const buffer of batch.uniforms) buffer.destroy(); }
+        // A later layer may overwrite parameters only after this layer's fence.
+        // Pool ownership ends with forward(), including cancellation/failure.
+        if (ctx.uniformPool) for (const buffer of batch.uniforms) {
+          const available = ctx.uniformPool.available.get(buffer.size) ?? [];
+          available.push(buffer); ctx.uniformPool.available.set(buffer.size, available);
+        }
+      } finally {
+        batch.encoding = false;
+        if (!ctx.uniformPool) for (const buffer of batch.uniforms) buffer.destroy();
+      }
     });
   }
   async read(buffer, elements, offset = 0, ctx = { control: this.control }) {
@@ -256,6 +268,9 @@ export class Qwen35TextModel {
   }
   async forward(ids, state, ctx, predict = true) {
     const c = this.config, tokens = ids.length, scratch = new Set(), f = n => this.buffer(n * 4, scratch);
+    // Uniforms are shape-dependent, so acquire lazily rather than reserve a
+    // fixed arena. Never retain prefill-sized storage or cross-request state.
+    if (ctx.batchDecode) ctx = { ...ctx, uniformPool: { available: new Map(), owned: scratch } };
     const norm = (input, weight, output, width = c.hiddenSize, context = ctx) => this.dispatch('rms', () => rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], context);
     const add = (hidden, update, context = ctx) => this.dispatch('axpy', axpyShader, [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], context);
     try {
