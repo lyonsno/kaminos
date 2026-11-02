@@ -2,7 +2,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {validateFrameYieldState}from '../models/trellis2/frame-yield-checks.js';
 const expected={shape:[4,2],frameBudgetMs:8,maxTaskYieldsPerFrame:8};
-const fixture=()=>({status:'completed',phase:'complete',backend:{vendor:'apple',architecture:'metal-3',isFallbackAdapter:false},effectiveRoute:'trellis2.image-generation.webgpu.v0',release:{status:'released'},errors:[],
+const fixture=()=>({status:'completed',phase:'complete',backend:{vendor:'apple',architecture:'metal-3',isFallbackAdapter:false},effectiveRoute:'trellis2.image-generation.webgpu.v0',release:{status:'released',foreground:{receipts:['warmup','baseline','frame-aware'].map(mode=>({status:'completed',result:{sceneDrawn:true},metadata:{renderer:'kaminos-app'},boundary:{invocationId:'retained-block-'+mode},requestedAtMs:10,startedAtMs:20}))}},errors:[],
  runs:['warmup','baseline','frame-aware'].map(mode=>({mode,startMs:0,endMs:100,wallMs:100,frames:[10,30,50],sceneFramesBefore:2,sceneFramesAfter:4,policy:{frameBudgetMs:8,maxTaskYieldsPerFrame:8,frameYields:2,gpuDrains:2},output:{shape:[4,2],byteLength:32,sha256:'a'.repeat(64)}})),
  stop:{requestedAt:300,observedAt:302,status:'failed',failure:{name:'AbortError'}}});
 test('complete paired evidence admits additive diagnostics',()=>{const s=fixture();s.future={field:1};assert.equal(validateFrameYieldState(s,expected),true);});
@@ -20,3 +20,6 @@ for(const[name,change]of [
  ['missing scene',s=>delete s.scene],['wrong asset',s=>s.scene.state.requestedPath='other.glb'],
  ['wrong bytes',s=>s.scene.sha256='d'.repeat(64)],['unregistered asset',s=>s.scene.objects=[]],['wrong registered source',s=>s.scene.objects[0].source='/other']
 ])test('loaded-scene false closure rejected: '+name,()=>{const s=fixture();s.scene=loadedScene();change(s);assert.throws(()=>validateFrameYieldState(s,{...expected,scene}));});
+test('RAF callbacks and aggregate counters cannot substitute for actual scene-render receipts',()=>{
+ const s=fixture();s.release.foreground={receipts:[]};assert.throws(()=>validateFrameYieldState(s,expected));
+});

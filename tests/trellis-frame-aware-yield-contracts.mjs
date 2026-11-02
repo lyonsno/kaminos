@@ -19,7 +19,7 @@ test('zero delay posts tasks inside the frame budget, then drains and yields an 
  assert.deepEqual(f.events,['task','drain','request-frame']);assert.equal(f.frames.size,1);
  const [id,frame]=f.frames.entries().next().value;f.frames.delete(id);f.setClock(17);frame(17);await pending;
  await f.sleep(0);assert.deepEqual(f.events,['task','drain','request-frame','task']);
- assert.deepEqual(f.sleep.snapshot(),{frameBudgetMs:8,maxTaskYieldsPerFrame:8,taskYields:2,frameYields:1,positiveWaits:0,gpuDrains:1});
+ assert.deepEqual(f.sleep.snapshot(),{kind:'frame-aware',frameBudgetMs:8,maxTaskYieldsPerFrame:8,taskYields:2,frameYields:1,positiveWaits:0,gpuDrains:1});
 });
 
 test('positive requested delays retain the caller timer',async()=>{
@@ -55,4 +55,17 @@ test('submission-count boundary yields a frame even when the CPU clock has not r
  assert.deepEqual(f.events,['task','task','drain','request-frame']);
  const [id,frame]=f.frames.entries().next().value;f.frames.delete(id);frame(0);await p;
  assert.equal(f.sleep.snapshot().frameYields,1);await f.sleep(0);assert.equal(f.sleep.snapshot().taskYields,3);
+});
+
+test('per-duty fence waits for actual GPU completion before a task and leaves frame ownership with the app',async()=>{
+ let release;const gate=new Promise(r=>release=r);
+ const f=fixture({perDutyFence:true,queue:{onSubmittedWorkDone(){f.events.push('drain');return gate;}}});
+ const pending=f.sleep(0);assert.deepEqual(f.events,['drain']);release();await pending;
+ assert.deepEqual(f.events,['drain','task']);assert.equal(f.frames.size,0);
+ assert.equal(f.sleep.snapshot().gpuDrains,1);assert.equal(f.sleep.snapshot().kind,'per-duty-fence-task');
+});
+
+test('per-duty fence propagates queue loss without posting a task or private frame',async()=>{
+ const lost=Error('observed device loss'),f=fixture({perDutyFence:true,queue:{async onSubmittedWorkDone(){throw lost;}}});
+ await assert.rejects(f.sleep(0),e=>e===lost);assert.deepEqual(f.events,[]);
 });

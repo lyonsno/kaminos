@@ -6,7 +6,7 @@ const postedTask=()=>new Promise((resolve,reject)=>{
  channel.port1.onmessage=()=>{close();resolve();};
  try{channel.port2.postMessage(null);}catch(error){close();reject(error);}
 });
-export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYieldsPerFrame=8,signal,
+export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYieldsPerFrame=8,perDutyFence=false,signal,
  now=()=>performance.now(),task=postedTask,timer=ms=>new Promise(r=>setTimeout(r,ms)),
  requestFrame=globalThis.requestAnimationFrame?.bind(globalThis),
  cancelFrame=globalThis.cancelAnimationFrame?.bind(globalThis)}={}){
@@ -14,7 +14,7 @@ export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYield
   throw TypeError('actual queue completion and cancellable frame callbacks required');
  if(!Number.isSafeInteger(maxTaskYieldsPerFrame)||maxTaskYieldsPerFrame<1)throw RangeError('positive integer task duty budget required');
  if(!Number.isFinite(frameBudgetMs)||frameBudgetMs<=0)throw RangeError('positive finite frame budget required');
- const counts={frameBudgetMs,maxTaskYieldsPerFrame,taskYields:0,frameYields:0,positiveWaits:0,gpuDrains:0};
+ const counts={kind:perDutyFence?'per-duty-fence-task':'frame-aware',frameBudgetMs,maxTaskYieldsPerFrame,taskYields:0,frameYields:0,positiveWaits:0,gpuDrains:0};
  const stopped=()=>{if(signal?.aborted)throw signal.reason??new DOMException('TRELLIS stopped','AbortError');};
  let lastFrame=now(),tasksSinceFrame=0;
  const frame=()=>new Promise((resolve,reject)=>{
@@ -28,6 +28,12 @@ export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYield
   if(!Number.isFinite(ms)||ms<0)throw RangeError('nonnegative finite delay required');
   stopped();
   if(ms>0){await timer(ms);counts.positiveWaits++;stopped();return;}
+  if(perDutyFence){
+   // The existing app frame source queues its own render request while this
+   // duty settles. The next runtime boundary services it without another RAF.
+   await queue.onSubmittedWorkDone();counts.gpuDrains++;stopped();
+   await task();counts.taskYields++;stopped();return;
+  }
   if(now()-lastFrame>=frameBudgetMs||tasksSinceFrame>=maxTaskYieldsPerFrame){
    // Drain submitted model work before yielding the frame: a fast CPU task loop
    // must not put an unbounded inference backlog ahead of the ordinary renderer.

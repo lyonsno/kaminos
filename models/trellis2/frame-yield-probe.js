@@ -2,6 +2,7 @@
 import {createTrellisSharedHost} from './shared-host.js';
 import {createTrellisSparseBlockAdapter,buildSparseBlockPlan,sparseBlockWeightShapes} from './sparse-block.js';
 import {createTrellisFrameAwareSleep} from './frame-aware-yield.js';
+import {foregroundRenderStats} from './frame-yield-checks.js';
 import {WEBGPU_BUFFER_USAGE as U} from '../../webgpu-inference-kit/src/core.js';
 const hash=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(v=>v.toString(16).padStart(2,'0')).join('');
 export async function runFrameYieldProbe(config){
@@ -48,7 +49,7 @@ export async function runFrameYieldProbe(config){
   block=createTrellisSparseBlockAdapter({route,config:config.fixtures.block.config,weights,conditioning,phases,inputs:{projected:input,modulation}});
   state.plan=plan;requestAnimationFrame(redraw);
   const execute=async mode=>{
-   const sleeper=mode==='frame-aware'?createTrellisFrameAwareSleep({queue:app.queue,frameBudgetMs:config.frameBudgetMs,maxTaskYieldsPerFrame:config.maxTaskYieldsPerFrame,signal:controller.signal}):ms=>new Promise(r=>setTimeout(r,ms));
+   const sleeper=mode==='frame-aware'?createTrellisFrameAwareSleep({queue:app.queue,frameBudgetMs:config.frameBudgetMs,maxTaskYieldsPerFrame:config.maxTaskYieldsPerFrame,perDutyFence:config.perDutyFence,signal:controller.signal}):ms=>new Promise(r=>setTimeout(r,ms));
    policy.sleep=sleeper;state.phase=mode;await save();const frames=[];let recording=true;
    const tick=()=>{if(recording){frames.push(performance.now());requestAnimationFrame(tick);}};
    const before=window.kaminosViewportShadingDebugState?.()?.lastRender?.sceneFrameCount??null;
@@ -65,13 +66,14 @@ export async function runFrameYieldProbe(config){
   // Warm this same block before comparing policies so compilation is not assigned only to the baseline.
   state.runs.push(await execute('warmup'));state.runs.push(await execute('baseline'));state.runs.push(await execute('frame-aware'));
   if(state.runs[1].output.sha256!==state.runs[2].output.sha256)throw Error('scheduler changed final block output');
-  if(!state.runs[2].policy.frameYields||state.runs[2].sceneFramesAfter<=state.runs[2].sceneFramesBefore)throw Error('candidate supplied no actual foreground frames');
+  if((!config.perDutyFence&&!state.runs[2].policy.frameYields)||state.runs[2].sceneFramesAfter<=state.runs[2].sceneFramesBefore)throw Error('candidate supplied no actual foreground frames');
   state.phase='stop';await save();let stopAt;
   const stopFrame=requestAnimationFrame(()=>{stopAt=performance.now();controller.abort(new DOMException('assay Stop','AbortError'));});
   const stopStart=performance.now(),job=route.enqueue({jobId:'retained-block-stop',execute:i=>block.run(i)});const terminal=await job.completion;cancelAnimationFrame(stopFrame);
   state.stop={requestedAt:stopAt,observedAt:performance.now(),startedAt:stopStart,status:terminal.status,failure:terminal.failure};
   if(!stopAt||terminal.status==='succeeded'||terminal.failure?.name!=='AbortError')throw Error('actual route Stop not observed');
   state.release=await run.finish();run=null;
+  for(const trial of state.runs)trial.foreground=foregroundRenderStats(trial,state.release.foreground?.receipts);
   if(state.release.status!=='released'||actualSession.snapshot().routes.length)throw Error('app route did not release');
   state.errors=errors;if(errors.length)throw Error('uncaptured WebGPU error');
   state.status='completed';state.phase='complete';

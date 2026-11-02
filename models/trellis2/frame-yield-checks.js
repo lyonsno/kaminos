@@ -1,5 +1,10 @@
 // Offline evidence admission; a successful subprocess alone cannot close the comparison.
-export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYieldsPerFrame,scene}){
+export function foregroundRenderStats(run,receipts){
+ const rows=(receipts??[]).filter(r=>r.status==='completed'&&r.result?.sceneDrawn===true&&r.metadata?.renderer==='kaminos-app'&&r.boundary?.invocationId==='retained-block-'+run.mode&&Number.isFinite(r.startedAtMs)&&r.startedAtMs>=run.startMs&&r.startedAtMs<=run.endMs);
+ const times=rows.map(r=>r.startedAtMs),points=[run.startMs,...times,run.endMs],gaps=points.slice(1).map((t,i)=>t-points[i]).sort((a,b)=>a-b);
+ return {renderCount:rows.length,renderStartedAtMs:times,boundaryInclusiveGapMaxMs:Math.max(...gaps),boundaryInclusiveGapP95Ms:gaps[Math.ceil(.95*gaps.length)-1],requestToServiceMaxMs:Math.max(0,...rows.map(r=>r.startedAtMs-r.requestedAtMs)),authority:'scene-render-returned-inside-service; not GPU presentation or input latency'};
+}
+export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYieldsPerFrame,scene,perDutyFence=false}){
  const need=(ok,message)=>{if(!ok)throw Error(message);};
  need(state?.status==='completed'&&state.phase==='complete','complete retained-block report required');
  need(state.backend?.vendor==='apple'&&state.backend.architecture?.includes('metal')&&state.backend.isFallbackAdapter===false,'actual nonfallback Apple Metal required');
@@ -18,7 +23,9 @@ export function validateFrameYieldState(state,{shape,frameBudgetMs,maxTaskYields
   need(Array.isArray(run.frames)&&run.frames.every((t,j)=>Number.isFinite(t)&&t>=run.startMs&&t<=run.endMs&&(!j||t>=run.frames[j-1])),'complete frame timeline required');
  }
  const a=state.runs[1],b=state.runs[2];need(a.output.sha256===b.output.sha256,'scheduling changed final output');
- need(b.policy?.frameBudgetMs===frameBudgetMs&&b.policy.maxTaskYieldsPerFrame===maxTaskYieldsPerFrame&&b.policy.frameYields>0&&b.policy.gpuDrains>0&&b.frames.length>0,'effective frame-aware policy required');
+ if(perDutyFence)need(b.policy?.kind==='per-duty-fence-task'&&b.policy.taskYields>0&&b.policy.gpuDrains===b.policy.taskYields,'effective per-duty queue fence and task policy required');
+ else need(b.policy?.frameBudgetMs===frameBudgetMs&&b.policy.maxTaskYieldsPerFrame===maxTaskYieldsPerFrame&&b.policy.frameYields>0&&b.policy.gpuDrains>0&&b.frames.length>0,'effective frame-aware policy required');
+ for(const run of [a,b])need(foregroundRenderStats(run,state.release?.foreground?.receipts).renderCount>0,'actual scene-render receipts required');
  need(Number.isFinite(b.sceneFramesBefore)&&b.sceneFramesAfter>b.sceneFramesBefore,'actual foreground render progress required');
  need(Number.isFinite(state.stop?.requestedAt)&&state.stop.observedAt>=state.stop.requestedAt&&state.stop.status!=='succeeded'&&state.stop.failure?.name==='AbortError','observed route Stop required');
  return true;
