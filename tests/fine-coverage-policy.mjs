@@ -27,6 +27,30 @@ test('activity can retain attention after all emitters are removed',()=>{
  assert.ok(r.target);assert.ok(r.activityCoverage>.9);
  assert.equal(chooseFineCoverage(input([],{demand:[box('fire',[2,4,0],.2)]}),opts).target,null);
 });
+test('zero fire priority remains zero after the last source is removed',()=>{
+ const i=input([],{demand:[box('gas',[2,4,0],.2)]});
+ assert.equal(chooseFineCoverage(i,{...opts,mode:'fire',activityWeight:0}).target,null);
+ assert.ok(chooseFineCoverage(i,{...opts,mode:'fire',activityWeight:1}).target);
+});
+test('authored supply edits release manual hold, while puff modulation does not',()=>{
+ const c=new FineCoverageController();
+ const sources=[{...box('a',[0,0,0],.1,10),authoredSupply:'speed=10'},{...box('b',[2,0,0],.1,1),authoredSupply:'speed=1'}];
+ c.update(input(sources),opts,0);
+ const manual=input(sources,{frame:{translate:[-.5,0,0],scale:1}});
+ assert.equal(c.update(manual,opts,1).status,'manual-hold');
+ const puffed=sources.map(s=>({...s,weight:s.weight*.8}));
+ assert.equal(c.update({...manual,sources:puffed},opts,2).status,'manual-hold');
+ const edited=[{...sources[0],weight:1,authoredSupply:'speed=1'},{...sources[1],weight:100,authoredSupply:'speed=100'}];
+ const result=c.update({...manual,sources:edited},opts,3);
+ assert.equal(result.status,'move');assert.equal(result.target.translate[0],2);
+});
+test('source hold identity excludes dynamic puff and coverage-relative centre',()=>{
+ const e={admitted:true,centreCells:[16,16,16],direction:[0,1,0],radiusCells:4,thickness:2,fullFlux:8};
+ const read=(speed,puffFactor,centre)=>sourceCoverageBounds({sources:[{id:'a',worldSource:true,config:{effective:e,requested:{speed,puffFactor,centre}}}]},{dims:[32,64,32],frame:{translate:[0,0,0],scale:1}})[0];
+ assert.ok(read(1,1,[0,0,0]).authoredSupply);
+ assert.equal(read(1,1,[0,0,0]).authoredSupply,read(1,.6,[0,2,0]).authoredSupply);
+ assert.notEqual(read(1,1,[0,0,0]).authoredSupply,read(2,1,[0,0,0]).authoredSupply);
+});
 test('activity tradeoff preserves all samples and can prioritize a detached flame',()=>{
  const i=input([box('source',[0,0,0])],{demand:[box('fire',[2.5,4,0],.2)]});
  assert.equal(chooseFineCoverage(i,{...opts,mode:'fire',activityWeight:0}).target,null);

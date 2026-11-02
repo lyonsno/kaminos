@@ -35,7 +35,7 @@ try{
  assert.equal(report.runtime.source.repoRoot,root);assert.equal(report.runtime.sharedBasinStore,null);
  report.executable=process.env.CHROME_EXECUTABLE;assert.ok(report.executable?.includes('Google Chrome for Testing'));
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
- browser=await chromium.launchPersistentContext(dirs.profile,{executablePath:report.executable,headless:true,viewport:{width:1100,height:800},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
+ browser=await chromium.launchPersistentContext(dirs.profile,{executablePath:report.executable,headless:true,viewport:{width:1440,height:1000},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  browser.setDefaultTimeout(0);browser.setDefaultNavigationTimeout(0);page=await browser.newPage();
  page.on('response',r=>{if(r.status()>=400)report.errors.push(`HTTP ${r.status()} ${r.url()}`);});
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
@@ -115,11 +115,42 @@ try{
  report.phase='fire-demand';await save();await patch({mode:'fire',activityWeight:1,interval:.25});await waitSteps(30);
  const demand=await capture('fire-demand');check(demand,followed,{advancing:true});assert.equal(demand.coverage.demandStatus,'measured');assert.ok(demand.coverageInput.demand.some(b=>b.weight>0));
  report.phase='disabled';await save();await patch({mode:'off'});await waitSteps(3);const off=await state();await move(elevated);await waitSteps(20);const stayed=await state();assert.deepEqual(stayed.pose,off.pose,'disabled policy must leave the box fixed');
- report.phase='settings-save';await save();await patch({mode:'sources',interval:.5});
+ report.phase='visible-controls';await save();
+ await page.evaluate(async()=>{window.kaminosWorkspace.setMode('workbench');await window.kaminosWorkbenchExperiments.open('material-hierarchy',{overlay:true});});
+ const mode=page.locator('[data-coverage="mode"]');await mode.selectOption('sources');
+ const intervalField=page.locator('[data-coverage="interval"]');await intervalField.click();await intervalField.fill('0.5');await intervalField.blur();
+ await page.waitForFunction(()=>window.kaminosFineCoverage.read().options.mode==='sources'&&window.kaminosFineCoverage.read().options.interval===.5);
+ const visible=await page.locator('[data-coverage]').evaluateAll(es=>es.map(e=>({key:e.dataset.coverage,visible:e.checkVisibility()})));
+ report.visibleCoverageControls=visible.filter(e=>e.visible).length;assert.equal(report.visibleCoverageControls,7,'All native controls must be mounted and visible');
+ await intervalField.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'coverage-controls.png')});
+ report.phase='settings-save';report.savedOptions=await page.evaluate(()=>window.kaminosFineCoverage.read().options);await save();
  const settings=await page.evaluate(()=>window.kaminosFlameAuthoring.read());assert.equal(settings.domControls['volume-coverage-mode'].value,'sources');assert.equal(Number(settings.domControls['volume-coverage-interval'].value),.5);
  await fs.writeFile(path.join(out,'authored-settings.json'),JSON.stringify(settings,null,2));
- await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('material-hierarchy',{overlay:true}));
- await waitSteps(15);await capture('final-panel');
+ report.savedScene=await page.evaluate(()=>window.saveSceneAs({result:true,name:'Automatic Fine coverage — moving fire'}));assert.equal(report.savedScene.ok,true);await save();
+ report.savedBasin=await page.evaluate(()=>window.__kaminosSaveVolumeSettingsPreset({label:'Automatic Fine coverage — moving fire'}));assert.equal(report.savedBasin.ok,true);await save();
+ // Keep the source still, displace coverage through the native editor, then
+ // remove the source. Only real measured gas can bring Fine back afterwards.
+ report.phase='source-free-gas';await save();await patch({mode:'off'});
+ await page.evaluate(()=>{
+  const edits=window.kaminosSceneEdits,i=window.__kaminosVolumePrototype.fineCoverageInputs(),p=edits.begin('@flame-domain','Displace coverage from retained gas').active.before;
+  const ends=[i.world.lo[0]+i.frame.scale,i.world.hi[0]-i.frame.scale];
+  const x=ends.sort((a,b)=>Math.abs(b-p.position[0])-Math.abs(a-p.position[0]))[0];edits.preview({...p,position:[x,p.position[1],p.position[2]]});edits.commit();
+ });
+ await waitSteps(3);await page.evaluate(id=>window.kaminosBurnerAuthoring.remove(id),id);await waitSteps(3);
+ await patch({mode:'sources'});await waitSteps(3);const noSource=await state();assert.equal(noSource.sources.length,0);assert.equal(noSource.coverage.status,'no-demand');
+ await patch({mode:'fire',activityWeight:0,hysteresis:0,lookahead:0,interval:0});await waitSteps(3);const zero=await state();assert.deepEqual(zero.pose,noSource.pose,'Zero priority cannot chase residual gas');
+ await patch({activityWeight:1});await waitSteps(15);const gas=await capture('source-free-gas');check(gas,zero,{advancing:true});
+ assert.equal(gas.sources.length,0,'Following gas cannot recreate an emitter');assert.ok(gas.coverage.moves>zero.coverage.moves,'Measured gas must move Fine with no source');report.gasComparison={sourceOnly:noSource.coverage,zero:zero.coverage,gas:gas.coverage};
+ // Fresh ordinary scene load must restore all seven controls, then a real
+ // basin save/load must replace an intentionally different policy.
+ report.phase='scene-reload';await save();const url=new URL(report.savedScene.url,origin);url.search='';const hash=new URLSearchParams(url.hash.slice(1));hash.set('workspace','workbench');hash.set('experiment','material-hierarchy');hash.set('experiment_inputs',JSON.stringify({overlay:true}));url.hash=hash.toString();report.savedUrl=url.href;
+ await page.goto(url.href);await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().simStepCount>=15&&window.kaminosWorkbenchExperiments?.state().id==='material-hierarchy');
+ const savedOptions=report.savedOptions;
+ const restored=await state();assert.deepEqual(restored.coverage.options,savedOptions);report.sceneRestored=restored.coverage;
+ report.phase='basin-reload';await save();await patch({mode:'off',interval:2});
+ await page.evaluate(id=>window.kaminosFlameAuthoring.applyBasin(id),report.savedBasin.effective.presetId);
+ await waitSteps(3);const basin=await state();assert.deepEqual(basin.coverage.options,savedOptions);report.basinRestored=basin.coverage;
+ await page.locator('[data-coverage="mode"]').scrollIntoViewIfNeeded();await capture('final-panel');
  report.final=await state();assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;if(page)try{report.failureState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());await page.screenshot({path:path.join(out,'failure.png')});}catch(c){report.captureError=String(c);}process.exitCode=1;}
 finally{await browser?.close();report.browserClosed=true;if(server&&server.exitCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}report.serverClosed=true;await save();}

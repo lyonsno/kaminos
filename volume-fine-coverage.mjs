@@ -38,7 +38,7 @@ export function chooseFineCoverage(input,options={}) {
  const result={target:null,status:'holding',sourceCoverage:0,activityCoverage:0,gain:0,worldLimited:false};
  if(o.mode==='off')return {...result,status:'off'};
  if(lower.some((x,a)=>x>upper[a]))return {...result,status:'box-exceeds-world',worldLimited:true};
- const sb=normalized(sources,1,o.lookahead),db=normalized(demand,o.mode==='fire'?(sources.length?o.activityWeight:1):0,o.lookahead),all=[...sb,...db].filter(b=>b.weight>0);
+ const sb=normalized(sources,1,o.lookahead),db=normalized(demand,o.mode==='fire'?o.activityWeight:0,o.lookahead),all=[...sb,...db].filter(b=>b.weight>0);
  if(!all.length)return {...result,status:'no-demand'};
  const score=t=>{const lo=t.map((x,a)=>x-frame.scale+extent[a]*o.margin),hi=lo.map((x,a)=>x+extent[a]*(1-2*o.margin));return all.reduce((sum,b)=>sum+b.weight*fraction(b,lo,hi),0);};
  const current=score(frame.translate),candidates=[frame.translate];
@@ -67,7 +67,10 @@ export function sourceCoverageBounds(packed,{dims,frame}) {
   const normal=e.direction??[0,1,0],len=Math.hypot(...normal)||1,c=e.centreCells.map((x,a)=>(2*x/dims[0]-1)*frame.scale+frame.translate[a]);
   const radius=Math.max(0,e.radiusCells??0),half=Math.max(0,e.thickness??1)/2;
   const reach=normal.map(x=>{const n=x/len;return (radius*Math.sqrt(Math.max(0,1-n*n))+half*Math.abs(n)+1.5)*pitch;});
-  out.push({id:source.id,lo:c.map((x,a)=>x-reach[a]),hi:c.map((x,a)=>x+reach[a]),weight});
+  // Authored supply changes release manual placement; per-step puff and the
+  // source's changing coordinates relative to Fine must not release that hold.
+  const {centre:relativeCentre,puffFactor,...authoredSupply}=source.config.requested??{};
+  out.push({id:source.id,lo:c.map((x,a)=>x-reach[a]),hi:c.map((x,a)=>x+reach[a]),weight,authoredSupply:JSON.stringify(authoredSupply)});
  }
  return out;
 }
@@ -77,7 +80,7 @@ export class FineCoverageController {
  due(options,now){const o=checkedFineCoverageOptions(options);return JSON.stringify(o)!==this.policy||now-this.lastCheck>=o.interval;}
  update(input,options,now){
   if(!Number.isFinite(now))throw new Error('Coverage clock must be finite');
-  const o=checkedFineCoverageOptions(options),policy=JSON.stringify(o),signature=JSON.stringify((input.sources??[]).map(b=>[b.id,...b.lo,...b.hi].map(x=>typeof x==='number'?Math.round(x*1e7)/1e7:x)));
+  const o=checkedFineCoverageOptions(options),policy=JSON.stringify(o),signature=JSON.stringify((input.sources??[]).map(b=>[b.id,b.authoredSupply,...b.lo,...b.hi].map(x=>typeof x==='number'?Math.round(x*1e7)/1e7:x)));
   const changed=policy!==this.policy||signature!==this.sources;
   const external=this.lastFrame&&!sameFrame(input.frame,this.lastFrame);
   if(external&&policy===this.policy)this.manualHold=true;else if(changed)this.manualHold=false;
