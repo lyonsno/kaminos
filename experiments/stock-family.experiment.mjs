@@ -2,7 +2,7 @@ import {Group,Mesh,BufferGeometry,BufferAttribute,LineSegments,LineBasicMaterial
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DEFAULT_RECIPE,validateRecipe,validateParameters,deformStock,createStockWarp} from './stock-family/model.mjs';
 import {installSceneControlHistory} from '../scene-control-history.mjs';
-import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences} from './stock-family/lifecycle.mjs';
+import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from './stock-family/lifecycle.mjs';
 
 const pose=root=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});
 const putPose=(root,p)=>{if(p){root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}};
@@ -17,7 +17,11 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   function assertLive(item){if(disposed||!item.asset.root.parent)throw Error('Stock removed; reopen the family');}
   function watchRemoval(asset,item){
     const removed=()=>{if(disposed)return;
-      const ids=new Set([asset.id,...(item?[item.target]:[])]);edits.discard(entry=>stockHistoryReferences(entry,ids));
+      const ids=new Set([asset.id,...(item?[item.target]:[])]),groupId=asset.root.userData.kaminosSceneObject?.groupId;
+      // Native membership prunes groups before detaching the root; its metadata
+      // still identifies the former group, which may have surviving members.
+      if(groupId&&!win.kaminosSceneAuthoring.read().groups.some(g=>g.id===groupId))ids.add('@group:'+groupId);
+      edits.discard(entry=>stockHistoryReferences(entry,ids));
       if(item){item.removed=true;edits.unregister(item.target);if(item.mesh.material!==item.surfaceMaterial)disposeStockMaterial(item.surfaceMaterial);item.strainMaterial.dispose();}
       refresh();
     };
@@ -113,6 +117,6 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       for(const i of items){list.querySelector(`option[value="${CSS.escape(i.value.id)}"]`).disabled=!!i.removed;i.ui.protect.disabled=!!i.removed;i.ui.protect.checked=i.value.protect;i.ui.status.textContent=i.removed?'Removed':i.error?'Blocked: '+i.error:`Axial stretch ${i.metrics.minAxialStretch.toFixed(2)} to ${i.metrics.maxAxialStretch.toFixed(2)} x`;}
       summary.textContent=!intact()?'Family members removed; reopen before saving.':items.filter(i=>i.error).map(i=>i.value.label+': '+i.error).join(' ');summary.style.cssText='font-size:12px;color:#e5b46a;overflow-wrap:anywhere;margin:10px 0';};refresh();operations.select({id:items[0].value.id});
   },async dispose(){if(disposed)return;refresh=()=>{};unsubscribe();for(const h of histories)h.dispose();for(const d of drags)d.dispose();for(const s of seats)s.dispose();
-    const ids=new Set(items.flatMap(i=>[i.target,i.asset.id]));if(reference)ids.add(reference.id);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
+    const ids=stockRetirementIds([reference.id,...items.flatMap(i=>[i.target,i.asset.id])],win.kaminosSceneAuthoring.read().groups);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
   }};
 }};
