@@ -141,7 +141,7 @@ test('clearing during preview releases the detached authored roots',async()=>{
  groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
  localLiquidDomainGuide:null,flameDomainGuide:null,localLiquidGeneration:0,localLiquidHost:null});
  state.sceneLoadRequests=state.workingScene.loads??{invalidate(){},isCurrent:()=>false};
- state.sceneLifecycle=state.createPageSceneLifecycle();state.clearScene();
+ state.sceneLifecycle=state.createPageSceneLifecycle();await state.clearScene();
  assert.equal(disposed,1,'whole-scene clear must release authored roots parked outside the preview');
  assert.equal(state.greenroomPreviewState,null);assert.equal(await state.restoreAuthoredSceneFromPreview(),false);
 });

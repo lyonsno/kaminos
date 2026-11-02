@@ -26,7 +26,7 @@ function fixture({sourceRoot=null,simulationRoot=null}={}){
 console.log('Source drafts retain identity and current playback status does not overwrite pending edits');
 const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
 const application=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const frameStart=application.indexOf('  function renderSceneFrame()'),armStart=application.indexOf('      if (waterFeature.host) {',frameStart),armEnd=application.indexOf('    }));',armStart)>=0?application.indexOf('    }));',armStart):application.indexOf('    sceneFrameCount++',armStart),arm=application.slice(armStart,armEnd);
+const frameStart=application.indexOf('  function renderSceneFrame()'),armStart=application.indexOf('      if (waterFeature.host) {',frameStart),armEnd=application.indexOf('    })));',armStart)>=0?application.indexOf('    })));',armStart):application.indexOf('    sceneFrameCount++',armStart),arm=application.slice(armStart,armEnd);
 for(const mode of ['continuous','finite_drop','failure']){
  const f=fixture();f.draftWidth(.75);let step=0,present=true,footer=null;
  const host={render(){if(mode==='failure')throw Error('frame rejected');step=12;},state:()=>mode==='continuous'?{solver:{stepCount:step,simulatedTimeSeconds:step/240}}:{mode,clock:{paused:false,step,timeSeconds:step/240}},dispose(){present=false;}};

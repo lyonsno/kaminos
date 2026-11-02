@@ -94,13 +94,13 @@ test('clearing a scene removes its old flame member before the next scene saves'
   const removed=[];
   const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),burnableEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),flameSourceDataTargets:new Set(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),sceneGiProxies:{clear(){},release(){},attach(){}},giProxyEditTargets:new Set(),applyGiProxySetting(){},giProxySettingFor:()=>null,rimLight:null,
     authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],localLiquidDomainGuide:null,flameDomainGuide:null,
-    sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
+    sceneLoadRequests:(await import('../scene-load-generation.mjs')).createSceneLoadRequests(),sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
     activeSceneGroupId:null,glbSourceScene:null,transformControls:null,
     document:{getElementById:()=>({classList:{remove:()=>{}}})},
     renderSceneObjectList:()=>{},updateTransformInspector:()=>{}};
-  await composePageSceneLifecycle(context,html);context.clearScene();
+  await composePageSceneLifecycle(context,html);await context.clearScene();
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
 });

@@ -27,3 +27,21 @@ const {createAuthoredFlameFeature}=await import('../authored-flame-feature.mjs')
  assert.equal(await pending,false);assert.equal(active,false,'Superseded restore cannot revive retained fire');
 }
 console.log('Flame retirement, retained reuse, visibility and obsolete restore preserve borrowed runtime custody');
+{
+ let active=true;const calls=[];
+ const runtime={isActive:()=>active,setActive:async value=>{calls.push(value);active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>true,composed:()=>true});
+ await feature.clear();await feature.sync();
+ assert.equal(active,false,'visibility projection cannot readmit a retired scene while its replacement is loading');
+ await feature.restore({present:true,composition:true,isCurrent:()=>true});
+ assert.equal(active,true,'explicit restore admits the retained runtime again');
+}
+{
+ let active=true,visible=false;
+ const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>visible,composed:()=>true});
+ await feature.clear();await feature.restore({present:true,composition:true,isCurrent:()=>true});
+ assert.equal(active,false,'restored hidden flame stays inactive');
+ visible=true;await feature.sync();
+ assert.equal(active,true,'restored hidden flame can later be made visible');
+}

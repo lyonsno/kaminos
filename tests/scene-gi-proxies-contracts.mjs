@@ -139,7 +139,7 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);
   h.sceneLifecycle=h.createPageSceneLifecycle();
   const start=html.indexOf('function clearScene('),end=html.indexOf('\nfunction clearSceneEditingState(',start);
-  vm.runInContext(html.slice(start,end)+'\nclearScene();',h);
+  await vm.runInContext(html.slice(start,end)+'\nclearScene();',h);
   assert.equal(registry.list().length,0);assert.equal(disposed,1,'page lifecycle must release the real proxy registry');
   assert.match(body('createPageSceneMembershipOperations'),/sceneGiProxies\.release\(entry\.object\)/);
 });

@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {createSceneLifecycle} from '../scene-lifecycle.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -184,4 +185,19 @@ test('withdrawn activation cannot resurrect the retained flame after GPU acquisi
   assert.equal(f.api.isActive(),false);assert.equal(f.scheduled.size,0);
   assert.equal(f.events.filter(event=>event.phase==='active').length,0,'obsolete acquisition must never publish activation');
  }finally{gate.resolve();await f.close();}
+});
+
+test('scene replacement retains render inputs until admitted foreground work finishes',async()=>{
+ const f=await fixture();
+ try{
+  const scene=createWorkingScene(),object={},destroyed=[];
+  scene.put({id:'old',type:'glb',object});
+  const lifecycle=createSceneLifecycle({scene,roots:{detach(){},dispose:o=>destroyed.push(o)},records:{},groups:{},selection:{},
+   context:{retire:()=>f.api.setActive(false)}});
+  f.api.render(0);await turn();
+  const clearing=lifecycle.clear();await turn();
+  assert.deepEqual(destroyed,[],'scene resources remain alive while the admitted frame is queued');
+  assert.deepEqual((await f.boundary()).failures,[]);
+  await clearing;assert.deepEqual(destroyed,[object]);
+ }finally{await f.close();}
 });

@@ -2,21 +2,31 @@
 // individual edits. Preview suspension retains identity; replacement ends it.
 export function createSceneLifecycle({scene,roots,records,groups,selection,context={}}){
   const current=id=>id===null||scene.loads.isCurrent(id);
-  function clear({loadRequestId=null}={}){
-    if(!current(loadRequestId)||loadRequestId===null)scene.loads.invalidate();
-    context.beforeClear?.();
-    scene.invalidateArrivals();
-    const rows=[...scene.objects,...scene.suspendedObjects()];
-    scene.discardSuspendedMembership();
-    context.clearDomains?.();
-    const released=new Set();
-    for(const entry of rows){if(released.has(entry.object))continue;released.add(entry.object);roots.detach(entry);roots.dispose(entry.object);}
-    context.clearTransient?.(released);
-    scene.clearMembership();context.cleared?.();
+  let pendingClears=0;
+  async function clear({loadRequestId=null}={}){
+    if(loadRequestId!==null&&!current(loadRequestId))return false;
+    if(loadRequestId===null)scene.loads.invalidate();
+    const request=scene.loads.current(),generation=scene.invalidateArrivals();
+    pendingClears++;
+    try{
+      // Keep the current scene intact until its admitted rendering has settled.
+      await context.retire?.();
+      if(!scene.loads.isCurrent(request)||scene.generation!==generation)return false;
+      context.beforeClear?.();
+      const rows=[...scene.objects,...scene.suspendedObjects()];
+      scene.discardSuspendedMembership();
+      context.clearDomains?.();
+      const released=new Set();
+      for(const entry of rows){if(released.has(entry.object))continue;released.add(entry.object);roots.detach(entry);roots.dispose(entry.object);}
+      context.clearTransient?.(released);
+      scene.clearMembership();context.cleared?.();
+      return true;
+    }finally{pendingClears--;}
   }
   async function replace(values,{loadRequestId=null,activeId=null,groups:nextGroups=[],activeGroupId=null,setup=null}={}){
     if(!current(loadRequestId))return false;
-    clear({loadRequestId});context.beginLoad?.(setup);
+    if(!await clear({loadRequestId}))return false;
+    context.beginLoad?.(setup);
     const loaded=[];
     try{
       for(const record of values){
@@ -32,7 +42,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
       if(activeGroupId&&scene.groups.some(group=>group.id===activeGroupId))selection.group(activeGroupId);
       else selection.object(activeId&&loaded.includes(activeId)?activeId:loaded.at(-1));
       return true;
-    }catch(error){if(!current(loadRequestId))return false;clear({loadRequestId});throw error;}
+    }catch(error){if(!current(loadRequestId))return false;await clear({loadRequestId});throw error;}
   }
   function capturePreview(){return context.capturePreview?.()??{};}
   function suspendPreview(){
@@ -49,5 +59,5 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     else selection.object(null);
     context.previewResumed?.();return true;
   }
-  return Object.freeze({clear,replace,capturePreview,suspendPreview,resumePreview});
+  return Object.freeze({get clearing(){return pendingClears>0;},clear,replace,capturePreview,suspendPreview,resumePreview});
 }
