@@ -6,6 +6,7 @@ import net from 'node:net';
 import {spawn,execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {coverageSceneUrl,coverageSceneLoaded} from './automatic-coverage-load.mjs';
 const [out,presetFile]=process.argv.slice(2);
 assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
 await fs.mkdir(out,{recursive:true});
@@ -39,6 +40,9 @@ try{
  browser.setDefaultTimeout(0);browser.setDefaultNavigationTimeout(0);page=await browser.newPage();
  page.on('response',r=>{if(r.status()>=400)report.errors.push(`HTTP ${r.status()} ${r.url()}`);});
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+ report.phase='entry-error-control';await save();await page.goto(origin+'/volume-settings-preset.html');
+ await assert.rejects(page.waitForFunction(coverageSceneLoaded),/settings preset id is required/);
+ report.expectedEntryErrors=report.errors.splice(0);assert.ok(report.expectedEntryErrors.some(e=>e.includes('settings preset id is required')));
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=authoring');if(report.errors.length)throw Error(report.errors.join('\n'));
 
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
@@ -143,8 +147,8 @@ try{
  assert.equal(gas.sources.length,0,'Following gas cannot recreate an emitter');assert.ok(gas.coverage.moves>zero.coverage.moves,'Measured gas must move Fine with no source');report.gasComparison={sourceOnly:noSource.coverage,zero:zero.coverage,gas:gas.coverage};
  // Fresh ordinary scene load must restore all seven controls, then a real
  // basin save/load must replace an intentionally different policy.
- report.phase='scene-reload';await save();const url=new URL(report.savedScene.url,origin);url.search='';const hash=new URLSearchParams(url.hash.slice(1));hash.set('workspace','workbench');hash.set('experiment','material-hierarchy');hash.set('experiment_inputs',JSON.stringify({overlay:true}));url.hash=hash.toString();report.savedUrl=url.href;
- await page.goto(url.href);await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().simStepCount>=15&&window.kaminosWorkbenchExperiments?.state().id==='material-hierarchy');
+ report.phase='scene-reload';await save();const url=coverageSceneUrl(report.savedScene.url,origin);report.savedUrl=url;
+ await page.goto(url);await page.waitForFunction(coverageSceneLoaded);
  const savedOptions=report.savedOptions;
  const restored=await state();assert.deepEqual(restored.coverage.options,savedOptions);report.sceneRestored=restored.coverage;
  report.phase='basin-reload';await save();await patch({mode:'off',interval:2});
