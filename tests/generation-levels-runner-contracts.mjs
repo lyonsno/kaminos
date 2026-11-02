@@ -49,3 +49,14 @@ test('the runner also runs for an arbitrary stored GLB without decode or materia
   assert.equal(FakeWorker.last.message.materialFields,undefined);
   assert.ok(FakeWorker.last.transfer.includes(heroGLB));
 });
+
+
+test('automatic surfel levels preserve the 512 format boundary; explicit requests are not silently changed',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',surfelFactors:m.surfelFactors}});};
+  const make=resolution=>{const x=inputs();x.decode.coordinates=new Int32Array(9);x.materialFields.resolution=resolution;return {...x,source:'c'.repeat(64),WorkerClass:FakeWorker};};
+  assert.deepEqual((await runGenerationLevels(make(512))).surfelFactors,[4,8,16]);
+  const unsupported=await runGenerationLevels(make(1024));
+  assert.deepEqual(unsupported.surfelFactors,[]);assert.equal(unsupported.surfels.reason,'unsupported-resolution');
+  const explicit=await runGenerationLevels({...make(1024),surfelFactors:[4]});
+  assert.deepEqual(explicit.surfelFactors,[4]);assert.equal(explicit.surfels,undefined);
+});

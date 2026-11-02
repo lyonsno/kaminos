@@ -14,7 +14,8 @@
 
 export const SURFEL_EXTENSION='KAMINOS_trellis_surfels';
 const MESH_NODE_MATRIX=[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]; // as encodeTrellisGeometryGLB: (x,y,z) -> (x,z,-y)
-const MAX_RESOLUTION=512;
+export const MAX_SURFEL_RESOLUTION=512;
+const MAX_RESOLUTION=MAX_SURFEL_RESOLUTION;
 const pack=(a,b,c)=>(a|(b<<9)|(c<<18))>>>0;
 const unpack=k=>[k&511,(k>>>9)&511,(k>>>18)&511];
 const byte=v=>Math.max(0,Math.min(255,Math.round(v*255)));
