@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createStockWarp, deformStock, validateRecipe, DEFAULT_RECIPE} from '../experiments/stock-family/model.mjs';
 import {Texture,MeshStandardMaterial} from '../lib/three.core.js';
-import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences} from '../experiments/stock-family/lifecycle.mjs';
+import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from '../experiments/stock-family/lifecycle.mjs';
 
 const profile={min:-.5,max:.5,xMin:-.17,xMax:.17,locks:[[-.5,-.45],[-.43,-.23],[.22,.39],[.45,.5]]};
 const near=(a,b,e=1e-7)=>assert.ok(Math.abs(a-b)<e,`${a} != ${b}`);
@@ -48,5 +48,9 @@ assert.equal(stockHistoryReferences({id:'@selection-transform',after:{roots:{'@g
 assert.equal(stockHistoryReferences({id:'@scene-groups',before:{groups:[{objectIds:['other','stock']}]}},ids),true);
 assert.equal(stockHistoryReferences({id:'@scene-selection',before:{ids:['stock'],activeId:'stock'}},ids),true);
 assert.equal(stockHistoryReferences({id:'@selection-transform',before:{roots:{other:{}}},beforeContext:{selectedId:'stock'}},ids),false);
+const retired=stockRetirementIds(['stock','second'],[{id:'owned',objectIds:['stock','second']},{id:'mixed',objectIds:['stock','other']},{id:'external',objectIds:['other']}]);
+assert.deepEqual([...retired],['stock','second','@group:owned']);
+assert.equal(stockHistoryReferences({id:'@scene-selection',before:{ids:['@group:owned']},after:{ids:['other']}},retired),true);
+assert.equal(stockHistoryReferences({id:'@scene-selection',before:{ids:['@group:mixed']},after:{ids:['other']}},retired),false);
 disposeStockMaterial(b);disposeStockMaterial(source);
 console.log('stock lifecycle: independent GPU resources and compound history references passed');
