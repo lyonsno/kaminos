@@ -1,6 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {createStockWarp, deformStock, validateRecipe, DEFAULT_RECIPE} from '../experiments/stock-family/model.mjs';
+import {Texture,MeshStandardMaterial} from '../lib/three.core.js';
+import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences} from '../experiments/stock-family/lifecycle.mjs';
 
 const profile={min:-.5,max:.5,xMin:-.17,xMax:.17,locks:[[-.5,-.45],[-.43,-.23],[.22,.39],[.45,.5]]};
 const near=(a,b,e=1e-7)=>assert.ok(Math.abs(a-b)<e,`${a} != ${b}`);
@@ -35,3 +37,16 @@ const recipe=validateRecipe(structuredClone(DEFAULT_RECIPE));assert.deepEqual(va
 assert.throws(()=>validateRecipe({...recipe,source:{...recipe.source,sha256:'bad'}}),/source/);
 assert.throws(()=>validateRecipe({...recipe,variants:[{...recipe.variants[0],length:-1}]}),/length/);
 console.log('stock family: identity, rigid bands, cross-sections, normals, refusal and recipe checks passed');
+const map=new Texture(),source=new MeshStandardMaterial({map,roughnessMap:map}),a=cloneStockMaterial(source),b=cloneStockMaterial(source);
+assert.notEqual(a.map,b.map);assert.notEqual(a.map,source.map);assert.equal(a.map,a.roughnessMap);
+let disposedA=0,disposedB=0;a.map.addEventListener('dispose',()=>disposedA++);b.map.addEventListener('dispose',()=>disposedB++);
+disposeStockMaterial(a);a.map=null;assert.equal(disposedA,1);assert.equal(disposedB,0);assert.ok(b.map&&source.map);
+const ids=new Set(['stock','@stock-family:stock']);
+assert.equal(stockHistoryReferences({id:'@stock-family:stock'},ids),true);
+assert.equal(stockHistoryReferences({id:'@selection-transform',before:{roots:{stock:{},other:{}}}},ids),true);
+assert.equal(stockHistoryReferences({id:'@selection-transform',after:{roots:{'@group:g':{members:{stock:{}}}}}},ids),true);
+assert.equal(stockHistoryReferences({id:'@scene-groups',before:{groups:[{objectIds:['other','stock']}]}},ids),true);
+assert.equal(stockHistoryReferences({id:'@scene-selection',before:{ids:['stock'],activeId:'stock'}},ids),true);
+assert.equal(stockHistoryReferences({id:'@selection-transform',before:{roots:{other:{}}},beforeContext:{selectedId:'stock'}},ids),false);
+disposeStockMaterial(b);disposeStockMaterial(source);
+console.log('stock lifecycle: independent GPU resources and compound history references passed');
