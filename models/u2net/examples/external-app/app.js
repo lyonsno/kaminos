@@ -119,8 +119,8 @@ get('download').addEventListener('click', async () => {
 });
 window.addEventListener('pagehide', () => { closed = true; progress.destroy(); view?.destroy(); void app?.destroy().catch(() => {}); });
 async function start() {
-  try { await connect(); busy = false; await select(sampleUrl, name); }
-  catch (error) { get('status').textContent = 'WebGPU unavailable'; get('error').textContent = error.message; }
+  try { await connect(); busy = false; await select(new URL(sampleUrl, import.meta.url).href, name); }
+  catch (error) { get('status').textContent = 'Unable to open studio'; get('error').textContent = error.message; }
   finally { busy = false; get('pause').disabled = true; controls(); }
 }
 void start();
