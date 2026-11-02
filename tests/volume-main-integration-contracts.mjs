@@ -47,6 +47,7 @@ const resources = {
   // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceTexture: {createView: () => ({ label: 'joined lower planes view' })},
   rayAllocationHistory:{buffer:buffer('history'),uniform:buffer('history uniform')},
+  worldRenderField: {view:{label:'resident World optics'}},
   worldSmoke: null, intermediateFlow: null, worldRenderUniform: buffer('world frame'),
   worldOpticalFallback: {createView: () => ({label:'inactive world optics'})},
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
@@ -68,6 +69,7 @@ for (let q = 0; q < 2; q++) {
   assert.ok(Number.isInteger(noiseBinding), 'noise texture has a shader binding');
   assert.deepEqual(group.entries.find(e => e.binding === noiseBinding)?.resource,
     resources.rayStartNoiseTexture.createView(), 'the production group binds the spatial ray-start texture');
+  assert.equal(group.entries.find(e=>e.binding===40)?.resource,resources.worldRenderField.view);
   assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
     'all fluid render resources have distinct bindings');
   assert.equal(group.entries.find(e=>e.binding===26)?.resource.buffer,resources.rayStepTelemetry.counterBuffer);

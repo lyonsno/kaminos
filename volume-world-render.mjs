@@ -1,4 +1,5 @@
-// Camera-only optical bricks. The solver's conservative dense export stays intact.
+// Camera-only optical bricks for the admitted physics material law (one global
+// albedo, hence emission RGB + extinction suffice). The solver's conservative dense export stays intact.
 export const WORLD_RENDER_STRIDE = 219; // three topology texels + 6^3 cells including a one-cell halo
 export function worldRenderShape(capacity, limit) {
   if (!Number.isSafeInteger(capacity) || capacity < 1 || !Number.isInteger(limit) || limit < 1) throw Error('Invalid World render capacity');
@@ -75,7 +76,11 @@ fn writeWorldAtlas(index:u32,value:vec4<f32>){
  if(n.children0.x!=0xffffffffu){return;}
  for(var i=local;i<216u;i+=64u){
   let c=vec3<u32>(i%6u,(i/6u)%6u,i/36u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*n.loPitch.w;
-  let r=worldRenderRaw(q);let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
+  var r:WorldRenderGas;
+  if(wr.loMode.w>.5 && all(c>=vec3<u32>(1)) && all(c<=vec3<u32>(4)) && all(q<wr.dimsPitch.xyz)){
+   let inner=c-vec3<u32>(1);r=worldRenderGas[slot*64u+inner.x+4u*(inner.y+4u*inner.z)];
+  }else{r=worldRenderRaw(q);}
+  let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
   writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,medium.absorption+medium.scattering));
  }
 }

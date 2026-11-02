@@ -113,3 +113,11 @@ test('numerical and fixed optical integration cover the combined World without f
   assert.equal(resolved.mode,mode);assert.equal(resolved.reason,null);
  }
 });
+
+test('joined numerical keeps Fine step scale and clips integration panels at region joins',()=>{
+ assert.match(core,/opticalStepInitPhased\(max\(startT, sceneDepthStartT\), endT, dtBase,/,'World extent must not enlarge the Fine refinement floor');
+ assert.doesNotMatch(core,/OPTICAL_STEP_MODE == 2u && !worldActive && priority/,'Fine guide must remain usable inside joined Fine');
+ assert.match(core,/opticalStepJoinStop\(opticalStep, nearHit\)/);
+ assert.match(core,/opticalStepJoinStop\(opticalStep, middleHit\)/);
+ assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/fn opticalStepJoinStop/);
+});

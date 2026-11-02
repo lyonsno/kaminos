@@ -8020,7 +8020,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
   let opticalStepping = OPTICAL_STEP_MODE > 0u && OPTICAL_STEP_MODE < 4u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5;
-  var opticalStep = opticalStepInitPhased(max(startT, sceneDepthStartT), endT, select(dtBase,(endT-max(startT,sceneDepthStartT))/steps,worldActive), select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
+  var opticalStep = opticalStepInitPhased(max(startT, sceneDepthStartT), endT, dtBase, select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   if (physicalColorMode > 0.5) { color = vec3<f32>(0.0); }
@@ -8069,16 +8069,26 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
       let priority = clamp(u.occupancy_controls.z, 0.0, 1.0);
-      if (OPTICAL_STEP_MODE == 2u && !worldActive && priority > 0.0 && opticalStep.mask <= 1u) {
+      if (opticalStep.mask <= 1u) {
         let remaining = opticalStep.end - opticalStep.cursor;
-        let horizon = min(remaining, dtBase * 8.0);
-        let guide = flameGuideSegment(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon);
-        let cellWidth = 2.0 / f32(GRID);
-        let nearby = guide.x <= cellWidth;
-        let support = select(0.0, guide.y, nearby);
-        let minimum = dtBase * mix(1.0, 0.25, priority * support);
-        let maximum = dtBase * 4.0 * mix(1.0, 2.0 - 1.75 * support, priority);
-        let stop = select(remaining, max(minimum, guide.x - cellWidth * 0.5), !nearby && guide.y > 0.0);
+        var stop = remaining;
+        if (worldActive) {
+          stop = min(opticalStepJoinStop(opticalStep, nearHit), opticalStepJoinStop(opticalStep, middleHit));
+        }
+        var minimum = dtBase * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
+        var maximum = minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
+        let localCursor = opticalStep.cursor;
+        let insideFine = !worldActive || (nearHit.y > nearHit.x && localCursor >= nearHit.x-opticalStep.origin && localCursor < nearHit.y-opticalStep.origin);
+        if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && insideFine) {
+          let horizon = min(stop, dtBase * 8.0);
+          let guide = flameGuideSegment(ro + rd * (opticalStep.origin + localCursor), rd, horizon);
+          let cellWidth = 2.0 / f32(GRID);
+          let nearby = guide.x <= cellWidth;
+          let support = select(0.0, guide.y, nearby);
+          minimum = dtBase * mix(1.0, 0.25, priority * support);
+          maximum = dtBase * 4.0 * mix(1.0, 2.0 - 1.75 * support, priority);
+          stop = min(stop, select(remaining, max(minimum, guide.x - cellWidth * 0.5), !nearby && guide.y > 0.0));
+        }
         opticalStepConstrain(&opticalStep, minimum, maximum, stop);
       }
       t = opticalStepPosition(opticalStep);
@@ -16870,7 +16880,7 @@ export function createKaminosVolumePrototype({
     }
     state.displayReconstruction = {...displayReconstruction?.read(),requested:displayRequest.mode,
       effective:displayConfig.value>0,reason:displayReason,scope:displayConfig.value>0?'fine-grid':null,
-      outerFields:worldSmoke?'native-thermal-moments':null};
+      outerFields:worldSmoke?(state.worldRenderField?.effective??'unbuilt'):null};
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
@@ -21142,6 +21152,13 @@ export function createKaminosVolumePrototype({
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
     state.worldRenderField=worldRenderField.read();
+    if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
+    if(state.worldSmoke?.raymarch){
+      const mode=state.opticalStepping?.effective??'unverified';
+      state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
+        policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
+        reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
+    }
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,0,0,0]));
     if(worldRenderChanged)rebuildFluidBindGroups();
     if (displayReconstruction?.encode(encoder,currentFluid,

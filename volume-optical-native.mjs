@@ -112,6 +112,18 @@ fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximu
   }
   opticalStepResetPositions(s);
 }
+// Distances share the controller's entry-relative coordinates so a clipped
+// endpoint is crossed exactly once, without absolute-ray addition rounding.
+fn opticalStepJoinStop(s: OpticalStepState, interval: vec2<f32>) -> f32 {
+  var stop = s.end - s.cursor;
+  if (interval.y > interval.x) {
+    let entry = interval.x - s.origin;
+    let exit = interval.y - s.origin;
+    if (entry > s.cursor) { stop = min(stop, entry - s.cursor); }
+    if (exit > s.cursor) { stop = min(stop, exit - s.cursor); }
+  }
+  return stop;
+}
 fn opticalStepIndex(mask: u32) -> u32 {
   for (var i = 0u; i < 5u; i++) { if ((mask & (1u << i)) == 0u) { return i; } }
   return 4u;
