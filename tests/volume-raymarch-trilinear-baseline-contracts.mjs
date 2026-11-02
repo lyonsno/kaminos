@@ -74,7 +74,7 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
-const displayAdmission = /if \(displayReconstructionActive\(\) && opticalStepping\) \{\s*directSupport = 1\.0;\s*\} else if/;
+const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
 assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
 const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
   .replace('!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
@@ -88,7 +88,7 @@ assert.match(
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
-const displaySample = /if \(displayReconstructionActive\(\) && opticalStepping\) \{\s*\} else if/;
+const displaySample = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*\} else if/;
 assert.match(sampleBranch, displaySample, 'only the explicit prepared-field arm omits raw reconstruction');
 assert.match(
   sampleBranch.replace(displaySample, 'if'),
@@ -102,7 +102,7 @@ assertRaymarchTrilinearAuthority(core);
 const falseClosureMutations = [
   [
     'display support enabled outside its explicit mode',
-    source => source.replace('if (displayReconstructionActive() && opticalStepping)', 'if (true)'),
+    source => source.replace('if (displayReconstructionActive() && (opticalStepping || guided))', 'if (true)'),
     /display support bypass requires both/,
   ],
   [

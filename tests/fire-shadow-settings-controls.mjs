@@ -56,6 +56,10 @@ assert(casterMenu,'the ordinary Rendering panel exposes explicit caster choices'
 assert.deepEqual(casterMenu.children.map(v=>v.value),['original','10k','5k']);
 document.defaultView.__kaminosSceneRadiance.setShadowCasterLevel=async value=>{state={...state,shadowCasterLevel:value,casters:{level:value,targets:1,originalTriangles:287407,captureTriangles:10000}};};
 const applied=await nativeSettings.operations.setCasterLevel('10k');assert.equal(applied.level,'10k');nativeSettings.sync();assert.equal(casterMenu.value,'10k');
+const casterStatusNode=nativeControls.find(v=>v.attrs['aria-live']==='polite');
+state={...state,shadowCasterLevel:'original',casters:{level:'original',targets:2,originalTriangles:412879,captureTriangles:7604}};
+nativeSettings.sync();
+assert.match(casterStatusNode.textContent,/2 stunt-double caster\(s\): 412,879 → 7,604 caster triangles/);
 
 const widthControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke shadow blur half-width (degrees)'),tapsControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke filter taps per axis');
 assert(widthControl&&tapsControl,'ordinary inspector exposes independent angular width and filter work');

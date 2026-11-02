@@ -528,6 +528,9 @@
     "tests/scene-light-route-consumer-contracts.mjs": {
       "kind": "node"
     },
+    "tests/scene-lod-budget.mjs": {
+      "kind": "node"
+    },
     "tests/scene-light-timing-contracts.mjs": {
       "kind": "node"
     },

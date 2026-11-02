@@ -18,13 +18,16 @@ const make=(n,value)=>{
 };
 const fine=make(8,1),world=make(27,2),middle=make(64,3);
 const bindings=createDistributedSmokeBindings(device);
-assert.equal(bindings.layout.entries.filter(e=>e.buffer?.type==='read-only-storage').length,2,
+assert.equal(bindings.layout.entries.filter(e=>e.buffer?.type==='read-only-storage').length,1,
   'regional planar support must retain masks and planes without multiplying storage bindings by region');
 const frame={texture:fine.texture,generation:1,frame:2,smokeReconstruction:fine,
   exterior:{generation:1,frame:2,smokeReconstruction:world,middle:{generation:1,frame:2,smokeReconstruction:middle}}};
 const group=bindings.update(frame),byBinding=new Map(group.entries.map(e=>[e.binding,e.resource]));
 const packedMasks=new Uint32Array(byBinding.get(1).buffer.data.buffer);
-const packedPlanes=new Float32Array(byBinding.get(2).buffer.data.buffer);
+const offsets=new Uint32Array(byBinding.get(20).buffer.data.buffer,64,4);
+assert.deepEqual(Array.from(offsets),[0,8,35,99]);
+const packedPlanes=new Float32Array(byBinding.get(1).buffer.data.buffer,offsets[3]*4);
+assert.equal(packedMasks.length,99*5,'all mask and plane bits retained without padding or truncation');
 let offset=0;
 for(const [n,value]of [[8,1],[27,2],[64,3]]){
   assert.ok(packedMasks.slice(offset,offset+n).every(v=>v===value));
@@ -39,8 +42,9 @@ assert.equal(packedPlanes[0],4.25);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...fine,planes:null}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,exterior:{...frame.exterior,frame:1}}),/same-generation/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...fine,identity:'prepared-geometry-visible-v1'}}),/reconstruction resources/);
-assert.equal((COMPOSED_SMOKE_WGSL.match(/var<storage,read> smokeSupportPlanes:/g)||[]).length,1);
-assert.match(COMPOSED_SMOKE_WGSL,/smokeSupportPlanes\[exteriorCoverage.maskOffsets.y\+id\]/);
-assert.match(COMPOSED_SMOKE_WGSL,/smokeSupportPlanes\[exteriorCoverage.maskOffsets.z\+id\]/);
+assert.equal((COMPOSED_SMOKE_WGSL.match(/var<storage,read>/g)||[]).length,1);
+assert.match(COMPOSED_SMOKE_WGSL,/bitcast<vec4<f32>>/);
+assert.match(COMPOSED_SMOKE_WGSL,/composedSmokeSupportPlane\(exteriorCoverage.maskOffsets.y\+id\)/);
+assert.match(COMPOSED_SMOKE_WGSL,/composedSmokeSupportPlane\(exteriorCoverage.maskOffsets.z\+id\)/);
 bindings.destroy();
 console.log('three-region planar support preserves every mask and plane with coherent refresh');

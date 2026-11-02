@@ -37,7 +37,7 @@ assert.match(
 );
 assert.match(
   core,
-  /adapter\.limits\?\.maxStorageBuffersPerShaderStage[\s\S]*BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT[\s\S]*requiredLimits\.maxStorageBuffersPerShaderStage\s*=\s*BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT/,
+  /adapter\.limits\?\.maxStorageBuffersPerShaderStage[\s\S]*VOLUME_STORAGE_BUFFER_BINDING_COUNT[\s\S]*requiredLimits\.maxStorageBuffersPerShaderStage\s*=\s*VOLUME_STORAGE_BUFFER_BINDING_COUNT/,
   'device admission must request the full unconditional compute layout requirement',
 );
 assert.match(

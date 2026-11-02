@@ -31,3 +31,32 @@ test('no hero, no tiers: a surfels-only run is skipped with a reason',async()=>{
   const report=await runGenerationLevels({...inputs(),source:null,WorkerClass:FakeWorker});
   assert.equal(report.phase,'skipped');assert.match(report.reason,/no stored hero mesh/);
 });
+
+test('when decode.coordinates is present, the runner requests x4, x8, x16 surfel levels and transfers the coordinate buffer',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',surfelFactors:m.surfelFactors}});};
+  const inp=inputs();inp.decode.coordinates=new Int32Array(9);
+  const report=await runGenerationLevels({...inp,source:'c'.repeat(64),WorkerClass:FakeWorker});
+  assert.deepEqual(report.surfelFactors,[4,8,16]);
+  assert.ok(FakeWorker.last.transfer.includes(inp.decode.coordinates.buffer));
+});
+
+test('the runner also runs for an arbitrary stored GLB without decode or materialFields, transferring heroGLB when given',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',source:m.source,tiers:[{faces:1000}]}});};
+  const heroGLB=new Uint8Array([1,2,3,4]).buffer;
+  const report=await runGenerationLevels({source:'d'.repeat(64),heroGLB,input:'imported.glb',WorkerClass:FakeWorker});
+  assert.equal(report.phase,'done');
+  assert.equal(FakeWorker.last.message.decode,undefined);
+  assert.equal(FakeWorker.last.message.materialFields,undefined);
+  assert.ok(FakeWorker.last.transfer.includes(heroGLB));
+});
+
+
+test('automatic surfel levels preserve the 512 format boundary; explicit requests are not silently changed',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',surfelFactors:m.surfelFactors}});};
+  const make=resolution=>{const x=inputs();x.decode.coordinates=new Int32Array(9);x.materialFields.resolution=resolution;return {...x,source:'c'.repeat(64),WorkerClass:FakeWorker};};
+  assert.deepEqual((await runGenerationLevels(make(512))).surfelFactors,[4,8,16]);
+  const unsupported=await runGenerationLevels(make(1024));
+  assert.deepEqual(unsupported.surfelFactors,[]);assert.equal(unsupported.surfels.reason,'unsupported-resolution');
+  const explicit=await runGenerationLevels({...make(1024),surfelFactors:[4]});
+  assert.deepEqual(explicit.surfelFactors,[4]);assert.equal(explicit.surfels,undefined);
+});

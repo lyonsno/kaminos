@@ -141,6 +141,49 @@ with tempfile.TemporaryDirectory() as directory:
         # Levels registered without an error measurement are never chosen by error.
         status, body = request('GET', f'/api/mesh-lods?source={hero}&maxError=1')
         assert body['choice'] is None and body['unmeasured'] == 3, body
+
+        # Merged surfel levels (trellis-surfels+hero-normals) live beside mesh levels on the hero:
+        # omitted `route` chooses only among mesh routes so mesh consumers never receive a surfel GLB;
+        # `route=trellis-surfels+hero-normals` chooses among the surfel levels by faces or maxError.
+        surfel_shas = {}
+        for name, factor, count, mx in (('sx4', 4, 25000, 0.003), ('sx8', 8, 6000, 0.008), ('sx16', 16, 1400, 0.018)):
+            data = glb(name); surfel_shas[name] = hashlib.sha256(data).hexdigest()
+            assert request('POST', '/api/ingest-mesh', data)[0] == 200
+            s_level = {'sha256': surfel_shas[name], 'faces': count, 'mergeFactor': factor,
+                       'route': 'trellis-surfels+hero-normals', 'representation': 'trellis-surfels',
+                       'error': {'relative': {'max': mx, 'p95': mx * 0.6, 'mean': mx * 0.2}}}
+            assert request('POST', '/api/mesh-lods', {'source': hero, 'level': s_level})[0] == 200
+        # Default (omitted route) still picks the 1000-face mesh level (twin_sha), not the 1400-surfel sx16 level.
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&faces=2000')
+        assert status == 200 and body['choice']['sha256'] == twin_sha, body['choice']
+        assert len(body['levels']) == 6, 'all mesh and surfel levels returned in levels list'
+        # Default maxError without route still sees only the 3 unmeasured mesh levels on `hero`.
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&maxError=1')
+        assert body['choice'] is None and body['unmeasured'] == 3, body
+        # Explicit surfel route chooses among surfel levels by faces or by maxError.
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&route=trellis-surfels%2Bhero-normals&faces=10000')
+        assert status == 200 and body['choice']['sha256'] == surfel_shas['sx8'] and body['withinBudget'] is True
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&route=trellis-surfels%2Bhero-normals&maxError=0.01')
+        assert status == 200 and body['choice']['sha256'] == surfel_shas['sx8'] and body['withinBudget'] is True
+        # Registered surfel levels stay hidden from the top-level authoring asset catalog.
+        listed = {Path(e['source'].split('path=')[-1]).stem for e in serve.authoring_asset_catalog('generated-meshes')['entries']}
+        assert not listed & set(surfel_shas.values()), 'surfel levels hidden from the asset list'
+        # Review M3: mixing mergeFactor and non-mergeFactor records on the same route (or omitting mergeFactor on
+        # a surfel route) must return HTTP 400 (ValueError), never an unhandled KeyError (HTTP 500), in both orders.
+        m_shas = {}
+        for mname in ('m1', 'm2', 'm3', 'm4'):
+            mdata = glb(mname); m_shas[mname] = hashlib.sha256(mdata).hexdigest()
+            assert request('POST', '/api/ingest-mesh', mdata)[0] == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m1'], 'faces': 200, 'route': 'trellis-surfels+hero-normals'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
+        st, _ = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m1'], 'faces': 200, 'route': 'custom-mixed-route'}})
+        assert st == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m2'], 'faces': 100, 'mergeFactor': 4, 'route': 'custom-mixed-route'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
+        st, _ = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m3'], 'faces': 100, 'mergeFactor': 4, 'route': 'custom-mixed-route-reverse'}})
+        assert st == 200
+        st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m4'], 'faces': 200, 'route': 'custom-mixed-route-reverse'}})
+        assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
     finally:
         server.shutdown()
         server.server_close()

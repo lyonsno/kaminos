@@ -864,6 +864,7 @@ export function createTrellisDinoV3ConditioningAdapter({route,pixelValues,imageS
   const { patchSide, patchTokens, tokenCount } = resolveDinoDimensions(imageSize);
   if(!runtime||!['createTensor','createManagedBuffer','createUniformBuffer','uploadTensor','defineComputeKernel','runKernel']
     .every(name=>typeof runtime[name]==='function'))throw TypeError('registered managed WebGPU runtime required');
+  if(typeof runtime.device?.queue?.onSubmittedWorkDone!=='function')throw TypeError('DINO requires GPU queue completion observation');
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==imageSize*imageSize*3||!pixelValues.every(Number.isFinite))
     throw TypeError('complete finite normalized F32 pixels required');
   if(typeof loadLayerWeights!=='function')throw TypeError('complete DINO checkpoint layer weight loader required');
@@ -879,7 +880,15 @@ export function createTrellisDinoV3ConditioningAdapter({route,pixelValues,imageS
     prefix[name]=new Float32Array(data);
   }
   const owned=new Set(),track=buffer=>{owned.add(buffer);bufferOwners.set(buffer,owned);return buffer;},
-    managed={...runtime,createManagedBuffer(d){return track(runtime.createManagedBuffer(d));},
+    managed={...runtime,
+      async runKernel(kernel,options){
+        const submitted=await runtime.runKernel(kernel,options);
+        // Keep serving resources bounded by completed GPU work. Merely awaiting
+        // submission lets all 24 blocks accumulate before the final queue fence.
+        await runtime.device.queue.onSubmittedWorkDone();
+        return submitted;
+      },
+      createManagedBuffer(d){return track(runtime.createManagedBuffer(d));},
       createUniformBuffer(d){const u=runtime.createUniformBuffer(d);track(u.buffer??u);return u;}},
     tensor=(name,shape,usage=WEBGPU_BUFFER_USAGE.storage|WEBGPU_BUFFER_USAGE.copySrc|WEBGPU_BUFFER_USAGE.copyDst)=>
       createResidentTensor(managed,{name:'trellis.dinov3.serving.'+name,shape,dtype:'f32',usage},{managed:true});

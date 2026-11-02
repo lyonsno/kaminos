@@ -34,23 +34,26 @@ export function repetitionMatrices(raw,rawFrame){
 }
 export const isRepetitionCopy=node=>node?.userData?.kaminosRepetitionCopy===true;
 export function withoutRepetitionCopies(root,fn){
+ const restoreBeauty=root.userData?.kaminosBeautyLodRestore?.();
  const copies=root.children.filter(isRepetitionCopy);for(const copy of copies)root.remove(copy);
- try{return fn();}finally{for(const copy of copies)root.add(copy);}
+ try{return fn();}finally{for(const copy of copies)root.add(copy);restoreBeauty?.();}
 }
 function cloneBorrowed(node){
  if(node.isSkinnedMesh||node.isInstancedMesh||node.morphTargetInfluences?.length)throw Error('Repetition requires a static mesh');
  const copy=node.isMesh?new Mesh(node.geometry,node.material):new Group();
  copy.name=node.name;copy.position.copy(node.position);copy.quaternion.copy(node.quaternion);copy.scale.copy(node.scale);copy.matrix.copy(node.matrix);copy.matrixAutoUpdate=node.matrixAutoUpdate;copy.visible=node.visible;copy.layers.mask=node.layers.mask;copy.castShadow=node.castShadow;copy.receiveShadow=node.receiveShadow;copy.renderOrder=node.renderOrder;copy.frustumCulled=node.frustumCulled;
- for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData.kaminosEditorHelper&&!child.userData.kaminosEditorOnly)copy.add(cloneBorrowed(child));
+ for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData.kaminosBeautyLodProxy&&!child.userData.kaminosEditorHelper&&!child.userData.kaminosEditorOnly)copy.add(cloneBorrowed(child));
  return copy;
 }
 export function createRepetitionView(){
  const states=new WeakMap();
  function clear(root){for(const copy of root.children.filter(isRepetitionCopy))root.remove(copy);states.delete(root);}
  function sync(root,settings,frame,{outer=[new Matrix4()]}={}){
+  const restoreBeauty=root.userData?.kaminosBeautyLodRestore?.();
+  try{
   const own=repetitionMatrices(settings,frame),matrices=outer.flatMap(group=>own.map(m=>group.clone().multiply(m))),count=matrices.length-1;
   if(!count){clear(root);return 0;}
-  const signature=[];function inspect(node){if(isRepetitionCopy(node))return;signature.push(node.uuid,node.geometry?.uuid,Array.isArray(node.material)?node.material.map(m=>m.uuid):node.material?.uuid,...node.children.filter(n=>!isRepetitionCopy(n)).map(n=>n.uuid));for(const child of node.children)if(!isRepetitionCopy(child))inspect(child);}inspect(root);
+  const signature=[];function inspect(node){if(isRepetitionCopy(node)||node.userData?.kaminosBeautyLodProxy)return;signature.push(node.uuid,node.geometry?.uuid,Array.isArray(node.material)?node.material.map(m=>m.uuid):node.material?.uuid,...node.children.filter(n=>!isRepetitionCopy(n)&&!n.userData?.kaminosBeautyLodProxy).map(n=>n.uuid));for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData?.kaminosBeautyLodProxy)inspect(child);}inspect(root);
   const key=JSON.stringify(signature);let state=states.get(root);
   if(!state||state.key!==key){clear(root);state={key,copies:[]};states.set(root,state);}
   while(state.copies.length>count)state.copies.pop().removeFromParent();
@@ -58,6 +61,7 @@ export function createRepetitionView(){
   root.updateWorldMatrix(true,false);const world=root.matrixWorld.clone(),inverse=world.clone().invert();
   for(let i=0;i<count;i++){const copy=state.copies[i];copy.matrix.copy(inverse).multiply(matrices[i+1]).multiply(world);copy.matrixWorldNeedsUpdate=true;}
   return count;
+  }finally{restoreBeauty?.();}
  }
  return {sync,clear};
 }
