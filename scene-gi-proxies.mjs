@@ -25,11 +25,11 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,digest=digestHex}){
   // versions come from one sequence that never restarts, so a request from before a release, a clear or a newer
   // selection can never pass as current; owned is the proxy each root holds, apart from the handle snapshots.
-  const handles=new Map(),versions=new Map(),owned=new Map();let sequence=0;
+  const handles=new Map(),versions=new Map(),owned=new Map(),releaseListeners=new Set();let sequence=0;
   // GI passes that read these proxies declare themselves; with none, a proxy setting changes nothing on screen.
   const consumers=new Map();let consumerSeq=0;
   // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
-  const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);};
+  const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);for(const fn of releaseListeners)fn(root);};
   function describe(root){
     const object=root.userData?.kaminosSceneObject,assetSha=shaOf(object?.source),surfels=surfelRootIn(root);
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
@@ -55,12 +55,25 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       if(selection.faces!=null)query.set('faces',String(selection.faces));
       if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
       const set=await fetchJson(`/api/mesh-lods?${query}`);
-      const levels=(set.levels??[]).map(l=>({sha:l.sha256,faces:l.faces,closed:l.closed??null}));
-      if(!set.choice)return settle({...base,levels,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
+      const allLevels=set.levels??[];
+      const levels=allLevels.filter(l=>!l.mergeFactor&&l.route!=='trellis-surfels+hero-normals').map(l=>({
+        sha:l.sha256,faces:l.faces,closed:l.closed??null,
+        ...(l.source?{source:l.source}:{}),
+        ...(l.textureSize!=null?{textureSize:l.textureSize}:{}),
+        ...(l.error?{error:l.error}:{}),
+        ...(l.normalMap?{normalMap:l.normalMap}:{}),
+      }));
+      const surfelLevels=allLevels.filter(l=>l.mergeFactor!=null||l.route==='trellis-surfels+hero-normals').map(l=>({
+        sha:l.sha256,mergeFactor:l.mergeFactor,count:l.count??null,route:l.route,
+        ...(l.source?{source:l.source}:{}),
+        ...(l.error?{error:l.error}:{}),
+      }));
+      const extra=surfelLevels.length?{surfelLevels}:{};
+      if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
       const choice=set.choice,bytes=await fetchBytes(choice.source);
       if(await digest(bytes)!==choice.sha256)throw Error('GI proxy content does not match its sha');
       const proxyRoot=await parseGlb(bytes);proxyRoot.matrixAutoUpdate=false;proxyRoot.updateMatrix?.();
-      return settle({...base,levels,state:'loaded',proxyRoot,
+      return settle({...base,levels,...extra,state:'loaded',proxyRoot,
         effective:{sha:choice.sha256,faces:choice.faces,withinBudget:set.withinBudget??null},
         error:choice.error?{reference:choice.error.reference,units:'fraction of the hero bounding-box diagonal',relative:choice.error.relative}:null});
     }catch(error){return settle({...base,state:'failed',failure:String(error?.message||error)});}
@@ -71,6 +84,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
     release(root){drop(root);},
+    onRelease(fn){if(typeof fn!=='function')throw Error('onRelease requires a callback');releaseListeners.add(fn);return ()=>releaseListeners.delete(fn);},
     registerConsumer(name){if(typeof name!=='string'||!name)throw Error('A GI proxy consumer needs a name');const key=++consumerSeq;consumers.set(key,name);return ()=>{consumers.delete(key);};},
     consumers:()=>[...consumers.values()],
     // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.

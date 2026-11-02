@@ -49,12 +49,15 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     },
     withCapture(fn,{smokeVisibility=false}={}){
       if(disposed)throw Error('fire caster consumer disposed');if(active)return fn();
+      const beautyRestores=[];
+      scene.traverse(n=>{if(typeof n.userData?.kaminosBeautyLodRestore==='function')beautyRestores.push(n.userData.kaminosBeautyLodRestore());});
+      try{
       scene.updateMatrixWorld(true);
       const candidates=[],reg=proxies();
       const visit=node=>{
         if(!node.visible)return;
         if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
-        const handle=reg?.handleFor?.(node);
+        const handle=reg?.handleFor?.(node)??reg?.get?.(node);
         if(handle?.state==='loaded'&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}
         const recipe=burnerRecipeOf(node);
         if(recipe){candidates.push({root:node,kind:'annular-burner',recipe});return;}
@@ -121,6 +124,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       }
       if(!smokeVisibility)for(const [k,inst]of instances)if(!seenRoots.has(k)){disposeInstance(inst);instances.delete(k);}
       return fn();}finally{for(const [root,visible]of hidden)root.visible=visible;for(const {wrapper}of instances.values())wrapper.removeFromParent();active=false;}
+      }finally{for(let i=beautyRestores.length-1;i>=0;i--)beautyRestores[i]?.();}
     },
     debugState:()=>({level,requested,error,...state,asset:KILN_CASTERS[level]??null,source:KILN_CASTER_SOURCE,scope:'point-shadow-captures-only'}),
     dispose(){if(disposed)return;disposed=true;syncConsumer(false);generation++;clear();for(const a of assets.values())release(a);assets.clear();},

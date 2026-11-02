@@ -3370,6 +3370,7 @@ import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
+import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, screenPixelError, selectFootprintTier } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
@@ -4099,6 +4100,23 @@ let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
 const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
+let sceneBeautyLods = null;
+window.kaminosSceneLodBudget = {
+  read: () => sceneBeautyLods?.read() ?? null,
+  setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; window._kaminosDirty?.(); return res; },
+  state: () => sceneBeautyLods?.state() ?? null,
+  update: () => sceneBeautyLods?.update(camera, {
+    viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
+    pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
+      ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
+      : null,
+  }) ?? null,
+  whenIdle: () => sceneBeautyLods?.whenIdle() ?? Promise.resolve(),
+  allocateBeauty: allocateSceneBeautyLods,
+  allocateShadow: allocateShadowCasterLods,
+  screenPixelError,
+  selectFootprintTier,
+};
 window.kaminosGiProxies = {
   handleFor: root => sceneGiProxies.get(root),
   // A GI pass that reads proxies registers here (returns its release); the Render section reports when none does.
@@ -11672,7 +11690,7 @@ async function initScene() {
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
   sceneComponents=createSceneComponentEdit({selected:()=>workingScene.selection.ids.length===1?workingScene.selection.activeId:null,cancel:()=>scenePlacementTools.finish(false),refresh:()=>{const entry=selectedPlacementEntry();currentMesh=entry?.object??null;if(currentMesh)attachViewportGizmo(currentMesh);else transformControls.detach();updateTransformInspector();markDirty();}});
   polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,ownerComponents:sceneComponents,
-    objectFor:id=>{const record=workingScene.objects.find(item=>item.id===id);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
+    objectFor:id=>{const record=workingScene.objects.find(item=>item.id===id);if(record?.object)sceneBeautyLods?.restoreHero?.(record.object);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
     overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection});
@@ -11836,9 +11854,23 @@ async function initScene() {
     // current inputs; do not submit retired medium resources or unlit fill.
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
-    updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    sceneBeautyLods ??= createSceneBeautyLodController({
+      THREE,
+      scene,
+      giProxies: sceneGiProxies,
+      surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+      parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+      onUpdate: () => window._kaminosDirty?.(),
+    });
+    sceneBeautyLods.update(camera, {
+      viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
+      pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
+        ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
+        : null,
+    });
+    updateSelectionFeedback();
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {

@@ -200,7 +200,7 @@ export function dedupCorners({positions, normals, uvs}) {
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
 export async function prepareLowTiers({mesh, materialFields, bakeMaterial, closestPoint, finish, unwrapMesh, WorkerClass,
-  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
+  targets = [5000, 1000, 500], textureSizeFor = target => target >= 25000 ? 1024 : target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
   const tiers = [];
   for (const target of targets) {
