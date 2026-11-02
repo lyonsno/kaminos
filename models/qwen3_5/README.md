@@ -113,3 +113,64 @@ and reused/evaluated input counts make repeated interactions useful performance
 observations. Saved conversations include admission receipts. This example
 owns a standalone device; embedding apps can supply their existing model/control
 through the same chat API.
+
+### Use the model outside Kaminos
+
+Export an ordinary ES module for your application. The exported model uses the
+installed inference kit for generation, sampling and shared attention kernels;
+it does not require a Kaminos server or a separate Qwen npm package. Weights and
+application GPU admission remain owned by the consuming application.
+
+For this branch, install a locally packed kit: the new generation export is not
+part of the previously published 0.1.60 package.
+
+```sh
+# From this checkout; choose an existing directory for the tarball.
+npm pack ./webgpu-inference-kit --pack-destination /path/to/artifacts
+node models/qwen3_5/export-browser.mjs --out /path/to/app/model
+cd /path/to/app
+npm install /path/to/artifacts/kaminos-webgpu-inference-kit-0.1.60.tgz
+```
+
+An application bundler resolves the package imports normally. With plain browser
+modules, map `@kaminos/webgpu-inference-kit/core` and
+`@kaminos/webgpu-inference-kit/generation` to the installed package's
+`src/core.js` and `src/generation.js` using an import map.
+
+```js
+import {createWebGpuInferenceControl} from '@kaminos/webgpu-inference-kit/core';
+import {Qwen35TextModel, QwenTokenizer, createQwenTextChat} from './model/qwen-text.js';
+
+// device is the application's WebGPU device. manifest and tokenizerJson are
+// the verified model package's weights.json and tokenizer.json.
+const control = createWebGpuInferenceControl({queue: device.queue});
+const model = new Qwen35TextModel(device, manifest, {
+  control, singleTokenKernel: 'quad', batchDecode: true,
+  decodeAttention: 'single-query',
+});
+await model.load(modelUrl);
+const capacity = Math.min(model.config.maxPositions,
+  Math.floor(model.bindingBytes / (model.config.kvHeads * model.config.headDim * 4)));
+const chat = createQwenTextChat({model, control, capacity,
+  tokenizer: new QwenTokenizer(tokenizerJson), systemPrompt: 'Help develop visual ideas.'});
+try {
+  const reply = await chat.send({text: 'Describe a tiny brass robot.', onText: (_, full) => render(full)});
+  await chat.reset({systemPrompt: 'Answer conversationally and briefly.'});
+  // The next send uses the new instruction; the model weights stay loaded.
+} finally {
+  await chat.dispose();
+  await model.destroy();
+  await control.close();
+}
+```
+
+The exporter writes `qwen-text.js`, an import/size/digest report, and license
+notices for the code and reused Klein components. It contains no model weights;
+the checkpoint's own license still applies to those weights. The export report
+records failure if bundling or dependency validation fails. The outside-app test
+packs and installs the kit into a fresh directory and imports the model there.
+
+In the chat page the system instruction stays editable while weights are loaded.
+Click **New conversation** to apply it; successful reset clears transcript and
+hybrid cache. Saved turns retain the instruction that was effective for each
+turn. Editing the field alone does not rewrite an ongoing conversation.

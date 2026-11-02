@@ -15,3 +15,13 @@ test('chat retains exact generated tokens and includes turn terminator on follow
  assert.match(String.fromCodePoint(...f.calls[1].slice(2)),/user\nmake it blue/);
  await chat.reset(); assert.equal(chat.snapshot().turns.length,0); await chat.dispose();
 });
+test('new system instruction resets conversation state without reloading model weights',async()=>{
+ const f=fixture(),chat=chatApi.createQwenTextChat({model:f.model,tokenizer:token,capacity:2048,systemPrompt:'Old instruction.'});
+ await chat.send({text:'hello',maxNewTokens:1});
+ await chat.reset({systemPrompt:'New instruction.'});
+ assert.equal(chat.snapshot().systemPrompt,'New instruction.');assert.equal(chat.snapshot().turns.length,0);
+ const r=await chat.send({text:'hello again',maxNewTokens:1});assert.equal(r.usage.reusedInputTokens,0);
+ assert.match(String.fromCodePoint(...f.calls.at(-1)),/system\nNew instruction\./);
+ await assert.rejects(chat.reset({systemPrompt:42}),/systemPrompt/);assert.equal(chat.snapshot().turns.length,1);
+ await chat.dispose();await assert.rejects(chat.reset(),/closed/);
+});

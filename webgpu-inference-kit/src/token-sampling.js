@@ -19,7 +19,8 @@ export function sampleToken(logits, {
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   let best = -1, maximum = -Infinity;
-  const candidates = [];
+  // Greedy needs only the best score; do not allocate a vocabulary-sized list.
+  const candidates = temperature === 0 ? null : [];
   for (let id = 0; id < logits.length; id++) {
     let score = logits[id];
     if (typeof score !== 'number' || Number.isNaN(score) || score === Infinity) throw new TypeError(`invalid logits at token ${id}`);
@@ -31,7 +32,7 @@ export function sampleToken(logits, {
     }
     if (!Number.isFinite(score)) throw new RangeError('sampling penalties overflowed logits');
     if (score > maximum) { maximum = score; best = id; }
-    candidates.push({ id, score, weight: 0 });
+    candidates?.push({ id, score, weight: 0 });
   }
   if (best < 0) throw new RangeError('logits contain no selectable token');
   if (temperature === 0) return best;

@@ -62,7 +62,14 @@ export function createQwenTextChat({ model, tokenizer, capacity, systemPrompt = 
     } finally { busy = false; }
   }
   return { send,
-    async reset() { if (busy) throw new Error('chat is busy'); await session.reset(); transcript=[]; turns=[]; },
+    async reset({systemPrompt: nextSystemPrompt = systemPrompt} = {}) {
+      if (closed) throw new Error('chat is closed');
+      if (busy) throw new Error('chat is busy');
+      if (typeof nextSystemPrompt !== 'string') throw new TypeError('systemPrompt must be a string');
+      busy=true;
+      try { await session.reset(); systemPrompt=nextSystemPrompt; transcript=[]; turns=[]; }
+      finally { busy=false; }
+    },
     async dispose() { closed=true; await session.dispose(); },
-    snapshot: () => ({ ...session.snapshot(), busy, closed, tokenIds:[...transcript], turns:structuredClone(turns) }) };
+    snapshot: () => ({ ...session.snapshot(), busy, closed, systemPrompt, tokenIds:[...transcript], turns:structuredClone(turns) }) };
 }
