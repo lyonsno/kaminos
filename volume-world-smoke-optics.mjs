@@ -14,7 +14,7 @@ export function worldSmokeOverlayGeometry(s) {
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
 ${THERMAL_MOMENTS_WGSL}
-struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32> }
+struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32>, atlas:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
 @group(0) @binding(35) var middleOptical:texture_3d<f32>;
@@ -53,7 +53,9 @@ fn middleSmokeWeight(p:vec3<f32>)->f32{
  return smoothstep(0.0,2.0*worldRender.middleLoPitch.w,min(d.x,min(d.y,d.z)));
 }
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- let far=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);
+ var far:EmissiveMaterial;
+ if(worldRender.atlas.x>.5){far=worldResidentMaterial(p,smokeVisible,fireVisible);}
+ else{far=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);}
  let weight=middleSmokeWeight(p);if(weight<=0.0){return far;}
  let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
  return EmissiveMaterial(mix(far.emission,middle.emission,weight),mix(far.absorption,middle.absorption,weight),mix(far.scattering,middle.scattering,weight));

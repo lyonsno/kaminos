@@ -242,6 +242,7 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
     }catch(e){if(!destroyed)error=e.message;if(readback===staging)readback=null;}finally{if(mapped)staging.unmap();if(destroyed||readback!==staging)staging.destroy();reading=false;}});
    }
   },
+  renderResources(){return storage?{gas:storage.fields[current],nodes:storage.meta,work:lists.all,capacity:storage.capacity,nodeCount:lastPlan.nodes.length,leafCount:lastPlan.leaves.length,revision,steps}:null;},
   coverageDemand(){
    const m=coverageMeasurement;
    if(!m||error)return {boxes:[],status:error?'measurement-error':'awaiting-measurement',error};

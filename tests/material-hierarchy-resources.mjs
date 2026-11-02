@@ -86,3 +86,17 @@ test('coverage demand reuses measured leaves with matching geometry and no extra
   f.release();await flush();
  }finally{f.release();f.hierarchy.destroy();await flush();}
 });
+
+test('camera receives current resident leaves without replacing conservative dense export',async()=>{
+ const f=fixture({budget:8,maxDetail:2});try{
+  assert.equal(typeof f.hierarchy.renderResources,'function','camera needs resident leaf resources');
+  assert.equal(f.hierarchy.renderResources(),null,'uninitialized hierarchy cannot pretend to be renderable');
+  f.step();await flush();f.step();await flush();
+  const r=f.hierarchy.renderResources(), state=f.hierarchy.read();
+  assert.equal(r.nodeCount,state.allocatedBricks);assert.equal(r.revision,state.revision);
+  assert.equal(r.steps,state.steps);assert.ok(r.nodes&&r.gas&&r.work);
+  assert.equal(r.capacity,state.capacity);assert.ok(r.nodeCount>state.leafBricks);
+  assert.equal(f.passes.filter(p=>p.label==='exportBricks').length,2,'dense conservative export remains in place');
+  const old=r.gas;f.step();assert.notEqual(f.hierarchy.renderResources().gas,old,'camera follows current ping-pong');
+ }finally{f.hierarchy.destroy();await flush();}
+});

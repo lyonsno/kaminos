@@ -426,6 +426,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid,lastBridge,lastBridgeGas,lastBridgeOptical;
   const values=new Float32Array(88);let priorFineBounds=Array(8).fill(0);
   return {optical,flowTexture,gasTexture,exportFields,plan,anchor,
+    renderResources(){const hierarchy=adaptive?.renderResources();return {plan,steps,gas:hierarchy?.gas??materials[m],hierarchy};},
     remapResources(){return {plan,anchor,gas:materials[m],velocity:flows[v]};},
     materialResources(){return {buffers:materials,optical,index:m,gasByteLength:plan.materialCells*32};},
     seedFine(encoder,{dims,transform,staggered,fluid,reaction}){

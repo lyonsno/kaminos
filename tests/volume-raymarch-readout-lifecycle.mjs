@@ -21,6 +21,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
   let receipt={...state.rayStepTelemetry},visible=true;
   const rayStepTelemetry={ensure(w,h,requested,options){const active=options.supported&&options.activate!==false;receipt={requested,active,reason:options.reason};visible=active;return false;},read:()=>receipt};
   const encoder={finish:()=>({})},context=vm.createContext({
+    pendingDomainRemap:null,encodeDomainRemap:noop,
     state,rayStepTelemetry,debugOpticalStepping:{mode:'numerical',tolerance:.001},controlsSnapshot:{lookFreeze:1,density:1,fire:1,rayStepTelemetry:true},
     productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
     emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',rebuildFluidBindGroups:noop,

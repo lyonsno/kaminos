@@ -26,7 +26,7 @@ export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
-  const wrongExterior=config.value>=4 ? !exterior : exterior;
+  const wrongExterior=config.value>=4 && !exterior;
   if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {
     if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
     return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,

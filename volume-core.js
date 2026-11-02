@@ -1,3 +1,4 @@
+import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
 import {checkedWorldFrame} from './volume-world-frame.mjs';
 import {validateAllocation} from './volume-material-hierarchy.mjs';
@@ -6432,6 +6433,7 @@ override RAY_STEP_STATS: bool = false;
 ${HISTORY_ALLOCATION_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${WORLD_SMOKE_OPTICS_WGSL}
+${WORLD_RENDER_WGSL}
 ${DISPLAY_RECONSTRUCTION_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
@@ -8017,8 +8019,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let jitter = select(dtBase * rayPhase, 0.0, guided);
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
-  let opticalStepping = OPTICAL_STEP_MODE > 0u && OPTICAL_STEP_MODE < 4u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5 && !worldActive;
-  var opticalStep = opticalStepInitPhased(max(startT, sceneDepthStartT), endT, dtBase, select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
+  let opticalStepping = OPTICAL_STEP_MODE > 0u && OPTICAL_STEP_MODE < 4u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5;
+  var opticalStep = opticalStepInitPhased(max(startT, sceneDepthStartT), endT, select(dtBase,(endT-max(startT,sceneDepthStartT))/steps,worldActive), select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   if (physicalColorMode > 0.5) { color = vec3<f32>(0.0); }
@@ -8067,7 +8069,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
       let priority = clamp(u.occupancy_controls.z, 0.0, 1.0);
-      if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
+      if (OPTICAL_STEP_MODE == 2u && !worldActive && priority > 0.0 && opticalStep.mask <= 1u) {
         let remaining = opticalStep.end - opticalStep.cursor;
         let horizon = min(remaining, dtBase * 8.0);
         let guide = flameGuideSegment(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon);
@@ -8112,15 +8114,21 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       }
       if(!guided && nearHit.y>nearHit.x && t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t;}
       let scatteredSource=medium.scattering * incidentAt(p);
+      if(opticalStepping){
+        opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
+        color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;continue;
+      }
       if(guided){recordRayGuidance(p,medium.emission+scatteredSource,sigma,trans,ds);}
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
+    var preparedFine:EmissiveMaterial;
+    if(displayReconstructionActive()){preparedFine=sampleDisplayMaterial(p,1.0);}
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
-    if (displayReconstructionActive() && (opticalStepping || guided)) {
+    if (displayReconstructionActive()) {
       directSupport = 1.0;
     } else if (LEAN_EMISSIVE_RAYMARCH) {
       neighborhood = sampleRaymarchNeighborhood(p);
@@ -8139,7 +8147,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       continue;
     }
     var reconstructed: FlowReconstructionSample;
-    if (displayReconstructionActive() && (opticalStepping || guided)) {
+    if (displayReconstructionActive()) {
       // The prepared field contains the optical coefficients consumed below.
       // Guided fixed-count and optical stepping consume the prepared coefficients directly.
     } else if (flowKernelReconstructionActive) {
@@ -8175,8 +8183,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp(worldToCell(p), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
-    let curlDebug = curlMagnitudeAtCell(sampleCell);
-    let divDebug = abs(divergenceAtCell(sampleCell));
+    var curlDebug=0.0;var divDebug=0.0;
+    if(!LEAN_EMISSIVE_RAYMARCH || (shellInspectMode>7.5 && !displayReconstructionActive())){
+      curlDebug=curlMagnitudeAtCell(sampleCell);divDebug=abs(divergenceAtCell(sampleCell));
+    }
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
     let density = ((smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w);
@@ -8198,8 +8208,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       * smoothstep(0.54, 1.18, flameRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + flameTransitionWisps * absorptionGain * 0.34;
-    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
+    var interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let fineSegmentEnd = select(endT, min(endT, nearHit.y), worldActive);
+    if(displayReconstructionActive()){
+      interest=clamp(max(preparedFine.absorption+preparedFine.scattering,length(preparedFine.emission))*(2.0/f32(GRID)),0.0,1.6);
+    }
     let localDt = select(min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, fineSegmentEnd - t)),guidedRay.width,guided);
     let rayStepOpacity = localDt * 3.65;
     let transportedCurtainStructure = clamp(
@@ -8311,7 +8324,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     var boundaryCandidate = 0.0;
     var boundaryMaterialSupport = 0.0;
     var boundaryFireColor = vec3<f32>(0.0);
-    if (boundarySurfaceMode > 0.5) {
+    if (boundarySurfaceMode > 0.5 && (!LEAN_EMISSIVE_RAYMARCH || !displayReconstructionActive())) {
       let boundarySupportWeights = vec4<f32>(shellThermalGain, shellReactionGain, shellFrontGain, shellEdgeGain);
       let boundaryCellStep = 2.0 / f32(GRID);
       let boundaryDx = vec3<f32>(boundaryCellStep, 0.0, 0.0);
@@ -8989,7 +9002,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       var medium: EmissiveMaterial;
       if (displayReconstructionActive()) {
-        medium = sampleDisplayMaterial(p, visibleSmokeAuthority);
+        medium = EmissiveMaterial(preparedFine.emission,preparedFine.absorption*visibleSmokeAuthority,preparedFine.scattering*visibleSmokeAuthority);
       } else {
         medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       }
@@ -11693,7 +11706,7 @@ export function createKaminosVolumePrototype({
     intermediateFlow?.destroy();intermediateSolidProducer?.destroy();
     intermediateFlow=null;intermediateSolidProducer=null;intermediateKey=null;
   }
-  let worldOpticalFallback = null, worldRenderUniform = null;
+  let worldOpticalFallback = null, worldRenderUniform = null, worldRenderField = null;
   let worldSmokeOverlay = 'off';
   let adaptiveMaterialOptions = controlsSnapshot.adaptiveMaterial?validateAllocation(controlsSnapshot.adaptiveMaterial):null, adaptiveMaterialError = null;
   // All fluid bind groups include the optical texture, including compute passes
@@ -13054,6 +13067,7 @@ export function createKaminosVolumePrototype({
         { binding: 39, resource: { buffer: rayAllocationHistory.buffer } },
         { binding: 37, resource: { buffer: rayAllocationHistory.uniform } },
         { binding: 38, resource: displayReconstruction.view },
+        { binding: 40, resource: worldRenderField.view },
       ],
     });
   }
@@ -14740,6 +14754,7 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
+    worldRenderField?.destroy();worldRenderField=createWorldRenderField(device,shader,uniformBuffer);
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, () => reactantTextures);
     displayReconstruction = createDisplayReconstruction(device, shader, uniformBuffer, () => ({fluid:fluidBuffers,reactant:reactantTextures}));
     emissiveSeedProducer = null;
@@ -14971,7 +14986,7 @@ export function createKaminosVolumePrototype({
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     worldOpticalFallback=device.createTexture({label:'disabled world smoke',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
-    worldRenderUniform=device.createBuffer({label:'world smoke render geometry',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    worldRenderUniform=device.createBuffer({label:'world smoke render geometry',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([worldSmokeOverlay==='contributions'?1:0,0,0,0]));
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
@@ -15205,6 +15220,7 @@ export function createKaminosVolumePrototype({
         { binding: 37, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 33, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'2d-array'} },
         { binding: 38, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
+        { binding: 40, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -21124,6 +21140,10 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
+    state.worldRenderField=worldRenderField.read();
+    device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,0,0,0]));
+    if(worldRenderChanged)rebuildFluidBindGroups();
     if (displayReconstruction?.encode(encoder,currentFluid,
       [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],options.displayTimestampWrites)) {
       state.displayReconstruction = {...state.displayReconstruction,...displayReconstruction.read(),builtThisDraw:true};
@@ -29191,6 +29211,7 @@ export function createKaminosVolumePrototype({
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
       rayStartNoiseTexture?.destroy();
+      worldRenderField?.destroy();worldRenderField=null;
       worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
       rayAllocationHistory?.dispose();
       ordinarySceneDepthFallback?.destroy();

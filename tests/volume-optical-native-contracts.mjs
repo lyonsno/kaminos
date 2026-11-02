@@ -106,3 +106,10 @@ test('adaptivity describes the selected algorithm without overwriting legacy tun
   }
   assert.throws(()=>policy('missing',.5),/unknown optical stepping mode/);
 });
+
+test('numerical and fixed optical integration cover the combined World without fallback',()=>{
+ for(const mode of ['numerical','fixed','fixed-dense']){
+  const resolved=resolveOpticalStepping(opticalSteppingConfig({mode}),{emissive:true,exterior:true,explicit:true});
+  assert.equal(resolved.mode,mode);assert.equal(resolved.reason,null);
+ }
+});
