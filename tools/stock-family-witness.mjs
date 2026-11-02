@@ -63,6 +63,8 @@ try{
   await invoke('select',{id:'bend'});await page.evaluate(()=>window.kaminosFrameSelected());await pixels();await page.screenshot({path:path.join(args.out,'after-removal.png')});
   await page.evaluate(async()=>{while(window.kaminosSceneEdits.state().undoCount)await window.kaminosSceneEdits.undo();});
   assert.equal(await page.evaluate(()=>window.stockUnrelated.value),0);
+  report.phase='grouped-close';await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),recipe);
+  await page.evaluate(async()=>{const family=await window.kaminosWorkbenchExperiments.read(),ids=family.variants.slice(0,2).map(v=>v.objectId);window.kaminosSelection.set(ids,ids[0]);window.kaminosSelection.group('Owned stock group');window.kaminosSelection.transform({position:[0,.4,0]});await window.kaminosWorkbenchExperiments.close();while(window.kaminosSceneEdits.state().undoCount)await window.kaminosSceneEdits.undo();});
   report.phase='source-refusal';const bad=structuredClone(recipe);bad.source.sha256='0'.repeat(64);
   report.badSource=await page.evaluate(async recipe=>{try{await window.kaminosWorkbenchExperiments.open('stock-family',{recipe});return null;}catch(e){return e.message;}},bad);
   assert.match(report.badSource,/digest mismatch/);await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
