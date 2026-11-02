@@ -5,6 +5,7 @@ export {
   FLASH_ATTENTION_PARAMS_WORDS,
   createWebGpuFlashAttentionShader,
   createWebGpuTiledFlashAttentionShader,
+  createWebGpuSingleQueryAttentionShader,
   flashAttentionDispatch,
   flashAttentionParams,
   flashAttentionStridedParams,
