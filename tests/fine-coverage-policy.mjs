@@ -74,3 +74,12 @@ test('coverage controls are additive domain settings in both scene and basin doc
  const doc=JSON.parse(JSON.stringify(buildSceneDocument({objects:[],composition,fireSettings:settings})));
  assert.deepEqual(planSceneRestore(doc).fireSettings,settings);
 });
+test('World source supply remains a placement target after its overlap with Fine reaches zero',()=>{
+ // Native WebGPU consumer02, b7c2e8a36: source moved to world y=2.84.
+ // The solver reports zero Fine flux but continuing full World supply.
+ const e={admitted:true,centreCells:[16,73.44,16],direction:[0,1,0],radiusCells:8,thickness:3.99,fluxRequested:0,fullFlux:116.97773272001578};
+ const sources=sourceCoverageBounds({sources:[{id:'flame-emitter',worldSource:true,config:{effective:e}}]},{dims:[32,64,32],frame:{translate:[0,-.75,0],scale:1}});
+ assert.equal(sources.length,1,'World supply cannot disappear from the placement objective outside Fine');
+ assert.equal(sources[0].weight,e.fullFlux);
+ assert.ok(chooseFineCoverage(input(sources,{frame:{translate:[0,-.75,0],scale:1}}),opts).target.translate[1]>1);
+});

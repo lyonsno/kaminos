@@ -63,7 +63,7 @@ export function chooseFineCoverage(input,options={}) {
 export function sourceCoverageBounds(packed,{dims,frame}) {
  const pitch=2*frame.scale/dims[0],out=[];
  for(const source of packed?.sources??[]){const e=source.config?.effective;if(!e||e.admitted===false)continue;
-  const weight=Math.max(0,e.fluxRequested??e.fullFlux??0);if(!weight)continue;
+  const weight=Math.max(0,source.worldSource?(e.fullFlux??e.fluxRequested??0):(e.fluxRequested??0));if(!weight)continue;
   const normal=e.direction??[0,1,0],len=Math.hypot(...normal)||1,c=e.centreCells.map((x,a)=>(2*x/dims[0]-1)*frame.scale+frame.translate[a]);
   const radius=Math.max(0,e.radiusCells??0),half=Math.max(0,e.thickness??1)/2;
   const reach=normal.map(x=>{const n=x/len;return (radius*Math.sqrt(Math.max(0,1-n*n))+half*Math.abs(n)+1.5)*pitch;});
