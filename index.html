@@ -254,7 +254,7 @@ canvas { display: block; }
 #scene-edit-hud[data-active="true"] { color:#f4c176; }
 #scene-edit-hud[data-alert="true"] { max-width:min(560px,calc(100% - 32px)); overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; padding:5px 8px; border:1px solid rgba(169,120,55,.9); background:rgba(26,20,14,.94); color:#ffd18e; }
 
-#env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
+#env-loading { position: absolute; bottom: 12px; left: 12px; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
@@ -2910,6 +2910,7 @@ import {createViewportRecording} from './viewport-recording.mjs';
 import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
+import { createEnvironmentLoader } from './scene-environment-loader.mjs';
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
 import {inspectAuthoredWaterCompatibility,planAuthoredWaterBounds,planAuthoredWaterMatch,resolveAuthoredWaterSampling,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
@@ -3692,7 +3693,7 @@ let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
-let environmentLoadToken = 0;
+
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
@@ -10508,31 +10509,36 @@ const HDR_ENVS = {
   studio: {
     label: 'Studio',
     url: './assets/hdr/studio_small_09_1k.hdr',
+    previewUrl: './assets/hdr/studio_small_09_128.hdr',
     // Noah's interim viewing defaults (2026-10-07), until the new lighting lands.
     exposure: 1.1,
     intensity: 0.7,
   },
   sunset: {
     label: 'Sunset',
-    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr',
+    url: './assets/hdr/kloofendal_48d_partly_cloudy_puresky_1k.hdr',
+    previewUrl: './assets/hdr/kloofendal_48d_partly_cloudy_puresky_128.hdr',
     exposure: 1.2,
     intensity: 1.0,
   },
   warehouse: {
     label: 'Warehouse',
-    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/empty_warehouse_01_1k.hdr',
+    url: './assets/hdr/empty_warehouse_01_1k.hdr',
+    previewUrl: './assets/hdr/empty_warehouse_01_128.hdr',
     exposure: 1.4,
     intensity: 1.2,
   },
   courtyard: {
     label: 'Courtyard',
-    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/royal_esplanade_1k.hdr',
+    url: './assets/hdr/royal_esplanade_1k.hdr',
+    previewUrl: './assets/hdr/royal_esplanade_128.hdr',
     exposure: 1.0,
     intensity: 1.0,
   },
   night: {
     label: 'Night',
-    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonlit_golf_1k.hdr',
+    url: './assets/hdr/moonlit_golf_1k.hdr',
+    previewUrl: './assets/hdr/moonlit_golf_128.hdr',
     exposure: 2.0,
     intensity: 1.5,
   },
@@ -10549,7 +10555,26 @@ let sceneAOControls=null;
 sceneAO.subscribe(applySceneAOParameters);
 const sceneEnvironment=createSceneEnvironmentState({presets:HDR_ENVS});
 sceneEnvironment.subscribe(applyEnvironmentParameters);
-const envCache = {};
+let neutralEnvironmentMap;
+const environmentLoader = createEnvironmentLoader({
+  presets: HDR_ENVS,
+  async load(url) {
+    const texture = await new RGBELoader().loadAsync(url);
+    try { return pmremGenerator.fromEquirectangular(texture).texture; }
+    finally { texture.dispose(); }
+  },
+  apply: map => applyEnvMap(map, readEnvironmentRecipe().intensity),
+  fallback: () => neutralEnvironmentMap ||= createProceduralEnv(),
+  changed(state) {
+    const label = HDR_ENVS[state.name]?.label || 'Environment';
+    const el = document.getElementById('env-loading');
+    el.style.display = state.quality === 'full' ? 'none' : 'block';
+    el.textContent = state.pending
+      ? `${label} · ${state.quality === 'preview' ? 'preview lighting · full detail loading…' : 'lighting loading…'}`
+      : `${label} · ${state.quality === 'preview' ? 'preview lighting' : 'neutral fallback'} · full map unavailable; select environment to retry`;
+  },
+});
+window.kaminosEnvironmentLoading = {state: environmentLoader.read, whenSettled: environmentLoader.whenSettled};
 
 // --- Three.js Setup ---
 let samHostContext = null;
@@ -12285,51 +12310,14 @@ function createProceduralEnv() {
 }
 
 async function loadEnvironment(name, { remember = true } = {}) {
-  const env = HDR_ENVS[name];
-  if (!env) return;
-  const token = ++environmentLoadToken;
+  if (!HDR_ENVS[name]) return;
   sceneEnvironment.select(name);
-
-  // Update button states
   document.querySelectorAll('.env-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.env === name);
   });
-
-  const recipe = readEnvironmentRecipe();
-  const loadingEl = document.getElementById('env-loading');
-  loadingEl.style.display = 'none';
-
-  if (envCache[name]) {
-    applyEnvMap(envCache[name], recipe.intensity);
-    return;
-  }
-
-  if (!env.url) {
-    // Procedural environment
-    const tex = createProceduralEnv();
-    envCache[name] = tex;
-    applyEnvMap(tex, recipe.intensity);
-    return;
-  }
-
-  loadingEl.style.display = 'block';
-  loadingEl.textContent = `Loading ${env.label} HDR...`;
-
-  try {
-    const tex = await new Promise((resolve, reject) => {
-      new RGBELoader().load(env.url, resolve, undefined, reject);
-    });
-    const envMap = pmremGenerator.fromEquirectangular(tex).texture;
-    tex.dispose();
-    envCache[name] = envMap;
-    if (token === environmentLoadToken) applyEnvMap(envMap, readEnvironmentRecipe().intensity);
-  } catch (e) {
-    console.warn(`Failed to load HDR ${name}, using procedural fallback:`, e);
-    const tex = createProceduralEnv();
-    envCache[name] = tex;
-    if (token === environmentLoadToken) applyEnvMap(tex, readEnvironmentRecipe().intensity);
-  }
-  if (token === environmentLoadToken) loadingEl.style.display = 'none';
+  // Selection/authored state is immediate; GPU resources arrive progressively.
+  // No scene, object, or editor admission depends on an HDR request settling.
+  return environmentLoader.select(name);
 }
 
 function applyEnvMap(envMap, intensity) {
@@ -26704,7 +26692,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 
   setInfo('Loading scene...');
 
-  // Load environment first
+  // Restore the lighting recipe now; maps load independently of scene objects.
   if (data.environment) {
     const env = data.environment;
     const name = env.name || 'studio';
@@ -26962,6 +26950,8 @@ sceneInitialization.then(async () => {
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
   if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
   const initialEnvironment = restoreSettings();
+  const admittedEnvironment = (await startupSceneAdmission).data?.environment;
+  if (admittedEnvironment) sceneEnvironment.restoreDocument(admittedEnvironment);
   // An image plane is unlit and can appear while the HDR environment downloads.
   // Combined asset routes keep their ordered replacement behavior below.
   const startupAssetParams = new URLSearchParams(window.location.search);
@@ -26969,7 +26959,7 @@ sceneInitialization.then(async () => {
   const earlyImageLoaded = startupImageRoute && !startupAssetParams.get('load')
     && !kaminosMeshAssetRouteFromSearch(startupAssetParams) && !kaminosSplatAssetRouteFromSearch(startupAssetParams)
     ? loadKaminosImageAssetRoute(startupImageRoute) : null;
-  const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
+  const environmentLoaded = loadEnvironment(admittedEnvironment?.name || initialEnvironment || 'studio').then(async () => {
     if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
       const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
       await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
@@ -27071,6 +27061,9 @@ sceneInitialization.then(async () => {
   // An owner enters the effective authored starting scene, never one that a
   // pending restore will clear. Ordinary routes keep environment-only startup.
   const ownerSceneReady = startupRestoreRequested ? startupSceneRestore : environmentLoaded;
+  // Let the restored scene paint before the full HDR fetch and PMREM work.
+  const releaseEnvironmentDetail = () => requestAnimationFrame(() => setTimeout(() => environmentLoader.releaseFull(), 0));
+  ownerSceneReady.then(releaseEnvironmentDetail, releaseEnvironmentDetail);
   ownerSceneReady.then(result => {
     if(result===startupSceneRedirect){rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));return;}
     resolveWorkbenchViewerReady();

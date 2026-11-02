@@ -5674,10 +5674,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
-        # Every response is uncacheable: a module kept heuristically fresh by
-        # the browser across a plain reload has already broken the operator
-        # route once (scene-placement-tools.mjs without addHistoryScope).
-        self.send_header("Cache-Control", "no-store")
+        # Code/API freshness is mandatory. Bundled HDR bytes may be retained,
+        # but revalidate on every use so a newer asset at the same URL wins.
+        # SimpleHTTPRequestHandler supplies Last-Modified and conditional 304s.
+        path = urlparse(self.path).path
+        bundled_hdr = path.startswith("/assets/hdr/") and path.endswith(".hdr")
+        self.send_header("Cache-Control", "public, no-cache" if bundled_hdr else "no-store")
         super().end_headers()
 
     def log_message(self, format, *args):
