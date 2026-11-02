@@ -1361,16 +1361,26 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   // while holding the kiln at 25,000 faces:
   const medCam = makeCamera({z: 5.5, fov: 50});
   const kilnFoot = selectFootprintTier(realKilnLevels, {heroFaces: 287407, worldBox: unitBox, worldDiag: diag, camera: medCam, viewportHeight: 1080, maxPixelError: 1.5});
-  const beamFoot = selectFootprintTier(realBeamLevels, {heroFaces: 239716, worldBox: unitBox, worldDiag: diag, camera: medCam, viewportHeight: 1080, maxPixelError: 1.5});
+  const beamFoot = selectFootprintTier(realBeamLevels, {heroFaces: 97670, worldBox: unitBox, worldDiag: diag, camera: medCam, viewportHeight: 1080, maxPixelError: 1.5});
   assert.equal(beamFoot.selected.faces, 500, 'at z = 5.5m, beam coarsens all the way to 500 faces by screen footprint');
   assert.equal(kilnFoot.selected.faces, 25000, 'at z = 5.5m, kiln stays at 25,000 faces by screen footprint');
 
-  // At close range (z = 1.8m) where both want high detail, a tight 10,500-face budget demotes the beam all the way to 500 faces
-  // while keeping the kiln at 10,000 faces (never dropping the kiln into its pipe-losing 1,000 or 500 tiers):
+  // At close range (z = 1.8m) where both want high detail:
+  // 1) Under a 320,000-face budget (combined hero faces = 287,407 + 97,670 = 385,077 > 320,000),
+  //    allocateSceneBeautyLods demotes the 97,670-face beam to 25,000 faces while keeping the 287,407-face kiln on hero!
   const closeCam = makeCamera({z: 1.8, fov: 50});
+  const heroStepBudget = allocateSceneBeautyLods([
+    {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
+    {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
+  ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 320000});
+  assert.equal(heroStepBudget.withinBudget, true);
+  assert.equal(heroStepBudget.allocations.beam.faces, 25000, '320k budget demotes the 97,670-face beam to 25,000 faces first');
+  assert.equal(heroStepBudget.allocations.kiln.tier, 'hero', '320k budget keeps the 287,407-face kiln on hero');
+
+  // 2) Under a tight 10,500-face budget, it demotes the beam all the way to 500 faces while keeping the kiln at 10,000 faces:
   const realBudget = allocateSceneBeautyLods([
     {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
-    {id: 'beam', heroFaces: 239716, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
+    {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
   ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 10500});
   assert.equal(realBudget.withinBudget, true);
   assert.equal(realBudget.allocations.beam.faces, 500, 'beam is demoted all the way to 500 faces first');
@@ -1379,6 +1389,97 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
     effectiveRelativeGeomError(realKilnLevels[3]) > 10 * effectiveRelativeGeomError(realBeamLevels[3]),
     'effectiveRelativeGeomError at 1,000 faces is >10x higher on the kiln than on the beam',
   );
+
+  // 3. Review M1, M2, M3, N1 verification:
+  // M1: Monotone deltaError across the texel floor (a lossier object just above the texel floor is NEVER cheaper to demote than a cleaner object just below it)
+  const cleanBelowTexelFloor = {
+    sha: sha('clean-below-floor'),
+    faces: 25000,
+    textureSize: 256,
+    normalMap: {texelSize: 0.004}, // texelWeight * texelSize = 0.0020
+    error: {diagonal: 1, relative: {p95: 0.0018, max: 0.0018}, sourceToLevel: {p95: 0.0018, max: 0.0018}, levelToSource: {p95: 0.0018, max: 0.0018}},
+  };
+  const lossyAboveTexelFloor = {
+    sha: sha('lossy-above-floor'),
+    faces: 25000,
+    textureSize: 256,
+    normalMap: {texelSize: 0.004}, // texelWeight * texelSize = 0.0020
+    error: {diagonal: 1, relative: {p95: 0.0021, max: 0.0021}, sourceToLevel: {p95: 0.0021, max: 0.0021}, levelToSource: {p95: 0.0021, max: 0.0021}},
+  };
+  const m1HeroDemote = allocateSceneBeautyLods([
+    {id: 'cleanA', heroFaces: 100000, levels: [cleanBelowTexelFloor], worldBox: unitBox, worldDiag: diag},
+    {id: 'lossyB', heroFaces: 100000, levels: [lossyAboveTexelFloor], worldBox: unitBox, worldDiag: diag},
+  ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 125000});
+  assert.equal(m1HeroDemote.allocations.cleanA.faces, 25000, 'M1: cleaner object below texel floor is demoted before lossier object above texel floor');
+  assert.equal(m1HeroDemote.allocations.lossyB.tier, 'hero', 'M1: lossier object above texel floor stays on hero');
+
+  // M2: Cumulative rung monotonicity across non-monotone baked ladders (realBeamLevels has 1k texelSize 0.006745 > 500 texelSize 0.004555)
+  for (let i = 1; i < beamFoot.rungs.length; i++) {
+    assert.ok(
+      beamFoot.rungs[i].pixelError >= beamFoot.rungs[i - 1].pixelError,
+      `M2: rung[${i}].pixelError (${beamFoot.rungs[i].pixelError}) must be >= rung[${i - 1}].pixelError (${beamFoot.rungs[i - 1].pixelError})`,
+    );
+    assert.ok(
+      beamFoot.rungs[i].geomPixelError >= beamFoot.rungs[i - 1].geomPixelError,
+      `M2: rung[${i}].geomPixelError (${beamFoot.rungs[i].geomPixelError}) must be >= rung[${i - 1}].geomPixelError (${beamFoot.rungs[i - 1].geomPixelError})`,
+    );
+  }
+  const beamAt4p2 = selectFootprintTier(realBeamLevels, {
+    heroFaces: 97670,
+    worldBox: unitBox,
+    worldDiag: diag,
+    camera: makeCamera({z: 4.2, fov: 50}),
+    viewportHeight: 1080,
+    maxPixelError: 1.5,
+  });
+  assert.equal(beamAt4p2.selected.faces, 5000, 'M2: at z = 4.2m where 1,000-face tier exceeds 1.5px, selectFootprintTier selects 5,000 faces (never skipping to 500 faces)');
+  const beamAt2p1 = selectFootprintTier(realBeamLevels, {
+    heroFaces: 97670,
+    worldBox: unitBox,
+    worldDiag: diag,
+    camera: makeCamera({z: 2.1, fov: 50}),
+    viewportHeight: 1080,
+    maxPixelError: 1.5,
+  });
+  assert.equal(beamAt2p1.selected.faces, 25000, 'M2/M3: at z = 2.1m, selectFootprintTier reaches the 25,000-face tier on realBeamLevels once surface-crack inflation is removed');
+  const beamGeomAt1p6 = selectFootprintTier(realBeamLevels, {
+    heroFaces: 97670,
+    worldBox: unitBox,
+    worldDiag: diag,
+    camera: makeCamera({z: 1.6, fov: 50}),
+    viewportHeight: 1080,
+    maxPixelError: 1.5,
+    texelWeight: 0,
+  });
+  assert.equal(beamGeomAt1p6.selected.faces, 10000, 'M2: geometric footprint reaches the 10,000-face tier on realBeamLevels');
+
+  // M3: Surface crack on realBeamLevels[0] (25k) does not inflate effectiveRelativeGeomError, while pipe drop on realKilnLevels[3] (1k) does
+  assert.ok(
+    Math.abs(effectiveRelativeGeomError(realBeamLevels[0]) - 0.000292) < 1e-6,
+    `M3: beam 25k effectiveRelativeGeomError (${effectiveRelativeGeomError(realBeamLevels[0])}) is not inflated by its 0.56% surface crack`,
+  );
+  assert.ok(
+    effectiveRelativeGeomError(realKilnLevels[3]) > 0.038,
+    `M3: kiln 1k effectiveRelativeGeomError (${effectiveRelativeGeomError(realKilnLevels[3])}) penalizes the dropped pipe beyond p95`,
+  );
+  for (let i = 1; i < realKilnLevels.length; i++) {
+    assert.ok(
+      effectiveRelativeGeomError(realKilnLevels[i]) > effectiveRelativeGeomError(realKilnLevels[i - 1]),
+      `M3: kiln effectiveRelativeGeomError is strictly increasing from tier ${i - 1} to ${i}`,
+    );
+  }
+
+  // N1: sourceToLevel.max === 0 does not fall back to relative.max, and tailWeight / creviceAllowance forward through callers
+  assert.equal(
+    effectiveRelativeGeomError({
+      error: {diagonal: 1, relative: {p95: 0, max: 0.5}, sourceToLevel: {p95: 0, max: 0}, levelToSource: {p95: 0, max: 0}},
+    }),
+    0,
+    'N1: sourceToLevel.max === 0 evaluates to 0 without falling back to relative.max',
+  );
+  const kilnPxZeroTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080, tailWeight: 0});
+  const kilnPxDefaultTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080});
+  assert.ok(kilnPxDefaultTail > kilnPxZeroTail, 'N1: tailWeight forwards through screenPixelError');
 });
 
 

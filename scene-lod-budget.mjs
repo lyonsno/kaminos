@@ -128,21 +128,26 @@ function boxIntersectsFrustum(box, planes) {
   return true;
 }
 
-export function effectiveRelativeGeomError(tier, {stat = 'p95', tailWeight = 0.3} = {}) {
+export function effectiveRelativeGeomError(tier, {stat = 'p95', tailWeight = 0.5, creviceAllowance = 0.005} = {}) {
   const err = tier?.error;
   if (!err) return 0;
   const baseRel = Number(err.relative?.[stat] ?? err.relative?.p95 ?? 0) || 0;
   if (stat !== 'p95') return baseRel;
   const diag = Number(err.diagonal) > 0 ? Number(err.diagonal) : 0;
-  const srcP95 = diag > 0 && Number(err.sourceToLevel?.p95) > 0 ? Number(err.sourceToLevel.p95) / diag : 0;
-  const srcMax =
-    diag > 0 && Number(err.sourceToLevel?.max) > 0
-      ? Number(err.sourceToLevel.max) / diag
-      : (Number(err.relative?.max) || 0);
-  return Math.max(baseRel, srcP95, (Number(tailWeight) || 0) * srcMax);
+  if (!(diag > 0)) return baseRel;
+  const rawSrcP95 = Number(err.sourceToLevel?.p95);
+  const srcP95 = Number.isFinite(rawSrcP95) && rawSrcP95 >= 0 ? rawSrcP95 / diag : 0;
+  const rawSrcMax = Number(err.sourceToLevel?.max);
+  const rawLvlMax = Number(err.levelToSource?.max);
+  const srcMax = Number.isFinite(rawSrcMax) && rawSrcMax >= 0 ? rawSrcMax / diag : 0;
+  const lvlMax = Number.isFinite(rawLvlMax) && rawLvlMax >= 0 ? rawLvlMax / diag : 0;
+  const allowance = Number.isFinite(Number(creviceAllowance)) ? Math.max(0, Number(creviceAllowance)) : 0.005;
+  const weight = Number.isFinite(Number(tailWeight)) ? Math.max(0, Number(tailWeight)) : 0.5;
+  const droppedFeatureExcess = Math.max(0, srcMax - lvlMax - allowance);
+  return Math.max(baseRel, srcP95) + weight * droppedFeatureExcess;
 }
 
-export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1, tailWeight = 0.3} = {}) {
+export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1, tailWeight = 0.5, creviceAllowance = 0.005} = {}) {
   if (!tier || tier === 'hero' || tier.isHero) return 0;
   const camPos = cameraWorldPosition(camera);
   const near = Math.max(camera?.near ?? 0.01, 1e-6);
@@ -158,7 +163,7 @@ export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHei
   }
   const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
   const stretch = Math.max(1, Number(texelStretch) || 1);
-  const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight});
+  const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight, creviceAllowance});
   const texelSize = (Number(tier.normalMap?.texelSize ?? (tier.textureSize > 0 ? 1 / tier.textureSize : 0)) || 0) * stretch;
   const combinedRel = Math.max(geomRel, texelWeight * texelSize);
   return diag * pixelsPerUnit * combinedRel;
@@ -174,6 +179,8 @@ export function selectFootprintTier(levels = [], {
   stat = 'p95',
   texelWeight = 0.5,
   texelStretch = 1,
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
   activeTier = null,
   hysteresis = 0.15,
 } = {}) {
@@ -189,12 +196,20 @@ export function selectFootprintTier(levels = [], {
         sha: id,
         isHero: false,
         faces: l.faces,
-        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight, texelStretch}),
-        geomPixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight: 0, texelStretch}),
+        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight, texelStretch, tailWeight, creviceAllowance}),
+        geomPixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight: 0, texelStretch, tailWeight, creviceAllowance}),
         level: l,
       };
     }),
   ];
+  for (let i = 1; i < rungs.length; i++) {
+    if (rungs[i].geomPixelError < rungs[i - 1].geomPixelError) {
+      rungs[i].geomPixelError = rungs[i - 1].geomPixelError;
+    }
+    if (rungs[i].pixelError < rungs[i - 1].pixelError) {
+      rungs[i].pixelError = rungs[i - 1].pixelError;
+    }
+  }
   const prevIdx = activeTier != null ? rungs.findIndex(r => r.id === activeTier) : -1;
   const coarsenLimit = maxPixelError * (1 - hysteresis);
   const refineLimit = maxPixelError * (1 + hysteresis);
@@ -238,6 +253,8 @@ export function allocateSceneBeautyLods(candidates = [], {
   faceBudget = Infinity,
   stat = 'p95',
   texelWeight = 0.5,
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
   hysteresis = 0.15,
 } = {}) {
   const planes = extractFrustumPlanes(camera);
@@ -285,6 +302,8 @@ export function allocateSceneBeautyLods(candidates = [], {
       stat,
       texelWeight,
       texelStretch: c.texelStretch ?? 1,
+      tailWeight,
+      creviceAllowance,
       activeTier: c.footprintTier ?? c.activeTier,
       hysteresis,
     });
@@ -324,8 +343,7 @@ export function allocateSceneBeautyLods(candidates = [], {
       if (deltaFaces <= 0) continue;
       const deltaTexOrGeom = Math.max(0, next.pixelError - cur.pixelError);
       const deltaGeomOnly = Math.max(0, (next.geomPixelError ?? 0) - (cur.geomPixelError ?? 0));
-      const deltaError =
-        deltaTexOrGeom + ((next.geomPixelError ?? 0) < next.pixelError - 1e-9 ? deltaGeomOnly : 0);
+      const deltaError = deltaTexOrGeom + deltaGeomOnly;
       const stickiness = cur.id === item.activeTier ? 1 + hysteresis : 1;
       const cost = (deltaError / deltaFaces) * stickiness;
       if (cost < bestCost - 1e-12 || (Math.abs(cost - bestCost) <= 1e-12 && deltaFaces > bestDeltaFaces)) {
@@ -370,6 +388,8 @@ export function allocateShadowCasterLods(candidates = [], {
   shadowFaceBudget = Infinity,
   maxSolidAngleError = 0.015,
   stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
   hysteresis = 0.15,
 } = {}) {
   const items = candidates.map((c, order) => {
@@ -383,9 +403,14 @@ export function allocateShadowCasterLods(candidates = [], {
       .sort((a, b) => b.faces - a.faces);
     const rungs = sorted.map(l => {
       const id = l.sha ?? l.sha256;
-      const rel = effectiveRelativeGeomError(l, {stat});
+      const rel = effectiveRelativeGeomError(l, {stat, tailWeight, creviceAllowance});
       return {id, sha: id, faces: l.faces, solidAngleError: (diag * rel) / dFlame, level: l};
     });
+    for (let i = 1; i < rungs.length; i++) {
+      if (rungs[i].solidAngleError < rungs[i - 1].solidAngleError) {
+        rungs[i].solidAngleError = rungs[i - 1].solidAngleError;
+      }
+    }
     const instanceCount = Math.max(1, c.instanceCount ?? (boxes.length || 1));
     if (!rungs.length) {
       return {
@@ -794,6 +819,8 @@ export function createSceneBeautyLodController({
     maxPixelError: 1.5,
     faceBudget: 150000,
     texelWeight: 0.5,
+    tailWeight: 0.5,
+    creviceAllowance: 0.005,
     hysteresis: 0.15,
     stat: 'p95',
     ...initialSettings,
@@ -1015,6 +1042,8 @@ export function createSceneBeautyLodController({
       if (Number.isFinite(patch.maxPixelError) && patch.maxPixelError > 0) config.maxPixelError = patch.maxPixelError;
       if (patch.faceBudget === Infinity || (Number.isFinite(patch.faceBudget) && patch.faceBudget > 0)) config.faceBudget = patch.faceBudget;
       if (Number.isFinite(patch.texelWeight) && patch.texelWeight >= 0) config.texelWeight = patch.texelWeight;
+      if (Number.isFinite(patch.tailWeight) && patch.tailWeight >= 0) config.tailWeight = patch.tailWeight;
+      if (Number.isFinite(patch.creviceAllowance) && patch.creviceAllowance >= 0) config.creviceAllowance = patch.creviceAllowance;
       if (Number.isFinite(patch.hysteresis) && patch.hysteresis >= 0 && patch.hysteresis < 1) config.hysteresis = patch.hysteresis;
       if (['p95', 'max', 'mean'].includes(patch.stat)) config.stat = patch.stat;
       if (!config.enabled) {
@@ -1145,6 +1174,8 @@ export function createSceneBeautyLodController({
         faceBudget: config.faceBudget,
         stat: config.stat,
         texelWeight: config.texelWeight,
+        tailWeight: config.tailWeight,
+        creviceAllowance: config.creviceAllowance,
         hysteresis: config.hysteresis,
       });
 

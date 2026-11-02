@@ -368,7 +368,7 @@ test('remeshing a curved kiln with a side pipe vs. a cracked planar beam at the 
   const beamErr = measureGeometricError({
     source: crackedBeam,
     level: remeshedBeam,
-    closestSource: closestCube,
+    closestSource: closestOnTriangleMesh(crackedBeam),
     closestLevel: closestOnTriangleMesh(remeshedBeam),
     samples: 8000,
     seed: 5,
