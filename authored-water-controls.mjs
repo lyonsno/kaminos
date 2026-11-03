@@ -28,9 +28,9 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   <label>Kinematic viscosity · m²/s<input class="transform-input" type="number" min="0" step="0.0001" data-kinematic-viscosity></label><p class="hint" data-active-kinematic-viscosity></p>
   <p class="hint">Enable to edit these values; enabling keeps their current values. With this off, the original grid coefficients stay fixed and these world values change with resolution. Numerical damping can still change. Material edits apply at the next simulation update, preserving the water. Restart to compare from the beginning.</p>
   <p role="alert" data-material-error></p>
-  <h3>Simulation bounds</h3><label><input type="checkbox" data-container>Contain water at the bounds</label><div data-bounds></div>
-  <p class="hint">Water collides with scene planes, spheres and bowls. Without boundary walls, water that leaves this box is removed.</p>
-  <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation; it starts water again from the sources.</p><p class="hint" data-running-bounds></p><p role="alert" data-simulation-error></p>
+  <h3>Water box</h3><label><input type="checkbox" data-container>Invisible container walls</label><div data-bounds></div>
+  <p class="hint">The scene outline shows this box, rounded outward to simulation cells. Walls on: it contains water. Walls off: water leaving the box is removed. Restart applies box edits; until then the outline shows the running box. Scene colliders work in either mode.</p>
+  <p class="hint">Settings save automatically. Restart applies allocation and bounds changes to the simulation.</p><p class="hint" data-running-bounds></p><p role="alert" data-simulation-error></p>
   <div data-compatibility><p class="hint" data-compatibility-status role="status"></p><p class="hint" data-match-plan></p><button class="btn" data-match>Match initial volumes to selected setup</button><p role="alert" data-match-error></p></div>
  </div>
  <div data-selected hidden>

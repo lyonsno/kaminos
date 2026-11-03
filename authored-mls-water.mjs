@@ -37,6 +37,15 @@ export function authoredMlsInlets(records,epochMs=Date.now(),generation=1,cellSi
  return validateMlsPacket({packet_id:`authored-mls-${generation}`,route_identity:MLS_ROUTE,authority:{simulation_safe:true},timestamp_ms:epochMs,emitters});
 }
 
+// Shared by allocation and the editor guide; computes no particle buffers.
+export function authoredMlsDomain(records,options={}){
+ const sampling=resolveAuthoredWaterSampling(records,options),cellSize=authoredMlsCellSize(records,options);
+ const bounds=sampling.container??sampling.worldBounds;
+ const solver={cellSize,gridSize:bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cellSize)+5),
+  originWorld:bounds.min.map(v=>v-2*cellSize),boundaryWalls:sampling.container!==null};
+ return {...solver,boundsWorld:mlsConfig(solver).bounds};
+}
+
 export function authoredMlsSetup(records,options={}){
  authoredMlsInlets(records.filter(r=>r.localLiquidEmitter?.mode!=='finite_drop'));
  const finite=records.filter(r=>r.localLiquidEmitter.mode==='finite_drop');
@@ -49,12 +58,9 @@ export function authoredMlsSetup(records,options={}){
  const capacity=initialCount+(hasFlow?(options.particleCount??12000):0);
  // One unit of mass per sample, at the producer's rest density of three samples
 // per grid cell. Deriving cell width from authored spacing preserves that law.
- const cell=authoredMlsCellSize(records,options);
- const bounds=structuredClone(sampling.container??sampling.worldBounds);
- const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
- const originWorld=bounds.min.map(v=>v-2*cell);
- const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
-  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
+ const {boundsWorld,...domain}=authoredMlsDomain(records,options),cell=domain.cellSize;
+ const solver={particleCount:capacity||options.particleCount||12000,...domain,
+  obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);
