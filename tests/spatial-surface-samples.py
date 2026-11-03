@@ -52,5 +52,26 @@ class SpatialSamples(unittest.TestCase):
         for count, area in [(0,2),(1000,2),(32,0)]:
             with self.assertRaises(ValueError):spatial.spatial_samples(rows,count,area)
 
+    def test_planar_candidates_are_enclosed_without_rank1_needle_collapse(self):
+        rng=np.random.default_rng(42)
+        xy=rng.uniform(0,1,(1024,2))
+        rows=np.zeros((1024,12),'<f4')
+        rows[:,:2]=xy; rows[:,5]=1; rows[:,6:12]=[.5,.5,.5,0,.5,1]
+        ids, f, _=spatial.spatial_samples(rows,256,1.)
+        pos=rows[ids,:2]
+        u=f[:,:2]; su=f[:,3]*3
+        v=f[:,4:6]; sv=f[:,7]*3
+        aspect=np.maximum(su,sv)/np.minimum(su,sv)
+        self.assertLess(float(np.max(aspect)),4.,'Two-point planar cells must not collapse into rank-1 needles')
+        d_cand=xy[:,None,:]-pos[None,:,:]
+        r2_cand=np.min((np.sum(d_cand*u[None,:,:],axis=2)/su[None,:])**2 +
+                       (np.sum(d_cand*v[None,:,:],axis=2)/sv[None,:])**2,axis=1)
+        self.assertEqual(float(np.mean(r2_cand<=1.)),1.,'Every candidate point must lie inside a 3-sigma footprint')
+        probes=rng.uniform(0,1,(2048,2))
+        d_probe=probes[:,None,:]-pos[None,:,:]
+        r2_probe=np.min((np.sum(d_probe*u[None,:,:],axis=2)/su[None,:])**2 +
+                        (np.sum(d_probe*v[None,:,:],axis=2)/sv[None,:])**2,axis=1)
+        self.assertGreaterEqual(float(np.mean(r2_probe<=1.)),.97)
+
 
 if __name__=='__main__':unittest.main()
