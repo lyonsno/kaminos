@@ -8,17 +8,13 @@ Start with the [chat page](#persistent-text-chat-example) or [embed the model in
 
 ## Model setup
 
-Use a WebGPU-capable browser and serve your application over HTTPS or localhost. You need the retained MLX affine4/group64 BFL prompt-upsampler pack, its tokenizer, and a matching `weights.json` manifest. This port reads the packed weights directly; it does not run MLX in the browser.
-
-Prepare the source manifest without MLX:
+Use Node 20 or later for preparation and a WebGPU-capable browser over HTTPS or localhost. Download and prepare the pinned BFL prompt-upsampler package in one command:
 
 ```sh
-python3 models/qwen3_5/export-model-reference.py \
-  --model-dir /path/to/retained-pack --out /path/to/package \
-  --report /path/to/package/report.json --manifest-only
+node models/qwen3_5/prepare-model.mjs --out /path/to/app/public/models/qwen
 ```
 
-This writes metadata and hashes existing files; it does not copy or convert the model. Serve `weights.json` alongside the referenced original safetensor files, or pass separate manifest/model base URLs.
+The command downloads about 6 GB, verifies each file, and writes `weights.json` alongside the original safetensors and tokenizer. It needs no Python, MLX, Kaminos server or Greenroom installation. Packed weights are unchanged. Repeat the command to reuse verified files and repair corrupt or incomplete downloads. To reuse an existing copy, choose its directory as `--out`; no second copy is required. Download byte progress and indexing phases appear in the terminal; `prepare-report.json` records success or the failed phase. The pinned source revision and hashes are in [model-recipe.json](model-recipe.json). The checkpoint's license applies to its weights.
 
 The weight server must support exact byte ranges with HTTP 206 and Content-Range. The loader verifies tensor lengths and hashes. For an existing prepared package, skip manifest preparation.
 

@@ -1,0 +1,13 @@
+{
+  "schema": "kaminos.qwen35-model-recipe.v1",
+  "repo": "mlx-community/flux-3-image-klein-pup-4bit",
+  "revision": "34abfa0769000d6a542169b0e61a04059697467c",
+  "files": [
+    { "file": "config.json", "bytes": 3878, "sha256": "e5d0820d32f3ab431b2f85e68280960800e1852fd4337689b84479f09cae4c98" },
+    { "file": "model-00001-of-00002.safetensors", "bytes": 5349769710, "sha256": "bdb437a6e7f9d551df2fd189701e5e8f0565142fd536f9ac867630ab7ee4aacf" },
+    { "file": "model-00002-of-00002.safetensors", "bytes": 600449850, "sha256": "3d079d5a645bc032513ae99c0e88660874094cf4cb8e6adec4383947a913b877" },
+    { "file": "tokenizer.json", "bytes": 19989325, "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523" },
+    { "file": "tokenizer_config.json", "bytes": 1164, "sha256": "7488550a894dcf741616126e322ea31d66cf9457b59ec5825f4c7efdced421f8" },
+    { "file": "system_prompts.json", "bytes": 12602, "sha256": "b5da3ed8bc04ab59dbdb747930f7dbff847e868903fed8028f85ee1a4ac82fb4" }
+  ]
+}
