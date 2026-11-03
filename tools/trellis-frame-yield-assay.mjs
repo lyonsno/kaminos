@@ -4,7 +4,17 @@ import fs from 'node:fs/promises';import path from 'node:path';import {spawn,exe
 const cfg=JSON.parse(await fs.readFile(process.argv[2],'utf8')),out=cfg.output;
 await fs.mkdir(out,{recursive:true});const report={schema:'trellis2.frame-yield-assay.v0',status:'failed',phase:'admission',config:cfg,command:process.argv};
 const persist=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');
-const sha=b=>createHash('sha256').update(b).digest('hex');const sleep=ms=>new Promise(r=>setTimeout(r,ms));let browser,server,cdp;
+const sha=b=>createHash('sha256').update(b).digest('hex');const sleep=ms=>new Promise(r=>setTimeout(r,ms));let browser,server,cdp,browserLife,serverLife;
+function observeChild(child){
+ let failure=null,closed=false;
+ const ended=new Promise(resolve=>{
+  child.once('error',error=>{failure=error;if(!child.pid){closed=true;resolve();}});
+  child.once('close',()=>{closed=true;resolve();});
+ });
+ return {child,ended,get closed(){return closed;},check(){if(failure)throw failure;if(closed)throw Error('owned child exited');},
+  snapshot(){return {status:failure&&!child.pid?'failed-to-spawn':closed?'exited':'running',pid:child.pid??null,exitCode:child.exitCode,signal:child.signalCode,...(failure?{error:{name:failure.name,message:failure.message}}:{})};}};
+}
+async function stopChild(life){if(life&&!life.closed){life.child.kill('SIGTERM');await life.ended;}}
 async function connect(url) {
   const socket = new WebSocket(url), pending = new Map(), listeners = new Map();
   let nextId = 0, failure;
@@ -58,13 +68,15 @@ try{
  const launch=fluidBrowserLaunch({executable:cfg.chrome,debugPort:cfg.debugPort,userDataDir:path.join(out,'browser-profile'),width:1280,height:900});
  report.browserLaunch={...launch,args:['--headless=new','--enable-unsafe-webgpu',...launch.args]};report.phase='server';await persist();
  server=spawn(cfg.python,[path.join(cfg.repoRoot,'tools/trellis-frame-yield-server.py'),process.argv[2]],{cwd:cfg.repoRoot,stdio:['ignore','pipe','pipe']});
+ serverLife=observeChild(server);
  const sl=await fs.open(path.join(out,'server.log'),'w');server.stdout.on('data',d=>sl.write(d));server.stderr.on('data',d=>sl.write(d));
  const url='http://127.0.0.1:'+cfg.port;
- while(true){if(server.exitCode!==null)throw Error('owned server exited');try{const r=await fetch(url+'/api/runtime-config');if(r.ok){report.runtimeConfig=await r.json();break;}}catch{}await sleep(125);}
+ while(true){serverLife.check();try{const r=await fetch(url+'/api/runtime-config');if(r.ok){report.runtimeConfig=await r.json();break;}}catch{}await sleep(125);}
  if(report.runtimeConfig.source?.repoRoot!==cfg.repoRoot||report.runtimeConfig.source.commit!==cfg.expectedCommit||report.runtimeConfig.source.dirty)throw Error('wrong served app source');
  report.phase='browser';await persist();browser=spawn(launch.executable,report.browserLaunch.args,{stdio:['ignore','ignore','pipe']});report.browserPid=browser.pid;
+ browserLife=observeChild(browser);
  const bl=await fs.open(path.join(out,'browser.log'),'w');browser.stderr.on('data',d=>bl.write(d));
- while(true){if(browser.exitCode!==null)throw Error('owned browser exited');try{const r=await fetch('http://127.0.0.1:'+cfg.debugPort+'/json/version');if(r.ok){report.browserVersion=await r.json();break;}}catch{}await sleep(125);}
+ while(true){browserLife.check();try{const r=await fetch('http://127.0.0.1:'+cfg.debugPort+'/json/version');if(r.ok){report.browserVersion=await r.json();break;}}catch{}await sleep(125);}
  const pages=await(await fetch('http://127.0.0.1:'+cfg.debugPort+'/json/list')).json();cdp=await connect(pages.find(p=>p.type==='page').webSocketDebuggerUrl);
  const evaluate=async expression=>{const r=await cdp.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
  await cdp.call('Page.enable');const loaded=cdp.once('Page.loadEventFired');
@@ -83,8 +95,8 @@ try{
 }catch(error){report.error={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;}
 finally{
  if(cdp){await cdp.call('Browser.close').catch(()=>{});cdp.close();}
- if(browser&&browser.exitCode===null){await Promise.race([new Promise(r=>browser.once('exit',r)),sleep(1000)]);if(browser.exitCode===null){browser.kill('SIGTERM');await new Promise(r=>browser.once('exit',r));}}
- if(server&&server.exitCode===null){server.kill('SIGTERM');await new Promise(r=>server.once('exit',r));}
- report.cleanup={ownedBrowserClosed:!browser||browser.exitCode!==null||browser.signalCode!==null,ownedServerClosed:!server||server.exitCode!==null||server.signalCode!==null};await persist();
+ if(browserLife&&!browserLife.closed)await Promise.race([browserLife.ended,sleep(1000)]);
+ await stopChild(browserLife);await stopChild(serverLife);
+ report.cleanup={ownedBrowserClosed:!browserLife||browserLife.closed,ownedServerClosed:!serverLife||serverLife.closed,browser:browserLife?.snapshot()??{status:'not-started'},server:serverLife?.snapshot()??{status:'not-started'}};await persist();
  console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error}));
 }

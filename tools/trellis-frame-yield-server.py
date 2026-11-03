@@ -23,7 +23,12 @@ class Handler(serve.KaminosHandler):
   if not route.startswith('/__frame_yield/'):return super().do_POST()
   name=route.removeprefix('/__frame_yield/')
   if not name or name[0]=='.'or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-'for c in name):self.send_error(400);return
-  raw=self.rfile.read(int(self.headers['Content-Length']));(out/name).write_bytes(raw)
+  length=self.headers.get('Content-Length')
+  if length is None:self.send_error(411,'Content-Length required');return
+  if not length.isascii()or not length.isdigit():self.send_error(400,'Invalid Content-Length');return
+  raw=self.rfile.read(int(length))
+  if len(raw)!=int(length):self.send_error(400,'Incomplete request body');return
+  (out/name).write_bytes(raw)
   receipt=json.dumps({'file':name,'byteLength':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}).encode()
   self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(receipt)));self.end_headers();self.wfile.write(receipt)
 serve.KaminosServer(('127.0.0.1',cfg['port']),Handler).serve_forever()
