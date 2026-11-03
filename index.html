@@ -4123,17 +4123,27 @@ let sceneNavigation = null;
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
 const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
 let sceneBeautyLods = null;
+const ensureSceneBeautyLods = () => (sceneBeautyLods ??= createSceneBeautyLodController({
+  THREE,
+  scene,
+  giProxies: sceneGiProxies,
+  surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+  parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+  onUpdate: () => window._kaminosDirty?.(),
+}));
 window.kaminosSceneLodBudget = {
-  read: () => sceneBeautyLods?.read() ?? null,
-  setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; window._kaminosDirty?.(); return res; },
-  state: () => sceneBeautyLods?.state() ?? null,
-  update: () => sceneBeautyLods?.update(camera, {
+  read: () => ensureSceneBeautyLods().read(),
+  setSettings: patch => { const res = ensureSceneBeautyLods().setSettings(patch); window._kaminosDirty?.(); return res; },
+  state: () => ensureSceneBeautyLods().state(),
+  update: () => ensureSceneBeautyLods().update(camera, {
     viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
     pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
       ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
       : null,
-  }) ?? null,
-  whenIdle: () => sceneBeautyLods?.whenIdle() ?? Promise.resolve(),
+  }),
+  resolveCollisionRung: (root, options) => ensureSceneBeautyLods().resolveCollisionRung(root, options),
+  prepareCollision: (roots, options) => ensureSceneBeautyLods().prepareCollision(roots, options),
+  whenIdle: () => ensureSceneBeautyLods().whenIdle(),
   allocateBeauty: allocateSceneBeautyLods,
   allocateShadow: allocateShadowCasterLods,
   screenPixelError,
@@ -11886,14 +11896,7 @@ async function initScene() {
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
-    sceneBeautyLods ??= createSceneBeautyLodController({
-      THREE,
-      scene,
-      giProxies: sceneGiProxies,
-      surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
-      parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
-      onUpdate: () => window._kaminosDirty?.(),
-    });
+    ensureSceneBeautyLods();
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -25591,7 +25594,7 @@ async function makeSceneRepetitionReal(id){
 
 async function mountAuthoredAsh(record,{activate=true,loadRequestId=null}={}) {
  const arrival=workingScene.arrival();
- const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
+ const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),lodController:ensureSceneBeautyLods(),onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId))){ash.dispose();throw Error('Ash scene load superseded');}
  try{scene.add(ash.root);authoredAsh.set(record.id,ash);registerSceneObject(ash.root,record,{activate});if(loadRequestId===null)await ash.initialize();return ash.root;}
  catch(error){if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});else{authoredAsh.delete(record.id);ash.dispose();}throw error;}

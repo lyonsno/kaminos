@@ -134,3 +134,148 @@ test('deletion during async regrid releases both old and candidate fields',async
  await object.initialize();const pending=object.regrid(.02);object.dispose();resolve(create());
  await assert.rejects(pending,/disposed/i);assert.deepEqual(patches.map(p=>p.disposed),[1,1]);
 });
+
+test('collision records isolate ash from viewport camera beauty LOD proxies',()=>{
+ const ashRoot=new Group();
+ const entryRoot=new Group();
+ const heroGeom=new BoxGeometry(1,2,1);
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ entryRoot.add(heroMesh);
+ const beautyGeom=new BoxGeometry(.5,.5,.5);
+ const beautyMesh=new Mesh(beautyGeom,new MeshBasicMaterial());
+ const wrapper=new Group();
+ wrapper.userData.kaminosBeautyLodProxy=true;
+ wrapper.add(beautyMesh);
+ const mountBeauty=()=>{
+  heroMesh.visible=false;
+  if(wrapper.parent!==entryRoot)entryRoot.add(wrapper);
+  entryRoot.userData.kaminosBeautyLodRestore=()=>{
+   heroMesh.visible=true;
+   if(wrapper.parent===entryRoot)entryRoot.remove(wrapper);
+   delete entryRoot.userData.kaminosBeautyLodRestore;
+   return mountBeauty;
+  };
+ };
+ mountBeauty();
+ const list=createAshCollisionRecords(ashRoot,()=>[{id:'kiln',type:'glb',object:entryRoot}]);
+ const out=list();
+ assert.equal(out.length,1);
+ assert.equal(out[0].object.geometry,heroGeom,'ash collision must read hero or ash-selected geometry, never camera beauty proxy');
+ assert.equal(heroMesh.visible,false,'camera beauty visibility state must be restored after collision inspection');
+ assert.equal(wrapper.parent,entryRoot,'camera beauty wrapper must remain mounted for viewport after inspection');
+ heroGeom.dispose();beautyGeom.dispose();
+});
+
+import {selectAshCollisionLod} from '../ash/scene-object.mjs';
+const kilnLevels=[
+ {faces:500,sha:'a'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.017971,max:0.135345},sourceToLevel:{p95:0.036353,max:0.273791},levelToSource:{p95:0.025811,max:0.151652}}},
+ {faces:1000,sha:'b'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.014104,max:0.135345},sourceToLevel:{p95:0.028532,max:0.273791},levelToSource:{p95:0.021121,max:0.165143}}},
+ {faces:5000,sha:'c'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.013183,max:0.089763},sourceToLevel:{p95:0.011002,max:0.171482},levelToSource:{p95:0.013183,max:0.181582}}},
+ {faces:10000,sha:'d'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.010283,max:0.075123},sourceToLevel:{p95:0.008512,max:0.138112},levelToSource:{p95:0.010283,max:0.151988}}},
+ {faces:25000,sha:'e'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.004917,max:0.066353},sourceToLevel:{p95:0.003999,max:0.134226},levelToSource:{p95:0.004917,max:0.134226}}},
+];
+const beamLevels=[
+ {faces:500,sha:'1'.repeat(64),closed:true,error:{diagonal:2.022871,relative:{p95:0.00505,max:0.023879},sourceToLevel:{p95:0.010215,max:0.036301},levelToSource:{p95:0.007909,max:0.048304}}},
+ {faces:1000,sha:'2'.repeat(64),closed:true,error:{diagonal:2.022871,relative:{p95:0.002976,max:0.017014},sourceToLevel:{p95:0.00602,max:0.034418},levelToSource:{p95:0.004521,max:0.031521}}},
+];
+test('selectAshCollisionLod chooses stunt-double tiers by cell width while rejecting pipe-dropping or topology-sealing tiers',()=>{
+ const at04=selectAshCollisionLod(kilnLevels,{cellSize:.04,worldDiag:2.023,heroFaces:368266});
+ assert.equal(at04.faces,5000,'0.04m ash selects 5000-face kiln and rejects pipe-dropping 500/1000 tiers');
+ const scaledUp=selectAshCollisionLod(kilnLevels,{cellSize:.04,worldDiag:8.0,heroFaces:368266});
+ assert.equal(scaledUp.faces,5000,'enlarging kiln keeps resident stunt-double tier instead of falling back to 368k hero');
+ const at02=selectAshCollisionLod(kilnLevels,{cellSize:.02,worldDiag:2.023,heroFaces:368266});
+ assert.equal(at02.faces,25000,'0.02m fine ash selects finer 25000-face kiln tier');
+ const beam=selectAshCollisionLod(beamLevels,{cellSize:.04,worldDiag:2.023,heroFaces:52936});
+ assert.equal(beam.faces,500,'prismatic beam selects coarsest 500-face tier');
+ const sealed=[
+  {faces:500,sha:'f'.repeat(64),closed:true,error:beamLevels[0].error},
+  {faces:5000,sha:'9'.repeat(64),closed:false,error:kilnLevels[2].error},
+ ];
+ assert.equal(selectAshCollisionLod(sealed,{cellSize:.04,worldDiag:2.023,heroFaces:100000}).faces,5000,'rejects coarse tier that seals an open mesh');
+});
+
+import * as THREE from '../lib/three.core.js';
+import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
+import {createSceneBeautyLodController} from '../scene-lod-budget.mjs';
+test('ash scene object prepares and consumes stunt-double collision rungs across initialize, repetition, vertex warp, and regrid',async()=>{
+ const heroSha='f'.repeat(64);
+ const scene=new Group();
+ const kilnRoot=new Group();
+ kilnRoot.position.set(1,0,-1);
+ kilnRoot.userData.kaminosSceneObject={id:'kiln-1',type:'glb',source:`/api/read?root=generated-meshes&path=${heroSha}.glb`};
+ const heroGeom=new BoxGeometry(1,2,1,50,50,50); // 30000 faces > 25000
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ kilnRoot.add(heroMesh);
+ const repCopy=new Group();
+ repCopy.userData.kaminosRepetitionCopy=true;
+ repCopy.position.set(2,0,0);
+ repCopy.updateMatrix();
+ kilnRoot.add(repCopy);
+ kilnRoot.userData.kaminosVertexWarp=pos=>{
+  const out=new Float32Array(pos.length);
+  for(let i=0;i<pos.length;i+=3){out[i]=pos[i]+0.25;out[i+1]=pos[i+1];out[i+2]=pos[i+2];}
+  return out;
+ };
+ kilnRoot.userData.kaminosVertexWarpRevision=1;
+ scene.add(kilnRoot);
+
+ const tierGeoms=new Map([
+  ['c'.repeat(64),new BoxGeometry(1,2,1,2,2,2)],
+  ['e'.repeat(64),new BoxGeometry(1,2,1,4,4,4)],
+ ]);
+ const levels=kilnLevels.map(l=>({...l,sha256:l.sha,source:`/api/read?root=generated-meshes&path=${l.sha}.glb`}));
+ const giProxies=createGiProxyRegistry({
+  THREE,
+  fetchJson:async()=>({levels,choice:levels[1],withinBudget:true}),
+  fetchBytes:async url=>new TextEncoder().encode(url),
+  digest:async bytes=>{const u=new TextDecoder().decode(bytes);return /([a-f0-9]{64})\.glb/.exec(u)?.[1]??'';},
+  parseGlb:async bytes=>{
+   const sha=/([a-f0-9]{64})\.glb/.exec(new TextDecoder().decode(bytes))?.[1];
+   const g=(tierGeoms.get(sha)??new BoxGeometry(1,2,1)).clone();
+   const root=new Group();root.add(new Mesh(g,new MeshBasicMaterial()));return root;
+  },
+ });
+ giProxies.select(kilnRoot,{faces:1000}); // deliberately in-flight (not awaited yet)
+ const lodController=createSceneBeautyLodController({
+  THREE,
+  scene,
+  giProxies,
+  fetchBytes:async url=>new TextEncoder().encode(url),
+  digest:async bytes=>{const u=new TextDecoder().decode(bytes);return /([a-f0-9]{64})\.glb/.exec(u)?.[1]??'';},
+  parseGlb:async bytes=>{
+   const sha=/([a-f0-9]{64})\.glb/.exec(new TextDecoder().decode(bytes))?.[1];
+   const g=(tierGeoms.get(sha)??new BoxGeometry(1,2,1)).clone();
+   const root=new Group();root.add(new Mesh(g,new MeshBasicMaterial()));return root;
+  },
+ });
+
+ const synced=[];
+ const ashObj=await createAshSceneObject({
+  record:record(),
+  readObjects:()=>[{id:'kiln-1',type:'glb',object:kilnRoot}],
+  lodController,
+  createPatch:async options=>({
+   root:new Group(),
+   syncScene(){synced.push(options.sceneRecords());},
+   deposit:async()=>{},
+   step(){},
+   read:()=>({}),
+   dispose(){},
+  }),
+ });
+ await ashObj.initialize();
+ assert.equal(synced.length,1);
+ assert.equal(synced[0].length,2,'primary placement + 1 repetition copy');
+ assert.notEqual(synced[0][0].object.geometry,heroGeom,'must use 5000-face stunt double instead of hero');
+ assert.equal(synced[0][0].object.geometry.parameters.widthSegments,2,'0.04m ash uses 5000-face tier geometry');
+ assert.equal(synced[0][0].object.geometry.userData.kaminosWarpApplied,true,'vertex warp propagated to ash collision stunt double');
+ assert.notEqual(synced[0][0].object,synced[0][1].object,'distinct proxy Mesh instances for each repetition copy');
+ assert.deepEqual(synced[0][0].object.matrixWorld.elements.slice(12,15),[-1,0,2]);
+ assert.deepEqual(synced[0][1].object.matrixWorld.elements.slice(12,15),[1,0,2]);
+
+ await ashObj.regrid(0.02);
+ assert.equal(synced.length,2);
+ assert.equal(synced[1][0].object.geometry.parameters.widthSegments,4,'0.02m regrid upgrades collision stunt double to 25000-face tier');
+ ashObj.dispose();lodController.dispose();giProxies.clear();
+});
+

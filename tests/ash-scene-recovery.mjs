@@ -28,3 +28,23 @@ for(const operation of ['move','remove'])test(`${operation} before later refusal
   assert.equal(s.field.update(s.records),false,'unchanged recovered scene is quiet');
  }finally{s.dispose();}
 });
+test('enlarging a tall obstacle past the 1D workgroup ceiling clips and bounds collision shapes without freezing or churning every drag step',()=>{
+ const s=setup();try{
+  const kiln=new Mesh(new BoxGeometry(1.4,2.0,1.4),new MeshBasicMaterial());kiln.name='Kiln';kiln.position.set(0,1,0);
+  const records=[{id:'kiln',object:kiln}];
+  for(let step=0;step<=20;step++){
+   const factor=1+step*0.4; // scales height from 2m (grid ~24) up to 18m (rawGrid ~184 > 162)
+   kiln.scale.setScalar(factor);
+   assert.doesNotThrow(()=>s.field.update(records),`scale factor ${factor} must not throw capacity failure`);
+  }
+  const state=s.field.read();
+  assert.equal(state.members.length,1);
+  assert.ok(state.members[0].grid<=128,`member grid ${state.members[0].grid} must remain bounded`);
+  assert.ok(state.shapeBuilds<=8,`expected quantized/clipped shape builds during 21-step scale drag, got ${state.shapeBuilds}`);
+  const buildsBeforeMove=state.shapeBuilds;
+  kiln.position.x=0.05;
+  s.field.update(records);
+  assert.equal(s.field.read().shapeBuilds,buildsBeforeMove,'sub-quantum translation of clipped obstacle reuses shape');
+  kiln.geometry.dispose();kiln.material.dispose();
+ }finally{s.dispose();}
+});

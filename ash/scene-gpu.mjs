@@ -51,15 +51,18 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const pipelines=Object.fromEntries(['clear','stamp'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint}})]));
  const group=(texture,uniform)=>device.createBindGroup({layout:bindLayout,entries:[{binding:0,resource:{buffer:collision}},{binding:1,resource:{buffer:headers}},{binding:2,resource:{buffer:jobs}},{binding:3,resource:texture.createView()},{binding:4,resource:{buffer:uniform}}]});
  const clearGroup=group(dummy,blank);
- const destroy=m=>{m.texture.destroy();m.uniform.destroy();};
- function geometry(mesh){
+ const destroy=m=>{m.texture.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
+ const maxBytes=Math.min(device.limits.maxStorageBufferBindingSize,device.limits.maxBufferSize);
+ const maxCells=Math.min(Math.floor((maxBytes-4)/4),device.limits.maxComputeWorkgroupsPerDimension*64);
+ const maxGrid=Math.min(128,device.limits.maxTextureDimension3D,Math.floor(Math.cbrt(Math.max(0,maxCells))));
+ function geometry(mesh,prev=null){
   const g=mesh.geometry,a=g?.getAttribute('position'),i=g?.getIndex();
   if(!a)throw Error(`Ash collision requires triangles: ${mesh.name}`);
   if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(v=>v!==0))throw Error(`Ash collision requires evaluated rigid geometry: ${mesh.name}`);
   const scale=new Vector3().setFromMatrixScale(mesh.matrixWorld),largest=Math.max(...scale.toArray().map(Math.abs));
   if(!Number.isFinite(largest)||largest<=0||Math.abs(mesh.matrixWorld.determinant())<1e-12)throw Error(`Ash collision requires an invertible transform: ${mesh.name}`);
   // Quantize the local sampling resolution so translations/rotations never
-  // rerasterize; growing scale earns a finer shape when it crosses a cell.
+  // rerasterize; growing scale earns a finer shape when it crosses a bucket.
   const version=[a,a.version??a.data?.version??0,i,i?.version??0,a.count,i?.count??0];let cached=boundsCache.get(g);
   if(!cached||version.some((v,k)=>v!==cached.version[k])){
    g.computeBoundingBox();let h=2166136261,j=2246822519;
@@ -68,42 +71,83 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    mix(a.count);for(let v=0;v<a.count;v++){mix(a.getX(v));mix(a.getY(v));mix(a.getZ(v));}mix(i?.count??0);if(i)for(let v=0;v<i.count;v++)mix(i.getX(v));
    cached={version,bounds:g.boundingBox.clone(),revision:++geometryRevision,digest:(h>>>0).toString(16)+':'+(j>>>0).toString(16)};boundsCache.set(g,cached);
   }
-  const bounds=cached.bounds,size=bounds.getSize(new Vector3());
-  const grid=Math.max(4,Math.ceil(Math.max(...size.toArray())*largest/p.cellSize-1e-8)+4),step=Math.max(...size.toArray())/(grid-4);
-  if(!(step>0))throw Error(`Ash collision has zero extent: ${mesh.name}`);
-  const center=bounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
-  const key=[g.uuid,cached.revision,grid].join(':');const identity=[cached.digest,a.count,i?.count??0,grid].join(':');
-  return {key,identity,grid,step,origin,center,bounds};
+  const fullBounds=cached.bounds,fullSize=fullBounds.getSize(new Vector3()),fullSpan=Math.max(...fullSize.toArray());
+  if(!(fullSpan>0))throw Error(`Ash collision has zero extent: ${mesh.name}`);
+  const rawGrid=Math.max(4,Math.ceil(fullSpan*largest/p.cellSize-1e-8)+4);
+  if(maxGrid<4)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${rawGrid} cubed)`);
+  if(rawGrid<=maxGrid){
+   const grid=rawGrid<=32?rawGrid:Math.min(maxGrid,Math.ceil(rawGrid/32)*32),step=fullSpan/(grid-4);
+   const center=fullBounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
+   const key=[g.uuid,cached.revision,grid].join(':'),identity=[cached.digest,a.count,i?.count??0,grid].join(':');
+   return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:fullBounds,fullBounds,clipped:false,coarseKey:null};
+  }
+  const inv=new Matrix4().copy(mesh.matrixWorld).invert();
+  const localBox=pad=>{const w=new Box3(new Vector3(p.origin[0]-pad,p.origin[1]-pad,p.origin[2]-pad),new Vector3(p.origin[0]+p.dims[0]*p.cellSize+pad,p.origin[1]+p.dims[1]*p.cellSize+pad,p.origin[2]+p.dims[2]*p.cellSize+pad)).applyMatrix4(inv);return fullBounds.clone().intersect(w);};
+  const reqBounds=localBox(2*p.cellSize);
+  if(reqBounds.isEmpty())return {empty:true,bounds:reqBounds,step:0};
+  const padBounds=localBox(8*p.cellSize);
+  const reuseBounds=prev?.clipped&&prev.revision===cached.revision&&prev.bounds.containsBox(reqBounds)&&prev.bounds.getSize(new Vector3()).length()<=padBounds.getSize(new Vector3()).length()*1.6;
+  const activeBounds=reuseBounds?prev.bounds.clone():padBounds;
+  const activeSpan=Math.max(1e-6,...activeBounds.getSize(new Vector3()).toArray());
+  const clipRaw=Math.max(4,Math.ceil(activeSpan*largest/p.cellSize-1e-8)+4);
+  const grid=clipRaw<=32?clipRaw:Math.min(maxGrid,Math.ceil(clipRaw/32)*32),step=activeSpan/(grid-4);
+  const center=activeBounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
+  const isClipped=!activeBounds.min.equals(fullBounds.min)||!activeBounds.max.equals(fullBounds.max);
+  const coarseGrid=Math.min(64,maxGrid),coarseStep=fullSpan/(coarseGrid-4),coarseCenter=fullBounds.getCenter(new Vector3()),coarseOrigin=coarseCenter.clone().addScalar(-coarseGrid*coarseStep/2);
+  const coarseKey=isClipped?[g.uuid,cached.revision,coarseGrid].join(':'):null;
+  const boxTag=isClipped?[...activeBounds.min.toArray(),...activeBounds.max.toArray()].map(v=>v.toFixed(6)).join(','):'full';
+  const key=[g.uuid,cached.revision,grid,boxTag].join(':'),identity=[cached.digest,a.count,i?.count??0,grid,boxTag].join(':');
+  return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:activeBounds,fullBounds,clipped:isClipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin};
  }
- function build(mesh,spec){
-  const {grid,step,origin,center,bounds}=spec,bytes=grid**3*4;
+ function build(mesh,spec,prev=null){
+  const {grid,step,origin,center,bounds,fullBounds,clipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin}=spec,bytes=grid**3*4;
   if(grid>device.limits.maxTextureDimension3D||bytes+4>device.limits.maxStorageBufferBindingSize||bytes+4>device.limits.maxBufferSize||Math.ceil(grid**3/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${grid} cubed)`);
-  let producer,texture,uniform;
+  let producer,coarseProducer,texture,coarseTexture=null,reusedCoarse=false,uniform;
   try{
-   producer=createGpuSceneSolidProducer(device,{grid});const proxy=new Mesh(mesh.geometry,mesh.material);proxy.updateMatrixWorld(true);
-   producer.update([{id:mesh.uuid,object:proxy}],{translate:center.toArray(),scale:grid*step/2},{grid,gridHeight:grid});
+   const proxy=new Mesh(mesh.geometry,mesh.material);proxy.updateMatrixWorld(true);
+   if(clipped){
+    if(prev?.coarseTexture&&prev.coarseKey===coarseKey){coarseTexture=prev.coarseTexture;reusedCoarse=true;}
+    else{
+     coarseProducer=createGpuSceneSolidProducer(device,{grid:coarseGrid});
+     coarseProducer.update([{id:mesh.uuid,object:proxy}],{translate:coarseCenter.toArray(),scale:coarseGrid*coarseStep/2},{grid:coarseGrid,gridHeight:coarseGrid});
+     coarseTexture=device.createTexture({label:'cached coarse ash solid '+mesh.name,size:[coarseGrid,coarseGrid,coarseGrid],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+     const ce=device.createCommandEncoder();coarseProducer.encode(ce);ce.copyTextureToTexture({texture:coarseProducer.texture},{texture:coarseTexture},[coarseGrid,coarseGrid,coarseGrid]);device.queue.submit([ce.finish()]);
+    }
+   }
+   producer=createGpuSceneSolidProducer(device,{grid});
+   const boundaryCap=clipped?{texture:coarseTexture,origin:coarseOrigin.toArray(),step:coarseStep,boundsMin:fullBounds.min.toArray(),boundsMax:fullBounds.max.toArray()}:null;
+   producer.update([{id:mesh.uuid,object:proxy}],{translate:center.toArray(),scale:grid*step/2},{grid,gridHeight:grid},{boundaryCap});
    texture=device.createTexture({label:'cached local ash solid '+mesh.name,size:[grid,grid,grid],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
    const e=device.createCommandEncoder();producer.encode(e);e.copyTextureToTexture({texture:producer.texture},{texture},[grid,grid,grid]);device.queue.submit([e.finish()]);
    uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-   builds++;return {...spec,texture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+80};
-  }catch(error){texture?.destroy();uniform?.destroy();throw error;}finally{producer?.destroy();}
+   if(reusedCoarse)prev.coarseTexture=null;
+   const coarseBytes=coarseTexture?coarseGrid**3*4:0;
+   builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+80};
+  }catch(error){texture?.destroy();if(!reusedCoarse)coarseTexture?.destroy();uniform?.destroy();throw error;}finally{coarseProducer?.destroy();producer?.destroy();}
  }
  function update(records){
   if(disposed)throw Error('Ash scene collision disposed');
   const meshes=new Map();
-  for(const {id,object,key:objectKey=id} of records){object.updateWorldMatrix(true,true);object.traverse(mesh=>{
-   if(!mesh.isMesh)return;for(let n=mesh;n;n=n.parent)if(!n.visible||n.userData?.kaminosEditorHelper||n.userData?.kaminosEditorOnly)return;
-   meshes.set(mesh.uuid,{mesh,id,objectKey});
-  });}
+  for(const {id,object,key:objectKey=id} of records){
+   const restoreBeauty=object.userData?.kaminosBeautyLodRestore?.()??null;
+   try{
+    object.updateWorldMatrix(true,true);object.traverse(mesh=>{
+     if(!mesh.isMesh)return;for(let n=mesh;n;n=n.parent)if(!n.visible||n.userData?.kaminosEditorHelper||n.userData?.kaminosEditorOnly||n.userData?.kaminosBeautyLodProxy)return;
+     meshes.set(mesh.uuid,{mesh,id,objectKey});
+    });
+   }finally{restoreBeauty?.();}
+  }
   const dirty=pendingDirty,include=box=>{for(const i of sceneTiles(p,box))dirty.add(i);};
   for(const [key,m] of cache)if(!meshes.has(key)){include(m.box);destroy(m);cache.delete(key);}
   for(const [key,{mesh,id,objectKey}] of meshes){
-   const spec=geometry(mesh);let m=cache.get(key);const matrix=mesh.matrixWorld.toArray();
+   let m=cache.get(key);const spec=geometry(mesh,m);
+   if(spec.empty){if(m){include(m.box);destroy(m);cache.delete(key);}continue;}
+   const matrix=mesh.matrixWorld.toArray();
    const worldBox=spec.bounds.clone().expandByScalar(spec.step).applyMatrix4(mesh.matrixWorld),boxNow={min:worldBox.min.toArray(),max:worldBox.max.toArray()};
    if(!sceneTiles(p,boxNow).length){if(m){include(m.box);destroy(m);cache.delete(key);}continue;}
    if(m?.key===spec.key&&matrix.every((v,i)=>Math.abs(v-m.matrix[i])<1e-10)){m.id=id;m.objectKey=objectKey;continue;}
    if(m)include(m.box);
-   if(!m||m.key!==spec.key){const next=build(mesh,spec);if(m)destroy(m);m=next;cache.set(key,m);}
+   if(!m||m.key!==spec.key){const next=build(mesh,spec,m);if(m)destroy(m);m=next;cache.set(key,m);}
    m.id=id;m.objectKey=objectKey;m.name=mesh.name;m.matrix=matrix;
    // Padding includes the conservative local shell at the geometric boundary.
    m.box=boxNow;include(m.box);

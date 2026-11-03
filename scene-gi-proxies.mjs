@@ -25,7 +25,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,digest=digestHex}){
   // versions come from one sequence that never restarts, so a request from before a release, a clear or a newer
   // selection can never pass as current; owned is the proxy each root holds, apart from the handle snapshots.
-  const handles=new Map(),versions=new Map(),owned=new Map(),releaseListeners=new Set();let sequence=0;
+  const handles=new Map(),versions=new Map(),owned=new Map(),releaseListeners=new Set(),inFlight=new Set();let sequence=0;
   // GI passes that read these proxies declare themselves; with none, a proxy setting changes nothing on screen.
   const consumers=new Map();let consumerSeq=0;
   // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
@@ -78,9 +78,11 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         error:choice.error?{reference:choice.error.reference,units:'fraction of the hero bounding-box diagonal',relative:choice.error.relative}:null});
     }catch(error){return settle({...base,state:'failed',failure:String(error?.message||error)});}
   }
+  const trackedResolve=(root,selection)=>{const p=resolve(root,selection);inFlight.add(p);p.finally(()=>inFlight.delete(p));return p;};
   return {
-    attach(root,selection=DEFAULT_GI_PROXY_SELECTION){return resolve(root,selection);},
-    select(root,selection){return resolve(root,selection);},
+    attach(root,selection=DEFAULT_GI_PROXY_SELECTION){return trackedResolve(root,selection);},
+    select(root,selection){return trackedResolve(root,selection);},
+    whenIdle:async()=>{while(inFlight.size)await Promise.all([...inFlight]);},
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
     release(root){drop(root);},
