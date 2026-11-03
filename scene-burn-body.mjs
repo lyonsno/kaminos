@@ -1,3 +1,4 @@
+import * as THREE from './lib/three.webgpu.js';
 import {checkedSurfaceKelvin,SURFACE_KELVIN_PER_HEAT} from './burn-thermal-radiance.mjs';
 import {checkedBurnAppearance} from './scene-burning-settings.mjs';
 import {createBurnMaterial} from './burn-table-material.mjs';
@@ -16,17 +17,29 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
   const mesh=resolveBurnableHeroMesh(entry.object);
   const resolveBeautyLods=()=>typeof beautyLods==='function'?beautyLods():beautyLods;
   const appearance=()=>checkedBurnAppearance(entry.burnable?.appearance??{profile:mesh.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
-  const original=Array.isArray(mesh.material)?mesh.material.map(originalBurnMaterial):originalBurnMaterial(mesh.material),bindings=[],releases=[],proxyOriginals=new Map(),proxyBurnMaterials=new Map();
+  const original=Array.isArray(mesh.material)?mesh.material.map(originalBurnMaterial):originalBurnMaterial(mesh.material),bindings=[],releases=[],proxyOriginals=new Map(),proxyBurnMaterials=new Map(),proxySameMaps=new Map(),proxyTransforms=new Map();
   let field,debris,elapsed=0,disposed=false,lastSettings,lastKelvin;
   function syncAppearance(){let kelvin;try{kelvin=checkedSurfaceKelvin(kelvinPerHeat());}catch{kelvin=lastKelvin??SURFACE_KELVIN_PER_HEAT;}if(entry.burnable!==lastSettings||kelvin!==lastKelvin){const next=appearance();for(const binding of bindings)binding.setAppearance({...next,kelvinPerHeat:kelvin});lastSettings=entry.burnable;lastKelvin=kelvin;}}
   function dispose(){
     if(disposed)return;disposed=true;
     for(const release of releases)release();
+    for(const [proxyMesh,tf] of proxyTransforms){
+      if(proxyMesh.geometry){
+        proxyMesh.geometry.applyMatrix4(tf.heroToRoot);
+        proxyMesh.geometry.computeBoundingBox?.();
+        proxyMesh.geometry.computeBoundingSphere?.();
+      }
+      proxyMesh.matrix.copy(tf.origMatrix);
+      proxyMesh.matrix.decompose(proxyMesh.position,proxyMesh.quaternion,proxyMesh.scale);
+      proxyMesh.matrixWorldNeedsUpdate=true;
+    }
+    proxyTransforms.clear();
     for(const [proxyMesh,origMat] of proxyOriginals){
       if(proxyMesh.userData)delete proxyMesh.userData.kaminosBeautyLodBurnProxy;
       proxyMesh.material=origMat;
     }
     proxyOriginals.clear();
+    proxySameMaps.clear();
     for(const pMats of proxyBurnMaterials.values()){
       for(const pm of (Array.isArray(pMats)?pMats:[pMats]))if(!converted?.includes(pm))pm?.dispose?.();
     }
@@ -36,6 +49,15 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
   }
   let converted=null;
   try{
+    entry.object.updateWorldMatrix(true,true);
+    const invRoot=new THREE.Matrix4().copy(entry.object.matrixWorld).invert();
+    const heroToRoot=new THREE.Matrix4().multiplyMatrices(invRoot,mesh.matrixWorld);
+    const rootToHero=new THREE.Matrix4().copy(heroToRoot).invert();
+    const identityMat=new THREE.Matrix4();
+    let heroIsRootSpace=true;
+    for(let i=0;i<16;i++){
+      if(Math.abs(heroToRoot.elements[i]-identityMat.elements[i])>1e-7){heroIsRootSpace=false;break;}
+    }
     mesh.geometry.computeBoundingBox();const bounds=mesh.geometry.boundingBox;
     const resolvedSurface=typeof resolveSurfaceGeometry==='function'?await resolveSurfaceGeometry(entry,{mesh,bounds,grid:LIVE_LOG_GRID}):null;
     const surfaceGeometry=resolvedSurface?.geometry??null;
@@ -57,7 +79,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
         &&(origProxyMat?.normalMap??null)===(heroOrig?.normalMap??null)
         &&(origProxyMat?.roughnessMap??null)===(heroOrig?.roughnessMap??null)
         &&(origProxyMat?.metalnessMap??null)===(heroOrig?.metalnessMap??null);
-      if(sameMaps||!origProxyMat)return baseBurn;
+      if(sameMaps||!origProxyMat)return {material:baseBurn,sameMaps:true};
       const cloned=cloneSceneRadianceMaterial(renderer.library,origProxyMat);
       cloned.colorNode=baseBurn.colorNode;
       cloned.roughnessNode=baseBurn.roughnessNode;
@@ -67,7 +89,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
       cloned.opacityNode=baseBurn.opacityNode;
       cloned.outputNode=baseBurn.outputNode;
       cloned.alphaTest=baseBurn.alphaTest;
-      return cloned;
+      return {material:cloned,sameMaps:false};
     }
     function syncProxyBurnMaterials(){
       const proxyMeshes=new Set();
@@ -84,16 +106,30 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
         rung.root?.traverse?.(node=>{if(node.isMesh)proxyMeshes.add(node);});
       }
       for(const proxyMesh of proxyMeshes){
+        if(!heroIsRootSpace&&!proxyTransforms.has(proxyMesh)&&proxyMesh.geometry){
+          proxyTransforms.set(proxyMesh,{heroToRoot:heroToRoot.clone(),origMatrix:proxyMesh.matrix.clone()});
+          proxyMesh.geometry.applyMatrix4(rootToHero);
+          proxyMesh.geometry.computeBoundingBox?.();
+          proxyMesh.geometry.computeBoundingSphere?.();
+          proxyMesh.matrix.copy(heroToRoot);
+          proxyMesh.matrix.decompose(proxyMesh.position,proxyMesh.quaternion,proxyMesh.scale);
+          proxyMesh.matrixWorldNeedsUpdate=true;
+        }
         if(!proxyOriginals.has(proxyMesh)){
           const rawOrig=proxyMesh.userData?.kaminosOriginalMaterial??proxyMesh.material;
           proxyOriginals.set(proxyMesh,Array.isArray(rawOrig)?rawOrig.map(originalBurnMaterial):originalBurnMaterial(rawOrig));
         }
         if(!proxyBurnMaterials.has(proxyMesh)){
           const origVal=proxyOriginals.get(proxyMesh);
-          const pBurn=Array.isArray(origVal)
-            ?origVal.map((m,i)=>buildProxyBurnMaterial(m,i))
-            :buildProxyBurnMaterial(origVal,0);
-          proxyBurnMaterials.set(proxyMesh,pBurn);
+          if(Array.isArray(origVal)){
+            const built=origVal.map((m,i)=>buildProxyBurnMaterial(m,i));
+            proxyBurnMaterials.set(proxyMesh,built.map(b=>b.material));
+            proxySameMaps.set(proxyMesh,built.map(b=>b.sameMaps));
+          }else{
+            const built=buildProxyBurnMaterial(origVal,0);
+            proxyBurnMaterials.set(proxyMesh,built.material);
+            proxySameMaps.set(proxyMesh,[built.sameMaps]);
+          }
         }
         if(!proxyMesh.userData)proxyMesh.userData={};
         proxyMesh.userData.kaminosBeautyLodBurnProxy=true;
@@ -119,9 +155,20 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
       const displayed=Array.isArray(mesh.material)?mesh.material:[mesh.material];
       bindings.forEach((binding,i)=>{
         binding.update(elapsed,displayed[i]);
-        for(const proxyMesh of proxyOriginals.keys()){
+        for(const [proxyMesh,origVal] of proxyOriginals.entries()){
           const pMat=Array.isArray(proxyMesh.material)?proxyMesh.material[i]:proxyMesh.material;
-          if(pMat&&pMat!==displayed[i])binding.update(elapsed,pMat);
+          if(!pMat||pMat===displayed[i])continue;
+          const sameMap=proxySameMaps.get(proxyMesh)?.[i]??true;
+          if(sameMap){
+            binding.update(elapsed,pMat);
+          }else{
+            const origMat=Array.isArray(origVal)?origVal[i]:origVal;
+            if(origMat){
+              pMat.color?.copy?.(origMat.color);
+              pMat.roughness=origMat.roughness;
+              pMat.metalness=origMat.metalness;
+            }
+          }
         }
       });
     }));

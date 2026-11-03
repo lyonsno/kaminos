@@ -66,9 +66,9 @@ test('resolveBurnableHeroMesh and createSceneBurnBody bind the true hero mesh ev
 
   assert.equal(burnTargetMod.resolveBurnableHeroMesh(root), heroMesh, 'resolveBurnableHeroMesh returns heroMesh, not the mounted beauty proxy mesh');
 
-  // Also simulate a second resident beauty rung in beautyLods.listResidentRungs(root) with its own baked normalMap
+  // Also simulate a second resident beauty rung in beautyLods.listResidentRungs(root) with its own baked normalMap and unit factor color
   const bakedNormalMap = new THREE.Texture();
-  const residentRungOrigMat = new THREE.MeshStandardMaterial({color: 0x885522, roughness: 0.8, metalness: 0.0, normalMap: bakedNormalMap});
+  const residentRungOrigMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 1.0, metalness: 0.0, normalMap: bakedNormalMap});
   const residentRungMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.4, 0.4, 2, 2, 2), residentRungOrigMat);
   residentRungMesh.castShadow = true;
   residentRungMesh.userData.kaminosOriginalMaterial = residentRungOrigMat;
@@ -124,6 +124,8 @@ test('resolveBurnableHeroMesh and createSceneBurnBody bind the true hero mesh ev
   assert.equal(residentRungMesh.material.colorNode, heroMesh.material.colorNode, 'resident beauty rung mesh with baked normalMap shares the live burn TSL colorNode');
   assert.equal(residentRungMesh.material.opacityNode, heroMesh.material.opacityNode, 'resident beauty rung mesh with baked normalMap shares the live burn TSL opacityNode');
   assert.equal(residentRungMesh.material.normalMap, bakedNormalMap, 'resident beauty rung mesh preserves its own UV-baked normalMap');
+  for (const fn of frameListeners) fn();
+  assert.equal(residentRungMesh.material.color.getHex(), 0xffffff, 'N1: beauty rung with custom baked maps preserves its own scalar factor color across onFrame updates');
   assert.ok(residentLightCoverage(heroMesh), 'residentLightCoverage is bound on heroMesh');
   assert.equal(residentLightCoverage(proxyMesh)?.owner, heroMesh, 'residentLightCoverage on proxyMesh points to heroMesh as owner');
   assert.equal(residentLightCoverage(residentRungMesh)?.owner, heroMesh, 'residentLightCoverage on residentRungMesh points to heroMesh as owner');
@@ -158,5 +160,50 @@ test('resolveBurnableHeroMesh and createSceneBurnBody bind the true hero mesh ev
   assert.equal(residentRungMesh.material, residentRungOrigMat, 'residentRungMesh original material restored on dispose');
   assert.equal(residentLightCoverage(heroMesh), null, 'residentLightCoverage unbound from heroMesh');
   assert.equal(residentLightCoverage(proxyMesh), null, 'residentLightCoverage unbound from proxyMesh');
+
+  // 6. WO1: When heroMesh has a non-identity local transform under root (e.g. TRELLIS -90 deg X rotation over Z-up vertices)
+  // while beauty proxy was baked into root space (Y-up, identity node transform), createSceneBurnBody aligns proxyMesh's
+  // positionLocal with heroMesh.geometry.boundingBox while keeping proxyMesh's world-space vertices invariant, and restores on dispose.
+  const trellisRoot = new THREE.Group();
+  trellisRoot.userData.kaminosSceneObject = {id: 'trellis-log', type: 'glb'};
+  // Z-up hero geometry: (1.0, 0.6, 0.2), rotated -90 deg around X so world Y extent is 0.2 and world Z extent is 0.6
+  const trellisHeroGeom = new THREE.BoxGeometry(1.0, 0.6, 0.2, 4, 4, 4);
+  const trellisHeroMesh = new THREE.Mesh(trellisHeroGeom, new THREE.MeshStandardMaterial({color: 0x885522}));
+  trellisHeroMesh.rotation.x = -Math.PI / 2;
+  trellisHeroMesh.updateMatrix();
+  trellisRoot.add(trellisHeroMesh);
+
+  // Beauty proxy was baked to root space (Y-up: 1.0, 0.2, 0.6) with identity transform
+  const trellisProxyWrapper = new THREE.Group();
+  trellisProxyWrapper.userData.kaminosBeautyLodProxy = true;
+  const trellisProxyGeom = new THREE.BoxGeometry(1.0, 0.2, 0.6, 2, 2, 2);
+  const trellisProxyMesh = new THREE.Mesh(trellisProxyGeom, new THREE.MeshStandardMaterial({color: 0x885522}));
+  trellisProxyWrapper.add(trellisProxyMesh);
+  trellisRoot.add(trellisProxyWrapper);
+  trellisHeroMesh.visible = false;
+  trellisProxyWrapper.visible = true;
+  scene.add(trellisRoot);
+  scene.updateMatrixWorld(true);
+  const worldBoxBefore = new THREE.Box3().setFromObject(trellisProxyMesh);
+
+  const trellisBody = await createSceneBurnBody({
+    entry: {id: 'trellis-log', object: trellisRoot, burnable: {enabled: true, material: 'wood'}},
+    renderer,
+    scene,
+    ground: () => ({center: [0, 0, 0], height: 0, radius: 5}),
+    onFrame,
+  });
+  scene.updateMatrixWorld(true);
+  const worldBoxAfter = new THREE.Box3().setFromObject(trellisProxyMesh);
+  trellisHeroMesh.geometry.computeBoundingBox();
+  trellisProxyMesh.geometry.computeBoundingBox();
+  assert.ok(Math.abs(trellisProxyMesh.geometry.boundingBox.max.y - trellisHeroMesh.geometry.boundingBox.max.y) < 1e-6, 'WO1: proxyMesh positionLocal Y extent matches heroMesh bounds (0.3)');
+  assert.ok(Math.abs(trellisProxyMesh.geometry.boundingBox.max.z - trellisHeroMesh.geometry.boundingBox.max.z) < 1e-6, 'WO1: proxyMesh positionLocal Z extent matches heroMesh bounds (0.1)');
+  assert.ok(Math.abs(worldBoxAfter.max.y - worldBoxBefore.max.y) < 1e-6 && Math.abs(worldBoxAfter.max.z - worldBoxBefore.max.z) < 1e-6, 'WO1: proxyMesh world-space bounding box remains invariant');
+
+  trellisBody.dispose();
+  trellisProxyMesh.geometry.computeBoundingBox();
+  assert.ok(Math.abs(trellisProxyMesh.geometry.boundingBox.max.y - 0.1) < 1e-6, 'WO1: proxyMesh root-space geometry restored on dispose');
+  assert.ok(Math.abs(trellisProxyMesh.rotation.x) < 1e-6, 'WO1: proxyMesh identity local transform restored on dispose');
 });
 

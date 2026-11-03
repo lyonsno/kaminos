@@ -646,7 +646,7 @@ export function createSceneColliderCollection(THREE,{
       restoreBeauty?.();
     }
 
-    for(let pass=0;pass<2;pass++){
+    for(let pass=0;pass<levels.length+1;pass++){
       const chosen=selectColliderTier(levels,{
         heroFaces:entry.heroFaces,
         worldDiag:localDiag,
@@ -687,7 +687,7 @@ export function createSceneColliderCollection(THREE,{
         creviceAllowance:config.creviceAllowance,
         hysteresis:0,
       });
-      if(recheck.tier!==targetTier&&pass===0)continue;
+      if(recheck.tier!==targetTier)continue;
       let rungMesh=null;
       rungRecord.root.traverse(rm=>{if(!rungMesh&&rm.isMesh&&rm.geometry)rungMesh=rm;});
       if(!rungMesh)return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
@@ -709,9 +709,9 @@ export function createSceneColliderCollection(THREE,{
       return {
         geometry,
         tier:targetTier,
-        faces:chosen.faces,
+        faces:recheck.selected?.faces??chosen.selected?.faces??rungRecord.faces,
         heroFaces:entry.heroFaces,
-        voxelError:chosen.voxelError,
+        voxelError:recheck.selected?.voxelError??chosen.selected?.voxelError??0,
       };
     }
     return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
