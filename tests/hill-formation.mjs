@@ -46,3 +46,15 @@ test('a uniform slope under uniform rain does not develop grid-scale depositiona
 test('channel initiation leaves sub-threshold hillslopes to weathering and slope transport',()=>{
  const f=formTerrain({resolution:17,iterations:10,channelArea:1000});assert.equal(f.metrics.rockEroded,0);assert.equal(f.metrics.erodedVolume,0);assert.ok(f.metrics.weathered>0);
 });
+test('exposed rock banks fail into conserved loose talus while stable rock remains intact',async()=>{
+ const {formationStep}=await import(source),c=formationConfig({resolution:9,width:8,length:8,incision:0,weathering:0,creep:0,hardness:0});const s=new Float32Array(9*9*4);
+ for(let z=0;z<9;z++)for(let x=0;x<9;x++)s[(z*9+x)*4]=x<4?4:0;
+ const metrics={weathered:0,exportedVolume:0,deposited:0,erodedVolume:0,rockEroded:0};const next=formationStep(s,c,metrics);
+ assert.ok(next[(4*9+3)*4]<4,'an exposed over-steep rock bank must supply material');
+ assert.equal(next[(4*9+1)*4],4,'stable interior rock stays intact');
+ assert.ok(next.some((v,i)=>i%4===1&&v>0),'failed rock becomes loose talus');assert.ok(Math.abs(sum(s)-sum(next))<1e-5);assert.ok(metrics.bankCollapsed>0);
+});
+test('inherited upland grades into a lower-gradient apron before the outlet',()=>{
+ const c=formationConfig({resolution:33}),s=seedGeology(c),height=z=>s[(z*33+16)*4];
+ assert.ok(Math.abs(height(28)-height(31))<Math.abs(height(14)-height(17))*.1,'the receiving apron must lose slope before sediment exits');
+});

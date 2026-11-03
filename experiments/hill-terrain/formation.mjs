@@ -1,14 +1,15 @@
 // Geological preparation only. Neither this solver nor its cache runs in playback.
-export const FORMATION_VERSION='hill-geology-4';
-const defaults={seed:47,resolution:129,width:8,length:9,iterations:260,relief:3.8,tilt:.28,fold:.18,bedThickness:.32,hardness:4,incision:.065,channelArea:.18,weathering:.0008,transport:.12,creep:.018,repose:34};
+export const FORMATION_VERSION='hill-geology-5';
+const defaults={seed:47,resolution:129,width:8,length:9,iterations:260,relief:3.8,tilt:.28,fold:.18,bedThickness:.32,hardness:4,incision:.065,channelArea:.18,weathering:.0008,transport:.12,creep:.018,repose:34,bankFailure:1,bankRepose:52,apron:.25};
 export function formationConfig(input={}){
  const c=Object.fromEntries(Object.keys(defaults).map(k=>[k,input[k]??defaults[k]]));
  if(!Number.isSafeInteger(c.seed)||c.seed<0||c.seed>0xffffffff)throw Error('Formation seed must be uint32');
  if(!Number.isSafeInteger(c.resolution)||c.resolution<3)throw Error('Formation resolution must be a whole grid >=3');
  if(!Number.isSafeInteger(c.iterations)||c.iterations<0)throw Error('Formation iterations must be nonnegative whole steps');
  for(const k of ['width','length','bedThickness','relief'])if(!Number.isFinite(c[k])||c[k]<=0)throw Error('Positive formation '+k+' required');
- for(const k of ['hardness','incision','channelArea','weathering','transport','creep','fold'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Nonnegative formation '+k+' required');
+ for(const k of ['hardness','incision','channelArea','weathering','transport','creep','fold','bankFailure'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Nonnegative formation '+k+' required');
  if(!Number.isFinite(c.tilt)||!Number.isFinite(c.repose)||c.repose<0||c.repose>=90)throw Error('Invalid formation slope');
+ if(!Number.isFinite(c.bankRepose)||c.bankRepose<=0||c.bankRepose>=90||!Number.isFinite(c.apron)||c.apron<0||c.apron>=1)throw Error('Invalid rock-bank or apron geometry');
  return c;
 }
 export const formationKey=input=>JSON.stringify([FORMATION_VERSION,formationConfig(input)]);
@@ -26,8 +27,9 @@ export function seedGeology(input){
   const u=x/(n-1),v=z/(n-1),px=(u-.5)*c.width,pz=(v-.5)*c.length;
   let texture=0,weight=1;for(let o=0;o<5;o++){texture+=weight*(noise(u*3*2**o,v*3*2**o,c.seed+o*71)-.5);weight*=.5;}
   // An inherited upland dipping toward the open front edge. No authored channels.
-  const broad=.10+.64*(1-v)+.42*(2*u-1)**2*(.4+.6*(1-v));
-  s[(z*n+x)*4]=.10+c.relief*(broad+.24*texture*Math.sin(Math.PI*v))+.06*Math.sin(px*.5+pz*.4);
+  const upland=Math.max(0,(1-v-c.apron)/(1-c.apron));
+  const broad=.10+(.64+.42*(2*u-1)**2)*upland**2;
+  s[(z*n+x)*4]=.10+c.relief*(broad+.24*texture*Math.sin(Math.PI*upland)**2)+.015*Math.sin(px*.5+pz*.4);
   s[(z*n+x)*4+1]=.025;
  }
  return s;
@@ -71,8 +73,19 @@ export function formationStep(state,input,metrics){
   }
   load[r]+=sediment;
  }
+ // Exposed over-steep rock banks fail locally into loose talus. Transfer from
+ // rock to neighboring loose cover conserves volume; buried banks are supported
+ // by that cover. The implicit four-neighbor factor bounds each shared transfer.
+ const bankFlow=new Float64Array(N*4),bankLimit=Math.tan(c.bankRepose*Math.PI/180);
+ for(let i=0;i<N;i++){const x=i%n,z=Math.floor(i/n),bed=out[i*4],strength=rockResistance((x/(n-1)-.5)*c.width,bed,(z/(n-1)-.5)*c.length,c),rate=c.bankFailure/(1+4*c.bankFailure)/Math.sqrt(strength);
+  for(let k=0;k<4;k++){const [ox,oz]=offsets[k],xx=x+ox,zz=z+oz;if(xx<0||xx>=n||zz<0||zz>=n)continue;const j=zz*n+xx;
+   bankFlow[i*4+k]=Math.max(0,bed-out[j*4]-out[j*4+1]-bankLimit*(k<2?dx:dz))*rate;}
+ }
+ for(let i=0;i<N;i++){const x=i%n,z=Math.floor(i/n),j=i*4,loss=bankFlow[j]+bankFlow[j+1]+bankFlow[j+2]+bankFlow[j+3];out[j]-=loss;
+  out[j+1]+=(x?bankFlow[j-3]:0)+(x+1<n?bankFlow[j+4]:0)+(z?bankFlow[j-n*4+3]:0)+(z+1<n?bankFlow[j+n*4+2]:0);metrics.bankCollapsed=(metrics.bankCollapsed??0)+loss*cell;
+ }
  // Conservative downslope creep and over-steep loose-material failure. The
- // quarter-excess bound prevents a donor from reversing its neighbor slopes.
+ // donor bound prevents a cell from transporting more cover than it owns.
  const flow=new Float64Array(N*4),talus=Math.tan(c.repose*Math.PI/180);
  for(let i=0;i<N;i++){const x=i%n,z=Math.floor(i/n),h=out[i*4]+out[i*4+1],e=[];let total=0;
   for(let k=0;k<4;k++){const [ox,oz]=offsets[k],xx=x+ox,zz=z+oz;let amount=0;if(xx>=0&&xx<n&&zz>=0&&zz<n){const j=zz*n+xx,diff=Math.max(0,h-out[j*4]-out[j*4+1]);amount=diff*c.creep+Math.max(0,diff-talus*(k<2?dx:dz))*.18;}e[k]=amount;total+=amount;}
@@ -86,7 +99,7 @@ export function formationStep(state,input,metrics){
 }
 export function createFormation(input){
  const config=formationConfig(input);let state=seedGeology(config),steps=0;
- const metrics={cellArea:config.width*config.length/(config.resolution-1)**2,weathered:0,rockEroded:0,erodedVolume:0,deposited:0,exportedVolume:0};
+ const metrics={cellArea:config.width*config.length/(config.resolution-1)**2,weathered:0,rockEroded:0,bankCollapsed:0,erodedVolume:0,deposited:0,exportedVolume:0};
  return{step(){if(steps<config.iterations){state=formationStep(state,config,metrics);steps++;}return steps;},get done(){return steps===config.iterations;},result(){if(steps!==config.iterations)throw Error('Formation is incomplete');return{version:FORMATION_VERSION,config,state,metrics:{...metrics},steps};}};
 }
 export function formTerrain(input){const f=createFormation(input);while(!f.done)f.step();return f.result();}
