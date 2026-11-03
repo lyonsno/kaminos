@@ -210,3 +210,59 @@ test('a surfel GLB names its frame: TRELLIS source space, placed by the same nod
   assert.deepEqual(json.nodes[0].matrix,extension.frame.nodeMatrix,'the node carries the matrix the frame names');
   assert.equal(extension.occupancy,'surface','the cells are the decoded surface shell, not filled mass');
 });
+
+test('sampleSurfelNormals replaces surfel normals from a world-space sampler through the TRELLIS node matrix and keeps unsampled surfels on their own normal',async()=>{
+  const {sampleSurfelNormals}=await import('../trellis-surfels.mjs');
+  const field=buildSurfelField(fixture()),seen=[];
+  // The sheet faces +z in source space, which is -y in world space under (x,y,z) -> (x,z,-y).
+  // Supply a world normal tilted toward +x and -y (or reversed to +y to verify sign alignment), and null on the 5th surfel.
+  const worldTarget=[0.6,-0.8,0];
+  const {field:sampled,sampled:hitCount,unsampled}=sampleSurfelNormals(field,(p,n,diameter)=>{
+    seen.push({p,n,diameter});
+    if(seen.length===5)return null;
+    return seen.length%2?worldTarget:worldTarget.map(v=>-v);
+  });
+  assert.equal(hitCount,4);assert.equal(unsampled,1);
+  assert.ok(Math.abs(seen[0].diameter-2*field.radiusVoxels/field.resolution)<1e-9);
+  const back=surfelNormals(sampled),orig=surfelNormals(field);
+  // World (0.6, -0.8, 0) corresponds to source (0.6, 0, 0.8) (or (-0.6, 0, -0.8) depending on sheet normal sign).
+  for(let i=0;i<4;i++){
+    const nx=back[i*3],ny=back[i*3+1],nz=back[i*3+2],w=[nx,nz,-ny];
+    const dot=Math.abs(w[0]*worldTarget[0]+w[1]*worldTarget[1]+w[2]*worldTarget[2]);
+    assert.ok(dot>0.995,`surfel ${i} world normal ${w} matches target ${worldTarget}`);
+  }
+  assert.deepEqual([...back.subarray(12,15)],[...orig.subarray(12,15)],'unsampled surfel keeps its own normal');
+});
+
+test('review M1: surfelTriangles builds the exact instance triangles that createSurfelObject draws at level 1',async()=>{
+  const {surfelTriangles}=await import('../trellis-surfels.mjs');
+  const {MeshBVH}=await import('three-mesh-bvh');
+  const {measureGeometricError}=await import('../mesh-lod-ladder.mjs');
+  const field=buildSurfelField(fixture());
+  const object=createSurfelObject(THREE,field,{levels:[1],chunkVoxels:64,proxyFactor:1});
+  const instanced=[];
+  const v=new THREE.Vector3(),m=new THREE.Matrix4();
+  object.traverse(o=>{
+    if(!o.isInstancedMesh)return;
+    const pos=o.geometry.getAttribute('position');
+    for(let j=0;j<o.count;j++){
+      o.getMatrixAt(j,m);
+      for(let k=0;k<3;k++){
+        v.fromBufferAttribute(pos,k).applyMatrix4(m);
+        instanced.push(v.x,v.y,v.z);
+      }
+    }
+  });
+  const drawn=new Float32Array(instanced),tri=surfelTriangles(field).positions;
+  assert.equal(drawn.length,tri.length);
+  for(let i=0;i<drawn.length;i++)assert.ok(Math.abs(drawn[i]-tri[i])<1e-6,`vertex float ${i}: drawn ${drawn[i]} vs surfelTriangles ${tri[i]}`);
+  const faces=Uint32Array.from({length:field.count*3},(_,i)=>i);
+  const closestFor=(V,F)=>{
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(V,3));g.setIndex(new THREE.BufferAttribute(F,1));
+    const bvh=new MeshBVH(g),p=new THREE.Vector3(),hit={};
+    return (x,y,z)=>{bvh.closestPointToPoint(p.set(x,y,z),hit);return {point:[hit.point.x,hit.point.y,hit.point.z],normal:[0,0,1]};};
+  };
+  const err=measureGeometricError({source:{vertices:drawn,faces},level:{vertices:tri,faces},
+    closestSource:closestFor(drawn,faces),closestLevel:closestFor(tri,faces),reference:{kind:'test'}});
+  assert.ok(err.max<1e-6,`error against rendered surfels should be ~0, got ${err.max}`);
+});

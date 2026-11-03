@@ -31,6 +31,15 @@ mount.setSurfaceEnabled(false);const offBatches=batches.length;
 consume(field);assert.equal(mount.canRender(),true);assert.equal(batches.length,offBatches,'off skips all surface shadow captures');
 assert.equal(mount.debugState().capturedPointCount,0);assert.equal(mount.debugState().evaluatedPointCount,0);assert.equal(mount.debugState().frame.pointRegions,null,'off skips point source reduction, not only brightness');
 assert(hostFrame,'distributed smoke remains live');assert.throws(()=>mount.readPointRegions(),/disabled/);
+const fineTexture=hostFrame.texture,fineBuilds=mount.debugState().geometryBuilds;
+field.source.exterior={status:'encoded',texture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:1,frame:1};
+consume(field);
+assert(hostFrame.exterior?.smokeReconstruction,'exterior smoke must receive its own current lighting field');
+assert.equal(hostFrame.texture,fineTexture,'adding exterior must preserve fine texture and resolution');
+assert.equal(mount.debugState().geometryBuilds,fineBuilds);
+assert.deepEqual(hostFrame.exterior.smokeReconstruction.localMax,[3,9,3]);
+field.source.exterior=null;consume(field);
+assert.equal(hostFrame.exterior,null,'disabled world must remove the camera field');
 mount.setSurfaceEnabled(true);
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
 assert(Object.values(mesh.material).some(value=>value?.isNode),'injected live lighting must be visible to Three material refresh, including unchanged surfaces in the GI source pass');
@@ -117,10 +126,10 @@ assert.deepEqual(first.frame.smokeReconstruction.dimensions,[2,4,2],'explicit ch
 assert.equal(mount.debugState().geometryBuilds,first.geometryBuilds,'surface spacing controls must not construct an unused cache');
 field.source.worldTransform={translate:[2,-1,4],scale:2};field.source.generation++;consume(field);
 assert.equal(mount.debugState().geometryBuilds,1,'source movement reuses world BVH');
-assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,2);
-assert.equal(passes.filter(p=>p==='prepare static smoke interpolation').length,2,'source movement must invalidate dependent smoke geometry');
-assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,2,'source movement must invalidate smoke ray visibility');
-assert.equal(uploads.filter(([label])=>label==='surface and smoke receivers').length,1);
+assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,3,'fine initial + exterior initial + moved fine');
+assert.equal(passes.filter(p=>p==='prepare static smoke interpolation').length,3,'source movement must invalidate dependent smoke geometry');
+assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,3,'source movement must invalidate smoke ray visibility');
+assert.equal(uploads.filter(([label])=>label==='surface and smoke receivers').length,2,'separate fine and exterior receivers');
 field.source.generation++;assert.equal(mount.canRender(),false,'new generation must not render stale point fields');consume(field);
 const pipelineCount=pipelines.length,preparations=passes.filter(p=>p==='static kiln visibility preparation').length;
 mount.setEditing(true);
@@ -264,3 +273,41 @@ await (owner.retry?.()??owner.request());
 assert.equal(owner.state().held,false,'public retry must release the failed flame owner hold');
 consume(field);assert.equal(composed.canRender(),true,'retry must consume the current source');
 composed.dispose();
+
+// Parallel wrong-object check: a TRELLIS surfel object with a loaded GI proxy must succeed in hybrid prepare(field)
+// (including localVisibility.snapshot(scene)) and build smoke visibility from the stunt-double proxy rather than
+// throwing static-light-dynamic-caster on SurfelChunkMesh (InstancedMesh).
+const {createSurfelObject}=await import('../trellis-surfels.mjs');
+const surfelHolder=new THREE.Group();
+const surfelRoot=createSurfelObject(THREE,{
+  resolution:16,radiusVoxels:1.5,count:2,
+  cells:new Uint32Array([1|(2<<10)|(3<<20),4|(5<<10)|(6<<20)]),
+  offsets:new Int8Array(6),normals:new Int8Array([0,0,127,0,0,127]),
+  color:new Uint8Array([200,100,50,200,100,50]),metalRough:new Uint8Array([0,200,0,200]),
+},{levels:[1]});
+surfelHolder.add(surfelRoot);scene.add(surfelHolder);
+const surfelProxy=new THREE.Group(),surfelProxyMesh=new THREE.Mesh(new THREE.TetrahedronGeometry(),new THREE.MeshStandardMaterial());
+surfelProxy.add(surfelProxyMesh);
+globalThis.window={
+  kaminosGiProxies:{
+    handleFor:r=>r===surfelHolder?{
+      state:'loaded',representation:'surfels',proxyRoot:surfelProxy,
+      effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+      error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.002}},
+      placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(surfelHolder.updateWorldMatrix(true,false)??surfelHolder.matrixWorld),
+    }:null,
+    registerConsumer(){return ()=>{};},
+  },
+};
+try{
+  const surfelMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+  field.source.generation++;field.source.frame++;
+  consume(field);
+  assert.equal(surfelMount.canRender(),true,'hybrid lighting must succeed when a TRELLIS surfel object has a loaded GI proxy');
+  assert.equal(surfelMount.debugState().staticTriangles,16,'12 box triangles + 4 tetrahedron GI proxy triangles in smoke visibility');
+  surfelMount.dispose();
+}finally{
+  scene.remove(surfelHolder);
+  delete globalThis.window;
+}
+

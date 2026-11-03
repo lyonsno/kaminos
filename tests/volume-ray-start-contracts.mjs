@@ -15,7 +15,16 @@ for (const rayStartNoise of [true, false, false, true]) {
 }
 assert.match(core, /let rayPhase = rayStartPhaseAtFrame\(in\.pos\.xy, u\.reserved_render_controls\.w, fullGridCapture, u\.occupancy_controls\.y\)/,
   'the actual camera marcher must offset starts by per-pixel noise while preserving full-grid capture');
-assert.match(core,/let jitter = dtBase \* rayPhase;/);
+const jitterExpression = core.match(/let jitter = ([^;]+);/)?.[1];
+assert.ok(jitterExpression, 'camera ray start must have an explicit phase policy');
+for (const guided of [false, true]) {
+ for (const rayPhase of [0, .25, .5, 1]) {
+  assert.equal(runInNewContext(jitterExpression, {dtBase:2, rayPhase, guided,
+   select:(ordinary, guidedValue, condition)=>condition ? guidedValue : ordinary}),
+  guided ? 0 : 2 * rayPhase,
+  'ordinary rays retain their phase; internally placed guided samples start at the full interval');
+ }
+}
 const phaseStart=core.match(/opticalStepInitPhased\((.+), endT, dtBase, select\(-1\.0, rayPhase, u\.reserved_render_controls\.w > 0\.5\)\)/)?.[1];
 assert.ok(phaseStart,'both optical modes retain the same per-pixel phase');
 for(const [sceneDepthStartT,expected] of [[0,.5],[.25,.5],[2,2]]) {

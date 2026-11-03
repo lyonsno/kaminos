@@ -83,45 +83,58 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   return {pixels, tangents, coveredPixels, unsampled, maxDegrees, texelSize};
 }
 
-// The source's interpolated shading normal for a level point: the nearest source surface hit by a
-// ray along the level normal (both ways) within `reach`, else the closest source point. Looking
-// along the normal keeps a nearby strand or sheet beside the point (fur, fins) from standing in
-// for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
+// The source's normal for a level point: the nearest source surface hit by a ray along the level
+// normal (both ways) within `reach` (and within `maxTexels * texelSize` when `texelSize > 0`), or
+// null when nothing is within reach so the texel keeps the level's own smooth normal instead of
+// projecting an unrelated nearby detail across an air gap. Looking along the normal keeps a nearby
+// strand or sheet beside the point (fur, fins) from standing in for the surface the level approximates
+// there. THREE and MeshBVH are passed in by the caller.
 // With `footprint`, the normal is averaged over a 3x3 grid across the texel in the surface plane,
-// so detail finer than a texel (fur) shades as its average rather than as one aliased sample.
-export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false}) {
-  if (!normals) throw Error('source has no shading normals');
-  if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1));
-  const bvh = new MeshBVH(geometry), ray = new THREE.Ray(), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
+// so detail finer than a texel (fur, or raw-decode facets) shades as its average rather than as one
+// aliased sample. With `faceNormals`, hit triangles supply their geometric face normals directly
+// (for TRELLIS's raw decode, whose face winding is inconsistent), turned toward the level normal.
+export function createHeroNormalSampler({hero: {vertices, faces, normals = null}, THREE, MeshBVH, reach = Infinity, maxTexels = reach === Infinity ? 2 : Infinity, footprint = false, bvh: prebuilt = null, faceNormals = false}) {
+  if (!normals && !faceNormals) throw Error('source has no shading normals');
+  if (!(reach >= 0) || !(maxTexels > 0)) throw Error('reach must be non-negative and maxTexels positive');
+  // A caller that already built a BVH over these same vertices and faces passes it as `bvh`.
+  let bvh = prebuilt;
+  if (!bvh) { const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1)); bvh = new MeshBVH(geometry); }
+  const ray = new THREE.Ray(), tri = new THREE.Triangle(), weights = new THREE.Vector3();
   const corner = i => new THREE.Vector3(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
   const normalAt = (face, at) => {
     const v = [0, 1, 2].map(k => faces[face * 3 + k]);
-    tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(at, weights);
+    tri.set(corner(v[0]), corner(v[1]), corner(v[2]));
+    if (faceNormals) {
+      tri.getNormal(weights);
+      return (weights.x || weights.y || weights.z) ? [weights.x, weights.y, weights.z] : null;
+    }
+    tri.getBarycoord(at, weights);
     const w = [weights.x, weights.y, weights.z];
     if (!w.every(Number.isFinite)) return null;
     return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * normals[vi * 3 + a], 0));
   };
-  const sample = (p, n) => {
+  const sample = (p, n, texelSize = 0) => {
+    const limit = Math.min(reach, maxTexels < Infinity && texelSize > 0 ? maxTexels * texelSize : Infinity);
+    if (!n || !(limit > 0 && limit < Infinity)) return null;
     let best = null;
-    if (n && reach > 0) for (const side of [1, -1]) {
+    for (const side of [1, -1]) {
       ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
       const h = bvh.raycastFirst(ray, THREE.DoubleSide);
-      if (h && h.distance <= reach && (!best || h.distance < best.distance)) best = h;
+      if (h && h.distance <= limit && (!best || h.distance < best.distance)) best = h;
     }
-    if (best) return normalAt(best.faceIndex, best.point);
-    bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
-    return normalAt(hit.faceIndex, hit.point);
+    if (!best) return null;
+    const out = normalAt(best.faceIndex, best.point);
+    return out && faceNormals && dot(out, n) < 0 ? [-out[0], -out[1], -out[2]] : out;
   };
-  const method = 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal';
+  const method = `ray along the level normal within reach (both ways, nearest hit), else level normal; ${faceNormals ? 'face geometric normal' : 'interpolated shading normal'}`;
   if (!footprint) { sample.method = method; return sample; }
   const averaged = (p, n, texelSize) => {
-    if (!(texelSize > 0) || !n) return sample(p, n);
+    if (!(texelSize > 0) || !n) return sample(p, n, texelSize);
     const u = unit(cross(n, Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])), v = cross(n, u), sum = [0, 0, 0], step = texelSize / 3;
     let any = false;
     for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
-      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n), hn = h && unit(h);
+      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n, texelSize), hn = h && unit(h);
       if (!hn) continue;
       const side = dot(hn, n) < 0 ? -1 : 1; for (let a = 0; a < 3; a++) sum[a] += side * hn[a]; any = true;
     }
@@ -134,7 +147,9 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE
 // Adds a baked normal map and TANGENT attribute to a one-mesh, one-primitive GLB with float
 // POSITION, NORMAL and TEXCOORD_0. sampleWorldNormal(point, levelNormal) works in world space
 // (after the node transform), so the source can be any mesh in the same world frame.
-export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, source = null}) {
+// Or sampleLocalNormal(point, levelNormal, texelSize) in the mesh's own frame, when the source shares it.
+export async function addNormalMapToGLB(glb, {sampleWorldNormal, sampleLocalNormal, textureSize, source = null}) {
+  if (!sampleWorldNormal === !sampleLocalNormal) throw Error('exactly one of sampleWorldNormal and sampleLocalNormal is required');
   const view = new DataView(glb), jsonLength = view.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))), binStart = 28 + jsonLength, binLength = view.getUint32(20 + jsonLength, true);
   if (json.meshes?.length !== 1 || json.meshes[0].primitives.length !== 1) throw Error('one mesh with one primitive required');
@@ -169,7 +184,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   const linear = [world[0], world[1], world[2], world[4], world[5], world[6], world[8], world[9], world[10]];
   const normalToLocal = n => [0, 1, 2].map(c => linear[c*3]*n[0] + linear[c*3+1]*n[1] + linear[c*3+2]*n[2]); // transpose of the linear part
   const baked = bakeTangentNormalMap({positions, normals, uvs, indices, textureSize,
-    sampleNormal: (p, n, texelSize) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n)), texelSize * lengths[0]); return s && normalToLocal(s); }});
+    sampleNormal: sampleLocalNormal ?? ((p, n, texelSize) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n)), texelSize * lengths[0]); return s && normalToLocal(s); })});
   const png = new Uint8Array(await encodeTrellisTexturePNG({pixels: baked.pixels, width: textureSize, height: textureSize}));
   // Append the tangents and the image after the existing binary chunk.
   const extra = []; let offset = Math.ceil(binLength / 4) * 4;
@@ -182,7 +197,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   json.textures = [...(json.textures ?? []), {source: json.images.length - 1, sampler: 0}];
   material.normalTexture = {index: json.textures.length - 1};
   json.extras = {...json.extras, lodNormalMap: {source, textureSize, texelSize: baked.texelSize * lengths[0], coveredPixels: baked.coveredPixels, unsampledTexels: baked.unsampled,
-    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: sampleWorldNormal.method ?? 'caller-supplied sampler',
+    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: (sampleWorldNormal ?? sampleLocalNormal).method ?? 'caller-supplied sampler',
     tangentFrame: 'glTF: T along +u from UV gradients, Gram-Schmidt to N; B = cross(N, T) * w toward decreasing v'}};
   json.buffers[0].byteLength = offset;
   const text = new TextEncoder().encode(JSON.stringify(json)), textLength = Math.ceil(text.length / 4) * 4;

@@ -38,20 +38,51 @@ export function createDistributedSmokeBindings(device) {
   const layout=device.createBindGroupLayout({entries:[
     {binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
     {binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
-    {binding:2,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
+    {binding:18,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
+    {binding:20,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},
+    {binding:21,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
   ]});
-  let last=null,group=null;
+  const coverage=device.createBuffer({label:'exterior smoke lookup coverage',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  let last=null,group=null,packedMasks=null,planeSources=[],maskSources=[],maskPreparations=[],maskOffsets=[];
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
     if(!frame.texture || r?.identity!=='prepared-planar-support-v4' || !r.texture || !r.masks || !r.planes || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
-    const handles=[r.texture,r.masks,r.planes];
+    const exterior=frame.exterior,e=exterior?.smokeReconstruction,m=exterior?.middle?.smokeReconstruction;
+    for(const region of [exterior,exterior?.middle]){
+      const e=region?.smokeReconstruction;
+      if(region&&(region.generation!==frame.generation||region.frame!==frame.frame||e?.identity!=='prepared-planar-support-v4'||!e.texture||!e.masks||!e.planes||!(e.staticPreparations>0)||!(e.updates>0)||!e.localMin||!e.localMax))throw Error('exterior lighting requires current same-generation reconstruction resources');
+    }
+    const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1]:Array(8).fill(0)),
+      ...(m?[...m.localMin,(m.localMax[0]-m.localMin[0])/m.coarseDimensions[0],...m.localMax,1]:Array(8).fill(0))];
+    // Pack masks followed by plane words into one storage binding. This keeps
+    // the guided camera plus distributed lighting within the native ten slots.
+    // Geometry refreshes together; live radiance updates require no copies.
+    const resources=[r,e??r,m??r],sources=resources.map(v=>v.masks);
+    const sizes=sources.map(v=>v.size);
+    if(!sizes.every((n,i)=>Number.isSafeInteger(n)&&n>0&&n%4===0&&resources[i].planes.size===n*4))throw Error('prepared smoke mask byte sizes required');
+    const offsets=[0,sizes[0],sizes[0]+sizes[1]],total=sizes.reduce((a,b)=>a+b,0);
+    if(total*5>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error('composed smoke masks exceed device capacity');
+    if(!packedMasks||packedMasks.size!==total*5){
+      packedMasks?.destroy();packedMasks=device.createBuffer({label:'composed smoke region masks and planes',size:total*5,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+      maskSources=[];
+    }
+    const changed=resources.map((v,i)=>sources[i]!==maskSources[i]||v.planes!==planeSources[i]||v.staticPreparations!==maskPreparations[i]||offsets[i]!==maskOffsets[i]);
+    if(changed.some(Boolean)){
+      const encoder=device.createCommandEncoder({label:'copy changed smoke geometry masks'});
+      changed.forEach((change,i)=>{if(change){encoder.copyBufferToBuffer(sources[i],0,packedMasks,offsets[i],sizes[i]);encoder.copyBufferToBuffer(resources[i].planes,0,packedMasks,total+offsets[i]*4,sizes[i]*4);}});
+      device.queue.submit([encoder.finish()]);maskSources=sources;planeSources=resources.map(v=>v.planes);maskPreparations=resources.map(v=>v.staticPreparations);maskOffsets=offsets;
+    }
+    device.queue.writeBuffer(coverage,0,new Float32Array(data));
+    device.queue.writeBuffer(coverage,64,new Uint32Array([...offsets.map(n=>n/4),total/4]));
+    const handles=[r.texture,packedMasks,e?.texture??r.texture,m?.texture??r.texture];
     if(!last || handles.some((h,i)=>h!==last[i])) {
       group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},
-        {binding:1,resource:{buffer:r.masks}},{binding:2,resource:{buffer:r.planes}}]});
+        {binding:1,resource:{buffer:packedMasks}},{binding:18,resource:handles[2].createView()},
+        {binding:20,resource:{buffer:coverage}},{binding:21,resource:handles[3].createView()}]});
       last=handles;
     }
     return group;
-  }};
+  },destroy(){coverage.destroy();packedMasks?.destroy();last=null;group=null;}};
 }
 
 export const DISTRIBUTED_SMOKE_WGSL=`
@@ -99,3 +130,64 @@ export function smokeSupportWeight(delta,radius){
   if(extents.some(r=>!(r>0)))return 0;
   return delta.reduce((w,d,i)=>w*Math.max(0,1-Math.abs(d)/extents[i]),1);
 }
+// Keep the fine-only kernel available for isolated numerical witnesses. Both
+// fields use identical geometry-safe interpolation; no camera BVH work.
+const exteriorLookup=DISTRIBUTED_SMOKE_WGSL
+ .replaceAll('@binding(0)','@binding(18)').replaceAll('@binding(1)','@binding(19)')
+ .replace('@group(2) @binding(2) var<storage,read> smokeSupportPlanes:array<vec4<f32>>;','')
+ .replaceAll('smokeSupportPlanes[','smokeSupportPlanes[exteriorCoverage.maskOffsets.y+')
+ .replaceAll('distributedIncident','exteriorIncident').replaceAll('smokeBoundaryMasks','exteriorBoundaryMasks')
+ .replaceAll('distributedLastMaskFlags','exteriorLastMaskFlags').replaceAll('distributedMeanIncident','exteriorMeanIncident')
+ .replace('let pitch=2.0/f32(dims.x);','let pitch=(exteriorCoverage.hiEnabled.x-exteriorCoverage.loBlend.x)/f32(dims.x);')
+ .replace('let lo=vec3<f32>(-1.0);let hi=lo+vec3<f32>(dims)*pitch;','let lo=exteriorCoverage.loBlend.xyz;let hi=exteriorCoverage.hiEnabled.xyz;');
+const middleLookup=exteriorLookup.replaceAll('@binding(18)','@binding(21)').replaceAll('@binding(19)','@binding(22)')
+ .replaceAll('exteriorCoverage.maskOffsets.y','exteriorCoverage.maskOffsets.z')
+ .replaceAll('exteriorIncident','middleIncident').replaceAll('exteriorBoundaryMasks','middleBoundaryMasks')
+ .replaceAll('exteriorLastMaskFlags','middleLastMaskFlags').replaceAll('exteriorMeanIncident','middleMeanIncident')
+ .replaceAll('exteriorCoverage.loBlend','exteriorCoverage.middleLoBlend').replaceAll('exteriorCoverage.hiEnabled','exteriorCoverage.middleHiEnabled');
+const composedSmokeSource=DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
+ .replaceAll('smokeBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.x+')
+ .replaceAll('smokeSupportPlanes[','smokeSupportPlanes[exteriorCoverage.maskOffsets.x+')+`
+struct ExteriorCoverage {loBlend:vec4<f32>,hiEnabled:vec4<f32>,middleLoBlend:vec4<f32>,middleHiEnabled:vec4<f32>,maskOffsets:vec4<u32>}
+@group(2) @binding(20) var<uniform> exteriorCoverage:ExteriorCoverage;
+`+exteriorLookup.replace('@group(2) @binding(19) var<storage,read> exteriorBoundaryMasks:array<u32>;','')
+ .replaceAll('exteriorBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.y+')
+ +middleLookup.replace('@group(2) @binding(22) var<storage,read> middleBoundaryMasks:array<u32>;','')
+ .replaceAll('middleBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.z+')+`
+fn regionalMeanIncident(p:vec3<f32>)->vec3<f32>{
+  let far=exteriorMeanIncident(p);
+  if(exteriorCoverage.middleHiEnabled.w<0.5){return far;}
+  let edge=min(p-exteriorCoverage.middleLoBlend.xyz,exteriorCoverage.middleHiEnabled.xyz-p);
+  let distance=min(edge.x,min(edge.y,edge.z));
+  if(distance<0.0){return far;}
+  let middle=middleMeanIncident(p);
+  let farMask=exteriorLastMaskFlags;
+  exteriorLastMaskFlags=middleLastMaskFlags;
+  // Finer solid ownership wins; coarse light must never fill its wall mask.
+  if(middleLastMaskFlags.x>0.5||farMask.x>0.5){return middle;}
+  return mix(far,middle,smoothstep(0.0,exteriorCoverage.middleLoBlend.w,distance));
+}
+fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
+  let fine=fineMeanIncident(p);
+  if(exteriorCoverage.hiEnabled.w<0.5){return fine;}
+  let hi=vec3<f32>(-1)+vec3<f32>(textureDimensions(distributedIncident))*(2.0/f32(textureDimensions(distributedIncident).x));
+  let inside=all(p>=vec3<f32>(-1))&&all(p<=hi);
+  let coarse=regionalMeanIncident(p);
+  if(!inside){distributedLastMaskFlags=exteriorLastMaskFlags;return coarse;}
+  // Never fill a fine solid mask from a coarse neighbor across the wall.
+  if(distributedLastMaskFlags.x>0.5||exteriorLastMaskFlags.x>0.5){return fine;}
+  let edge=min(p+vec3<f32>(1),hi-p);let distance=min(edge.x,min(edge.y,edge.z));
+  return mix(coarse,fine,smoothstep(0.0,exteriorCoverage.loBlend.w,distance));
+}
+`;
+
+// Plane bits share the mask buffer after its complete region prefix. No
+// quantization, truncation or extra per-frame geometry preparation is involved.
+export const COMPOSED_SMOKE_WGSL=composedSmokeSource
+ .replace('@group(2) @binding(2) var<storage,read> smokeSupportPlanes:array<vec4<f32>>;','')
+ .replace(/smokeSupportPlanes\[([^\]]+)\]/g,'composedSmokeSupportPlane($1)')+`
+fn composedSmokeSupportPlane(index:u32)->vec4<f32>{
+  let at=exteriorCoverage.maskOffsets.w+index*4u;
+  return bitcast<vec4<f32>>(vec4<u32>(smokeBoundaryMasks[at],smokeBoundaryMasks[at+1u],smokeBoundaryMasks[at+2u],smokeBoundaryMasks[at+3u]));
+}
+`;

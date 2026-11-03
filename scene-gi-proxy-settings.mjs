@@ -2,7 +2,7 @@
 // uses (scene-gi-proxies.mjs). Only mesh objects have them. A stored tier is chosen by face budget (the tiers
 // Generate prepares: 500, 1000, 5000) or by relative geometric error with its statistic. "Off" means no proxy is
 // held; whether the GI renderer then leaves the object out is its own pass policy.
-export const GI_PROXY_FACE_TIERS=Object.freeze([500,1000,5000]);
+export const GI_PROXY_FACE_TIERS=Object.freeze([500,1000,5000,10000,25000]);
 export const GI_PROXY_ERROR_STATS=Object.freeze(['max','p95','mean']);
 export const DEFAULT_GI_PROXY_SETTING=Object.freeze({enabled:true,selection:Object.freeze({faces:1000})});
 export const canHaveGiProxy=record=>record?.type==='glb';

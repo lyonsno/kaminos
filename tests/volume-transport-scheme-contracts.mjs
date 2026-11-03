@@ -11,6 +11,7 @@ import * as core from '../volume-core.js';
 // own is the operator's live comparison.
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const pressureTransfer = readFileSync(new URL('../volume-pressure-resolution.mjs', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const layout = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
@@ -84,12 +85,21 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   assert.doesNotMatch(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'clamping to the extremum is rejected: it inflates fields toward their running maximum');
   const bound = wgslFunction('boundVelocity');
   assert.ok(bound, 'boundVelocity must exist');
-  assert.match(bound, /vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy scheme keeps the exact fixed component clamp');
+  assert.match(bound, /vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy scheme keeps the exact fixed component clamp');
   assert.match(bound, /transport_controls\.z/, 'non-legacy schemes bound the step by backtrace cells from the uniform');
-  const velocityWrites = source.match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
+  // The separated projection emits a coarse correction, then bounds the
+  // prolonged velocity in the receiving lattice. Solid-cell clearing carries
+  // no velocity. Other velocity writes still use the shared bound helper.
+  const separatedProjection = /if \(SEPARATED_PRESSURE\) \{ fluidDst\[base\] = vec4<f32>\((?:0\.0|correctedVelocity, 0\.0)\); return; \}/g;
+  assert.equal((source.match(separatedProjection) || []).length, 2);
+  assert.match(pressureTransfer, /velocity=clamp\(velocity,vec3<f32>\(-0\.34\*shape\.bounds\.w\),vec3<f32>\(0\.52\*shape\.bounds\.w\)\)/,
+    'separated pressure applies the legacy bound after prolongation in the receiving lattice units');
+  assert.match(pressureTransfer, /if\(magnitude>shape\.bounds\.y\) \{ velocity\*=shape\.bounds\.y\/magnitude; \}/,
+    'separated pressure also applies the selected backtrace bound after prolongation');
+  const velocityWrites = source.replace(separatedProjection, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
   assert.ok(velocityWrites.length >= 4, `expected the main kernel and three projection kernels to write velocity: ${velocityWrites.length}`);
   for (const write of velocityWrites) {
-    assert.match(write, /boundVelocity\(/, `every velocity write goes through boundVelocity: ${write.trim()}`);
+    assert.match(write, /boundVelocity\(/, `each remaining velocity write uses the selected bound: ${write.trim()}`);
   }
   assert.doesNotMatch(source, /var vel = advected\.xyz \* 0\.982;/, 'per-step velocity damping is no longer unconditional');
   assert.match(source, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'velocity damping goes through the scheme-aware helper');
@@ -185,7 +195,7 @@ test('runtime receipt, predictor dispatch, and cost ledger name the transport sc
   assert.match(source, /transport: state\.transport/, 'debug state exports the transport receipt');
   assert.match(source, /transportPredictorPasses/, 'cost ledger counts the predictor pass');
   const encodeSim = source.slice(source.indexOf('  function encodeSim(encoder'), source.indexOf('  function retirePressureResidualMap('));
-  assert.match(encodeSim, /predictorPass[^]*?transportPredictPipeline[^]*?pass\.setPipeline\(computePipeline\)/, 'predictor pass is encoded before the main sim pass when the scheme requests it');
+  assert.match(encodeSim, /predictorPass[^]*?predictor\.setPipeline\(velocityOwner\?materialOnlyPredictPipeline:transportPredictPipeline\);[^]*?predictor\.end\(\);[^]*?pass\.setPipeline\(velocityOwner \? materialOnlyPipeline : computePipeline\)/, 'both matched and separate velocity routes predict before the main material pass');
   assert.match(source, /uniforms\[353\] = transportConfig\.effective\.commonCharacteristic \? 1 : 0;/, 'common characteristic is packed at slot 353');
   assert.match(source, /uniforms\[360\] = transportSchemeUniformValue\(transportConfig\.effective\.scheme\);/, 'scheme is packed at slot 360');
   const predictorLayout=source.slice(source.indexOf('transportPredictBindGroupLayout = device.createBindGroupLayout('),source.indexOf('    browserResidualBindGroupLayout ='));

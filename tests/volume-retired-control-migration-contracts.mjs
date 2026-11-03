@@ -121,7 +121,7 @@ assert.equal(commonGasTransport?.additiveSinceControlCount, 211);
 // A 210-control basin predates common gas transport and every later addition,
 // so the fixture strips everything declared additive at 211 or later.
 const additionsSinceCommonGas = schema.controls.filter(control => control.additiveSinceControlCount >= 211);
-assert.equal(additionsSinceCommonGas[0]?.key, commonGasTransport.key, 'common gas transport is the first addition after the 210-control schema');
+assert.equal(Math.min(...additionsSinceCommonGas.map(c=>c.additiveSinceControlCount)), commonGasTransport.additiveSinceControlCount, 'common gas transport is the first historical addition regardless of display order');
 const legacyTransportArtifact = currentPresetArtifact();
 const legacyTransportRoute = new URL(legacyTransportArtifact.preset.route);
 for (const control of additionsSinceCommonGas) {
@@ -143,8 +143,9 @@ assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), paren
   .preset.domControls[commonGasTransport.key].value, false);
 const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength', 'volume-reactant-soot-yield', 'volume-swirl-jostle']
   .map(key => schema.controls.find(control => control.key === key));
-assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261],
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 1, 1],
   'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio, the reaction-law controls and the physics-appearance controls and the appearance model declare successive additive counts after common gas transport');
+assert.deepEqual(flameDoctorControls.slice(-2).map(c=>c.additiveLineage), ['reactant-soot-yield','swirl-jostle'], 'independent additions do not renumber legacy history');
 // A hole is not history: a record that still carries a control introduced later
 // (wavelet strength, 259) cannot be missing one introduced earlier (pressure solver, 212).
 {
@@ -170,7 +171,7 @@ assert.ok(legacySolverCount < 212 && legacySolverCount > legacyTransportCount, '
 legacySolverArtifact.controlCount = legacySolverCount;
 legacySolverArtifact.preset.controlCount = legacySolverCount;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
-assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
+assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, schema.controls.filter(control => control.additiveSinceControlCount >= 212).map(control => control.key));
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
 assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');
@@ -300,7 +301,7 @@ console.log('volume retired-control migration contracts passed');
     artifact.preset.route = route.href;
     const receipt = validateVolumeSettingsPresetDocument(artifact, artifact.presetId, schema);
     assert.deepEqual(receipt.retirementMigration?.removedControlIds, [cellsRetired.key], `cells ${cells}: the cells control is retired`);
-    assert.deepEqual(receipt.retirementMigration?.addedControlIds, [ratioControl.key, ...laterControls.map(control => control.key)], `cells ${cells}: the multiplier is added, then the later additive controls`);
+    assert.deepEqual(new Set(receipt.retirementMigration?.addedControlIds), new Set([ratioControl.key, ...laterControls.map(control => control.key)]), `cells ${cells}: the multiplier and every later additive control are restored regardless of display order`);
     assert.equal(receipt.preset.domControls[ratioControl.key].value, 2, `cells ${cells}: the multiplier takes the saved-basin height`);
     assert.equal(receipt.presetRoute.searchParams.get(ratioControl.param), '2');
     assert.equal(receipt.presetRoute.searchParams.has(cellsRetired.param), false);

@@ -280,7 +280,7 @@ assert.match(volumeSource, /function fluidBindGroup\(fluidIndex\s*=\s*currentFlu
 assert.match(volumeSource, /currentQuench\s*=\s*1\s*-\s*currentQuench/, 'the main simulation advances quench ownership exactly once per step');
 assert.match(volumeSource, /liquidFireContactBindGroups\[currentFluid\s*\*\s*2\s*\+\s*currentQuench\]/, 'liquid transfer writes the independently current fluid and quench destinations');
 assert.match(volumeSource, /liquidFireContactBindGroups\.length\s*!==\s*4/, 'liquid transfer requires every fluid/quench ownership combination');
-const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}\)[\s\S]*?\n  }\n/)?.[0] || '';
+const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}[^)]*\)[\s\S]*?\n  }\n/)?.[0] || '';
 assert.ok(pressureProjectionSource, 'pressure projection body is inspected');
 assert.doesNotMatch(pressureProjectionSource, /currentQuench\s*=/, 'pressure projection cannot advance or rewind quench ownership');
 assert.match(volumeSource, /gridCellCount\(gridSize\)\s*\+\s*LIQUID_FIRE_SOURCE_STATE_WORDS/, 'quench allocation reserves continuous source state without adding a storage buffer');

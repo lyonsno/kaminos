@@ -7,17 +7,22 @@ import { snapshotExportGeometry } from './scene-export-geometry.mjs';
 // rebinds skinned meshes to their cloned bones, so the exported skin points at
 // joints inside the export rather than at the scene's originals.
 export function exportCloneInWorld(object) {
-  object.updateWorldMatrix(true, true);
-  const clone = cloneHierarchy(object);
-  snapshotExportGeometry(object, clone);
-  const helpers = [];
-  clone.traverse(child => {
-    // Evaluated copies become ordinary asset geometry at this boundary. Their
-    // live ownership marker must not survive glTF extras and a later import.
-    delete child.userData.kaminosRepetitionCopy;
-    if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child);
-  });
-  for (const helper of helpers) helper.removeFromParent();
-  object.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
-  return clone;
+  const restoreBeauty = object.userData?.kaminosBeautyLodRestore?.();
+  try {
+    object.updateWorldMatrix(true, true);
+    const clone = cloneHierarchy(object);
+    snapshotExportGeometry(object, clone);
+    const helpers = [];
+    clone.traverse(child => {
+      // Evaluated copies become ordinary asset geometry at this boundary. Their
+      // live ownership marker must not survive glTF extras and a later import.
+      delete child.userData.kaminosRepetitionCopy;
+      if (child !== clone && (child.userData?.kaminosEditorHelper || child.userData?.kaminosBeautyLodProxy)) helpers.push(child);
+    });
+    for (const helper of helpers) helper.removeFromParent();
+    object.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
+    return clone;
+  } finally {
+    restoreBeauty?.();
+  }
 }

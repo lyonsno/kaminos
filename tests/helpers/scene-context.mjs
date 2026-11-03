@@ -40,6 +40,10 @@ export function sceneContext(context, options) {
     context.waterFeature=water;
   }
   context.flameFeature??=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
+  // These scene-unit fixtures do not allocate World or its visual overlay.
+  context.volumePrototype??=null;context.worldSmokeGuide??=null;context.worldSmokeOverlayMode??='off';
+  context.refreshWorldSmokeOverlay??=()=>({mode:'off'});
+  context.worldSourceSupplyEnabled??=()=>{const c=context.readVolumeControls?.()??{};return c.worldSmoke==='on'&&c.emitterSourceLaw==='immersed-source';};
   context.checkedBurnAppearance??=checkedBurnAppearance;
   context.createKilnRecipeStore??=createKilnRecipeStore;
   // This domain fixture does not assemble the Rendering panel. Its controls

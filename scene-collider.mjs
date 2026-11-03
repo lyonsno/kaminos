@@ -16,7 +16,7 @@ export function checkSceneCollisionReferences(records,{implicitFireDomain=false}
 
 function eligibleMesh(mesh) {
   if(!mesh.isMesh)return false;
-  for(let node=mesh;node;node=node.parent)if(!node.visible || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
+  for(let node=mesh;node;node=node.parent)if(!node.visible || node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
   return true;
 }
 
@@ -30,10 +30,15 @@ export function createSceneColliderCollection(THREE) {
     const meshes=new Map();memberIds=[];
     for(const record of records) {
       if(!checkedObjectCollision(record)?.enabled)continue;
-      record.object.updateWorldMatrix(true,true);
-      let included=false;
-      record.object.traverse(mesh=>{if(eligibleMesh(mesh)){meshes.set(mesh.uuid,{mesh,recordId:record.id});included=true;}});
-      if(included)memberIds.push(record.id);
+      const restoreBeauty=record.object.userData?.kaminosBeautyLodRestore?.();
+      try {
+        record.object.updateWorldMatrix(true,true);
+        let included=false;
+        record.object.traverse(mesh=>{if(eligibleMesh(mesh)){meshes.set(mesh.uuid,{mesh,recordId:record.id});included=true;}});
+        if(included)memberIds.push(record.id);
+      } finally {
+        restoreBeauty?.();
+      }
     }
     for(const [id,wrapper] of wrappers)if(!meshes.has(id)){wrapper.removeFromParent();wrappers.delete(id);}
     for(const [id,{mesh,recordId}] of [...meshes].sort(([a],[b])=>a.localeCompare(b))) {

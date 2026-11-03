@@ -39,7 +39,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       value(selector,state.effective??requested);
       const caster=win.__kaminosSceneRadiance?.debugState().casters;
       value(casterSelector,caster?.level??'original');
-      if(casterStatus)casterStatus.textContent=caster?.error?`Caster load failed: ${caster.error}; using ${caster.level}.`:caster?.level!=='original'&&caster?`${caster.targets} mapped kiln(s): ${caster.originalTriangles.toLocaleString()} → ${caster.captureTriangles.toLocaleString()} caster triangles. Visible geometry and smoke visibility unchanged. Error unmeasured.`:'Original scene geometry. Reduced choices apply only to the mapped kiln, not other objects.';
+      if(casterStatus)casterStatus.textContent=caster?.error?`Caster load failed: ${caster.error}; using ${caster.level}.`:caster?.level!=='original'&&caster&&!caster.errorMeasured?`${caster.targets} mapped kiln(s): ${caster.originalTriangles.toLocaleString()} → ${caster.captureTriangles.toLocaleString()} caster triangles. Visible geometry and smoke visibility unchanged. Error unmeasured.`:caster?.targets>0?`${caster.targets} stunt-double caster(s): ${caster.originalTriangles.toLocaleString()} → ${caster.captureTriangles.toLocaleString()} caster triangles. Visible geometry and smoke visibility unchanged.`:'Original scene geometry. Reduced choices apply only to the mapped kiln, not other objects.';
       value(pointSelector,state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1));
       for(const {key,number} of qualityControls){
         value(number,state.shadowQuality?.[key]??requestedQuality?.[key]??DEFAULT_SHADOW_QUALITY[key]);
