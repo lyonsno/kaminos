@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import net from 'node:net';import {spawn,execFileSync}from 'node:child_process';import {createHash}from 'node:crypto';import {fileURLToPath}from 'node:url';
 const sourceRepo=process.env.TRELLIS_ASSAY_REPO_ROOT??path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const root=await fs.mkdtemp(path.join(process.env.TRELLIS_ASSAY_NEGATIVE_OUTPUT??os.tmpdir(),'trellis-assay-negative-'));
+const root=await fs.realpath(await fs.mkdtemp(path.join(process.env.TRELLIS_ASSAY_NEGATIVE_OUTPUT??os.tmpdir(),'trellis-assay-negative-')));
 // Other suite entries mutate their checkout while running. Execute the actual
 // admitted SHA in a clean sparse snapshot; never relax the production guard.
 const revision=execFileSync('git',['rev-parse','HEAD'],{cwd:sourceRepo,encoding:'utf8'}).trim(),repo=path.join(root,'source');
