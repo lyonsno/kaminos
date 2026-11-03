@@ -20,6 +20,7 @@ try{
  report.phase='save';await page.getByLabel('Family name',{exact:true}).fill(args.name);
  async function save(){const response=page.waitForResponse(r=>r.url().endsWith('/api/stock-families')&&r.request().method()==='POST');await page.getByRole('button',{name:'Save family',exact:true}).click();const r=await response;assert.equal(r.status(),200);return r.json();}
  report.saved=await save();assert.equal(report.saved.recipe.sources.length,3);assert.equal(report.saved.name,args.name);
+ assert.deepEqual(JSON.parse(new URL(page.url()).searchParams.get('experiment_inputs')),{assetSource:'/api/read?root=generated-meshes&path='+report.saved.id+'.stock-family.json'});
  await invoke('set',{id:'long',length:2.3});report.updated=await save();assert.equal(report.updated.id,report.saved.id);assert.notEqual(report.updated.revision,report.saved.revision);
  const catalog=await page.evaluate(()=>fetch('/api/authoring-assets?collection=generated-meshes').then(r=>r.json()));
  const entry=catalog.entries.find(e=>e.kind==='stock-family'&&e.path===report.saved.id+'.stock-family.json');assert.ok(entry);assert.equal(entry.label,args.name);report.entry=entry;
@@ -32,6 +33,7 @@ try{
  await page.getByRole('button',{name:'Open family',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('[aria-label="Long Length"]')?.value==='2.3'&&document.body.dataset.workspace==='workbench');
  report.reopened=await invoke('read');assert.deepEqual(report.reopened.recipe,report.updated.recipe);assert.equal((await invoke('library')).id,report.updated.id);
+ await invoke('set',{id:'long',length:2.7});report.beforeReload=await save();await page.reload();await page.waitForFunction(()=>document.querySelector('[aria-label="Long Length"]')?.value==='2.7');assert.equal((await invoke('library')).revision,report.beforeReload.revision);report.reloaded=await invoke('read');
  await page.getByLabel('Stock source',{exact:true}).selectOption('7be0be2857ce5100ffa86f329e4068ba83ebb701c8582e2f982d28e68b8f8bdd');
  await page.waitForFunction(()=>{const s=document.querySelector('[aria-label="Stock source"]');return s?.value.startsWith('7be0')&&!s.disabled;});
  assert.equal((await invoke('read')).source.fit.axis,'x');await invoke('select',{id:'bend'});await page.evaluate(()=>window.kaminosFrameSelected());

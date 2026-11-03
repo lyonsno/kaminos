@@ -27,6 +27,7 @@ export function validateRecipe(value){
   if(r?.schema!=='kaminos.stock-family.v1'||!r.source||!/^[a-f0-9]{64}$/.test(r.source.sha256)||typeof r.source.url!=='string'||!r.source.url)throw Error('Invalid stock source recipe');
   validateStockSource(r.source);
   if(r.sources!==undefined){if(!Array.isArray(r.sources))throw Error('Invalid source library');r.sources.forEach(validateStockSource);}
+  if(r.referencePose!==undefined){for(const k of ['position','rotation','scale'])if(!Array.isArray(r.referencePose?.[k])||r.referencePose[k].length!==3||!r.referencePose[k].every(Number.isFinite))throw Error('Invalid reference pose');}
   if(!Array.isArray(r.variants)||!r.variants.length)throw Error('Variants required');
   const ids=new Set();for(const v of r.variants){validateParameters(v);if(typeof v.id!=='string'||!v.id||ids.has(v.id)||typeof v.label!=='string')throw Error('Unique named variants required');ids.add(v.id);
     if(v.pose){for(const k of ['position','rotation','scale'])if(!Array.isArray(v.pose[k])||v.pose[k].length!==3||!v.pose[k].every(Number.isFinite))throw Error('Invalid variant pose');}}return r;

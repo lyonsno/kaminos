@@ -19,3 +19,12 @@ test('withheld or non-family selection never opens an experiment',async()=>{
  await assert.rejects(openStockFamilyAsset({kind:'stock-family',visibility:{status:'withheld'}},{}),/available/);
  await assert.rejects(openStockFamilyAsset({kind:'mesh'},{}),/available/);
 });
+test('native family open keeps a live internal address, not an inline revision snapshot',async()=>{
+ const previous=globalThis.fetch,calls=[];globalThis.fetch=async()=>Response.json({schema:'kaminos.stock-family-asset.v1',id,name:'Test',revision:'a'.repeat(64),recipe});
+ try{await openStockFamilyAsset({kind:'stock-family',source:'/api/read?root=generated-meshes&path='+id+'.stock-family.json'},{kaminosWorkbenchExperiments:{open:async(...args)=>calls.push(args)},kaminosAssets:{close(){}},kaminosWorkspace:{setMode(){}}});
+ assert.deepEqual(calls,[['stock-family',{assetSource:'/api/read?root=generated-meshes&path='+id+'.stock-family.json'}]]);
+ }finally{globalThis.fetch=previous;}
+});
+test('malformed retained reference poses fail before creating scene objects',()=>{
+ assert.throws(()=>validateFamilyAsset({schema:'kaminos.stock-family-asset.v1',id,name:'Test',revision:'a'.repeat(64),recipe:{...recipe,referencePose:{position:[0,0],rotation:[0,0,0],scale:[1,1,1]}}}),/reference pose/);
+});
