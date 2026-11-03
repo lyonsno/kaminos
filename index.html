@@ -5338,7 +5338,7 @@ function setSceneObjectMounted(entry, mounted) {
 }
 
 function detachAuthoredSceneForPreview() {
-  sceneLifecycle.suspendPreview();
+  return sceneLifecycle.suspendPreview();
 }
 
 function updateGreenroomPreviewControls() {
@@ -5353,7 +5353,7 @@ function updateGreenroomPreviewControls() {
   const preview = greenroomPreviewState.preview || {};
   document.getElementById('greenroom-preview-title').textContent = preview.display?.title || preview.fileName || 'Greenroom output';
   document.getElementById('greenroom-preview-source').textContent = preview.url || '';
-  if (importButton) importButton.disabled = !greenroomPreviewState.previewObject;
+  if (importButton) importButton.disabled = greenroomPreviewState.loading || !greenroomPreviewState.previewObject;
   panel.hidden = false;
 }
 
@@ -6218,10 +6218,13 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   if (!greenroomPreviewState) return false;
   const state = greenroomPreviewState;
   const authored = state.authored;
-  removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
-  greenroomPreviewState = null;
+  if(!await sceneLifecycle.resumePreview(authored,{beforeRestore(){
+    if(greenroomPreviewState!==state)return false;
+    removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
+  }}))return false;
+  if(greenroomPreviewState!==state)return false;
+  greenroomPreviewState=null;
   updateGreenroomPreviewControls();
-  sceneLifecycle.resumePreview(authored);
   if (!options.silent) setInfo('Returned to scene');
   return true;
 }
@@ -11638,7 +11641,7 @@ async function initScene() {
   window.kaminosPolyEdit=polyEdit.api;
   const sceneCommandBlocked=()=>{
       const edit=scenePlacementTools.edits.state();
-      if(authoringBusy||sceneDocument.state().blocked)return 'Finish the scene document action first';
+      if(authoringBusy||sceneDocument.state().blocked||sceneLifecycle.clearing)return 'Finish the scene document action first';
       if(vantageCaptureHeld)return 'The agent sub is taking a picture';
       if(edit.active||edit.replaying||scenePlacementTools.edits.isSettling())return 'Finish or cancel the current edit first';
       if(transformGizmoDragging||transformControls.dragging||sceneNavigation.state().gesture||(controls.state??-1)!==-1)return 'Finish navigating or dragging first';
@@ -11914,7 +11917,7 @@ async function initScene() {
     const fireProxyEffective = fireProxySync?.effective() ?? false;
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && isSceneItemVisible('flame-field') && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const mainRendererNeeded = !volumePrototype?.isActive() || !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = waterFeature.active;
 
     if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
@@ -12264,18 +12267,32 @@ function createPageSceneLifecycle(){
     records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
-    context:{beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup;},loaded:async setup=>{if(setup)await mountLocalLiquidHost();},
-      capturePreview:()=>({activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+    context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},loaded:async setup=>{if(setup.water)await mountLocalLiquidHost();},
+      capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
         renderSceneObjectList();updateTransformInspector();
       },
       restorePreview(authored){sceneDocument.resume(authored.documentSession);modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
-      previewResumed(){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}},
+      async previewResumed(authored,{isCurrent}){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}await restoreSceneFlame({present:authored.flamePresent,composition:!!activeSceneComposition,isCurrent},new URLSearchParams(authored.flameRoute));},
     },
   });
+}
+async function retireSceneFlame(){
+  await flameFeature.clear();
+  // A consumer waiting for an encoded flame frame cannot own an ordinary
+  // scene after its producer retires. Release it before replacing inputs.
+  await syncSceneRadianceRoute(new URLSearchParams());
+  window._kaminosDirty?.();
+}
+async function restoreSceneFlame(options,route=fireLightFieldRouteParams()){
+  const isCurrent=options.isCurrent??(()=>true);
+  if(!isCurrent())return false;
+  await syncSceneRadianceRoute(options.present?route:new URLSearchParams());
+  if(!isCurrent())return false;
+  return flameFeature.restore(options);
 }
 const sceneLifecycle=createPageSceneLifecycle();
 function clearScene(options={}) {return sceneLifecycle.clear(options);}
@@ -12306,7 +12323,9 @@ function clearSceneEditingState(){
   sceneMembership.clearHistoryTargets();
 }
 function clearSceneDomains(){
-  flameFeature.clear().catch(error=>setInfo(`Fire retirement: ${error.message}`));
+  activeSceneComposition=null;authoredFlamePresent=false;
+  volumePrototype?.setSceneCompositionPresentation?.(false);
+  setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
   waterFeature.clear();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
@@ -12370,7 +12389,7 @@ async function showImagePlane(source, options = {}) {
     setInfo('Image source required');
     return null;
   }
-  if (shouldClearSceneForImport(options)) clearScene();
+  if (shouldClearSceneForImport(options)&&!await clearScene()) return null;
   const loadToken = workingScene.generation;
   const metadata = options.metadata || {};
   const texture = await loadTexture(source);
@@ -12420,7 +12439,7 @@ async function showImagePlane(source, options = {}) {
 
 // --- PBR Material Preview ---
 async function showPBRPreview(options = {}) {
-  if (shouldClearSceneForImport(options)) clearScene();
+  if (shouldClearSceneForImport(options)&&!await clearScene()) return null;
   const loadToken = workingScene.generation;
   const metadata = options.metadata || {};
   modelSourceUrl = metadata.source ?? modelSourceUrl ?? 'material-preview';
@@ -12651,7 +12670,7 @@ function frameAssetArrival(object) {
 async function showGLB(file, options = {}) {
   await sceneLightingPreparation?.whenIdle();
   const cleared = shouldClearSceneForImport(options);
-  if (cleared) clearScene();
+  if (cleared&&!await clearScene()) return null;
   const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
   const loadToken = workingScene.generation;
   const isBlob = typeof file !== 'string';
@@ -13027,7 +13046,7 @@ window.kaminosMountInvestigationEntry=async(options={})=>{
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
   const cleared = shouldClearSceneForImport(options);
-  if (cleared) clearScene();
+  if (cleared&&!await clearScene()) return null;
   const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
@@ -13096,7 +13115,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
 
 // --- Depth Surface ---
 async function showDepthSurface(options = {}) {
-  if (shouldClearSceneForImport(options)) clearScene();
+  if (shouldClearSceneForImport(options)&&!await clearScene()) return null;
   const depthFile = loadedFiles['depth_vis.png'] || loadedFiles['depth.exr'];
   const imageFile = loadedFiles['image.jpg'];
   if (!depthFile) { setInfo('No depth output found'); return; }
@@ -21657,7 +21676,7 @@ async function initKaminosVolumeRoute() {
     setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
     try {
-      await flameFeature.setActive(true);
+      await flameFeature.restore({present:true,composition:!!activeSceneComposition});
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
@@ -22165,8 +22184,7 @@ async function writeFirstFlameFieldStateUnchecked(value) {
     renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   } finally {burnerGraphWriting=wasWriting;}
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
-    if(value.composition&&activeSceneComposition){await flameFeature.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
-    if(!activeSceneComposition)await flameFeature.setActive(false);
+    await flameFeature.restore({present:!!activeSceneComposition,composition:!!activeSceneComposition});
   });
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
@@ -23651,21 +23669,22 @@ async function greenroomViewMesh(url, fileName, display) {
   glbFileName = fileName;
   const metadata = greenroomMeshMetadata(display, fileName, url);
   const authored = greenroomPreviewState?.authored || captureAuthoredSceneStateForPreview();
-  if (greenroomPreviewState) {
-    removeGreenroomPreviewObject();
-  } else {
-    detachAuthoredSceneForPreview(authored);
-  }
   const previewGeneration = nextGreenroomPreviewGeneration();
-  greenroomPreviewState = {
+  // Retain the authored snapshot before retirement changes runtime presence.
+  // A newer View shares it, and Back can cancel even while entry is draining.
+  const state = greenroomPreviewState = {
     authored,
     preview: { url, fileName, display, metadata },
-    previewGeneration: previewGeneration,
-    previewObject: null,
+    previewGeneration,
+    loading: true,
+    previewObject: greenroomPreviewState?.previewObject ?? null,
   };
   updateGreenroomPreviewControls();
   setInfo(`Greenroom preview: ${display?.title || fileName}`);
   try {
+    if(!await detachAuthoredSceneForPreview(authored)||greenroomPreviewState!==state)return;
+    removeGreenroomPreviewObject();
+    state.previewObject=null;
     const previewObject = await showGLB(url, {
       clear: false,
       register: false,
@@ -23674,6 +23693,7 @@ async function greenroomViewMesh(url, fileName, display) {
     });
     if (greenroomPreviewState?.previewGeneration === previewGeneration) {
       greenroomPreviewState.previewObject = previewObject;
+      greenroomPreviewState.loading = false;
     } else {
       scene.remove(previewObject);
       if (transformControls && currentMesh === previewObject) {
@@ -23710,7 +23730,7 @@ async function recordImportedSceneObject(object) {
 
 async function greenroomImportMesh(url, fileName, display) {
   if (greenroomPreviewIsActive()) {
-    await restoreAuthoredSceneFromPreview({ silent: true });
+    if(!await restoreAuthoredSceneFromPreview({ silent: true }))return null;
   }
   glbFileName = fileName;
   const imported = await showGLB(url, {
@@ -23946,10 +23966,10 @@ function greenroomSplatMetadata(display, fileName, url, metadata = {}) {
 
 async function greenroomImportSplat(url, fileName, display, options = {}) {
   if (greenroomPreviewIsActive()) {
-    await restoreAuthoredSceneFromPreview({ silent: true });
+    if(!await restoreAuthoredSceneFromPreview({ silent: true }))return null;
     if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
   }
-  if (shouldClearSceneForImport(options)) clearScene();
+  if (shouldClearSceneForImport(options)&&!await clearScene()) return null;
   const importIsCurrent = createSceneObjectPublicationGuard({
     getMutationToken: () => workingScene.generation,
     isCurrent: options.isCurrent,
@@ -24014,14 +24034,14 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
 window.greenroomImportSplat = greenroomImportSplat;
 
 async function importGreenroomPreviewToScene() {
-  if (!greenroomPreviewState?.previewObject) {
+  if (greenroomPreviewState?.loading || !greenroomPreviewState?.previewObject) {
     setInfo('Greenroom preview is still loading');
     updateGreenroomPreviewControls();
     return false;
   }
   const preview = greenroomPreviewState.preview;
   const transformState = previewTransformState(greenroomPreviewState.previewObject);
-  await restoreAuthoredSceneFromPreview({ silent: true });
+  if(!await restoreAuthoredSceneFromPreview({ silent: true }))return false;
   glbFileName = preview.fileName;
   const imported = await showGLB(preview.url, {
     clear: false,
@@ -24832,7 +24852,7 @@ function restoreLoadedSceneRecord(entry,record){
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
 async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:liquidSetup,loadRequestId});
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent}},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -24947,6 +24967,7 @@ function compositionStatus(message, failed = false) {
 }
 
 async function collectSceneComposition() {
+  if(!flameFeature.present&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
   const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
@@ -25241,6 +25262,7 @@ function attachSceneObject(id,groupId) {
   },groupId?'Parent object':'Unparent object');
 }
 function assertSceneConstructionAvailable() {
+  if(sceneLifecycle.clearing)throw Error('Wait for the scene to finish retiring');
   if(sceneLightingPreparation?.state().compiling)throw Error('Lighting is being prepared; scene edits resume when it finishes');
   if(workingScene.isSuspended)throw Error('Finish preview before editing the scene');
   if(authoringBusy||sceneDocument.state().blocked)throw Error('Wait for the document to finish loading');
@@ -26356,7 +26378,7 @@ async function saveToServer(sceneData, filename, options = {}) {
 }
 
 function sceneIsEmpty() {
-  const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
+  const persistableFlame = flameFeature.present && isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
   return workingScene.objects.length === 0 && volumePrimitives.length === 0 && !persistableFlame && !waterFeature.setup;
 }
 
@@ -26366,7 +26388,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
-  if((activeSceneComposition||isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
+  if((activeSceneComposition||flameFeature.present&&isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
@@ -26469,6 +26491,9 @@ async function loadSceneFile(file, options = {}) {
 
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   await sceneLightingPreparation?.whenIdle();
+  if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
+  await retireSceneFlame();
+  if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
@@ -26550,12 +26575,12 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 
   // The pinned basin is already mounted. Reapplying identical primitives would
   // rebuild its GPU field and invalidate textures held by the lighting pass.
-  if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
+  if (!activeSceneComposition || JSON.stringify(getVolumePrimitiveState()) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition||new URLSearchParams(location.search).get('kaminos_volume_smoke')==='1');
+  const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition);
   if(firePresent)setActiveTab(activeSceneComposition?'assets':'volume',{reveal:false});
-  if(!await flameFeature.restore({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
+  if(!await restoreSceneFlame({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
 
 
   // Apply camera

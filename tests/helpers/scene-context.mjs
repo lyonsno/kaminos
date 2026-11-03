@@ -39,7 +39,14 @@ export function sceneContext(context, options) {
     water.setPaused=value=>{context.localLiquidPaused=Boolean(value);context.localLiquidHost?.setPaused(value);return context.localLiquidPaused;};
     context.waterFeature=water;
   }
-  context.flameFeature??=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
+  context.window??={};
+  context.fireLightFieldRouteParams??=()=>new URLSearchParams();
+  context.fireShadowSceneRoute??=()=>({});
+  context.syncSceneRadianceRoute??=async()=>{};
+  context.URLSearchParams??=URLSearchParams;
+  context.retireSceneFlame??=()=>context.flameFeature.clear();
+  context.restoreSceneFlame??=options=>context.flameFeature.restore(options);
+  context.flameFeature??=createAuthoredFlameFeature({present:!!context.activeSceneComposition||!!context.volumePrototype?.isActive?.()&&!!context.isFireLightFieldRoute?.(),runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
   // These scene-unit fixtures do not allocate World or its visual overlay.
   context.volumePrototype??=null;context.worldSmokeGuide??=null;context.worldSmokeOverlayMode??='off';
   context.refreshWorldSmokeOverlay??=()=>({mode:'off'});
@@ -171,6 +178,8 @@ export async function composePageMembershipBatch(context, html) {
 export async function composePageSceneLifecycle(context,html){
  const {createSceneLifecycle}=await import('../../scene-lifecycle.mjs');sceneContext(context);
  context.workingScene.loads??=context.sceneLoadRequests;
+ context.VOLUME_PRIMITIVE_SCHEMA??='kaminos.volume-primitives.v0';
+ context.setVolumePrimitivesState??=value=>{context.volumePrimitives=value;};
  context.workingScene.suspendedObjects??=()=>[];
  context.workingScene.discardSuspendedMembership??=()=>null;
  for(const name of ['setSceneObjectMounted','setSceneGroupsFromRecords','setSceneSelection','setActiveSceneObject','setActiveSceneGroup'])context[name]??=()=>{};

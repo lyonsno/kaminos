@@ -1,8 +1,10 @@
 // kaminos-test: node
+import {createSceneLifecycle} from '../scene-lifecycle.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createAuthoredFlameFeature} from '../authored-flame-feature.mjs';
 import {createSceneSimulationActivity} from '../scene-simulation-activity.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createWorkingScene} from '../working-scene.mjs';
@@ -27,7 +29,7 @@ async function fixture({gate=null,failure=null}={}){
   ensureGpu:async()=>{},ensureBrowserResidualModel:async()=>{},invalidateRaymarchReadouts:()=>{},
   requestAnimationFrame:fn=>{scheduled.set(++nextRaf,fn);return nextRaf;},cancelAnimationFrame:id=>scheduled.delete(id),
   canvas:{classList:{add(){},remove(){}},remove:()=>destroyed.push('canvas')},emitStatus:event=>events.push(event),performance};
- for(const name of ['sceneTransportConsumer','sceneTransport','rayStepTelemetry','scenePointBindings','persistentSparseCohortGpuState','fourArmHeldStateRuntimeState','fourArmHeldStateResidualGrid','frameTexture','rayStartNoiseTexture','ordinarySceneDepthFallback','boundarySplatHdrTexture','boundarySplatOpticalTexture','fourArmHeldStateLinearTexture','fourArmHeldStateResidualTexture','fourArmHeldStateResidualParamsBuffer','browserResidualFeatureTexture','externalEmitterBuffer','analyticEmitterInjectionUniformBuffer','volumePresentationControlsBuffer','boundarySplatCameraBuffer'])scope[name]=null;
+ for(const name of ['distributedBindings','worldOpticalFallback','worldRenderUniform','rayAllocationHistory','sceneTransportConsumer','sceneTransport','rayStepTelemetry','scenePointBindings','persistentSparseCohortGpuState','fourArmHeldStateRuntimeState','fourArmHeldStateResidualGrid','frameTexture','rayStartNoiseTexture','ordinarySceneDepthFallback','boundarySplatHdrTexture','boundarySplatOpticalTexture','fourArmHeldStateLinearTexture','fourArmHeldStateResidualTexture','fourArmHeldStateResidualParamsBuffer','browserResidualFeatureTexture','externalEmitterBuffer','analyticEmitterInjectionUniformBuffer','volumePresentationControlsBuffer','boundarySplatCameraBuffer'])scope[name]=null;
  scope.frameTexture={destroy:()=>destroyed.push('frameTexture')};
  scope.clearBoundarySplatLiveUnionCoefficientOverlay=()=>{};
  scope.destroyLiquidFireContactConsumer=()=>destroyed.push('liquidContact');
@@ -128,6 +130,7 @@ function authoredField(f){
   isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},
   ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
   fireLightFieldRouteParams:()=>new URLSearchParams(),window:{},syncSceneRadianceRoute:async()=>{}};
+ context.flameFeature=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,visible:()=>true,composed:()=>!!context.activeSceneComposition});
  const start=html.indexOf('function writeFirstFlameFieldState('),end=html.indexOf('async function addFirstFlameField',start);
  vm.createContext(context);vm.runInContext(html.slice(start,end),context);
  const edits=createSceneEdits({read(){},write(){}});
@@ -167,5 +170,49 @@ test('failed flame edit restores authored state and releases its selection guard
   assert.deepEqual(structuredClone(context.firstFlameFieldState()),initial);
   assert.equal(context.burnerGraphWriting,false);assert.equal(f.api.isActive(),true);
   assert.equal(edits.state().undoCount,0);assert.equal(edits.state().active,null);
+ }finally{await f.close();}
+});
+
+test('withdrawn activation cannot resurrect the retained flame after GPU acquisition',async()=>{
+ const f=await fixture(),gate=deferred();
+ try{
+  await f.api.setActive(false);
+  f.scope.ensureGpu=()=>gate.promise;
+  const feature=createAuthoredFlameFeature({runtime:()=>f.api,visible:()=>true,composed:()=>true});
+  const activating=feature.setActive(true);
+  const clearing=feature.clear();
+  await clearing;gate.resolve();await activating;
+  assert.equal(f.api.isActive(),false);assert.equal(f.scheduled.size,0);
+  assert.equal(f.events.filter(event=>event.phase==='active').length,0,'obsolete acquisition must never publish activation');
+ }finally{gate.resolve();await f.close();}
+});
+
+test('scene replacement retains render inputs until admitted foreground work finishes',async()=>{
+ const f=await fixture();
+ try{
+  const scene=createWorkingScene(),object={},destroyed=[];
+  scene.put({id:'old',type:'glb',object});
+  const lifecycle=createSceneLifecycle({scene,roots:{detach(){},dispose:o=>destroyed.push(o)},records:{},groups:{},selection:{},
+   context:{retire:()=>f.api.setActive(false)}});
+  f.api.render(0);await turn();
+  const clearing=lifecycle.clear();await turn();
+  assert.deepEqual(destroyed,[],'scene resources remain alive while the admitted frame is queued');
+  assert.deepEqual((await f.boundary()).failures,[]);
+  await clearing;assert.deepEqual(destroyed,[object]);
+ }finally{await f.close();}
+});
+
+test('dispose keeps the world geometry buffer alive through fluid cleanup',async()=>{
+ const f=await fixture();try{
+  let destroyed=false,writes=0;
+  f.scope.worldRenderUniform={destroy(){destroyed=true;}};
+  f.scope.device.queue.writeBuffer=buffer=>{assert.equal(destroyed,false,'fluid cleanup writes world geometry before its buffer is destroyed');assert.equal(buffer,f.scope.worldRenderUniform);writes++;};
+  for(const key of ['fineVelocity','worldSmoke','worldSolidProducer'])f.scope[key]=null;
+  f.scope.retireIntermediateFlow=()=>{};
+  // Execute the production cleanup prefix containing the world-geometry write;
+  // later fluid allocations are irrelevant to this lifetime invariant.
+  const start=source.indexOf('  function destroyFluidState('),end=source.indexOf('    separatedPressure?.destroy();',start);
+  vm.runInContext(source.slice(start,end)+'}',f.scope);
+  await f.api.dispose();assert.equal(writes,1);assert.equal(destroyed,true);
  }finally{await f.close();}
 });

@@ -15,11 +15,11 @@ function fixture(){
  context:{beforeClear(){events.push(['history',state.objects.length+state.suspendedObjects().length]);},clearDomains(){events.push(['domains',state.generation]);},cleared(){events.push(['cleared',state.objects.length]);}}};
  return {state,world,events,disposed,adapters,add,lifecycle:createSceneLifecycle(adapters)};
 }
-test('clear invalidates pending work, retires active or parked roots once, and ends history before disposal',()=>{
+test('clear invalidates pending work, retires active or parked roots once, and ends history before disposal',async()=>{
  for(const preview of [false,true]){
   const f=fixture(),a=f.add('a'),arrival=f.state.arrival(),load=f.state.loads.begin();f.state.select(['a']);
-  if(preview)f.lifecycle.suspendPreview();const before=f.state.generation;
-  f.lifecycle.clear();assert.deepEqual(f.disposed,[a.object]);assert.equal(a.object.parent,null);
+  if(preview)await f.lifecycle.suspendPreview();const before=f.state.generation;
+  await f.lifecycle.clear();assert.deepEqual(f.disposed,[a.object]);assert.equal(a.object.parent,null);
   assert.equal(f.state.objects.length,0);assert.equal(f.state.suspendedObjects().length,0);assert.equal(f.state.isSuspended,false);
   assert.equal(arrival.isCurrent(),false);assert.equal(f.state.loads.isCurrent(load),false);assert.equal(f.state.generation,before+1);
   assert.deepEqual(f.events,[['history',1],['domains',before+1],['cleared',0]]);
@@ -39,20 +39,21 @@ test('superseded replacement cannot clear or select over the newer scene',async(
  const f=fixture();let finish;
  f.adapters.records.load=(record,id)=>record.id==='slow'?new Promise(resolve=>{finish=()=>resolve(f.state.loads.isCurrent(id)?f.add(record.id).object:null);}):Promise.resolve(f.add(record.id).object);
  const old=f.state.loads.begin(),pending=f.lifecycle.replace([{id:'slow'}],{loadRequestId:old});
+ await new Promise(r=>setImmediate(r));
  const fresh=f.state.loads.begin();await f.lifecycle.replace([{id:'current'}],{loadRequestId:fresh});finish();
  assert.equal(await pending,false);assert.deepEqual(f.state.objects.map(row=>row.id),['current']);assert.equal(f.state.activeObjectId,'current');
  assert.equal(await f.lifecycle.replace([{id:'stale'}],{loadRequestId:old}),false);assert.equal(f.state.activeObjectId,'current');
 });
-test('closing an owner during preview cannot resurrect it or destroy a parked comparison resource',()=>{
+test('closing an owner during preview cannot resurrect it or destroy a parked comparison resource',async()=>{
  const f=fixture(),geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial(),unique=new THREE.BoxGeometry(),released=[];
  const owned=f.add('owned'),borrowed=f.add('borrowed');owned.object.add(new THREE.Mesh(geometry,material),new THREE.Mesh(unique,material));borrowed.object.add(new THREE.Mesh(geometry,material));
  geometry.addEventListener('dispose',()=>released.push('shared'));unique.addEventListener('dispose',()=>released.push('unique'));
  f.state.setGroups([{id:'comparison',objectIds:['owned','borrowed']}]);f.state.select(['@group:comparison']);
  const operations=createSceneMembershipOperations({scene:f.state,records:{},roots:{detach:row=>row.object.removeFromParent(),dispose(){throw Error('must use scoped disposal');}}});
- f.lifecycle.suspendPreview();assert.equal(f.world.children.length,0);
+ await f.lifecycle.suspendPreview();assert.equal(f.world.children.length,0);
  const close=()=>operations.removeOwned({id:'owned',root:owned.object},root=>disposeOwnedSceneTree(root,[f.world,...f.state.suspendedObjects().map(row=>row.object)]));
  assert.equal(close(),true);assert.equal(close(),false);assert.deepEqual(released,['unique']);
- f.lifecycle.resumePreview({});assert.equal(f.state.find('owned'),undefined);assert.equal(owned.object.parent,null);assert.equal(borrowed.object.parent,f.world);
+ await f.lifecycle.resumePreview({});assert.equal(f.state.find('owned'),undefined);assert.equal(owned.object.parent,null);assert.equal(borrowed.object.parent,f.world);
  assert.deepEqual(f.state.groups[0].objectIds,['borrowed']);assert.equal(f.state.activeGroupId,'comparison');assert.deepEqual(released,['unique']);
 });
 test('replacement identity mismatch fails loudly and releases the published partial root',async()=>{
@@ -74,6 +75,50 @@ for(const parked of [false,true])test(`presentation owner cleanup protects autho
  const host=createWorkbenchSceneHost({scene:f.world,camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3()},findObject:root=>f.state.findRoot(root),redraw(){},onFrame:()=>()=>{},
    resourceConsumers:()=>[f.world,...f.state.retainedObjects().map(row=>row.object),...f.state.suspendedObjects().map(row=>row.object)]});
  const owner=host.open(),presentation=new THREE.Group();presentation.add(new THREE.Mesh(geometry,material),new THREE.Mesh(unique,material));await owner.attach(presentation,{owned:true,presentation:true});
- if(parked)f.lifecycle.suspendPreview();await owner.dispose();assert.deepEqual(events,['unique'],'presentation cleanup must preserve the parked or mounted authored consumer');
- if(parked)f.lifecycle.resumePreview({});assert.equal(authored.object.parent,f.world);assert.equal(presentation.parent,null);
+ if(parked)await f.lifecycle.suspendPreview();await owner.dispose();assert.deepEqual(events,['unique'],'presentation cleanup must preserve the parked or mounted authored consumer');
+ if(parked)await f.lifecycle.resumePreview({});assert.equal(authored.object.parent,f.world);assert.equal(presentation.parent,null);
+});
+
+test('clear retires domain work before touching history or scene resources',async()=>{
+ const f=fixture(),old=f.add('old');let release;
+ f.adapters.context.retire=()=>new Promise(r=>release=r);
+ const clearing=f.lifecycle.clear();
+ await Promise.resolve();
+ assert.deepEqual(f.events,[]);assert.deepEqual(f.disposed,[]);
+ release();await clearing;
+ assert.deepEqual(f.disposed,[old.object]);assert.equal(f.state.objects.length,0);
+});
+test('newer replacement supersedes a clear waiting for domain retirement',async()=>{
+ const f=fixture();f.add('old');let release;const gate=new Promise(r=>release=r);
+ f.adapters.context.retire=()=>gate;
+ const stale=f.state.loads.begin(),first=f.lifecycle.replace([{id:'stale'}],{loadRequestId:stale});
+ const current=f.state.loads.begin(),second=f.lifecycle.replace([{id:'current'}],{loadRequestId:current});
+ assert.deepEqual(f.disposed,[],'both replacements wait for admitted work');release();
+ assert.equal(await first,false);assert.equal(await second,true);
+ assert.deepEqual(f.state.objects.map(row=>row.id),['current']);
+});
+test('failed retirement preserves existing scene and releases transition state',async()=>{
+ const f=fixture(),old=f.add('old');
+ f.adapters.context.retire=async()=>{throw Error('retirement rejected');};
+ await assert.rejects(async()=>f.lifecycle.clear(),/retirement rejected/);
+ assert.deepEqual(f.disposed,[]);assert.equal(f.state.find('old'),old);
+ assert.equal(f.lifecycle.clearing,false);
+});
+
+for(const method of ['suspendPreview','resumePreview'])test(`${method} waits for retired domain work before changing mounts or inputs`,async()=>{
+ const f=fixture(),row=f.add('owned');
+ if(method==='resumePreview')await f.lifecycle.suspendPreview();
+ let release;const gate=new Promise(r=>release=r);let inputs=0;
+ f.adapters.context.retire=()=>gate;
+ f.adapters.context.previewDetached=()=>inputs++;
+ f.adapters.context.restorePreview=()=>inputs++;
+ const parent=row.object.parent,pending=f.lifecycle[method]({});await Promise.resolve();
+ assert.equal(row.object.parent,parent,'preview must retain current mounts until retirement');assert.equal(inputs,0);
+ release();assert.equal(await pending,true);assert.equal(inputs,1);
+});
+test('a preview suspension superseded by clear cannot park the replacement scene',async()=>{
+ const f=fixture();f.add('old');let release;f.adapters.context.retire=()=>new Promise(r=>release=r);
+ const pending=f.lifecycle.suspendPreview();await Promise.resolve();const finish=release;
+ f.adapters.context.retire=async()=>{};await f.lifecycle.replace([{id:'new'}]);finish();
+ assert.equal(await pending,false);assert.equal(f.state.isSuspended,false);assert.deepEqual(f.state.objects.map(r=>r.id),['new']);
 });

@@ -19,7 +19,7 @@ function source(start, end) {
 function context() {
   const scene = new THREE.Scene();
   const state = sceneContext({
-    THREE, checkedSceneLightRecord, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
+    activeSceneComposition:null,THREE, checkedSceneLightRecord, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
     scene, sceneObjects: [], sceneGroups: [], rimLight: new THREE.SpotLight(), RIM_LIGHT_ID: '@rim-light',
     window: { _kaminosDirty() {} }, document: { getElementById: () => ({ checked: false, classList: { remove() {} } }) },
     sceneMutationToken: 0, greenroomPreviewGeneration: 0, greenroomPreviewState: null,
@@ -124,6 +124,7 @@ test('failed View and a late completion after Back preserve original light ident
   let complete;
   state.showGLB = () => new Promise(resolve => { complete = resolve; });
   const loading = state.greenroomViewMesh('/late.glb', 'late.glb', {});
+  await new Promise(resolve=>setImmediate(resolve));
   assertDetached(state);
   await state.restoreAuthoredSceneFromPreview();
   const late = new THREE.Group(); state.scene.add(late); complete(late);
@@ -141,7 +142,111 @@ test('clearing during preview releases the detached authored roots',async()=>{
  groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
  localLiquidDomainGuide:null,flameDomainGuide:null,localLiquidGeneration:0,localLiquidHost:null});
  state.sceneLoadRequests=state.workingScene.loads??{invalidate(){},isCurrent:()=>false};
- state.sceneLifecycle=state.createPageSceneLifecycle();state.clearScene();
+ state.sceneLifecycle=state.createPageSceneLifecycle();await state.clearScene();
  assert.equal(disposed,1,'whole-scene clear must release authored roots parked outside the preview');
  assert.equal(state.greenroomPreviewState,null);assert.equal(await state.restoreAuthoredSceneFromPreview(),false);
+});
+
+for(const kind of ['mesh','splat','preview'])test(`superseded preview return aborts ${kind} import`,async()=>{
+ const state=context();await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ let finish,started;const retiring=new Promise(resolve=>started=resolve);
+ state.restoreAuthoredSceneFromPreview=()=>{started();return new Promise(resolve=>{finish=resolve;});};
+ state.createSceneObjectPublicationGuard=()=>()=>true;
+ state.shouldClearSceneForImport=()=>false;
+ state.greenroomSplatMetadata=()=>{throw Error('Superseded splat import continued');};
+ vm.runInContext(source('async function greenroomImportSplat(', 'window.greenroomImportSplat ='),state);
+ const pending=kind==='mesh'?state.greenroomImportMesh('/stale.glb','stale.glb',{}):kind==='splat'?state.greenroomImportSplat('/stale.ply','stale.ply',{}):state.importGreenroomPreviewToScene();
+ await retiring;state.workingScene.loads.invalidate();state.workingScene.discardSuspendedMembership();finish(false);
+ assert.ok(!await pending);
+ assert.deepEqual(state.recordedInsertions,[]);
+ assert.equal(state.sceneObjects.length,0,'no stale asset in the replacement document');
+});
+
+test('preview retirement releases dependent lighting and Back restores its accepted settings',async()=>{
+ const state=context(),events=[];
+ state.fireLightFieldRouteParams=()=>new URLSearchParams('volume_light_field=1&volume_light_field_shared_source=1');
+ state.fireShadowSceneRoute=()=>({volume_light_field_hybrid_shadow_resolution:'128'});
+ state.syncSceneRadianceRoute=async params=>{events.push(Object.fromEntries(params));};
+ await state.flameFeature.restore({present:true,composition:false});
+ await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ assert.deepEqual(events.at(-1),{},'retired producer must release scene lighting consumer before displaying preview');
+ await state.restoreAuthoredSceneFromPreview();
+ assert.equal(events.at(-1).volume_light_field_shared_source,'1');
+ assert.equal(events.at(-1).volume_light_field_hybrid_shadow_resolution,'128','retain accepted lighting settings across temporary preview');
+});
+
+test('an older Back cannot adopt the generation of a later replacing GLB import',async()=>{
+ const state=context();await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ Object.assign(state,{authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
+ groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},
+ localLiquidDomainGuide:null,flameDomainGuide:null,sceneNavigation:null,sceneGiProxies:{clear(){},release(){}},
+ shouldClearSceneForImport:()=>true,resolveAssetArrivalMode:()=> 'preserve',applyAssetArrival:()=>false,
+ GLTFLoader:class{load(url,done){const scene=new THREE.Group();scene.name=url;done({scene});}},
+ registerSceneObject(object,metadata){const row={id:'replacement',object,...metadata};state.workingScene.put(row);return row;},
+ });
+ state.document.getElementById=()=>({classList:{add(){},remove(){}}});
+ const start=html.indexOf('async function showGLB('),end=html.indexOf('\n}',start)+2;vm.runInContext(html.slice(start,end),state);
+ const back=state.restoreAuthoredSceneFromPreview();await retiring;
+ const replacing=state.showGLB('/replacement.glb',{clear:true});await new Promise(r=>setImmediate(r));release();
+ assert.equal(await back,false,'obsolete Back must yield to the later replacing operation');
+ assert.ok(await replacing,'newer import must not be silently discarded');
+ assert.deepEqual(state.workingScene.objects.map(row=>row.id),['replacement']);assert.equal(state.greenroomPreviewState,null);
+});
+
+ test('overlapping View preserves the original authored presence',async()=>{
+ const state=context();await state.flameFeature.restore({present:true,composition:false});
+ let release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>true,setActive:async value=>{if(!value){started();await gate;}}};
+ const first=state.greenroomViewMesh('/first.glb','first.glb',{});await retiring;
+ const second=state.greenroomViewMesh('/second.glb','second.glb',{});release();
+ await Promise.all([first,second]);
+ assert.equal(state.greenroomPreviewState.authored.flamePresent,true,'second View must retain original authored presence');
+ assert.equal(await state.restoreAuthoredSceneFromPreview(),true);assert.equal(state.flameFeature.present,true);
+ });
+test('Back during preview retirement restores the original scene without waiting for asset loading',async()=>{
+ const state=context();await state.flameFeature.restore({present:true,composition:false});
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const viewing=state.greenroomViewMesh('/pending.glb','pending.glb',{});await retiring;
+ const back=state.restoreAuthoredSceneFromPreview();release();await viewing;
+ assert.equal(await back,true);assert.equal(state.greenroomPreviewState,null);assert.equal(state.flameFeature.present,true);
+ assert.deepEqual(state.workingScene.objects.map(r=>r.id),state.originalRecords.map(r=>r.id));
+});
+test('switching preview retires admitted runtime work before removing its object',async()=>{
+ const state=context();await state.greenroomViewMesh('/first.glb','first.glb',{});
+ const original=state.greenroomPreviewState.previewObject;
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const switching=state.greenroomViewMesh('/second.glb','second.glb',{});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(original.parent,state.scene,'keep the old preview drawable while retirement is pending');
+ release();await switching;assert.equal(active,false);assert.equal(original.parent,null);
+ assert.equal(state.greenroomPreviewState.preview.url,'/second.glb');
+});
+
+test('View during Back lighting restoration retains original authored presence',async()=>{
+ const state=context();state.fireLightFieldRouteParams=()=>new URLSearchParams('volume_light_field=1');
+ await state.flameFeature.restore({present:true,composition:false});await state.greenroomViewMesh('/first.glb','first.glb',{});
+ let release,started;const gate=new Promise(r=>release=r),lighting=new Promise(r=>started=r);
+ state.syncSceneRadianceRoute=async params=>{if(params.get('volume_light_field')){started();await gate;}};
+ const back=state.restoreAuthoredSceneFromPreview();await lighting;
+ const viewing=state.greenroomViewMesh('/second.glb','second.glb',{});release();await Promise.all([back,viewing]);
+ assert.equal(state.greenroomPreviewState.authored.flamePresent,true);
+ await state.restoreAuthoredSceneFromPreview();assert.equal(state.flameFeature.present,true);
+});
+test('Import cannot combine incoming preview metadata with the outgoing object during retirement',async()=>{
+ const state=context();await state.greenroomViewMesh('/first.glb','first.glb',{});
+ const importButton={disabled:false},panel={querySelector:()=>importButton};
+ state.document.getElementById=id=>id==='greenroom-preview-controls'?panel:{classList:{add(){},remove(){}}};
+ vm.runInContext(source('function updateGreenroomPreviewControls()', 'function removeGreenroomPreviewObject('),state);
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const switching=state.greenroomViewMesh('/second.glb','second.glb',{});await retiring;
+ assert.equal(importButton.disabled,true,'pending preview cannot be imported through the visible control');
+ const importing=state.importGreenroomPreviewToScene();release();await switching;
+ assert.equal(await importing,false,'incoming preview has not loaded yet');assert.deepEqual(state.recordedInsertions,[]);
+ assert.equal(importButton.disabled,false);assert.equal(await state.importGreenroomPreviewToScene(),true);
+ assert.deepEqual(state.recordedInsertions,['/second.glb']);
 });
