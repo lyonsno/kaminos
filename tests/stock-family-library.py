@@ -2,11 +2,16 @@
 import copy, hashlib, http.client, json, sys, tempfile, threading, unittest
 from pathlib import Path
 from http.server import ThreadingHTTPServer
-from unittest.mock import patch
+from unittest.mock import patch, Mock
+from types import SimpleNamespace
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import serve
 
 class StockLibrary(unittest.TestCase):
+ def test_negative_content_length_is_rejected_without_reading(self):
+  handler=SimpleNamespace(headers={'Content-Length':'-1'},rfile=SimpleNamespace(read=Mock(return_value=b'{}')),send_json=Mock())
+  serve.KaminosHandler.handle_stock_family_save(handler)
+  handler.rfile.read.assert_not_called();self.assertEqual(handler.send_json.call_args.args[1],400)
  def test_internal_family_roundtrip_updates_and_conflicts(self):
   with tempfile.TemporaryDirectory() as temporary:
    root=Path(temporary);data=b'source fixture';sha=hashlib.sha256(data).hexdigest();(root/(sha+'.glb')).write_bytes(data)
@@ -27,6 +32,12 @@ class StockLibrary(unittest.TestCase):
      self.assertEqual(len(list(root.glob('*.stock-family.json'))),1)
      self.assertEqual(request('/api/stock-families',payload)[0],409,'stale writers must not overwrite')
      self.assertEqual(request(entry['source'])[1],updated)
+     target=root/(saved['id']+'.stock-family.json')
+     for corrupt in ['[]','null','false','{"broken":', '{"revision":"bad"}']:
+      target.write_text(corrupt)
+      self.assertEqual(request('/api/stock-families',{**payload,'revision':updated['revision']})[0],500)
+      self.assertEqual(target.read_text(),corrupt)
+     target.write_text(json.dumps(updated))
      for bad in [{'id':'../escape'}, {'recipe':{**recipe,'source':{**source,'url':'https://example.com/unretained.glb'}}}, {'recipe':{**recipe,'sources':[{**source,'sha256':'0'*64}]}}]:
       self.assertEqual(request('/api/stock-families',{'name':'Bad','recipe':recipe,**bad})[0],400)
      (root/(sha+'.glb')).write_bytes(b'changed bytes')
