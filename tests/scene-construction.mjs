@@ -52,3 +52,13 @@ test('geometry parameters and material response have separate canonical owners',
  assert.throws(()=>checkedGeometry({kind:'sphere',parameters:{radius:-1}}),/positive/);
  assert.throws(()=>checkedProceduralMesh({...r,surface:{...r.surface,fieldBinding:'missing'}}),/field/);
 });
+{
+ const before=identityGroupPose(),after={position:[2,1,-3],rotation:[0,Math.PI/2,0],scale:[2,2,2]};
+ const source={position:[1,0,0],rotation:[0,.2,0],scale:[0,0,0]};
+ const moved=moveGroupMembers(before,after,{source}).source;
+ assert.ok(moved.position.every((v,i)=>Math.abs(v-[2,1,-5][i])<1e-10));
+ assert.deepEqual(moved.scale,[0,0,0],'A closed flame outlet stays closed while its assembly moves');
+ const restored=moveGroupMembers(after,before,{source:moved}).source;
+ assert.ok(restored.position.every((v,i)=>Math.abs(v-source.position[i])<1e-10));
+ assert.ok(restored.rotation.every((v,i)=>Math.abs(v-source.rotation[i])<1e-10));
+}
