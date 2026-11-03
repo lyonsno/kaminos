@@ -73,16 +73,16 @@ fn put(i:u32,amount:f32)->f32{
   let y0=max(0,hitCell.y);
   if(y0<i32(p.dims.y)){
    let j0=index(vec3<u32>(u32(hitCell.x),u32(y0),u32(hitCell.z)));
-   if(solid[j0]==0u){amount-=put(j0,min(amount,0.28));}
+   if(solid[j0]==0u){amount-=put(j0,min(amount,0.32));}
    for(var dz=-1;dz<=1;dz++){for(var dx=-1;dx<=1;dx++){
-    if((dx==0&&dz==0)||amount<=0.0){continue;}
+    if((dx==0)==(dz==0)||amount<=0.0){continue;}
     let nx=hitCell.x+dx;let nz=hitCell.z+dz;
     if(nx<0||nz<0||nx>=i32(p.dims.x)||nz>=i32(p.dims.z)){continue;}
     let nj=index(vec3<u32>(u32(nx),u32(y0),u32(nz)));
     if(solid[nj]!=0u){continue;}
     var supported=y0==0;
     if(!supported){let bj=index(vec3<u32>(u32(nx),u32(y0-1),u32(nz)));supported=solid[bj]!=0u||bitcast<f32>(atomicLoad(&density[bj]))>0.1;}
-    if(supported){let cap=select(0.08,0.14,dx==0||dz==0);amount-=put(nj,min(amount,cap));}
+    if(supported){amount-=put(nj,min(amount,0.17));}
    }}
   }
   for(var y=y0;y<i32(p.dims.y)&&amount>0.0;y++){

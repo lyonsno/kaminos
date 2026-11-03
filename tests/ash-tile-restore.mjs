@@ -4,9 +4,26 @@ import assert from 'node:assert/strict';
 import {createGpuTiledAsh,tileShader} from '../ash/tile-gpu.mjs';
 import {patchLayout} from '../ash/gpu-plan.mjs';
 // Local validation only: fake storage never executes WGSL or supplies GPU evidence.
-test('tileShader keeps partial-height surface cells unmerged so corner heights interpolate smoothly across cell boundaries',()=>{
+test('tileShader keeps partial-height surface cells unmerged, culls underground/uncapped-side quads, and etches outermost-cell perimeter opacity',async()=>{
  const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
  assert.match(code,/if\(p\.mode\.w!=0u&&band\.y>=1\.0\)/,'partial surface cells must remain 1x1 quads so corner height interpolation acts on every cell corner');
+ assert.match(code,/face==2u&&c\.y==0u/,'underground floor bottom faces must be culled in surface_band');
+ assert.match(code,/if\(!capAbove\)\{return vec2<f32>\(-1\);\}/,'uncapped cells must omit redundant vertical side quads');
+ globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};
+ const attributes=new Map();
+ const device={limits:{maxStorageBufferBindingSize:1e7,maxBufferSize:1e7,maxComputeWorkgroupsPerDimension:65535},
+  createBuffer:({size})=>({size,destroy(){}}),queue:{writeBuffer(){},submit(){}},
+  createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createBindGroupLayout:()=>({}),createPipelineLayout:()=>({}),createComputePipelineAsync:async()=>({}),createBindGroup:()=>({}),
+  createCommandEncoder:()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},dispatchWorkgroupsIndirect(){},end(){}}),copyBufferToBuffer(){},finish(){return {};}})};
+ const backend={device,isWebGPUBackend:true,createStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),createIndirectStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),get:a=>attributes.get(a),destroyAttribute:a=>attributes.delete(a)};
+ const patch=await createGpuTiledAsh({renderer:{backend},cellSize:1,bounds:{min:[0,0,0],max:[1,2,1]},solid:new Uint8Array(2),tileSize:1});
+ try{
+  assert.equal(patch.root.castShadow,false,'ash sheet omits shadow-map double pass and static-light caster conflicts');
+  assert.equal(patch.root.receiveShadow,true,'ash sheet still receives scene shadows');
+  assert.equal(patch.root.material.transparent,false,'ash material stays in opaque MRT/GI pass');
+  assert.equal(patch.root.material.alphaTest,0.5,'ash material discards etched perimeter pixels via alphaTest');
+  assert.ok(patch.root.material.opacityNode,'ash material wires perimeter opacity etching node');
+ }finally{patch.dispose();}
 });
 test('tiled restore rejects material loss and ledger disagreement before any upload',async()=>{
  globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};

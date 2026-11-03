@@ -76,7 +76,7 @@ fn penetration(c:vec3<u32>)->f32{
  else if(solid[i]==2u){transfer=min(a,1.0-b);}
  else if(solid[j]==2u){transfer=-min(b,1.0-a);}
  else if(pa>pb+1e-5){transfer=min(a,1.0-b);}else if(pb>pa+1e-5){transfer=-min(b,1.0-a);}
- else if(pa==0.0&&pb==0.0){if(axis==1u){transfer=-min(b,1.0-a);}else{let diff=a-b;var midpoint=vec3<f32>(c)+vec3<f32>(.5);midpoint[axis]+=.5;let threshold=ash_sliding_threshold(p.origin.xyz+midpoint*p.origin.w,p.sliding.xy);if(abs(diff)>threshold+select(0.0,0.000001,p.sliding.x>0.0)){transfer=sign(diff)*(abs(diff)-threshold*(1.0-p.sliding.z))*.5;}}}
+ else if(pa==0.0&&pb==0.0){if(axis==1u){transfer=-min(b,1.0-a);}else{let diff=a-b;var midpoint=vec3<f32>(c)+vec3<f32>(.5);midpoint[axis]+=.5;let threshold=ash_sliding_threshold(p.origin.xyz+midpoint*p.origin.w,p.sliding.xy);if(abs(diff)>threshold+max(0.0001,select(0.0,0.000001,p.sliding.x>0.0))){transfer=sign(diff)*(abs(diff)-threshold*(1.0-p.sliding.z))*.5;}}}
  let na=a-transfer;let nb=b+transfer;if(na!=a&&nb!=b){density[i]=na;density[j]=nb;mark(c);mark(q);atomicAdd(&jobs[${t.count*2+8}u+2],1u);}
 }
 @compute @workgroup_size(64) fn admit_surface(@builtin(global_invocation_id) gid:vec3<u32>){
@@ -85,9 +85,14 @@ fn penetration(c:vec3<u32>)->f32{
  let slot=atomicAdd(&jobs[${t.count*2+8}u+1],1u);atomicStore(&jobs[${t.count}u+slot],tile);atomicAdd(&jobs[${t.count*2+4}u+0],G);
 }
 fn surface_band(c:vec3<u32>,face:u32)->vec2<f32>{
- if(any(c>=p.dims.xyz)){return vec2<f32>(-1);}
- let a=density[index(c)];if(a<${ASH_SURFACE_MIN_FILL.toFixed(8)}||solid[index(c)]!=0u){return vec2<f32>(-1);}
+ if(any(c>=p.dims.xyz)||(face==2u&&c.y==0u)){return vec2<f32>(-1);}
+ let i=index(c);let a=density[i];if(a<${ASH_SURFACE_MIN_FILL.toFixed(8)}||solid[i]!=0u){return vec2<f32>(-1);}
  let axis=face/2u;var q=vec3<i32>(c);q[axis]+=select(-1,1,face%2u==1u);let b=filled(q);
+ if(axis!=1u){
+  var capAbove=false;
+  if(c.y+1u<p.dims.y){let up=index(c+vec3<u32>(0u,1u,0u));capAbove=solid[up]!=0u||density[up]>=${ASH_SURFACE_MIN_FILL.toFixed(8)};}
+  if(!capAbove){return vec2<f32>(-1);}
+ }
  let exposed=select(a>b,select(a<1.0||b<=0.0,b<1.0,face==2u),axis==1u);
  if(!exposed){return vec2<f32>(-1);}return vec2<f32>(select(b,0.0,axis==1u),a);
 }
@@ -171,6 +176,59 @@ fn ash_surface_normal(p:vec3<f32>,face:vec3<f32>,origin:vec3<f32>,size:f32,dims:
  return (*d)[u32(c.x)+dims.x*(u32(c.y)+dims.y*u32(c.z))];
 }
 `);
+const vertexCover=THREE.TSL.wgslFn(`
+fn ash_vertex_cover(p:vec3<f32>,origin:vec3<f32>,size:f32,dims:vec3<u32>,d:ptr<storage,array<f32>,read>)->f32{
+ let rel=(p-origin)/size;
+ let gx=i32(round(rel.x));let gz=i32(round(rel.z));
+ let cy=clamp(i32(floor(rel.y-0.001)),0,i32(dims.y)-1);
+ var occ2=0.0;var occ4=0.0;
+ for(var dz=-2;dz<=1;dz++){for(var dx=-2;dx<=1;dx++){
+  let h=ash_cover_height(gx+dx,cy,gz+dz,dims,d);
+  let w=smoothstep(0.0,0.04,h);
+  occ4+=w;
+  if(dx>=-1&&dx<=0&&dz>=-1&&dz<=0){occ2+=w;}
+ }}
+ let raw2=(occ2-1.6)/2.4;
+ let raw4=clamp((occ4/16.0-0.15)/0.70,0.0,1.0);
+ let patchCover=0.72*raw2+0.28*raw4;
+ let boxDist=min(min(f32(gx),f32(dims.x)-f32(gx)),min(f32(gz),f32(dims.z)-f32(gz)));
+ let fadeSpan=clamp(f32(min(dims.x,dims.z))*0.04,1.5,8.0);
+ let boxCover=clamp(0.22+0.78*(boxDist/fadeSpan),0.0,1.0);
+ return min(patchCover,boxCover);
+}fn ash_cover_height(cx:i32,cy:i32,cz:i32,dims:vec3<u32>,d:ptr<storage,array<f32>,read>)->f32{
+ let h0=ash_cover_sample(vec3<i32>(cx,cy,cz),dims,d);
+ let hUp=ash_cover_sample(vec3<i32>(cx,cy+1,cz),dims,d);
+ let hDn=select(0.0,ash_cover_sample(vec3<i32>(cx,cy-1,cz),dims,d),cy>0&&h0==0.0);
+ return h0+hUp+hDn;
+}fn ash_cover_sample(c:vec3<i32>,dims:vec3<u32>,d:ptr<storage,array<f32>,read>)->f32{
+ if(any(c<vec3<i32>(0))||any(c>=vec3<i32>(dims))){return 0.0;}
+ return (*d)[u32(c.x)+dims.x*(u32(c.y)+dims.y*u32(c.z))];
+}
+`);
+const surfaceOpacity=THREE.TSL.wgslFn(`
+fn ash_surface_opacity(p:vec3<f32>,cover:f32,origin:vec3<f32>,size:f32)->f32{
+ if(cover>=0.995){return 1.0;}
+ let c0=clamp((cover-0.26)/0.74,0.0,1.0);
+ if(c0<=0.0){return 0.0;}
+ let rel=(p.xz-origin.xz)/size;
+ let n=0.50*ash_etch_noise(rel*0.28)+0.32*ash_etch_noise(rel*0.85+vec2<f32>(17.3,31.7))+0.18*ash_etch_noise(rel*2.40+vec2<f32>(53.1,11.9));
+ let etched=clamp(c0-(1.0-c0)*(n*0.85),0.0,1.0);
+ if(etched>=0.52){return 1.0;}
+ if(etched<=0.06){return 0.0;}
+ let rim=(etched-0.06)/0.46;
+ let grain=0.55*ash_etch_noise(rel*6.5+vec2<f32>(91.7,47.3))+0.45*ash_etch_hash(floor(rel*14.0));
+ return select(0.0,1.0,rim>0.12+0.78*grain);
+}fn ash_etch_noise(x:vec2<f32>)->f32{
+ let i=floor(x);let f=fract(x);let u=f*f*(vec2<f32>(3.0)-2.0*f);
+ let a=ash_etch_hash(i);let b=ash_etch_hash(i+vec2<f32>(1.0,0.0));
+ let c=ash_etch_hash(i+vec2<f32>(0.0,1.0));let d=ash_etch_hash(i+vec2<f32>(1.0,1.0));
+ return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
+}fn ash_etch_hash(p:vec2<f32>)->f32{
+ let q=vec2<u32>(bitcast<u32>(i32(floor(p.x))*73856093),bitcast<u32>(i32(floor(p.y))*19349663));
+ var h=(q.x^q.y)*0x7feb352du;h=(h^(h>>16u))*0x846ca68bu;
+ return f32(h^(h>>16u))/4294967296.0;
+}
+`);
 export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize=16,sceneRecords=null,surfaceMode='cells',sliding:slidingInput={}}){
  if(!renderer?.backend?.isWebGPUBackend)throw Error('Tiled ash requires shared WebGPU renderer');
  if(!['cells','runs'].includes(surfaceMode))throw Error('Unknown ash surface mode');
@@ -204,11 +262,15 @@ export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize
  const d=storage(density.attribute,'float',p.count).toReadOnly(),s=storage(collision.attribute,'uint',p.count).toReadOnly();
  const addr=address({rank:instanceIndex,nt:uint(t.count),v:uint(t.cellsPerTile),faces:storage(faces.attribute,'uint',faceWords).toReadOnly(),prefix:storage(prefix.attribute,'uint',t.count+1).toReadOnly()});
  const geometry=new THREE.PlaneGeometry(1,1);geometry.setIndirect(draw.attribute);
- const material=new THREE.MeshStandardNodeMaterial({color:0xb9b3a8,roughness:1});
- material.positionNode=vertex({a:addr,uv:positionGeometry.xy.add(.5),b:uint(t.width),td:uvec3(...t.dims),dims:uvec3(...p.dims),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize),density:d,solid:s});
+ const material=new THREE.MeshStandardNodeMaterial({color:0xb9b3a8,roughness:1,alphaTest:.5});
+ const originNode=vec3(...p.origin),dimsNode=uvec3(...p.dims),cellScale=THREE.TSL.float(cellSize);
+ material.positionNode=vertex({a:addr,uv:positionGeometry.xy.add(.5),b:uint(t.width),td:uvec3(...t.dims),dims:dimsNode,origin:originNode,size:cellScale,density:d,solid:s});
  const softness=THREE.TSL.uniform(0);
- material.normalNode=transformNormalToView(THREE.TSL.varying(surfaceNormal({p:material.positionNode,face:faceNormal({f:addr.y.mod(uint(6))}),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize),dims:uvec3(...p.dims),d,soft:softness})));
- mesh=new THREE.Mesh(geometry,material);mesh.name='Tiled retained ash';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.add(fall.root);
+ material.normalNode=transformNormalToView(THREE.TSL.varying(surfaceNormal({p:material.positionNode,face:faceNormal({f:addr.y.mod(uint(6))}),origin:originNode,size:cellScale,dims:dimsNode,d,soft:softness})));
+ const coverNode=THREE.TSL.varying(vertexCover({p:material.positionNode,origin:originNode,size:cellScale,dims:dimsNode,d}),'ash_cover');
+ const worldPosNode=THREE.TSL.varying(material.positionNode,'ash_world_pos');
+ material.opacityNode=surfaceOpacity({p:worldPosNode,cover:coverNode,origin:originNode,size:cellScale});
+ mesh=new THREE.Mesh(geometry,material);mesh.name='Tiled retained ash';mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;mesh.add(fall.root);
  const params=(contact,previous,moved)=>{for(let phase=0;phase<6;phase++){const bytes=new ArrayBuffer(96),u=new Uint32Array(bytes),f=new Float32Array(bytes);u.set([...p.dims,p.count]);f.set([...p.origin,cellSize],4);f.set(contact??[0,0,0,0],8);f.set(previous??contact??[0,0,0,0],12);u.set([[1,0,2][Math.floor(phase/2)],phase%2,moved?1:0,surfaceMode==='runs'?1:0],16);f.set([sliding.variation,sliding.scale,sliding.release,0],20);device.queue.writeBuffer(uniforms[phase],0,bytes);}};
  const dispatch=(e,name,n,{phase=0,indirect=null}={})=>{const pass=e.beginComputePass({label:'ash '+name});pass.setPipeline(pipes[name]);pass.setBindGroup(0,groups[phase]);if(indirect)pass.dispatchWorkgroupsIndirect(indirect.buffer,indirect.offset);else pass.dispatchWorkgroups(n);pass.end();};
  const rebuild=()=>{params(null,null,false);const e=device.createCommandEncoder();dispatch(e,'reset',1);dispatch(e,'admit_surface',Math.ceil(t.count/64));dispatch(e,'pack_dispatch',1);e.copyBufferToBuffer(jobs,t.count*8+16,surfaceWork.buffer,0,12);dispatch(e,'build_surface',0,{indirect:surfaceWork});dispatch(e,'draw_prefix',1);device.queue.submit([e.finish()]);};
