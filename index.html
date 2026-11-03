@@ -2201,8 +2201,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <span class="slider-label">Appearance model</span>
       <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
-        <option value="authored">Authored (nine carriers)</option>
+        <option value="authored">Legacy activity network</option>
         <option value="compact-3">Compact (three carriers)</option>
+        <option value="shred-only">Shred only (one activity field)</option>
       </select>
       <span class="slider-val" id="volume-appearance-model-val">authored</span>
     </div>
@@ -19545,7 +19546,13 @@ function refreshVolumeReadout() {
   }
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
-  document.getElementById('volume-appearance-model-state').textContent = !appearance || appearance.effective !== 'compact-3'
+  for (const id of ['volume-microdetail','volume-fire-licks','volume-swirl-jostle','volume-fine-breakup-localization','volume-fire-scale']) {
+    document.getElementById(id).disabled = appearance?.effective === 'shred-only';
+  }
+  document.getElementById('volume-appearance-model-state').textContent = appearance?.reason
+    ? `${appearance.requested}: ${appearance.reason}; running ${appearance.effective}`
+    : appearance?.effective === 'shred-only' ? 'Shred only: physical interface + one transported activity field'
+    : !appearance || appearance.effective !== 'compact-3'
     ? 'authored · nine carriers + front field stored'
     : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
   const reactant = s.reactantCombustion;

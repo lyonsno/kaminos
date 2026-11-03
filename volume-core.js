@@ -2265,13 +2265,25 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
 // pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
 // The flag rides the last borrowed reactant lane (d.w). `authored` is the
 // existing model, bit for bit.
-export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3']);
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3', 'shred-only']);
 export const COMPACT_CARRIER_RATIOS = Object.freeze({
   ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
   emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
 });
 export function appearanceModelUniformValue(model) {
   return model === 'compact-3' ? 1 : 0;
+}
+export function resolveAppearanceModel(requested = 'authored', {reactant = false, physics = false} = {}) {
+  const known = APPEARANCE_MODELS.includes(requested);
+  const reason = !known ? 'unknown-appearance-model'
+    : requested !== 'authored' && !reactant ? `${requested}-requires-the-reactant-law`
+    : requested === 'shred-only' && !physics ? 'shred-only-requires-physics-appearance' : null;
+  const effective = reason ? 'authored' : requested;
+  return {requested, effective, reason,
+    storedCarriers: effective === 'shred-only' ? ['interfaceShred']
+      : effective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null,
+    transportedSlots: effective === 'shred-only' ? [0, 1, 3] : effective === 'compact-3' ? [0, 1, 2] : [0, 1, 2, 3],
+    storedSlots: effective === 'compact-3' ? 3 : 4};
 }
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
@@ -3719,6 +3731,7 @@ override OPTICAL_TRACE_CAPTURE: bool = false;
 override SEPARATED_PRESSURE: bool = false;
 override MATERIAL_ONLY: bool = false;
 override VELOCITY_ONLY: bool = false;
+override SHRED_ONLY: bool = false;
 override VELOCITY_UNIT_SCALE: f32 = 1.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -5985,7 +5998,21 @@ fn flameTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmo
   );
 }
 
+fn shredPhysicalInterface(c: vec3<i32>) -> f32 {
+  let material = readSlot(c, 1u);
+  let freshBurn = textureLoad(reactantSrc, vec3<i32>(clampCell(c)), 0).y;
+  let reaction = 1.0 - exp(-max(freshBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+  return material.x * 0.72 - material.y * 0.44 + reaction * 0.38;
+}
+
 fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
+  if (SHRED_ONLY) {
+    return 0.5 * vec3<f32>(
+      shredPhysicalInterface(c + vec3<i32>(1, 0, 0)) - shredPhysicalInterface(c - vec3<i32>(1, 0, 0)),
+      shredPhysicalInterface(c + vec3<i32>(0, 1, 0)) - shredPhysicalInterface(c - vec3<i32>(0, 1, 0)),
+      shredPhysicalInterface(c + vec3<i32>(0, 0, 1)) - shredPhysicalInterface(c - vec3<i32>(0, 0, 1))
+    );
+  }
   let sx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).x;
   let sx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u).x;
   let hx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).y;
@@ -6829,6 +6856,12 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  if (SHRED_ONLY) {
+    if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
+    fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
+    fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0);
+    return;
+  }
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
     fluidPredict[base] = sampleFluidSlotInflowWith(backCell, 0u, true);
@@ -6949,7 +6982,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var material = vec4<f32>(0.0);
   var fireLayer = vec4<f32>(0.0);
   var microLayer = vec4<f32>(0.0);
-  if (macCormack) {
+  if (SHRED_ONLY) {
+    let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
+    if (!MATERIAL_ONLY) {
+      if (macCormack) { advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u); }
+      else { advected = sampleFluidSlotInflow(backCell, 0u); }
+    }
+    if (macCormackScalars) {
+      material = vec4<f32>(macCormackSlot(cellI, idx, backCell, forwardCell, 1u).xyz, 0.0);
+      microLayer = vec4<f32>(0.0, macCormackSlot(cellI, idx, backCell, forwardCell, 3u).y, 0.0, 0.0);
+    } else {
+      material = vec4<f32>(sampleFluidSlotMasked(backCell, 1u).xyz, 0.0);
+      microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);
+    }
+  } else if (macCormack) {
     let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
     if (!MATERIAL_ONLY) { advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u); }
     if (macCormackScalars) {
@@ -6974,7 +7020,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
     }
   }
-  var combustionFrontTopology = sampleFrontFieldTransport(backCell) * stepRate(0.936);
+  var combustionFrontTopology = 0.0;
+  if (!SHRED_ONLY) { combustionFrontTopology = sampleFrontFieldTransport(backCell) * stepRate(0.936); }
 
   // Reactant law (volume-reactant-combustion.mjs): the oxidizer rides the
   // fuel's characteristic and scheme, then one named exchange (an eddy
@@ -7076,6 +7123,66 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     oxidizer=mix(oxidizer,0.0,entry);smoke=mix(smoke,0.0,entry);
   }
   let residentDivergence=residentRate/transportBacktraceScale(dynamicsSpeed());
+  var reactantFreshBurnRate = 0.0;
+  if (SHRED_ONLY) {
+    // One activity memory. No auxiliary-flame/source-envelope network is
+    // evaluated in this pipeline specialization. Chemistry stays the same.
+    let priorBurn = textureLoad(reactantSrc, cellI, 0).y;
+    let reaction = 1.0 - exp(-max(priorBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+    var interfaceEnergy = 0.0;
+    if (shredOperatorGain > 0.0) { interfaceEnergy = length(materialInterfaceGradient(cellI)); }
+    if (!MATERIAL_ONLY) {
+      let confinementMode = u.reserved_source_extension_0.y;
+      if (confinementMode < 0.5) {
+        vel += vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52);
+      } else if (confinementMode < 1.5) {
+        vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z);
+      }
+      if (waveletOn() && !VELOCITY_ONLY) { vel += waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
+      if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
+        vel += interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, reaction, interfaceShred) * VELOCITY_UNIT_SCALE;
+      }
+      let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
+      let externalVelocity = applyExternalEmitterInjection(externalEmitterInfluence(p)).velocity.xyz * (0.18 + speed * 0.036);
+      let buoyancy = thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale;
+      let wind = windDirection * windStrength * windHeightRamp * clamp(smoke * 0.54 + heat * 0.30, 0.0, 1.6) * (0.020 + speed * 0.004);
+      let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(length(p.xz), 0.08);
+      let artisticSwirl = swirl * heat * (0.018 + 0.010 * curl) * step(0.5, u.artistic_motion_controls.x);
+      centredForce = heatExpansion + externalVelocity + buoyancy + wind + artisticSwirl;
+      vel += centredForce;
+      if (u.artistic_motion_controls.y > 0.5) {
+        let delta = clamp((prev.xz - advected.xz) * clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24), vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE), vec2<f32>(0.006 * VELOCITY_UNIT_SCALE));
+        vel += vec3<f32>(delta.x, 0.0, delta.y);
+      }
+      let increment = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE - 1.0)) * timeStep;
+      vel = velTransported + increment;
+      if (faceForcesOn()) {
+        let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE;
+        forceDeltaStore(cellI, centredIncrement);
+        vel -= centredIncrement;
+      }
+      if (immersedWeight > 0.0) { vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation)); }
+    }
+    if (VELOCITY_ONLY) {
+      let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
+      let wall = max(max(abs(p.x), mix(-p.y, -1.0, floorExempt)), abs(p.z));
+      let fade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
+      vel *= stepRate(mix(0.55, 1.0, fade));
+      vel.y = mix(max(vel.y, -0.015 * VELOCITY_UNIT_SCALE), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
+      fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
+      fluidDst[base + 1u] = vec4<f32>(fluidSrc[base + 1u].xyz, 0.0);
+      fluidDst[base + 2u] = vec4<f32>(0.0);
+      fluidDst[base + 3u] = vec4<f32>(0.0, microLayer.y, 0.0, 0.0);
+      return;
+    }
+    let burn = reactantBurn(fuel, oxidizer, heat, timeStep);
+    fuel = burn.x; oxidizer = burn.y; heat = burn.z;
+    reactantFreshBurnRate = burn.w / max(timeStep, 1e-6);
+    smoke = smoke + u.reactant_combustion_b.z * reactantFreshBurnRate * timeStep;
+    let freshReaction = 1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6));
+    interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + freshReaction * 0.32 + immersedTarget * 0.30) * 1.72);
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
+  } else {
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
   let sourceRadial = length(sourceCenter.xz);
@@ -7357,7 +7464,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     heat = burn.z;
     reactantBurned = burn.w;
   }
-  let reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
+  reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
   let smokeFromHeat = select(heatToSmokeConversion(heat, fuel, p.y), u.reactant_combustion_b.z * reactantFreshBurnRate, reactantOn);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let flameDirectSmokeBirthGain = (0.18);
@@ -7625,7 +7732,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * stepRate(flameFireSurvival);
   fireLick = fireLick * stepRate(flameFireSurvival);
   emberFleck = emberFleck * stepRate(flameFireSurvival);
-
+  }
 
   // Keep the original lower and side walls, but move the upper fade to the
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
@@ -11711,9 +11818,9 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  const simulationVariants = new Map();
   let separatedPressure = null;
   let fineVelocity = null;
-  let materialOnlyPipeline = null, materialOnlyPredictPipeline = null;
   let separatedPressureProjectPipeline = null;
   let faceForcesPipeline = null;
   let waveletLowPassPipeline = null;
@@ -12811,7 +12918,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState(preserveWorld = false) {
-    fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null; materialOnlyPredictPipeline=null;
+    fineVelocity?.destroy(); fineVelocity=null; simulationVariants.clear();
     if(!preserveWorld){
       retireIntermediateFlow();
       worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;worldReferenceDims=null;
@@ -16718,10 +16825,6 @@ export function createKaminosVolumePrototype({
     // compact-3 is fitted on, and only meaningful under, the reactant law: under
     // the authored law the dropped carriers feed the reaction itself, so
     // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
-    const appearanceRequested = String(controlsSnapshot.appearanceModel ?? 'authored');
-    const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig.effective.admitted ? 'compact-3' : 'authored';
-    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
-    state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null, storedSlots: appearanceEffective === 'compact-3' ? 3 : 4, layout: fluidLayoutInForce };
     state.reactantCombustion = reactantCombustionConfig;
     state.residentGasSource={registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted&&reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
@@ -16817,6 +16920,11 @@ export function createKaminosVolumePrototype({
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
     state.physicsAppearance = physicsAppearance;
+    state.appearanceModel = {...resolveAppearanceModel(String(controlsSnapshot.appearanceModel ?? 'authored'), {
+      reactant: reactantCombustionConfig.effective.admitted === true,
+      physics: physicsAppearance.effective.render,
+    }), layout: fluidLayoutInForce};
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(state.appearanceModel.effective);
     const displayRequest = resolveDisplayReconstruction(controlsSnapshot);
     const displaySupported = emissiveRaymarchAdmission().eligible && debugRaymarchShaderSpecialization !== 'force-full' && physicsAppearance.effective.render
       && !sceneTransportConsumer && !state.joinedRendering?.enabled && productFrameOwner === 'prototype';
@@ -17173,8 +17281,9 @@ export function createKaminosVolumePrototype({
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simPassesPerFrame = 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
-    const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
-    const mainFluidKernelStrategy = fireLickBreakupEnabled
+    const shredOnly = state.appearanceModel?.effective === 'shred-only';
+    const fireLickBreakupEnabled = !shredOnly && fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
+    const mainFluidKernelStrategy = shredOnly ? 'reactant-one-field-shred-specialized-v0' : fireLickBreakupEnabled
       ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
       : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
     const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 1 : 0;
@@ -17450,7 +17559,7 @@ export function createKaminosVolumePrototype({
   // flip the sim pass would do. The relayout reads the stored form directly,
   // so it does not depend on which model the uniforms name for the read seam.
   function ensureAppearanceLayout(encoder) {
-    const wanted = state.appearanceModel?.effective ?? 'authored';
+    const wanted = state.appearanceModel?.effective === 'compact-3' ? 'compact-3' : 'authored';
     if (wanted === fluidLayoutInForce) return false;
     if (!appearanceRelayoutPipeline || !transportPredictBindGroup) {
       throw new Error('appearance relayout pipeline unavailable');
@@ -17470,6 +17579,24 @@ export function createKaminosVolumePrototype({
     state.appearanceRelayouts = (state.appearanceRelayouts || 0) + 1;
     if (state.appearanceModel) state.appearanceModel.layout = fluidLayoutInForce;
     return true;
+  }
+
+  function simulationPipeline(entryPoint, constants = {}) {
+    const specialized = {...constants, SHRED_ONLY: state.appearanceModel?.effective === 'shred-only'};
+    const role = constants.VELOCITY_ONLY ? 'velocity' : constants.MATERIAL_ONLY ? 'material' : 'combined';
+    state.simulationPipelines ??= {};
+    state.simulationPipelines[`${entryPoint}:${role}`] = {entryPoint, constants: specialized};
+    if (!specialized.SHRED_ONLY && Object.keys(constants).length === 0) {
+      return entryPoint === 'cs' ? computePipeline : transportPredictPipeline;
+    }
+    const key = JSON.stringify([entryPoint, specialized]);
+    if (!simulationVariants.has(key)) {
+      simulationVariants.set(key, device.createComputePipeline({
+        label: `kaminos simulation ${key}`, layout: transportPipelineLayout,
+        compute: {module: shader, entryPoint, constants: specialized},
+      }));
+    }
+    return simulationVariants.get(key);
   }
 
   function encodeSim(encoder, options = {}) {
@@ -17510,7 +17637,7 @@ export function createKaminosVolumePrototype({
         throw new Error('transport predictor pipeline unavailable');
       }
       const predictor = encoder.beginComputePass({ label: 'kaminos transport predictor pass' });
-      predictor.setPipeline(velocityOwner?materialOnlyPredictPipeline:transportPredictPipeline);
+      predictor.setPipeline(simulationPipeline('csTransportPredict', velocityOwner ? {MATERIAL_ONLY:true} : {}));
       predictor.setBindGroup(0, materialGroup);
       predictor.setBindGroup(3, transportPredictBindGroup);
       const predictorWorkgroups = Math.ceil(gridSize / 4);
@@ -17536,7 +17663,7 @@ export function createKaminosVolumePrototype({
         ? {querySet:options.timestampWrites.querySet,endOfPassWriteIndex:options.timestampWrites.endOfPassWriteIndex}
         : options.timestampWrites } : {}),
     });
-    pass.setPipeline(velocityOwner ? materialOnlyPipeline : computePipeline);
+    pass.setPipeline(simulationPipeline('cs', velocityOwner ? {MATERIAL_ONLY:true} : {}));
     pass.setBindGroup(0, materialGroup);
     pass.setBindGroup(3, transportPredictBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
@@ -17605,14 +17732,12 @@ export function createKaminosVolumePrototype({
     if(!fineVelocity||fineVelocity.key!==key){
       fineVelocity?.destroy();fineVelocity=createFineVelocityGrid(device,plan,uniforms.byteLength);fineVelocity.key=key;
       const constants={VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/plan.materialPerVelocity};
-      fineVelocity.pipelines=Object.fromEntries(['cs','csFaceForces','csTransportPredict','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
+      fineVelocity.pipelines=Object.fromEntries(['csFaceForces','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
       fineVelocity.predictGroup=device.createBindGroup({layout:transportPredictBindGroupLayout,entries:[{binding:1,resource:{buffer:fineVelocity.predictor}},{binding:2,resource:emptyGasSourceTexture.createView()}]});
     }
     const turbulent=!!state.waveletTurbulence?.effective?.admitted;
     if(turbulent&&!fineVelocity.waveletActive)fineVelocity.resetWavelet();
     fineVelocity.waveletActive=turbulent;
-    if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
-    if(!materialOnlyPredictPipeline)materialOnlyPredictPipeline=device.createComputePipeline({label:'fine material turbulence predictor',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'csTransportPredict',constants:{MATERIAL_ONLY:true}}});
     const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];
     // D / h² belongs to the lattice evaluating the scalar force inputs.
     // Keep the raw coefficient so the existing dt-dependent stability cap
@@ -17628,7 +17753,7 @@ export function createKaminosVolumePrototype({
     owner.prepare(fineTransferInputs());owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
     const i=owner.current;
     const group=createFluidRenderBindGroup({label:'independent fine velocity',uniformsBuffer:owner.uniform,fluidRead:owner.fluid[i],fluidWrite:owner.fluid[1-i],frontRead:owner.front[0],frontWrite:owner.front[1],quenchRead:owner.quench[0],quenchWrite:owner.quench[1],reactantRead:owner.reactant[0],reactantWrite:owner.reactant[1],waveletRead:owner.wavelet[i],waveletWrite:owner.wavelet[1-i],solidView:owner.solid.createView(),expansionTexture:owner.burn,lowerFaceTexture:owner.lower,forceTexture:owner.force,captureRows:nonRidgeOpticalCaptureRowBuffer});
-    const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};
+    const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(entry==='cs'||entry==='csTransportPredict'?simulationPipeline(entry,{VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/owner.plan.materialPerVelocity}):owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};
     if(transport.effective.predictorPass)run('csTransportPredict');
     if(state.waveletTurbulence?.effective?.admitted){run('csWaveletLowPass');run('csWaveletLowPass2');}
     run('cs');run('csFaceForces');owner.flip();

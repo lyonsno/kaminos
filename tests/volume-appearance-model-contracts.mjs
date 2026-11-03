@@ -18,12 +18,12 @@ const fnBody = name => { const at = source.indexOf(`fn ${name}(`); return source
 // the existing model.
 
 test('the compact expansion is one law with the pooled coefficients, applied to the carrier slots at every sampler', () => {
-  assert.deepEqual(core.APPEARANCE_MODELS, ['authored', 'compact-3']);
+  assert.deepEqual(core.APPEARANCE_MODELS, ['authored', 'compact-3', 'shred-only']);
   assert.deepEqual(core.COMPACT_CARRIER_RATIOS, {
     ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
     emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
   }, '[flame, shred, front] weights; negatives from the fit are dropped (0). materialDetail is not expanded: it lives in the material slot (1.w) and stays stored under both models');
-  assert.match(source, /storedCarriers: appearanceEffective === 'compact-3' \? \['flame', 'interfaceShred', 'combustionFront', 'materialDetail'\] : null/, 'the receipt names materialDetail as stored too');
+  assert.deepEqual(core.resolveAppearanceModel('compact-3', {reactant:true}).storedCarriers, ['flame', 'interfaceShred', 'combustionFront', 'materialDetail']);
   const body = fnBody('expandCompactCarriers');
   assert.match(body, /fn expandCompactCarriers\(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32\) -> vec4<f32>/);
   assert.match(body, /if \(!compactAppearanceOn\(\)\) \{ return value; \}/, 'the authored model returns the stored value untouched');
@@ -59,7 +59,7 @@ test('the compact expansion is one law with the pooled coefficients, applied to 
 test('under compact-3 the step kernel stores the three carriers in slot 2, never writes slot 3, and the front-topology field is reconstructed, not stored', () => {
   assert.match(mainKernel, /let compact = compactAppearanceOn\(\);/);
   assert.match(mainKernel, /if \(compact\) \{\n\s*fluidDst\[base \+ 2u\] = vec4<f32>\(clamp\(flame, 0\.0, 2\.4\), clamp\(interfaceShred, 0\.0, 1\.8\), 0\.0, clamp\(combustionFront, 0\.0, 1\.8\)\);\n\s*\} else \{\n\s*fluidDst\[base \+ 2u\] = vec4<f32>\(clamp\(flame, 0\.0, 2\.4\), clamp\(ember, 0\.0, 2\.0\), clamp\(flameDetail, 0\.0, 1\.8\), clamp\(combustionFront, 0\.0, 1\.8\)\);\n\s*fluidDst\[base \+ 3u\] = vec4<f32>\(clamp\(microSmoke, 0\.0, 1\.8\), clamp\(interfaceShred, 0\.0, 1\.8\), clamp\(fireLick, 0\.0, 1\.8\), clamp\(emberFleck, 0\.0, 1\.4\)\);\n\s*\}/);
-  assert.equal([...mainKernel.matchAll(/fluidDst\[base \+ 3u\]/g)].length, 1, 'the only slot-3 store in the step kernel is the authored one');
+  assert.equal([...mainKernel.matchAll(/fluidDst\[base \+ 3u\]/g)].length, 2, 'authored output plus the separately specialized Shred-only velocity output');
   assert.match(mainKernel, /frontDst\[idx\] = select\(clamp\(combustionFrontTopology, 0\.0, 2\.0\), 0\.0, compact\);/, 'the separate front field is not stored under compact');
   assert.match(fnBody('readFrontField'), /select\(frontSrc\[index3\(clampCell\(c\)\)\], readSlot\(c, 2u\)\.w \* COMPACT_FRONT_TOPOLOGY_RATIO, compactAppearanceOn\(\)\)/, 'the front field reads as the stored front times its fitted ratio under compact');
 });
@@ -71,7 +71,7 @@ test('switching the model converts the stored form once (relayout pass), so the 
   assert.match(relayout, /fluidDst\[base \+ 2u\] = expandCompactCarriers\(2u, fire, fire\.x, fire\.y, fire\.w\);\n\s*fluidDst\[base \+ 3u\] = expandCompactCarriers\(3u, fire, fire\.x, fire\.y, fire\.w\);\n\s*frontDst\[idx\] = clamp\(fire\.w \* COMPACT_FRONT_TOPOLOGY_RATIO, 0\.0, 2\.0\);/, 'compact -> authored expands the dropped carriers and the front field');
   assert.match(relayout, /if \(reactantLawOn\(\)\) \{ textureStore\(reactantDst/, 'the reactant sidecar follows the flip');
   const host = source.slice(source.indexOf('  function ensureAppearanceLayout('), source.indexOf('  function encodeSim('));
-  assert.match(host, /const wanted = state\.appearanceModel\?\.effective \?\? 'authored';\n\s*if \(wanted === fluidLayoutInForce\) return false;/);
+  assert.match(host, /const wanted = state\.appearanceModel\?\.effective === 'compact-3' \? 'compact-3' : 'authored';\n\s*if \(wanted === fluidLayoutInForce\) return false;/);
   assert.match(host, /currentFluid = 1 - currentFluid;\n\s*currentFront = 1 - currentFront;/, 'the pass writes the other buffer and flips like a step');
   assert.match(host, /fluidLayoutInForce = wanted;/);
   const step = source.slice(source.indexOf('  function encodeSim('), source.indexOf('\n  }', source.indexOf('  function encodeSim(')) + 4);
@@ -79,7 +79,7 @@ test('switching the model converts the stored form once (relayout pass), so the 
   assert.ok(step.indexOf('ensureAppearanceLayout(encoder);') < step.indexOf('const transportConfig ='), 'layout is seated before transport dispatch preparation');
   assert.equal([...source.matchAll(/(?<!let )fluidLayoutInForce = 'authored';/g)].length, 2, 'grid rebuild and full-field import both write the authored form');
   assert.match(source, /entryPoint: 'csAppearanceRelayout', constants: computePipelineConstants/);
-  assert.match(source, /storedSlots: appearanceEffective === 'compact-3' \? 3 : 4, layout: fluidLayoutInForce \}/, 'the receipt names the stored slot count and the layout in force');
+  assert.equal(core.resolveAppearanceModel('compact-3', {reactant:true}).storedSlots, 3);
 });
 
 test('the cockpit carries the Appearance model select; saved basins load on authored; the receipt names the model', () => {
@@ -87,13 +87,14 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   assert.match(index, /appearanceModel: document\.getElementById\('volume-appearance-model'\)\.value \|\| 'authored',/);
   assert.match(index, /id="volume-appearance-model-state"/);
   const control = schema.controls.find(c => c.key === 'volume-appearance-model');
-  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3'], additiveSinceControlCount: 256 });
+  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3', 'shred-only'], additiveSinceControlCount: 256 });
   assert.equal(schema.controlCount, schema.controls.length);
-  assert.match(source, /const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig\.effective\.admitted \? 'compact-3' : 'authored';\n\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(appearanceEffective\);/, 'packed in the last borrowed reactant lane (d.w); compact-3 is effective only under the admitted reactant law (under the authored law the dropped carriers feed the reaction)');
-  assert.match(source, /reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' \? 'compact-3-requires-the-reactant-law' : null/, 'the receipt names the refusal');
+  assert.equal(core.resolveAppearanceModel('compact-3').effective, 'authored');
+  assert.equal(core.resolveAppearanceModel('compact-3').reason, 'compact-3-requires-the-reactant-law');
+  assert.match(source, /uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(state.appearanceModel.effective\)/);
   assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat lane follows the effective model');
   assert.equal(core.appearanceModelUniformValue('compact-3'), 1);
   assert.equal(core.appearanceModelUniformValue('authored'), 0);
   assert.equal(core.appearanceModelUniformValue(undefined), 0);
-  assert.match(source, /state\.appearanceModel = \{ requested: appearanceRequested, effective: appearanceEffective, reason: [^\n]*storedCarriers: [^\n]*\};/);
+  assert.match(source, /state\.appearanceModel = \{\.\.\.resolveAppearanceModel\(/);
 });

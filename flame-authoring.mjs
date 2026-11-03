@@ -175,6 +175,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-smoke-interpolation','Smoke kernel'], ['volume-smoke-smoothing','Smoke cubic blend'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
+    ['volume-appearance-model','Activity model'],
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
   ] },
@@ -418,6 +419,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
     if(group.name==='Domain & simulation')section.append(pressureStatus);
     if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
     if(group.name==='Combustion')section.append(appearanceStatus);
+    if(group.name==='Carriers & added forces')section.append(byId('volume-appearance-model-state'));
     if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.quick||group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
