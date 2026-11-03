@@ -22,6 +22,12 @@ try{
   const occluder=new T.Mesh(new T.PlaneGeometry(.3,.3),new T.MeshBasicNodeMaterial({color:0x00ff00}));occluder.position.z=.2;scene.add(occluder);const front=await sample();occluder.position.z=-.2;const behind=await sample();scene.remove(occluder);
   renderer.setRenderTarget(null);renderer.render(scene,camera);const image=renderer.domElement.toDataURL();
   const read=splat.read();scene.remove(splat.root);splat.dispose();
+  // Isolated foreground splat centered at x = 0.162 (r = 0.162 / 0.18 = 0.9 -> 2.7 sigma at origin):
+  // its 2.7-sigma Gaussian tail (w ~ 0.026) must not claim silhouette coverage over a background surface at x = 0.
+  const fringeRows=new Float32Array([.162,0,.2,0,0,1,0,1,0,0,.5,1, 0,0,0,0,0,1,.8,.2,.1,0,.5,1]);
+  const fringeFoot=new Float32Array([1,0,0,.06,0,1,0,.06, 1,0,0,.06,0,1,0,.06]);
+  splat=createDeferredSurfaceSplats(fringeRows,{count:2,stride:12,radius:.03},fringeFoot);scene.add(splat.root);splat.set({mode:'opaque'});renderer.setRenderTarget(target);
+  const fringePixel=await sample(),fringeSurface=await splat.inspectSurface(128,128);scene.remove(splat.root);splat.dispose();
   for(let i=11;i<rows.length;i+=12)rows[i]=.2;
   const glassState=[];light.intensity=0;
   for(const copies of [1,2]){
@@ -29,13 +35,14 @@ try{
    splat=createDeferredSurfaceSplats(data,{count:81*copies,stride:12,radius:.03},f);scene.add(splat.root);splat.set({mode:'glass'});scene.add(occluder);renderer.setRenderTarget(target);
    const pixel=await sample(),s=await splat.inspectSurface(128,128);glassState.push({copies,pixel,surface:s});scene.remove(splat.root);splat.dispose();
   }
-  target.dispose();renderer.dispose();return {backend,adapter,bright,dark,front,behind,surface,glassState,read,image};
+  target.dispose();renderer.dispose();return {backend,adapter,bright,dark,front,behind,surface,fringePixel,fringeSurface,glassState,read,image};
  });
  fs.writeFileSync(out+'/opaque.png',Buffer.from(report.result.image.split(',')[1],'base64'));delete report.result.image;
  assert.equal(report.result.backend,flags.includes('--negative-route')?'fallback':'webgpu');
- const {bright,dark,front,behind,surface,read,image}=report.result;
+ const {bright,dark,front,behind,surface,fringePixel,fringeSurface,read,image}=report.result;
  assert.ok(bright[0]>dark[0]+10,'physical light must illuminate reconstructed surface');assert.ok(front[1]>front[0]+50,'near mesh must occlude splats');assert.ok(behind[0]>behind[1],'far mesh must be occluded by surface depth');
  assert.ok(surface[0].nearest[3]>1.9&&surface[0].nearest[3]<2.1,'nearest plane must be at source depth');assert.ok(read.updates>0&&read.width===256);
+ assert.ok(fringeSurface[0].nearest[3]>1.9&&fringePixel[0]>fringePixel[1],'isolated 2.7-sigma foreground tail must not claim silhouette over background surface');
  for(const g of report.result.glassState){const c=g.surface[0].sums[0],m=g.surface[0].sums[2];assert.ok(Math.abs(m[0]/c[3]-.2)<.002,'overlap must not turn material opacity into coverage alpha');assert.ok(g.pixel[1]>g.pixel[0],'glass must transmit the green opaque backdrop');}
  for(let k=0;k<3;k++)assert.ok(Math.abs(report.result.glassState[0].pixel[k]-report.result.glassState[1].pixel[k])<=2,'duplicating the same surface must preserve resolved color and opacity');
  assert.equal(report.errors.length,0);report.phase='done';report.ok=true;

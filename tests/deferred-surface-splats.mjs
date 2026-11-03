@@ -7,6 +7,7 @@ test('coverage reconstruction keeps material transmission separate and resolves 
  const footprint=new Float32Array([1,0,0,.01,0,1,0,.01, 1,0,0,.01,0,1,0,.01]);
  const c=createDeferredSurfaceSplats(data,{count:2,stride:12,radius:.03},footprint);
  assert.equal(c.read().count,2);assert.equal(c.read().layers,2);assert.equal(c.read().lightingPrimitives,4);
+ assert.equal(c.read().supportCutoff,.08);
  assert.equal(c.root.children.length,2);assert.ok(c.root.children.every(m=>m.geometry.index.count===6));
  assert.ok(c.root.children.every(m=>m.material.fragmentNode===null&&m.material.depthNode&&m.material.normalNode));
  c.set({mode:'opaque'});assert.ok(c.root.children.every(m=>m.material.transmission===0));
