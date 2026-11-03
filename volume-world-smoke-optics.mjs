@@ -21,18 +21,35 @@ export function fineOpticalEnvelope(p,top=3){
  return 1-r*r*(3-2*r);
 }
 
+function fract1(x){return x-Math.floor(x);}
+function worldHash31(x,y,z){
+ let qx=fract1(x*0.1031),qy=fract1(y*0.1030),qz=fract1(z*0.0973);
+ const d=qx*(qy+33.33)+qy*(qx+33.33)+qz*(qz+33.33);
+ qx+=d;qy+=d;qz+=d;
+ return fract1((qx+qy)*qz);
+}
 function subgridNoise3(q){
- const a=Math.sin(q[0]*1.7+Math.cos(q[1]*1.3-q[2]*1.5));
- const b=Math.cos(q[2]*1.9+Math.sin(q[0]*1.4+q[1]*1.1));
- const c=Math.sin((q[0]-q[2])*2.3+q[1]*1.6);
- return 0.5+0.5*(0.45*a+0.35*b+0.20*c);
+ const ix=Math.floor(q[0]),iy=Math.floor(q[1]),iz=Math.floor(q[2]);
+ const fx=q[0]-ix,fy=q[1]-iy,fz=q[2]-iz;
+ const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy),uz=fz*fz*(3-2*fz);
+ const lerp=(a,b,t)=>a+(b-a)*t;
+ const n000=worldHash31(ix,iy,iz),n100=worldHash31(ix+1,iy,iz);
+ const n010=worldHash31(ix,iy+1,iz),n110=worldHash31(ix+1,iy+1,iz);
+ const n001=worldHash31(ix,iy,iz+1),n101=worldHash31(ix+1,iy,iz+1);
+ const n011=worldHash31(ix,iy+1,iz+1),n111=worldHash31(ix+1,iy+1,iz+1);
+ const nx00=lerp(n000,n100,ux),nx10=lerp(n010,n110,ux);
+ const nx01=lerp(n001,n101,ux),nx11=lerp(n011,n111,ux);
+ const nxy0=lerp(nx00,nx10,uy),nxy1=lerp(nx01,nx11,uy);
+ return lerp(nxy0,nxy1,uz);
 }
 
-export function worldSubgridClump(p,sigma,time=0){
+export function worldSubgridClump(p,sigma,{lo=[-3,-3,-3],pitch=0.25}={}){
  if(!(sigma>0))return 1;
- const drift=[p[0]*4.2,p[1]*3.1-time*1.35,p[2]*4.2];
- const n1=subgridNoise3(drift);
- const n2=subgridNoise3([drift[0]*2.15+1.7,drift[1]*2.05-0.9,drift[2]*2.15+2.3]);
+ const step=Math.max(pitch,0.125);
+ const gx=(p[0]-lo[0])/step,gy=(p[1]-lo[1])/step,gz=(p[2]-lo[2])/step;
+ const q=[gx*1.05,gy*0.78,gz*1.05];
+ const n1=subgridNoise3(q);
+ const n2=subgridNoise3([q[0]*2.15+1.7,q[1]*2.05-0.9,q[2]*2.15+2.3]);
  const billow=Math.min(1,Math.max(0,(0.62*n1+0.38*n2-0.18)/(0.84-0.18)));
  const shaped=billow*billow*(3-2*billow);
  const strength=Math.min(1,Math.max(0,(sigma-0.02)/(0.85-0.02)));
@@ -56,15 +73,39 @@ fn fineOpticalEnvelope(p:vec3<f32>,top:f32)->f32{
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
  return 1.0-r*r*(3.0-2.0*r);
 }
+fn worldHash31(p:vec3<f32>)->f32{
+ var q=fract(p*vec3<f32>(0.1031,0.1030,0.0973));
+ q+=dot(q,q.yxz+vec3<f32>(33.33));
+ return fract((q.x+q.y)*q.z);
+}
 fn worldSubgridNoise(q:vec3<f32>)->f32{
- let a=sin(q.x*1.7+cos(q.y*1.3-q.z*1.5));
- let b=cos(q.z*1.9+sin(q.x*1.4+q.y*1.1));
- let c=sin((q.x-q.z)*2.3+q.y*1.6);
- return 0.5+0.5*(0.45*a+0.35*b+0.20*c);
+ let i=floor(q);
+ let f=fract(q);
+ let u=f*f*(vec3<f32>(3.0)-2.0*f);
+ let n000=worldHash31(i+vec3<f32>(0,0,0));
+ let n100=worldHash31(i+vec3<f32>(1,0,0));
+ let n010=worldHash31(i+vec3<f32>(0,1,0));
+ let n110=worldHash31(i+vec3<f32>(1,1,0));
+ let n001=worldHash31(i+vec3<f32>(0,0,1));
+ let n101=worldHash31(i+vec3<f32>(1,0,1));
+ let n011=worldHash31(i+vec3<f32>(0,1,1));
+ let n111=worldHash31(i+vec3<f32>(1,1,1));
+ let nx00=mix(n000,n100,u.x);
+ let nx10=mix(n010,n110,u.x);
+ let nx01=mix(n001,n101,u.x);
+ let nx11=mix(n011,n111,u.x);
+ let nxy0=mix(nx00,nx10,u.y);
+ let nxy1=mix(nx01,nx11,u.y);
+ return mix(nxy0,nxy1,u.z);
+}
+fn worldGridPoint(p:vec3<f32>)->vec3<f32>{
+ let pitch=max(worldRender.loPitch.w,0.125);
+ return (p-worldRender.loPitch.xyz)/pitch;
 }
 fn worldSubgridWarp(p:vec3<f32>,pitch:f32)->vec3<f32>{
  let step=clamp(pitch,0.125,0.75);
- let q=vec3<f32>(p.x*3.4,p.y*2.6-u.cameraPos_time.w*1.1,p.z*3.4);
+ let g=worldGridPoint(p);
+ let q=vec3<f32>(g.x*0.85,g.y*0.65,g.z*0.85);
  let w1=vec3<f32>(
   worldSubgridNoise(q+vec3<f32>(1.3,2.7,4.1))-0.5,
   worldSubgridNoise(q+vec3<f32>(5.9,1.1,7.3))-0.5,
@@ -80,9 +121,10 @@ fn worldSubgridWarp(p:vec3<f32>,pitch:f32)->vec3<f32>{
 }
 fn worldSubgridClump(p:vec3<f32>,sigma:f32)->f32{
  if(u.reactant_combustion_a.x<0.5||sigma<=0.0){return 1.0;}
- let drift=vec3<f32>(p.x*4.2,p.y*3.1-u.cameraPos_time.w*1.35,p.z*4.2);
- let n1=worldSubgridNoise(drift);
- let n2=worldSubgridNoise(drift*vec3<f32>(2.15,2.05,2.15)+vec3<f32>(1.7,-0.9,2.3));
+ let g=worldGridPoint(p);
+ let q=vec3<f32>(g.x*1.05,g.y*0.78,g.z*1.05);
+ let n1=worldSubgridNoise(q);
+ let n2=worldSubgridNoise(q*vec3<f32>(2.15,2.05,2.15)+vec3<f32>(1.7,-0.9,2.3));
  let billow=smoothstep(0.18,0.84,0.62*n1+0.38*n2);
  let strength=smoothstep(0.02,0.85,sigma);
  return mix(1.0,0.45+0.95*billow,strength);
@@ -143,19 +185,8 @@ fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMat
 }
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
- var near=worldSmokeDiagnostic(fine,false);
- if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){
-  if(u.reactant_combustion_a.x>0.5){
-   let spanY=max(top+1.0,2.0);
-   let rx=clamp((abs(p.x)-0.76)/0.24,0.0,1.0);
-   let rz=clamp((abs(p.z)-0.76)/0.24,0.0,1.0);
-   let ry=clamp((p.y-(-1.0+0.82*spanY))/(0.18*spanY),0.0,1.0);
-   let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
-   let fade=1.0-r*r*(3.0-2.0*r);
-   near.emission*=fade;near.absorption*=fade;near.scattering*=fade;
-  }
-  return near;
- }
+ let near=worldSmokeDiagnostic(fine,false);
+ if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return near;}
  let weight=select(
   1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y))),
   1.0-fineOpticalEnvelope(p,top),

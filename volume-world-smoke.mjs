@@ -99,6 +99,12 @@ export function fineDonorEnvelope(p,top=3){
  return 1-r*r*(3-2*r);
 }
 
+export function remapWorldMaterial(total,owned,oldWeight,nextWeight){
+ const part=oldWeight>0?owned*(nextWeight/oldWeight):0;
+ const exterior=oldWeight<1?Math.max(0,total-owned)*((1-nextWeight)/(1-oldWeight)):0;
+ return {total:exterior+part,owned:part};
+}
+
 export const WORLD_SMOKE_WGSL=/* wgsl */`
 struct Params {
  flow:vec4<f32>, material:vec4<f32>, near:vec4<f32>, mapping:vec4<f32>,
@@ -162,6 +168,14 @@ fn fineDonorWeight(p:vec3<f32>,pitch:f32)->f32{
  let top=2.0*u.near.y/u.near.x-1.0;
  return base*fineDonorEnvelope(finePoint(p),top);
 }
+fn priorFineDonorWeight(p:vec3<f32>,pitch:f32)->f32{
+ let base=boxFraction(p,pitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
+ if(!reactantLawOn()||u.time.x<=0.0||base<=0.0){return base;}
+ let halfSpanX=max((u.priorFineHi.x-u.priorFineLo.x)*.5,1e-6);
+ let center=vec3<f32>((u.priorFineLo.x+u.priorFineHi.x)*.5,u.priorFineLo.y+halfSpanX,(u.priorFineLo.z+u.priorFineHi.z)*.5);
+ let top=(u.priorFineHi.y-center.y)/halfSpanX;
+ return base*fineDonorEnvelope((p-center)/halfSpanX,top);
+}
 fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32)->f32{
  let s=max(0.0,soot);
  if(s<=0.0){return 0.0;}
@@ -173,9 +187,10 @@ fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32)->f32{
 // exterior portion each occupy their own subvolume. Only the part now covered
 // by Fine is replaced. When Fine moves away, its previous gas is released.
 fn exteriorHistory(total:Gas,owned:Gas,p:vec3<f32>,back:vec3<f32>,pitch:f32)->Gas{
- let old=boxFraction(back,pitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
- let shift=p-back;let joint=boxFraction(p,pitch,max(fineLo(),u.priorFineLo.xyz+shift),min(fineHi(),u.priorFineHi.xyz+shift));
- let covered=fineFraction(p,pitch);
+ let old=priorFineDonorWeight(back,pitch);
+ let shift=p-back;
+ let covered=fineDonorWeight(p,pitch);
+ let joint=min(old,min(covered,boxFraction(p,pitch,max(fineLo(),u.priorFineLo.xyz+shift),min(fineHi(),u.priorFineHi.xyz+shift))));
  var keepOwned=1.0;var keepExterior=1.0;
  if(old>0.0){keepOwned=clamp(1.0-joint/old,0.0,1.0);}
  if(old<1.0){keepExterior=clamp(1.0-(covered-joint)/(1.0-old),0.0,1.0);}
@@ -186,8 +201,8 @@ fn exteriorHistory(total:Gas,owned:Gas,p:vec3<f32>,back:vec3<f32>,pitch:f32)->Ga
 // Refine a previously mixed cell using its two constant subvolume densities.
 // This keeps a tiny Fine region from being smeared uniformly into every child.
 fn remapMaterial(total:Gas,owned:Gas,source:vec3<f32>,sourcePitch:f32,p:vec3<f32>,pitch:f32)->array<Gas,2>{
- let old=boxFraction(source,sourcePitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
- let next=boxFraction(p,pitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
+ let old=priorFineDonorWeight(source,sourcePitch);
+ let next=priorFineDonorWeight(p,pitch);
  var part=Gas(vec4<f32>(0),vec4<f32>(0));var exterior=total;
  if(old>0.0){part=gasScale(owned,next/old);}
  if(old<1.0){exterior=gasScale(Gas(max(vec4<f32>(0),total.a-owned.a),max(vec4<f32>(0),total.b-owned.b)),(1.0-next)/(1.0-old));}
@@ -420,16 +435,12 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}let i=idx(c,u.material.xyz);let p=u.lo.xyz+(vec3<f32>(c)+.5)*u.material.w;
  let fraction=fineDonorWeight(p,u.material.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
  if(fraction>0.0){owned=gasScale(fineGas(p),fraction);}
- if(fraction>=.999999){storeMaterial(c,i,p,owned,owned);return;}
+ if(fraction==1.0){storeMaterial(c,i,p,owned,owned);return;}
  let back=clipped(p,p-velocity(p)*u.time.y);var history=gas(back);
- var r:Gas;
- if(reactantLawOn()&&u.time.x>0.0){
-   r=suppliedGas(history,supplyTexel(materialSupply,2u*i));
- }else{
-   if(fraction>0.0){history=exteriorHistory(history,gasHistory(back),p,back,u.material.w);}
-   // Exterior supply is already an amount per whole receiving-cell volume.
-   r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*i)/(1.0-fraction));
- }
+ let invExterior=select(1.0/(1.0-fraction),1.0,reactantLawOn()&&u.time.x>0.0);
+ if(fraction>0.0&&(!reactantLawOn()||u.time.x<=0.0)){history=exteriorHistory(history,gasHistory(back),p,back,u.material.w);}
+ // Exterior supply is already an amount per whole receiving-cell volume.
+ var r=suppliedGas(gasScale(history,invExterior),supplyTexel(materialSupply,2u*i)*invExterior);
  if(reactantLawOn()){
    let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
    for(var a=0u;a<3u;a++){

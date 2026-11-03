@@ -287,11 +287,13 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
 // neighbor diffusion and no secondary ray per camera sample.
 @compute @workgroup_size(64)
 fn sweepEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
+  seatGridShape();
   let plane = LIGHT_GRID*LIGHT_GRID;
   if(id.x>=6u*plane) { return; }
   let direction = id.x/plane; let column = id.x%plane;
   var light = vec3<f32>(u.emissive_material.z);
-  let ds = 2.0/f32(LIGHT_GRID);
+  let top = 2.0*f32(GRID_Y)/f32(GRID)-1.0;
+  let ds = select(2.0,max(top+1.0,2.0),direction/2u==1u)/f32(LIGHT_GRID);
   for(var step=0u;step<LIGHT_GRID;step++) {
     let along = select(step,LIGHT_GRID-1u-step,(direction&1u)==1u);
     var c = vec3<u32>(along,column%LIGHT_GRID,column/LIGHT_GRID);

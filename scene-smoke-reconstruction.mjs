@@ -179,12 +179,14 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
   let fine=fineMeanIncident(p);
   if(exteriorCoverage.hiEnabled.w<0.5){return fine;}
   let hi=vec3<f32>(-1)+vec3<f32>(textureDimensions(distributedIncident))*(2.0/f32(textureDimensions(distributedIncident).x));
-  let inside=all(p>=vec3<f32>(-1))&&all(p<=hi);
+  let edge=min(p-vec3<f32>(-1),hi-p);
+  let distance=min(edge.x,min(edge.y,edge.z));
   let coarse=regionalMeanIncident(p);
-  if(!inside){distributedLastMaskFlags=exteriorLastMaskFlags;return coarse;}
+  if(distance<0.0){distributedLastMaskFlags=exteriorLastMaskFlags;return coarse;}
   // Never fill a fine solid mask from a coarse neighbor across the wall.
   if(distributedLastMaskFlags.x>0.5||exteriorLastMaskFlags.x>0.5){return fine;}
-  return mix(coarse,fine,fineIncidentEnvelope(p,hi.y));
+  let blend=min(smoothstep(0.0,exteriorCoverage.loBlend.w,distance),fineIncidentEnvelope(p,hi.y));
+  return mix(coarse,fine,blend);
 }
 `;
 

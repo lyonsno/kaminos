@@ -209,8 +209,9 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
+  let pw=select(p,p+worldSubgridWarp(p,worldRender.loPitch.w),u.reactant_combustion_a.x>0.5);
   // Same physical law as the camera, before optional diagnostic tinting.
-  let medium=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,1.0,1.0);
+  let medium=regionSmokeMaterial(worldSmokeSample(pw),regionSmokeSample(worldOptical,pw,worldRender.loPitch,1).xyz,1.0,1.0);
   let sigma=(medium.absorption+medium.scattering)*worldSubgridClump(p,medium.absorption+medium.scattering);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(sigma,0,0,0));
 }
@@ -219,7 +220,8 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,1.0,1.0);
+  let pw=select(p,p+worldSubgridWarp(p,worldRender.middleLoPitch.w),u.reactant_combustion_a.x>0.5);
+  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,1.0,1.0);
   let sigma=(medium.absorption+medium.scattering)*worldSubgridClump(p,medium.absorption+medium.scattering);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(sigma,0,0,0));
 }
@@ -229,16 +231,14 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
   seatGridShape();
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
-  let top = 2.0 * f32(SCENE_SOURCE_GRID_Y) / f32(SCENE_SOURCE_GRID) - 1.0;
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;
   for (var k=0u; k<8u; k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
     let p = (vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-vec3<f32>(1.0);
     let medium = sceneEmissiveMaterialAt(p);
-    let env = select(1.0, 0.35 + 0.65 * fineOpticalEnvelope(p, top), u.reactant_combustion_a.x > 0.5);
-    coefficients += vec4<f32>(medium.emission, (medium.absorption + medium.scattering) * env)*0.125;
-    scattering+=(medium.scattering * env)*0.125;
+    coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)*0.125;
+    scattering+=medium.scattering*0.125;
   }
   textureStore(sceneSourceOut, vec3<i32>(c), coefficients);
   textureStore(sceneScatteringOut,vec3<i32>(c),vec4<f32>(scattering,0,0,0));

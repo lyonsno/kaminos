@@ -59,8 +59,16 @@ test('fine-to-coarse donor envelope tapers smoothly inside upper walls and corne
 
   // Both coarse material solvers use fineDonorWeight instead of raw fineCellFraction box overwrite.
   assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /fn fineDonorWeight\(/);
+  assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /fn priorFineDonorWeight\(/);
   assert.match(worldSmoke.WORLD_SMOKE_WGSL, /fineDonorWeight\(p,\s*u\.material\.w\)/);
   assert.match(materialHierarchy.MATERIAL_HIERARCHY_WGSL, /fineDonorWeight\(p,\s*n\.loPitch\.w\)/);
+
+  // R1: remapMaterial preserves exterior coarse-advected smoke (total - owned) inside the tapered handoff region.
+  assert.equal(typeof worldSmoke.remapWorldMaterial, 'function');
+  const remapped = worldSmoke.remapWorldMaterial(1.0, 0.3, 0.3, 0.3);
+  assert.ok(Math.abs(remapped.total - 1.0) < 1e-6, `expected remapMaterial to preserve total=1.0 when old=next=0.3, got ${remapped.total}`);
+  assert.ok(Math.abs(remapped.owned - 0.3) < 1e-6, `expected remapMaterial to preserve owned=0.3, got ${remapped.owned}`);
+  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /fn remapMaterial[^]*?let old=priorFineDonorWeight\(source,sourcePitch\);[^]*?let next=priorFineDonorWeight\(p,pitch\);/);
 });
 
 test('world smoke optics use a rounded corner-free interior blend and sub-grid coarse soot clumping', () => {
@@ -77,9 +85,9 @@ test('world smoke optics use a rounded corner-free interior blend and sub-grid c
   const cornerWeight = worldOptics.fineOpticalEnvelope([0.7, 1.0, 0.7], top);
   assert.ok(cornerWeight < faceWeight, `expected rounded optical envelope at corner (${cornerWeight} < ${faceWeight})`);
 
-  // Sub-grid clumping modulates dense coarse plumes across space so coarse bricks are not flat blocks.
-  const c0 = worldOptics.worldSubgridClump([0.15, 1.4, -0.2], 0.8, 1.0);
-  const c1 = worldOptics.worldSubgridClump([0.85, 2.1, 0.45], 0.8, 1.0);
+  // Sub-grid clumping modulates dense coarse plumes across World grid space without wall-clock drift.
+  const c0 = worldOptics.worldSubgridClump([0.15, 1.4, -0.2], 0.8);
+  const c1 = worldOptics.worldSubgridClump([0.85, 2.1, 0.45], 0.8);
   assert.notEqual(c0, c1);
   assert.ok(c0 > 0.35 && c0 < 1.85);
   assert.ok(c1 > 0.35 && c1 < 1.85);
@@ -87,15 +95,17 @@ test('world smoke optics use a rounded corner-free interior blend and sub-grid c
   assert.match(worldOptics.WORLD_SMOKE_OPTICS_WGSL, /fn fineOpticalEnvelope\(/);
   assert.match(worldOptics.WORLD_SMOKE_OPTICS_WGSL, /fn worldSubgridClump\(/);
   assert.match(worldOptics.WORLD_SMOKE_OPTICS_WGSL, /fn worldSubgridWarp\(/);
+  assert.match(worldOptics.WORLD_SMOKE_OPTICS_WGSL, /fn worldGridPoint\(/);
+  // R3.2: worldSmokeBlend returns near unattenuated when !worldSmokeOn().
+  assert.match(worldOptics.WORLD_SMOKE_OPTICS_WGSL, /if\(!worldSmokeOn\(\)\|\|any\(p<worldRender\.loPitch\.xyz\)\|\|any\(p>worldRender\.hiEnabled\.xyz\)\)\{return near;\}/);
 });
 
 test('scene lighting and volume source blend smoothly across the rounded interior handoff and full tall domain', () => {
   assert.match(COMPOSED_SMOKE_WGSL, /fineIncidentEnvelope\(p,\s*hi\.y\)/);
-  assert.doesNotMatch(
-    COMPOSED_SMOKE_WGSL,
-    /let edge=min\(p\+vec3<f32>\(1\),hi-p\);let distance=min\(edge\.x,min\(edge\.y,edge\.z\)\);/,
-  );
-  assert.match(SCENE_VOLUME_SOURCE_WGSL, /fineOpticalEnvelope\(p,\s*top\)/);
+  assert.match(COMPOSED_SMOKE_WGSL, /smoothstep\(0\.0,exteriorCoverage\.loBlend\.w,distance\)/);
+  assert.match(SCENE_VOLUME_SOURCE_WGSL, /worldSubgridWarp\(p,worldRender\.loPitch\.w\)/);
+  assert.match(SCENE_VOLUME_SOURCE_WGSL, /worldSubgridWarp\(p,worldRender\.middleLoPitch\.w\)/);
   assert.match(SCENE_VOLUME_SOURCE_WGSL, /worldSubgridClump\(p,\s*medium\.absorption\s*\+\s*medium\.scattering\)/);
   assert.match(EMISSIVE_TRANSPORT_WGSL, /2\.0\s*\*\s*f32\(GRID_Y\)\s*\/\s*f32\(GRID\)\s*-\s*1\.0/);
+  assert.match(EMISSIVE_TRANSPORT_WGSL, /select\(2\.0,max\(top\+1\.0,2\.0\),direction\/2u==1u\)\/f32\(LIGHT_GRID\)/);
 });
