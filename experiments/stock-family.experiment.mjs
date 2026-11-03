@@ -127,6 +127,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     unsubscribe=edits.subscribe(()=>refresh());
   }catch(e){disposed=true;removals.forEach(remove=>remove());edits?.unregister(sourceTarget);for(const i of items){edits?.unregister(i.target);i.strainMaterial.dispose();}await session.dispose();sourceGeometry?.dispose();if(sourceMaterial)disposeStockMaterial(sourceMaterial);throw e;}
   return {read,operations,mount({root:panel,document,invoke}){
+    host.scene.enterWorkbench();
     document.body.classList.add('stock-family-active');
     const style=document.createElement('link');style.rel='stylesheet';style.href='/experiments/stock-family/controls.css';document.head.append(style);removals.push(()=>{style.remove();document.body.classList.remove('stock-family-active');});
     const common=document.createElement('section');common.className='stock-family-controls';panel.append(common);removals.push(()=>common.remove());
