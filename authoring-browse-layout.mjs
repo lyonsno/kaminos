@@ -46,7 +46,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   byId('asset-entries').addEventListener('dblclick',event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
     const selected=controller.read().selected;if(!selected||selected.visibility?.status==='withheld')return;
-    if(['mesh','surface'].includes(selected.kind))controller.add().catch(()=>{});
+    if(['mesh','surface','stock-family'].includes(selected.kind))controller.add().catch(()=>{});
     else if(selected.kind==='image')open('generate');
   });
   function render(){
