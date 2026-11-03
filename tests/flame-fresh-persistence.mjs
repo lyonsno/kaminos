@@ -79,3 +79,18 @@ test('Add then Undo after replacement cannot let stale route authority block Sav
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.deepEqual(m.writes.map(x=>x.kind),['scene']);
 });
+
+for(const stage of ['layout','basin'])test(`document switch during ${stage} preparation cannot install old composition`,async()=>{
+ const m=mount({refused:false});let release;
+ const held=new Promise(resolve=>{release=resolve;});
+ if(stage==='layout')m.c.volumeCockpitLayoutReady=held;
+ else m.c.saveVolumeSettingsPreset=async()=>{await held;return{effective:{presetId:'old-basin',label:'Old'}};};
+ const pending=m.c.window.saveScene({result:true});
+ await new Promise(resolve=>setImmediate(resolve));
+ m.c.sceneLoadRequests.begin();m.c.sceneDocument.sceneCleared();
+ const replacement={schema:'replacement-marker'};m.c.activeSceneComposition=replacement;
+ release();
+ assert.equal((await pending).ok,false);
+ assert.equal(m.c.activeSceneComposition,replacement);
+ assert.equal(m.writes.filter(row=>row.kind==='scene').length,0);
+});
