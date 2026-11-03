@@ -1,3 +1,4 @@
+import {translateWaterSetup} from './water-world-translation.mjs';
 import {normalizeLocalLiquidSetup} from './local-liquid-setup.mjs';
 import {resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 
@@ -86,6 +87,12 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   restart(next){retire();setup=next;failure=null;return generation;},
   fail(error){retire();failure=String(error?.message||error);},
   setPaused(value){paused=Boolean(value);host?.setPaused(paused);return paused;},
+  translateWorld(delta){
+   if(pending)throw Error('Wait for water to finish mounting before moving its workspace');
+   const next=translateWaterSetup(setup,delta);
+   if(host){if(!host.translateWorld)throw Error('This water runtime cannot move with the workspace');host.translateWorld(delta);}
+   setup=next;
+  },
   sync(){if(host&&setup){host.setEmitters(runtimeEmitters());host.setSetup?.(setup);}},
   render(options){return host?.render(options);},
   get active(){return !!host&&!host.paused;},

@@ -3586,7 +3586,7 @@ window.kaminosProxyPreview={layer:PROXY_LAYER,layers:{water:PROXY_LAYER,fire:FIR
 // disposal need no extra hooks.
 let waterProxy=null;
 function syncWaterProxy() {
- const host=waterFeature.host,display=isSceneItemVisible('water-field')&&viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
+ const host=waterFeature.host,display=arrivalPresentation.opacity('water-field')>0&&isSceneItemVisible('water-field')&&viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
  camera?.layers[display?'enable':'disable'](PROXY_LAYER);
  if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
  if(host&&!waterProxy){
@@ -3603,7 +3603,7 @@ function syncWaterProxy() {
   waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
  }
  if(waterProxy&&!wanted&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
- const mode=!isSceneItemVisible('water-field')?'hidden':display?'proxy':'full';
+ const mode=arrivalPresentation.opacity('water-field')===0||!isSceneItemVisible('water-field')?'hidden':display?'proxy':'full';
  if(host&&host.presentation!==mode)host.setPresentation(mode);
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
@@ -4169,7 +4169,7 @@ const waterFeature = createAuthoredWaterFeature({
   emitters:localLiquidEmitterRecords,
   enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),
   runtimeEmitters:()=>localLiquidEmitterState().emitters,
-  visible:()=>isSceneItemVisible('water-field'),viewerPaused:()=>sceneViewerPaused,
+  visible:()=>isSceneItemVisible('water-field')&&arrivalPresentation.opacity('water-field')>0,viewerPaused:()=>sceneViewerPaused,
   preview:visible=>{refreshAuthoredWaterSamplingPreviews();setAuthoredWaterPreviewVisible(visible);},
   refresh:()=>{authoredWaterControls?.refresh();refreshLocalLiquidPerformance();if(!waterFeature.host)sharedWorkbench?.update({source:waterFeature.setup?'Authored water sources':'Shared scene',status:waterFeature.setup?'Initial preview':'No water',clock:waterFeature.setup?'Release starts water':''});window._kaminosDirty?.();},
   report:setInfo,
@@ -11838,7 +11838,7 @@ async function initScene() {
     };
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>sceneBeautyLods.withFrame(camera,beautyFrameOpts,()=>arrivalPresentation.withFrame(workingScene.objects,()=>renderWithViewportShading(() => {
       if (waterFeature.host) {
-        if(!isSceneItemVisible('water-field')) {
+        if(!isSceneItemVisible('water-field')||arrivalPresentation.opacity('water-field')===0) {
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
         } else try { waterFeature.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
@@ -12945,6 +12945,20 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     arrivalPresentation,
+    translateArrivalStage(ids,delta){
+      const selected=new Set(ids),rows=workingScene.objects.filter(row=>selected.has(row.id));
+      if(rows.length!==selected.size)throw Error('Arrival stage membership changed');
+      const groups=workingScene.groups.filter(g=>g.objectIds.some(id=>selected.has(id)));
+      if(groups.some(g=>g.objectIds.some(id=>!selected.has(id))))throw Error('Arrival must include every member of its groups');
+      if(localLiquidEmitterRecords().some(row=>!selected.has(row.id)))throw Error('Arrival cannot relocate unrelated water');
+      // Admission precedes scene mutation; native MLS translation preserves all
+      // grid-local water state, including paused particles and their age.
+      waterFeature.translateWorld(delta);
+      const vector=new THREE.Vector3(...delta);
+      for(const row of rows){const point=row.object.getWorldPosition(new THREE.Vector3()).add(vector);row.object.parent?.worldToLocal(point);row.object.position.copy(point);row.object.updateMatrixWorld(true);refreshWorkbenchAssetPresentation({id:row.id,root:row.object});}
+      for(const group of groups){const transform={...structuredClone(group.transform),position:group.transform.position.map((v,i)=>v+delta[i])};workingScene.updateGroup(group.id,{transform});applySceneObjectTransformState(groupProxy(group),transform);}
+      waterFeature.sync();syncWaterDomainGuide();updateTransformInspector();window._kaminosDirty?.();
+    },
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
@@ -25716,7 +25730,7 @@ function syncWaterDomainGuide(){
     localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
     localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
   }
-  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!waterFeature.setup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
+  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=arrivalPresentation.opacity('water-field')>0&&isSceneItemVisible('water-field')&&!!waterFeature.setup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
 }
 function pickWaterDomainFromViewportPointer(event){
   if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
@@ -25729,7 +25743,7 @@ function syncSceneSimulationVisibility(){
   }
   syncAuthoredFireActivity().catch(error=>setInfo(`Fire activity: ${error.message}`));
   syncLocalLiquidHostEmitters();
-  if(waterFeature.host){const paused=waterFeature.paused||!isSceneItemVisible('water-field');if(waterFeature.host.paused!==paused)waterFeature.host.setPaused(paused);}
+  if(waterFeature.host){const paused=waterFeature.paused||!isSceneItemVisible('water-field')||arrivalPresentation.opacity('water-field')===0;if(waterFeature.host.paused!==paused)waterFeature.host.setPaused(paused);}
 }
 function syncEditorHelperVisibility(){
   syncWaterDomainGuide();

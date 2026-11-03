@@ -1,3 +1,4 @@
+import {translateWaterSetup} from './water-world-translation.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {texture,vec4,positionView} from './lib/three.tsl.js';
 import {createFluidSceneEnvironment} from './fluid-scene-environment.mjs';
@@ -36,6 +37,12 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
   setPaused(value){paused=Boolean(value);solver.setPaused(paused);return paused;},
   setEmitters(next){makePacket(next);records=structuredClone(next);sourceGeneration++;publishInlets();return true;},
   setSetup(next){pendingSetup=structuredClone(next);},
+  translateWorld(delta){
+   const nextSetup=translateWaterSetup(setup,delta),nextPending=translateWaterSetup(pendingSetup,delta);
+   solver.translateWorld(delta);setup=nextSetup;pendingSetup=nextPending;
+   for(const rows of [records,initial.sourceRecords])for(const row of rows)row.transform.position=row.transform.position.map((v,i)=>v+delta[i]);
+   publishInlets();
+  },
   interfaceRecordDescriptor:()=>disposed?null:proxy.descriptor(),
   snapshot:()=>solver.snapshot(),
   async advanceTo(step){paused=true;publishInlets();const result=await solver.advanceTo(step);redraw();return result;},

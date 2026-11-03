@@ -9,7 +9,7 @@ export function createSceneArrivalPresentation(){
     row.object.traverse(node=>{if(visited.has(node))return;visited.add(node);
      if(opacity===0){const before=node.visible;restore.push(()=>node.visible=before);node.visible=false;return;}
      if(!node.material)return;const before=node.material;
-     const fade=material=>{let clone=clones.get(material);if(!clone){clone=material.clone();clone.transparent=true;clone.depthWrite=false;clones.set(material,clone);}clone.opacity=material.opacity*opacity;return clone;};
+     const fade=material=>{let clone=clones.get(material);if(!clone){clone=material.clone();clones.set(material,clone);}clone.copy(material);clone.transparent=true;clone.opacity=material.opacity*opacity;return clone;};
      node.material=Array.isArray(before)?before.map(fade):fade(before);restore.push(()=>node.material=before);
     });}
     return draw();

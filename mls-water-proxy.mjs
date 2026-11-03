@@ -21,8 +21,9 @@ export async function createMlsWaterProxy(device,solver){
    }`});
   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'proxy'}});
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[solver.particles,records,counters,world].map((buffer,binding)=>({binding,resource:{buffer}}))});
-  let tick=-1;
-  return {descriptor(){const step=solver.read().clock.step;if(step!==tick){
+  let tick=-1,origin=null;
+  return {descriptor(){const step=solver.read().clock.step;if(step!==tick||origin!==c.min.join(',')){
+    device.queue.writeBuffer(world,0,new Float32Array([...c.min,c.cell,c.modelSecondsPerSecond,c.particleRadius,0,0]));origin=c.min.join(',');
     const encoder=device.createCommandEncoder({label:'MLS shared particle proxy'});encoder.clearBuffer(counters);
     const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(c.capacity/64));pass.end();device.queue.submit([encoder.finish()]);tick=step;
    }

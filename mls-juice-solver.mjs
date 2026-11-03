@@ -1,3 +1,4 @@
+import {checkedTranslation} from './water-world-translation.mjs';
 import {createSceneLiquidSupport,SCENE_LIQUID_COLLIDER_WGSL,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL} from './scene-liquid-support.mjs';
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
 
@@ -158,6 +159,15 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         return true;
     };
     return {config,particles,
+      translateWorld(delta){
+        checkedTranslation(delta);if(disposed||failure)throw Error(failure||'MLS solver disposed');
+        // Particle positions and APIC state are grid-local. Queue ordering makes
+        // this uniform update follow any previously submitted step.
+        const next=config.min.map((v,i)=>v+delta[i]);
+        device.queue.writeBuffer(domain,0,new Float32Array([...next,config.cell]));
+        config.min=next;for(const side of ['min','max'])config.bounds[side]=config.bounds[side].map((v,i)=>v+delta[i]);
+        if(config.obstacle)config.obstacle={...config.obstacle,center:config.obstacle.center.map((v,i)=>v+delta[i])};
+      },
       setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},

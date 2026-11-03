@@ -5,17 +5,24 @@ import {createMlsJuiceSolver} from '../mls-juice-solver.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};
 const saved=globalThis.fetch;
 globalThis.fetch=async url=>({ok:true,text:()=>fs.readFile(url,'utf8')});
-let now=0,complete;
+let now=0,complete;const writes=[];
 const pending=()=>new Promise(resolve=>complete=resolve);
 let completion=Promise.resolve();
-const device={createBuffer:({size})=>({getMappedRange:()=>new ArrayBuffer(size),unmap(){},destroy(){}}),
+const device={createBuffer:({size,label})=>({label,getMappedRange:()=>new ArrayBuffer(size),unmap(){},destroy(){}}),
   createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),
   createComputePipelineAsync:async()=>({getBindGroupLayout(){return {};}}),createBindGroup:()=>({}),
   createCommandEncoder:()=>({clearBuffer(){},copyBufferToBuffer(){},beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
-  queue:{writeBuffer(){},submit(){},onSubmittedWorkDone:()=>completion}};
+  queue:{writeBuffer(buffer,offset,data){writes.push({label:buffer.label,values:Array.from(data)});},submit(){},onSubmittedWorkDone:()=>completion}};
 let solver;
 try{
   solver=await createMlsJuiceSolver({device,setup:{particleCount:2},packet:{authority:{simulation_safe:false},emitters:[]},now:()=>now});
+  const origin=[...solver.config.min];
+  assert.equal(typeof solver.translateWorld,'function','mounted MLS must carry its domain with an arriving rig');
+  solver.translateWorld([2,-3,4]);
+  assert.deepEqual(solver.read().domain.originWorld,origin.map((v,i)=>v+[2,-3,4][i]));
+  assert.equal(solver.read().clock.step,0);
+  assert.deepEqual(writes.filter(w=>w.label==='MLS world mapping').at(-1).values.slice(0,3),solver.config.min.map(Math.fround));
+  assert.throws(()=>solver.translateWorld([NaN,0,0]));
   solver.advance(now=0);completion=pending();solver.advance(now=100);
   solver.setPaused(true);solver.advance(now=200);solver.advance(now=1000);
   complete();await new Promise(resolve=>setImmediate(resolve));
