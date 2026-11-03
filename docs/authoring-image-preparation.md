@@ -7,12 +7,35 @@ alpha without another background model call. Preparation preserves the canvas
 size and RGBA pixels. SF3D separately owns its resize, background blend and
 normalization; the Trellis crop/premultiply recipe is not applied to SF3D.
 
-The server needs a Python environment containing Pillow, rembg and CPU
-ONNX Runtime, plus existing `u2net.onnx` weights. Set
-`KAMINOS_IMAGE_PREPARATION_PYTHON` to that environment's Python (default: the
-server interpreter) and `KAMINOS_BACKGROUND_MODEL_PATH` to the existing weights
-(default: `~/.u2net/u2net.onnx`). Missing dependencies/weights or empty cutouts
-fail visibly; original RGB is never used as a successful preparation fallback.
+Register the existing preparation environment once for every worktree and revision server:
+
+```sh
+python3 image_preparation_installation.py register --python /installed/venv/bin/python3 --model /installed/u2net.onnx
+python3 image_preparation_installation.py status
+```
+
+The shared `~/.config/kaminos/models.json` stores `imagePreparation.python` and
+`imagePreparation.model` alongside weight packages. `KAMINOS_MODEL_INSTALLATIONS`
+selects another catalog. Relative registered paths resolve beside that catalog;
+virtual-environment executable symlinks retain their environment identity.
+Registration preserves other catalog entries and verifies dependency metadata and
+weight presence. It installs nothing and does not run background removal.
+
+Normal server startup selects that installation. Explicit
+`KAMINOS_IMAGE_PREPARATION_PYTHON` and `KAMINOS_BACKGROUND_MODEL_PATH` overrides
+still take precedence individually; invalid overrides fail instead of falling
+back. Without registration, the server interpreter and `~/.u2net/u2net.onnx`
+remain the defaults. Restart a running server after registration or dependency
+changes. `/api/runtime-config` exposes `imagePreparation`, the selected paths,
+resolution sources, package versions and per-route availability reasons.
+Dependency metadata is probed once per server, without importing ONNX or loading
+weights. An available report establishes installation presence; actual preparation
+still validates execution and the resulting pixels.
+
+Pillow supports retaining existing alpha; opaque-image background removal also
+requires rembg, CPU ONNX Runtime and existing `u2net.onnx`. Missing dependencies,
+weights or empty cutouts fail visibly; original RGB never substitutes for a
+successful cutout.
 
 `KAMINOS_IMAGE_PREPARATION_DIR` chooses persistent preparation storage (default:
 `$KAMINOS_ASSETS_DIR/images/prepared`). Original bytes and cutout PNGs are retained,
