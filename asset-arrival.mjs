@@ -223,6 +223,90 @@ function eulerXYZFromMinusZToDirection([dx, dy, dz]) {
   return [rx, ry, rz];
 }
 
+export const DEFAULT_STUDIO_LOOK_ID = 'sculptural-studio';
+
+export const STUDIO_LOOK_LIBRARY = Object.freeze({
+  'sculptural-studio': Object.freeze({
+    id: 'sculptural-studio',
+    label: 'Sculptural Studio',
+    description: 'Warm three-quarter key and cool grazing rim on a neutral cyclorama',
+    environment: Object.freeze({
+      name: 'studio',
+      exposure: 1.15,
+      intensity: 1.15,
+      rotation: 0,
+      showBackground: true,
+      backgroundBlur: 0.55,
+      backgroundBrightness: 0.78,
+      backgroundContrast: 1.05,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#ece9e2', roughness: 0.78 }),
+    }),
+    keyLight: Object.freeze({ azimuthDeg: -34, elevationDeg: 42, distanceScale: 4.2, color: '#fff1e0', intensity: 95, angle: 62, penumbra: 0.9 }),
+    rimLight: Object.freeze({ azimuthDeg: 148, elevationDeg: 28, distanceScale: 4.4, color: '#cfe2ff', intensity: 58, angle: 66, penumbra: 0.92 }),
+  }),
+  'obsidian-stage': Object.freeze({
+    id: 'obsidian-stage',
+    label: 'Obsidian Stage',
+    description: 'High-contrast dark stage with warm amber key and crisp icy rim',
+    environment: Object.freeze({
+      name: 'studio',
+      exposure: 1.08,
+      intensity: 0.95,
+      rotation: 0.45,
+      showBackground: true,
+      backgroundBlur: 0.65,
+      backgroundBrightness: 0.34,
+      backgroundContrast: 1.14,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#26282d', roughness: 0.58 }),
+    }),
+    keyLight: Object.freeze({ azimuthDeg: -38, elevationDeg: 38, distanceScale: 4.1, color: '#ffe4c4', intensity: 118, angle: 54, penumbra: 0.88 }),
+    rimLight: Object.freeze({ azimuthDeg: 142, elevationDeg: 24, distanceScale: 4.2, color: '#9ecbff', intensity: 82, angle: 58, penumbra: 0.9 }),
+  }),
+  'warm-gallery': Object.freeze({
+    id: 'warm-gallery',
+    label: 'Warm Gallery',
+    description: 'Golden-hour gallery key with soft warm limestone floor',
+    environment: Object.freeze({
+      name: 'sunset',
+      exposure: 1.12,
+      intensity: 1.08,
+      rotation: 0.2,
+      showBackground: true,
+      backgroundBlur: 0.58,
+      backgroundBrightness: 0.76,
+      backgroundContrast: 1.06,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#eee5d8', roughness: 0.82 }),
+    }),
+    keyLight: Object.freeze({ azimuthDeg: -28, elevationDeg: 36, distanceScale: 4.3, color: '#ffe6c7', intensity: 102, angle: 64, penumbra: 0.92 }),
+    rimLight: Object.freeze({ azimuthDeg: 154, elevationDeg: 32, distanceScale: 4.5, color: '#d8e6ff', intensity: 52, angle: 68, penumbra: 0.94 }),
+  }),
+  'technical-daylight': Object.freeze({
+    id: 'technical-daylight',
+    label: 'Technical Daylight',
+    description: 'Crisp neutral inspection light with balanced fill',
+    environment: Object.freeze({
+      name: 'courtyard',
+      exposure: 1.1,
+      intensity: 1.12,
+      rotation: 0,
+      showBackground: true,
+      backgroundBlur: 0.6,
+      backgroundBrightness: 0.82,
+      backgroundContrast: 1.02,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#e4e6e9', roughness: 0.74 }),
+    }),
+    keyLight: Object.freeze({ azimuthDeg: -32, elevationDeg: 46, distanceScale: 4.2, color: '#ffffff', intensity: 88, angle: 64, penumbra: 0.88 }),
+    rimLight: Object.freeze({ azimuthDeg: 146, elevationDeg: 34, distanceScale: 4.4, color: '#e2eeff', intensity: 64, angle: 66, penumbra: 0.9 }),
+  }),
+});
+
+export function resolveStudioLook(lookId = DEFAULT_STUDIO_LOOK_ID) {
+  if (lookId == null || lookId === '') return STUDIO_LOOK_LIBRARY[DEFAULT_STUDIO_LOOK_ID];
+  const look = STUDIO_LOOK_LIBRARY[lookId];
+  if (!look) throw new Error(`Unknown Studio look: ${lookId}`);
+  return look;
+}
+
 // Plan a two-light studio rig (warm three-quarter Key + cool grazing Rim)
 // scaled and aimed at the arriving asset's bounds, with optional material-aware
 // tuning adjustments for dark-metallic, specular-metallic, bright-matte, or balanced surfaces.
@@ -231,7 +315,9 @@ export function planArrivalStudioLights({
   groundY = -0.85,
   materialProfile = null,
   materialTuning = false,
+  lookId = DEFAULT_STUDIO_LOOK_ID,
 } = {}) {
+  const look = resolveStudioLook(lookId);
   const min = Array.isArray(bounds?.min) && bounds.min.length === 3 ? bounds.min : [-0.58, groundY, -0.58];
   const max = Array.isArray(bounds?.max) && bounds.max.length === 3 ? bounds.max : [0.58, groundY + 1.15, 0.58];
   const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || ASSET_ARRIVAL_TARGET_DIAGONAL;
@@ -279,32 +365,36 @@ export function planArrivalStudioLights({
   };
 
   const distanceScale = scaleFactor * scaleFactor;
+  const keySpec = look.keyLight;
+  const rimSpec = look.rimLight;
   const keyRecord = buildSpotRecord({
     id: '@studio-key-light',
     label: 'Studio key light',
     role: 'key',
-    azimuthDeg: -34,
-    elevationDeg: 42,
-    distance: 4.2 * scaleFactor,
-    color: '#fff1e0',
-    intensity: 95 * distanceScale * activeTuning.keyMultiplier,
-    angle: 62,
-    penumbra: 0.9,
+    azimuthDeg: keySpec.azimuthDeg,
+    elevationDeg: keySpec.elevationDeg,
+    distance: keySpec.distanceScale * scaleFactor,
+    color: keySpec.color,
+    intensity: keySpec.intensity * distanceScale * activeTuning.keyMultiplier,
+    angle: keySpec.angle,
+    penumbra: keySpec.penumbra,
   });
   const rimRecord = buildSpotRecord({
     id: '@studio-rim-light',
     label: 'Studio rim light',
     role: 'rim',
-    azimuthDeg: 148,
-    elevationDeg: 28,
-    distance: 4.4 * scaleFactor,
-    color: '#cfe2ff',
-    intensity: 58 * distanceScale * activeTuning.rimMultiplier,
-    angle: 66,
-    penumbra: 0.92,
+    azimuthDeg: rimSpec.azimuthDeg,
+    elevationDeg: rimSpec.elevationDeg,
+    distance: rimSpec.distanceScale * scaleFactor,
+    color: rimSpec.color,
+    intensity: rimSpec.intensity * distanceScale * activeTuning.rimMultiplier,
+    angle: rimSpec.angle,
+    penumbra: rimSpec.penumbra,
   });
 
   return {
+    lookId: look.id,
+    lookLabel: look.label,
     target,
     profileKind,
     materialTuning: Boolean(materialTuning),

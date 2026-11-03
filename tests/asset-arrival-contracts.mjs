@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from '../lib/three.core.js';
+import * as assetArrival from '../asset-arrival.mjs';
 import {
   ASSET_ARRIVAL_TARGET_DIAGONAL,
   assetArrivalViewDirection,
@@ -159,7 +160,7 @@ test('arrival studio light rig plans warm key and cool rim spot records and appl
 
 test('startup studio light lifecycle yields on scene spot lights, preserves promoted light edits, and records undo history', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const syncStart = html.indexOf('function syncArrivalStudioLighting()');
+  const syncStart = html.indexOf('function syncArrivalStudioLighting(');
   const syncEnd = html.indexOf('function autoCalibrateSceneGIFromScene(', syncStart);
   const syncBody = html.slice(syncStart, syncEnd);
   assert.ok(
@@ -184,7 +185,7 @@ test('startup studio light lifecycle yields on scene spot lights, preserves prom
     /syncArrivalStudioLighting\(\)/,
     'disposeSceneSpotLight must sync arrival studio lighting when a scene spot light is removed',
   );
-  const promoteStart = html.indexOf('function promoteArrivalStudioLightsToScene()');
+  const promoteStart = html.indexOf('function promoteArrivalStudioLightsToScene(');
   const promoteEnd = html.indexOf('function readSceneGIControls()', promoteStart);
   const promoteBody = html.slice(promoteStart, promoteEnd);
   assert.match(
@@ -223,5 +224,59 @@ test('fresh asset arrival framing resets tilted orbit camera.up so the horizon n
     html.slice(frameStart, frameEnd),
     /camera\.up\.fromArray\(framing\.up\)/,
     'frameAssetArrival must restore camera.up from framing.up before controls.update()',
+  );
+});
+
+test('studio look library defines curated looks and arrival rig materializes as a grouped Kaminos object with one-click drag and saved-scene differentiation', () => {
+  assert.equal(assetArrival.DEFAULT_STUDIO_LOOK_ID, 'sculptural-studio');
+  for (const id of ['sculptural-studio', 'obsidian-stage', 'warm-gallery', 'technical-daylight']) {
+    const look = assetArrival.resolveStudioLook(id);
+    assert.equal(look.id, id);
+    assert.ok(['studio', 'sunset', 'warehouse', 'courtyard'].includes(look.environment.name), `valid HDR_ENVS name for ${id}`);
+    const plan = planArrivalStudioLights({ bounds: { min: [-0.6, -0.85, -0.5], max: [0.6, 0.55, 0.5] }, groundY: -0.85, lookId: id });
+    assert.equal(plan.lookId, id);
+    assert.equal(plan.lights[0].light.color, look.keyLight.color);
+    assert.equal(plan.lights[1].light.color, look.rimLight.color);
+  }
+
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const promoteStart = html.indexOf('function promoteArrivalStudioLightsToScene(');
+  const promoteEnd = html.indexOf('function readSceneGIControls()', promoteStart);
+  const promoteBody = html.slice(promoteStart, promoteEnd);
+  assert.match(
+    promoteBody,
+    /@studio-light-rig/,
+    'promoteArrivalStudioLightsToScene must group promoted studio lights into the @studio-light-rig Kaminos scene group',
+  );
+  assert.match(
+    promoteBody,
+    /scenePlacementTools\?\.start\(dragOp\)/,
+    'grabArrivalStudioRig / promoteArrivalStudioLightsToScene must support one-click interactive drag via scenePlacementTools.start',
+  );
+  assert.ok(
+    !promoteBody.includes("startDrag === 'move' ? 'move'") && promoteBody.includes("const dragOp = startDrag === 'move' ? 'translate' : startDrag;"),
+    'promoteArrivalStudioLightsToScene must normalize move to translate so scenePlacementTools.start receives a valid transformPose operation',
+  );
+  const outlinerStart = html.indexOf('data-arrival-studio-rig="true"');
+  const outlinerRow = html.slice(outlinerStart - 120, outlinerStart + 650);
+  assert.match(
+    outlinerRow,
+    /data-arrival-rig-action="translate"/,
+    'Outliner Grab button must pass translate action to grabArrivalStudioRig',
+  );
+  const mountStart = html.indexOf('function mountSceneSpotLight(raw)');
+  const mountEnd = html.indexOf('function groupPivotPose(', mountStart);
+  assert.match(
+    html.slice(mountStart, mountEnd),
+    /reusedStudioLight/,
+    'mountSceneSpotLight must reuse studioKeyLight and studioRimLight when promoting @studio-key-light and @studio-rim-light so promotion causes zero shader recompilation',
+  );
+
+  const applyDocStart = html.indexOf('async function applySceneDocument(');
+  const applyDocEnd = html.indexOf('// File input handler for Load Scene', applyDocStart);
+  assert.match(
+    html.slice(applyDocStart, applyDocEnd),
+    /arrivalLightingState\.sceneKind\s*=\s*['"]authored-scene['"]/,
+    'applySceneDocument must mark saved scenes with objects as authored-scene so unauthored stage studio lights are not injected',
   );
 });

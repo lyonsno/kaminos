@@ -72,5 +72,8 @@ export function calibrateSceneGISettingsForBounds({ boxes = [], cameraDistance =
   const radius = Math.round(Math.max(0.25, Math.min(25, rawRadius)) * 100) / 100;
   const rawThickness = 0.14 * medianDiagonal;
   const thickness = Math.round(Math.max(0.08, Math.min(Math.min(2.5, radius * 0.45), rawThickness)) * 100) / 100;
-  return resolveSceneGIControlState({ ...base, radius, thickness });
+  const bounceFeedback = Object.hasOwn(current, 'bounceFeedback')
+    ? Boolean(current.bounceFeedback) && base.temporal !== false
+    : base.temporal !== false;
+  return resolveSceneGIControlState({ ...base, radius, thickness, bounceFeedback });
 }

@@ -42,4 +42,9 @@ test('saved defaults use accepted AO semantics and retain fixed ranges for the u
  assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{backdropBrightness:3}}),/Backdrop|backdrop/);
  const valid={ao:{radius:7.5,intensity:1.25,scale:.75,thickness:1.45,falloff:.37},dof:{focus:2.5,aperture:.002,maxblur:.01}};
  assert.deepEqual(checkedPreferences(defaults(valid)).sceneDefaults.postprocessing,valid);
+ assert.equal(checkedPreferences({schema:PREFERENCES_SCHEMA,studioLook:'obsidian-stage'}).studioLook,'obsidian-stage');
+ assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,studioLook:'nonexistent-look'}),/Studio look/i);
+ const uiText=readFileSync(new URL('../user-preferences-ui.mjs',import.meta.url),'utf8');
+ assert.match(uiText,/preference-studio-look/,'Preferences UI must expose the Studio Look library selector');
+ assert.match(uiText,/data-action="apply-look"/,'Preferences UI must offer switching the current scene over to the chosen Studio Look');
 });

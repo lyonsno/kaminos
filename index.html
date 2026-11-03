@@ -905,12 +905,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         </label>
       </div>
       <div class="slider-row" style="margin-top: 4px;">
+        <span class="slider-label">Studio look</span>
+        <select id="arrival-studio-look-select" class="select-input" title="Choose a studio look preset (also available in Cmd+, Preferences)">
+          <option value="sculptural-studio">Sculptural Studio</option>
+          <option value="obsidian-stage">Obsidian Stage</option>
+          <option value="warm-gallery">Warm Gallery</option>
+          <option value="technical-daylight">Technical Daylight</option>
+        </select>
+      </div>
+      <div class="slider-row" style="margin-top: 4px;">
         <label style="font-size: 10px; color: #aaa; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Optional: inspect arrived mesh albedo, roughness, and metalness to tune key/rim light balance and exposure">
           <input type="checkbox" id="arrival-material-tuning-toggle"> Material-Aware Arrival Tuning
         </label>
       </div>
       <div id="arrival-material-tuning-status" role="status" style="font-size: 10px; color: #888; margin: 4px 0 6px; line-height: 1.35;">Studio rig active · Material tuning off</div>
-      <button type="button" class="btn" id="arrival-studio-lights-promote" title="Convert the startup key and rim lights into editable Spot Light objects in Scene Objects">Promote Studio Lights to Scene</button>
+      <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+        <button type="button" class="btn" id="arrival-studio-lights-promote" style="flex: 1 1 auto;" title="Materialize the arrival key and rim lights into the @studio-light-rig Kaminos scene group">Make Rig Scene Object</button>
+        <button type="button" class="btn" id="arrival-studio-lights-grab" style="flex: 1 1 auto;" title="One-click: materialize the Arrival Studio Rig and immediately drag it in the viewport">Grab Rig (G)</button>
+        <button type="button" class="btn" id="arrival-studio-lights-orbit" style="flex: 1 1 auto;" title="One-click: materialize the Arrival Studio Rig and immediately orbit it around the object">Orbit Rig (R)</button>
+      </div>
     </div>
 
     </section>
@@ -3436,7 +3449,7 @@ import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, inspectArrivalMaterialProfile, planArrivalStudioLights, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, inspectArrivalMaterialProfile, planArrivalStudioLights, resolveAssetArrivalMode, resolveStudioLook } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -6977,6 +6990,9 @@ function renderSceneGroupRow(group, outline = null) {
   const active = group.id === workingScene.activeGroupId;
   const rowClass = `scene-group-row ${active?'active':workingScene.selection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
+  const rigQuickActions = group.id === '@studio-light-rig'
+    ? `<button type="button" class="btn" data-arrival-rig-action="move" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: move the Arrival Studio Rig (G)">Grab</button><button type="button" class="btn" data-arrival-rig-action="rotate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: orbit the Arrival Studio Rig around the object (R)">Orbit</button>`
+    : '';
   return `
     <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
@@ -6984,7 +7000,7 @@ function renderSceneGroupRow(group, outline = null) {
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
-        ${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">${group.assembly?.kind==='burner'?'Burner':group.assembly?'Assembly':'group'}</span>
+        ${rigQuickActions}${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">${group.assembly?.kind==='burner'?'Burner':group.assembly?'Assembly':'group'}</span>
       </span>
     </div>
   `;
@@ -7021,7 +7037,23 @@ function renderSceneObjectList() {
       if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
+  if (workingScene.objects.length > 0 && !workingScene.groups.some(g => g.id === '@studio-light-rig') && (studioKeyLight?.visible || studioRimLight?.visible)) {
+    const lookLabel = arrivalLightingState?.plan?.lookLabel || 'Sculptural Studio';
+    rows.push(`<div class="scene-group-row" data-arrival-studio-rig="true" role="button" tabindex="0" title="Click to materialize Arrival Studio Rig as a scene group, or use Grab / Orbit for one-click interactive dragging"><span>${sceneOutlineGlyph('light')}<strong>Arrival Studio Rig</strong> <span class="scene-object-meta">(${escapeHtml(lookLabel)} · Key + Rim)</span></span><span class="scene-object-actions"><button type="button" class="btn" data-arrival-rig-action="translate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: materialize and move the Arrival Studio Rig (G)">Grab</button><button type="button" class="btn" data-arrival-rig-action="rotate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: materialize and orbit the Arrival Studio Rig around the object (R)">Orbit</button><span class="scene-object-chip">arrival rig</span></span></div>`);
+  }
   list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-arrival-studio-rig="true"]').forEach(row => {
+    row.addEventListener('click', event => {
+      if (event.target.closest?.('[data-arrival-rig-action]')) return;
+      try { promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false }); } catch (error) { setInfo(error.message); }
+    });
+  });
+  list.querySelectorAll('[data-arrival-rig-action]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      try { grabArrivalStudioRig(button.dataset.arrivalRigAction); } catch (error) { setInfo(error.message); }
+    });
+  });
   list.querySelectorAll('[data-scene-visibility-id]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();const id=button.dataset.sceneVisibilityId;try{window.kaminosSceneVisibility.set(id,!isSceneItemVisible(id));list.querySelector(`[data-scene-visibility-id="${CSS.escape(id)}"]`)?.focus();}catch(error){setInfo(error.message);}}));
   list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
     event.stopPropagation();
@@ -7657,6 +7689,9 @@ function applyAuthoredScenePose(id, transform = {}) {
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
   if(entry.type===CAMERA_TYPE){mountAuthoredCamera({...serializeSceneObject(entry),transform});}
   else if (entry.type==='light') {
+    if (typeof arrivalLightingState !== 'undefined' && (id === '@studio-key-light' || id === '@studio-rim-light')) {
+      arrivalLightingState.rigTransformEdited = true;
+    }
     mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
     writeAuthoredFlameEmitterPose(transform,id);
@@ -12778,6 +12813,10 @@ function clearSceneDomains(setup=null){
     arrivalLightingState.bounds = null;
     arrivalLightingState.materialProfile = inspectArrivalMaterialProfile([]);
     arrivalLightingState.promotedIds = [];
+    arrivalLightingState.promotedGroupId = null;
+    arrivalLightingState.rigTransformEdited = false;
+    arrivalLightingState.sceneKind = 'static-asset';
+    arrivalLightingState.studioLightsEnabled = true;
   }
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
 }
@@ -22954,14 +22993,19 @@ document.getElementById('scene-gi-panel').append(document.getElementById('scene-
 installRenderingNumberControls(document.getElementById('rendering-panel-content'));
 installRenderingNumberControls(document.getElementById('scene-ao-panel'));
 let studioKeyLight = null, studioRimLight = null;
-let sceneGIManuallyConfigured = false, sceneGIAutoCalibrationState = null;
+let sceneGIManuallyConfigured = false, sceneGIBounceManuallyConfigured = false, sceneGIAutoCalibrationState = null;
+let syncingArrivalStudioLighting = false;
 const arrivalLightingState = {
+  sceneKind: 'static-asset',
+  lookId: DEFAULT_STUDIO_LOOK_ID,
   studioLightsEnabled: true,
   materialTuningEnabled: false,
   bounds: null,
   materialProfile: inspectArrivalMaterialProfile([]),
   plan: null,
   promotedIds: [],
+  promotedGroupId: null,
+  rigTransformEdited: false,
 };
 
 function applySpotRecordToThreeLight(light, record, enabled) {
@@ -22973,10 +23017,15 @@ function applySpotRecordToThreeLight(light, record, enabled) {
   light.angle = THREE.MathUtils.degToRad(record.light.angle);
   light.penumbra = record.light.penumbra;
   light.position.fromArray(record.transform.position);
+  const effectiveAim = Math.max(0.5, (record.light.aimDistance || 4) * (record.transform.scale?.[2] ?? 1));
   const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(...record.transform.rotation));
-  light.target.position.copy(light.position).addScaledVector(direction, record.light.aimDistance * (record.transform.scale?.[2] ?? 1));
+  light.target.position.copy(light.position).addScaledVector(direction, effectiveAim);
   light.target.updateMatrixWorld();
-  light.shadow?.camera?.updateProjectionMatrix?.();
+  if (light.shadow?.camera) {
+    light.shadow.camera.near = Math.max(0.1, Math.min(0.5, effectiveAim * 0.12));
+    light.shadow.camera.far = Math.max(8, effectiveAim * 3.0);
+    light.shadow.camera.updateProjectionMatrix?.();
+  }
   return wasVisible !== light.visible;
 }
 
@@ -22986,9 +23035,9 @@ function installStartupStudioLights(targetScene) {
     const light = new THREE.SpotLight();
     light.name = name;
     light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
-    light.shadow.bias = -0.0001;
-    light.shadow.normalBias = 0.02;
+    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.bias = -0.00005;
+    light.shadow.normalBias = 0.004;
     return light;
   };
   studioKeyLight = makeSpot('Startup studio key light');
@@ -23080,22 +23129,62 @@ function extractObjectMaterialSamples(object) {
   return samples;
 }
 
-function syncArrivalStudioLighting() {
+function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
   const groundY = groundPlane ? groundPlane.position.y : -0.85;
   const plan = planArrivalStudioLights({
     bounds: arrivalLightingState.bounds,
     groundY,
     materialProfile: arrivalLightingState.materialProfile,
     materialTuning: arrivalLightingState.materialTuningEnabled,
+    lookId: arrivalLightingState.lookId,
   });
   arrivalLightingState.plan = plan;
+  const lookSelect = document.getElementById('arrival-studio-look-select');
+  if (lookSelect && lookSelect.value !== plan.lookId) lookSelect.value = plan.lookId;
+  const toggleEl = document.getElementById('arrival-studio-lights-toggle');
+  if (toggleEl && toggleEl.checked !== arrivalLightingState.studioLightsEnabled) toggleEl.checked = arrivalLightingState.studioLightsEnabled;
   const hasPromotedOrSavedLights = typeof sceneSpotLights !== 'undefined' && sceneSpotLights.size > 0;
+  const hasNonStudioSpotLights = typeof sceneSpotLights !== 'undefined' &&
+    Array.from(sceneSpotLights.keys()).some(id => id !== '@studio-key-light' && id !== '@studio-rim-light');
   const routeAllowsStudioRig = typeof isFireLightFieldRoute === 'function' ? !isFireLightFieldRoute() : true;
-  const activeStageRig = arrivalLightingState.studioLightsEnabled && routeAllowsStudioRig && !hasPromotedOrSavedLights;
+  const activeStageRig = arrivalLightingState.studioLightsEnabled && routeAllowsStudioRig && !hasPromotedOrSavedLights && !hasNonStudioSpotLights;
   const [keyRecord, rimRecord] = plan.lights;
-  const keyChanged = applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
-  const rimChanged = applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
+  let keyChanged = false, rimChanged = false;
+  if (typeof sceneSpotLights === 'undefined' || !sceneSpotLights.has('@studio-key-light')) {
+    keyChanged = applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
+  }
+  if (typeof sceneSpotLights === 'undefined' || !sceneSpotLights.has('@studio-rim-light')) {
+    rimChanged = applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
+  }
   if (keyChanged || rimChanged) sceneLightingPreparation?.request();
+
+  if (syncPromoted && !syncingArrivalStudioLighting && typeof workingScene !== 'undefined') {
+    syncingArrivalStudioLighting = true;
+    try {
+      for (const planned of plan.lights) {
+        const existing = workingScene.objects.find(o => o.id === planned.id && o.type === 'light');
+        if (!existing) continue;
+        const currentRecord = typeof serializeSceneObject === 'function' ? serializeSceneObject(existing) : existing;
+        const nextTransform = arrivalLightingState.rigTransformEdited ? currentRecord.transform : planned.transform;
+        const nextLight = {
+          ...currentRecord.light,
+          ...planned.light,
+          enabled: Boolean(arrivalLightingState.studioLightsEnabled),
+        };
+        mountSceneSpotLight({ ...currentRecord, transform: nextTransform, light: nextLight });
+      }
+      if (!arrivalLightingState.rigTransformEdited) {
+        const rigGroup = workingScene.groups?.find(g => g.id === '@studio-light-rig');
+        if (rigGroup) {
+          const rigPivot = { position: [...plan.target], rotation: [0, 0, 0], scale: [1, 1, 1] };
+          workingScene.updateGroup('@studio-light-rig', { transform: rigPivot });
+          if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(rigGroup), rigPivot);
+        }
+      }
+    } finally {
+      syncingArrivalStudioLighting = false;
+    }
+  }
 
   if (renderer && scene && typeof sceneEnvironment !== 'undefined') {
     const env = sceneEnvironment.read();
@@ -23119,7 +23208,7 @@ function syncArrivalStudioLighting() {
     const rimI = Math.round(rimRecord.light.intensity);
     const rigLabel = hasPromotedOrSavedLights
       ? 'Scene spot lights active'
-      : (activeStageRig ? `Key ${keyI} / Rim ${rimI}` : 'Studio rig off');
+      : (activeStageRig ? `${plan.lookLabel} · Key ${keyI} / Rim ${rimI}` : `Studio rig off (${arrivalLightingState.sceneKind})`);
     const tuningLabel = arrivalLightingState.materialTuningEnabled
       ? `Tuning ON (${p.kind}, lum ${p.meanLuminance.toFixed(2)}, rough ${p.meanRoughness.toFixed(2)}, metal ${p.meanMetalness.toFixed(2)}, exp ×${plan.environmentDelta.exposureScale.toFixed(2)})`
       : `Tuning OFF (${p.sampleCount ? `${p.kind} detected` : 'default profile'})`;
@@ -23150,14 +23239,18 @@ function autoCalibrateSceneGIFromScene(extraObject = null) {
   }
   if (!boxes.length) return null;
   const cameraDistance = camera && controls ? camera.position.distanceTo(controls.target) : null;
+  const currentForCalibration = sceneGIBounceManuallyConfigured
+    ? sceneGISettings
+    : (() => { const { bounceFeedback: _omit, ...rest } = sceneGISettings || {}; return rest; })();
   const calibrated = calibrateSceneGISettingsForBounds({
     boxes,
     cameraDistance,
-    current: sceneGISettings,
+    current: currentForCalibration,
   });
   sceneGIAutoCalibrationState = {
     radius: calibrated.radius,
     thickness: calibrated.thickness,
+    bounceFeedback: calibrated.bounceFeedback,
     cameraDistance: cameraDistance ? Math.round(cameraDistance * 1000) / 1000 : null,
     boxCount: boxes.length,
   };
@@ -23170,6 +23263,9 @@ function recordAssetArrivalLightingAndGI(object, mode) {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   if (mode === 'fresh') {
+    arrivalLightingState.sceneKind = 'static-asset';
+    arrivalLightingState.studioLightsEnabled = true;
+    arrivalLightingState.rigTransformEdited = false;
     if (!box.isEmpty()) {
       arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
     }
@@ -23178,7 +23274,8 @@ function recordAssetArrivalLightingAndGI(object, mode) {
       arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(samples);
     }
     sceneGIManuallyConfigured = false;
-    syncArrivalStudioLighting();
+    sceneGIBounceManuallyConfigured = false;
+    syncArrivalStudioLighting({ syncPromoted: true });
   } else if (mode === 'append') {
     if (!box.isEmpty()) {
       if (arrivalLightingState.bounds) {
@@ -23191,7 +23288,7 @@ function recordAssetArrivalLightingAndGI(object, mode) {
         arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
       }
     }
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
     queueMicrotask(() => autoCalibrateSceneGIFromScene(object));
   }
 }
@@ -23211,37 +23308,135 @@ function refreshArrivalLightingFromWorkingScene() {
   }
   arrivalLightingState.bounds = union.isEmpty() ? null : { min: union.min.toArray(), max: union.max.toArray() };
   arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(allSamples);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
 }
 
 function syncArrivalLightingAndGI(object) {
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
   autoCalibrateSceneGIFromScene(object);
 }
 
-function promoteArrivalStudioLightsToScene() {
+function promoteArrivalStudioLightsToScene({ groupRig = true, select = 'rig', startDrag = null, recordHistory = !startDrag } = {}) {
   if (typeof assertSceneConstructionAvailable === 'function') assertSceneConstructionAvailable();
   const plan = syncArrivalStudioLighting();
   const ids = [];
+  const rigId = '@studio-light-rig';
+  const rigPivot = { position: [...plan.target], rotation: [0, 0, 0], scale: [1, 1, 1] };
+  const canBatchHistory = Boolean(
+    recordHistory &&
+    groupRig &&
+    scenePlacementTools?.edits &&
+    !scenePlacementTools.edits.state().active &&
+    typeof checkSelectionMembership === 'function' &&
+    typeof readSelectionMembership === 'function'
+  );
+  const hadAllLights = typeof workingScene !== 'undefined' && plan.lights.every(r => workingScene.objects.some(o => o.id === r.id && o.type === 'light'));
+  const hadRigGroup = typeof workingScene !== 'undefined' && workingScene.groups.some(g => g.id === rigId);
+  const beforeMembership = canBatchHistory && (!hadAllLights || !hadRigGroup)
+    ? checkSelectionMembership(readSelectionMembership())
+    : null;
   for (const record of plan.lights) {
     if (typeof workingScene !== 'undefined' && workingScene.objects.some(o => o.id === record.id && o.type === 'light')) {
       ids.push(record.id);
       continue;
     }
     const target = typeof ensureSceneObjectMembershipTarget === 'function' ? ensureSceneObjectMembershipTarget(record.id) : null;
-    if (target && scenePlacementTools?.edits) scenePlacementTools.edits.assertCanRecordApplied(target);
+    if (recordHistory && !beforeMembership && target && scenePlacementTools?.edits) {
+      scenePlacementTools.edits.assertCanRecordApplied(target);
+    }
     mountSceneSpotLight({ ...record, createdAt: new Date().toISOString() });
-    if (typeof recordSceneObjectInsertion === 'function' && scenePlacementTools?.edits) {
+    if (beforeMembership && typeof sceneMembership !== 'undefined') {
+      sceneMembership.retainForHistory(record.id, '@selection-membership');
+    } else if (recordHistory && typeof recordSceneObjectInsertion === 'function' && scenePlacementTools?.edits) {
       recordSceneObjectInsertion(record.id);
     }
     ids.push(record.id);
   }
   arrivalLightingState.promotedIds = ids;
-  if (ids.length && typeof setActiveSceneObject === 'function') setActiveSceneObject(ids[0]);
+  if (groupRig && ids.length && typeof createSceneGroupForObjects === 'function') {
+    const existingGroup = typeof workingScene !== 'undefined' ? workingScene.groups.find(g => g.id === rigId) : null;
+    const effectivePivot = arrivalLightingState.rigTransformEdited && existingGroup?.transform ? existingGroup.transform : rigPivot;
+    createSceneGroupForObjects(ids, 'Arrival Studio Rig', {
+      id: rigId,
+      source: 'kaminos:arrival-studio-rig',
+      transform: effectivePivot,
+      select: false,
+    });
+    if (!arrivalLightingState.rigTransformEdited && typeof workingScene !== 'undefined') {
+      const grp = workingScene.groups.find(g => g.id === rigId);
+      if (grp) {
+        workingScene.updateGroup(rigId, { transform: rigPivot });
+        if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(grp), rigPivot);
+      }
+    }
+    arrivalLightingState.promotedGroupId = rigId;
+  }
+  if (select === 'rig' && arrivalLightingState.promotedGroupId && typeof setActiveSceneGroup === 'function') {
+    setActiveSceneGroup(arrivalLightingState.promotedGroupId);
+  } else if (select && ids.includes(select) && typeof setActiveSceneObject === 'function') {
+    setActiveSceneObject(select);
+  } else if (ids.length && typeof setActiveSceneObject === 'function') {
+    setActiveSceneObject(ids[0]);
+  }
+  if (beforeMembership) {
+    scenePlacementTools.edits.recordApplied('@selection-membership', beforeMembership, readSelectionMembership(), 'Create Arrival Studio Rig');
+  }
+  const dragOp = startDrag === 'move' ? 'translate' : startDrag;
+  if (typeof setGizmoMode === 'function') {
+    setGizmoMode(dragOp === 'rotate' ? 'rotate' : 'translate');
+  }
+  if (dragOp === 'translate' || dragOp === 'rotate') {
+    scenePlacementTools?.start(dragOp);
+  }
   syncArrivalStudioLighting();
   renderSceneObjectList?.();
   updateTransformInspector?.();
   return ids;
+}
+
+function grabArrivalStudioRig(operation = 'translate') {
+  const op = operation === 'rotate' ? 'rotate' : 'translate';
+  promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', startDrag: op, recordHistory: false });
+  return arrivalLightingState.promotedGroupId || arrivalLightingState.promotedIds[0] || null;
+}
+
+async function applyStudioLookToCurrentScene(lookId = arrivalLightingState.lookId, { promoteRig = typeof workingScene !== 'undefined' && workingScene.objects.length > 0 } = {}) {
+  const look = resolveStudioLook(lookId);
+  arrivalLightingState.lookId = look.id;
+  arrivalLightingState.studioLightsEnabled = true;
+  arrivalLightingState.rigTransformEdited = false;
+  const env = look.environment;
+  if (typeof sceneEnvironment !== 'undefined') {
+    sceneEnvironment.restoreDocument(env);
+    await loadEnvironment(env.name, { remember: true });
+  }
+  if (groundPlane && env.ground) {
+    groundPlane.visible = env.ground.visible ?? true;
+    groundPlane.position.y = Number.isFinite(env.ground.height) ? env.ground.height : -0.85;
+    groundPlane.material.color.set(env.ground.color ?? '#ece9e2');
+    groundPlane.material.roughness = Number.isFinite(env.ground.roughness) ? env.ground.roughness : 0.78;
+    const visEl = document.getElementById('composition-ground-visible');
+    if (visEl) visEl.checked = groundPlane.visible;
+    const hEl = document.getElementById('composition-ground-height');
+    if (hEl) hEl.value = String(groundPlane.position.y);
+    const cEl = document.getElementById('composition-ground-color');
+    if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+    const rEl = document.getElementById('composition-ground-roughness');
+    if (rEl) rEl.value = String(groundPlane.material.roughness);
+    const rvEl = document.getElementById('composition-ground-roughness-value');
+    if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+  }
+  refreshArrivalLightingFromWorkingScene();
+  if (promoteRig) {
+    if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+    promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false });
+  }
+  sceneGIManuallyConfigured = false;
+  sceneGIBounceManuallyConfigured = false;
+  autoCalibrateSceneGIFromScene();
+  renderSceneObjectList?.();
+  setInfo(`Studio look applied: ${look.label}`);
+  return look;
 }
 
 function readSceneGIControls() { return structuredClone(sceneGISettings); }
@@ -23253,6 +23448,11 @@ function setSceneGIControls(value, {preserveInput=null, autoCalibrated=false}={}
     } else if (!preserveInput) {
       sceneGIManuallyConfigured = explicitRadiusOrThickness && (value.radius !== sceneGIAutoCalibrationState?.radius || value.thickness !== sceneGIAutoCalibrationState?.thickness);
       if (!explicitRadiusOrThickness) sceneGIAutoCalibrationState = null;
+    }
+    if (preserveInput && preserveInput.id === 'scene-gi-bounceFeedback') {
+      sceneGIBounceManuallyConfigured = true;
+    } else if (!preserveInput && Object.hasOwn(value, 'bounceFeedback')) {
+      sceneGIBounceManuallyConfigured = true;
     }
   }
   const settings = resolveSceneGIControlState(value);
@@ -23288,30 +23488,52 @@ for (const key of [...Object.keys(sceneGISettings).filter(key=>key!=='estimator'
   // Finish incomplete/invalid text on commit using the last accepted state.
   control.addEventListener('change',()=>setSceneGIControls(sceneGISettings));
 }
-setSceneGIControls(sceneGISettings);
+setSceneGIControls(sceneGISettings, { autoCalibrated: true });
 document.getElementById('arrival-studio-lights-toggle')?.addEventListener('change', event => {
   arrivalLightingState.studioLightsEnabled = Boolean(event.target.checked);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
+  renderSceneObjectList?.();
+});
+document.getElementById('arrival-studio-look-select')?.addEventListener('change', event => {
+  void applyStudioLookToCurrentScene(event.target.value);
 });
 document.getElementById('arrival-material-tuning-toggle')?.addEventListener('change', event => {
   arrivalLightingState.materialTuningEnabled = Boolean(event.target.checked);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
 });
 document.getElementById('arrival-studio-lights-promote')?.addEventListener('click', () => {
   try {
-    promoteArrivalStudioLightsToScene();
+    promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig' });
+  } catch (error) {
+    setInfo(error.message);
+  }
+});
+document.getElementById('arrival-studio-lights-grab')?.addEventListener('click', () => {
+  try {
+    grabArrivalStudioRig('translate');
+  } catch (error) {
+    setInfo(error.message);
+  }
+});
+document.getElementById('arrival-studio-lights-orbit')?.addEventListener('click', () => {
+  try {
+    grabArrivalStudioRig('rotate');
   } catch (error) {
     setInfo(error.message);
   }
 });
 window.kaminosArrivalLighting = {
   read: () => ({
+    sceneKind: arrivalLightingState.sceneKind,
+    lookId: arrivalLightingState.lookId,
     studioLightsEnabled: arrivalLightingState.studioLightsEnabled,
     materialTuningEnabled: arrivalLightingState.materialTuningEnabled,
     bounds: structuredClone(arrivalLightingState.bounds),
     materialProfile: structuredClone(arrivalLightingState.materialProfile),
     plan: structuredClone(arrivalLightingState.plan),
     promotedIds: [...arrivalLightingState.promotedIds],
+    promotedGroupId: arrivalLightingState.promotedGroupId,
+    rigTransformEdited: arrivalLightingState.rigTransformEdited,
     stageLightsVisible: Boolean(studioKeyLight?.visible || studioRimLight?.visible),
     autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
   }),
@@ -23319,22 +23541,32 @@ window.kaminosArrivalLighting = {
     arrivalLightingState.studioLightsEnabled = Boolean(enabled);
     const toggle = document.getElementById('arrival-studio-lights-toggle');
     if (toggle) toggle.checked = arrivalLightingState.studioLightsEnabled;
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
+    renderSceneObjectList?.();
     return this.read();
   },
   setMaterialTuning(enabled) {
     arrivalLightingState.materialTuningEnabled = Boolean(enabled);
     const toggle = document.getElementById('arrival-material-tuning-toggle');
     if (toggle) toggle.checked = arrivalLightingState.materialTuningEnabled;
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
     return this.read();
   },
-  promoteToSceneObjects() {
-    promoteArrivalStudioLightsToScene();
+  promoteToSceneObjects(options = {}) {
+    promoteArrivalStudioLightsToScene(options);
+    return this.read();
+  },
+  grabRig(operation = 'translate') {
+    grabArrivalStudioRig(operation);
+    return this.read();
+  },
+  async applyStudioLook(lookId, options = {}) {
+    await applyStudioLookToCurrentScene(lookId, options);
     return this.read();
   },
   calibrateGI() {
     sceneGIManuallyConfigured = false;
+    sceneGIBounceManuallyConfigured = false;
     autoCalibrateSceneGIFromScene();
     return this.read();
   },
@@ -26080,19 +26312,28 @@ const sceneSpotLights=new Map();
 window.kaminosSceneLightState=()=>Array.from(sceneSpotLights,([id,{light,marker}])=>({id,parentIsScene:light.parent===scene,markerIsScene:marker.parent===scene,visible:light.visible,power:light.intensity,position:light.position.toArray(),target:light.target.position.toArray()}));
 function mountSceneSpotLight(raw) {
   const record=checkedSceneLightRecord(raw);let entry=workingScene.objects.find(o=>o.id===record.id),binding=sceneSpotLights.get(record.id);
+  const reusedStudioLight = !binding
+    ? (record.id === '@studio-key-light' && typeof studioKeyLight !== 'undefined' ? studioKeyLight
+      : record.id === '@studio-rim-light' && typeof studioRimLight !== 'undefined' ? studioRimLight : null)
+    : null;
+  const priorVisible = reusedStudioLight ? reusedStudioLight.visible : binding?.light?.visible;
   if(!binding){
-    const light=new THREE.SpotLight();
-    light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;
+    const light=reusedStudioLight||new THREE.SpotLight();
+    light.castShadow=true;light.shadow.mapSize.set(2048,2048);light.shadow.bias=-.00005;light.shadow.normalBias=.004;
     const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
     const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
-    marker.userData.kaminosEditorOnly=true;binding={light,marker};sceneSpotLights.set(record.id,binding);scene.add(light,light.target,marker);
+    marker.userData.kaminosEditorOnly=true;binding={light,marker,reusedStudioLight:Boolean(reusedStudioLight)};sceneSpotLights.set(record.id,binding);
+    if(reusedStudioLight)scene.add(marker);else scene.add(light,light.target,marker);
   }
   const {light,marker}=binding;
-  const topologyChanged=!entry||light.visible!==record.light.enabled;
+  const topologyChanged=(!entry&&!reusedStudioLight)||priorVisible!==record.light.enabled;
   applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled&&viewportHelpersVisible;
   light.visible=record.light.enabled;light.color.set(record.light.color);light.intensity=record.light.intensity;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;
   light.position.fromArray(record.transform.position);
-  const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,record.light.aimDistance*record.transform.scale[2]);
+  const effectiveAim=Math.max(0.5,record.light.aimDistance*record.transform.scale[2]);
+  const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,effectiveAim);
+  light.shadow.camera.near=Math.max(0.1,Math.min(0.5,effectiveAim*0.12));
+  light.shadow.camera.far=Math.max(8,effectiveAim*3);
   light.shadow.camera.updateProjectionMatrix();
   if(!entry){entry={...record,object:marker};sceneMembership.admit(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   marker.userData.kaminosSceneObject={...record};
@@ -26103,9 +26344,13 @@ function mountSceneSpotLight(raw) {
 function disposeSceneSpotLight(id) {
   const binding=sceneSpotLights.get(id);if(!binding)return;
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
+  sceneSpotLights.delete(id);
+  if(binding.reusedStudioLight){
+    if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
+    return;
+  }
   binding.light.removeFromParent();binding.light.target.removeFromParent();
   if(sceneLightingPreparation)sceneLightingPreparation.deferDisposal(()=>binding.light.dispose?.());else binding.light.dispose?.();
-  sceneSpotLights.delete(id);
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   sceneLightingPreparation?.request();
 }
@@ -27066,6 +27311,9 @@ function ensureGroupTarget(group) {
 }
 function writeGroupPose(id,value) {
   const group=workingScene.groups.find(group=>group.id===id);if(!group)throw Error('Group is absent');
+  if (typeof arrivalLightingState !== 'undefined' && id === '@studio-light-rig') {
+    arrivalLightingState.rigTransformEdited = true;
+  }
   const before=groupEditState(group),next=checkedGroupPose(value);
   const members=moveGroupMembers(value.frame||before.frame,next,value.members||before.members);
   if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Group membership changed during placement');
@@ -27686,6 +27934,14 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // Scenes without a saved GI record use defaults, independent of prior tuning.
   setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
+  if (typeof arrivalLightingState !== 'undefined') {
+    if (Array.isArray(data?.objects) && data.objects.length > 0) {
+      arrivalLightingState.sceneKind = 'authored-scene';
+      arrivalLightingState.studioLightsEnabled = false;
+    } else {
+      arrivalLightingState.sceneKind = 'static-asset';
+    }
+  }
   if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
@@ -27868,14 +28124,15 @@ sceneInitialization.then(async () => {
     input.value=value.navigationInput??(/Mac/i.test(navigator.userAgentData?.platform||navigator.platform)?'trackpad':'mouse');
     input.dispatchEvent(new Event('change',{bubbles:true}));
   };
-  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);};
-  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved});
+  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);if(value.studioLook&&!workingScene.objects.length){arrivalLightingState.lookId=value.studioLook;syncArrivalStudioLighting();}};
+  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
     save:async value=>{const saved=await userPreferences.save({...value,startupConfigured:true});preferencesSaved(saved);return saved;},
+    applyStudioLook:(lookId,options)=>applyStudioLookToCurrentScene(lookId,options),
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
-  if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
+  if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);if(startupPreferences.studioLook){arrivalLightingState.lookId=startupPreferences.studioLook;syncArrivalStudioLighting();}}
   const initialEnvironment = restoreSettings();
   const admittedEnvironment = (await startupSceneAdmission).data?.environment;
   if (admittedEnvironment) sceneEnvironment.restoreDocument(admittedEnvironment);

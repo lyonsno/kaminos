@@ -3,6 +3,7 @@ import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
 import {createSceneAOState} from './scene-ao-state.mjs';
+import {STUDIO_LOOK_LIBRARY} from './asset-arrival.mjs';
 export const PREFERENCES_SCHEMA='kaminos.preferences.v1';
 const copy=value=>structuredClone(value);
 const sections=['environment','postprocessing','camera','sceneCamera','editorDisplay','backdrop','backdropBrightness'];
@@ -49,7 +50,8 @@ export function checkedPreferences(raw){
  if(raw?.schema!==PREFERENCES_SCHEMA)throw Error('Unsupported preferences document');
  if(Object.hasOwn(raw,'startupConfigured')&&typeof raw.startupConfigured!=='boolean')throw Error('Invalid startup preference state');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
- return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
+ if(raw.studioLook!=null&&!Object.hasOwn(STUDIO_LOOK_LIBRARY,raw.studioLook))throw Error('Invalid Studio look preference');
+ return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),...(Object.hasOwn(raw,'studioLook')?{studioLook:raw.studioLook??null}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
 }
 export function sceneDefaultsApplyToLocation(value){
  const url=new URL(value,'http://localhost');
