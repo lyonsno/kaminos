@@ -78,11 +78,13 @@ test('incremental formation exposes partial snapshots and resumes identically to
  while(!resumed.done)resumed.step();const finalResumed=resumed.result(),full=formTerrain(c);
  assert.deepEqual(finalResumed.state,full.state);assert.deepEqual(finalResumed.metrics,full.metrics);
 });
-test('multi-tile stitched formation partitions into 20-40 seam-locked tiles with continuous cross-tile drainage',async()=>{
+test('multi-tile stitched formation partitions into ~1000 seam-locked tiles across a high-resolution territory with continuous cross-tile drainage',async()=>{
  const mod=await import(source),def=formationConfig({});
- assert.ok(def.tilesX*def.tilesZ>=20&&def.tilesX*def.tilesZ<=40,'default landscape must span 20-40 stitched tiles');
+ assert.ok(def.tilesX*def.tilesZ>=900&&def.tilesX*def.tilesZ<=1600,'default territory must span ~1,000 stitched tiles (e.g. 32x32 = 1,024)');
+ assert.ok(def.resolution>=385&&def.valleys>=5,'default territory must pair 1,000-tile partitioning with higher feature resolution and multi-basin density');
  assert.equal(typeof mod.partitionTiles,'function','formation must export tile partitioning');
  assert.equal(typeof mod.buildTiledIndices,'function','formation must export tile-ordered index construction');
+ const t1024=mod.partitionTiles(def);assert.equal(t1024.length,def.tilesX*def.tilesZ);
  const c=formationConfig({resolution:25,tilesX:4,tilesZ:5,iterations:15}),tiles=mod.partitionTiles(c),indices=mod.buildTiledIndices(c);
  assert.equal(tiles.length,20);assert.equal(indices.length,24*24*6);
  let totalIndices=0;
@@ -109,11 +111,37 @@ test('strike-rotated stratigraphy and macro-authoring metadata expose bounded ra
  const mod=await import(source),c=formationConfig({resolution:17,iterations:10,tilt:.8,hardness:6});
  assert.notEqual(rockResistance(.6,1.1,.4,{...c,strike:0}),rockResistance(.6,1.1,.4,{...c,strike:45}),'strike angle must rotate 3D bedding orientation');
  assert.notDeepEqual(seedGeology({...c,valleys:2}),seedGeology({...c,valleys:5}),'valley count must reshape the underlying macro-topography');
- assert.ok(Array.isArray(mod.FORMATION_FIELDS)&&mod.FORMATION_FIELDS.length>=12,'authoring field metadata must be exported');
+ assert.ok(Array.isArray(mod.FORMATION_FIELDS)&&mod.FORMATION_FIELDS.length>=14,'authoring field metadata must include mesa and terrace controls');
  for(const field of mod.FORMATION_FIELDS){
   assert.ok(typeof field.key==='string'&&typeof field.title==='string'&&typeof field.tooltip==='string'&&field.tooltip.length>20,'each field needs a descriptive tooltip');
   assert.ok(Number.isFinite(field.min)&&Number.isFinite(field.max)&&field.max>field.min&&Number.isFinite(field.step)&&field.step>0,'each field needs a sane [min, max] range and step');
   assert.equal(field.default,formationConfig({})[field.key],'field default must match formationConfig default');
  }
  assert.ok(Array.isArray(mod.FORMATION_PRESETS)&&mod.FORMATION_PRESETS.some(p=>p.id==='cuesta-hogbacks'&&p.patch.hardness>=10),'presets must include cuesta hogbacks');
+ assert.ok(mod.FORMATION_PRESETS.some(p=>p.id==='canyon-mesas'&&p.patch.mesa>=.65),'presets must include flat-topped canyon mesas');
+ assert.ok(mod.FORMATION_PRESETS.some(p=>p.id==='stepped-terraces'&&p.patch.terrace>=.75),'presets must include stepped structural terraces');
+});
+test('mesa and structural terrace controls form flat-topped benches bounded by cliff scarps while seed variation reorganizes macro-topography',()=>{
+ const mesaCfg=formationConfig({resolution:65,iterations:50,mesa:.85,terrace:.82,tilt:.08,hardness:12,valleys:5});
+ const ridgeCfg=formationConfig({resolution:65,iterations:50,mesa:0,terrace:0,tilt:.45,hardness:4,valleys:5});
+ const mesaState=formTerrain(mesaCfg).state,ridgeState=formTerrain(ridgeCfg).state;
+ const countBenchAndCliff=(state,cfg)=>{
+  const n=cfg.resolution,dx=cfg.width/(n-1),dz=cfg.length/(n-1);
+  let bench=0,cliff=0,elevated=0;
+  for(let z=2;z<Math.floor(n*.72);z++)for(let x=2;x<n-2;x++){
+   const i=(z*n+x)*4,b=state[i];if(b<.32*cfg.relief)continue;
+   elevated++;
+   const gx=(state[i+4]-state[i-4])/(2*dx),gz=(state[i+n*4]-state[i-n*4])/(2*dz),grad=Math.hypot(gx,gz);
+   if(grad<.24)bench++;
+   if(grad>.85)cliff++;
+  }
+  return{bench,cliff,elevated,benchShare:bench/Math.max(1,elevated)};
+ };
+ const mStats=countBenchAndCliff(mesaState,mesaCfg),rStats=countBenchAndCliff(ridgeState,ridgeCfg);
+ assert.ok(mStats.benchShare>rStats.benchShare*2&&mStats.benchShare>.22,`mesa/terrace recipe must produce substantially more elevated flat bench/caprock tread area than peaked ridges (mesa=${mStats.benchShare.toFixed(3)}, ridge=${rStats.benchShare.toFixed(3)})`);
+ assert.ok(mStats.cliff>=40,`mesa/terrace topography must retain steep bounding cliff scarps (cliff=${mStats.cliff})`);
+ const s47=seedGeology(formationConfig({resolution:49,seed:47})),s344=seedGeology(formationConfig({resolution:49,seed:344})),s862=seedGeology(formationConfig({resolution:49,seed:862}));
+ const uplandRms=(a,b)=>{let sq=0,k=0;for(let z=2;z<34;z++)for(let x=0;x<49;x++){const d=a[(z*49+x)*4]-b[(z*49+x)*4];sq+=d*d;k++;}return Math.sqrt(sq/k);};
+ const rms1=uplandRms(s47,s344),rms2=uplandRms(s47,s862),rms3=uplandRms(s344,s862);
+ assert.ok(rms1>.45&&rms2>.45&&rms3>.45,`different seeds must reorganize macro-topography rather than nudging fixed ridges (rms=${rms1.toFixed(3)}, ${rms2.toFixed(3)}, ${rms3.toFixed(3)})`);
 });

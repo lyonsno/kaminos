@@ -6,7 +6,7 @@ import {registerExportGeometrySnapshot} from '../scene-export-geometry.mjs';
 export default {
  id:'hill-geology',title:'Hill · formed landscape',
  async create({host,inputs={},record,updateInputs=()=>{}}){
-  let config=formationConfig(inputs),formed=null,error=null,pending=null,job=null,epoch=0,disposed=false,playing=false,remainder=0,partials=0,showSeams=false,activePreset='range-bajada',sync=()=>{};
+  let config=formationConfig(inputs),formed=null,error=null,pending=null,job=null,epoch=0,disposed=false,playing=false,remainder=0,partials=0,showSeams=false,activePreset='canyon-mesas',sync=()=>{};
   const n=config.resolution,tiles=partitionTiles(config),indices=buildTiledIndices(config),geometry=new THREE.BufferGeometry();
   geometry.setIndex(new THREE.BufferAttribute(indices,1));
   for(const t of tiles)geometry.addGroup(t.indexOffset,t.indexCount,0);
@@ -53,7 +53,7 @@ export default {
    const style=document.createElement('style');
    style.textContent=`.hill-geo-badge{font-size:11px;color:#b8c7ce;background:rgba(255,255,255,.05);padding:5px 8px;border-radius:4px;margin:6px 0}.hill-geo-hint{font-size:11.5px;line-height:1.4;color:#d5e1e6;background:rgba(190,165,110,.11);border-left:2px solid #c9ae74;padding:6px 8px;margin:6px 0;border-radius:0 4px 4px 0}.hill-geo-group{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ab0b8;margin:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:2px}.hill-geo-row{display:block;margin:6px 0;padding:3px 0}.hill-geo-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:2px;cursor:ew-resize}.hill-geo-meta{font-size:10.5px;color:#8aa0a8}.hill-geo-controls{display:grid;grid-template-columns:1fr 5.2rem;gap:6px;align-items:center}.hill-geo-actions{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}`;
    panel.append(style);
-   const intro=document.createElement('p');intro.textContent='Stitched 30-tile mountain range and piedmont bajada. Author macro-valleys, tilted/folded rock strata, and erosion epoch; hover or focus any control for its physical meaning and range.';panel.append(intro);
+   const intro=document.createElement('p');intro.textContent=`Stitched ${tiles.length}-tile (${config.tilesX}×${config.tilesZ}) geological territory: flat-topped caprock mesas, stepped structural terraces, box canyons, tilted hogbacks, and coalescing alluvial aprons.`;panel.append(intro);
    const badge=document.createElement('div');badge.className='hill-geo-badge';badge.textContent=`Stitched quilt · ${config.tilesX}×${config.tilesZ} = ${tiles.length} tiles · ${n}×${n} grid (${((n-1)**2*2).toLocaleString()} tris)`;panel.append(badge);
    const presetRow=document.createElement('label');presetRow.className='hill-geo-row';presetRow.title='Select a curated geological authoring preset or reset all parameters to defaults.';
    const presetHead=document.createElement('div');presetHead.className='hill-geo-head';presetHead.textContent='Geological preset';
@@ -87,17 +87,17 @@ export default {
    const frameButton=document.createElement('button');frameButton.textContent='Frame landscape';frameButton.onclick=()=>invoke('frame');
    const stepButton=document.createElement('button');stepButton.textContent='Step formation';stepButton.title='Advance geological formation by +20 steps from the current state while streaming intermediate frames.';stepButton.onclick=()=>invoke('stepFormation',20).catch(e=>{status.textContent=e.message;});
    const play=document.createElement('button');play.title='Toggle live GPU loose-talus relaxation.';play.onclick=()=>invoke('play',!playing);
-   const seamButton=document.createElement('button');seamButton.title='Toggle 3D overlay showing the 30 stitched tile boundaries on the terrain surface.';seamButton.onclick=()=>invoke('setTileSeams',!showSeams);
-   const resetButton=document.createElement('button');resetButton.textContent='Reset defaults';resetButton.title='Restore default 30-tile Range & Bajada recipe.';resetButton.onclick=()=>{presetSelect.value='range-bajada';invoke('applyPreset','range-bajada').catch(e=>{status.textContent=e.message;});};
+   const seamButton=document.createElement('button');seamButton.title=`Toggle 3D overlay showing the ${tiles.length} stitched tile boundaries on the terrain surface.`;seamButton.onclick=()=>invoke('setTileSeams',!showSeams);
+   const resetButton=document.createElement('button');resetButton.textContent='Reset defaults';resetButton.title=`Restore default ${tiles.length}-tile Canyonlands Mesas & Terraces recipe.`;resetButton.onclick=()=>{presetSelect.value='canyon-mesas';invoke('applyPreset','canyon-mesas').catch(e=>{status.textContent=e.message;});};
    actions.append(frameButton,stepButton,play,seamButton,resetButton);panel.append(actions);
-   const note=document.createElement('p');note.textContent='Step formation advances geological age incrementally and streams partial states across all 30 tiles. Run settling redistributes loose cover on the GPU.';panel.append(note,status);
+   const note=document.createElement('p');note.textContent=`Step formation advances geological age incrementally and streams partial states across all ${tiles.length} tiles. Run settling redistributes loose cover on the GPU.`;panel.append(note,status);
    sync=()=>{
     for(const [key,input]of fields)if(document.activeElement!==input||input.readOnly)input.value=String(config[key]);
     for(const [key,slider]of sliders)if(document.activeElement!==slider)slider.value=String(config[key]);
     presetSelect.value=activePreset;
     stepButton.disabled=Boolean(pending||error);play.textContent=playing?'Pause settling':'Run settling';play.disabled=Boolean(pending||error);
     seamButton.textContent=showSeams?`Hide ${tiles.length}-tile seams`:`Show ${tiles.length}-tile seams`;
-    status.textContent=error??(pending?'Forming 30-tile landscape · '+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`30 tiles stored · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache}`+(formed.warning?' · '+formed.warning:''):''));
+    status.textContent=error??(pending?`Forming ${tiles.length}-tile territory · `+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`${tiles.length} tiles stored · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache}`+(formed.warning?' · '+formed.warning:''):''));
    };sync();this._cleanup=()=>clearTimeout(timer);
   },
   async dispose(){if(disposed)return;disposed=true;epoch++;job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}

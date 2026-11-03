@@ -26,12 +26,14 @@ const normal=wgslFn(`fn hill_normal(v:u32,n:u32,dx:f32,dz:f32,state:ptr<storage,
  let gx=(r.x+r.y-l.x-l.y)/(dx*select(1.,2.,x>0u&&x+1u<n));let gz=(f.x+f.y-b.x-b.y)/(dz*select(1.,2.,z>0u&&z+1u<n));return vec4<f32>(normalize(vec3<f32>(-gx,1.,-gz)),0.);
 }`);
 
-const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32)->vec4<f32>{
+const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32)->vec4<f32>{
  let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=x*ca+z*sa;let rz=-x*sa+z*ca;
- let warp=.3*sin(rx*.55+rz*.35+seed*.03)+.18*cos(rz*.85-rx*.45);
- let phase=(bed-tilt*rx-fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
+ let dipScale=1.-.88*clamp(stepStyle,0.,1.);
+ let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
+ let phase=(bed-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
  let band=.5+.5*sin(phase*6.28318530718);
- let rock=mix(vec3<f32>(.13,.10,.065),vec3<f32>(.30,.245,.16),band);
+ let ledge=smoothstep(.25,.75,band);
+ let rock=mix(vec3<f32>(.12,.09,.06),vec3<f32>(.33,.26,.165),mix(band,ledge,.55*clamp(stepStyle,0.,1.)));
  let earth=vec3<f32>(.12,.17,.065);let exposed=exp(-soil/.045);
  return vec4<f32>(mix(earth,rock,exposed),1.);
 }`);
@@ -48,7 +50,7 @@ export function createTerrainGPU(geometry,input={}){
  const interpolators=states.map((state,i)=>Fn(()=>{displayState.element(instanceIndex).assign(mix(states[1-i].element(instanceIndex),state.element(instanceIndex),alpha));})().compute(count));
  const positionNode=storage(positions,'vec4',count),normalNode=storage(normals,'vec4',count),colorNode=storage(colors,'vec4',count);
  const formedAttribute=attribute(new Float32Array(count*4),4,'formed-source'),formedNode=storage(formedAttribute,'vec4',count),useFormed=uniform(0);
- const geoTilt=uniform(.35),geoStrike=uniform(16),geoFold=uniform(.22),geoThickness=uniform(.34),geoSeed=uniform(47);
+ const geoTilt=uniform(.16),geoStrike=uniform(18),geoFold=uniform(.16),geoThickness=uniform(.34),geoSeed=uniform(47),geoStepStyle=uniform(.86);
  const dt=uniform(.05),drive=uniform(config.uplift),talus=uniform(Math.tan(config.repose*Math.PI/180)),fraction=uniform(0),soil=uniform(config.soil);
  const initializers=states.map(state=>Fn(()=>{state.element(instanceIndex).assign(mix(init({v:instanceIndex,n:uint(n),width:float(config.width),length:float(config.length),soil,ridges:ridgeNode}),formedNode.element(instanceIndex),useFormed));})().compute(count));
  const solvers=states.map((state,i)=>[
@@ -63,7 +65,7 @@ export function createTerrainGPU(geometry,input={}){
   // Soil cover and actual slope control the material, independent of world time.
   const cover=s.y.mul(4).clamp(0,1),steep=float(1).sub(norm.y).mul(1.3).clamp(0,1),exposed=steep.mul(float(1).sub(cover.mul(.4)));
   const legacyColor=initPosition(float(.30).add(exposed.mul(.12)).add(cover.mul(.05)),float(.36).sub(exposed.mul(.04)).add(cover.mul(.10)),float(.20).add(exposed.mul(.08)));
-  colorNode.element(v).assign(mix(legacyColor,formedColor({x,z,bed:s.x,soil:s.y,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed}),useFormed));
+  colorNode.element(v).assign(mix(legacyColor,formedColor({x,z,bed:s.x,soil:s.y,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle}),useFormed));
  })().compute(count));
  nodes.push(...initializers,...solvers.flat(),...interpolators,...publishers);
  let renderer=null,initialized=false,index=0,steps=0,preparationSteps=0,seconds=0,disposed=false,pendingPresentation=true,generation=0,error=null,formationProvenance=null;
@@ -93,7 +95,7 @@ export function createTerrainGPU(geometry,input={}){
   loadFormation(result){
    if(result.config.resolution!==n||result.config.width!==config.width||result.config.length!==config.length)throw Error('Formation grid does not match GPU terrain');
    if(!(result.state instanceof Float32Array)||result.state.length!==count*4||!result.state.every(Number.isFinite))throw Error('Complete finite formed state required');
-   geoTilt.value=result.config.tilt;geoStrike.value=result.config.strike??0;geoFold.value=result.config.fold;geoThickness.value=result.config.bedThickness;geoSeed.value=result.config.seed;
+   geoTilt.value=result.config.tilt;geoStrike.value=result.config.strike??0;geoFold.value=result.config.fold;geoThickness.value=result.config.bedThickness;geoSeed.value=result.config.seed;geoStepStyle.value=Math.min(1,Math.max(0,.65*(result.config.mesa??0)+.65*(result.config.terrace??0)));
    formationProvenance={kind:'formed-landscape',version:result.version,recipe:{...result.config},preparationSteps:result.steps};
    formedAttribute.array.set(result.state);formedAttribute.needsUpdate=true;useFormed.value=1;initialized=false;steps=0;preparationSteps=0;seconds=0;generation++;alpha.value=1;if(renderer)flush(renderer);return read();
   },
