@@ -34,6 +34,7 @@
   "exports": {
     ".": "./src/index.js",
     "./core": "./src/core.js",
+    "./generation": "./src/generation.js",
     "./sam": "./src/sam.js",
     "./examples/minimal-model-port": "./examples/minimal-model-port.mjs",
     "./examples/render-plus-inference": "./examples/render-plus-inference.mjs",

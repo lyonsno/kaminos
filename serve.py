@@ -2499,7 +2499,7 @@ _model_spec = importlib.util.spec_from_file_location('kaminos_model_installation
 _model_installations = importlib.util.module_from_spec(_model_spec)
 _model_spec.loader.exec_module(_model_installations)
 MODEL_INSTALLATIONS = _model_installations.ModelInstallations()
-MOUNTED_PACKAGES = {'/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
+MOUNTED_PACKAGES = {'/qwen35-weights/': 'qwen35', '/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
