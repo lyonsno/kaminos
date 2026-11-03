@@ -452,12 +452,12 @@ function declaration(name) {
 // variable between calls. Names the scope lacks and the global object lacks
 // resolve to inert stand-ins, so a test supplies only what it observes.
 function fromIndexLive(name, scope) {
+  sceneContext(scope);
   const inert = new Proxy(function () {}, {get: (_, key) => (key === Symbol.toPrimitive ? () => 0 : inert), apply: () => inert});
   const live = new Proxy(scope, {has: (target, key) => key in target || !(key in globalThis),
     get: (target, key) => (key === Symbol.unscopables ? undefined : key in target ? target[key] : inert),
     set: (target, key, value) => { target[key] = value; return true; }});
   const source = INDEX.includes(`const ${name}=`) ? definition(name) : declaration(name);
-  sceneContext(live);
   return new Function('scope', `with (scope) { ${source}\nreturn ${name}; }`)(live);
 }
 

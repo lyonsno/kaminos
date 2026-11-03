@@ -579,7 +579,11 @@ assert.match(index, /<link rel="icon" href="data:,">/, 'static volume smoke rout
 assert.match(index, /isKaminosVolumeSmokeRoute\(\)[\s\S]*\/api\/runtime-config/, 'volume smoke routes skip optional runtime-config fetches on static smoke servers');
 assert.match(index, /id="finger-juice-viewport-frame"[\s\S]*data-src="lerms-finger-juice\.html\?lerms_world_finger_juice=1"[\s\S]*loading="lazy"/, 'volume smoke startup does not eager-load the hidden Finger Juice child route');
 assert.match(index, /if \(isKaminosVolumeSmokeRoute\(\)\)[\s\S]*asset browser deferred[\s\S]*Greenroom browse deferred/, 'volume smoke startup defers optional Greenroom/API browser fetches');
-assert.match(index, /mainRendererNeeded = !volumeSmokeRouteActive/, 'volume smoke routes skip idle main-renderer draws while native volume canvas owns the viewport');
+const mainDrawExpression=index.match(/const mainRendererNeeded = (.*);/)[1];
+for(const active of [false,true]) {
+ const draw=Function('volumePrototype','volumeSmokeRouteActive','fireLightFieldActive','motionAgencyActive','motionDecisionActive','motionPhraseControlActive','motionTrackActive','motionOutputMapActive','motionTemporalActive','forgeHostActive',`return ${mainDrawExpression}`)({isActive:()=>active},true,false,false,false,false,false,false,false,false);
+ assert.equal(draw,!active,'ordinary scene reclaims presentation when the smoke runtime is inactive');
+}
 assert.match(index, /volume_reaction_fuel/, 'URL route can starve tall-plume reaction fuel without rewriting visual controls');
 assert.match(index, /routedVolumeReactionFuelScale/, 'route-only reaction fuel scale is preserved outside the visible cockpit sliders');
 assert.match(index, /reactionFuelScale/, 'Volume controls carry tall-plume reaction fuel scale into renderer debug state');

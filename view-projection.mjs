@@ -6,7 +6,7 @@
 // turns (Blender's Auto Perspective); one chosen explicitly (Numpad 5) stays until toggled.
 import {Vector3} from './lib/three.core.js';
 
-export function createViewProjection({camera,target}) {
+export function createViewProjection({camera,target,onChange=()=>{}}) {
   const perspective=camera.updateProjectionMatrix.bind(camera),forward=new Vector3(),now=new Vector3();
   let orthographic=false,auto=false;
 
@@ -28,6 +28,7 @@ export function createViewProjection({camera,target}) {
     camera.isOrthographicCamera=orthographic;camera.isPerspectiveCamera=!orthographic;
     camera.updateMatrixWorld(true);camera.getWorldDirection(forward);
     camera.updateProjectionMatrix();
+    onChange(state());
     return state();
   }
   // Once per frame or after navigation: resize the orthographic view to the current pivot

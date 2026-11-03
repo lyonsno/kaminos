@@ -111,7 +111,7 @@ test('environment backdrop brightness and contrast are independent from scene li
   assert.equal(scene.environment, map);
   assert.ok(scene.backgroundNode, 'contrast must reach the actual rendered background');
   assert.match(between('function buildSceneData(', 'function isCompositionAuthoring()'), /sceneEnvironment\.document/);
-  assert.match(between('  // Load environment first', '  if (objectRecords.length > 0)'), /sceneEnvironment\.restoreDocument/);
+  assert.match(between('  // Restore the lighting recipe now;', '  const restoredFlame='), /sceneEnvironment\.restoreDocument/);
 });
 
 let failures = 0;

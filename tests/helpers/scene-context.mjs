@@ -1,3 +1,6 @@
+import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
+import {ASH_SOURCE_TYPE} from '../../ash/source-object.mjs';
+import {ashMembershipEntry} from '../../ash/history-record.mjs';
 import {createAuthoredFlameFeature} from '../../authored-flame-feature.mjs';
 import {createKilnRecipeStore} from '../../inference-kiln-selection.mjs';
 import {FIRE_RENDER_DEFAULTS} from '../../scene-fire-render-settings.mjs';
@@ -6,6 +9,7 @@ import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
 import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
 import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
+import {checkedAssembly,assemblySelection} from '../../scene-assembly.mjs';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
 import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
 import {createSceneDocumentSession} from '../../scene-document-session.mjs';
@@ -25,6 +29,10 @@ const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneR
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.ashMembershipEntry??=ashMembershipEntry;
+  context.ASH_OBJECT_TYPE??=ASH_OBJECT_TYPE;context.ASH_SOURCE_TYPE??=ASH_SOURCE_TYPE;
+  context.authoredAsh??=new Map();context.ashEditTargets??=new Set();
+  context.captureAuthoredAsh??=async()=>{for(const ash of context.authoredAsh.values())await ash.checkpoint();};
   // Page-consumer fixture projection only. Runtime lifetime tests instantiate
   // createAuthoredWaterFeature directly; these old fields describe domain inputs.
   if(!context.waterFeature){
@@ -39,9 +47,16 @@ export function sceneContext(context, options) {
     water.setPaused=value=>{context.localLiquidPaused=Boolean(value);context.localLiquidHost?.setPaused(value);return context.localLiquidPaused;};
     context.waterFeature=water;
   }
-  context.flameFeature??=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
+  context.window??={};
+  context.fireLightFieldRouteParams??=()=>new URLSearchParams();
+  context.fireShadowSceneRoute??=()=>({});
+  context.syncSceneRadianceRoute??=async()=>{};
+  context.URLSearchParams??=URLSearchParams;
+  context.retireSceneFlame??=()=>context.flameFeature.clear();
+  context.restoreSceneFlame??=options=>context.flameFeature.restore(options);
+  context.flameFeature??=createAuthoredFlameFeature({present:!!context.activeSceneComposition||!!context.volumePrototype?.isActive?.()&&!!context.isFireLightFieldRoute?.(),runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
   // These scene-unit fixtures do not allocate World or its visual overlay.
-  context.volumePrototype??=null;context.worldSmokeGuide??=null;context.worldSmokeOverlayMode??='off';
+  context.volumePrototype??=null;context.worldSmokeGuide??=null;context.waterDomainProxy??=null;context.worldSmokeOverlayMode??='off';
   context.refreshWorldSmokeOverlay??=()=>({mode:'off'});
   context.worldSourceSupplyEnabled??=()=>{const c=context.readVolumeControls?.()??{};return c.worldSmoke==='on'&&c.emitterSourceLaw==='immersed-source';};
   context.checkedBurnAppearance??=checkedBurnAppearance;
@@ -56,7 +71,14 @@ export function sceneContext(context, options) {
   context.sceneAO ??= createSceneAOState();
   context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
+  context.checkedAssembly??=checkedAssembly;context.assemblySelection??=assemblySelection;context.assemblyEditing??=null;
+  context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
+  context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
+  // Domain fixtures do not prepare GPU environments; loading behavior has its own tests.
+  context.environmentLoader ??= {holdFull:()=>()=>{},releaseFull(){}};
+  context.requestAnimationFrame ??= fn=>fn();
+  context.setTimeout ??= fn=>fn();
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {
     context.sceneObjects ??= [];
@@ -171,6 +193,8 @@ export async function composePageMembershipBatch(context, html) {
 export async function composePageSceneLifecycle(context,html){
  const {createSceneLifecycle}=await import('../../scene-lifecycle.mjs');sceneContext(context);
  context.workingScene.loads??=context.sceneLoadRequests;
+ context.VOLUME_PRIMITIVE_SCHEMA??='kaminos.volume-primitives.v0';
+ context.setVolumePrimitivesState??=value=>{context.volumePrimitives=value;};
  context.workingScene.suspendedObjects??=()=>[];
  context.workingScene.discardSuspendedMembership??=()=>null;
  for(const name of ['setSceneObjectMounted','setSceneGroupsFromRecords','setSceneSelection','setActiveSceneObject','setActiveSceneGroup'])context[name]??=()=>{};

@@ -1,0 +1,25 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';
+import {validateFrameYieldState}from '../models/trellis2/frame-yield-checks.js';
+const expected={shape:[4,2],frameBudgetMs:8,maxTaskYieldsPerFrame:8};
+const fixture=()=>({status:'completed',phase:'complete',backend:{vendor:'apple',architecture:'metal-3',isFallbackAdapter:false},effectiveRoute:'trellis2.image-generation.webgpu.v0',release:{status:'released',foreground:{receipts:['warmup','baseline','frame-aware'].map(mode=>({status:'completed',result:{sceneDrawn:true},metadata:{renderer:'kaminos-app'},boundary:{invocationId:'retained-block-'+mode},requestedAtMs:10,startedAtMs:20}))}},errors:[],
+ runs:['warmup','baseline','frame-aware'].map(mode=>({mode,startMs:0,endMs:100,wallMs:100,frames:[10,30,50],sceneFramesBefore:2,sceneFramesAfter:4,policy:{frameBudgetMs:8,maxTaskYieldsPerFrame:8,frameYields:2,gpuDrains:2},output:{shape:[4,2],byteLength:32,sha256:'a'.repeat(64)}})),
+ stop:{requestedAt:300,observedAt:302,status:'failed',failure:{name:'AbortError'}}});
+test('complete paired evidence admits additive diagnostics',()=>{const s=fixture();s.future={field:1};assert.equal(validateFrameYieldState(s,expected),true);});
+for(const [name,change]of [
+ ['failed primary',s=>s.status='failed'],['fallback',s=>s.backend.isFallbackAdapter=true],['wrong route',s=>s.effectiveRoute='isolated'],
+ ['missing pair',s=>s.runs.pop()],['partial output',s=>s.runs[1].output.byteLength--],['different output',s=>s.runs[2].output.sha256='b'.repeat(64)],
+ ['changed policy',s=>s.runs[2].policy.frameBudgetMs=40],['changed task budget',s=>s.runs[2].policy.maxTaskYieldsPerFrame=40],['missing frame wait',s=>s.runs[2].policy.frameYields=0],
+ ['missing drain',s=>s.runs[2].policy.gpuDrains=0],['no frames',s=>s.runs[2].frames=[]],['no foreground renders',s=>s.runs[2].sceneFramesAfter=2],
+ ['stale frame',s=>s.runs[2].frames=[-5]],['Stop not observed',s=>s.stop.status='succeeded'],['unreleased',s=>s.release.status='held']
+])test('false closure rejected: '+name,()=>{const s=fixture();change(s);assert.throws(()=>validateFrameYieldState(s,expected));});
+const scene={root:'generated-meshes',path:'retained.glb',sha256:'c'.repeat(64)};
+const loadedScene=()=>({state:{schema:'kaminos.asset-smoke-link.v0',status:'loaded',assetType:'mesh',requestedRoot:scene.root,requestedPath:scene.path,effectiveUrl:'/api/read?root=generated-meshes&path=retained.glb',registeredObjectId:'mesh-1'},objects:[{id:'mesh-1',type:'glb',source:'/api/read?root=generated-meshes&path=retained.glb'}],sha256:scene.sha256});
+test('loaded scene preserves requested asset and its actual registration',()=>{const s=fixture();s.scene=loadedScene();assert.equal(validateFrameYieldState(s,{...expected,scene}),true);});
+for(const[name,change]of [
+ ['missing scene',s=>delete s.scene],['wrong asset',s=>s.scene.state.requestedPath='other.glb'],
+ ['wrong bytes',s=>s.scene.sha256='d'.repeat(64)],['unregistered asset',s=>s.scene.objects=[]],['wrong registered source',s=>s.scene.objects[0].source='/other']
+])test('loaded-scene false closure rejected: '+name,()=>{const s=fixture();s.scene=loadedScene();change(s);assert.throws(()=>validateFrameYieldState(s,{...expected,scene}));});
+test('RAF callbacks and aggregate counters cannot substitute for actual scene-render receipts',()=>{
+ const s=fixture();s.release.foreground={receipts:[]};assert.throws(()=>validateFrameYieldState(s,expected));
+});

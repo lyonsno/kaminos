@@ -47,6 +47,7 @@ export function frameBox(box,camera,controls) {
   const direction=camera.position.clone().sub(controls.target).normalize();
   if(direction.lengthSq()===0)direction.set(0,0,1);
   camera.position.copy(center).addScaledVector(direction,distance);controls.target.copy(center);
+  if(Math.abs(direction.y)<1-1e-6)camera.up.set(0,camera.up.y<0?-1:1,0);
   camera.near=Math.min(camera.near,Math.max(.001,distance-radius)/10);camera.far=Math.max(camera.far,distance+radius*3);
   camera.updateProjectionMatrix();controls.update();return true;
 }

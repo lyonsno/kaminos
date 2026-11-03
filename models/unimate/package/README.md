@@ -15,7 +15,7 @@ Skeletal animation from a text prompt, for any rigged skeleton, running entirely
 npm install @kaminos/unimate-webgpu
 ```
 
-The package is plain ES modules with no build step. Use it from a bundler or straight from a browser with an import map. For the shared application lifecycle below, build the kit and UniMate from the same checkout using the [source-package recipe](https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/model-applications.md#install-the-source-packages). These source additions do not imply a new npm release.
+The package is plain ES modules with no build step. Use it from a bundler or straight from a browser with an import map. The shared application lifecycle below is available in `@kaminos/unimate-webgpu@^0.2.1` with `@kaminos/webgpu-inference-kit@^0.1.60`. The [application guide](https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/model-applications.md#install) gives the npm install commands; its separate source-package recipe is for building from a checkout.
 
 ## Generate motion
 

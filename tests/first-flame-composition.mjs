@@ -80,12 +80,12 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
 
 test('first-field writes await lighting synchronization before resuming, including undo',async()=>{
   const events=[],location={href:'http://localhost/#authoring=1'};
-  const context={isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},URL,URLSearchParams,structuredClone,location,history:{state:null,replaceState(a,b,url){location.href=String(url);}},
+  const context={burnerGraphWriting:false,isSceneItemVisible:()=>true,syncAuthoredFireActivity:async()=>{},URL,URLSearchParams,structuredClone,location,history:{state:null,replaceState(a,b,url){location.href=String(url);}},
     volumePrototype:{setActive:async value=>events.push(['active',value]),setSceneCompositionPresentation(){}},
     activeSceneComposition:null,authoredFlamePresent:false,workingScene:createWorkingScene(),
     writeFlameSettingsState(){},ensureAuthoredFlameEmitter(){},renderSceneObjectList(){},refreshRenderingControls(){},flameInspector:null,
     fireLightFieldRouteParams:()=>new URLSearchParams(),window:{},async syncSceneRadianceRoute(){await Promise.resolve();events.push(['lighting',!!context.activeSceneComposition]);}};
-  const start=source.indexOf('function writeFirstFlameFieldStateUnchecked('),end=source.indexOf('async function addFirstFlameField',start);
+  const start=source.indexOf('async function writeFirstFlameFieldStateUnchecked('),end=source.indexOf('async function addFirstFlameField',start);
   context.volumePrototype.isActive=()=>events.findLast(e=>e[0]==='active')?.[1]??false;
   context.flameFeature=createAuthoredFlameFeature({runtime:()=>context.volumePrototype,visible:()=>true,composed:()=>!!context.activeSceneComposition});
   vm.createContext(context);vm.runInContext(source.slice(start,end),context);

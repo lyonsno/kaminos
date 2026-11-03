@@ -50,7 +50,7 @@ export async function createInferenceKilnPreview({viewport,document=globalThis.d
  async function dispose(){
   if(disposed)return;disposed=true;active=false;
   if(fire){await fire.setActive(false);await sharedGpu.device.queue.onSubmittedWorkDone();}
-  lighting?.dispose();await lighting?.whenRebuilt?.().catch(()=>{});await burning?.dispose();fire?.setSceneTransportConsumer(null);fire?.dispose();
+  lighting?.dispose();await lighting?.whenRebuilt?.().catch(()=>{});await burning?.dispose();fire?.setSceneTransportConsumer(null);await fire?.dispose();
   hdr?.dispose();pipeline?.dispose();sceneBloom?.dispose();gi?.dispose();colliders.clear();frames.clear();
   for(const resource of owned)resource.dispose();
   const textures=new Set(),geometries=new Set(),materials=new Set();scene.traverse(node=>{if(node.geometry)geometries.add(node.geometry);for(const m of [].concat(node.material??[])){materials.add(m);for(const v of Object.values(m))if(v?.isTexture)textures.add(v);}});

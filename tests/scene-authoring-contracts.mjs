@@ -38,7 +38,9 @@ assert.throws(() => captureComposedCanvases({ host: null, document, label: 'A' }
 assert.throws(() => captureComposedCanvases({ host, document, label: '' }), /label/);
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(index, /id="composition-ground-visible"/, 'author can remove the inspection floor that clips a lowered kiln');
-assert.match(index, /const firePresent=.*hasVolumePrimitiveScene.*activeSceneComposition.*kaminos_volume_smoke/,
-  'a geometry-only authored scene preserves an explicitly requested live volume route');
-assert.match(index, /flameFeature\.restore\(\{present:firePresent/, 'restore routes that presence through the feature owner');
+const presenceExpression=index.match(/const firePresent=(.*);/)[1];
+for(const hasVolumePrimitiveScene of [false,true])for(const activeSceneComposition of [null,{}]) {
+ const firePresent=Function('hasVolumePrimitiveScene','activeSceneComposition',`return ${presenceExpression}`)(hasVolumePrimitiveScene,activeSceneComposition);
+ assert.equal(firePresent,Boolean(hasVolumePrimitiveScene||activeSceneComposition),'document membership decides presence independently of an old smoke URL');
+}
 console.log('scene authoring contracts passed');

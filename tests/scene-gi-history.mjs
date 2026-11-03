@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import {createSceneFrameComposition} from '../scene-frame-composition.mjs';
 import {resolveSceneGIControlState} from '../scene-gi-settings.mjs';
 assert.equal(resolveSceneGIControlState().temporal,true,'Noah accepted temporal GI as the fresh-scene default');
 assert.equal(resolveSceneGIControlState({temporal:false}).temporal,false,'an explicit saved temporal setting remains authoritative');
@@ -34,7 +35,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const begin=html.indexOf('  function animate() {'),end=html.indexOf('\n  compositionHost =',begin);
 for(const enabled of [true,false]) {
   let remaining=45,draws=0;
-  const scope={sceneLightingPreparation:null,outputCaptureExtent:null,recordingExtent:null,document:{getElementById:()=>({textContent:''})},requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
+  const scope={volumePrototype:null,sceneLightingPreparation:null,outputCaptureExtent:null,recordingExtent:null,document:{getElementById:()=>({textContent:''})},requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
     isSceneItemVisible:()=>true,isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,waterFeature:{active:false},
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
@@ -42,6 +43,7 @@ for(const enabled of [true,false]) {
     sceneGI:{historyStatus:()=>null,needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
     renderSceneFrame(){draws++;remaining--;},
   };
+  scope.frameComposition=createSceneFrameComposition({readInputs:()=>({}),draw:()=>scope.renderSceneFrame(),frameCount:()=>draws});
   for(const name of ['updateHybridSplatOverlayFrame','updateMotionAgencyFrame','updateMotionDecisionFrame','updateMotionPhraseControlFrame','updateMotionTrackFrame','updateGeneratedPoseOutputMapFrame','updateGeneratedPoseTemporalFrame','updateForgeHostStationFrame'])scope[name]=()=>false;
   runInNewContext(html.slice(begin,end)+';for(let tick=0;tick<90;tick++)animate();',scope);
   assert.equal(draws,enabled?45:4,'ordinary RAF must settle enabled history and preserve disabled idle behavior');

@@ -23,7 +23,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
     fluidBuffers:[{},{}],reactantTextures:[{},{}],currentFluid:0,currentFront:0,currentQuench:0,
     resolveTimeStepConfig:()=>({effective:{}}),resolvePhysicsAppearance:()=>({}),resolveVelocityStaggeringConfig:()=>({effective:{mode:'cell'}}),
     refreshSceneCollision(){},ensureAppearanceLayout(){},resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
-    computePipeline:{},transportPredictBindGroup:{},encodeAnalyticEmitterInjection(){},encodePressureProjection(){return false;},updateSimCostLedger(){},Float32Array};
+    simulationPipeline:()=>({}),transportPredictBindGroup:{},encodeAnalyticEmitterInjection(){},encodePressureProjection(){return false;},updateSimCostLedger(){},Float32Array};
   ctx.uniforms[368]=2;ctx.rebuildFluidBindGroups();vm.createContext(ctx);
   vm.runInContext(['retireIntermediateFlow','prepareWorldSmoke','encodeWorldSmoke','encodeSim'].map(grab).join('\n'),ctx);
   const encoder={beginComputePass(){return {setPipeline(){},setBindGroup(_i,g){if(g.texture)bound.push(g.texture);},dispatchWorkgroups(){},end(){}};}};

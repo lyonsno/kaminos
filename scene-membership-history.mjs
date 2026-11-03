@@ -49,6 +49,9 @@ export function restoreSceneObjectGroups(currentGroups, savedGroups, objectId, p
       if (present.has(id) && !saved.objectIds.includes(id)) orderedIds.push(id);
     }
     const group = { ...(current || savedGroup), objectIds: [...new Set(orderedIds)] };
+    if(current?.assembly && savedGroup.assembly){
+      group.assembly={...current.assembly,roles:{...current.assembly.roles,[objectId]:savedGroup.assembly.roles[objectId]??'body'}};
+    }
     if (currentIndex >= 0) groups.splice(currentIndex, 1);
     groups.splice(Math.min(groupIndex, groups.length), 0, group);
   }

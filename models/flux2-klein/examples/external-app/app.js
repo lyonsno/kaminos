@@ -1,14 +1,17 @@
 import { createKleinApp } from '@kaminos/flux2-klein';
-import { createElement, Download, Maximize, Square } from 'lucide';
+import { createElement, Download, Maximize, Square, Pause, Play } from 'lucide';
 import { createImageView } from './image-view.js';
+import { createProgressView } from './progress-view.js';
 
 const get = id => document.getElementById(id);
-const icons = { Download, Maximize, Square };
+const icons = { Download, Maximize, Square, Pause, Play };
 for (const button of document.querySelectorAll('[data-icon]')) {
   button.replaceChildren(createElement(icons[button.dataset.icon]));
 }
 
 let klein, viewer, image, running = false, closed = false;
+let paused = false, stopping = false, request = 0;
+const progress = createProgressView(get);
 const status = text => { get('status').textContent = text; };
 const showError = error => { get('error').textContent = error.message; };
 
@@ -18,11 +21,7 @@ async function initialize() {
     const weights = new URLSearchParams(location.search).get('weights');
     klein = await createKleinApp({ load: false,
       pipelineOptions: weights === null ? {} : { weightsBase: weights },
-      onProgress: (part, file, progress) => {
-        const loaded = Math.round(progress.loadedBytes / 1e6);
-        const total = Math.round(progress.totalBytes / 1e6);
-        status(`Loading ${part}: ${loaded} / ${total} MB`);
-      },
+      onProgress: progress.loading,
     });
     viewer = await createImageView(get('image'), klein.device, klein.foreground, showError);
     get('generate').disabled = false;
@@ -39,38 +38,58 @@ get('prompt-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!viewer || running || closed) return;
   running = true;
-  get('generate').disabled = get('download').disabled = true;
+  request++; paused = stopping = false;
+  get('generate').disabled = true;
+  get('pause').replaceChildren(createElement(Pause));
+  get('pause').title = get('pause').ariaLabel = 'Pause generation';
   get('error').textContent = '';
-  status('Loading model');
+  progress.start(klein.snapshot().loaded);
   const options = { prompt: get('prompt').value, seed: Number(get('seed').value),
     width: Number(get('size').value), height: Number(get('size').value), steps: Number(get('steps').value) };
   try {
     await klein.load();
     if (closed) return;
-    get('stop').disabled = false;
+    get('stop').disabled = get('pause').disabled = false;
+    progress.beginGeneration();
     const result = await klein.generate({ ...options, textLength: 'fit16',
-      onPhase: phase => status(`Generating: ${phase}`),
-      onStep: (step, steps) => status(`Step ${step} of ${steps}`),
+      onPhase: progress.phase, onStep: progress.step, scheduling: { onDuty: progress.duty },
     });
     if (closed) return;
     viewer.setImage(result);
     viewer.fit(); get('zoom').value = '1';
     image = result;
     get('image-label').textContent = `${image.width} x ${image.height}`;
-    status('');
+    progress.finish('Image complete');
   } catch (error) {
-    if (error.name === 'AbortError') status('Stopped');
-    else { showError(error); status(''); }
+    progress.finish(error.name === 'AbortError' ? 'Stopped' : 'Generation failed');
+    if (error.name !== 'AbortError') showError(error);
   } finally {
     running = false;
     get('generate').disabled = closed;
-    get('stop').disabled = true;
+    get('stop').disabled = get('pause').disabled = true;
     get('download').disabled = !image;
   }
 });
 
 get('stop').addEventListener('click', () => {
-  klein.stop(); get('stop').disabled = true; status('Stopping');
+  stopping = true; klein.stop(); get('stop').disabled = get('pause').disabled = true;
+  progress.control('Stopping generation');
+});
+get('pause').addEventListener('click', async () => {
+  if (!running || stopping) return;
+  const current = request, wasPaused = paused;
+  get('pause').disabled = true;
+  progress.control(wasPaused ? 'Resuming generation' : 'Pausing generation');
+  try {
+    const state = await (wasPaused ? klein.resume() : klein.pause());
+    if (!running || stopping || current !== request) return;
+    paused = state?.status === 'paused';
+    get('pause').replaceChildren(createElement(paused ? Play : Pause));
+    get('pause').title = get('pause').ariaLabel = paused ? 'Resume generation' : 'Pause generation';
+    progress.control(paused ? 'Generation paused' : null);
+  } catch (error) {
+    if (running && !stopping && current === request) { showError(error); progress.control(wasPaused ? 'Generation paused' : null); }
+  } finally { if (running && !stopping && current === request) get('pause').disabled = false; }
 });
 get('zoom').addEventListener('input', event => viewer?.setZoom(Number(event.target.value)));
 get('fit').addEventListener('click', () => { viewer?.fit(); get('zoom').value = '1'; });
@@ -90,6 +109,7 @@ get('download').addEventListener('click', () => {
 window.addEventListener('pagehide', event => {
   if (event.persisted) return;
   closed = true;
+  progress.destroy();
   viewer?.destroy();
   klein?.destroy().catch(console.error);
 });
