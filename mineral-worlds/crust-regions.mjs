@@ -1,4 +1,4 @@
-import {faceFrame,facePoint,faceUV,facePatch} from './crust-faces.mjs';
+import {faceFrame,facePoint,faceUV,facePatch,edgePorts} from './crust-faces.mjs';
 import {refreshBridges} from './crust-bridges.mjs';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const keys=['water','salt','residue','hazard','births'];
@@ -37,13 +37,17 @@ export function regionFronts(rects){
  return out;
 }
 export function regionArea(s,p,r){const f=faceFrame(s.grains[p.grain],p.face);return regionRects(s,p,r).reduce((n,q)=>n+(q.hi[0]-q.lo[0])*(q.hi[1]-q.lo[1])*f.w*f.h,0);}
+// Exponential waiting budgets are numerical event clocks, not stored incubation.
+// Conditional on no event, their remaining budget is again exponential. Give
+// newly independent reservoirs independent clocks on a connectivity change.
+function renewClock(s,r){r.clockEpoch=(r.clockEpoch??0)+1;const x=Math.sin((r.id+1)*127.1+s.seed*311.7+r.clockEpoch*74.7)*43758.5453;r.hazard=0;r.threshold=-Math.log(Math.max(1e-12,x-Math.floor(x)));}
 const touches=(a,b)=>a.lo.every((v,i)=>v<=b.hi[i]+1e-10&&a.hi[i]>=b.lo[i]-1e-10);
 export function mergeWetRegions(s,p){
  // A previously connected film may separate as it dries. Each resulting spot
  // inherits its share of the formerly mixed water and salt, then evolves alone.
  const separated=[];
  for(const r of p.regions){
-  if(r.water<=0||r.lobes.length===1){separated.push(r);continue;}
+  if(r.lobes.length===1){separated.push(r);continue;}
   const rects=r.lobes.map(l=>facePatch(s,{...p,water:r.water*l.share,entry:l.entry})),remaining=new Set(rects.map((_,i)=>i)),groups=[];
   while(remaining.size){const group=[remaining.values().next().value];remaining.delete(group[0]);for(let k=0;k<group.length;k++)for(const j of remaining)if(touches(rects[group[k]],rects[j])){remaining.delete(j);group.push(j);}groups.push(group);}
   if(groups.length===1){separated.push(r);continue;}
@@ -52,37 +56,69 @@ export function mergeWetRegions(s,p){
    for(const key of ['water','salt','residue','hazard'])part[key]=r[key]*share;
    // Event counts belong to the historical original, not fractional children.
    if(i>0){part.births=0;part.attempts=0;}
-   separated.push(part);
+   renewClock(s,part);separated.push(part);
   }
  }
  p.regions=separated;
  let again=true;
  while(again){again=false;
   outer:for(let i=0;i<p.regions.length;i++)for(let j=i+1;j<p.regions.length;j++){
-   const a=p.regions[i],b=p.regions[j];if(a.water<=0||b.water<=0)continue;
+   const a=p.regions[i],b=p.regions[j];
+   if(a.water<=0||b.water<=0){
+    const wet=a.water>0?a:b,dry=a.water>0?b:a;if(wet.water<=0)continue;
+    if(!dry.lobes.every(l=>reaches(s,p,wet,l.entry)))continue;
+    for(const key of ['salt','residue','births'])wet[key]+=dry[key];wet.attempts+=dry.attempts;
+    p.regions.splice(a.water>0?j:i,1);again=true;break outer;
+   }
    if(!regionRects(s,p,a).some(x=>regionRects(s,p,b).some(y=>touches(x,y))))continue;
    const total=a.water+b.water;
    a.lobes=[...a.lobes.map(l=>({...l,share:l.share*a.water/total})),...b.lobes.map(l=>({...l,share:l.share*b.water/total}))];
-   for(const key of keys)a[key]+=b[key];a.attempts+=b.attempts;p.regions.splice(j,1);again=true;break outer;
+   for(const key of keys)a[key]+=b[key];a.attempts+=b.attempts;renewClock(s,a);p.regions.splice(j,1);again=true;break outer;
   }
  }
  syncFace(p);
 }
-function contactPoint(s,p,r,uv,extent=[0,0]){for(const q of regionRects(s,p,r)){if(uv.every((v,i)=>v+extent[i]>=q.lo[i]-1e-9&&v-extent[i]<=q.hi[i]+1e-9))return uv.map((v,i)=>(Math.max(v-extent[i],q.lo[i])+Math.min(v+extent[i],q.hi[i]))/2);}return null;}
+function contactPoint(s,p,r,uv,extent=[0,0]){
+ for(const l of r.lobes){const q=facePatch(s,{...p,water:r.water*l.share,entry:l.entry});
+  if(r.water>0&&uv.every((v,i)=>v+extent[i]>=q.lo[i]-1e-9&&v-extent[i]<=q.hi[i]+1e-9))return uv.map((v,i)=>clamp(l.entry[i],Math.max(v-extent[i],q.lo[i]),Math.min(v+extent[i],q.hi[i])));
+ }return null;
+}
 function reaches(s,p,r,uv,extent){return contactPoint(s,p,r,uv,extent)!==null;}
 function at(s,p,uv){
  return p.regions.find(r=>reaches(s,p,r,uv))??p.regions.find(r=>r.water===0&&r.lobes.some(l=>l.entry.every((v,i)=>Math.abs(v-uv[i])<1e-9)))??addWetRegion(s,p,uv);
 }
-function edgePort(s,p,r,mid){
+function contactSpans(s,p,r,mid,extent){
+ const out=[];
  for(const q of regionRects(s,p,r)){
-  const fixed=Math.abs(mid[0]-.5)>.25?0:1,along=1-fixed;
-  if(mid[fixed]<q.lo[fixed]-1e-9||mid[fixed]>q.hi[fixed]+1e-9)continue;
-  const uv=[...mid];uv[along]=(q.lo[along]+q.hi[along])/2;return uv;
+  const lo=mid.map((v,i)=>Math.max(v-extent[i],q.lo[i])),hi=mid.map((v,i)=>Math.min(v+extent[i],q.hi[i]));
+  if(lo.every((v,i)=>v<=hi[i]+1e-9))out.push([lo,hi]);
+ }return out;
+}
+// Parent and child sides grow independently; normalized contact coordinates
+// must follow the actual attachment edge, rather than its birth-time position.
+function refreshAttachments(s){
+ for(const e of s.pools){
+  if(e.kind!=='edge'||e.surfaceEdge)continue;
+  const a=s.pools[e.a],b=s.pools[e.b];if(a.kind!=='face'||b.kind!=='face')continue;
+  const parent=s.grains[a.grain],child=s.grains[b.grain];if(child.parent!==parent.id)continue;
+  const [,mid]=edgePorts(child,child.supportFace,b.face),along=Math.abs(mid[0]-.5)<.25?0:1;
+  const childEnds=[0,1].map(t=>{const uv=[...mid];uv[along]=t;return uv;});
+  const parentEnds=childEnds.map(uv=>faceUV(parent,a.face,facePoint(child,b.face,uv)));
+  let lo=0,hi=1;
+  for(let i=0;i<2;i++){
+   const x=parentEnds[0][i],d=parentEnds[1][i]-x;
+   if(Math.abs(d)<1e-12){if(x< -1e-8||x>1+1e-8){hi=-1;break;}}
+   else{const t0=-x/d,t1=(1-x)/d;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));}
+  }
+  e.contactClosed=hi<lo;if(e.contactClosed){e.connected=false;continue;}
+  for(const [ends,port,extent]of [[parentEnds,'portA','contactA'],[childEnds,'portB','contactB']]){
+   e[port]=ends[0].map((x,i)=>clamp(x+(ends[1][i]-x)*(lo+hi)/2,0,1));
+   e[extent]=ends[0].map((x,i)=>Math.abs(ends[1][i]-x)*(hi-lo)/2);
+  }
  }
- return null;
 }
 export function stepWetRegions(s,dt,{geometry,exchange,react,neighbors}){
- refreshBridges(s);
+ refreshAttachments(s);refreshBridges(s);
  for(const id of s.sources){const p=s.pools[id],v=s.settings.feed*dt/s.sources.length;p.water+=v;p.salt+=v*s.settings.salinity;s.ledger.incomingWater+=v;s.ledger.incomingSalt+=v*s.settings.salinity;}
  for(const p of s.pools)if(p.regions)mergeWetRegions(s,p);
  const original=s.pools.length,geoms=s.pools.map(p=>geometry(s,p)),requests=[],seen=new Set();
@@ -90,26 +126,36 @@ export function stepWetRegions(s,dt,{geometry,exchange,react,neighbors}){
  // Resolve all exposed contacts before any pair drains a spot. Multiple
  // disconnected arrivals on one face acquire independent retained reservoirs.
  for(const e of s.pools){
-  if(e.kind!=='edge')continue;
+  if(e.kind!=='edge'||e.contactClosed)continue;
   const a=s.pools[e.a],b=s.pools[e.b];
   for(const [from,to,portFrom,portTo,extent]of [[a,b,e.portA,e.portB,e.contactA],[b,a,e.portB,e.portA,e.contactB]]){
    for(const r of from.regions??[from]){
     if(r.water<=0)continue;
-    const uv=from.regions?(e.surfaceEdge?edgePort(s,from,r,portFrom):contactPoint(s,from,r,portFrom,extent)):null;
+    const contactExtent=extent?[...extent]:[0,0];if(e.surfaceEdge)contactExtent[1-(Math.abs(portFrom[0]-.5)>.25?0:1)]=.5;
+    const uv=from.regions?contactPoint(s,from,r,portFrom,contactExtent):null;
     if(from.regions&&!uv)continue;
-    const dest=from.regions&&to.regions?faceUV(s.grains[from.grain],to.face,facePoint(s.grains[from.grain],from.face,uv)).map(v=>clamp(v,0,1)):portTo;
-    const other=to.regions?at(s,to,dest):to;
-    const ka=from.regions?'r'+r.id:'p'+from.id,kb=to.regions?'r'+other.id:'p'+to.id,key=e.id+':'+[ka,kb].sort().join(':');
-    if(seen.has(key))continue;seen.add(key);
-    requests.push({e,a:r,b:other,ga:geoms[from.id],gb:geoms[to.id]});
+    const dest=from.regions&&to.regions?faceUV(s.grains[to.grain],to.face,facePoint(s.grains[from.grain],from.face,uv)).map(v=>clamp(v,0,1)):portTo;
+    const project=v=>faceUV(s.grains[to.grain],to.face,facePoint(s.grains[from.grain],from.face,v)).map(x=>clamp(x,0,1));
+    const spans=from.regions&&to.regions?contactSpans(s,from,r,portFrom,contactExtent).map(pair=>pair.map(project)):[];
+    // If any part of the same wet contact already reaches a receiving region,
+    // feed that region. Moving a representative point must not create a second
+    // arrival across an edge that is already continuously wet.
+    const existing=to.regions?.filter(other=>spans.some(([a,b])=>reaches(s,to,other,a.map((v,i)=>(v+b[i])/2),a.map((v,i)=>Math.abs(v-b[i])/2))))??[];
+    const receivers=existing.length?existing:[to.regions?at(s,to,dest):to];
+    for(const other of receivers){
+     const ka=from.regions?'r'+r.id:'p'+from.id,kb=to.regions?'r'+other.id:'p'+to.id,key=e.id+':'+[ka,kb].sort().join(':');
+     if(seen.has(key))continue;seen.add(key);
+     requests.push({e,a:r,b:other,ga:geoms[from.id],gb:geoms[to.id]});
+    }
    }
   }
  }
+ const counts=new Map();for(const {e}of requests)counts.set(e.id,(counts.get(e.id)??0)+1);
  if(s.tick%2)requests.reverse();
- for(const {e,a,b,ga,gb}of requests){const g=geoms[e.id],conductance=s.settings.mobility*g.width*g.aperture**3/(12*g.length);exchange(a,b,ga,gb,conductance,dt);e.connected=a.water>0&&b.water>0;}
+ for(const {e,a,b,ga,gb}of requests){const g=geoms[e.id],conductance=s.settings.mobility*g.width*g.aperture**3/(12*g.length*counts.get(e.id));exchange(a,b,ga,gb,conductance,dt);e.connected=a.water>0&&b.water>0;}
  const bridges=s.pools.filter(p=>p.kind==='bridge');if(s.tick%2)bridges.reverse();
  for(const e of bridges){
-  const g=geoms[e.id];if(g.closed){if(!e.wasClosed)s.events.closures++;e.wasClosed=true;continue;}e.wasClosed=false;
+  const g=geoms[e.id];if(g.closed){if(!e.wasClosed)s.events.closures++;e.wasClosed=true;e.connected=false;e.lastFlux=0;continue;}e.wasClosed=false;
   const pa=s.pools[e.a],pb=s.pools[e.b];
   let [a,b]=bridgeContacts.get(e.id);
   if(e.water<g.capacity*(1-1e-10))e.connected=false;

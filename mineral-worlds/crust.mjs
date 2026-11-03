@@ -19,10 +19,11 @@ function radius(g,dx,dz){const c=Math.cos(g.angle),sn=Math.sin(g.angle),x=c*dx+s
 function addPool(s,grain,face){const p={id:s.pools.length,kind:'face',grain,face,water:0,salt:0,residue:0,hazard:0,births:0,threshold:-Math.log(Math.max(EPS,random(s.seed,s.pools.length+507)))};if(s.wetting==='regions')p.regions=[];s.pools.push(p);return p.id;}
 function addTrack(s,a,b,kind,carrier=null){const p={id:s.pools.length,kind,a,b,carrier,water:0,salt:0,residue:0,hazard:0,births:0,threshold:-Math.log(Math.max(EPS,random(s.seed,s.pools.length+507))),owner:a,connected:false,maxWetFraction:0,anchor:null};s.pools.push(p);return p.id;}
 function addGrain(s,x,z,y,size,angle,authored,parent=null){const g={id:s.grains.length,x,z,angle,faces:[size[0]/2,-size[0]/2,size[2]/2,-size[2]/2,y+size[1],y],authored,parent,born:s.time,basePool:null,topPool:null};s.grains.push(g);return g;}
-export function createCrust({rows=4,seed=31,settings={},setup='blocks',arrangement='neighbors',tilt=0,wetting='single',bridgeReach=.08}={}){
+export function createCrust({rows=4,seed=31,settings={},setup='blocks',arrangement='neighbors',tilt=0,wetting='single',bridgeReach=.08,supply='all'}={}){
+ if(!['all','local'].includes(supply))throw Error('Unknown basal supply');
  if(!['single','regions'].includes(wetting))throw Error('Unknown wetting model');
  if(wetting==='regions'&&setup!=='neighbors')throw Error('Separate regions require exposed crystal faces');
- if(setup==='neighbors')return createNeighbors({seed,settings,arrangement,tilt,wetting,bridgeReach});
+ if(setup==='neighbors')return createNeighbors({seed,settings,arrangement,tilt,wetting,bridgeReach,supply});
  if(setup!=='blocks')throw Error('Unknown crust setup');
  if(!Number.isInteger(rows)||rows<1||!Number.isSafeInteger(seed))throw Error('Invalid crust setup');
  const s={model:CRUST_MODEL,seed,rows,time:0,tick:0,settings:{...DEFAULTS},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
@@ -56,11 +57,12 @@ function faceNetwork(s,g,supportFace=5){
   const id=addTrack(s,g.facePools[a],g.facePools[b],'edge'),p=s.pools[id];[p.portA,p.portB]=edgePorts(g,a,b);p.surfaceEdge=true;
  }
 }
-function createNeighbors({seed,settings,arrangement,tilt,wetting,bridgeReach}){
+function createNeighbors({seed,settings,arrangement,tilt,wetting,bridgeReach,supply}){
  if(!['neighbors','arcs','spiral'].includes(arrangement))throw Error('Unknown seed arrangement');positive(tilt,'seed tilt');
  if(!Number.isSafeInteger(seed))throw Error('Invalid crust seed');
  const s={model:CRUST_MODEL,setup:'neighbors',faceModel:arrangement!=='neighbors'||tilt>0?'oriented-contact-v3':'exposed-contact-v2',arrangement,tilt,seed,rows:2,time:0,tick:0,settings:{...DEFAULTS,feed:0,salinity:1.6,evaporation:.006,mobility:12000,growth:.012,nucleation:8},grains:[],pools:[],sources:[],ledger:{initialWater:0,initialSalt:0,incomingWater:0,incomingSalt:0,evaporated:0,deposited:0},events:{nucleations:0,dryouts:0,closures:0}};
  if(wetting==='regions'){if(!Number.isFinite(bridgeReach)||bridgeReach<=0)throw Error('Invalid bridge reach');Object.assign(s,{wetting,bridgeReach,nextRegion:0});}
+ if(supply==='local')s.supply='local';
  const source=addPool(s,null,'base');Object.assign(s.pools[source],{kind:'junction',walls:[],x:0,z:0});delete s.pools[source].regions;s.sources=[source];
  const seeds=arrangement==='neighbors'?[[0,0,.22,.08],[-.29,-.06,.25,-.06],[.28,.035,.23,.12],[.015,-.29,.24,-.1],[-.045,.29,.21,.04]]:[];
  if(arrangement==='arcs')for(let ring=0;ring<3;ring++){const radius=.43+ring*.43,count=5+ring*3;for(let i=0;i<count;i++){const angle=-2.25+4.5*i/(count-1);seeds.push([Math.cos(angle)*radius,Math.sin(angle)*radius,.24,angle+PI/2]);}}
@@ -72,6 +74,7 @@ function createNeighbors({seed,settings,arrangement,tilt,wetting,bridgeReach}){
   const g=addGrain(s,x,z,0,[size,size,size],angle,true);
   if(arrangement!=='neighbors'||tilt>0){g.basis=seedBasis(angle,tilt*(.4+.6*random(seed,g.id+1200)));g.origin=[x,0,z];g.faces=[size/2,-size/2,size/2,-size/2,size/2,-size/2];g.origin[1]=-frameBounds(g)[2]+1e-9;}
   faceNetwork(s,g,g.basis?-1:5);
+  if(supply==='local'&&g.id!==0)continue;
   // Authored basal supply contacts the lowest corner, not an invented mid-face inlet.
   if(g.basis){const axes=grainBasis(g),local=axes.map((axis,i)=>(axis[1]>0?-1:1)*size/2),point=grainPoint(g,local);
    for(let face=0;face<6;face++){const uv=faceUV(g,face,point),frame=faceFrame(g,face),onPlane=Math.abs(dot(point.map((v,i)=>v-frame.origin[i]),frame.normal))<1e-8;
@@ -325,6 +328,7 @@ export function restoreCrust(value){
  for(const k of ['nucleations','dryouts','closures'])if(!Number.isSafeInteger(s.events?.[k])||s.events[k]<0)throw Error('Invalid event counter');
  for(const [i,g]of s.grains.entries())if(g.id!==i||g.faces?.length!==6||![g.x,g.z,g.angle,...g.faces].every(Number.isFinite)||grainDimensions(g).some(x=>x<=0)||typeof g.authored!=='boolean'||g.parent!=null&&(!s.grains[g.parent]||g.parent>=i))throw Error('Invalid grain');
  for(const g of s.grains)if(g.basis){if(s.setup!=='neighbors'||s.faceModel!=='oriented-contact-v3')throw Error('Oriented grain requires oriented face model');if(g.origin?.length!==3||!g.origin.every(Number.isFinite)||g.basis.length!==3||g.basis.some(a=>a?.length!==3||!a.every(Number.isFinite))||g.basis.some((a,i)=>g.basis.some((b,j)=>Math.abs(dot(a,b)-(i===j?1:0))>1e-8))||dot(cross(g.basis[0],g.basis[1]),g.basis[2])<.99999999)throw Error('Invalid grain frame');}
+ if(s.supply!=null&&!['all','local'].includes(s.supply))throw Error('Invalid basal supply');
  if(s.arrangement!=null&&!['neighbors','arcs','spiral'].includes(s.arrangement))throw Error('Invalid seed arrangement');if(s.tilt!=null)positive(s.tilt,'seed tilt');
  for(const [i,p]of s.pools.entries()){
   if(p.id!==i||!['face','junction','gap','film','branch','edge','bridge'].includes(p.kind))throw Error('Invalid pool');for(const k of ['water','salt','residue','hazard','births','threshold'])positive(p[k],k);if(p.threshold===0||!Number.isSafeInteger(p.births))throw Error('Invalid nucleation clock');
@@ -343,4 +347,4 @@ export function restoreCrust(value){
  if(s.wetting==='regions')validateRegions(s);
  return s;
 }
-export function readCrust(s){const water=s.pools.reduce((a,p)=>a+p.water,0),solute=s.pools.reduce((a,p)=>a+p.salt,0),residue=s.pools.reduce((a,p)=>a+p.residue,0);return {model:s.model,wetting:s.wetting??'single',bridgeReach:s.bridgeReach??null,regions:s.pools.reduce((n,p)=>n+(p.regions?.filter(r=>r.water>0).length??0),0),bridges:s.pools.filter(p=>p.kind==='bridge').length,filledBridges:s.pools.filter(p=>p.kind==='bridge'&&p.connected).length,bridgeThroughput:s.pools.reduce((n,p)=>n+(p.throughput??0),0),setup:s.setup??'blocks',arrangement:s.arrangement??'neighbors',tilt:s.tilt??0,time:s.time,tick:s.tick,settings:{...s.settings},grains:s.grains.length,authored:s.grains.filter(g=>g.authored).length,nuclei:s.events.nucleations,tracks:s.pools.filter(p=>!reservoir(p)).length,wet:s.pools.filter(p=>p.water>0).length,connected:s.pools.filter(p=>p.connected).length,water,solute,unresolvedDrySalt:residue,deposited:s.ledger.deposited,waterError:water+s.ledger.evaporated-s.ledger.initialWater-s.ledger.incomingWater,saltError:solute+residue+s.ledger.deposited-s.ledger.initialSalt-s.ledger.incomingSalt,events:{...s.events},provenance:s.wetting==='regions'?'Separate connected wet regions; geometry-derived short bridges; finite local growth/birth competition; reduced uncalibrated pressure and wetting laws':s.setup==='neighbors'?`Authored ${s.arrangement??'neighbors'} seed layout; face-local films and edge ports; shared basal supply; phenomenological nucleation; no reconstructed pore network`:'Authored seed grains; reduced capillary slots and one-sided surface-film strips; phenomenological interfacial nucleation; dimensionless, uncalibrated'};}
+export function readCrust(s){const water=s.pools.reduce((a,p)=>a+p.water,0),solute=s.pools.reduce((a,p)=>a+p.salt,0),residue=s.pools.reduce((a,p)=>a+p.residue,0);return {model:s.model,wetting:s.wetting??'single',supply:s.supply??'all',bridgeReach:s.bridgeReach??null,regions:s.pools.reduce((n,p)=>n+(p.regions?.filter(r=>r.water>0).length??0),0),bridges:s.pools.filter(p=>p.kind==='bridge').length,filledBridges:s.pools.filter(p=>p.kind==='bridge'&&p.connected).length,bridgeThroughput:s.pools.reduce((n,p)=>n+(p.throughput??0),0),setup:s.setup??'blocks',arrangement:s.arrangement??'neighbors',tilt:s.tilt??0,time:s.time,tick:s.tick,settings:{...s.settings},grains:s.grains.length,authored:s.grains.filter(g=>g.authored).length,nuclei:s.events.nucleations,tracks:s.pools.filter(p=>!reservoir(p)).length,wet:s.pools.filter(p=>p.water>0).length,connected:s.pools.filter(p=>p.connected).length,water,solute,unresolvedDrySalt:residue,deposited:s.ledger.deposited,waterError:water+s.ledger.evaporated-s.ledger.initialWater-s.ledger.incomingWater,saltError:solute+residue+s.ledger.deposited-s.ledger.initialSalt-s.ledger.incomingSalt,events:{...s.events},provenance:s.wetting==='regions'?'Separate connected wet regions; geometry-derived short bridges; finite local growth/birth competition; reduced uncalibrated pressure and wetting laws':s.setup==='neighbors'?`Authored ${s.arrangement??'neighbors'} seed layout; face-local films and edge ports; shared basal supply; phenomenological nucleation; no reconstructed pore network`:'Authored seed grains; reduced capillary slots and one-sided surface-film strips; phenomenological interfacial nucleation; dimensionless, uncalibrated'};}
