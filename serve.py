@@ -4229,6 +4229,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_mesh_lods_register()
         elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
+        elif parsed.path == "/api/stock-families":
+            self.handle_stock_family_save()
         elif parsed.path == "/api/scene-library-import":
             self.handle_scene_library_import()
         elif parsed.path == "/api/save-scene":
@@ -5088,6 +5090,18 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 400)
         except OSError as error:
             self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 500)
+
+    def handle_stock_family_save(self):
+        from stock_family_store import save_family, StockConflict
+        try:
+            payload=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))))
+            self.send_json(save_family(BROWSE_ROOTS['generated-meshes'],payload,_atomic_write_json))
+        except StockConflict as error:
+            self.send_json({'error':str(error),'phase':'stock-family-persistence'},409)
+        except (ValueError,TypeError,KeyError) as error:
+            self.send_json({'error':str(error),'phase':'stock-family-persistence'},400)
+        except OSError as error:
+            self.send_json({'error':str(error),'phase':'stock-family-persistence'},500)
 
     def handle_ingest_mesh(self):
         """Persist a generated GLB by content hash for the existing scene loader."""
