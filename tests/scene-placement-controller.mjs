@@ -220,3 +220,12 @@ test('overlay master clears the pivot diamond and axis guide without altering se
  assert.equal(f.overlay.innerHTML,'','modal axis guide obeys the same overlay master');
  assert.ok(f.tools.state().active);visible=true;f.tools.draw();assert.match(f.overlay.innerHTML,/stroke-dasharray/);f.tools.finish(false);
 });
+
+test('undo from a focused inspector button uses scene history without enabling transform shortcuts',()=>{
+ const f=fixture(),button=new Element();button.tagName='BUTTON';f.tools.addHistoryScope(button);
+ f.viewport.contains=()=>false;f.document.activeElement=button;f.tools.edits.apply('kiln',{position:[2,0,0]});
+ emit(f.document,'keydown',{key:'g',target:button});assert.equal(f.tools.state().modal,null);
+ const undo=emit(f.document,'keydown',{key:'z',metaKey:true,target:button});
+ assert.equal(undo.defaultPrevented,true);assert.deepEqual(f.pose.position,[0,0,0]);
+ emit(f.document,'keydown',{key:'z',metaKey:true,shiftKey:true,target:button});assert.deepEqual(f.pose.position,[2,0,0]);
+});

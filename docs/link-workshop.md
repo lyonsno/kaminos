@@ -23,6 +23,34 @@ editing after closing the experiment. Agent operations are the same domain
 operations as the controls: append, select, move, piston, mode, tool, play,
 pause, period, restore, snapshot and frame. There is no fixed link-count limit.
 
+cosine timing; Pause holds; Return to pose restores the selected authored endpoint. All numeric tuning uses Kaminos number-drag controls.
+
+Mechanisms are ordinary authored scene objects with source `kaminos:link-mechanism`.
+Save / Load use the existing server scene library. Recipes, poses, phase, root
+transforms and attachment frames reconstruct on reopen, without an experiment.
+Closing the workshop leaves the construction in the scene. JSON import/export
+remains available under the inspector's Recipe section.
+
+Select a joint, choose a mesh in Object to attach, and Attach object. Placement
+is preserved. Select the payload and use native G/R/S to edit its offset.
+Detach releases it at its displayed pose. GLB, PBR and procedural meshes are
+supported; simulation emitters require another binding. Mechanism roots can be attached and keep their independent motion.
+Missing payloads remain visible as unresolved references.
+
+Construction/pose tools occupy the viewport header. Play/Pause holds and resumes;
+Return to pose restores the authored endpoint. Cycle position and phase offset
+use native number-drag fields; one unit is one cycle. Shift-Space toggles playback
+when these controls are visible. Space remains command search. Delete branch
+removes descendants and releases their attachments through Undo. Add another
+mechanism creates an independent construction. Command search also has Add Mechanism.
+
+Attachments retain a scene object ID, joint and a rigid local mounting frame.
+Scaling the assembly moves its joints while payload dimensions stay independently
+authored; scale the payload itself to resize it. Native Undo/Redo restores offsets
+at the current playback position. Construction history survives deletion and
+reconstruction of the mechanism. Assembly roots remain movable. Parent-null nodes are fixed relative to the assembly. Current
+playback directly places objects; contact, forces and propulsion are future work.
+
 The first handoff tests construction usability. It does not establish physical
 collision, actuator stroke clearance, closed-loop constraint solution or a
 successful generated-shell pipeline. Analytical geometry is constructed from
@@ -74,3 +102,14 @@ This slice prepares the spatial input for a generator. It has not established th
 Choosing Draw links, Select / move or Connect piston enters native joint editing on the workshop. The viewport notice names the active mode. Draw links shows branch targets and a pending span on the construction plane. Connect piston highlights available joints in green, the first mount in amber, and unavailable mounts in red; hovering previews the connection. Click a valid second joint to complete and return to Select / move. Escape clears the first mount, then exits the tool; Tab leaves component editing. Pose changes, playback and component exit clear pending connections. These guides describe authoring eligibility, not mechanical collision clearance.
 
 Replacement history snapshots serialize only returned bodies. An empty replacement restore preserves an already analytical body view. Motion-space reservation remains an explicit operation; no periodic envelope reconstruction runs during playback.
+
+
+## Mounts and compound construction
+
+Place mount in the viewport adds a construction-frame mount on a link or an object-local mount on an ordinary mesh surface. Select the mechanism and enter component editing with Tab first. Mounts have visible rings and axes; G/R and the native transform inspector edit their position/orientation. Add mount in the inspector places a mount at the chosen object's origin or selected joint. A mechanism in that chooser means its assembly root; select that mechanism itself to author mounts on its moving links.
+
+Snap mounts uses two clicks, source then destination, and moves the source object once. Fasten mounts retains that relationship. Choose an object-owned source mount first; a link's own joint mount is a destination. The inspector offers the same source/destination operations. Existing binding owners must be detached before snapping or fastening again; cyclic fastening requires a constraint solver and is rejected without changing the construction.
+
+Piston mounts connects any two mounts in this mechanism's mounting list. Its barrel length is fixed at creation and its extension follows the separation. Preview piston travel shows a sampled sweep over this construction's A/B interpolation, with externally driven objects held at their current placement. This is a visual preview, not a certified extrema calculation or force solver. A warning identifies when a requested pose puts the endpoint inside the barrel.
+
+A second mechanism can be fastened by an assembly-root mount and run its own period/phase. The scene service advances all mechanism clocks, places connected objects in dependency order, and then presents them. Mounts, connections and mounted pistons save with the ordinary mechanism scene record. Undo of fastening restores the object's placement as well as the relationship. Generated-body appearance remains a separate consumer; mounts refer to construction frames rather than mesh vertex identities.
