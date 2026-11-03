@@ -34,6 +34,11 @@ test('detail switching preserves optics and source identity; full triangles load
   await c.operations.setSurfelFactor('adaptive');assert.equal(c.read().factor,'adaptive');assert.equal(c.read().splats.depthTolerance,'per-splat');assert.equal(c.read().splats.ior,1.7);
   await assert.rejects(()=>c.operations.setRepresentation('surfels'),/uniform detail/i);assert.equal(c.read().representation,'splats');
   await c.operations.setSurfelFactor(4);assert.equal(c.read().splats.depthTolerance,'uniform');
+  await c.operations.setRepresentation('hybrid');
+  assert.equal(c.read().representation,'hybrid');
+  assert.equal(asset.visible,true,'hybrid mode must display the mesh region');
+  assert.equal(roots.find(r=>r.name==='Deferred surface splats').visible,true,'hybrid mode must display the splat region');
+  assert.equal(roots.find(r=>r.name==='TRELLIS surfels').visible,false,'hybrid mode must hide circle surfels');
   await c.operations.setRepresentation('surfels');assert.equal(c.read().surfels.ior,1.7);
   const pending=c.operations.setRepresentation('rawMesh');await trianglesStarted;
   await c.operations.setRepresentation('mesh');releaseTriangles();await pending;
