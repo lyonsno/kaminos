@@ -14,6 +14,7 @@ export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
 export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
 struct Shape { material:vec4<u32>, velocity:vec4<u32>, ratio:vec4<f32> };
 override GENERAL_TRANSFER:bool=false;
+override SHRED_ONLY:bool=false;
 ${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> s:Shape;
 @group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
@@ -62,8 +63,10 @@ fn restrictGeneral(c:vec3<u32>){
  let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;
  for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
-  let fi=idx(vec3<u32>(p),s.material.xyz);a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;
-  front+=fineFront[fi]*w;wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
+  let fi=idx(vec3<u32>(p),s.material.xyz);
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
+  else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
+  wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
  if(s.velocity.w==1u){var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=transferFace(c,axis,false);}coarse[ci*4u]=vec4<f32>(v,0);}
@@ -79,8 +82,9 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
  var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
   let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz);let blocked=solid(vec3<i32>(p));
-  a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;
-  front+=fineFront[fi]*weight;wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
+  else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
+  wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
   if(s.velocity.w==1u){for(var axis=0u;axis<3u;axis++){var next=vec3<i32>(p);next[axis]++;if(o[axis]==r-1u&&!blocked&&!solid(next)){vel[axis]+=fine[fi*4u][axis]*weight;}}}
  }}}
@@ -152,9 +156,14 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
  for(const [buffer,seed] of [[shape,0],[seedShape,1]]){const data=new ArrayBuffer(48);new Uint32Array(data).set([...plan.materialDims,Math.floor(plan.materialPerVelocity),...d,seed]);new Float32Array(data)[8]=plan.materialPerVelocity;device.queue.writeBuffer(buffer,0,data);}
  const module=device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL});
  const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity)}}})]));
+ const restrictions=new Map([[false,pipelines.restrictScalars]]);
+ let activeShredOnly=false;
  let current=0,seed=true,bindings,prior=[];
- function prepare(f) {
-  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current];
+ function prepare(f,{shredOnly=activeShredOnly}={}) {
+  activeShredOnly=shredOnly;
+  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity),SHRED_ONLY:shredOnly}}}));
+  pipelines.restrictScalars=restrictions.get(shredOnly);
+  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly];
   if(bindings&&resources.every((v,i)=>v===prior[i]))return;
   prior=resources;
   const bs=[shape,f.fluid,fluid[current],fluid[current],f.front,front[0],f.quench,quench[0]];

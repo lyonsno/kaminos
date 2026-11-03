@@ -8,6 +8,29 @@ import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
+const transfer = readFileSync(new URL('../volume-fine-grid.mjs', import.meta.url), 'utf8');
+
+test('candidate preserves legacy physical transport and explicitly bypasses carrier tail arithmetic', () => {
+  const step = balancedWgslBlock(source, 'fn cs(@builtin');
+  assert.match(balancedWgslBlock(step, 'if (SHRED_ONLY)'), /thermalAdvection\(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection\)/);
+  for (const marker of ['// Retired activity sponge.', '// Retired activity quenching.']) {
+    const tail = step.slice(step.indexOf(marker));
+    assert.ok(step.includes(marker));
+    assert.match(balancedWgslBlock(tail, 'if (!SHRED_ONLY)'), /flameDetail = flameDetail \* stepRate/);
+  }
+});
+
+test('split-grid restriction specializes away discarded activity reads', () => {
+  assert.match(transfer, /override SHRED_ONLY:bool=false;/);
+  for (const name of ['restrictGeneral', 'restrictScalars']) {
+    const body = balancedWgslBlock(transfer, `fn ${name}(`);
+    const only = balancedWgslBlock(body, 'if(SHRED_ONLY)');
+    assert.match(only, /d.y\+=fine\[fi\*4u\+3u\]\.y/);
+    assert.doesNotMatch(only, /fineFront|fi\*4u\+2u/);
+  }
+  assert.match(transfer, /SHRED_ONLY:shredOnly/);
+  assert.match(source, /owner.prepare\(fineTransferInputs\(\),\{shredOnly:state.appearanceModel\?\.effective==='shred-only'\}\)/);
+});
 
 test('one-field Shred is opt-in, persisted and reachable from Flow properties', () => {
   assert.ok(core.APPEARANCE_MODELS.includes('shred-only'), 'one-field Shred must be an actual selectable model');

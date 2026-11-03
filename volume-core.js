@@ -6993,6 +6993,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = vec4<f32>(0.0, macCormackSlot(cellI, idx, backCell, forwardCell, 3u).y, 0.0, 0.0);
     } else {
       material = vec4<f32>(sampleFluidSlotMasked(backCell, 1u).xyz, 0.0);
+      if (!macCormack && !commonGasTransport) {
+        material = vec4<f32>(thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection).xyz, 0.0);
+      }
       microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);
     }
   } else if (macCormack) {
@@ -7772,6 +7775,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: the side and floor sponge regions are ambient air, so the
   // oxidizer relaxes toward ambient at the fuel's sponge rate there.
   oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
+  // Retired activity sponge.
+  if (!SHRED_ONLY) {
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
   flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
@@ -7779,9 +7784,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   combustionFrontTopology = combustionFrontTopology * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   microSmoke = microSmoke * stepRate(mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade));
-  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
   emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
+  }
+  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
   // skipped and a wetted cell only decays.
@@ -7832,6 +7838,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
   heat = heat * stepRate(1.0 - localQuenchSuppression * 0.025);
   fuel = fuel * stepRate(1.0 - localQuenchSuppression * 0.030);
+  // Retired activity quenching.
+  if (!SHRED_ONLY) {
   flame = flame * stepRate(1.0 - localQuenchSuppression * 0.025);
   ember = ember * stepRate(1.0 - localQuenchSuppression * 0.025);
   flameDetail = flameDetail * stepRate(1.0 - localQuenchSuppression * 0.035);
@@ -7839,6 +7847,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = combustionFrontTopology * stepRate(1.0 - localQuenchSuppression * 0.028);
   fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
   emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
+  }
   // Physics appearance: soot burns out where it is hot and meets oxygen
   // (volume-physics-appearance.mjs); exactly 1 at rate 0.
   if (reactantOn) {
@@ -7856,7 +7865,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let compact = compactAppearanceOn();
   // compact-3 stores flame, interface shred and combustion front only; the rest
   // is rebuilt at the slot samplers (expandCompactCarriers).
-  if (compact) {
+  if (SHRED_ONLY) {
+    fluidDst[base + 2u] = vec4<f32>(0.0);
+    fluidDst[base + 3u] = vec4<f32>(0.0, clamp(interfaceShred, 0.0, 1.8), 0.0, 0.0);
+  } else if (compact) {
     fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(interfaceShred, 0.0, 1.8), 0.0, clamp(combustionFront, 0.0, 1.8));
   } else {
     fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
@@ -17750,7 +17762,7 @@ export function createKaminosVolumePrototype({
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){
-    owner.prepare(fineTransferInputs());owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
+    owner.prepare(fineTransferInputs(),{shredOnly:state.appearanceModel?.effective==='shred-only'});owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
     const i=owner.current;
     const group=createFluidRenderBindGroup({label:'independent fine velocity',uniformsBuffer:owner.uniform,fluidRead:owner.fluid[i],fluidWrite:owner.fluid[1-i],frontRead:owner.front[0],frontWrite:owner.front[1],quenchRead:owner.quench[0],quenchWrite:owner.quench[1],reactantRead:owner.reactant[0],reactantWrite:owner.reactant[1],waveletRead:owner.wavelet[i],waveletWrite:owner.wavelet[1-i],solidView:owner.solid.createView(),expansionTexture:owner.burn,lowerFaceTexture:owner.lower,forceTexture:owner.force,captureRows:nonRidgeOpticalCaptureRowBuffer});
     const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(entry==='cs'||entry==='csTransportPredict'?simulationPipeline(entry,{VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/owner.plan.materialPerVelocity}):owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};
