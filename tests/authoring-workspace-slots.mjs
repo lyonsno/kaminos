@@ -63,3 +63,22 @@ test('document commands remain in the shared header while object tools return to
   }
   assert.equal(saves,2,'one bound Save command survives both workspace transitions');
 });
+
+import fs from 'node:fs';
+
+test('viewport toolbar owns Mode, Ground Snap, Transform menu, and Mesh Shading while Inspector owns progressive-disclosure state', () => {
+  const workspaceJs = fs.readFileSync(new URL('../authoring-workspace.mjs', import.meta.url), 'utf8');
+  const workspaceCss = fs.readFileSync(new URL('../authoring-workspace.css', import.meta.url), 'utf8');
+  const repetitionJs = fs.readFileSync(new URL('../scene-repetition-inspector.mjs', import.meta.url), 'utf8');
+  const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(workspaceJs, /authoring-object-tools/, 'Object tools drawer is removed from the bottom of the Selection inspector');
+  assert.match(workspaceJs, /id="authoring-edit-mode"/, 'Viewport toolbar includes far-left Object/Edit Mode toggle');
+  assert.match(workspaceJs, /id="authoring-snap-slot"/, 'Viewport toolbar includes ground snap slot next to gizmo tools');
+  assert.match(workspaceJs, /id="authoring-transform-menu"/, 'Viewport toolbar includes Transform operations popover');
+  assert.match(workspaceJs, /id="authoring-mesh-shading-slot"/, 'Viewport settings popover includes mesh diagnosis shading slot');
+  assert.match(workspaceCss, /#authoring-inspector \[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/, 'Inspector enforces [hidden] over .btn display rules');
+  assert.match(repetitionJs, /repetition-center-fields'\)\.hidden\s*=/, 'Repetition inspector hides center fields when inactive');
+  assert.match(indexHtml, /input\.closest\('label'\)\.hidden\s*=\s*!burnInput\.checked/, 'Combustion inspector hides Emission gain when Burnable wood is unchecked');
+  assert.match(indexHtml, /detail\.closest\('label'\)\.hidden\s*=\s*!setting\.enabled/, 'Render inspector hides Proxy detail when GI proxy is unchecked');
+});

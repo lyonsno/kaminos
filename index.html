@@ -6549,7 +6549,7 @@ function updateTransformInspector() {
   inspector.hidden=!!workingScene.activeFieldId;
   inspector.dataset.componentEditing=String(!!sceneComponents?.active());
   document.body.dataset.componentEditing=inspector.dataset.componentEditing;
-  for(const button of document.querySelectorAll('#transform-bar button[onclick], #authoring-transform-slot button[onclick]'))if(/snapToGround|snapFaceToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
+  for(const button of document.querySelectorAll('#transform-bar button[onclick], #authoring-viewport-tools button[onclick]'))if(/snapToGround|snapFaceToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
@@ -11689,13 +11689,14 @@ async function initScene() {
   const cameraViewAction=id=>{if(id==='camera'){viewProjection.setOrthographic(false);sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);viewProjection.setOrthographic(true,{auto:true});};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
-  sceneComponents=createSceneComponentEdit({selected:()=>workingScene.selection.ids.length===1?workingScene.selection.activeId:null,cancel:()=>scenePlacementTools.finish(false),refresh:()=>{const entry=selectedPlacementEntry();currentMesh=entry?.object??null;if(currentMesh)attachViewportGizmo(currentMesh);else transformControls.detach();updateTransformInspector();markDirty();}});
+  sceneComponents=createSceneComponentEdit({selected:()=>workingScene.selection.ids.length===1?workingScene.selection.activeId:null,cancel:()=>scenePlacementTools.finish(false),refresh:()=>{const entry=selectedPlacementEntry();currentMesh=entry?.object??null;if(currentMesh)attachViewportGizmo(currentMesh);else transformControls.detach();updateTransformInspector();syncEditModeToolbar();markDirty();}});
   polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,ownerComponents:sceneComponents,
     objectFor:id=>{const record=workingScene.objects.find(item=>item.id===id);if(record?.object)sceneBeautyLods?.restoreHero?.(record.object);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
-    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection,snapFace:plane=>window.snapToGround({basePlane:plane})});
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>{syncEditModeToolbar();window._kaminosDirty?.();},separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection,snapFace:plane=>window.snapToGround({basePlane:plane})});
   window.kaminosPolyEdit=polyEdit.api;
+  window.kaminosToggleEditMode=()=>{try{if(polyEdit?.active())polyEdit.api.exit();else if(sceneComponents?.active())sceneComponents.toggle(selectedSceneObjectEntry()?.id);else if(!sceneComponents?.toggle(selectedSceneObjectEntry()?.id))polyEdit?.api.enter();}catch(error){setInfo(error.message);}syncEditModeToolbar();};
   const sceneCommandBlocked=()=>{
       const edit=scenePlacementTools.edits.state();
       if(authoringBusy||sceneDocument.state().blocked)return 'Finish the scene document action first';
@@ -21881,6 +21882,22 @@ document.getElementById('env-reset').onclick = () => {
 };
 
 window.kaminosApplyBurnerPreset=()=>window.kaminosBurnerAuthoring.add('burner-assembly');
+function syncEditModeToolbar() {
+  const modeBtn=document.getElementById('authoring-edit-mode'),submodes=document.getElementById('authoring-edit-submodes');
+  if(!modeBtn)return;
+  const polyActive=!!polyEdit?.active(),compActive=!!sceneComponents?.active(),active=polyActive||compActive;
+  modeBtn.setAttribute('aria-pressed',String(active));
+  modeBtn.textContent=active?'Edit Mode':'Object Mode';
+  const entry=selectedSceneObjectEntry();
+  modeBtn.disabled=!active&&(!entry||workingScene.selection.ids.length!==1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(entry.type));
+  if(submodes){
+    submodes.hidden=!polyActive;
+    if(polyActive){
+      const mode=polyEdit.api.read()?.mode||'vertex';
+      for(const b of submodes.querySelectorAll('[data-edit-mode]'))b.setAttribute('aria-pressed',String(b.dataset.editMode===mode));
+    }
+  }
+}
 function updateAuthoringPropertySelection() {
   const flame=document.getElementById('selected-flame-properties');
   if(flame)flame.hidden=selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE;
@@ -21893,7 +21910,10 @@ function updateAuthoringPropertySelection() {
   const summary=document.getElementById('water-simulation-summary');if(summary&&(workingScene.activeFieldId==='water-field'||selectedSceneObjectEntry()?.type===LOCAL_LIQUID_EMITTER_TYPE)){const state=authoredWaterSimulationState();summary.textContent=`${state.sourceCount} sources · ${state.particleCount.toLocaleString()} particles · ${waterFeature.host?'Current simulation':'Initial setup'} · Density passes ${state.settings.densityIterations} for all ${state.sourceCount} sources`;}
   syncBurnerInspector();
   syncSceneDataInspector();
-  document.querySelectorAll('#transform-bar button[onclick], #authoring-transform-slot button[onclick]').forEach(button=>{
+  syncEditModeToolbar();
+  const hideMeshActions=!selectedSceneObjectEntry()||workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
+  for(const id of ['authoring-snap-slot','authoring-transform-menu']){const el=document.getElementById(id);if(el)el.hidden=hideMeshActions||!!sceneComponents?.active();}
+  document.querySelectorAll('#transform-bar button[onclick], #authoring-viewport-tools button[onclick]').forEach(button=>{
     if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround|snapFaceToGround/.test(button.getAttribute('onclick'))) button.hidden=workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
   });
 }
@@ -25489,13 +25509,13 @@ function syncSceneDataInspector() {
     burnPanel.hidden=!canCollideWithFire(entry);
     const burnInput=document.getElementById('object-burnable');burnInput.disabled=!supported;burnInput.checked=entry?.burnable?.enabled===true;
     const burnAppearance=checkedBurnAppearance(entry?.burnable?.appearance??{profile:entry?.object?.userData?.kaminosPromptRelief?.appearance??'crust',glow:1});
-    for(const [key,id]of [['profile','object-burn-profile'],['glow','object-burn-glow']]){const input=document.getElementById(id);if(input){input.disabled=!supported||(key==='glow'&&false);if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=String(burnAppearance[key]);}}
+    for(const [key,id]of [['profile','object-burn-profile'],['glow','object-burn-glow']]){const input=document.getElementById(id);if(input){input.disabled=!supported||(key==='glow'&&false);input.closest('label').hidden=!burnInput.checked;if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=String(burnAppearance[key]);}}
     if(supported)syncBurnableStatus();else document.getElementById('object-burnable-status').textContent=reason;
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
     if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
       if(!editing){document.getElementById('object-gi-proxy').checked=setting.enabled;detail.value=setting.selection.faces?`faces:${setting.selection.faces}`:'error';if(setting.selection.maxError!=null)error.value=String(setting.selection.maxError);}
-      detail.disabled=!setting.enabled;error.closest('label').hidden=detail.value!=='error';error.disabled=!setting.enabled;
+      detail.disabled=!setting.enabled;detail.closest('label').hidden=!setting.enabled;error.closest('label').hidden=!setting.enabled||detail.value!=='error';error.disabled=!setting.enabled;
       const h=sceneGiProxies.get(entry.object),consumers=sceneGiProxies.consumers();
       // Not silent when nothing renders with proxies: the scene's GI is screen-space and sees only drawn geometry.
       const unused=consumers.length?'':' No GI pass uses proxies yet: the scene GI sees only the drawn mesh, so this setting does not change the image.';
