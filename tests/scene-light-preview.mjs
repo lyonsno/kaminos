@@ -174,3 +174,23 @@ test('preview retirement releases dependent lighting and Back restores its accep
  assert.equal(events.at(-1).volume_light_field_shared_source,'1');
  assert.equal(events.at(-1).volume_light_field_hybrid_shadow_resolution,'128','retain accepted lighting settings across temporary preview');
 });
+
+test('an older Back cannot adopt the generation of a later replacing GLB import',async()=>{
+ const state=context();await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ Object.assign(state,{authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
+ groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},
+ localLiquidDomainGuide:null,flameDomainGuide:null,sceneNavigation:null,sceneGiProxies:{clear(){},release(){}},
+ shouldClearSceneForImport:()=>true,resolveAssetArrivalMode:()=> 'preserve',applyAssetArrival:()=>false,
+ GLTFLoader:class{load(url,done){const scene=new THREE.Group();scene.name=url;done({scene});}},
+ registerSceneObject(object,metadata){const row={id:'replacement',object,...metadata};state.workingScene.put(row);return row;},
+ });
+ state.document.getElementById=()=>({classList:{add(){},remove(){}}});
+ const start=html.indexOf('async function showGLB('),end=html.indexOf('\n}',start)+2;vm.runInContext(html.slice(start,end),state);
+ const back=state.restoreAuthoredSceneFromPreview();await retiring;
+ const replacing=state.showGLB('/replacement.glb',{clear:true});await new Promise(r=>setImmediate(r));release();
+ assert.equal(await back,false,'obsolete Back must yield to the later replacing operation');
+ assert.ok(await replacing,'newer import must not be silently discarded');
+ assert.deepEqual(state.workingScene.objects.map(row=>row.id),['replacement']);assert.equal(state.greenroomPreviewState,null);
+});

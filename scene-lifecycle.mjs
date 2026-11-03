@@ -52,8 +52,8 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     try{
       await context.retire?.();
       if(!isCurrent())return false;
-      await change(isCurrent);
-      return isCurrent();
+      const result=await change(isCurrent);
+      return result!==false&&isCurrent();
     }finally{pendingClears--;}
   }
   function suspendPreview(){return previewTransition(()=>{
@@ -61,7 +61,8 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     for(const entry of snapshot.objects)roots.mount(entry,false);
     context.previewDetached?.();
   });}
-  function resumePreview(saved){return previewTransition(async isCurrent=>{
+  function resumePreview(saved,{beforeRestore=()=>{}}={}){return previewTransition(async isCurrent=>{
+    if(beforeRestore()===false)return false;
     const snapshot=scene.resumeMembership();
     for(const entry of scene.objects){roots.mount(entry,true);roots.resumed?.(entry);}
     context.restorePreview?.(saved);

@@ -6237,12 +6237,12 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   if (!greenroomPreviewState) return false;
   const state = greenroomPreviewState;
   const authored = state.authored;
-  await retireSceneFlame();
-  if(greenroomPreviewState!==state)return false;
-  removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
-  greenroomPreviewState = null;
-  updateGreenroomPreviewControls();
-  if(!await sceneLifecycle.resumePreview(authored))return false;
+  if(!await sceneLifecycle.resumePreview(authored,{beforeRestore(){
+    if(greenroomPreviewState!==state)return false;
+    removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
+    greenroomPreviewState = null;
+    updateGreenroomPreviewControls();
+  }}))return false;
   if (!options.silent) setInfo('Returned to scene');
   return true;
 }
