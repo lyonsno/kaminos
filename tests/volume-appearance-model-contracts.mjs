@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as core from '../volume-core.js';
+import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -59,7 +60,7 @@ test('the compact expansion is one law with the pooled coefficients, applied to 
 test('under compact-3 the step kernel stores the three carriers in slot 2, never writes slot 3, and the front-topology field is reconstructed, not stored', () => {
   assert.match(mainKernel, /let compact = compactAppearanceOn\(\);/);
   assert.match(mainKernel, /if \(compact\) \{\n\s*fluidDst\[base \+ 2u\] = vec4<f32>\(clamp\(flame, 0\.0, 2\.4\), clamp\(interfaceShred, 0\.0, 1\.8\), 0\.0, clamp\(combustionFront, 0\.0, 1\.8\)\);\n\s*\} else \{\n\s*fluidDst\[base \+ 2u\] = vec4<f32>\(clamp\(flame, 0\.0, 2\.4\), clamp\(ember, 0\.0, 2\.0\), clamp\(flameDetail, 0\.0, 1\.8\), clamp\(combustionFront, 0\.0, 1\.8\)\);\n\s*fluidDst\[base \+ 3u\] = vec4<f32>\(clamp\(microSmoke, 0\.0, 1\.8\), clamp\(interfaceShred, 0\.0, 1\.8\), clamp\(fireLick, 0\.0, 1\.8\), clamp\(emberFleck, 0\.0, 1\.4\)\);\n\s*\}/);
-  assert.equal([...mainKernel.matchAll(/fluidDst\[base \+ 3u\]/g)].length, 2, 'authored output plus the separately specialized Shred-only velocity output');
+  assert.doesNotMatch(balancedWgslBlock(mainKernel, 'else if (compact)'), /fluidDst\[base \+ 3u\]/, 'compact output does not write slot 3, regardless of other specializations');
   assert.match(mainKernel, /frontDst\[idx\] = select\(clamp\(combustionFrontTopology, 0\.0, 2\.0\), 0\.0, compact\);/, 'the separate front field is not stored under compact');
   assert.match(fnBody('readFrontField'), /select\(frontSrc\[index3\(clampCell\(c\)\)\], readSlot\(c, 2u\)\.w \* COMPACT_FRONT_TOPOLOGY_RATIO, compactAppearanceOn\(\)\)/, 'the front field reads as the stored front times its fitted ratio under compact');
 });

@@ -6994,6 +6994,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     } else {
       material = vec4<f32>(sampleFluidSlotMasked(backCell, 1u).xyz, 0.0);
       if (!macCormack && !commonGasTransport) {
+        let localMaterial = readSlot(cellI, 1u);
         material = vec4<f32>(thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection).xyz, 0.0);
       }
       microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);

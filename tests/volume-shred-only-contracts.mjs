@@ -13,6 +13,7 @@ const transfer = readFileSync(new URL('../volume-fine-grid.mjs', import.meta.url
 test('candidate preserves legacy physical transport and explicitly bypasses carrier tail arithmetic', () => {
   const step = balancedWgslBlock(source, 'fn cs(@builtin');
   assert.match(balancedWgslBlock(step, 'if (SHRED_ONLY)'), /thermalAdvection\(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection\)/);
+  assert.match(balancedWgslBlock(step, 'if (!macCormack && !commonGasTransport)'), /let localMaterial = readSlot\(cellI, 1u\);[\s\S]*thermalAdvection/);
   for (const marker of ['// Retired activity sponge.', '// Retired activity quenching.']) {
     const tail = step.slice(step.indexOf(marker));
     assert.ok(step.includes(marker));
