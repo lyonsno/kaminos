@@ -77,3 +77,18 @@ test('an empty experiment can start its first recipe without inheriting an unrel
  assert.deepEqual(h.c.decorate(h.get()).experiment,{id:'new-glove',title:'New glove'});
  assert.equal(h.c.decorate(h.get()).iteration,undefined);
 });
+
+test('reference edits retain experiment membership while clearing the old recipe lineage',()=>{
+ const h=harness(),experiment={id:'gloves',title:'Glove flight'};
+ h.c.recall({...entry(),experiment});h.c.editImage(entry('/selected.png'));
+ assert.equal(h.c.read().parent,null);assert.deepEqual(h.c.decorate(h.get()).experiment,experiment);
+ h.c.editImage({...entry('/other.png'),experiment:{id:'other',title:'Other flight'}});
+ assert.equal(h.c.decorate(h.get()).experiment.id,'other');
+});
+test('entering Generate from an experiment preserves its existing recipe but drops unrelated lineage',()=>{
+ const h=harness(),experiment={id:'gloves',title:'Glove flight'};
+ h.c.recall({...entry(),experiment});h.c.joinExperiment(experiment,{preserveRecipe:true});
+ assert.equal(h.c.read().parent.source,'/glove.png');
+ h.c.joinExperiment({id:'other',title:'Other flight'},{preserveRecipe:true});
+ assert.equal(h.c.read().parent,null);assert.equal(h.c.decorate(h.get()).experiment.id,'other');
+});

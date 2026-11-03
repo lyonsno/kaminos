@@ -82,3 +82,11 @@ test('page surface arrival uses current scene generation and rolls back failed i
  pending=null;context.recordImportedSceneObject=async()=>{throw Error('history unavailable');};
  await assert.rejects(add(entry),/history unavailable/);assert.equal(workingScene.objects.length,0);assert.equal(disposed,2);
 });
+
+test('loading collection choices for a direct experiment link does not fetch an unrelated catalogue',async()=>{
+ const requests=[],c=createAuthoringAssets({request:async url=>{requests.push(url);return url==='/api/roots'?{greenroom:{exists:true},'generated-meshes':{exists:true}}:{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[]};}});
+ assert.equal(await c.refresh({browse:false}),true);
+ assert.deepEqual(requests,['/api/roots']);
+ assert.ok(c.read().roots.some(r=>r.id==='agent-work'));
+ assert.ok(c.read().roots.some(r=>r.id==='image-experiments'));
+});

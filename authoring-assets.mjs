@@ -52,14 +52,15 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
   }
   return {
     read:()=>copy(state), browse, prepare,
-    async refresh() {
+    async refresh({browse:loadCollection=true}={}) {
       try {
         const roots = await get('/api/roots');
         state.roots = Object.entries(roots).filter(([id,value])=>collections.has(id)&&value.exists).map(([id,value])=>({id,...value}));
         if(state.roots.some(root=>root.id==='greenroom'))state.roots.push({id:'agent-work',exists:true});
         state.roots.push({id:'image-experiments',exists:true});
         if(!state.roots.some(root=>root.id===state.root))state.root=state.roots[0]?.id || 'generated-meshes';
-        return browse(state.root,state.path);
+        if(loadCollection)return browse(state.root,state.path);
+        publish();return true;
       }catch(error){state.error=error.message;publish();return false;}
     },
     select(entry) {if(!entry || !['mesh','image','surface'].includes(entry.kind))throw Error('Choose a 3D asset or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
@@ -123,7 +124,7 @@ export function installAuthoringAssets({document,controller,edits,onExperiment=(
   const labels={'generated-meshes':'Saved assets',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work','image-experiments':'Experiments',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
   function close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');render(controller.read());}
-  function setMode(next){mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());}
+  function setMode(next){const previous=mode;mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());if(previous!==mode)document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-assets-mode-change',{detail:{mode,previous}}));}
   function render(state) {
     if(!runHeader.isConnected)byId('authoring-header')?.append(runHeader);
     byId('asset-loading').hidden=!state.loading;panel.setAttribute('aria-busy',String(!!state.loading));
@@ -200,7 +201,7 @@ export function installAuthoringAssets({document,controller,edits,onExperiment=(
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
-  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close,open(next='browse',{refresh=true}={}){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return !refresh||(next==='generate'&&controller.read().selected?.kind==='image')?Promise.resolve(true):action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
 export function assetPaneHeight(value,height,narrow=false){return Math.max(160,Math.min(value,Math.max(160,height-42-180-(narrow?180:0))));}

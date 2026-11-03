@@ -56,7 +56,8 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
  return {
   read,recall,
   clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;baseline=null;experiment=null;error=null;changed();},
-  joinExperiment(value){requireIdle();if(!value?.id||!value?.title)throw Error('Choose a saved experiment');this.clear();experiment=clone(value);changed();},
+  joinExperiment(value,{preserveRecipe=false}={}){requireIdle();if(!value?.id||!value?.title)throw Error('Choose a saved experiment');if(!preserveRecipe||experiment?.id!==value.id)this.clear();experiment=clone(value);changed();},
+  editImage(entry){const destination=entry?.experiment??entry?.provenance?.experiment??experiment;this.clear();if(destination)this.joinExperiment(destination);},
   async open(entry){
    requireIdle();const own=++ticket;opening=true;error=null;changed();
    try{
@@ -92,6 +93,7 @@ export function installImageRecipeStatus({document,iteration,busy=()=>false}){
   document.getElementById('asset-generate').dataset.recipeActive=String(!!(state.parent||state.experiment));
   status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:state.experiment?`New results will join ${state.experiment.title}.`:'');
   reset.hidden=!state.parent&&!state.experiment;reset.disabled=busy()||state.opening;
+  reset.textContent=state.experiment?'Leave experiment':'Clear recipe';
  }
  for(const id of ['asset-prompt','asset-seed','asset-image-size','asset-image-aspect','asset-image-level','asset-image-model','asset-use-reference']){
   document.getElementById(id).addEventListener('input',render);document.getElementById(id).addEventListener('change',render);
