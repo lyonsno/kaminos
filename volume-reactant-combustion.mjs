@@ -1,3 +1,4 @@
+import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // Reactant-driven combustion (candidate v0, 2026-10-12).
 //
 // One local material process replaces the authored tall-plume reaction when
@@ -323,8 +324,10 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   if (options.sourceAdmitted === false) return off('reactant-law-requires-an-admitted-source');
   // Receipt at the effective dt (the kernel applies min(weight x timeStep, cap)).
   const dt = Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1;
-  const exchange = reactantExchangeWeight({ diffusivity: model.exchangeDiffusivity, grid, dt });
-  const exchangeWeightPerUnitDt = model.exchangeDiffusivity / ((2 / grid) ** 2);
+  const calibration=resolveWorldCalibration(controls,{grid});
+  const localDiffusivity=model.exchangeDiffusivity*calibration.lengthGain**2;
+  const exchange = reactantExchangeWeight({ diffusivity: localDiffusivity, grid, dt });
+  const exchangeWeightPerUnitDt = localDiffusivity / ((2 / grid) ** 2);
   return {
     identity: REACTANT_COMBUSTION_IDENTITY,
     requested,

@@ -2148,6 +2148,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row"><span class="slider-label">Fine velocity width (0 = material)</span><input type="number" id="volume-fine-velocity" data-volume-settings-param="volume_fine_velocity" min="0" step="1" value="0"></div>
     <div class="slider-row"><span class="slider-label">Fine pressure width (0 = velocity / legacy choice)</span><input type="number" id="volume-fine-pressure" data-volume-settings-param="volume_fine_pressure" min="0" step="1" value="0"></div>
     <span class="slider-help">Fine material uses Grid width. Independent velocity requires converged pressure and staggered face forces. Material, velocity and pressure widths are independent integer cell counts. Floor inflow and joined pressure are not supported by this mode.</span>
+    <div hidden data-volume-grid-editor-state id="volume-calibration-controls">
+<select id="volume-calibration-mode" data-volume-settings-param="volume_calibration_mode"><option value="legacy">Legacy</option><option value="world">World scale</option></select>
+<input type="number" id="volume-simulation-world-scale" data-volume-settings-param="volume_simulation_world_scale" value="2" step="any" min="0">
+<input type="number" id="volume-calibration-material-cells" data-volume-settings-param="volume_calibration_material_cells" value="64" step="1" min="4">
+<input type="number" id="volume-calibration-velocity-cells" data-volume-settings-param="volume_calibration_velocity_cells" value="64" step="1" min="2">
+</div>
     <div class="slider-row"><span class="slider-label">Following</span><select id="volume-coverage-mode" data-volume-settings-param="volume_coverage_mode" title="Off: leave Fine coverage where you place it. Sources: follow source supply. Fire + sources: also use measured reaction, mixing, heat and smoke demand from adaptive material." class="select-input"><option value="off">Off</option><option value="sources">Sources</option><option value="fire">Fire + sources</option></select></div>
     <div class="slider-row"><span class="slider-label">Interior margin</span><input type="number" min="0" step="any" value="0.15" id="volume-coverage-margin" data-volume-settings-param="volume_coverage_margin" title="Fraction of each side reserved as spare coverage. Larger margins trigger earlier movement and leave less interior space."></div>
     <div class="slider-row"><span class="slider-label">Headroom</span><input type="number" min="0" step="any" value="0.75" id="volume-coverage-headroom" data-volume-settings-param="volume_coverage_headroom" title="Fraction of Fine height above a source when choosing a new placement. Does not resize the box."></div>
@@ -2960,6 +2966,7 @@ import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, p
 import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
 import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
 import {FineCoverageController} from './volume-fine-coverage.mjs';
+import {WORLD_CALIBRATION_FIELDS,readWorldCalibrationControls,resolveWorldCalibration,captureWorldCalibration} from './volume-world-calibration.mjs';
 import {FINE_COVERAGE_FIELDS,readFineCoverageControls,patchFineCoverageControls} from './volume-fine-coverage-controls.mjs';
 import { ADAPTIVE_MATERIAL_FIELDS, readAdaptiveMaterialControls, patchAdaptiveMaterialControls, hasAuthoredAdaptiveMaterial } from './volume-adaptive-material-controls.mjs';
 let adaptiveMaterialSettingsAuthored=false;
@@ -18946,6 +18953,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
     ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(document.getElementById(field.id).value)])),
     adaptiveMaterial: adaptiveMaterialRuntimeControls(),
+    ...Object.fromEntries(WORLD_CALIBRATION_FIELDS.map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -20249,6 +20257,7 @@ async function initKaminosVolumeRoute() {
     ...REGION_CONTROL_FIELDS.map(field=>[field.id,field.param]),
     ...ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.param]),
     ...FINE_COVERAGE_FIELDS.map(field=>[field.id,field.param]),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>[field.id,field.param]),
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -20670,6 +20679,7 @@ async function initKaminosVolumeRoute() {
     ...REGION_CONTROL_FIELDS.map(field=>field.id),
     ...ADAPTIVE_MATERIAL_FIELDS.map(field=>field.id),
     ...FINE_COVERAGE_FIELDS.map(field=>field.id),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>field.id),
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',
@@ -21940,6 +21950,10 @@ function createFlameQuickFields() {
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     gridTuning:{
       read:()=>readVolumeControls(),
+      calibration:{
+        capture:()=>{const patch=captureWorldCalibration(readVolumeControls(),flameDomainScale);const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Capture simulation world scale');},
+        set:patch=>{const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS)if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
+      },
       validate:c=>volumePrototype.validateGridControls(c),
       bindLiveField:input=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label:'Tune pressure iterations',onError:error=>showFlameEditRefused(error)}),
       live:(key,value)=>{
@@ -22106,6 +22120,7 @@ function clampedFlameSettingsState(state) {
   return next;
 }
 function checkFlameSettingsState(state) {
+  resolveWorldCalibration(readWorldCalibrationControls(state.domControls));
   readAdaptiveMaterialControls(state.domControls);
   const problems=flameSettingsStateProblems(state);
   if(problems.length)throw Error(problems[0].message);

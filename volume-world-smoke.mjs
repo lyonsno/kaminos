@@ -1,3 +1,4 @@
+import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 import {createWorldSeed} from './volume-world-seed.mjs';
 import {depositWorldSources,createSourceAtlas,WORLD_SOURCE_WGSL} from './volume-world-sources.mjs';
 export {depositWorldSources} from './volume-world-sources.mjs';
@@ -75,8 +76,8 @@ export function worldTransitionSample(p,{fineDims,mapping,flowPitch,cells}){
 // The caller supplies the already-resolved gust for this simulation step.
 // Fine authored acceleration is in material-cell units; outer flow is in
 // anchor-local distance units. The material and height coupling stay in WGSL.
-export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineWidth,scale=1}){
- const gain=strength*(.020+speed*.004)*2/fineWidth*scale;
+export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineWidth,scale=1,calibration={}}){
+ const gain=strength*(.020+speed*.004)*2/fineWidth*scale*resolveWorldCalibration(calibration,{grid:fineWidth}).cellGain;
  return [Math.cos(angle)*gain,0,Math.sin(angle)*gain,height];
 }
 
@@ -446,7 +447,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       return {...m,boxes:m.boxes.map(b=>({...b,lo:b.lo.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:b.hi.map((x,a)=>x*anchor.scale+anchor.translate[a]),motionMin:b.motionMin.map(x=>x*anchor.scale),motionMax:b.motionMax.map(x=>x*anchor.scale)}))};
     },
     adaptiveMaterialSnapshot(){return adaptive?.snapshot()??null;},
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},sources={parcels:[],supports:[],count:0}}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},calibration={},sources={parcels:[],supports:[],count:0}}){
       if(flowOnly)m=materialIndex;
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
@@ -462,13 +463,13 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,transitionCells,time.dtScale,time.backtraceScale,buoyancy,solids===fallback?0:1]);
       values.set(reactantCombustionUniformValues(reactant),24);
       // Diffusivity is in fine-local length units; scale to the anchored field.
-      if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*mapping.fineToField[3]**2/plan.materialPitch**2;
+      if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*(mapping.fineToField[3]*resolveWorldCalibration(calibration,{grid:fineDims[0]}).lengthGain)**2/plan.materialPitch**2;
       if(physics)values.set(physicsAppearanceUniformValues(physics),40);
       values.set([...(plan.materialMin??plan.min),(flowOnly||exportFields)?1:0],44);
       values.set(intermediate?[...intermediate.plan.min,intermediate.plan.flowPitch,...intermediate.plan.flowDims,1]:[0,0,0,1,1,1,1,0],48);
       values.set([...plan.pressureDims,plan.pressurePitch,iterations,plan.flowDims[0]/plan.pressureDims[0],exportFields?1:0,0],56);
       values.set(intermediate?.exportFields?[...intermediate.plan.materialDims,intermediate.plan.materialPitch]:[1,1,1,0],64);
-      values.set(worldWindAcceleration({...wind,fineWidth:fineDims[0],scale:mapping.fineToField[3]}),68);
+      values.set(worldWindAcceleration({...wind,fineWidth:fineDims[0],scale:mapping.fineToField[3],calibration}),68);
       const momentum=momentumBounds(plan,mapping.fineToField,fineDims);
       values.set([...momentum.lo,0,...momentum.hi,0],72);
       values.set(priorFineBounds,80);

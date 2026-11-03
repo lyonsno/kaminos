@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 167,
+  "controlCount": 171,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1262,6 +1262,46 @@
       "additiveDefault": 0.05,
       "additiveLineage": "fine-coverage",
       "additiveSinceControlCount": 7
+    },
+    {
+      "key": "volume-calibration-mode",
+      "param": "volume_calibration_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "legacy",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 1,
+      "allowedValues": [
+        "legacy",
+        "world"
+      ]
+    },
+    {
+      "key": "volume-simulation-world-scale",
+      "param": "volume_simulation_world_scale",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-calibration-material-cells",
+      "param": "volume_calibration_material_cells",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 64,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 3
+    },
+    {
+      "key": "volume-calibration-velocity-cells",
+      "param": "volume_calibration_velocity_cells",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 64,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 4
     }
   ],
   "retiredControls": [

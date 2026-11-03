@@ -1,3 +1,4 @@
+import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
 import {checkedWorldFrame} from './volume-world-frame.mjs';
@@ -2186,7 +2187,8 @@ export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 8;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
 export const OPEN_WORLD_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
 export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = OPEN_WORLD_UNIFORM_OFFSET + 4;
-export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const WORLD_CALIBRATION_UNIFORM_OFFSET = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const VOLUME_UNIFORM_FLOATS = WORLD_CALIBRATION_UNIFORM_OFFSET + 8;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -2337,7 +2339,7 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
       bandHalfWidth: inflow.bandHalfWidth,
       halfLength: inflow.halfLength,
       sideAxis: [...inflow.sideAxis],
-      inletVelocity: inflow.inletVelocity,
+      inletVelocity: inflow.inletVelocity * resolveWorldCalibration(controls,{grid}).cellGain,
       fuelFraction: inflow.fuelFraction,
       inletTemperature: inflow.inletTemperature,
       antialiasWidth: 2 / grid,
@@ -2775,8 +2777,9 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   if(!centre.every(Number.isFinite))throw Error('Immersed source centre must be finite');
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
   const radius = clampFinite(controls.immersedRadius, 0.02, Infinity, 0.2);
-  const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
-  const speed = clampFinite(controls.immersedSpeed, 0, 1, 0.1);
+  const calibration=resolveWorldCalibration(controls,{grid});
+  const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5) * calibration.cellGain;
+  const speed = clampFinite(controls.immersedSpeed, 0, 1, 0.1) * calibration.cellGain;
   const fuel = clampFinite(controls.immersedFuel, 0, 1, 0.56);
   const temperature = clampFinite(controls.immersedTemperature, 0, 2, 1.2);
   const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
@@ -2789,7 +2792,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const patternNormalised = normalizeInflowApertureSpec({ kind: 'disc', pattern: patternRequested.kind, lineWeight: patternRequested.lineWeight, jetJitter: patternRequested.jetJitter, count: patternRequested.count, ratio: patternRequested.ratio, seed: patternRequested.seed });
   const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
   const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
-  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
+  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness: thickness/calibration.cellGain, speed: speed/calibration.cellGain, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
   const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, coverageFraction: 0, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (controls.immersedSourceEnabled === false) return off('source-disabled');
@@ -2806,7 +2809,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
+  const effective = { admitted: true, reason: null, grid, calibration, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
@@ -3845,6 +3848,8 @@ struct Uniforms {
   open_world_boundary: vec4<f32>,
   display_reconstruction: vec4<f32>,
   display_interpolation: vec4<f32>,
+  world_calibration: vec4<f32>,
+  calibration_pose: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4781,15 +4786,17 @@ fn transportVelocityDamping() -> f32 {
   return select(1.0, 0.982, u.transport_controls.x < 0.5);
 }
 
+${WORLD_CALIBRATION_WGSL}
+
 fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
   if (u.transport_controls.x < 0.5) {
-    return clamp(v, vec3<f32>(-0.34 * VELOCITY_UNIT_SCALE), vec3<f32>(0.52 * VELOCITY_UNIT_SCALE));
+    return clamp(v, vec3<f32>(-0.34 * VELOCITY_UNIT_SCALE * calibrationCellGain()), vec3<f32>(0.52 * VELOCITY_UNIT_SCALE * calibrationCellGain()));
   }
   // Non-legacy schemes bound the per-step backtrace to a fixed number of
   // cells, symmetric in every direction. Semi-Lagrangian transport is stable
   // at any step; this keeps the trilinear footprint local and catches blow-ups.
   let safe = clamp(v, vec3<f32>(-64.0), vec3<f32>(64.0));
-  let maxSpeed = max(0.05, u.transport_controls.z) * VELOCITY_UNIT_SCALE / dynamicsBacktraceScale();
+  let maxSpeed = max(0.05, u.transport_controls.z) * VELOCITY_UNIT_SCALE * calibrationCellGain() / dynamicsBacktraceScale();
   let magnitude = length(safe);
   if (magnitude > maxSpeed) {
     return safe * (maxSpeed / magnitude);
@@ -6864,7 +6871,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
     forceDeltaStore(cellI, vec3<f32>(0.0));
-    if (waveletOn() && !MATERIAL_ONLY) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
+    if (waveletOn() && !MATERIAL_ONLY) { waveletCoordStore(cellI, 0, calibrationNoiseCoordinate(cell)); waveletCoordStore(cellI, 1, calibrationNoiseCoordinate(cell)); }
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
@@ -6922,13 +6929,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
-  var waveletCoordA = cell;
-  var waveletCoordB = cell;
+  let noiseCell = calibrationNoiseCoordinate(cell);
+  var waveletCoordA = noiseCell;
+  var waveletCoordB = noiseCell;
   if (waveletOn() && !MATERIAL_ONLY) {
     // The noise coordinates ride the same characteristic as the gas.
     let wPhase = u32(u.wavelet_turbulence.w) % WAVELET_COHERENCE_PERIOD_STEPS;
-    waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
-    waveletCoordB = select(waveletCoordSample(backCell, 1), cell, wPhase == WAVELET_COHERENCE_PERIOD_STEPS / 2u);
+    waveletCoordA = select(waveletCoordSample(backCell, 0), noiseCell, wPhase == 0u);
+    waveletCoordB = select(waveletCoordSample(backCell, 1), noiseCell, wPhase == WAVELET_COHERENCE_PERIOD_STEPS / 2u);
     if(VELOCITY_ONLY){
       let foot=vec3<i32>(clampCell(vec3<i32>(floor(backCell))));
       let band=waveletLevel2Box(foot,2)-waveletLevel2Box(foot,4);
@@ -7212,7 +7220,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = max(combustionFrontTopology, (columnFrontTopologyBirth));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p));
   let confinementMode = u.reserved_source_extension_0.y;
-  let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
+  let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5)) * calibrationCellGain();
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
   if (!MATERIAL_ONLY) {
   let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);
@@ -7272,17 +7280,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let projectionCorrection = vec3<f32>(0.0);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * 1.0 * artisticSwirl;
   centredForce = centredForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * 1.0 * artisticSwirl;
-  vel = vel + confinement;
+  vel = vel + confinement * calibrationConfinementGain();
   // Wavelet turbulence: velocity-derived, so it stays on the stored value
   // under the staggered reading (like confinement); the fold below scales it
   // by the time step with every other increment.
   if (waveletOn() && !VELOCITY_ONLY) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
-  vel = vel + oracleActivityCurl;
-  vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
-  vel = vel + detailForce * VELOCITY_UNIT_SCALE;
-  vel = vel + microForce * VELOCITY_UNIT_SCALE;
-  vel = vel + shredForce * VELOCITY_UNIT_SCALE;
-  vel = vel + fineBreakup * VELOCITY_UNIT_SCALE;
+  vel = vel + oracleActivityCurl * calibrationConfinementGain();
+  vel = vel + oracleActivityConfinement * calibrationConfinementGain() * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
+  vel = vel + detailForce * VELOCITY_UNIT_SCALE * calibrationCellGain();
+  vel = vel + microForce * VELOCITY_UNIT_SCALE * calibrationCellGain();
+  vel = vel + shredForce * VELOCITY_UNIT_SCALE * calibrationCellGain();
+  vel = vel + fineBreakup * VELOCITY_UNIT_SCALE * calibrationCellGain();
   vel = vel + heatExpansion;
   centredForce = centredForce + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
@@ -7298,8 +7306,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
     let transportedLateralExcitation = clamp(
       transportedLateralDelta * transportedLateralGain,
-      vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE),
-      vec2<f32>(0.006 * VELOCITY_UNIT_SCALE)
+      vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE * calibrationCellGain()),
+      vec2<f32>(0.006 * VELOCITY_UNIT_SCALE * calibrationCellGain())
     );
     vel = vel + vec3<f32>(transportedLateralExcitation.x, 0.0, transportedLateralExcitation.y);
   }
@@ -7314,12 +7322,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Centred authored accelerations retain their material-grid units; convert
   // them once to the independent velocity lattice's cell-displacement units.
   // Velocity-derived increments already use that lattice's stored units.
-  let forceIncrement = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE - 1.0)) * timeStep;
+  let forceIncrement = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE * calibrationCellGain() - 1.0)) * timeStep;
   if (faceForcesOn()) {
     // The centred additive forces go to the face-force pass; everything else
     // (velocity-derived forces, velocity deltas, the damping) stays here. The
     // stored value is left unbounded: the pass bounds once after its increment.
-    let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE;
+    let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE * calibrationCellGain();
     forceDeltaStore(cellI, centredIncrement);
     vel = velTransported + forceIncrement - centredIncrement;
   } else {
@@ -7341,7 +7349,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let wall = max(max(abs(p.x),vertical),abs(p.z));
     let fade = select(max(1.0-smoothstep(0.86,1.0,wall),clamp(immersedSlabWeight,0.0,1.0)),1.0,joinedBoundary()||openWorldBoundary());
     vel *= stepRate(mix(0.55,1.0,fade));
-    vel.y = mix(max(vel.y,-0.015 * VELOCITY_UNIT_SCALE),vel.y,select(0.0,1.0,joinedBoundary()||openWorldBoundary()));
+    vel.y = mix(max(vel.y,-0.015 * VELOCITY_UNIT_SCALE * calibrationCellGain()),vel.y,select(0.0,1.0,joinedBoundary()||openWorldBoundary()));
     fluidDst[base] = vec4<f32>(select(boundVelocity(vel),vel,faceForcesOn()),0.0);
     // Scalar history is supplied afresh by the material lattice next step.
     fluidDst[base+1u]=fluidSrc[base+1u];fluidDst[base+2u]=fluidSrc[base+2u];fluidDst[base+3u]=fluidSrc[base+3u];
@@ -7743,7 +7751,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
   vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
-  vel.y = mix(max(vel.y, -0.015), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
+  vel.y = mix(max(vel.y, -0.015 * calibrationCellGain()), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
   // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
   fluidDst[base] = vec4<f32>(select(select(boundVelocity(vel), vel, faceForcesOn()),prev.xyz,MATERIAL_ONLY), 0.0);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
@@ -11781,7 +11789,7 @@ export function createKaminosVolumePrototype({
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
     const sources=immersedCollectionPrepared?compileWorldSourceParcels(immersedCollectionPrepared,{grid:gridSize,gridHeight,transform:productTransform,anchor:worldSmoke.anchor}):{parcels:[],supports:[],count:0};
-    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
+    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;
@@ -12236,17 +12244,20 @@ export function createKaminosVolumePrototype({
   // the lattice itself, so a later switch-on starts from undistorted noise.
   let waveletTextures = [];
   let waveletSidecarFull = false;
+  function waveletCalibrationFrame(){return {calibration:resolveWorldCalibration(controlsSnapshot,{grid:gridSize,scale:productTransform.scale}),transform:productTransform};}
+  let waveletCalibrationKey=null;
   function writeWaveletLattice(texture) {
-    const texels = new Float32Array(gridSize * gridHeight * gridSize * 2 * 4);
-    let i = 0;
-    for (let set = 0; set < 2; set += 1) for (let z = 0; z < gridSize; z += 1) for (let y = 0; y < gridHeight; y += 1) for (let x = 0; x < gridSize; x += 1) {
-      texels[i] = x + 0.5; texels[i + 1] = y + 0.5; texels[i + 2] = z + 0.5; i += 4;
-    }
+    const texels=calibrationWaveletLattice([gridSize,gridHeight,gridSize],waveletCalibrationFrame());
     device.queue.writeTexture({ texture }, texels, { bytesPerRow: gridSize * 16, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 2]);
   }
   function ensureWaveletCoordinates(admitted) {
     if (!device) return false;
-    if (waveletTextures.length === 2 && waveletSidecarFull === admitted) return false;
+    const key=calibrationSignature(waveletCalibrationFrame().calibration);
+    if (waveletTextures.length === 2 && waveletSidecarFull === admitted) {
+      if(admitted&&key!==waveletCalibrationKey)for(const texture of waveletTextures)writeWaveletLattice(texture);
+      waveletCalibrationKey=key;return false;
+    }
+    waveletCalibrationKey=key;
     for (const texture of waveletTextures) texture.destroy();
     const size = admitted ? [gridSize, gridHeight, gridSize * 2] : [1, 1, 1];
     waveletTextures = [0, 1].map(i => {
@@ -12288,7 +12299,7 @@ export function createKaminosVolumePrototype({
       pendingDomainRemap = null; return false;
     }
     const world = controlsSnapshot.worldSmoke === 'on' ? worldSmoke?.remapResources() : null;
-    const common = {before, after, world, ambient: REACTANT_MODEL.ambientOxidizer,
+    const common = {before, after, world, calibration:resolveWorldCalibration(controlsSnapshot,{grid:gridSize,scale:after.scale}), ambient: REACTANT_MODEL.ambientOxidizer,
       staggered: resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode === 'staggered'};
     domainRemapper.encode(encoder, {...common,
       fluid: [fluidBuffers[currentFluid], fluidBuffers[1-currentFluid]],
@@ -16213,6 +16224,10 @@ export function createKaminosVolumePrototype({
   }
 
   function updateUniforms(now) {
+    controlsSnapshot={...controlsSnapshot,simulationDomainScale:productTransform.scale};
+    const calibration=resolveWorldCalibration(controlsSnapshot,{grid:gridSize,scale:productTransform.scale});
+    state.worldCalibration=calibration;
+    uniforms.set([calibration.cellGain,calibration.lengthGain,calibration.materialCells,calibration.velocityCells,...productTransform.translate,productTransform.scale],WORLD_CALIBRATION_UNIFORM_OFFSET);
     resize();
     if (!sceneSourceFrameConsumer && !sceneTransportConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
@@ -17645,13 +17660,15 @@ export function createKaminosVolumePrototype({
     if(reason){state.fineGrid={...state.fineGrid,effective:'unavailable',reason};throw Error(reason);}
     const key=JSON.stringify([plan.materialDims,plan.velocityDims,state.fluidStateResetCount]);
     if(!fineVelocity||fineVelocity.key!==key){
-      fineVelocity?.destroy();fineVelocity=createFineVelocityGrid(device,plan,uniforms.byteLength);fineVelocity.key=key;
+      fineVelocity?.destroy();fineVelocity=createFineVelocityGrid(device,plan,uniforms.byteLength,waveletCalibrationFrame());fineVelocity.key=key;
       const constants={VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/plan.materialPerVelocity};
       fineVelocity.pipelines=Object.fromEntries(['cs','csFaceForces','csTransportPredict','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
       fineVelocity.predictGroup=device.createBindGroup({layout:transportPredictBindGroupLayout,entries:[{binding:1,resource:{buffer:fineVelocity.predictor}},{binding:2,resource:emptyGasSourceTexture.createView()}]});
     }
     const turbulent=!!state.waveletTurbulence?.effective?.admitted;
-    if(turbulent&&!fineVelocity.waveletActive)fineVelocity.resetWavelet();
+    const waveletKey=calibrationSignature(waveletCalibrationFrame().calibration);
+    if(turbulent&&(!fineVelocity.waveletActive||waveletKey!==fineVelocity.waveletCalibrationKey))fineVelocity.resetWavelet(waveletCalibrationFrame());
+    fineVelocity.waveletCalibrationKey=waveletKey;
     fineVelocity.waveletActive=turbulent;
     if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
     if(!materialOnlyPredictPipeline)materialOnlyPredictPipeline=device.createComputePipeline({label:'fine material turbulence predictor',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'csTransportPredict',constants:{MATERIAL_ONLY:true}}});
@@ -28040,6 +28057,7 @@ export function createKaminosVolumePrototype({
     },
     setControls(next) {
       resolveDisplayReconstruction({...controlsSnapshot,...next});
+      resolveWorldCalibration({...controlsSnapshot,...next},{grid:Number(next.resolution??gridSize),scale:productTransform.scale});
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
       this.validateGridControls(next);
       if(Object.hasOwn(next,'adaptiveMaterial')) {

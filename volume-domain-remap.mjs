@@ -90,12 +90,14 @@ fn remap(@builtin(global_invocation_id)c:vec3<u32>){
  if(textureDimensions(waveletSrc).x==u32(u.dims.x)){
   for(var coordinateSet=0;coordinateSet<2;coordinateSet++){
    var coord=vec4<f32>(p,0);
+   if(u.dims.w>0.0){coord=vec4<f32>((w/u.options.w+1.0)*u.dims.w*.5,0);}
    if(retained){coord=vec4<f32>(0);
     for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
      let o=vec3<i32>(x,y,z);var q=clamp(base+o,vec3<i32>(0),vec3<i32>(u.dims.xyz)-1);q.z+=coordinateSet*i32(u.dims.z);
      coord+=textureLoad(waveletSrc,q,0)*weights(f,o);
     }}}
    }
+   coord.w*=u.before.w/u.after.w;
    var destination=vec3<i32>(c);destination.z+=coordinateSet*i32(u.dims.z);textureStore(waveletDst,destination,coord);
   }
  }
@@ -118,13 +120,13 @@ export function createDomainRemap(device, dimensions) {
     dimension: '2d', format: 'r32float', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING});
   return {
     residentBytes: 160 + side * side * 12,
-    encode(encoder, {before, after, fluid, front, quench, reaction, wavelet, lower, world = null, staggered = true, ambient = 1}) {
+    encode(encoder, {before, after, fluid, front, quench, reaction, wavelet, lower, world = null, staggered = true, ambient = 1, calibration = null}) {
       const anchor = world?.anchor ?? {translate: [0, 0, 0], scale: 1};
       const plan = world?.plan ?? {min: [0, 0, 0], flowDims: [1, 1, 1], flowPitch: 1, materialDims: [1, 1, 1], materialPitch: 1};
       device.queue.writeBuffer(uniform, 0, new Float32Array([
-        ...dimensions, 0, ...before.translate, before.scale, ...after.translate, after.scale,
+        ...dimensions, calibration?.velocityCells??0, ...before.translate, before.scale, ...after.translate, after.scale,
         ...anchor.translate, anchor.scale, ...plan.min, 0, ...plan.flowDims, plan.flowPitch,
-        ...plan.materialDims, plan.materialPitch, world ? 1 : 0, staggered ? 1 : 0, ambient, 0,
+        ...plan.materialDims, plan.materialPitch, world ? 1 : 0, staggered ? 1 : 0, ambient, (calibration?.width??2)/2,
       ]));
       encoder.copyTextureToTexture({texture: lower}, {texture: lowerSnapshot}, [side, side, 3]);
       const entries = [uniform, ...fluid, ...front, ...quench, world?.gas ?? empty, world?.velocity ?? empty]

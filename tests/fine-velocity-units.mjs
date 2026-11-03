@@ -35,7 +35,7 @@ test('lateral excitation cap preserves physical strength on the velocity lattice
   const scale=velocity/64;
   // Run each independent vector component through the actual clamp expression.
   const scalar=body.replaceAll('vec2<f32>','Number');
-  const value=new Function('transportedLateralDelta','transportedLateralGain','VELOCITY_UNIT_SCALE','clamp',`return clamp(${scalar});`)(1,.24,scale,(x,a,b)=>Math.min(b,Math.max(a,x)));
+  const value=new Function('transportedLateralDelta','transportedLateralGain','VELOCITY_UNIT_SCALE','clamp','calibrationCellGain',`return clamp(${scalar});`)(1,.24,scale,(x,a,b)=>Math.min(b,Math.max(a,x)),()=>1);
   close(value*2/velocity,.006*2/64,`velocity${velocity} excitation cap`);
  }
 });
