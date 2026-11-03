@@ -1,7 +1,7 @@
 import {createCrust,saveCrust,restoreCrust} from './crust.mjs';
 export const CRYSTAL_TYPE='crystal-growth',CRYSTAL_SOURCE='kaminos:crystal-growth';
 export const crystalRuntime=Symbol('crystal-growth-runtime');
-export function defaultCrystalSnapshot(){return {schema:'kaminos.crystal-growth.v1',state:saveCrust(createCrust({setup:'neighbors',arrangement:'arcs',tilt:.24})),rate:1,playing:false,interfaces:false,substrate:true,pendingModelSeconds:0};}
+export function defaultCrystalSnapshot(){return {schema:'kaminos.crystal-growth.v1',state:saveCrust(createCrust({setup:'neighbors',wetting:'regions',arrangement:'arcs',tilt:.24})),rate:1,playing:false,interfaces:false,substrate:true,pendingModelSeconds:0};}
 export function checkedCrystalSnapshot(value){
  if(value?.schema!=='kaminos.crystal-growth.v1')throw Error('Unknown crystal growth snapshot');
  const state=restoreCrust(value.state);

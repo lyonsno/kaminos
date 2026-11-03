@@ -31,7 +31,7 @@ export function createCrystalObject({snapshot=defaultCrystalSnapshot(),onFrame,r
   if(operation==='remember'){checkpoint=snap();return read();}
   if(operation==='returnToCheckpoint'){if(!checkpoint)throw Error('Store a checkpoint first');return replace(checkpoint);}
   if(operation==='restart'||operation==='seedLayout'){
-   const previous=snap(),next=createCrust({rows:state.rows,seed:state.seed,settings:state.settings,setup:operation==='seedLayout'?'neighbors':state.setup,arrangement:input?.arrangement??state.arrangement,tilt:input?.tilt??state.tilt});
+   const previous=snap(),next=createCrust({rows:state.rows,seed:state.seed,settings:state.settings,setup:operation==='seedLayout'?'neighbors':state.setup,arrangement:input?.arrangement??state.arrangement,tilt:input?.tilt??state.tilt,wetting:input?.wetting??state.wetting??'single',bridgeReach:input?.bridgeReach??state.bridgeReach??.08});
    const result=replace({...previous,state:saveCrust(next),pendingModelSeconds:0,playing:false});checkpoint=previous;return result;
   }
   if(operation==='conditions')setCrustConditions(state,input);

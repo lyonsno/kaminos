@@ -1,3 +1,4 @@
+import {regionRects,regionFronts} from './crust-regions.mjs';
 import {grainBasis} from './crust-frame.mjs';
 import {facePoint,facePatch,faceFrame} from './crust-faces.mjs';
 import {Group,Mesh,InstancedMesh,BoxGeometry,PlaneGeometry,BufferGeometry,Float32BufferAttribute,MeshStandardNodeMaterial,MeshBasicNodeMaterial,Matrix4,Quaternion,Vector3,Color,DoubleSide} from '../lib/three.webgpu.js';
@@ -28,8 +29,9 @@ export function createCrustSurface(state){
    const g=trackGeometry(s,p);if(p.water<=0||g.closed)continue;
    const fraction=clamp(p.water/g.capacity,0,1);
    if(p.kind==='face'&&typeof p.face==='number'){
-    const grain=s.grains[p.grain],patch=facePatch(s,p),[u,v]=patch.lo,[U,V]=patch.hi,points=[[u,v],[U,v],[U,V],[u,V]].map(uv=>facePoint(grain,p.face,uv,.001));
-    quad(water,...points);if(showInterfaces)for(let i=0;i<4;i++){const a=points[i],b=points[(i+1)%4];ribbon(lines,a,b,.0015,faceFrame(grain,p.face).normal);}continue;
+    const grain=s.grains[p.grain],patches=p.regions?p.regions.flatMap(r=>regionRects(s,p,r)):[facePatch(s,p)];
+    for(const patch of patches){const [u,v]=patch.lo,[U,V]=patch.hi,points=[[u,v],[U,v],[U,V],[u,V]].map(uv=>facePoint(grain,p.face,uv,.001));
+    quad(water,...points);}if(showInterfaces)for(const [a,b]of regionFronts(patches))ribbon(lines,facePoint(grain,p.face,a,.001),facePoint(grain,p.face,b,.001),.0015,faceFrame(grain,p.face).normal);continue;
    }
    if(p.kind==='face'){
     const grain=s.grains[p.grain],center=grainCenter(grain),[w,,d]=grainDimensions(grain),r=Math.sqrt(fraction),co=Math.cos(grain.angle),sn=Math.sin(grain.angle),point=(x,z)=>[center[0]+co*x-sn*z,grain.faces[4]+.003,center[2]+sn*x+co*z];
