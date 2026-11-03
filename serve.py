@@ -1374,7 +1374,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
 
 
 def read_volume_settings_preset(store_path, preset_ref, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     store = _volume_settings_store_path(store_path)
     requested = str(preset_ref or "").strip()
     if not requested:
@@ -1447,15 +1447,48 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
 # files keep their identity (inode, size, mtime). A changed or missing file is
 # read again; a read that fails is never cached.
 _VOLUME_SETTINGS_PRESET_SUMMARIES = {}
-
-
-def _volume_settings_schema_key(schema):
-    return hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+_VOLUME_SETTINGS_ALIAS_DOCUMENTS = {}
+_VOLUME_SETTINGS_HISTORY_SCANS = {}
+_VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE = None
 
 
 def _file_identity(path):
     stat = path.stat()
     return (str(path), stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+def _load_volume_settings_preset_schema(schema=None):
+    global _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE
+    if schema is not None:
+        return schema
+    try:
+        identity = _file_identity(VOLUME_SETTINGS_PRESET_SCHEMA_PATH)
+    except OSError:
+        identity = None
+    if (
+        identity is not None
+        and _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE is not None
+        and _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE[0] == identity
+    ):
+        return _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE[1]
+    loaded = json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if identity is not None:
+        _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE = (identity, loaded)
+    return loaded
+
+
+def _read_cached_volume_settings_alias_file(alias_path):
+    identity = _file_identity(alias_path)
+    cached = _VOLUME_SETTINGS_ALIAS_DOCUMENTS.get(str(alias_path))
+    if cached is not None and cached[0] == identity:
+        return identity, copy.deepcopy(cached[1])
+    document = _read_json_object(alias_path, "alias")
+    _VOLUME_SETTINGS_ALIAS_DOCUMENTS[str(alias_path)] = (identity, copy.deepcopy(document))
+    return identity, document
+
+
+def _volume_settings_schema_key(schema):
+    return hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _volume_settings_preset_summary_from_document(document):
@@ -1483,12 +1516,12 @@ def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_k
     ref = str(preset_ref or "").strip()
     try:
         if ref.startswith("vsp-"):
-            paths = [store / "presets" / f"{ref}.json"]
+            identity = (_file_identity(store / "presets" / f"{ref}.json"),)
         else:
             alias_path = store / "aliases" / f"{ref}.json"
-            preset_id = _read_json_object(alias_path, "alias").get("presetId")
-            paths = [alias_path, store / "presets" / f"{preset_id}.json"]
-        identity = tuple(_file_identity(path) for path in paths)
+            alias_identity, alias_document = _read_cached_volume_settings_alias_file(alias_path)
+            preset_id = alias_document.get("presetId")
+            identity = (alias_identity, _file_identity(store / "presets" / f"{preset_id}.json"))
     except (OSError, ValueError, TypeError):
         identity = None
     key = (str(store), ref, schema_key)
@@ -1503,7 +1536,7 @@ def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_k
 
 
 def list_volume_settings_presets(store_path, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     store = _volume_settings_store_path(store_path)
     schema_key = _volume_settings_schema_key(schema)
     aliases_dir = store / "aliases"
@@ -1514,7 +1547,7 @@ def list_volume_settings_presets(store_path, schema=None):
     for alias_path in sorted(aliases_dir.glob("*.json")):
         # A malformed alias is reported on its own; it must not fail the index.
         try:
-            alias_document = _read_json_object(alias_path, "alias")
+            _alias_identity, alias_document = _read_cached_volume_settings_alias_file(alias_path)
             alias = alias_document.get("alias")
             if alias_path.stem != alias:
                 raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
@@ -1691,6 +1724,13 @@ def _scan_volume_settings_alias_history(store, alias):
     invalid = []
     if not path.exists():
         return rows, invalid
+    try:
+        identity = _file_identity(path)
+    except OSError:
+        identity = None
+    cached = _VOLUME_SETTINGS_HISTORY_SCANS.get(str(path))
+    if identity is not None and cached is not None and cached[0] == identity:
+        return copy.deepcopy(cached[1]), copy.deepcopy(cached[2])
     for number, line in enumerate(path.read_text().splitlines(), start=1):
         if not line.strip():
             continue
@@ -1709,6 +1749,8 @@ def _scan_volume_settings_alias_history(store, alias):
             invalid.append({"alias": alias, "path": str(path), "line": number, "error": "label history row is not a basin version"})
             continue
         rows.append(row)
+    if identity is not None:
+        _VOLUME_SETTINGS_HISTORY_SCANS[str(path)] = (identity, copy.deepcopy(rows), copy.deepcopy(invalid))
     return rows, invalid
 
 

@@ -160,4 +160,77 @@ assert.equal(validateVolumeSettingsPresetIndex({ ...mixed, futureMetadata: true 
 for (const broken of [null, {}, [null], [{ ...unavailable, error: '' }], [{ ...unavailable, presetId: 'invented' }]]) {
   assert.throws(() => validateVolumeSettingsPresetIndex({ ...mixed, unavailableEntries: broken }), /unavailable/i);
 }
+
+// Concurrent refreshVolumeSettingsPresetList calls share a single in-flight
+// /api/volume-settings-presets request while honoring the requested selection.
+{
+  let indexFetches = 0;
+  const pendingResolvers = [];
+  const select = {
+    options: [], value: '',
+    replaceChildren(...options) { this.options = options; },
+    add(option) { this.options.push(option); },
+  };
+  const context = vm.createContext({
+    volumeSettingsPresetIndex: null,
+    volumeSettingsPresetIndexInFlight: null,
+    volumeSettingsPresetIndexSummary: null,
+    document: { getElementById: () => select },
+    Option: class { constructor(text, value) { this.text = text; this.value = value; this.disabled = false; } },
+    fetch: () => {
+      indexFetches += 1;
+      return new Promise(resolve => {
+        pendingResolvers.push(() => resolve({ ok: true, json: async () => ({ ...mixed, entries: [available, carried], unavailableEntries: [] }) }));
+      });
+    },
+    validateVolumeSettingsPresetIndex,
+    describeVolumeSettingsPresetProjection,
+    activeVolumeSettingsPresetReceipt: null,
+    activeVolumeSettingsPresetStatus: () => ({ text: '', warning: false }),
+    describeFlameSettingsProblems: () => ({ text: '', warning: false }),
+    volumeSettingsPresetStatus: () => {},
+  });
+  vm.runInContext(`${showStatus}\n${refresh}`, context);
+  const firstCall = vm.runInContext(`refreshVolumeSettingsPresetList('')`, context);
+  const secondCall = vm.runInContext(`refreshVolumeSettingsPresetList(${JSON.stringify(carried.presetId)})`, context);
+  for (const resolve of pendingResolvers) resolve();
+  await Promise.all([firstCall, secondCall]);
+  assert.equal(indexFetches, 1, 'concurrent preset list refreshes must coalesce into one fetch');
+  assert.equal(select.value, carried.presetId, 'coalesced refresh preserves the requested preset selection');
+}
+
+// Switching basins through loadAuthoredFlameBasin caches the preset schema
+// across loads while fetching each requested preset artifact.
+{
+  const loadBasinFn = source.match(/async function loadAuthoredFlameBasin\([^]*?\n\}/)?.[0];
+  assert.ok(loadBasinFn, 'loadAuthoredFlameBasin is present');
+  const fetchedUrls = [];
+  const loadedReceipts = [];
+  const context = vm.createContext({
+    window: {},
+    console,
+    setInfo: () => {},
+    fetch: async url => {
+      fetchedUrls.push(String(url));
+      if (String(url).includes('volume-settings-preset-schema-v2.json')) {
+        return { ok: true, json: async () => ({ schemaIdentity: 'kaminos-volume-settings-preset-schema-v2' }) };
+      }
+      return { ok: true, json: async () => ({ presetId: String(url), preset: { domControls: { 'emitter-assay-family': { value: 'hearth' } } } }) };
+    },
+    validateVolumeSettingsPresetDocument: (artifact, id) => {
+      loadedReceipts.push(id);
+      return { label: id, preset: artifact.preset };
+    },
+    flameSettingsState: (preset, receipt) => ({ preset, receipt }),
+    flameSettingsStateClamps: () => [],
+    clampedFlameSettingsState: state => state,
+  });
+  await vm.runInContext(
+    `${loadBasinFn}\n(async () => { await loadAuthoredFlameBasin('kiln-hero'); await loadAuthoredFlameBasin('bowl-wisp'); })()`,
+    context,
+  );
+  const schemaFetches = fetchedUrls.filter(url => url.includes('volume-settings-preset-schema-v2.json'));
+  assert.equal(schemaFetches.length, 1, 'basin switches must reuse the loaded preset schema');
+  assert.deepEqual(loadedReceipts, ['kiln-hero', 'bowl-wisp'], 'each basin switch loads and validates its requested preset');
+}
 console.log('volume settings index UI contracts passed');

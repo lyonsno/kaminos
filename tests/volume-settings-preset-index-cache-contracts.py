@@ -62,6 +62,18 @@ def counting_normalize(*args, **kwargs):
 
 serve.normalize_volume_settings_preset_payload = counting_normalize
 
+alias_json_reads = []
+_real_read_json_object = serve._read_json_object
+
+
+def counting_read_json_object(path, label):
+    if label == "alias":
+        alias_json_reads.append(str(path))
+    return _real_read_json_object(path, label)
+
+
+serve._read_json_object = counting_read_json_object
+
 
 def listing(layers, use_schema=schema):
     return serve.list_volume_settings_presets_layered(layers, use_schema)
@@ -93,8 +105,10 @@ def main():
         assert len(first["earlierVersions"]) == 1, first["earlierVersions"]
 
         normalize_calls.clear()
+        alias_json_reads.clear()
         second = listing(layers)
         assert len(normalize_calls) == 0, f"unchanged presets were recomputed {len(normalize_calls)} times"
+        assert len(alias_json_reads) == 0, f"unchanged alias files were re-parsed {len(alias_json_reads)} times"
         assert second == first, "a repeated listing must return the same index"
 
         # Touching one preset file (same content, new size) re-reads only it.

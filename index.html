@@ -17827,10 +17827,16 @@ function recordVolumeSettingsPresetApplied() {
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   const select = document.getElementById('settings-preset-select');
   try {
-    const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
-    const index = await response.json();
-    if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
-    validateVolumeSettingsPresetIndex(index);
+    refreshVolumeSettingsPresetList.inFlight ||= (async () => {
+      const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
+      const parsed = await response.json();
+      if (!response.ok) throw new Error(parsed.error || `preset index failed: ${response.status}`);
+      validateVolumeSettingsPresetIndex(parsed);
+      return parsed;
+    })().finally(() => {
+      refreshVolumeSettingsPresetList.inFlight = null;
+    });
+    const index = await refreshVolumeSettingsPresetList.inFlight;
     volumeSettingsPresetIndex = index;
     const unavailable = index.unavailableEntries || [];
     // Earlier versions of a label, and other stores' pointers for it, stay
@@ -22370,9 +22376,10 @@ function installFlameAuthoring() {
 }
 
 async function loadAuthoredFlameBasin(id,options={}) {
-  const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
-  const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
-  if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+  loadAuthoredFlameBasin.schemaPromise ||= fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'}).then(async r=>{const s=await r.json();if(!r.ok)throw Error(s.error||'Basin lookup failed');return s;}).catch(e=>{loadAuthoredFlameBasin.schemaPromise=null;throw e;});
+  const [artifactResponse,schema]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),loadAuthoredFlameBasin.schemaPromise]);
+  const artifact=await artifactResponse.json();
+  if(!artifactResponse.ok)throw Error(artifact.error||'Basin lookup failed');
   const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
   if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
   // Operator, 2026-10-18: values outside a control's range do not ban a basin;

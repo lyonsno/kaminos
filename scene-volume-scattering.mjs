@@ -5,11 +5,16 @@ export function composeScatteredSource(primary,sigma,incident,gain=1){
     throw new Error('finite source, incident and nonnegative scattering/gain required');
   return [...incident.map((j,c)=>primary[c]*gain+sigma*j),primary[3]];
 }
+const scatteredSourcePipelines = new WeakMap();
 export function createScatteredSource(device,{dimensions,primary,scattering,incident}){
   const output=device.createTexture({label:'primary plus once-scattered smoke emission',dimension:'3d',size:dimensions,format:'rgba32float',
     usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const params=device.createBuffer({label:'scattered source primary gain',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const pipeline=device.createComputePipeline({label:'form same-frame smoke scattered source',layout:'auto',compute:{module:device.createShaderModule({code:SCATTERED_SOURCE_WGSL}),entryPoint:'buildScatteredSource'}});
+  let pipeline=scatteredSourcePipelines.get(device);
+  if(!pipeline){
+    pipeline=device.createComputePipeline({label:'form same-frame smoke scattered source',layout:'auto',compute:{module:device.createShaderModule({code:SCATTERED_SOURCE_WGSL}),entryPoint:'buildScatteredSource'}});
+    scatteredSourcePipelines.set(device,pipeline);
+  }
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
     {binding:0,resource:primary.createView()},{binding:1,resource:scattering.createView()},{binding:2,resource:incident.createView()},
     {binding:3,resource:output.createView()},{binding:4,resource:{buffer:params}}]});
