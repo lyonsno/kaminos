@@ -207,8 +207,8 @@ export function formationStep(state,input,metrics,scratch=null){
  for(let i=0;i<N;i++){const x=i%n,z=(i/n)|0,j=i*4,h=out[j]+out[j+1],bed=out[j],soil=out[j+1];let e0=0,e1=0,e2=0,e3=0;
   for(let k=0;k<4;k++){const xx=x+ox[k],zz=z+oz[k];if(xx<0||xx>=n||zz<0||zz>=n)continue;
    const nb=(zz*n+xx)*4,dist=k<2?effDx:effDz,diff=Math.max(0,h-out[nb]-out[nb+1]),bedDiff=Math.max(0,bed-out[nb]);
-   const scarpStrip=Math.max(0,bedDiff/dist-stripSlope)*soil*.42;
-   const amt=diff*c.creep+scarpStrip+Math.max(0,diff-talus*dist)*.20;
+   const scarpStrip=Math.min(diff*.24,Math.max(0,bedDiff/dist-stripSlope)*soil*.42);
+   const amt=Math.min(diff*.24,diff*c.creep+scarpStrip+Math.max(0,diff-talus*dist)*.20);
    if(k===0)e0=amt;else if(k===1)e1=amt;else if(k===2)e2=amt;else e3=amt;
   }
   const total=e0+e1+e2+e3,factor=total>0?Math.min(1,soil/total):0;

@@ -96,6 +96,14 @@ test('multi-tile stitched formation partitions into 20-40 seam-locked tiles with
  let crossSeam=0;
  for(const t of tiles)if(t.tz+1<c.tilesZ)for(let x=t.x0;x<=t.x1;x++){const i=t.z1*c.resolution+x,r=d.receiver[i];if(r>=0&&Math.floor(r/c.resolution)>t.z1)crossSeam++;}
  assert.ok(crossSeam>0,'drainage must route water and sediment continuously across internal tile seams');
+ const denseCfg=formationConfig({resolution:97,tilesX:6,tilesZ:5,iterations:60}),initialState=seedGeology(denseCfg),formedDense=formTerrain(denseCfg);
+ let initPeak=0,formedPeak=0,maxSoil=0;
+ for(let i=0;i<denseCfg.resolution**2;i++){
+  initPeak=Math.max(initPeak,initialState[i*4]+initialState[i*4+1]);
+  formedPeak=Math.max(formedPeak,formedDense.state[i*4]+formedDense.state[i*4+1]);
+  maxSoil=Math.max(maxSoil,formedDense.state[i*4+1]);
+ }
+ assert.ok(formedPeak<=initPeak+1e-4&&maxSoil<.65,`scarp stripping must never push soil uphill into spikes (formedPeak=${formedPeak.toFixed(3)}, initPeak=${initPeak.toFixed(3)}, maxSoil=${maxSoil.toFixed(3)})`);
 });
 test('strike-rotated stratigraphy and macro-authoring metadata expose bounded ranges, tooltips and presets',async()=>{
  const mod=await import(source),c=formationConfig({resolution:17,iterations:10,tilt:.8,hardness:6});
