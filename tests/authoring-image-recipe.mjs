@@ -52,3 +52,8 @@ test('a late link read cannot overwrite a newer explicit recall or start generat
  const old=h.c.open({kind:'image',source:'/old.png'});h.c.recall(entry('/chosen.png'));release(new Uint8Array());
  await assert.rejects(old,/superseded/i);assert.equal(h.c.read().parent.source,'/chosen.png');assert.equal(h.get().seed,7009);
 });
+
+test('starting a separate experiment clears helper provenance and lineage while retaining editable controls',()=>{
+ let reset=0;const h=harness({resetPrompt:()=>reset++});h.c.recall(entry());h.set({prompt:'edited glove'});const before=structuredClone(h.get());
+ h.c.clear();assert.equal(reset,1);assert.equal(h.c.read().parent,null);assert.deepEqual(h.get(),before);assert.equal(h.c.decorate(h.get()).iteration,undefined);
+});

@@ -91,7 +91,9 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
   if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
   byId('asset-prompt-use').hidden=!showDraft||busy;byId('asset-prompt-use').disabled=!matches;
-  byId('asset-prompt-undo').hidden=!wasApplied||busy;
+  // Recalled PNG metadata has no live controller request, but still contains
+  // the original request that Undo should restore.
+  byId('asset-prompt-undo').hidden=!(applied&&prompt.value===applied.text&&promptExpansionMatches(applied.request,current()))||busy;
   let message=state.error||state.progress||'';
   if(showDraft&&!busy&&!matches)message='The selected image or model changed. Restore the original selection to use this expansion, or expand again.';
   if(state.coordination)message+=` · ${state.coordination}`;
