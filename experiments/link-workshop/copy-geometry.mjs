@@ -23,6 +23,7 @@ export function mirrorBodyGeometry(packet,{planeZ,selections,positions}){
    const tangent=geometry.attributes.tangent;if(tangent)for(let i=0;i<tangent.count;i++)tangent.setW(i,-tangent.getW(i));
    const mesh=new T.Mesh(geometry,source.material);mesh.name='Mirror: '+(source.name||source.uuid);mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.userData={...source.userData,mirrorSource:source.name||source.uuid};group.add(mesh);
   }
+  for(const mesh of group.children)if(mesh.userData.copyPart)mesh.userData.copyPart=group.uuid+':'+mesh.userData.copyPart;
   object.add(group);object.updateMatrixWorld(true);item.object=object.toJSON();
   const gs=new Set(),ms=new Set();object.traverse(o=>{if(o.geometry)gs.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)ms.add(m);});for(const g of gs)g.dispose();for(const m of ms)m.dispose();
  }
