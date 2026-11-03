@@ -1,6 +1,7 @@
 import {Group,Mesh,BufferGeometry,BufferAttribute,LineSegments,LineBasicMaterial,MeshStandardMaterial,Box3,Vector3} from '../lib/three.core.js';
-import {DEFAULT_RECIPE,validateRecipe,validateParameters,validateProfile,replaceStockSource,deformStock,createStockWarp} from './stock-family/model.mjs';
+import {DEFAULT_RECIPE,validateRecipe,validateParameters,validateProfile,replaceStockSource,deformStock,createStockWarp,bandPercent,bandsFromPercent} from './stock-family/model.mjs';
 import {loadStockSource,stockDigest} from './stock-family/source.mjs';
+import {assetWithheld,assetSource} from '../authoring-assets.mjs';
 import {installSceneControlHistory} from '../scene-control-history.mjs';
 import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from './stock-family/lifecycle.mjs';
 
@@ -48,6 +49,13 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   function read(){return {source:structuredClone(recipe.source),sources:structuredClone(recipe.sources??[recipe.source]),sourceBusy,referenceId:reference?.id,variants:items.map(i=>({id:i.value.id,label:i.value.label,objectId:i.asset.id,targetId:i.target,parameters:params(i),status:i.removed?'removed':i.error?'blocked':'deformed',error:i.error,metrics:i.metrics,pose:pose(i.root),materialMaps:Object.fromEntries(['map','roughnessMap','metalnessMap','normalMap'].map(key=>[key,!!i.mesh.material[key]]))})),recipe:intact()?exported():null};}
   const operations={
     read,export:exported,
+    async asset({entry,axis='z'}){
+      if(entry?.kind!=='mesh'||assetWithheld(entry))throw Error('Choose an available mesh in Assets');
+      const url=entry.source??assetSource(entry.root,entry.path),response=await fetch(url,{cache:'no-store'});
+      if(!response.ok)throw Error('Stock source HTTP '+response.status);
+      const sha256=await stockDigest(await response.arrayBuffer());
+      return operations.source({source:{url,sha256,label:entry.label??entry.name,fit:{axis}},fit:true});
+    },
     async source({source,fit=false}){
       if(!intact())throw Error('Reopen the complete family before replacing its source');
       const request=++sourceRequest;sourceBusy=true;refresh();let loaded;
@@ -111,6 +119,10 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     const sourceSelect=document.createElement('select');sourceSelect.className='transform-input';sourceSelect.setAttribute('aria-label','Stock source');common.append(sourceSelect);
     const sourceStatus=document.createElement('output');sourceStatus.className='stock-source-status';
     async function chooseSource(source,fit=false){sourceStatus.textContent='Loading source...';try{await invoke('source',{source,fit});sourceStatus.textContent='';}catch(e){sourceStatus.textContent=e.message;refresh();}}
+    const browse=document.createElement('button');browse.className='btn';browse.textContent='Choose from Assets...';browse.onclick=()=>{if(win.kaminosWorkspace.setMode('authoring')!==false)win.kaminosAssets.open('browse');};common.append(browse);
+    const useAsset=document.createElement('button'),assetStatus=document.createElement('output');useAsset.className='btn';useAsset.textContent='Use as stock source';assetStatus.className='stock-source-status';
+    document.querySelector('#authoring-assets .asset-selected-actions').append(useAsset,assetStatus);removals.push(()=>{useAsset.remove();assetStatus.remove();});
+    useAsset.onclick=async()=>{useAsset.disabled=true;sourceStatus.textContent=assetStatus.textContent='Loading source...';try{await invoke('asset',{entry:win.kaminosAssets.read().selected,axis:axis.value});sourceStatus.textContent=assetStatus.textContent='';win.kaminosAssets.close();win.kaminosWorkspace.setMode('workbench');refresh();}catch(e){sourceStatus.textContent=assetStatus.textContent=e.message;}finally{useAsset.disabled=false;}};
     sourceSelect.onchange=()=>{sourceSelect.blur();chooseSource((recipe.sources??[recipe.source]).find(s=>s.sha256===sourceSelect.value));};
     const importButton=document.createElement('button'),meshFile=document.createElement('input');importButton.className='btn';importButton.textContent='Import source GLB...';meshFile.type='file';meshFile.accept='.glb';meshFile.hidden=true;meshFile.setAttribute('aria-label','Import stock source');importButton.onclick=()=>meshFile.click();
     meshFile.onchange=async()=>{const file=meshFile.files[0];if(!file)return;importButton.disabled=true;sourceStatus.textContent='Storing source...';try{
@@ -124,20 +136,23 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     for(const value of ['z','x','y','-z','-x','-y']){const option=document.createElement('option');option.value=value;option.textContent=value.toUpperCase();axis.append(option);}axisLabel.append(axis);fitting.append(axisLabel);
     axis.onchange=()=>{axis.blur();chooseSource({...recipe.source,fit:{axis:axis.value}},true);};
     const bandTitle=document.createElement('h4');bandTitle.textContent='Protected bands (%)';const bands=document.createElement('div');bands.className='stock-source-bands';fitting.append(bandTitle,bands);
-    const addBand=document.createElement('button');addBand.className='btn';addBand.textContent='Add protected band';fitting.append(addBand);
+    const addBand=document.createElement('button'),applyBands=document.createElement('button');addBand.className=applyBands.className='btn';addBand.textContent='Add protected band';applyBands.textContent='Apply bands';fitting.append(addBand,applyBands);
     const sourceIdentity=document.createElement('output');sourceIdentity.className='stock-source-identity';fitting.append(sourceIdentity);
-    addBand.onclick=()=>{const p=recipe.source.profile,points=[p.min,...p.locks.flat(),p.max],gaps=[];for(let i=0;i<points.length;i+=2)if(points[i+1]>points[i])gaps.push([points[i],points[i+1]]);gaps.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));const gap=gaps[0];if(!gap)return;invoke('bands',{locks:[...p.locks,[gap[0],gap[0]+(gap[1]-gap[0])*.1]].sort((a,b)=>a[0]-b[0])}).catch(e=>sourceStatus.textContent=e.message);};
-    let sourceKey='',bandKey='';
+    let sourceKey='',bandKey='',bandDraft=[];
+    addBand.onclick=()=>{try{const p=recipe.source.profile,locks=bandsFromPercent(p,bandDraft),points=[p.min,...locks.flat(),p.max],gaps=[];for(let i=0;i<points.length;i+=2)if(points[i+1]>points[i])gaps.push([points[i],points[i+1]]);gaps.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));const gap=gaps[0];if(!gap)return;bandDraft=[...locks,[gap[0],gap[0]+(gap[1]-gap[0])*.1]].sort((a,b)=>a[0]-b[0]).map(b=>b.map(v=>bandPercent(p,v)));renderBands();sourceStatus.textContent='';}catch(e){sourceStatus.textContent=e.message;}};
+    applyBands.onclick=async()=>{try{await invoke('bands',{locks:bandsFromPercent(recipe.source.profile,bandDraft)});sourceStatus.textContent='';bandKey='';refresh();}catch(e){sourceStatus.textContent=e.message;}};
+    function renderBands(){
+      bands.replaceChildren();bandDraft.forEach((band,index)=>{const row=document.createElement('div');row.className='stock-band-row';
+        for(let end=0;end<2;end++){const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.value=band[end];input.setAttribute('aria-label',`Band ${index+1} ${end?'end':'start'} percent`);input.oninput=()=>{bandDraft[index][end]=input.value;};row.append(input);}
+        const remove=document.createElement('button');remove.className='btn';remove.textContent='\u00d7';remove.title=`Remove band ${index+1}`;remove.setAttribute('aria-label',remove.title);remove.onclick=()=>{bandDraft.splice(index,1);renderBands();sourceStatus.textContent='';};row.append(remove);bands.append(row);
+      });
+    }
     function refreshSources(){
       const sources=recipe.sources??[recipe.source],key=JSON.stringify(sources.map(s=>[s.sha256,s.label]));
       if(key!==sourceKey){sourceKey=key;sourceSelect.replaceChildren();for(const s of sources){const option=document.createElement('option');option.value=s.sha256;option.textContent=s.label??(s.sha256===DEFAULT_RECIPE.source.sha256?'Steel trough':s.sha256.slice(0,12));sourceSelect.append(option);}}
       sourceSelect.value=recipe.source.sha256;sourceSelect.disabled=sourceBusy;importButton.disabled=sourceBusy;axis.disabled=sourceBusy;axis.value=recipe.source.fit?.axis??'z';
       sourceIdentity.textContent=recipe.source.sha256;sourceIdentity.title=recipe.source.url;
-      const profile=recipe.source.profile,nextKey=JSON.stringify(profile);if(nextKey===bandKey)return;bandKey=nextKey;bands.replaceChildren();
-      profile.locks.forEach((band,index)=>{const row=document.createElement('div');row.className='stock-band-row';
-        for(let end=0;end<2;end++){const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.value=String(Number(((band[end]-profile.min)/(profile.max-profile.min)*100).toFixed(4)));input.setAttribute('aria-label',`Band ${index+1} ${end?'end':'start'} percent`);input.onchange=()=>{const locks=structuredClone(recipe.source.profile.locks);locks[index][end]=profile.min+Number(input.value)/100*(profile.max-profile.min);invoke('bands',{locks}).catch(e=>{sourceStatus.textContent=e.message;bandKey='';refresh();});};row.append(input);}
-        const remove=document.createElement('button');remove.className='btn';remove.textContent='\u00d7';remove.title=`Remove band ${index+1}`;remove.setAttribute('aria-label',remove.title);remove.onclick=()=>invoke('bands',{locks:recipe.source.profile.locks.filter((_,i)=>i!==index)});row.append(remove);bands.append(row);
-      });
+      const profile=recipe.source.profile,nextKey=JSON.stringify([recipe.source.sha256,profile]);if(nextKey===bandKey)return;bandKey=nextKey;bandDraft=profile.locks.map(b=>b.map(v=>bandPercent(profile,v)));renderBands();sourceStatus.textContent='';
     }
     const frame=document.createElement('button');frame.className='btn';frame.textContent='Frame family';frame.onclick=()=>invoke('frame');common.append(frame);
     const strainLabel=document.createElement('label'),strain=document.createElement('input');strain.type='checkbox';strain.onchange=()=>invoke('strain',{enabled:strain.checked});strainLabel.append(strain,' Axial strain');common.append(strainLabel);
