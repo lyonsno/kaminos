@@ -13,17 +13,20 @@ export async function probeLiveBodies(){
   // Two vertical regions, with a rotated first body. Recorded engine ABI is
   // pinned by lib/fracture/rigid-engine.js; this tests the material producer.
   const material=floats(32);for(let i=0;i<4;i++)material[i*8+5]=1;
-  const state=buffer(material),positions=buffer(Float32Array.of(3,4,5,.25,1,0,0,.25)),rotations=buffer(Float32Array.of(0,0,Math.SQRT1_2,Math.SQRT1_2,0,0,0,1));
-  const rest=buffer(Float32Array.of(.5,1,.5,4,1.5,1,.5,4)),boxesRaw=Float32Array.of(0,.5,1,.5,0,.5,1,.5);
-  new Uint32Array(boxesRaw.buffer)[0]=new Uint32Array(boxesRaw.buffer)[4]=0x02010000;
-  const boxes=buffer(boxesRaw),inertia=buffer(Float32Array.of(.6,1.5,.6,.25,.6,1.5,.6,.25)),velocities=buffer(floats(8)),angular=buffer(Float32Array.of(0,0,2,0,0,0,0,0));
-  const jointData=floats(44);new Uint32Array(jointData.buffer).set([0,1,0,1]);jointData.set([.5,0,0,1],4);jointData.set([-.5,0,0,1],8);const joints=buffer(jointData);
+  const state=buffer(material),positions=buffer(Float32Array.of(3,4,5,.25,1,0,0,.25,4,1,.5,.5)),rotations=buffer(Float32Array.of(0,0,Math.SQRT1_2,Math.SQRT1_2,0,0,0,1,0,0,0,1));
+  const rest=buffer(Float32Array.of(.5,1,.5,4,1.5,1,.5,4,4,1,.5,2)),boxesRaw=Float32Array.of(0,.5,1,.5,0,.5,1,.5,0,.2,.3,.4);
+  new Uint32Array(boxesRaw.buffer)[0]=new Uint32Array(boxesRaw.buffer)[4]=new Uint32Array(boxesRaw.buffer)[8]=0x02010000;
+  const boxes=buffer(boxesRaw),inertia=buffer(Float32Array.of(.6,1.5,.6,.25,.6,1.5,.6,.25,6,7.5,1.5/.13,.5)),velocities=buffer(floats(12)),angular=buffer(Float32Array.of(0,0,2,0,0,0,0,0,0,0,0,0));
+  const jointData=floats(88);new Uint32Array(jointData.buffer).set([0,1,0,1]);jointData.set([.5,0,0,1],4);jointData.set([-.5,0,0,1],8);new Uint32Array(jointData.buffer).set([1,2,0,1],44);const joints=buffer(jointData);
   const contactData=floats(36);contactData.set([0,1,1,0]);contactData.set([3,4,5,6],20);contactData.set([7,8,9,10],24);const contacts=buffer(contactData);
   const field={residentState:()=>({after:state,bounds:new Box3(new Vector3(0,0,0),new Vector3(2,2,1)),dimensions:[2,2,1]})};
-  reducer=await createBurnRegionBodiesGpu({device,field,mapping:{counts:Uint32Array.of(2,2),spans:Uint32Array.of(0,2,2,2),cells:Uint32Array.of(0,2,1,3)},rest,positions,rotations,boxes,inertia,velocities,angular,joints,contacts});
+  reducer=await createBurnRegionBodiesGpu({device,field,mapping:{counts:Uint32Array.of(2,2,0),spans:Uint32Array.of(0,2,2,2,4,0),cells:Uint32Array.of(0,2,1,3)},envelopes:[{min:[0,0,0],max:[1,2,1]},{min:[1.1,.1,.1],max:[1.9,1.9,.9]},{min:[3.8,.7,.1],max:[4.2,1.3,.9]}],rest,positions,rotations,boxes,inertia,velocities,angular,joints,contacts});
   const arrays=[positions,rest,boxes,inertia,velocities,joints,contacts,reducer.shape];
   async function step(){const bytes=arrays.reduce((s,b)=>s+b.size,0),staging=device.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const encoder=device.createCommandEncoder();reducer.encode(encoder);let offset=0;for(const b of arrays){encoder.copyBufferToBuffer(b,0,staging,offset,b.size);offset+=b.size;}device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);const raw=new Uint8Array(staging.getMappedRange()),out=[];offset=0;for(const b of arrays){out.push(Array.from(new Float32Array(raw.slice(offset,offset+b.size).buffer)));offset+=b.size;}return out;}finally{staging.destroy();}}
-  const cold=await step();near(cold[0],[3,4,5,.25,1,0,0,.25]);
+  const cold=await step();near(cold[0],[3,4,5,.25,1,0,0,.25,4,1,.5,.5]);
+  near(cold[2].slice(5,8),[.4,.9,.4]);
+  near(cold[2].slice(9,12),[.2,.3,.4]);near(cold[3].slice(8,12),[6,7.5,1.5/.13,.5]);
+  if(new Uint32Array(Float32Array.from(cold[5]).buffer)[47]!==1)throw Error('Unmapped material is not consumed material');
   material[5]=0;device.queue.writeBuffer(state,0,material);const consumed=await step();
   const expected=remainingBurnBody({points:[[.5,.5,.5],[.5,1.5,.5]],fuel:[0,1],pitch:[1,1,1],mass:4});
   near(consumed[0].slice(0,4),[2.5,4,5,1/expected.mass]);near(consumed[1].slice(0,3),expected.center);near(consumed[2].slice(1,4),expected.halfExtents);near(consumed[3].slice(0,3),expected.inverseInertia);
@@ -33,6 +36,7 @@ export async function probeLiveBodies(){
   near(exhausted[0].slice(0,4),[2.5,4,5,0]);near(exhausted[3].slice(0,4),[0,0,0,0]);
   const masks=new Uint32Array(Float32Array.from(exhausted[2]).buffer);if(masks[0]>>>24!==0)throw Error('Exhausted material retained contact');
   if(new Uint32Array(Float32Array.from(exhausted[5]).buffer)[3]!==0)throw Error('Exhausted material retained connection');
+  if(new Uint32Array(Float32Array.from(exhausted[5]).buffer)[47]!==1)throw Error('Unknown-region connection must survive an unrelated exhaustion');
   await device.queue.onSubmittedWorkDone();if(errors.length)throw Error(errors.join('\n'));
   return {adapter:{vendor:adapter.info.vendor,description:adapter.info.description},fallback:adapter.isFallbackAdapter,scope:'remaining-material mass/contact/inertia producer; not a live interaction claim',cold,consumed,stable,exhausted,expected};
  }finally{reducer?.dispose();owned.forEach(b=>b.destroy());device.destroy();}

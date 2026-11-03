@@ -16,7 +16,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   if(mesh.matrixWorld.determinant()<=0||Math.max(...worldScale.toArray())-Math.min(...worldScale.toArray())>s*1e-6)throw Error('Live fracture requires positive uniform object scale');
   if(referenceScale!==null&&Math.abs(s-referenceScale)>referenceScale*1e-6)throw Error('Object scale changed: switch Fracture off and on to rebuild mechanics at this size');
   const position=new Vector3(g.center[0],g.height-.05,g.center[2]).applyMatrix4(inverse),scale=new Vector3(),rotation=new Quaternion();inverse.decompose(new Vector3(),rotation,scale);
-  return {scale:s,gravity:new Vector3(0,-9.81,0).applyMatrix3(new Matrix3().setFromMatrix4(inverse)).toArray(),support:{position:position.toArray(),quaternion:rotation.toArray(),halfExtents:[g.radius/s,.05/s,g.radius/s],friction:.6}};
+  return {scale:s,contactsEnabled:g.visible!==false,gravity:new Vector3(0,-9.81,0).applyMatrix3(new Matrix3().setFromMatrix4(inverse)).toArray(),support:{position:position.toArray(),quaternion:rotation.toArray(),halfExtents:[g.radius/s,.05/s,g.radius/s],friction:.6}};
  }
  function clear(){field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();}
  function present(){if(!surface)return;mesh.updateWorldMatrix(true,false);parent.updateWorldMatrix(true,false);surface.mesh.matrix.copy(parent.matrixWorld).invert().multiply(mesh.matrixWorld);surface.mesh.updateWorldMatrix(false,false);}
@@ -43,7 +43,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
    status='preparing';pending=prepare(token);return pending;
   },
   get active(){return status==='live';},
-  afterSubmit({dt}){if(status!=='live')return;try{const current=frame();dynamics.setGravity(current.gravity);dynamics.setSupport(0,current.support);dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';throw cause;}},
+  afterSubmit({dt}){if(status!=='live')return;try{const current=frame();dynamics.setGravity(current.gravity);dynamics.setContactsEnabled(current.contactsEnabled);dynamics.setSupport(0,current.support);dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';}},
   present,
   update(seconds,appearance){for(const b of surface?.bindings??[]){b.setAppearance(appearance);b.update(seconds);}},
   read:()=>({enabled,status,error,thermal:'live-resident-material',clock:'submitted-fluid-simulation-seconds',mechanics:dynamics?.read()??null,surface:surface?.read()??null,contact:'coarse-surviving-boxes-against-ground; no-piece-self-contact',interaction:'ordinary-whole-object-transforms; no-independent-fragment-grab'}),

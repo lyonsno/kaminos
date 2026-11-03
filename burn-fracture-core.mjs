@@ -2,11 +2,13 @@ import {LOG_RESIDUE,LOG_MATERIAL_EPSILON} from './log-consumption.mjs';
 
 // CPU reference for the resident remaining-material reduction. Contact and
 // inertia use a coarse surviving-material box, not the original hollow shell.
-export function remainingBurnBody({points,fuel,pitch,mass}){
+export function remainingBurnBody({points,fuel,pitch,mass,bounds}){
  if(!Array.isArray(points)||!points.length||points.some(p=>p.length!==3||!p.every(Number.isFinite))||fuel.length!==points.length||!fuel.every(x=>Number.isFinite(x)&&x>=0&&x<=1)||pitch.length!==3||!pitch.every(x=>Number.isFinite(x)&&x>0)||!Number.isFinite(mass)||mass<=0)throw Error('Complete finite remaining material required');
  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let remaining=0;
  points.forEach((p,i)=>{if(fuel[i]<=LOG_RESIDUE+LOG_MATERIAL_EPSILON)return;remaining+=fuel[i];for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]-pitch[k]/2);hi[k]=Math.max(hi[k],p[k]+pitch[k]/2);}});
  if(!remaining)return null;
+ if(bounds)for(let k=0;k<3;k++){lo[k]=Math.max(lo[k],bounds.min[k]);hi[k]=Math.min(hi[k],bounds.max[k]);}
+ if(lo.some((v,k)=>v>=hi[k]))return null;
  const currentMass=mass*remaining/points.length,halfExtents=lo.map((v,k)=>(hi[k]-v)/2);
  return {mass:currentMass,center:lo.map((v,k)=>(hi[k]+v)/2),halfExtents,inverseInertia:halfExtents.map((_,k)=>3/(currentMass*(halfExtents[(k+1)%3]**2+halfExtents[(k+2)%3]**2)))};
 }
