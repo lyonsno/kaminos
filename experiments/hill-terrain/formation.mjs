@@ -82,44 +82,76 @@ export function rockResistance(x,y,z,c){
 }
 export function seedGeology(input){
  const c=formationConfig(input),n=c.resolution,s=new Float32Array(n*n*4);
- const p1=hash(3,7,c.seed)*Math.PI*2,p2=hash(17,13,c.seed)*Math.PI*2,p3=hash(29,31,c.seed)*Math.PI*2;
- const az=(hash(41,19,c.seed)-.5)*1.18,ca=Math.cos(az),sa=Math.sin(az);
- const crossAz=az+(hash(53,23,c.seed)>.5?1:-1)*(.74+.36*hash(61,37,c.seed)),cca=Math.cos(crossAz),csa=Math.sin(crossAz);
- const massifShiftX=(hash(71,43,c.seed)-.5)*.68,massifShiftZ=(hash(83,59,c.seed)-.5)*.32;
- const breachCenter=(hash(97,67,c.seed)-.5)*.58,breachSkew=(hash(109,73,c.seed)-.5)*.48;
- const mesaMix=clamp(c.mesa,0,1),terraceMix=clamp(c.terrace,0,1),stepStyle= clamp(.65*mesaMix+.65*terraceMix,0,1);
+ const mesaMix=clamp(c.mesa,0,1),terraceMix=clamp(c.terrace,0,1),stepStyle=clamp(.65*mesaMix+.65*terraceMix,0,1);
  const strikeRad=(c.strike??0)*Math.PI/180,sca=Math.cos(strikeRad),ssa=Math.sin(strikeRad);
  const dipScale=1-.88*stepStyle;
+ // Seeded winding trunk canyons and oblique tributary branches (eliminates parallel sine-grating stripes).
+ const numCanyons=Math.max(2,Math.min(9,Math.round(c.valleys*.75)));
+ const canyons=[];
+ for(let m=0;m<numCanyons;m++){
+  const slot=(m+.18+.64*hash(m*11+3,7,c.seed))/numCanyons;
+  const x0=clamp(.08+.84*((slot+hash(3,17,c.seed))%1),.08,.92);
+  const x1=clamp(x0+(hash(m*13+5,19,c.seed)-.5)*.62,.10,.90);
+  const amp=.07+.09*hash(m*17+7,29,c.seed),freq=1.5+1.3*hash(m*23+9,37,c.seed),phase=hash(m*31+13,41,c.seed)*Math.PI*2;
+  const width=(.048+.028*hash(m*43+17,53,c.seed))*(4.8/Math.max(2.5,c.valleys));
+  const b1v=.18+.22*hash(m*53+19,61,c.seed),b1dir=hash(m*59+23,67,c.seed)>.5?1:-1,b1len=.16+.14*hash(m*67+29,71,c.seed),b1slope=(hash(m*71+31,73,c.seed)-.35)*.8;
+  const b2v=.42+.22*hash(m*79+37,79,c.seed),b2dir=-b1dir,b2len=.14+.14*hash(m*83+41,83,c.seed),b2slope=(hash(m*89+43,89,c.seed)-.35)*.8;
+  canyons.push({x0,x1,amp,freq,phase,width,b1v,b1dir,b1len,b1slope,b2v,b2dir,b2len,b2slope});
+ }
+ // Seeded tectonic mesa plates and isolated outlier buttes across the territory.
+ const plates=[];
+ for(let p=0;p<6;p++){
+  const px=.10+.80*hash(p*19+3,101,c.seed),pz=.08+.56*hash(p*29+7,107,c.seed);
+  const rx=.14+.20*hash(p*37+11,113,c.seed),rz=.12+.18*hash(p*47+13,127,c.seed);
+  const ang=(hash(p*53+17,131,c.seed)-.5)*Math.PI,ca=Math.cos(ang),sa=Math.sin(ang);
+  const h=(.48+.48*Math.max(0,1-pz*1.15))*(.72+.28*hash(p*61+19,137,c.seed));
+  plates.push({px,pz,rx,rz,ca,sa,h});
+ }
+ const segDist=(px,pz,ax,az,bx,bz)=>{
+  const dx=bx-ax,dz=bz-az,t=clamp(((px-ax)*dx+(pz-az)*dz)/Math.max(1e-6,dx*dx+dz*dz),0,1);
+  return Math.hypot(px-ax-t*dx,pz-az-t*dz);
+ };
  for(let z=0;z<n;z++)for(let x=0;x<n;x++){
   const u=x/(n-1),v=z/(n-1);
-  const wx=u+.20*fbm(u*2.8+1.3,v*2.8+.7,c.seed+19,4),wz=v+.20*fbm(u*2.8-.9,v*2.8+2.1,c.seed+43,4);
-  const texture=fbm(wx*3.8,wz*3.8,c.seed+5,5);
-  const ux=wx-.5-massifShiftX*.45,uz=wz-.38-massifShiftZ*.45;
-  const rotMain=ux*ca+uz*sa,rotCross=ux*cca+uz*csa;
-  const wavePhase=rotMain*c.valleys*Math.PI*2+p1+.55*Math.sin(rotCross*Math.PI*2.4+p2);
-  const crossPhase=rotCross*Math.max(2,c.valleys*.68)*Math.PI*2+p2+.45*Math.cos(rotMain*Math.PI*2.2+p3);
-  const frontShift=c.apron>0?Math.min(c.apron*.24,.032)*(Math.cos(wavePhase)+.45*Math.sin(crossPhase)):0;
+  const wx=u+.15*fbm(u*2.6+1.3,v*2.6+.7,c.seed+19,4),wz=v+.15*fbm(u*2.6-.9,v*2.6+2.1,c.seed+43,4);
+  const texture=fbm(wx*3.8,wz*3.8,c.seed+5,5),smoothTex=fbm(u*2.1+3.1,v*2.1+1.7,c.seed+33,3);
+  let dMin=99,nearestFloor=.05;
+  for(let m=0;m<numCanyons;m++){
+   const cy=canyons[m],tv=clamp(wz/.78,0,1),cx=cy.x0+(cy.x1-cy.x0)*tv+cy.amp*Math.sin(wz*Math.PI*cy.freq+cy.phase);
+   const dTrunk=Math.abs(wx-cx)/cy.width;
+   const b1x=cy.x0+(cy.x1-cy.x0)*cy.b1v+cy.amp*Math.sin(cy.b1v*Math.PI*cy.freq+cy.phase);
+   const dB1=segDist(wx,wz,b1x,cy.b1v,b1x+cy.b1dir*cy.b1len,cy.b1v+cy.b1slope*cy.b1len)/(cy.width*.78);
+   const b2x=cy.x0+(cy.x1-cy.x0)*cy.b2v+cy.amp*Math.sin(cy.b2v*Math.PI*cy.freq+cy.phase);
+   const dB2=segDist(wx,wz,b2x,cy.b2v,b2x+cy.b2dir*cy.b2len,cy.b2v+cy.b2slope*cy.b2len)/(cy.width*.78);
+   const d=Math.min(dTrunk,dB1,dB2);
+   if(d<dMin){dMin=d;nearestFloor=.05+.09*Math.max(0,1-tv);}
+  }
+  const frontShift=c.apron>0?Math.min(c.apron*.26,.042)*(smoothstep(.8,2.2,dMin)-.5+.4*smoothTex):0;
   const localApron=clamp(c.apron+frontShift,0,.90);
   const upland=clamp((1-v-localApron)/Math.max(1e-4,1-localApron),0,1);
-  const breachCoord=u-.5-breachCenter-breachSkew*(v-.38);
-  const breach=1-.52*Math.exp(-((breachCoord/.16)**2))*(.45+.55*smoothstep(.05,.85,upland));
-  const province=.84+.34*Math.cos((u-.5-massifShiftX)*Math.PI*1.8+p3*.6)+.20*(upland-.35);
-  const w1=1-Math.abs(Math.sin(wavePhase*.5)),w2=1-Math.abs(Math.sin(crossPhase*.5));
-  // 1) Peaked ridge & dendritic range morphology (when mesa=0, terrace=0): sharp V-valleys and tented ridges
-  const ridgeComb=(.72*w1+.28*w2)*(.65+.35*upland);
-  const env=Math.sin(Math.PI*upland)**1.2;
-  const ridgeNorm=.08+.52*(upland**1.35)*clamp(province,.52,1.30)*breach+(.42*ridgeComb+.36*texture)*env;
-  // 2) Broad structural field for mesa tablelands, isolated buttes, and stepped benches
-  const smoothTex=fbm(u*2.2+3.1,v*2.2+1.7,c.seed+33,3);
-  const cWave1=.5+.5*Math.cos(wavePhase),cWave2=.5+.5*Math.cos(crossPhase);
-  const blockField=clamp((.12+.62*(upland**.88)*clamp(province,.6,1.25)*breach)*(.32+.68*(.66*cWave1+.34*cWave2))+.08*smoothTex,0,1);
-  // Quantize blockField into 3–4 broad flat-topped mesa & structural terrace tiers separated by steep cliff scarps
-  const tierCount=3.2+1.2*terraceMix,scaled=blockField*tierCount,tierIdx=Math.floor(scaled),frac=scaled-tierIdx;
-  const riserW=.22-.06*mesaMix;
+  // Tectonic plateau & isolated outlier butte envelope
+  let plateEnv=.38+.52*(upland**.78);
+  for(let p=0;p<6;p++){
+   const pl=plates[p],dx=wx-pl.px,dz=wz-pl.pz,rx=(dx*pl.ca+dz*pl.sa)/pl.rx,rz=(-dx*pl.sa+dz*pl.ca)/pl.rz;
+   const r2=rx*rx+rz*rz,w=smoothstep(1.35,.28,r2);
+   plateEnv=Math.max(plateEnv*.75,w*pl.h+.25*plateEnv);
+  }
+  const xw=(u-.5)*c.width,zw=(v-.5)*c.length,rx=xw*sca+zw*ssa,rz=-xw*ssa+zw*sca;
+  // 1) Peaked ridge, anticlinal fold & cuesta hogback morphology (when mesa=0, terrace=0)
+  const strikeWave=.5+.5*Math.cos((rx*1.35+.25*Math.sin(rz*.8))*Math.PI*Math.max(1.5,c.valleys*.5)+c.seed*.13);
+  const canyonRidge=smoothstep(.15,2.1,dMin)**1.25;
+  const env=Math.sin(Math.PI*upland)**1.15;
+  const ridgeNorm=.08+(.56*(upland**1.28)*(.55+.45*plateEnv)+.34*strikeWave*env)*canyonRidge+.36*texture*env;
+  // 2) Flat-topped caprock mesas, isolated outlier buttes & stair-stepped structural terraces
+  const frontEscarp=smoothstep(.02,.18,upland);
+  const canyonCarve=smoothstep(.42,1.65,dMin);
+  const blockField=clamp(frontEscarp*plateEnv*(.14+.86*canyonCarve)+.07*smoothTex*(1-.6*mesaMix),0,1);
+  const tierCount=2.5+1.6*terraceMix,scaled=blockField*tierCount,tierIdx=Math.floor(scaled),frac=scaled-tierIdx;
+  const riserW=.24-.08*mesaMix;
   const tierStep=frac<riserW?.97*smoothstep(0,riserW,frac):.97+.03*(frac-riserW)/(1-riserW);
-  const xw=(u-.5)*c.width,zw=(v-.5)*c.length,rx=xw*sca+zw*ssa;
   const dipShift=dipScale*c.tilt*rx*.04;
-  const mesaNorm=clamp((tierIdx+tierStep)/tierCount+.025*upland+dipShift,0,1.05);
+  const treadGrade=.032*upland+.048*smoothstep(.40,.52,upland);
+  const mesaNorm=clamp(nearestFloor*(1-canyonCarve)+(tierIdx+tierStep)/tierCount*.86+treadGrade+dipShift,0,1.05);
   const y0=c.relief*((1-stepStyle)*ridgeNorm+stepStyle*mesaNorm);
   const apronGrade=.002*(1-v);
   s[(z*n+x)*4]=.10+apronGrade+y0*smoothstep(0,.04,upland);
