@@ -33,7 +33,16 @@ def save_family(root, payload, write_json):
     with (root/'.stock-family.lock').open('a+') as lock:
         fcntl.flock(lock.fileno(),fcntl.LOCK_EX)
         if target.is_symlink():raise ValueError('Invalid family storage target')
-        prior=json.loads(target.read_text()) if target.exists() else None
+        prior=None
+        if target.exists():
+            try:
+                prior=json.loads(target.read_text())
+                if not isinstance(prior,dict) or prior.get('schema')!='kaminos.stock-family-asset.v1' or prior.get('id')!=identity or not re.fullmatch(r'[a-f0-9]{64}',str(prior.get('revision',''))):
+                    raise ValueError('Invalid stored family envelope')
+                expected=hashlib.sha256(json.dumps({k:v for k,v in prior.items() if k!='revision'},sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+                if prior['revision']!=expected:raise ValueError('Stored family content changed')
+            except (ValueError,TypeError) as error:
+                raise OSError('Stored family is corrupt; refusing to overwrite it') from error
         if prior and payload.get('revision')!=prior.get('revision'):raise StockConflict('Family changed in another tab; reopen it before saving')
         if not prior and payload.get('revision') is not None:raise StockConflict('Saved family is missing; save a new family')
         result={'schema':'kaminos.stock-family-asset.v1','id':identity,'name':name.strip(),'recipe':recipe}

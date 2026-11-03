@@ -5048,11 +5048,17 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_stock_family_save(self):
         from stock_family_store import save_family, StockConflict
         try:
-            payload=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))))
-            self.send_json(save_family(BROWSE_ROOTS['generated-meshes'],payload,_atomic_write_json))
+            length=int(self.headers.get('Content-Length',0))
+            if length<=0:raise ValueError('Stock family body required')
+            body=self.rfile.read(length)
+            if len(body)!=length:raise ValueError('Incomplete stock family body')
+            payload=json.loads(body)
+            root=BROWSE_ROOTS.get('generated-meshes')
+            if root is None:raise OSError('Saved asset storage is not mounted')
+            self.send_json(save_family(root,payload,_atomic_write_json))
         except StockConflict as error:
             self.send_json({'error':str(error),'phase':'stock-family-persistence'},409)
-        except (ValueError,TypeError,KeyError) as error:
+        except (ValueError,TypeError) as error:
             self.send_json({'error':str(error),'phase':'stock-family-persistence'},400)
         except OSError as error:
             self.send_json({'error':str(error),'phase':'stock-family-persistence'},500)
