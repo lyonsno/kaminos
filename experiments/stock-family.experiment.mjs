@@ -1,6 +1,7 @@
 import {Group,Mesh,BufferGeometry,BufferAttribute,LineSegments,LineBasicMaterial,MeshStandardMaterial,Box3,Vector3} from '../lib/three.core.js';
 import {DEFAULT_RECIPE,validateRecipe,validateParameters,validateProfile,replaceStockSource,deformStock,createStockWarp,bandPercent,bandsFromPercent} from './stock-family/model.mjs';
 import {loadStockSource,stockDigest} from './stock-family/source.mjs';
+import {validateFamilyAsset,readFamilyAsset,saveFamilyAsset} from './stock-family/library.mjs';
 import {assetWithheld,assetSource} from '../authoring-assets.mjs';
 import {installSceneControlHistory} from '../scene-control-history.mjs';
 import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from './stock-family/lifecycle.mjs';
@@ -9,7 +10,8 @@ const pose=root=>({position:root.position.toArray(),rotation:[root.rotation.x,ro
 const putPose=(root,p)=>{if(p){root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}};
 
 export default {id:'stock-family',title:'Stockroom - adaptable trough',async create({host,inputs={},record=()=>{}}){
-  let recipe=validateRecipe(inputs.recipe??DEFAULT_RECIPE);
+  let library=inputs.asset?validateFamilyAsset(inputs.asset):inputs.assetSource?await readFamilyAsset(inputs.assetSource):null;
+  let recipe=validateRecipe(library?.recipe??inputs.recipe??DEFAULT_RECIPE),saving=false;
   const session=await host.scene.open();
   const win=host.controls.document.defaultView,edits=win.kaminosSceneEdits,items=[],seats=[],drags=[],histories=[];
   let disposed=false,strainEnabled=false,refresh=()=>{},unsubscribe=()=>{},reference,sourceGeometry,sourceMaterial,sourceRequest=0,sourceBusy=false;
@@ -49,6 +51,13 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   function read(){return {source:structuredClone(recipe.source),sources:structuredClone(recipe.sources??[recipe.source]),sourceBusy,referenceId:reference?.id,variants:items.map(i=>({id:i.value.id,label:i.value.label,objectId:i.asset.id,targetId:i.target,parameters:params(i),status:i.removed?'removed':i.error?'blocked':'deformed',error:i.error,metrics:i.metrics,pose:pose(i.root),materialMaps:Object.fromEntries(['map','roughnessMap','metalnessMap','normalMap'].map(key=>[key,!!i.mesh.material[key]]))})),recipe:intact()?exported():null};}
   const operations={
     read,export:exported,
+    library:()=>library?{id:library.id,name:library.name,revision:library.revision}:null,
+    async save({name,copy=false}){
+      if(saving||sourceBusy||edits.state().active||edits.state().replaying)throw Error('Finish the current edit before saving');
+      saving=true;
+      try{const saved=await saveFamilyAsset({recipe:exported(),name,...(!copy&&library?{id:library.id,revision:library.revision}:{})});if(!disposed)library=saved;return saved;}
+      finally{saving=false;}
+    },
     async asset({entry,axis='z'}){
       if(entry?.kind!=='mesh'||assetWithheld(entry))throw Error('Choose an available mesh in Assets');
       const url=entry.source??assetSource(entry.root,entry.path),response=await fetch(url,{cache:'no-store'});
@@ -116,12 +125,14 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     const style=document.createElement('link');style.rel='stylesheet';style.href='/experiments/stock-family/controls.css';document.head.append(style);removals.push(()=>{style.remove();document.body.classList.remove('stock-family-active');});
     const common=document.createElement('section');common.className='stock-family-controls';panel.append(common);removals.push(()=>common.remove());
     const heading=document.createElement('h3');heading.textContent='Stock family';common.append(heading);
+    const name=document.createElement('input');name.className='transform-input';name.type='text';name.setAttribute('aria-label','Family name');name.value=library?.name??'Workshop stock';common.append(name);
     const sourceSelect=document.createElement('select');sourceSelect.className='transform-input';sourceSelect.setAttribute('aria-label','Stock source');common.append(sourceSelect);
     const sourceStatus=document.createElement('output');sourceStatus.className='stock-source-status';
     async function chooseSource(source,fit=false){sourceStatus.textContent='Loading source...';try{await invoke('source',{source,fit});sourceStatus.textContent='';}catch(e){sourceStatus.textContent=e.message;refresh();}}
     const browse=document.createElement('button');browse.className='btn';browse.textContent='Choose from Assets...';browse.onclick=()=>{if(win.kaminosWorkspace.setMode('authoring')!==false)win.kaminosAssets.open('browse');};common.append(browse);
     const useAsset=document.createElement('button'),assetStatus=document.createElement('output');useAsset.className='btn';useAsset.textContent='Use as stock source';assetStatus.className='stock-source-status';
     document.querySelector('#authoring-assets .asset-selected-actions').append(useAsset,assetStatus);removals.push(()=>{useAsset.remove();assetStatus.remove();});
+    const showSourceAction=state=>{useAsset.hidden=state.selected?.kind!=='mesh'||assetWithheld(state.selected);};showSourceAction(win.kaminosAssets.read());removals.push(win.kaminosAssets.subscribe(showSourceAction));
     useAsset.onclick=async()=>{useAsset.disabled=true;sourceStatus.textContent=assetStatus.textContent='Loading source...';try{await invoke('asset',{entry:win.kaminosAssets.read().selected,axis:axis.value});sourceStatus.textContent=assetStatus.textContent='';win.kaminosAssets.close();win.kaminosWorkspace.setMode('workbench');refresh();}catch(e){sourceStatus.textContent=assetStatus.textContent=e.message;}finally{useAsset.disabled=false;}};
     sourceSelect.onchange=()=>{sourceSelect.blur();chooseSource((recipe.sources??[recipe.source]).find(s=>s.sha256===sourceSelect.value));};
     const importButton=document.createElement('button'),meshFile=document.createElement('input');importButton.className='btn';importButton.textContent='Import source GLB...';meshFile.type='file';meshFile.accept='.glb';meshFile.hidden=true;meshFile.setAttribute('aria-label','Import stock source');importButton.onclick=()=>meshFile.click();
@@ -171,11 +182,13 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       item.ui={status,protect,properties};seats.push(host.controls.mountObject({asset:item.asset,properties}));
     }
     const fileStatus=document.createElement('output');fileStatus.style.display='block';
-    const save=document.createElement('button');save.className='btn';save.textContent='Save family...';save.onclick=async()=>{try{const r=await invoke('export'),text=JSON.stringify(r,null,2)+'\n';
+    const saveInternal=document.createElement('button');saveInternal.className='btn';saveInternal.textContent='Save family';saveInternal.onclick=async()=>{saveInternal.disabled=true;try{const value=await invoke('save',{name:name.value});fileStatus.textContent='Saved '+value.name;}catch(e){fileStatus.textContent=e.message;}finally{saveInternal.disabled=false;}};common.append(saveInternal);
+    const transfer=document.createElement('details'),transferTitle=document.createElement('summary');transferTitle.textContent='Import / export';transfer.append(transferTitle);common.append(transfer);
+    const save=document.createElement('button');save.className='btn';save.textContent='Export family...';save.onclick=async()=>{try{const r=await invoke('export'),text=JSON.stringify(r,null,2)+'\n';
       if(win.showSaveFilePicker){const h=await win.showSaveFilePicker({suggestedName:'trough-family.json',types:[{description:'Stock family',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(text);await w.close();fileStatus.textContent='Saved '+h.name;}
       else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='trough-family.json';a.click();URL.revokeObjectURL(url);fileStatus.textContent='Downloaded family';}
     }catch(e){if(e.name!=='AbortError')fileStatus.textContent=e.message;}};
-    const open=document.createElement('button'),file=document.createElement('input');open.className='btn';open.textContent='Open family...';file.type='file';file.setAttribute('aria-label','Open stock family');file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const r=validateRecipe(JSON.parse(await file.files[0].text()));await win.kaminosWorkbenchExperiments.open('stock-family',{recipe:r});}catch(e){fileStatus.textContent=e.message;}finally{file.value='';}};common.append(save,open,file,fileStatus);
+    const open=document.createElement('button'),file=document.createElement('input');open.className='btn';open.textContent='Import family...';file.type='file';file.setAttribute('aria-label','Open stock family');file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const r=validateRecipe(JSON.parse(await file.files[0].text()));await win.kaminosWorkbenchExperiments.open('stock-family',{recipe:r});}catch(e){fileStatus.textContent=e.message;}finally{file.value='';}};transfer.append(save,open,file);common.append(fileStatus);
     refresh=()=>{if(disposed)return;const sceneSlot=document.getElementById('experiment-scene-slot'),parent=sceneSlot&&!sceneSlot.hidden?sceneSlot:panel;if(common.parentNode!==parent)parent.prepend(common);refreshSources();
       strain.checked=strainEnabled;for(const {item,key,input}of fields){input.disabled=!!item.removed;if(document.activeElement!==input||input.readOnly)input.value=String(item.value[key]);}
       for(const i of items){i.ui.protect.disabled=!!i.removed;i.ui.protect.checked=i.value.protect;i.ui.status.textContent=i.removed?'Removed':i.error?'Blocked: '+i.error:`Axial stretch ${i.metrics.minAxialStretch.toFixed(2)} to ${i.metrics.maxAxialStretch.toFixed(2)} x`;i.ui.status.dataset.blocked=String(!!i.error);}

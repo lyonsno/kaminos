@@ -4,6 +4,12 @@ import {createAuthoringAssets,assetSource} from '../authoring-assets.mjs';
 import {createAuthoringGeneration} from '../authoring-generation.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+test('named stock families open through the asset browser without treating the recipe as a GLB',async()=>{
+ let opened,meshes=0;const entry={kind:'stock-family',name:'family.stock-family.json',label:'Workshop channels',source:'/api/read?root=generated-meshes&path=family.stock-family.json'};
+ const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]}),openFamily:async e=>{opened=e;return 'family';},addMesh:async()=>meshes++});
+ assert.equal(await c.browse('generated-meshes'),true);c.select(c.read().entries[0]);assert.equal(await c.add(),'family');assert.equal(opened.source,entry.source);assert.equal(meshes,0);
+ c.select({...entry,visibility:{status:'withheld'}});await assert.rejects(c.add(),/review/);assert.equal(meshes,0);
+});
 test('held catalog selections retain their identity but cannot load, prepare or generate',async()=>{
  let calls=0;const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'greenroom',entries:[]}),addMesh:async()=>calls++,prepareImage:async()=>calls++,generator:()=>({preparesInput:true,read:()=>({status:'idle'}),run:async()=>calls++})});
  const held={kind:'image',source:'/api/job-output?job_id=held&file=output.png',label:'Lirm study',visibility:{status:'withheld',reason:'Hostile to eyesight. Awaiting further review.'}};
