@@ -7,8 +7,8 @@ import {createEncounterWorld} from '../experiments/creature-motion/encounters.mj
 // The joined walking creature: attention follows the cast that is actually
 // applied, and switching attention off while paused clears the turn at once.
 class Element {
- constructor(){this.children=[];this.style={};this.value='0';this.checked=true;}
- append(...nodes){this.children.push(...nodes);} prepend(...nodes){this.children.unshift(...nodes);} setAttribute(){} remove(){} dispatchEvent(){}
+ constructor(){this.children=[];this.style={};this.dataset={};this.value='0';this.checked=true;}
+ append(...nodes){this.children.push(...nodes);} prepend(...nodes){this.children.unshift(...nodes);} setAttribute(k,v){this[k]=v;} remove(){} dispatchEvent(){}
 }
 const document={createElement:()=>new Element(),getElementById:()=>null};
 const names=['pelvis','spine-chest','neck','head','head-end'],parentIndex=[-1,0,1,2,3];
@@ -38,6 +38,21 @@ const inputs={blend_frames:0,radius:4,case:'case-c',case_sha256:'c'.repeat(64),c
 const oldWindow=globalThis.window;globalThis.window={};
 try{
  const creature=await createWalkingCreature({host,inputs},dependencies);
+ const nodes=n=>[n,...n.children.flatMap(nodes)],panelRoot=new Element();
+ const controls=creature.mount({root:panelRoot,invoke:(name,input)=>creature.operations[name](input),reopen:async()=>{}});
+ const curiosity=nodes(panelRoot).find(n=>n['aria-label']==='Creature curiosity');assert.ok(curiosity,'creature inspector exposes curiosity');
+ curiosity.value='2.5';await curiosity.onchange();
+ assert.equal(creature.read().attention.behavior.curiosity,2.5,'properties use the live behavior operation');
+ assert.equal(creature.read().recipe.attention.behavior.curiosity,2.5,'authored multiplier is saved');
+ const habituation=nodes(panelRoot).find(n=>n['aria-label']==='Creature habituation speed');assert.ok(habituation,'inspector exposes habituation independently');
+ habituation.value='1.5';await habituation.onchange();assert.equal(creature.read().recipe.attention.behavior.habituation,1.5);
+ const priorSettings=creature.read().attention.behavior;
+ assert.throws(()=>creature.operations.behavior({aversion:-1}),/nonnegative/);
+ assert.deepEqual(creature.read().attention.behavior,priorSettings,'invalid updates are atomic');
+ assert.throws(()=>creature.operations.behavior({recoveryTime:0}),/positive/);
+ assert.throws(()=>creature.operations.behavior({habituation:0}),/positive/);
+ const savedRecipe=JSON.parse(JSON.stringify(creature.read().recipe));controls.dispose();
+ creature.operations.behavior({curiosity:1});
  const profileOf=()=>creature.read().attention.profile.forward;
  // R1: the older request finishes last but is superseded; attention must use
  // the cast that was actually applied to the body.
@@ -66,6 +81,9 @@ try{
  assert.ok(q.angleTo(new THREE.Quaternion())<1e-9,'head returns to the unmodified source orientation');
  assert.ok((creature.inspect??window.kaminosWalkingCreature)().vertices.some((v,i)=>Math.abs(v-turnedVertices[i])>1e-6),'the deformed body follows');
  await creature.dispose();
+ const reopened=await createWalkingCreature({host,inputs:savedRecipe},dependencies);
+ assert.deepEqual(reopened.read().attention.behavior,priorSettings,'serialized setup restores behavior multipliers');await reopened.dispose();
+ await assert.rejects(createWalkingCreature({host,inputs:{...inputs,attention:{...inputs.attention,behavior:{recoveryTime:0}}}},dependencies),/positive/);
 
  // Attention may hold locomotion without pausing the creature's observation
  // clock. Exercise the real walking consumer, source adapter and flame bridge.
@@ -136,12 +154,128 @@ try{
   assert.deepEqual(onsetWalker.pose({bones:['pelvis']}).bones,pose.bones.slice(0,1),'root does not slide during recoil');
   assert.notDeepEqual(onsetWalker.pose({bones:['spine-chest']}).bones,pose.bones.slice(1),'chest expresses the pulse while stride is held');
   advance(3);assert.equal(onsetWalker.read().attention.startle,null);
-  if(engage){assert.equal(onsetWalker.read().action.engagement.phase,'cautious','strong native light bridge onset extends caution beyond recoil');advance(5);}
+  if(engage){assert.ok(['cautious','withdrawing'].includes(onsetWalker.read().action.engagement.phase),'strong native light bridge onset keeps a protective response beyond recoil');advance(5);}
   assert.ok(onsetWalker.read().action.motion.elapsed>before.action.motion.elapsed,'autonomous walking resumes');
   if(engage){onsetWalker.operations.pause();onsetWalker.operations.engagement({enabled:false});assert.equal(onsetWalker.read().action.engagement.phase,'wandering');assert.equal(onsetWalker.read().action.motion.path.status,'wandering');assert.equal(onsetWalker.read().recipe.attention.engage,false);}
 
  }finally{await onsetWalker?.dispose();globalThis.setInterval=savedTimers.set;globalThis.clearInterval=savedTimers.clear;delete window.kaminosFireLightProbe;}
 
+ }
+ // Motivation reaches the actual path consumer through native source state
+ // and sampled illumination, without directly injecting engagement intent.
+ for(const [luminance,expectRetreat] of [[.004,false],[.2,true]]){
+  let motivated,poll;const saved={set:globalThis.setInterval,clear:globalThis.clearInterval};
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance}))})};
+   motivated=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+   await motivated.operations.action({kind:'wander'});
+   const states=[],joined=[],tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});const r=motivated.read();states.push(r.action.engagement);joined.push(r);};
+   for(let i=0;i<6;i++)tick();fire.active=true;notify();for(let i=0;i<6;i++)tick();await poll();
+   for(let i=0;i<110;i++)tick();
+   assert.equal(states.some(x=>x.phase==='withdrawing'),expectRetreat,'sampled magnitude changes the actual walking intention');
+   if(expectRetreat){
+    const retreat=states.find(x=>x.phase==='withdrawing');assert.ok(retreat.destination&&retreat.motivation.aversion>retreat.motivation.drive);
+    const withdrawing=joined.filter(r=>r.action.engagement.phase==='withdrawing');
+    assert.ok(withdrawing.every(r=>r.action.motion.reverse),'actual withdrawal selects backward retained steps');
+    assert.ok(withdrawing.filter(r=>r.attention.perceived.some(p=>p.id==='flame-emitter')).length>withdrawing.length*.9,'actual body and gaze retain visual contact during retreat');
+    assert.ok(withdrawing.every(r=>r.action.engagement.pace>1),'withdrawal consumes urgent gait pace');
+
+   }
+  }finally{await motivated?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
+ }
+ // A light change behind the body is sensed locally. It must lead to actual
+ // reacquisition, and a later ignition must work even with a resident atlas.
+ for(const cached of [false,true]){
+  let wary,poll;const saved=[globalThis.setInterval,globalThis.clearInterval];
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:cached||fire.active?700:0},values:points.map(()=>({luminance:(cached||fire.active)?0.2:0}))})};
+   wary=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();await wary.operations.action({kind:'wander'});
+   let count=0;const tick=async()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});if(count++%15===0)await poll();return wary.read();};
+   for(let i=0;i<6;i++)await tick();fire.active=true;notify();
+   const first=[];for(let i=0;i<180;i++)first.push(await tick());
+   assert.ok(first.some(r=>r.attention.startle),'rearward ignition is sensed through local illumination, including a retained atlas');
+   const late=first.slice(90);
+   assert.ok(late.filter(r=>r.attention.perceived.some(x=>x.id==='flame-emitter')).length>late.length*.9,'wary escape recruits body turning to regain actual sight within 1.5 seconds');
+   assert.ok(late.filter(r=>r.attention.focus?.id==='flame-emitter').length>late.length*.85,'after reacquisition the cause retains gaze apart from brief checks');
+   fire.active=false;notify();for(let i=0;i<180;i++)await tick();
+   // Turn the source off and relocate it behind the actual head. Its hidden
+   // transform is not an observation; the later local light change is.
+   const h=new THREE.Matrix4().fromArray(wary.inspect().boneWorld.find(b=>b.name==='head').matrix);
+   const forward=new THREE.Vector3(...wary.read().attention.profile.forward).transformDirection(h);
+   emitter.position.setFromMatrixPosition(h).addScaledVector(forward,-3);emitter.updateMatrixWorld(true);
+   for(let i=0;i<30;i++)await tick();
+   fire.active=true;notify();const again=[];for(let i=0;i<180;i++)again.push(await tick());
+   assert.ok(again.some(r=>r.attention.startle),'another sensed ignition rearms after cessation even when source state was not visually watched');
+  }finally{await wary?.dispose();[globalThis.setInterval,globalThis.clearInterval]=saved;delete window.kaminosFireLightProbe;}
+ }
+ // V-1: an ordinary retained-motion edit must preserve travel versus facing,
+ // including a Wander temporarily held while the source clip is previewed.
+ for(const held of [false,true]){
+  let editing,poll;const saved={set:globalThis.setInterval,clear:globalThis.clearInterval};
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.2}))})};
+   const motions=[{id:'one',label:'One',motion:'one',motion_sha256:'a'.repeat(64)},{id:'two',label:'Two',motion:'two',motion_sha256:'d'.repeat(64)}];
+   const loadSources=async request=>({...data,source:{...data.source,motionSha256:request.motion_sha256}});
+   editing=await createWalkingCreature({host,inputs:{...inputs,motion:'one',motion_sha256:'a'.repeat(64),motions,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},{...dependencies,loadSources});await Promise.resolve();
+   await editing.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<6;i++)tick();fire.active=true;notify();for(let i=0;i<6;i++)tick();await poll();for(let i=0;i<110;i++)tick();
+   editing.operations.pause();assert.equal(editing.read().action.motion.reverse,true,'replacement fixture is backing away');
+   const facing=()=>{const b=editing.pose({bones:['pelvis','spine-chest']}).bones;return new THREE.Vector3().fromArray(b[1].matrix,12).sub(new THREE.Vector3().fromArray(b[0].matrix,12)).normalize();};
+   const before=facing(),position=editing.read().action.motion.path.position;
+   if(held)await editing.operations.action({kind:'preview'});
+   await editing.operations.motion({id:'two'});
+   assert.equal(held?editing.read().recipe.held_wander.reverse:editing.read().action.motion.reverse,true,`V-1: ${held?'held':'active'} replacement keeps backward transport`);
+   if(held)await editing.operations.action({kind:'wander'});
+   assert.deepEqual(editing.read().action.motion.path.position,position,'replacement preserves the path position');
+   assert.ok(before.dot(facing())>.999999,'equivalent retained motion preserves actual body facing');
+   editing.operations.play();let seen=0;
+   for(let i=0;i<60;i++){tick();if(editing.read().attention.perceived.some(p=>p.id==='flame-emitter'))seen++;}
+   assert.ok(seen>54,'continued withdrawal retains actual source perception after editing motion');
+  }finally{await editing?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
+ }
+ // A cessation observed while looking supplies a remembered approach even
+ // after the source is moved while off; no hidden transform enters the path.
+ {
+  let motivated;fire={active:true,paused:false};emitter.position.set(.8,.4,-4);scene.updateMatrixWorld(true);
+  motivated=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  try{
+   await motivated.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<30;i++)tick();fire.active=false;notify();tick();tick();
+   const stop=motivated.read().attention.interruption;assert.ok(stop?.point,'actual walking perception witnesses cessation');
+   const atStop=motivated.read().action.motion.path.position;emitter.position.set(100,100,100);scene.updateMatrixWorld(true);
+   for(let i=0;i<10;i++)tick();assert.deepEqual(motivated.read().action.motion.path.position,atStop,'initial arrest holds the path');
+   const rows=[];for(let i=0;i<240;i++){tick();rows.push(motivated.read().action.engagement);}
+   const approach=rows.find(x=>x.phase==='approaching'&&x.motivation?.remembered);
+   assert.ok(approach,'cessation leads to remembered approach through the real walking consumer');assert.deepEqual(approach.point,stop.point);
+  }finally{await motivated.dispose();}
+ }
+ // RM-1: return without a measured light/recoil event must remain investigable.
+ {
+  fire={active:true,paused:false};emitter.position.set(.8,.4,-4);scene.updateMatrixWorld(true);
+  const returning=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  try{
+   await returning.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<30;i++)tick();fire.active=false;notify();tick();tick();
+   assert.ok(returning.read().attention.interruption?.point,'return fixture witnesses cessation');
+   for(let i=0;i<1500;i++)tick();
+   const headMatrix=new THREE.Matrix4().fromArray(returning.inspect().boneWorld.find(b=>b.name==='head').matrix);
+   const forward=new THREE.Vector3(...returning.read().attention.profile.forward).transformDirection(headMatrix);
+   emitter.position.setFromMatrixPosition(headMatrix).addScaledVector(forward,2);
+   fire.active=true;notify();
+   const rows=[];for(let i=0;i<180;i++){tick();rows.push(returning.read());}
+   assert.ok(rows.some(x=>x.attention.perceived.some(s=>s.id==='flame-emitter')),'returned source is actually perceived');
+   assert.ok(rows.every(x=>!x.attention.startle),'return fixture has no recoil alarm');
+   assert.ok(rows.some(x=>x.action.engagement.phase==='approaching'),'ordinary return renews approach through the walking consumer');
+  }finally{await returning.dispose();}
  }
  // RC-1: editing a currently inspected source restarts pursuit through the
  // real attention, live root and retained-gait consumer, without the old timer.
@@ -161,7 +295,7 @@ try{
 
  // PHYSICAL-02: the collision consumer must see both resolved gaze and chest
  // recoil, without presenting speculative poses or advancing perception twice.
- for(const response of ['physical','admission']){
+ for(const response of ['physical','admission'])for(const engaged of [false,true]){
   const world=createEncounterWorld({response,avoidance:false}),context=world.actor('attention');let proposed,poll,walker;
   const timers={set:globalThis.setInterval,clear:globalThis.clearInterval};
   globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
@@ -169,19 +303,20 @@ try{
   try{
    fire={active:false,paused:false};emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);
    window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.08}))})};
-   walker=await createWalkingCreature({host,inputs:{...inputs,choices:[],deformation:'gpu',action:'wander',play:false,attention:{interests:inputs.attention.interests,flame:{interest:1}}}},{...dependencies,loadGpuDeformer:async()=>supportFactory,encounterContext:{...context,steer:({direction})=>({direction,distanceScale:0}),limit:input=>{proposed=input.nextBody;return {fraction:1};}}});
+   walker=await createWalkingCreature({host,inputs:{...inputs,choices:[],deformation:'gpu',action:'wander',play:false,attention:{engage:engaged,interests:inputs.attention.interests,flame:{interest:1}}}},{...dependencies,loadGpuDeformer:async()=>supportFactory,encounterContext:{...context,steer:({direction})=>({direction,distanceScale:0}),limit:input=>{proposed=input.nextBody;return {fraction:1};}}});
    walker.operations.play();
    const tick=()=>{scene.updateMatrixWorld(true);const updates=walker.read().skin.updates,observation=world.beginStep();callback({deltaSeconds:1/30,observation});world.finishStep();
     const body=walker.operations.encounterBody(),shapes=response==='physical'?world.read().physics.shapes.map(s=>s.position):proposed.movementCores.map(s=>s.a);
     for(let i=0;i<shapes.length;i++)assert.ok(Math.hypot(...shapes[i].map((x,j)=>x-body.movementCores[i].a[j]))<1e-7,`PHYSICAL-02: ${response} support excludes resolved attention`);
     assert.ok(walker.read().skin.updates-updates<=1,'A proposed pose must not publish extra deformation updates');
    };
-   for(let i=0;i<45;i++)tick();
+   for(let i=0;i<45;i++)tick();await poll();
    assert.ok(walker.read().attention.weight>.8,'Held-gait fixture must actually look at the prop');
    const chestBefore=walker.pose({bones:['spine-chest']});
-   fire.active=true;notify();for(let i=0;i<3;i++)tick();await poll();tick();
+   fire.active=true;if(engaged)emitter.position.set(.8,.4,2.5);notify();for(let i=0;i<3;i++)tick();await poll();tick();
    assert.ok(walker.read().attention.startle,'Fixture must actually invoke chest recoil');
    assert.notDeepEqual(walker.pose({bones:['spine-chest']}).bones,chestBefore.bones,'Chest overlay must change the presented support');
+   if(engaged)for(let i=0;i<60;i++)tick();
   }finally{await walker?.dispose();world.dispose();globalThis.setInterval=timers.set;globalThis.clearInterval=timers.clear;delete window.kaminosFireLightProbe;}
  }
  // Wander held-endpoint and removed-area cases return with the Wander action

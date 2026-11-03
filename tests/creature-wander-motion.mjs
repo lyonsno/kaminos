@@ -55,3 +55,26 @@ free.advance(.05,{direction:[1,0]});admitted.advance(.05,{direction:[1,0],admit:
 const rotating=make({snapshot:priorProtected});let proposedAngle;rotating.advance(.1,{direction:[1,0],admit:({from,to,turnOnly})=>{if(turnOnly)proposedAngle=Math.atan2(from.direction[0]*to.direction[1]-from.direction[1]*to.direction[0],from.direction[0]*to.direction[0]+from.direction[1]*to.direction[1]);return turnOnly?.5:0;}});
 assert.equal(rotating.read().elapsed,priorProtected.elapsed,'Blocked travel holds gait while a safe partial turn remains possible');
 assert.ok(Math.abs(rotating.read().path.direction[0]+Math.sin(proposedAngle*.5))<1e-9);assert.deepEqual(rotating.read().path.position,[0,0]);
+
+const freePhysical=make({area,position:[0,0],direction:[0,1],seed:22}),identityPhysical=make({snapshot:freePhysical.snapshot()});
+for(let i=0;i<90;i++){
+ freePhysical.advance(.01);const before=identityPhysical.snapshot(),proposed=identityPhysical.advance(.01);
+ identityPhysical.contact(before,{position:proposed.path.position,direction:proposed.path.direction});
+ assert.deepEqual(identityPhysical.snapshot(),freePhysical.snapshot(),'Physical feedback reshaped an unobstructed source-paced route');
+}
+
+// Contact can stop or shove the root after the proposed path has arrived.
+// Its exhausted subcurve has no tangent left, so the residual return journey
+// must explicitly retain the accepted heading, including after restoration.
+const endpoint=make({area,position:[0,0],direction:[0,1],seed:123});
+endpoint.setDestination([2,2]);const beforeEndpoint=endpoint.snapshot();
+endpoint.advance(1);assert.equal(endpoint.read().path.status,'arrived');
+endpoint.contact(beforeEndpoint,{position:[2.02,2],direction:[0,1]});
+const endpointSnapshot=endpoint.snapshot();
+for(const continuation of [endpoint,make({snapshot:endpointSnapshot})]){
+ const next=continuation.advance(.00001).path;
+ assert.ok(next.direction[1]>.99,'Endpoint correction discarded accepted heading on next nonzero advance');
+ assert.ok(next.position[1]>2,'Residual journey must initially move along the accepted heading');
+ assert.deepEqual(next.target,[2,2],'Contact must preserve the selected destination');
+ continuation.advance(1);assert.equal(continuation.read().path.status,'arrived');
+}
