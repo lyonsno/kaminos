@@ -12,6 +12,7 @@ import {
   planArrivalStudioLights,
   resolveAssetArrivalMode,
 } from '../asset-arrival.mjs';
+import { orbitCamera } from '../scene-navigation.mjs';
 import { checkedSceneLightRecord } from '../scene-spot-light.mjs';
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
@@ -190,5 +191,37 @@ test('startup studio light lifecycle yields on scene spot lights, preserves prom
     promoteBody,
     /recordSceneObjectInsertion\(/,
     'promoteArrivalStudioLightsToScene must record scene object insertion for undo/redo history and dirty state',
+  );
+});
+
+test('fresh asset arrival framing resets tilted orbit camera.up so the horizon never rolls', () => {
+  const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.01, 100);
+  camera.position.set(0, 0.6, 3);
+  const target = new THREE.Vector3(0, 0, 0);
+  camera.lookAt(target);
+  for (let i = 0; i < 20; i++) {
+    orbitCamera(camera, target, target, -0.08, 0.04);
+    camera.lookAt(target);
+  }
+  assert.ok(Math.abs(camera.up.x) > 0.3, 'precondition: orbitCamera tilts camera.up in the previous azimuth plane');
+
+  const points = [-0.5, -0.85, -0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, -0.85, -0.5];
+  const framing = computeAssetArrivalFraming({ points, fovDeg: 40, aspect: 16 / 9 });
+  assert.deepEqual(framing.up, [0, 1, 0], 'computeAssetArrivalFraming must return upright camera up vector');
+
+  camera.position.fromArray(framing.position);
+  target.fromArray(framing.target);
+  camera.up.fromArray(framing.up);
+  camera.lookAt(target);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  close(right.y, 0, 'camera right axis must stay level with the horizon after fresh arrival framing');
+
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const frameStart = html.indexOf('function frameAssetArrival(object)');
+  const frameEnd = html.indexOf('async function showGLB(', frameStart);
+  assert.match(
+    html.slice(frameStart, frameEnd),
+    /camera\.up\.fromArray\(framing\.up\)/,
+    'frameAssetArrival must restore camera.up from framing.up before controls.update()',
   );
 });

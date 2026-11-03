@@ -6784,6 +6784,7 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   if (!camera || !controls) throw new Error('Kaminos camera debug pose unavailable before viewport initialization');
   if (Array.isArray(pose.position) && pose.position.length === 3) camera.position.fromArray(pose.position);
   if (Array.isArray(pose.target) && pose.target.length === 3) controls.target.fromArray(pose.target);
+  camera.up.fromArray(Array.isArray(pose.up) && pose.up.length === 3 ? pose.up : [0, 1, 0]);
   controls.update();
   camera.updateMatrixWorld?.();
   updateHybridSplatOverlayFrame();
@@ -7920,6 +7921,7 @@ function frameForgeHostCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.05, 1.85, 4.35);
   controls.target.set(0, -0.18, 0.16);
+  camera.up.set(0, 1, 0);
   controls.update();
   window._kaminosDirty?.();
 }
@@ -8104,6 +8106,7 @@ function frameMotionAgencyCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
   controls.target.set(0.05, 0.15, 0.15);
+  camera.up.set(0, 1, 0);
   controls.update();
   window._kaminosDirty?.();
 }
@@ -11550,9 +11553,10 @@ async function initScene() {
   viewportResizeObserver.observe(vp);
 
   // --- Render loop with idle detection ---
-  window.__kaminosSetSceneCameraFrame = (position, target) => {
+  window.__kaminosSetSceneCameraFrame = (position, target, up = [0, 1, 0]) => {
     camera.position.set(...position);
     controls.target.set(...target);
+    camera.up.set(...up);
     controls.update();
     needsRender = true;
     return { position: camera.position.toArray(), target: controls.target.toArray() };
@@ -12792,10 +12796,12 @@ function frameAssetArrival(object) {
   if (!framing) return false;
   camera.position.fromArray(framing.position);
   controls.target.fromArray(framing.target);
+  camera.up.fromArray(framing.up);
   camera.near = Math.min(camera.near, framing.near);
   camera.far = Math.max(camera.far, framing.far);
   camera.updateProjectionMatrix();
-  controls.update();
+  if (typeof sceneNavigation !== 'undefined' && sceneNavigation?.resetView) sceneNavigation.resetView();
+  else controls.update();
   syncArrivalLightingAndGI(object);
   window._kaminosDirty?.();
   return true;
@@ -14131,6 +14137,7 @@ function syncFingerFluidCompositionCamera() {
   camera.fov = 180 / 3.15;
   camera.updateProjectionMatrix();
   controls.target.set(target[0], target[1], target[2]);
+  camera.up.set(0, 1, 0);
   controls.update();
 }
 
@@ -19692,6 +19699,7 @@ function frameVolumeCamera() {
   const frame = DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
+  camera.up.set(0, 1, 0);
   controls.update();
   window._kaminosDirty?.();
 }

@@ -98,6 +98,7 @@ export function computeAssetArrivalFraming({
   return {
     target,
     position: target.map((value, axis) => value + back[axis] * distance),
+    up: [...up],
     distance,
     near: Math.max(0.001, (distance - maxZ) / 10),
     far: (distance - minZ) + radius * 2,

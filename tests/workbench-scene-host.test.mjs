@@ -47,6 +47,11 @@ test('shared camera rejects an invalid view before mutation and round trips the 
  assert.deepEqual(session.readView(),before);
  const view={...before,position:[2,3,4],target:[0,.2,0],fov:55,zoom:1.2};
  assert.deepEqual(session.setView(view),view);
+ h.camera.up.set(-0.56,0.82,-0.02).normalize();
+ const upright=session.setView({position:[3.8,2.4,4.8],target:[0,0.65,0]});
+ assert.deepEqual(upright.up,[0,1,0],'setView without explicit up must reset tilted orbit camera.up to upright');
+ const right=new THREE.Vector3(1,0,0).applyQuaternion(h.camera.quaternion);
+ assert.ok(Math.abs(right.y)<1e-9,`setView must keep horizon level, got right.y=${right.y}`);
 });
 test('owned tree cleanup preserves shared geometry, materials and textures',()=>{
  const geometry=new THREE.BoxGeometry(),material=new THREE.MeshStandardMaterial(),texture=new THREE.Texture();material.map=texture;
