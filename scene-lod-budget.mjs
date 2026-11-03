@@ -608,7 +608,8 @@ export function selectColliderTier(levels = [], {
       chosenIndex = prevIdx;
     }
   }
-  return {selected: rungs[chosenIndex], chosenIndex, rungs};
+  const sel = rungs[chosenIndex];
+  return {selected: sel, tier: sel.id, sha: sel.sha, faces: sel.faces, voxelError: sel.voxelError, chosenIndex, rungs};
 }
 
 export function allocateColliderLods(candidates = [], {

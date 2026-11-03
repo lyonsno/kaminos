@@ -289,5 +289,131 @@ test('real Refractory Kiln (f8e6ce91) and Weathered Timber Beam (7be0be28) GLB l
   assert.ok(kilnVox.surfaceCellCount > 1300, `real 5,000-face Refractory Kiln rung preserves >1300 surface cells (got ${kilnVox.surfaceCellCount})`);
 });
 
+test('review M1, M2, N1: hidden LOD obstacles do not emit ghost colliders or poison heroFaces=1; pre-warped hero bounds do not break frameDrift clamping; prepare() settles stretch-upgraded tiers', async () => {
+  const {createGiProxyRegistry} = await import('../scene-gi-proxies.mjs');
+  const HERO_SHA = '1'.repeat(64);
+  const TIER_5K = '2'.repeat(64);
+  const TIER_500 = '3'.repeat(64);
+
+  const levels = [
+    {sha256: TIER_5K, faces: 5000, closed: true, source: `/api/read?root=generated-meshes&path=${TIER_5K}.glb`, error: {diagonal: 1.0, relative: {p95: 0.005, max: 0.01}, levelToSource: {p95: 0.005, max: 0.01}, sourceToLevel: {p95: 0.005, max: 0.01}}},
+    {sha256: TIER_500, faces: 500, closed: true, source: `/api/read?root=generated-meshes&path=${TIER_500}.glb`, error: {diagonal: 1.0, relative: {p95: 0.02, max: 0.04}, levelToSource: {p95: 0.02, max: 0.04}, sourceToLevel: {p95: 0.02, max: 0.04}}},
+  ];
+
+  // Build a hero mesh with > 5,000 faces (20x20x6 box = 1,440 * 4 -> let's use SphereGeometry(0.5, 64, 48) = 6,016 tris)
+  const makeHighPolyRoot = () => {
+    const g = new THREE.Group();
+    g.userData.kaminosSceneObject = {source: `/api/read?root=generated-meshes&path=${HERO_SHA}.glb`};
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.5, 64, 48), new THREE.MeshBasicMaterial());
+    g.add(m);
+    g.updateMatrixWorld(true);
+    return g;
+  };
+
+  const makeDriftedRung = () => {
+    const g = new THREE.Group();
+    const geom = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1);
+    // Introduce slight remeshing frameDrift on Z (+0.5011 > +0.5002)
+    const pos = geom.attributes.position.array;
+    for (let i = 2; i < pos.length; i += 3) {
+      if (pos[i] > 0) pos[i] = 0.5011;
+    }
+    geom.attributes.position.needsUpdate = true;
+    g.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial()));
+    return g;
+  };
+
+  const fetchBytes = async url => {
+    const m = /([a-f0-9]{64})\.glb/.exec(url);
+    return new TextEncoder().encode(m ? m[1] : '').buffer;
+  };
+  const digest = async bytes => new TextDecoder().decode(bytes);
+  const parseGlb = async () => makeDriftedRung();
+
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async () => ({schema: 'kaminos.lod-set.v0', source: HERO_SHA, levels, choice: levels[1], withinBudget: true}),
+    fetchBytes,
+    digest,
+    parseGlb,
+  });
+
+  // 1. M1: Obstacle starts initially hidden (visible = false)
+  const hiddenFirstRoot = makeHighPolyRoot();
+  hiddenFirstRoot.visible = false;
+  await giProxies.attach(hiddenFirstRoot, {faces: 1000});
+  // Switch giProxies effective sha so collider collection loads its own rungs
+  const collection = createSceneColliderCollection(THREE, {
+    giProxies: {get: r => r === hiddenFirstRoot ? {...giProxies.get(hiddenFirstRoot), effective: {sha: 'none'}} : giProxies.get(r)},
+    fetchBytes,
+    digest,
+    parseGlb,
+    grid: 32,
+    domainScale: 1,
+    maxVoxelError: 0.85,
+  });
+
+  // While hidden, update() must return null (no ghost solid collider!)
+  const hiddenOut = collection.update([record('obs1', hiddenFirstRoot, true)], {grid: 32, domainScale: 1});
+  assert.equal(hiddenOut, null, 'M1: hidden LOD obstacle must not emit ghost collider meshes');
+
+  // Now unhide obs1: heroFaces must NOT have been poisoned to 1 while hidden!
+  hiddenFirstRoot.visible = true;
+  await collection.prepare([record('obs1', hiddenFirstRoot, true)], {grid: 32, domainScale: 1});
+  const visibleOut = collection.update([record('obs1', hiddenFirstRoot, true)], {grid: 32, domainScale: 1});
+  assert.ok(visibleOut, 'M1: unhidden obstacle emits collider');
+  assert.equal(collection.state().lodBudget.allocations.obs1.tier, TIER_500, 'M1: initially-hidden obstacle still selects 500-face stunt-double tier once unhidden');
+
+  // Hide obs1 again while its stunt-double rung is active/displayed: must disappear from collider mask!
+  hiddenFirstRoot.visible = false;
+  assert.equal(collection.update([record('obs1', hiddenFirstRoot, true)], {grid: 32, domainScale: 1}), null, 'M1: hiding an obstacle with an active stunt-double rung removes it from collider mask');
+
+  // 2. M2 + N1: Pre-warped hero mesh (stretched 3x in Z, so localBox.max.z = 1.5) + warpFn that throws on z > 0.5002
+  const warpedRoot = makeHighPolyRoot();
+  const heroPos = warpedRoot.children[0].geometry.attributes.position.array;
+  for (let i = 2; i < heroPos.length; i += 3) heroPos[i] *= 3.0; // Hero mesh already warped 3x in place!
+  warpedRoot.children[0].geometry.attributes.position.needsUpdate = true;
+  warpedRoot.children[0].geometry.computeBoundingBox();
+
+  // Warp function enforces unwarped profile domain [-0.5002, +0.5002] and stretches Z by 3x (maxStretch = 3.0)
+  // Under geomStretch = 1, TIER_500 has voxelError = (1.0 * 0.02 * 1) / (2/32) = 0.32 <= 0.85 (would pick TIER_500).
+  // Under true geomStretch = 3.0, TIER_500 has voxelError = (1.0 * 0.02 * 3) / (2/32) = 0.96 > 0.85, so it upgrades to TIER_5K (voxelError = 0.24 <= 0.85)!
+  warpedRoot.userData.kaminosVertexWarp = pos => {
+    const out = new Float32Array(pos.length);
+    for (let i = 0; i < pos.length; i += 3) {
+      const z = pos[i + 2];
+      if (Math.abs(z) > 0.5002) throw Error('Vertex outside fitted longitudinal profile');
+      out[i] = pos[i];
+      out[i + 1] = pos[i + 1];
+      out[i + 2] = z * 3.0;
+    }
+    return {positions: out};
+  };
+  warpedRoot.userData.kaminosVertexWarpRevision = 1;
+
+  await giProxies.attach(warpedRoot, {faces: 1000});
+  const warpCollection = createSceneColliderCollection(THREE, {
+    giProxies: {get: r => r === warpedRoot ? {...giProxies.get(warpedRoot), effective: {sha: 'none'}} : null},
+    fetchBytes,
+    digest,
+    parseGlb,
+    grid: 32,
+    domainScale: 1,
+    maxVoxelError: 0.85,
+  });
+
+  await warpCollection.prepare([record('warped', warpedRoot, true)], {grid: 32, domainScale: 1});
+  const warpOut = warpCollection.update([record('warped', warpedRoot, true)], {grid: 32, domainScale: 1});
+  const warpState = warpCollection.state();
+  assert.equal(warpState.lodBudget.allocations.warped.tier, TIER_5K, 'N1: prepare() discovers geomStretch=3.0 from warpFn and settles upgraded TIER_5K');
+  assert.equal(warpState.lodBudget.objects[0].displayedTier, TIER_5K, 'N1: upgraded TIER_5K is resident and displayed after prepare()');
+
+  const warpedTris = trianglesFromSceneObject(warpOut.objects[0].object).triangles;
+  let maxZ = -Infinity;
+  for (const tri of warpedTris) for (const v of tri) if (v[2] > maxZ) maxZ = v[2];
+  assert.ok(maxZ > 1.45, `M2: drifted LOD rung clamped via insetBounds and stretched 3x to maxZ=${maxZ} without aborting on pre-warped hero localBox`);
+});
+
+
 
 

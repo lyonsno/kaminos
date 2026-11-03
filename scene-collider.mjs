@@ -1,5 +1,5 @@
 import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE} from './scene-fire-domain.mjs';
-import {allocateColliderLods,applyRootVertexWarpToRung,voxelSolidError} from './scene-lod-budget.mjs';
+import {allocateColliderLods,applyRootVertexWarpToRung,selectColliderTier,voxelSolidError} from './scene-lod-budget.mjs';
 import {readTrianglePrimitives} from './poly-glb-io.mjs';
 
 export function parseUntexturedColliderGlb(THREE,bytes) {
@@ -46,10 +46,23 @@ function eligibleMesh(mesh) {
   return true;
 }
 
-function primaryHeroMesh(mesh,root) {
-  if(!eligibleMesh(mesh))return false;
-  for(let node=mesh;node&&node!==root;node=node.parent)if(node.userData?.kaminosRepetitionCopy)return false;
+function intrinsicHeroMesh(mesh,root) {
+  if(!mesh.isMesh)return false;
+  for(let node=mesh;node;node=node.parent){
+    if(node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
+    if(node!==root && node.userData?.kaminosRepetitionCopy)return false;
+  }
   return true;
+}
+
+function primaryHeroMesh(mesh,root) {
+  return eligibleMesh(mesh) && intrinsicHeroMesh(mesh,root);
+}
+
+function hasVisibleHeroMesh(root) {
+  let found=false;
+  root.traverse(m=>{if(!found&&primaryHeroMesh(m,root))found=true;});
+  return found;
 }
 
 function meshTriangleCount(mesh) {
@@ -120,7 +133,7 @@ function inspectColliderHeroRoot(THREE,root) {
   let heroFaces=0;
   let primaryMaterial=null;
   root.traverse(m=>{
-    if(!primaryHeroMesh(m,root))return;
+    if(!intrinsicHeroMesh(m,root))return;
     if(!primaryMaterial&&m.material)primaryMaterial=m.material;
     heroFaces+=meshTriangleCount(m);
     const geom=m.geometry;
@@ -142,7 +155,7 @@ function inspectColliderHeroRoot(THREE,root) {
     localBox.set(new THREE.Vector3(-0.5,-0.5,-0.5),new THREE.Vector3(0.5,0.5,0.5));
   }
   const explicitBounds=root.userData?.kaminosVertexWarpBounds??root.userData?.kaminosUnwarpedRootBox??null;
-  const unwarpedBounds=explicitBounds??(!unwarpedBox.isEmpty()?{min:unwarpedBox.min.toArray(),max:unwarpedBox.max.toArray()}:{min:localBox.min.toArray(),max:localBox.max.toArray()});
+  const unwarpedBounds=explicitBounds??(!unwarpedBox.isEmpty()?{min:unwarpedBox.min.toArray(),max:unwarpedBox.max.toArray()}:(!root.userData?.kaminosVertexWarp?{min:localBox.min.toArray(),max:localBox.max.toArray()}:null));
   const geomStretch=Math.max(1,Number(root.userData?.kaminosVertexWarpMaxStretch)||1);
   return {heroFaces:Math.max(1,heroFaces),localBox,unwarpedBounds,geomStretch,primaryMaterial};
 }
@@ -185,10 +198,14 @@ export function createSceneColliderCollection(THREE,{
     entries.delete(root);
   }
 
+  const ashGroups=new Map(),ashWrappers=new Map();
+
   function clear() {
     object.clear();
     wrappers.clear();
     groups.clear();
+    ashWrappers.clear();
+    ashGroups.clear();
     memberIds=[];
     lastTriangleCount=0;
     lastHeroTriangleCount=0;
@@ -203,7 +220,11 @@ export function createSceneColliderCollection(THREE,{
     rungRoot.matrixWorld.identity();
     if(typeof entry.warpFn==='function'){
       const warpRes=applyRootVertexWarpToRung(THREE,rungRoot,entry.warpFn,{bounds:entry.unwarpedBounds});
-      if(warpRes.maxStretch>entry.geomStretch)entry.geomStretch=warpRes.maxStretch;
+      if(warpRes.maxStretch>entry.geomStretch){
+        entry.geomStretch=warpRes.maxStretch;
+        entry.voxelTier='hero';
+        entry.activeTier='hero';
+      }
     }
     const record={sha,faces,root:rungRoot,warpFn:entry.warpFn,warpRevision:entry.warpRevision};
     entry.rungs.set(sha,record);
@@ -237,6 +258,49 @@ export function createSceneColliderCollection(THREE,{
     pendingLoads.add(task);
   }
 
+  function ensureEntryForRoot(root,id) {
+    let entry=entries.get(root);
+    const curWarpFn=typeof root.userData?.kaminosVertexWarp==='function'?root.userData.kaminosVertexWarp:null;
+    const curWarpRev=root.userData?.kaminosVertexWarpRevision??0;
+    if(!entry){
+      const info=inspectColliderHeroRoot(THREE,root);
+      entry={
+        id,
+        ...info,
+        rungs:new Map(),
+        inFlight:new Set(),
+        activeTier:'hero',
+        voxelTier:'hero',
+        displayedTier:'hero',
+        generation:1,
+        warpFn:curWarpFn,
+        warpRevision:curWarpRev,
+      };
+      entries.set(root,entry);
+    }else{
+      if(id)entry.id=id;
+      if(entry.warpFn!==curWarpFn||entry.warpRevision!==curWarpRev){
+        entry.warpFn=curWarpFn;
+        entry.warpRevision=curWarpRev;
+        const info=inspectColliderHeroRoot(THREE,root);
+        entry.heroFaces=info.heroFaces;
+        entry.localBox=info.localBox;
+        entry.unwarpedBounds=info.unwarpedBounds;
+        entry.geomStretch=info.geomStretch;
+        entry.primaryMaterial=info.primaryMaterial;
+        entry.voxelTier='hero';
+        entry.activeTier='hero';
+        for(const rungRecord of entry.rungs.values()){
+          const warpRes=applyRootVertexWarpToRung(THREE,rungRecord.root,curWarpFn,{bounds:entry.unwarpedBounds});
+          if(warpRes.maxStretch>entry.geomStretch)entry.geomStretch=warpRes.maxStretch;
+          rungRecord.warpFn=curWarpFn;
+          rungRecord.warpRevision=curWarpRev;
+        }
+      }
+    }
+    return entry;
+  }
+
   function update(records,frameOptions={}) {
     const meshes=new Map();
     memberIds=[];
@@ -256,45 +320,14 @@ export function createSceneColliderCollection(THREE,{
       try {
         record.object.updateWorldMatrix(true,true);
         const handle=(config.enabled&&reg)?(reg.handleFor?.(record.object)??reg.get?.(record.object)??null):null;
-        if(handle?.levels?.length&&handle.representation!=='surfels'){
+        const hasLods=Boolean(handle?.levels?.length&&handle.representation!=='surfels');
+        if(hasLods){
           seenLodRoots.add(record.object);
-          let entry=entries.get(record.object);
-          const curWarpFn=typeof record.object.userData?.kaminosVertexWarp==='function'?record.object.userData.kaminosVertexWarp:null;
-          const curWarpRev=record.object.userData?.kaminosVertexWarpRevision??0;
-          if(!entry){
-            const info=inspectColliderHeroRoot(THREE,record.object);
-            entry={
-              id:record.id,
-              ...info,
-              rungs:new Map(),
-              inFlight:new Set(),
-              activeTier:'hero',
-              voxelTier:'hero',
-              displayedTier:'hero',
-              generation:1,
-              warpFn:curWarpFn,
-              warpRevision:curWarpRev,
-            };
-            entries.set(record.object,entry);
-          }else{
-            entry.id=record.id;
-            if(entry.warpFn!==curWarpFn||entry.warpRevision!==curWarpRev){
-              entry.warpFn=curWarpFn;
-              entry.warpRevision=curWarpRev;
-              const info=inspectColliderHeroRoot(THREE,record.object);
-              entry.heroFaces=info.heroFaces;
-              entry.localBox=info.localBox;
-              entry.unwarpedBounds=info.unwarpedBounds;
-              entry.geomStretch=info.geomStretch;
-              entry.primaryMaterial=info.primaryMaterial;
-              for(const rungRecord of entry.rungs.values()){
-                const warpRes=applyRootVertexWarpToRung(THREE,rungRecord.root,curWarpFn,{bounds:entry.unwarpedBounds});
-                if(warpRes.maxStretch>entry.geomStretch)entry.geomStretch=warpRes.maxStretch;
-                rungRecord.warpFn=curWarpFn;
-                rungRecord.warpRevision=curWarpRev;
-              }
-            }
-          }
+          ensureEntryForRoot(record.object,record.id);
+        }
+        if(!hasVisibleHeroMesh(record.object))continue;
+        if(hasLods){
+          const entry=entries.get(record.object);
           const repSources=record.object.children.filter(c=>c.visible&&c.userData?.kaminosRepetitionCopy===true);
           const instanceBoxes=[new THREE.Box3().copy(entry.localBox).applyMatrix4(record.object.matrixWorld)];
           for(const rep of repSources){
@@ -469,14 +502,117 @@ export function createSceneColliderCollection(THREE,{
     return object.children.length?{requested:true,id:SCENE_COLLIDER_SOURCE_ID,object,objects:memberIds.map(id=>({id,object:groups.get(id)})),memberIds:[...memberIds]}:null;
   }
 
+  function resolveObstacle(recordOrRoot,frameOptions={}) {
+    const root=recordOrRoot?.object??recordOrRoot;
+    const id=recordOrRoot?.id??root?.uuid??'obstacle';
+    if(!root?.isObject3D)return null;
+    const restoreBeauty=root.userData?.kaminosBeautyLodRestore?.();
+    try{
+      root.updateWorldMatrix(true,true);
+      const reg=resolveGiProxies();
+      const beauty=resolveBeautyLods();
+      const handle=(config.enabled&&reg)?(reg.handleFor?.(root)??reg.get?.(root)??null):null;
+      const hasLods=Boolean(handle?.levels?.length&&handle.representation!=='surfels');
+      const entry=hasLods?ensureEntryForRoot(root,id):null;
+      if(!hasVisibleHeroMesh(root))return null;
+      if(!hasLods)return root;
+
+      const effectiveOpts={...config,...frameOptions};
+      const wBox=new THREE.Box3().copy(entry.localBox).applyMatrix4(root.matrixWorld);
+      const worldDiag=Math.hypot(wBox.max.x-wBox.min.x,wBox.max.y-wBox.min.y,wBox.max.z-wBox.min.z)||1;
+      const chosen=selectColliderTier(handle.levels,{
+        ...effectiveOpts,
+        worldDiag,
+        heroFaces:entry.heroFaces,
+        geomStretch:entry.geomStretch,
+        currentTier:'hero',
+      });
+      const targetTier=chosen.tier;
+      let displayedTier='hero';
+      if(targetTier!=='hero'){
+        if(entry.rungs.has(targetTier)){
+          displayedTier=targetTier;
+        }else if(handle.effective?.sha===targetTier&&handle.proxyRoot){
+          const levelObj=handle.levels.find(l=>(l.sha??l.sha256)===targetTier);
+          installRungRoot(entry,targetTier,levelObj?.faces??chosen.faces,handle.proxyRoot);
+          displayedTier=targetTier;
+        }else{
+          const beautyExact=beauty?.getResidentRung?.(root,targetTier);
+          const beautyExactRoot=beautyExact?.root??(beautyExact?.isObject3D?beautyExact:null);
+          if(beautyExactRoot){
+            installRungRoot(entry,targetTier,beautyExact?.faces??chosen.faces,beautyExactRoot);
+            displayedTier=targetTier;
+          }else{
+            const levelObj=handle.levels.find(l=>(l.sha??l.sha256)===targetTier);
+            if(levelObj)ensureRungLoaded(root,entry,levelObj);
+            const residentBeauty=(beauty?.listResidentRungs?.(root)??[]).sort((a,b)=>(b.faces??0)-(a.faces??0));
+            for(const br of residentBeauty){
+              const lvl=handle.levels.find(l=>(l.sha??l.sha256)===br.sha);
+              if(lvl&&(!effectiveOpts.requireClosed||lvl.closed!==false)){
+                const vErr=voxelSolidError(lvl,{...effectiveOpts,worldDiag,geomStretch:entry.geomStretch});
+                if(vErr<=effectiveOpts.maxVoxelError){
+                  installRungRoot(entry,br.sha,br.faces??lvl.faces,br.root);
+                  displayedTier=br.sha;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      const rungRecord=(displayedTier!=='hero')?entry.rungs.get(displayedTier):null;
+      if(!rungRecord)return root;
+
+      rungRecord.root.updateWorldMatrix(true,true);
+      const rungMeshes=[];
+      rungRecord.root.traverse(rm=>{if(rm.isMesh&&rm.geometry)rungMeshes.push(rm);});
+      if(!rungMeshes.length)return root;
+
+      let group=ashGroups.get(root);
+      if(!group){group=new THREE.Group();group.name=`${id}:stunt-double`;ashGroups.set(root,group);}
+      const repSources=root.children.filter(c=>c.visible&&c.userData?.kaminosRepetitionCopy===true);
+      const totalInstances=1+repSources.length;
+      const instMat=new THREE.Matrix4();
+      const activeKeys=new Set();
+      for(let instIdx=0;instIdx<totalInstances;instIdx++){
+        if(instIdx===0)instMat.copy(root.matrixWorld);
+        else instMat.multiplyMatrices(root.matrixWorld,repSources[instIdx-1].matrix);
+        for(let meshIdx=0;meshIdx<rungMeshes.length;meshIdx++){
+          const rm=rungMeshes[meshIdx];
+          const wKey=`${id}:ash:${meshIdx}:${instIdx}`;
+          activeKeys.add(wKey);
+          let wrapper=ashWrappers.get(wKey);
+          if(!wrapper){wrapper=new THREE.Mesh(rm.geometry,rm.material);wrapper.matrixAutoUpdate=false;ashWrappers.set(wKey,wrapper);}
+          if(wrapper.parent!==group)group.add(wrapper);
+          wrapper.geometry=rm.geometry;
+          wrapper.material=rm.material;
+          wrapper.name=rm.name||id;
+          wrapper.matrix.multiplyMatrices(instMat,rm.matrixWorld);
+          wrapper.matrixWorld.copy(wrapper.matrix);
+        }
+      }
+      for(const [k,w] of ashWrappers)if(w.parent===group&&!activeKeys.has(k)){w.removeFromParent();ashWrappers.delete(k);}
+      return group;
+    }finally{
+      restoreBeauty?.();
+    }
+  }
+
   return {
     update,
+    resolveObstacle,
     clear,
     whenIdle:async()=>{while(pendingLoads.size)await Promise.all([...pendingLoads]);},
     async prepare(records,frameOptions={}) {
       await resolveGiProxies()?.whenIdle?.();
-      update(records,frameOptions);
-      while(pendingLoads.size)await Promise.all([...pendingLoads]);
+      for(let pass=0;pass<3;pass++){
+        update(records,frameOptions);
+        if(frameOptions.ashCellSize){
+          for(const r of records)if(canCollideWithFire(r))resolveObstacle(r,{...frameOptions,voxelSize:frameOptions.ashCellSize});
+        }
+        if(!pendingLoads.size)break;
+        while(pendingLoads.size)await Promise.all([...pendingLoads]);
+      }
       update(records,frameOptions);
       return lastLodBudget;
     },
