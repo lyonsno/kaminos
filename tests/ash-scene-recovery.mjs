@@ -68,3 +68,23 @@ test('stamp dispatches each collider only over its own overlapping marked tiles 
   c.geometry.dispose();c.material.dispose();
  }finally{s.dispose();}
 });
+import {BURNER_DEFAULTS,normalizeBurner} from '../annular-burner.mjs';
+test('analytic annular burner collider bypasses 3D texture voxelization and stamps synthetic ring recipe directly',()=>{
+ const s=setup();try{
+  const proxy=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());
+  proxy.name='ShrineFloorBurner';
+  proxy.scale.setScalar(4);
+  proxy.userData.kaminosAnalyticAnnularBurner=normalizeBurner(BURNER_DEFAULTS);
+  const buildsBefore=s.field.read().shapeBuilds;
+  assert.equal(s.field.update([{id:'burner',object:proxy}]),true);
+  const state=s.field.read();
+  assert.equal(state.members.length,1);
+  assert.equal(state.members[0].grid,0,'analytic annular burner allocates no 3D voxel texture grid');
+  assert.match(state.members[0].geometry,/^annular-analytic:/,'analytic annular burner records synthetic recipe identity');
+  assert.equal(state.shapeBuilds,buildsBefore+1);
+  proxy.position.x=0.2;
+  assert.equal(s.field.update([{id:'burner',object:proxy}]),true);
+  assert.equal(s.field.read().shapeBuilds,buildsBefore+1,'moving analytic annular burner reuses collider record without rebuilding');
+  proxy.geometry.dispose();proxy.material.dispose();
+ }finally{s.dispose();}
+});

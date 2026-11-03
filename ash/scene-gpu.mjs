@@ -9,13 +9,13 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const t=p.tiles,cache=new Map(),boundsCache=new WeakMap(),pendingDirty=new Set();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
  let jobsCapacity=t.count+1,jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
- const blank=device.createBuffer({size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const blank=device.createBuffer({size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const code=`
  const ROW:u32=${device.limits.maxComputeWorkgroupsPerDimension}u;
  const B:u32=${t.width}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
  const TD=vec3<u32>(${t.dims.map(n=>n+'u')});const D=vec3<u32>(${p.dims.map(n=>n+'u')});
  const O=vec3<f32>(${p.origin.map(n=>Number(n).toFixed(12))});const S:f32=${p.cellSize.toFixed(12)};
- struct Pose {inverse:mat4x4<f32>,local:vec4<f32>,tiles:vec4<u32>}
+ struct Pose {inverse:mat4x4<f32>,local:vec4<f32>,tiles:vec4<u32>,burner0:vec4<f32>,burner1:vec4<f32>}
  @group(0) @binding(0) var<storage,read_write> solid:array<u32>;
  @group(0) @binding(1) var<storage,read_write> headers:array<atomic<u32>>;
  @group(0) @binding(2) var<storage,read> jobs:array<u32>;
@@ -24,6 +24,35 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  fn tc(i:u32)->vec3<u32>{return vec3<u32>(i%TD.x,(i/TD.x)%TD.y,i/(TD.x*TD.y));}
  fn ti(c:vec3<u32>)->u32{return c.x+TD.x*(c.y+TD.y*c.z);}
  fn cell(base:u32,wg:u32,lid:u32)->vec3<u32>{let i=(wg%G)*64u+lid;return tc(jobs[base+wg/G])*B+vec3<u32>(i%B,(i/B)%B,i/(B*B));}
+ fn burner_solid(point:vec3<f32>,localCell:f32,b0:vec4<f32>,b1:vec4<f32>)->bool{
+  let rIn=b0.x;let rOut=b0.y;let rings=b0.z;let gFrac=b0.w;
+  let gDepth=b1.x;let sectors=b1.y;let thick=b1.z;let rimH=b1.w;
+  let halfCell=0.5*localCell;
+  let r=length(point.xz);
+  if(r>rOut+0.045+halfCell){return false;}
+  let yBottom=-thick-halfCell;
+  if(point.y<yBottom){return false;}
+  if(r>=rOut){return point.y<=max(rimH,-thick+halfCell);}
+  if(r<=rIn){return point.y<=max(0.0,-thick+halfCell);}
+  let pitch=(rOut-rIn)/rings;
+  let grooveW=pitch*gFrac;
+  let bedTop=-gDepth+0.001;
+  let baseTop=max(bedTop,-thick+halfCell);
+  if(point.y<=baseTop){return true;}
+  let landTop=select(max(0.0,-thick+halfCell),max(0.0,baseTop+localCell),grooveW>=localCell);
+  if(point.y>landTop){return false;}
+  if(grooveW<localCell){return true;}
+  let u=fract((r-rIn)/pitch);
+  if(abs(u-0.5)<gFrac*0.5){return false;}
+  let sectorSpan=6.28318530718/sectors;
+  let seam=min(0.012,3.14159265359/sectors*0.06);
+  if(seam*r>=localCell){
+   let phi=atan2(point.x,point.z);
+   let phase=fract(phi/sectorSpan)*sectorSpan;
+   if(phase<seam*0.5||phase>sectorSpan-seam*0.5){return false;}
+  }
+  return true;
+ }
  @compute @workgroup_size(64) fn clear(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
   let group=w.x+w.y*ROW;if(group>=jobs[0]*G){return;}let local=(group%G)*64u+l.x;if(local>=V){return;}let c=cell(1u,group,l.x);
   if(all(c<D)){solid[c.x+D.x*(c.y+D.y*c.z)]=0u;}
@@ -36,7 +65,12 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  @compute @workgroup_size(64) fn stamp(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
   let group=w.x+w.y*ROW;if(group>=pose.tiles.y*G||(group%G)*64u+l.x>=V){return;}let c=cell(pose.tiles.x,group,l.x);if(any(c>=D)){return;}
   let world=O+(vec3<f32>(c)+vec3<f32>(.5))*S;
-  let point=(pose.inverse*vec4<f32>(world,1)).xyz;let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));
+  let point=(pose.inverse*vec4<f32>(world,1)).xyz;
+  if(pose.tiles.z==1u){
+   if(burner_solid(point,pose.local.w,pose.burner0,pose.burner1)){solid[c.x+D.x*(c.y+D.y*c.z)]=2u;}
+   return;
+  }
+  let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));
   if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return;}
   if(textureLoad(shape,q,0).x!=0u){solid[c.x+D.x*(c.y+D.y*c.z)]=2u;}
  }`;
@@ -51,7 +85,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const pipelines=Object.fromEntries(['clear','stamp'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint}})]));
  const group=(texture,uniform)=>device.createBindGroup({layout:bindLayout,entries:[{binding:0,resource:{buffer:collision}},{binding:1,resource:{buffer:headers}},{binding:2,resource:{buffer:jobs}},{binding:3,resource:texture.createView()},{binding:4,resource:{buffer:uniform}}]});
  let clearGroup=group(dummy,blank);
- const destroy=m=>{m.texture.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
+ const destroy=m=>{m.texture?.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
  const maxBytes=Math.min(device.limits.maxStorageBufferBindingSize,device.limits.maxBufferSize);
  const maxCells=Math.min(Math.floor((maxBytes-4)/4),device.limits.maxComputeWorkgroupsPerDimension*64);
  const maxGrid=Math.min(128,device.limits.maxTextureDimension3D,Math.floor(Math.cbrt(Math.max(0,maxCells))));
@@ -61,6 +95,13 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(v=>v!==0))throw Error(`Ash collision requires evaluated rigid geometry: ${mesh.name}`);
   const scale=new Vector3().setFromMatrixScale(mesh.matrixWorld),largest=Math.max(...scale.toArray().map(Math.abs));
   if(!Number.isFinite(largest)||largest<=0||Math.abs(mesh.matrixWorld.determinant())<1e-12)throw Error(`Ash collision requires an invertible transform: ${mesh.name}`);
+  const b=mesh.userData?.kaminosAnalyticAnnularBurner;
+  if(b){
+   const rMax=b.outerRadius+0.045,bounds=new Box3(new Vector3(-rMax,-b.thickness,-rMax),new Vector3(rMax,Math.max(0,b.rimHeight),rMax));
+   const step=p.cellSize/largest,tag=[b.innerRadius,b.outerRadius,b.ringCount,b.grooveFraction,b.grooveDepth,b.sectorCount,b.thickness,b.rimHeight].join(',');
+   const key='annular-analytic:'+tag;
+   return {analyticBurner:b,key,identity:key,revision:0,grid:0,step,origin:new Vector3(),center:new Vector3(),bounds,fullBounds:bounds,clipped:false,coarseKey:null};
+  }
   // Quantize the local sampling resolution so translations/rotations never
   // rerasterize; growing scale earns a finer shape when it crosses a bucket.
   const version=[a,a.version??a.data?.version??0,i,i?.version??0,a.count,i?.count??0];let cached=boundsCache.get(g);
@@ -102,6 +143,10 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:activeBounds,fullBounds,clipped:isClipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin};
  }
  function build(mesh,spec,prev=null){
+  if(spec.analyticBurner){
+   const uniform=device.createBuffer({label:'ash analytic burner '+mesh.name,size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+   builds++;return {...spec,texture:null,coarseTexture:null,uniform,group:group(dummy,uniform),box:null,matrix:null,bytes:128};
+  }
   const {grid,step,origin,center,bounds,fullBounds,clipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin}=spec,bytes=grid**3*4;
   if(grid>device.limits.maxTextureDimension3D||bytes+4>device.limits.maxStorageBufferBindingSize||bytes+4>device.limits.maxBufferSize||Math.ceil(grid**3/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${grid} cubed)`);
   let producer,coarseProducer,texture,coarseTexture=null,reusedCoarse=false,uniform;
@@ -121,10 +166,10 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    producer.update([{id:mesh.uuid,object:proxy}],{translate:center.toArray(),scale:grid*step/2},{grid,gridHeight:grid},{boundaryCap});
    texture=device.createTexture({label:'cached local ash solid '+mesh.name,size:[grid,grid,grid],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
    const e=device.createCommandEncoder();producer.encode(e);e.copyTextureToTexture({texture:producer.texture},{texture},[grid,grid,grid]);device.queue.submit([e.finish()]);
-   uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+   uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    if(reusedCoarse)prev.coarseTexture=null;
    const coarseBytes=coarseTexture?coarseGrid**3*4:0;
-   builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+96};
+   builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+128};
   }catch(error){texture?.destroy();if(!reusedCoarse)coarseTexture?.destroy();uniform?.destroy();throw error;}finally{coarseProducer?.destroy();producer?.destroy();}
  }
  function update(records){
@@ -150,10 +195,11 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    if(m?.key===spec.key&&matrix.every((v,i)=>Math.abs(v-m.matrix[i])<1e-10)){m.id=id;m.objectKey=objectKey;continue;}
    if(m)include(m.box);
    if(!m||m.key!==spec.key){const next=build(mesh,spec,m);if(m)destroy(m);m=next;cache.set(key,m);}
-   m.id=id;m.objectKey=objectKey;m.name=mesh.name;m.matrix=matrix;
+   m.id=id;m.objectKey=objectKey;m.name=mesh.name;m.matrix=matrix;m.step=spec.step;m.origin=spec.origin;
    // Padding includes the conservative local shell at the geometric boundary.
    m.box=boxNow;include(m.box);
    const values=new Float32Array(20);values.set(new Matrix4().copy(mesh.matrixWorld).invert().elements);values.set([...m.origin.toArray(),m.step],16);device.queue.writeBuffer(m.uniform,0,values);
+   if(m.analyticBurner){const b=m.analyticBurner;device.queue.writeBuffer(m.uniform,96,new Float32Array([b.innerRadius,b.outerRadius,b.ringCount,b.grooveFraction,b.grooveDepth,b.sectorCount,b.thickness,b.rimHeight]));}
   }
   lastTiles=dirty.size;if(!dirty.size)return false;
   const packed=[dirty.size,...dirty],stamps=[];
@@ -162,13 +208,13 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    if(!mDirty.length)continue;
    let offset=1;
    if(mDirty.length<dirty.size){offset=packed.length;packed.push(...mDirty);}
-   device.queue.writeBuffer(m.uniform,80,new Uint32Array([offset,mDirty.length,0,0]));
+   device.queue.writeBuffer(m.uniform,80,new Uint32Array([offset,mDirty.length,m.analyticBurner?1:0,0]));
    stamps.push({m,tiles:mDirty.length});
   }
   if(packed.length>jobsCapacity){
    jobs.destroy();jobsCapacity=Math.max(packed.length,jobsCapacity*2);
    jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
-   clearGroup=group(dummy,blank);for(const m of cache.values())m.group=group(m.texture,m.uniform);
+   clearGroup=group(dummy,blank);for(const m of cache.values())m.group=group(m.texture??dummy,m.uniform);
   }
   device.queue.writeBuffer(jobs,0,new Uint32Array(packed));
   const encoder=device.createCommandEncoder(),dispatch=(name,bind,tiles)=>{const pass=encoder.beginComputePass({label:'ash scene '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(...ashDispatchGrid(tiles*t.groupsPerTile,device.limits.maxComputeWorkgroupsPerDimension));pass.end();};

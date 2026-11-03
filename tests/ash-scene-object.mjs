@@ -316,7 +316,7 @@ test('ash scene object prepares and consumes stunt-double collision rungs across
 
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {BURNER_DEFAULTS,createAnnularBurner} from '../annular-burner.mjs';
-test('annular burner procedural meshes collapse 29 beauty sub-meshes into a single caster collision proxy',()=>{
+test('annular burner procedural meshes collapse 29 beauty sub-meshes into a single analytic ring collider (or caster proxy when vertex-warped)',()=>{
  const ashRoot=new Group();
  const burner=createAnnularBurner(THREE,mergeGeometries,BURNER_DEFAULTS);
  burner.group.position.set(1,0.5,-2);
@@ -324,13 +324,20 @@ test('annular burner procedural meshes collapse 29 beauty sub-meshes into a sing
  assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner has 29 sub-meshes');
  const list=createAshCollisionRecords(ashRoot,()=>[{id:'burner-floor',type:'procedural-mesh',object:burner.group}]);
  const first=list();
- assert.equal(first.length,1,'annular burner must emit 1 merged collision proxy instead of 29 sub-meshes');
- assert.equal(first[0].collisionTier,'annular-caster');
- assert.ok(first[0].collisionFaces>1000&&first[0].collisionFaces<8000,`expected ~6.6k caster triangles, got ${first[0].collisionFaces}`);
+ assert.equal(first.length,1,'annular burner must emit 1 collider record instead of 29 sub-meshes');
+ assert.equal(first[0].collisionTier,'annular-analytic');
+ assert.equal(first[0].object.userData.kaminosAnalyticAnnularBurner?.ringCount,24,'unwarped annular burner carries analytic ring recipe');
  assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner children remain untouched');
  const second=list();
  assert.equal(second[0].object,first[0].object,'proxy mesh is reused across ticks');
- assert.equal(second[0].object.geometry,first[0].object.geometry,'caster geometry is reused across ticks');
+ // Vertex-warped burner falls back to triangle caster proxy
+ burner.group.userData.kaminosVertexWarp=pos=>new Float32Array(pos);
+ burner.group.userData.kaminosVertexWarpRevision=1;
+ const warped=list();
+ assert.equal(warped.length,1);
+ assert.equal(warped[0].collisionTier,'annular-caster');
+ assert.equal(warped[0].object.userData.kaminosAnalyticAnnularBurner,null,'vertex-warped burner uses triangle caster instead of unwarped analytic formula');
+ assert.ok(warped[0].collisionFaces>1000&&warped[0].collisionFaces<8000);
  burner.dispose();
 });
 

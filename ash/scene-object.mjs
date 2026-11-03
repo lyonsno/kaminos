@@ -1,6 +1,6 @@
 import {Group,Mesh,Matrix4,Matrix3,Vector2,Vector3,Quaternion,BoxGeometry,LatheGeometry,CylinderGeometry,EdgesGeometry,LineSegments,LineBasicMaterial,TorusGeometry,MeshBasicMaterial,MeshStandardMaterial} from '../lib/three.core.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {annularBurnerCasterKey,createAnnularBurnerCaster} from '../annular-burner.mjs';
+import {normalizeBurner,annularBurnerCasterKey,createAnnularBurnerCaster} from '../annular-burner.mjs';
 import {checkedAshRecord,checkedAshSettings,ashObjectLayout,ASH_OBJECT_TYPE} from './scene-record.mjs';
 import {selectAshCollisionLod,applyRootVertexWarpToRung} from '../scene-lod-budget.mjs';
 
@@ -27,10 +27,10 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
     if(!rung){
      const recipe=burnerRecipeOf(entry.object);
      if(recipe){
-      const key=annularBurnerCasterKey(recipe);let caster=burnerCasters.get(entry.object);
+      const normalized=normalizeBurner(recipe),key=annularBurnerCasterKey(normalized);let caster=burnerCasters.get(entry.object);
       if(!caster||caster.key!==key){
        caster?.geometry.dispose();
-       const built=createAnnularBurnerCaster({LatheGeometry,CylinderGeometry,Vector2},mergeGeometries,recipe);
+       const built=createAnnularBurnerCaster({LatheGeometry,CylinderGeometry,Vector2},mergeGeometries,normalized);
        const mesh=new Mesh(built.geometry,proxyMaterial);mesh.name=entry.object.name||'Annular burner caster';
        caster={key,root:mesh,geometry:built.geometry,faces:built.triangles,warpFn:undefined,warpRev:undefined};
        burnerCasters.set(entry.object,caster);
@@ -41,7 +41,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
        if(warpFn||caster.warpFn)applyRootVertexWarpToRung({Matrix4,Matrix3,Vector3,Quaternion},caster.root,warpFn,{bounds:entry.object.userData?.kaminosVertexWarpBounds??entry.object.userData?.kaminosUnwarpedRootBox??null});
        caster.warpFn=warpFn;caster.warpRev=warpRev;
       }
-      rung={root:caster.root,tier:'annular-caster',faces:caster.faces};
+      rung=warpFn?{root:caster.root,tier:'annular-caster',faces:caster.faces,analyticBurner:null}:{root:caster.root,tier:'annular-analytic',faces:0,analyticBurner:normalized};
      }
     }
     if(rung?.root){
@@ -58,6 +58,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
        let byPlacement=proxies.get(mesh);if(!byPlacement){byPlacement=new Map();proxies.set(mesh,byPlacement);}
        let proxy=byPlacement.get(p);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;byPlacement.set(p,proxy);}
        proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
+       proxy.userData.kaminosAnalyticAnnularBurner=rung.analyticBurner??null;
        proxy.matrix.multiplyMatrices(inverse,placementWorld).multiply(invRung).multiply(mesh.matrixWorld);proxy.updateMatrixWorld(true);
        result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy,collisionTier:rung.tier??null,collisionFaces:rung.faces??null});
       });
