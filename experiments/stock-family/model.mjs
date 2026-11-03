@@ -13,7 +13,7 @@ export const DEFAULT_RECIPE={schema:'kaminos.stock-family.v1',source:{
     {id:'stretch',label:'Long stress',length:4,bend:140,protect:true},
     {id:'tight',label:'Tight stress',length:.6,bend:180,protect:true},
   ]};
-function validateProfile(p){
+export function validateProfile(p){
   if(!p||![p.min,p.max,p.xMin,p.xMax].every(Number.isFinite)||p.min>=p.max||p.xMin>=p.xMax||!Array.isArray(p.locks))throw Error('Invalid source profile');
   let end=p.min;
   for(const b of p.locks){if(!Array.isArray(b)||b.length!==2||!b.every(Number.isFinite)||b[0]<end||b[0]>=b[1]||b[1]>p.max)throw Error('Invalid protected bands');end=b[1];}return p;
@@ -25,9 +25,34 @@ export function validateParameters(p){
 export function validateRecipe(value){
   const r=structuredClone(value);
   if(r?.schema!=='kaminos.stock-family.v1'||!r.source||!/^[a-f0-9]{64}$/.test(r.source.sha256)||typeof r.source.url!=='string'||!r.source.url)throw Error('Invalid stock source recipe');
-  validateProfile(r.source.profile);if(!Array.isArray(r.variants)||!r.variants.length)throw Error('Variants required');
+  validateStockSource(r.source);
+  if(r.sources!==undefined){if(!Array.isArray(r.sources))throw Error('Invalid source library');r.sources.forEach(validateStockSource);}
+  if(!Array.isArray(r.variants)||!r.variants.length)throw Error('Variants required');
   const ids=new Set();for(const v of r.variants){validateParameters(v);if(typeof v.id!=='string'||!v.id||ids.has(v.id)||typeof v.label!=='string')throw Error('Unique named variants required');ids.add(v.id);
     if(v.pose){for(const k of ['position','rotation','scale'])if(!Array.isArray(v.pose[k])||v.pose[k].length!==3||!v.pose[k].every(Number.isFinite))throw Error('Invalid variant pose');}}return r;
+}
+export function validateStockSource(source){
+  if(!source||typeof source.url!=='string'||!source.url||!/^[a-f0-9]{64}$/.test(source.sha256))throw Error('Invalid stock source');
+  if(source.fit&&!['x','y','z','-x','-y','-z'].includes(source.fit.axis))throw Error('Invalid source axis');
+  validateProfile(source.profile);return structuredClone(source);
+}
+export function replaceStockSource(recipe,source){
+  const next=validateRecipe(recipe),checked=validateStockSource(source);
+  const sources=new Map([next.source,...(next.sources??[]),checked].map(s=>[s.sha256,structuredClone(s)]));
+  return validateRecipe({...next,source:checked,sources:[...sources.values()]});
+}
+// A declared axis, centered unit longitudinal extent, and no inferred semantic
+// protection. Authored bands belong to this fitted source, never its predecessor.
+export function fitStockSource(positions,normals,axis){
+  const rotations={x:([x,y,z])=>[-z,y,x],y:([x,y,z])=>[x,-z,y],z:p=>p,
+    '-x':([x,y,z])=>[z,y,-x],'-y':([x,y,z])=>[x,z,-y],'-z':([x,y,z])=>[-x,y,-z]};
+  if(!rotations[axis])throw Error('Invalid source axis');
+  if(!positions.length||positions.length%3||positions.length!==normals.length||!positions.every(Number.isFinite)||!normals.every(Number.isFinite))throw Error('Finite matching position and normal arrays required');
+  const out=new Float32Array(positions.length),n=new Float32Array(normals.length),lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<out.length;i+=3){const p=rotations[axis](Array.from(positions.subarray(i,i+3)));out.set(p,i);n.set(rotations[axis](Array.from(normals.subarray(i,i+3))),i);p.forEach((v,k)=>{lo[k]=Math.min(lo[k],v);hi[k]=Math.max(hi[k],v);});}
+  const extent=hi[2]-lo[2];if(!(extent>0)||!(hi[0]>lo[0]))throw Error('Source needs nonzero longitudinal and cross-section extent');
+  for(let i=0;i<out.length;i++)out[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
+  return {positions:out,normals:n,profile:{min:-.5,max:.5,xMin:Math.fround((lo[0]-hi[0])/2/extent),xMax:Math.fround((hi[0]-lo[0])/2/extent),locks:[]}};
 }
 export function createStockWarp(profile,parameters){
   const p=validateProfile(profile),v=validateParameters(parameters),angle=v.bend*Math.PI/180;
