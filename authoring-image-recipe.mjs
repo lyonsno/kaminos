@@ -33,7 +33,7 @@ export function imageRecipeChanges(before,after){
 
 // The same operation serves the history button, a saved-image link and agents.
 // Reading another image never implicitly changes the active recipe parent.
-export function createImageRecipeIteration({history,assets,readControls,applyControls,recallPrompt=()=>{},changed=()=>{},busy=()=>false,
+export function createImageRecipeIteration({history,assets,readControls,applyControls,recallPrompt=()=>{},resetPrompt=()=>{},changed=()=>{},busy=()=>false,
  fetchBytes=async source=>{const r=await fetch(source);if(!r.ok)throw Error(`Image recipe HTTP ${r.status}`);return new Uint8Array(await r.arrayBuffer());}}){
  let parent=null,baseline=null,error=null,opening=false,ticket=0;
  const read=()=>({parent:parent?{source:parent.source,name:parent.name}:null,error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
@@ -55,7 +55,7 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
  }
  return {
   read,recall,
-  clear(){requireIdle();++ticket;opening=false;parent=null;baseline=null;error=null;changed();},
+  clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;baseline=null;error=null;changed();},
   async open(entry){
    requireIdle();const own=++ticket;opening=true;error=null;changed();
    try{
