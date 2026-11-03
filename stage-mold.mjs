@@ -107,3 +107,29 @@ export function replaceStageMold(entry,value){
  if(object.userData.kaminosSceneObject)Object.assign(object.userData.kaminosSceneObject,{stageMold:recipe,label:entry.label});
  return recipe;
 }
+
+// A separately authored positive of the channels. This is a removable solid,
+// not a liquid checkpoint or a claim of simulated solidification.
+export const STAGE_CASTING_SOURCE='kaminos:stage-casting-v1';
+export function createStageCasting(value){
+ const p=checkedStageMold(value),w=p.rows[0].length,h=p.rows.length,vertices=[],normals=[];
+ const point=(x,y,z)=>[(x-w/2)*p.pitch,y,(z-h/2)*p.pitch];
+ const ink=(x,z)=>x>=0&&z>=0&&x<w&&z<h&&p.rows[z][x]==='.';
+ function quad(a,b,c,d,n){for(const v of [a,b,c,a,c,d]){vertices.push(...v);normals.push(...n);}}
+ for(let z=0;z<h;z++)for(let x=0;x<w;x++)if(ink(x,z)){
+  const y=p.wallHeight;
+  quad(point(x,y,z),point(x,y,z+1),point(x+1,y,z+1),point(x+1,y,z),[0,1,0]);
+  quad(point(x,0,z+1),point(x,0,z),point(x+1,0,z),point(x+1,0,z+1),[0,-1,0]);
+  if(!ink(x-1,z))quad(point(x,0,z),point(x,0,z+1),point(x,y,z+1),point(x,y,z),[-1,0,0]);
+  if(!ink(x+1,z))quad(point(x+1,0,z+1),point(x+1,0,z),point(x+1,y,z),point(x+1,y,z+1),[1,0,0]);
+  if(!ink(x,z-1))quad(point(x+1,0,z),point(x,0,z),point(x,y,z),point(x+1,y,z),[0,0,-1]);
+  if(!ink(x,z+1))quad(point(x,0,z+1),point(x+1,0,z+1),point(x+1,y,z+1),point(x,y,z+1),[0,0,1]);
+ }
+ const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(vertices,3));geometry.setAttribute('normal',new Float32BufferAttribute(normals,3));geometry.computeBoundingBox();geometry.computeBoundingSphere();
+ const object=new Mesh(geometry,new MeshStandardMaterial({color:0xc8aa78,roughness:.85,metalness:0}));
+ object.name=p.label+' · casting';object.castShadow=object.receiveShadow=true;object.userData.kaminosStageCasting=p;return object;
+}
+export const stageCastingRecordDomain={type:'pbr',source:STAGE_CASTING_SOURCE,
+ recognize:o=>Boolean(o?.userData?.kaminosStageCasting),check:r=>({...r,stageCasting:checkedStageMold(r.stageCasting)}),fields:r=>({stageCasting:r.stageCasting}),
+ capture:entry=>({stageCasting:checkedStageMold(entry.object.userData.kaminosStageCasting)}),reloadable:r=>{checkedStageMold(r.stageCasting);return true;},
+ load:(r,loaders,options)=>loaders.constructed(createStageCasting(r.stageCasting),r,options)};

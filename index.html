@@ -3441,7 +3441,7 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
-import {stageWordMold,checkedStageMold,replaceStageMold} from './stage-mold.mjs';
+import {stageWordMold,checkedStageMold,replaceStageMold,createStageCasting,STAGE_CASTING_SOURCE} from './stage-mold.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
@@ -25308,6 +25308,14 @@ function setPromptLettering(id,prompt){
   const object=createPromptLettering(document,prompt,entry.burnable?.appearance?.profile??'incineration');
   try{return scenePlacementTools.edits.apply(target,promptReliefRecord(object).promptRelief,'Edit prompt lettering');}finally{object.geometry.dispose();object.material.dispose();}
 }
+async function addStageCasting(recipe,pose){
+  assertSceneConstructionAvailable();recipe=checkedStageMold(recipe);pose=checkedPose(pose);
+  const id=makeSceneObjectId('pbr'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  const object=createStageCasting(recipe);object.position.fromArray(pose.position);object.rotation.set(...pose.rotation);object.scale.fromArray(pose.scale);scene.add(object);
+  try{registerSceneObject(object,{id,type:'pbr',source:STAGE_CASTING_SOURCE,label:object.name,stageCasting:recipe,burnable:{enabled:true,material:'wood',appearance:{profile:'incineration',glow:1}}});await recordSceneObjectInsertion(id);}
+  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  return id;
+}
 const stageWordEditTargets=new Set();
 function setStageWord(id,label){
  assertSceneConstructionAvailable();
@@ -25641,7 +25649,7 @@ function installSceneConstruction() {
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
-    addPrompt:addPromptLettering,setPrompt:setPromptLettering,setStageWord,
+    addPrompt:addPromptLettering,setPrompt:setPromptLettering,setStageWord,addStageCasting,
     setBurnable:(id,enabled)=>{assertSceneConstructionAvailable();const entry=workingScene.objects.find(row=>row.id===id);return edits.apply(ensureObjectBurnableTarget(id),{...entry?.burnable,enabled,material:'wood'},'Set burnable wood');},
     burningState:id=>sceneBurning.read(id),
     setBurnAppearance:(id,value)=>{const entry=workingScene.objects.find(row=>row.id===id);if(!entry)throw Error('Select a burnable mesh');if(value.kelvinPerHeat!==undefined)throw Error('Change Kelvin per heat in the flame physical controls');const prior=entry.burnable??{enabled:false,material:'wood'};const appearance=checkedBurnAppearance({...checkedBurnAppearance(prior.appearance??{profile:entry.object.userData.kaminosPromptRelief?.appearance??'crust',glow:1}),...value});return edits.apply(ensureObjectBurnableTarget(id),{...prior,appearance},'Edit burn appearance');},
