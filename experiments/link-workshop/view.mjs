@@ -4,10 +4,11 @@ import {createBodyView,bodyLayout} from './bodies.mjs';
 
 export function createMechanismView(root){
  let bodyRoot=new T.Group(),bodies=createBodyView(bodyRoot),lastModel,lastT;root.add(bodyRoot);
+ const guides=new T.Group();guides.userData.kaminosEditorOnly=true;root.add(guides);
  const box=new T.BoxGeometry(1,1,1),ring=new T.TorusGeometry(1,.12,8,32);
  const materials={joint:new T.MeshBasicMaterial({color:0xe2ac5a}),A:new T.MeshBasicMaterial({color:0x4fe0e6,transparent:true,opacity:.14,depthWrite:false}),B:new T.MeshBasicMaterial({color:0xffb65a,transparent:true,opacity:.18,depthWrite:false})};
  let markers=[],ghosts=[],topology;
- const mesh=(geo,mat)=>{const m=new T.Mesh(geo,mat);root.add(m);return m;};
+ const mesh=(geo,mat)=>{const m=new T.Mesh(geo,mat);guides.add(m);return m;};
  function segment(o,a,b){const dx=b[0]-a[0],dy=b[1]-a[1];o.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,-.17);o.rotation.z=Math.atan2(dy,dx);o.scale.set(Math.hypot(dx,dy),.19,.16);}
  function clear(){for(const o of [...markers,...ghosts.flat()])o?.removeFromParent();for(const p of markers)p.material.dispose();markers=[];ghosts=[];}
  function update(m,t,selected,showGhosts=true){
@@ -28,5 +29,5 @@ export function createMechanismView(root){
   try{if(packet?.schema!=='kaminos.assembly-geometry.v1'||!Array.isArray(packet.bodies))throw Error('Choose an assembly geometry package');next.update(lastModel,lastT);if(packet.bodies.length)next.importBodies(packet);}catch(e){next.dispose();throw e;}
   bodies.dispose();bodyRoot.removeFromParent();bodyRoot=nextRoot;bodies=next;root.add(bodyRoot);root.updateMatrixWorld(true);return bodies.manifest();
  }
- return {update,setBodies,replacementState:()=>bodies.replacementState(),bodyManifest:()=>bodies.manifest(),exportBodies:()=>bodies.exportBodies(),importBodies:p=>bodies.importBodies(p),markers:()=>markers,dispose(){bodies.dispose();bodyRoot.removeFromParent();clear();box.dispose();ring.dispose();for(const m of Object.values(materials))m.dispose();}};
+ return {update,setBodies,replacementState:()=>bodies.replacementState(),bodyManifest:()=>bodies.manifest(),exportBodies:()=>bodies.exportBodies(),importBodies:p=>bodies.importBodies(p),markers:()=>markers,dispose(){bodies.dispose();bodyRoot.removeFromParent();clear();guides.removeFromParent();box.dispose();ring.dispose();for(const m of Object.values(materials))m.dispose();}};
 }
