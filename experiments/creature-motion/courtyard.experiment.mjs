@@ -3,6 +3,8 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {createLivingScene} from './living-scene.experiment.mjs';
 import {createStimulusSequence,validateStimulusProgram} from './stimulus-sequence.mjs';
 import {createInvestigationRecording,investigationOperations} from '../../investigation-recording.mjs';
+import {observeFlameInvestigation} from '../../flame-workbench.mjs';
+import {fireControlOwner} from '../../scene-fire-domain.mjs';
 const clone=x=>structuredClone(x),sources=new Set(['fire','beacon','traveler']);
 export function validateCourtyardProgram(value){
  const program=validateStimulusProgram(value);
@@ -24,7 +26,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  let program=validateCourtyardProgram(initial.program),sequence=createStimulusSequence(program),automatic=initial.automatic??false;
  if(typeof automatic!=='boolean')throw Error('Timed objects require a boolean run state');
  const session=await host.scene.open(),props=new Map(),seatings=[],log=[],manualSources=new Set();
- let living,flame,disposed=false,mountNode=null,ui=null,worldTime=0,programTime=0,baselineInputs,mountRoot,recording,failure=null;
+ let living,flame,disposed=false,mountNode=null,ui=null,worldTime=0,programTime=0,baselineInputs,mountRoot,recording,failure=null,fireOrigin=null,fireBaseline=null,observingFire=false;
  const materials=[0x968d7a,0xa59b86,0x8b8477,0xb1a58e].map(color=>new THREE.MeshStandardMaterial({color,roughness:.93}));
  const bronze=new THREE.MeshStandardMaterial({color:0x876844,metalness:.65,roughness:.48}),inlay=new THREE.MeshStandardMaterial({color:0x4b716e,metalness:.6,roughness:.5});
  function mesh(parent,geometry,material,position){const m=new THREE.Mesh(geometry,material);m.position.fromArray(position);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
@@ -55,9 +57,20 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  const emit=(kind,effective)=>{const event={kind,phase:'applied',target:'furnace-courtyard',clock:identity(),effective};log.push(clone(event));record(event);};
  const consume=event=>record(event.phase&&event.target&&Object.hasOwn(event,'effective')?event:{kind:event.kind,phase:event.phase??'applied',target:event.actor??'creatures',...(event.actor?{actor:event.actor}:{}),clock:identity(),effective:clone(event)});
  const makeLiving=(value,sceneHost=host)=>(dependencies.createLivingScene??createLivingScene)({host:sceneHost,inputs:value,record:consume},dependencies);
- function patch(source,values){
+ function patch(source,values,origin='courtyard-manual'){
   validateCourtyardProgram({duration:1,events:[{at:0,source,patch:values}]});
-  if(source==='fire'){flame.setControls({'volume-flow-rate':values.flow});return;}
+  if(source==='fire'){
+   const previous=fireOrigin;fireOrigin=origin;
+   try{
+    const state=flame.read(),law=state.settings?.domControls?.['volume-emitter-source-law']?.value;
+    if(law==='immersed-source'){
+     if(typeof host.fire?.setEnabled!=='function')throw Error('Courtyard requires native fire source enable control');
+     const speed=Number(fireBaseline.settings.domControls['volume-immersed-speed'].value)*values.flow;
+     flame.setControls({'volume-immersed-speed':speed});host.fire.setEnabled(values.flow>0);
+    }else flame.setControls({'volume-flow-rate':values.flow});
+   }finally{fireOrigin=previous;}
+   return;
+  }
   const row=props.get(source);if(!row?.root.parent)throw Error(`Source removed from scene: ${source}`);
   if(values.visible!==undefined)row.root.visible=values.visible;
   if(values.scale!==undefined)row.root.scale.setScalar(values.scale);
@@ -76,7 +89,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
    if(manualSources.has(event.source))continue;
    const row=props.get(event.source);
    if(row&&!row.root.parent){manualSources.add(event.source);emit('courtyard.source-removed',{source:event.source,hostId:row.asset.id});continue;}
-   if(event.at===0&&event.source==='traveler')resetTraveler();patch(event.source,event.patch);emit('courtyard.event',{event,observationPhase:'world edit on viewer frame; creatures and fluid retain their ordinary clocks'});
+   if(event.at===0&&event.source==='traveler')resetTraveler();patch(event.source,event.patch,'courtyard-schedule');emit('courtyard.event',{event,observationPhase:'world edit on viewer frame; creatures and fluid retain their ordinary clocks'});
   }
  }
  function tick({deltaSeconds}){
@@ -88,7 +101,7 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
    sync();
   }catch(error){automatic=false;failure=error.message;emit('courtyard.schedule-failed',{error:failure,creatures:'independent',fire:'ordinary native controls'});sync();}
  }
- function read(){return {schema:'kaminos.creature-courtyard.v2',...identity(),mounted:!disposed,failure,sources:Object.fromEntries([...props].map(([id,row])=>[id,{hostId:row.asset.id,mounted:Boolean(row.root.parent),scheduled:automatic&&!manualSources.has(id),visible:row.root.visible,moving:row.moving??false,motionTime:row.motionTime??0,speed:row.speed??null,width:row.width??null,authoredPosition:row.origin.toArray(),position:row.root.position.toArray(),scale:row.root.scale.toArray()}])),fire:flame.read(),creatures:living?.read()??null,diagnostic,log:clone(log),continuation:{events:'viewer-time edits; independent native fire and creatures',restart:'creature recipes only; no fluid checkpoint'}};}
+ function read(){return {schema:'kaminos.creature-courtyard.v2',...identity(),mounted:!disposed,failure,observationCoverage:{nativeFireOperations:observingFire,courtyardCommands:true,creatures:'emitted owner operations',reconstruction:'authored inputs and retained events; no evolved fluid checkpoint'},sources:{fire:{hostId:flame.read().scene?.objects?.find(x=>x.type==='flame-emitter')?.id??null,scheduled:automatic&&!manualSources.has('fire')},...Object.fromEntries([...props].map(([id,row])=>[id,{hostId:row.asset.id,mounted:Boolean(row.root.parent),scheduled:automatic&&!manualSources.has(id),visible:row.root.visible,moving:row.moving??false,motionTime:row.motionTime??0,speed:row.speed??null,width:row.width??null,authoredPosition:row.origin.toArray(),position:row.root.position.toArray(),scale:row.root.scale.toArray()}]))},fire:flame.read(),creatures:living?.read()??null,diagnostic,log:clone(log),continuation:{events:'viewer-time edits; independent native fire and creatures',restart:'creature recipes only; no fluid checkpoint'}};}
  function sync(){
   if(!ui)return;const text=failure?`Timed objects stopped: ${failure}`:`Timed objects ${automatic?'running':'paused'} · ${(programTime%program.duration).toFixed(1)} / ${program.duration} s`;
   if(ui.status.textContent!==text)ui.status.textContent=text;ui.automatic.checked=automatic;
@@ -130,11 +143,11 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
   check('Follow timed events',()=>!manualSources.has(id),enabled=>invoke('scheduled',{source:id,enabled}));
   if(id==='beacon'){check('Beacon visible',()=>props.get(id).root.visible,visible=>invoke('manual',{source:id,patch:{visible}}));number('Beacon size',()=>props.get(id).root.scale.x,scale=>invoke('manual',{source:id,patch:{scale}}),.01);}
   if(id==='traveler'){check('Lantern moving',()=>props.get(id).moving,moving=>invoke('manual',{source:id,patch:{moving}}));number('Travel speed',()=>props.get(id).speed,speed=>invoke('travel',{speed}),.01);number('Travel width',()=>props.get(id).width,width=>invoke('travel',{width}),.05);}
-  const note=document.createElement('p');note.textContent=id==='fire'?'The flame keeps its normal emitter and simulation controls. Timed events only edit its flow.':'Place this object with the ordinary editor. Editing its state releases it from timed events.';properties.append(note,status);
+  const note=document.createElement('p');note.textContent=id==='fire'?'The flame keeps its normal emitter and simulation controls. Timed events scale its authored inlet speed for immersed sources, or edit Flow for boundary sources. A native source edit releases its timer.':'Place this object with the ordinary editor. Editing its state releases it from timed events.';properties.append(note,status);
   const syncFields=()=>fields.forEach(fn=>fn());syncFields();seatings.push(host.controls.mountObject({asset,properties,onSelected:syncFields}));
  }
  try{
-  flame=await(dependencies.openFlame?.()??host.flame.open());if(!flame?.read().active)throw Error('Courtyard requires an authored Fire & smoke field');
+  flame=await(dependencies.openFlame?.()??host.flame.open());if(!flame?.read().active)throw Error('Courtyard requires an authored Fire & smoke field');fireBaseline=clone(flame.read());
   await session.attach(floor,{owned:true,metadata:{label:floor.name,source:'rubberneck:courtyard-stone-floor'}});
   await session.attach(architecture,{owned:true,metadata:{label:architecture.name,source:'rubberneck:courtyard-colonnade'}});
   for(const id of ['beacon','traveler']){
@@ -147,7 +160,19 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
   baselineInputs={...initial,running:false,attention:{...initial.attention,interests:[...props.values()].map(row=>({object:row.asset.id,label:row.root.name,anchor:'center',interest:1.2}))}};
   living=await makeLiving(clone(baselineInputs));if(automatic)for(const step of sequence.advance(0))applyEvents(step);session.setView(initial.view);
   const stop=session.onFrame(frame=>{tick(frame);showField();});seatings.push({dispose:stop});
+  observingFire=typeof flame.subscribe==='function';
   recording=createInvestigationRecording({id:crypto.randomUUID(),source:{experiment:'rubberneck/courtyard',program},initial:read(),startingConditions:{kind:'authored-creature-baseline',fluidCheckpoint:false}});
+  // Observe the owner's accepted operations, including inspector aliases. A
+  // scheduled write carries its origin through synchronous owner notifications.
+  if(typeof flame.subscribe==='function'){
+   const sourceState=current=>current.scene?.objects?.filter(x=>x.type==='flame-emitter').map(x=>({id:x.id,emission:x.emission,enabled:x.emissionEnabled,transform:x.transform}))??Object.fromEntries(Object.entries(current.settings?.domControls??{}).filter(([id])=>fireControlOwner(id)==='source'));
+   let previousSource=JSON.stringify(sourceState(flame.read()));
+   const stop=observeFlameInvestigation({read:flame.read,subscribe:flame.subscribe,channel:{emit(operation){
+    const current=flame.read(),nextSource=JSON.stringify(sourceState(current)),changed=nextSource!==previousSource;previousSource=nextSource;
+    record({...operation,origin:fireOrigin??'native-fire-operation'});
+    if(changed&&!fireOrigin){manualSources.add('fire');emit('courtyard.manual',{source:'fire',origin:'native-fire-operation',accepted:sourceState(current)});sync();}
+   }}});observingFire=true;seatings.push({dispose(){stop();observingFire=false;}});
+  }
   if(globalThis.window)window.kaminosCreatureCourtyard={read,operations};
   return {read,operations,mount({root,document=host.controls.document,invoke}){
    mountRoot=root;living.mount({root});const node=document.createElement('section');mountNode=node;node.className='creature-courtyard-controls';node.style.cssText='display:grid;gap:8px;padding:10px';
