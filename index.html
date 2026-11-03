@@ -3445,6 +3445,7 @@ import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
 import {createImageRecipeIteration,installImageRecipeStatus} from './authoring-image-recipe.mjs';
+import {createImageExperiments,installImageExperiments} from './authoring-image-experiments.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
@@ -26933,7 +26934,7 @@ sceneInitialization.then(async () => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
-  let recipeIteration=null,recipeStatus=null;
+  let recipeIteration=null,recipeStatus=null,imageExperiments=null,imageExperimentsUI=null;
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
   // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
@@ -27209,7 +27210,7 @@ function setupAuthoringAssets(){
     if(entry.visibility?.status==='withheld'||historyReads.has(source)||authoringImageHistory.read().viewed?.provenance)return;
     historyReads.add(source);fetch(source).then(async response=>{if(!response.ok)throw Error(`Image metadata HTTP ${response.status}`);const provenance=readPngProvenance(new Uint8Array(await response.arrayBuffer()));if(provenance)authoringImageHistory.annotate(source,{provenance});}).catch(error=>console.warn('Image history metadata unavailable',error));
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();},
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();imageExperimentsUI?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -27226,7 +27227,7 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();recipeStatus?.render();};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits,onExperiment:id=>imageExperimentsUI.open(id)});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();recipeStatus?.render();imageExperimentsUI?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
@@ -27234,7 +27235,7 @@ function setupAuthoringAssets(){
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
     weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
-    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});if(provenance.iteration?.parent)authoringGenerateLayout.compare(true);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});await imageExperiments?.recordResult(entry,provenance);if(provenance.iteration?.parent)authoringGenerateLayout.compare(true);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
     blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
@@ -27307,6 +27308,8 @@ function setupAuthoringAssets(){
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),resetPrompt:()=>authoringPromptUI.reset(),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
   recipeStatus=installImageRecipeStatus({document,iteration:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);}});
+  imageExperimentsUI=installImageExperiments({document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
     onEdit:()=>{recipeIteration.clear();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
     onRecall:entry=>recipeIteration.recall(entry)});
@@ -27314,7 +27317,11 @@ function setupAuthoringAssets(){
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:()=>authoringImageUI.run(),imageRequest:()=>authoringImageUI.readRequest(),
     openImageRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);},
+    experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id)},
     promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
+  const experimentParams=new URLSearchParams(location.search);
+  if(experimentParams.has('image_experiment'))imageExperimentsUI.open(experimentParams.get('image_experiment')).catch(error=>{document.getElementById('asset-status').textContent=error.message;});
+  else if(experimentParams.get('asset_collection')==='image-experiments')authoringAssetsUI.open('browse').then(()=>authoringAssets.browse('image-experiments'));
 }
 
 </script>

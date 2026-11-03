@@ -2493,6 +2493,8 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
 )).expanduser()
 KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
     str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
+IMAGE_EXPERIMENTS_DIR = Path(os.environ.get('KAMINOS_IMAGE_EXPERIMENTS_DIR',
+    str(KAMINOS_ASSETS_DIR / 'image-experiments'))).expanduser().resolve()
 # The server owns model resolution. Installed packages live outside checkouts;
 # explicit invocation overrides remain scoped to this process.
 _model_spec = importlib.util.spec_from_file_location('kaminos_model_installations', ROOT / 'model_installations.py')
@@ -3889,10 +3891,57 @@ def prepare_authoring_image(content, *, source, name, expected_sha256):
 
 def authoring_asset_catalog(collection):
     from authoring_asset_catalog import read_catalog
-    return read_catalog(collection, roots=BROWSE_ROOTS,
+    if collection == 'image-experiments':
+        listing=image_experiment_store().list()
+        return {'schema':'kaminos.authoring-assets.v1','collection':collection,
+                'entries':[image_experiment_card(doc) for doc in listing['entries']], 'warnings':listing['warnings']}
+    result=read_catalog(collection, roots=BROWSE_ROOTS,
         image_entries=lambda: list_asset_entries(kind='image'),
         origins=read_mesh_generation_origins, levels=mesh_lod_level_index,
         output_resolver=resolve_greenroom_output_dir, label=_clean_label)
+    if collection == 'agent-work':
+        listing=image_experiment_store().list()
+        result['entries']=[image_experiment_card(doc) for doc in listing['entries'] if doc.get('agent')]+result['entries']
+        result['warnings']+=listing['warnings']
+    return result
+
+
+def image_experiment_card(doc):
+    members=doc['members'];available=[m for m in members if m['availability']=='available']
+    return {'id':doc['id'],'kind':'experiment','name':doc['title'],'label':doc['title'],
+            'source':'/api/image-experiments?'+urlencode({'id':doc['id']}),'path':doc['id'],
+            'description':doc['description'],'count':len(members),'mtime':doc['updatedAt'],
+            'preview':available[0]['source'] if available else None,
+            'agent':doc.get('agent',{'id':'operator','label':'Your experiments'}),'outputClass':'experiment',
+            'producedAt':doc['updatedAt']}
+
+
+def image_experiment_store():
+    from image_experiments import ExperimentStore, png_recipe
+    from authoring_asset_catalog import visibility_holds
+    apply_hold=visibility_holds()
+    def inspect(source):
+        parsed=urlparse(source)
+        if parsed.scheme or parsed.netloc or not source.startswith('/api/'):
+            raise ValueError('Experiment images must use a local asset source')
+        if parsed.path=='/api/read':path=_resolve_api_read_source(source)
+        elif parsed.path=='/api/job-output':
+            query=parse_qs(parsed.query);job=query.get('job_id',[''])[0];filename=query.get('file',[''])[0]
+            receipt=find_greenroom_receipt(job)
+            if not receipt:raise FileNotFoundError('Image job receipt is missing')
+            output=resolve_greenroom_output_dir(receipt.get('output_dir'))
+            if output is None or not filename:raise ValueError('Image job output is unavailable')
+            path=(output/filename).resolve()
+            if not path.is_relative_to(output):raise ValueError('Image path leaves its job directory')
+        else:raise ValueError('Unsupported image source route')
+        if path.suffix.lower() not in ('.png','.jpg','.jpeg','.webp'):raise ValueError('Choose an image asset')
+        stat=path.stat()
+        entry=apply_hold({'kind':'image','source':source,'name':path.name,'size':stat.st_size,'mtime':stat.st_mtime},path)
+        if entry.get('visibility',{}).get('status')!='withheld':
+            p=png_recipe(str(path),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns)
+            if p:entry['provenance']=p
+        return entry
+    return ExperimentStore(IMAGE_EXPERIMENTS_DIR,inspect)
 
 
 def greenroom_output_roots():
@@ -4066,7 +4115,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
-        if parsed.path == "/api/workbench-experiments":
+        if parsed.path == '/api/image-experiments':
+            self.handle_image_experiments(parse_qs(parsed.query))
+        elif parsed.path == "/api/workbench-experiments":
             from workbench_experiments import discover_experiments, experiment_catalogue
             try:
                 modules = discover_experiments(ROOT, os.environ.get("KAMINOS_EXPERIMENTS_DIR", "experiments"))
@@ -4169,7 +4220,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/preferences':
+        if parsed.path == '/api/image-experiments':
+            self.handle_image_experiments(parse_qs(parsed.query),write=True)
+        elif parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
@@ -5117,6 +5170,23 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_image_experiments(self,params,write=False):
+        from image_experiments import Conflict
+        try:
+            store=image_experiment_store()
+            if write:
+                payload=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))))
+                result=store.apply(payload)
+            else:
+                id=params.get('id',[None])[0]
+                result=store.get(id) if id else store.list()
+            self.send_json(result)
+        except Conflict as error:self.send_json({'error':str(error)},409)
+        except (ValueError,TypeError,KeyError) as error:self.send_json({'error':str(error)},400)
+        except FileNotFoundError as error:self.send_json({'error':str(error)},404)
+        except PermissionError as error:self.send_json({'error':str(error)},403)
+        except OSError as error:self.send_json({'error':str(error),'phase':'experiment-persistence'},500)
 
     def handle_prepare_image(self,params):
         try:

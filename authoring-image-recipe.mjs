@@ -35,8 +35,8 @@ export function imageRecipeChanges(before,after){
 // Reading another image never implicitly changes the active recipe parent.
 export function createImageRecipeIteration({history,assets,readControls,applyControls,recallPrompt=()=>{},resetPrompt=()=>{},changed=()=>{},busy=()=>false,
  fetchBytes=async source=>{const r=await fetch(source);if(!r.ok)throw Error(`Image recipe HTTP ${r.status}`);return new Uint8Array(await r.arrayBuffer());}}){
- let parent=null,baseline=null,error=null,opening=false,ticket=0;
- const read=()=>({parent:parent?{source:parent.source,name:parent.name}:null,error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
+ let parent=null,baseline=null,error=null,opening=false,ticket=0,experiment=null;
+ const read=()=>({parent:parent?{source:parent.source,name:parent.name}:null,experiment:clone(experiment),error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
  const requireIdle=()=>{if(busy())throw Error('Finish the current generation before opening another recipe.');};
  function recall(entry){
   requireIdle();++ticket;opening=false;
@@ -50,12 +50,13 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
    }
    const saved=history.record({...entry,source:sourceOf(entry)});assets.select(saved);
    applyControls(request);recallPrompt(entry.provenance);
-   parent=clone(saved);baseline=request;error=null;changed();return read();
+   parent=clone(saved);baseline=request;experiment=clone(entry.experiment??entry.provenance.experiment??null);error=null;changed();return read();
   }catch(e){error=e.message;changed();throw e;}
  }
  return {
   read,recall,
-  clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;baseline=null;error=null;changed();},
+  clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;baseline=null;experiment=null;error=null;changed();},
+  joinExperiment(value){requireIdle();if(!value?.id||!value?.title)throw Error('Choose a saved experiment');this.clear();experiment=clone(value);changed();},
   async open(entry){
    requireIdle();const own=++ticket;opening=true;error=null;changed();
    try{
@@ -69,10 +70,10 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
   },
   decorate(request){
    if(opening)throw Error('Wait for the image recipe to finish opening.');
-   if(!parent)return request;
+   if(!parent)return experiment?{...request,experiment:clone(experiment)}:request;
    const p=parent.provenance,sameModel=request.model===baseline.model;
    const expectedModel=sameModel?Object.fromEntries(['source','sampling','lora'].filter(k=>p[k]!=null).map(k=>[k,clone(p[k])])):null;
-   return {...request,...(sameModel&&baseline.model==='flux2'?{textLength:baseline.textLength}:{}),
+   return {...request,...(experiment?{experiment:clone(experiment)}:{}),...(sameModel&&baseline.model==='flux2'?{textLength:baseline.textLength}:{}),
     ...(expectedModel&&Object.keys(expectedModel).length?{expectedModel}:{}),
     iteration:{parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};
   },
@@ -87,10 +88,10 @@ export function installImageRecipeStatus({document,iteration,busy=()=>false}){
  document.getElementById('asset-step-image').querySelector('h3').after(host);
  const labels={prompt:'prompt',seed:'seed',size:'size',aspect:'shape',level:'weight precision',model:'model',reference:'reference image'};
  function render(){
-  const state=iteration.read();host.hidden=!state.parent&&!state.error&&!state.opening;
-  document.getElementById('asset-generate').dataset.recipeActive=String(!!state.parent);
-  status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:'');
-  reset.hidden=!state.parent;reset.disabled=busy()||state.opening;
+  const state=iteration.read();host.hidden=!state.parent&&!state.experiment&&!state.error&&!state.opening;
+  document.getElementById('asset-generate').dataset.recipeActive=String(!!(state.parent||state.experiment));
+  status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:state.experiment?`New results will join ${state.experiment.title}.`:'');
+  reset.hidden=!state.parent&&!state.experiment;reset.disabled=busy()||state.opening;
  }
  for(const id of ['asset-prompt','asset-seed','asset-image-size','asset-image-aspect','asset-image-level','asset-image-model','asset-use-reference']){
   document.getElementById(id).addEventListener('input',render);document.getElementById(id).addEventListener('change',render);
