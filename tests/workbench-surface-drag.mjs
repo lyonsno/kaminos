@@ -35,3 +35,10 @@ test('cancelled pending contacts never replay a physical hand',async()=>{
  resolve({object:root,point:[0,0,.5],distance:4.5});await new Promise(r=>setImmediate(r));assert.deepEqual(seen,[]);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);stop();
  }
 });
+test('GPU-owned ray gesture delivers synchronous rays and releases without a CPU hit',()=>{
+ const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},root=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),seen=[];camera.position.z=5;camera.lookAt(0,0,0);root.position.x=100;root.updateMatrixWorld(true);
+ const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[root],rayDrag:true,callback:e=>{seen.push(e);return true;}});
+ function send(type,x=250){const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:x,clientY:250,button:0,pointerId:1});canvas.dispatchEvent(e);return e;}
+ assert.equal(send('pointerdown').defaultPrevented,true,'Resident input must capture synchronously without querying CPU rest geometry');assert.equal(controls.enabled,false);send('pointermove',280);send('pointerup',280);
+ assert.deepEqual(seen.map(x=>x.phase),['start','move','move','end']);assert.deepEqual(seen[0].ray.origin,[0,0,5]);assert.ok(seen[1].ray.direction[0]>0);assert.equal(seen[0].ray.maxDistance,Infinity);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);stop();
+});

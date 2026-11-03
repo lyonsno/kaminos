@@ -16,6 +16,9 @@ struct Parameters {
 @group(0) @binding(8) var<uniform> params: Parameters;
 @group(0) @binding(9) var<storage, read_write> output: array<vec4f>;
 
+fn handActive() -> f32 {
+  for(var i=0u;i<params.counts.x;i++){if(grip[i*3u].x>0.0){return 1.0;}}return 0.0;
+}
 fn qmul(a: vec4f, b: vec4f) -> vec4f {
   return vec4f(a.w*b.xyz + b.w*a.xyz + cross(a.xyz,b.xyz), a.w*b.w-dot(a.xyz,b.xyz));
 }
@@ -49,7 +52,7 @@ fn commands(@builtin(global_invocation_id) id: vec3u) {
       let local=grip[i*3u+1u]; let offset=grip[i*3u+2u];
       let changed=joints[base+2u].w!=command.z || jointMeta.w==0u;
       jointMeta.w=1u; joints[base]=bitcast<vec4f>(jointMeta);
-      joints[base+1u]=vec4f(params.handTarget.xyz+offset.xyz,1.0);
+      joints[base+1u]=vec4f(select(params.handTarget.xyz+offset.xyz,offset.xyz,command.w==1.0),1.0);
       joints[base+2u]=vec4f(local.xyz,command.z);
       joints[base+4u]=vec4f(params.control.z*command.y,0.0,0.0,0.0);
       if(changed) { clearDual(j); }
@@ -69,7 +72,7 @@ fn commands(@builtin(global_invocation_id) id: vec3u) {
   joints[base+2u]=vec4f(qrot(qconj(quaternions[b]),midpoint-positions[b].xyz),0.0);
   joints[base+3u]=normalize(qmul(qconj(quaternions[a]),quaternions[b]));
   clearDual(i); jointMeta.w=1u; joints[base]=bitcast<vec4f>(jointMeta);
-  damage[i*3u+2u]=vec4f(0.0,f32(params.counts.z),2.0,f32(params.binding.z));
+  damage[i*3u+2u]=vec4f(0.0,f32(params.counts.z),2.0,handActive());
 }
 
 @compute @workgroup_size(64)
@@ -92,7 +95,7 @@ fn fracture(@builtin(global_invocation_id) id: vec3u) {
     jointMeta.w=0u; joints[base]=bitcast<vec4f>(jointMeta);
     damage[i*3u].w=f32(params.counts.z);
     let energy=(length(force)*length(velocities[a].xyz-velocities[b].xyz)+length(torque)*length(angularVelocities[a].xyz-angularVelocities[b].xyz))*params.control.y;
-    damage[i*3u+1u]=vec4f(energy,f32(params.counts.z),1.0,f32(params.binding.z));
+    damage[i*3u+1u]=vec4f(energy,f32(params.counts.z),1.0,handActive());
   }
 }
 
