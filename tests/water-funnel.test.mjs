@@ -1,0 +1,25 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.core.js';
+import {sceneLiquidCollider,sceneLiquidDistance,packSceneLiquidColliders} from '../scene-liquid-support.mjs';
+import {createProceduralMesh,checkedGeometry} from '../scene-geometry.mjs';
+const parameters={bottomRadius:.2,topRadius:.6,height:.6,thickness:.06};
+const record={id:'funnel',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'funnel',parameters},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}};
+const c=sceneLiquidCollider(record);
+assert.ok(c,'An authored funnel needs an analytical collider with open inlet and outlet');
+for(const y of [-.5,-.3,0,.3,.5])assert.ok(sceneLiquidDistance(c,[0,y,0]).distance>.15,'Axis must remain an open passage');
+assert.ok(sceneLiquidDistance(c,[.4,0,0]).distance<0,'Wall must be solid');
+const inner=sceneLiquidDistance(c,[.36,0,0]),outer=sceneLiquidDistance(c,[.44,0,0]);
+assert.ok(inner.normal[0]<0&&inner.normal[1]>0);assert.ok(outer.normal[0]>0&&outer.normal[1]<0);
+const built=createProceduralMesh(THREE,null,record.geometry);
+const p=built.group.geometry.attributes.position;
+for(let i=0;i<p.count;i++)assert.ok(Math.abs(sceneLiquidDistance(c,[p.getX(i),p.getY(i),p.getZ(i)]).distance)<2e-7,'Rendered vertices must follow the analytical wall including both lips');
+assert.equal(packSceneLiquidColliders([c])[0],3);assert.equal(packSceneLiquidColliders([c]).length,20);
+const moved=sceneLiquidCollider({...record,transform:{position:[1,2,3],rotation:[0,0,Math.PI/2],scale:[2,2,2]}});
+const v=new THREE.Vector3(.36,0,0).multiplyScalar(2).applyEuler(new THREE.Euler(0,0,Math.PI/2)).add(new THREE.Vector3(1,2,3));
+assert.ok(Math.abs(sceneLiquidDistance(moved,v.toArray()).distance-inner.distance*2)<1e-8);
+assert.throws(()=>checkedGeometry({kind:'funnel',parameters:{...parameters,thickness:.5}}),/outlet|radius|thickness/i);
+built.dispose();
+const {buildSceneDocument,planSceneRestore}=await import('../scene-persistence-core.js');
+assert.deepEqual(planSceneRestore(buildSceneDocument({objects:[record]})).objects[0].geometry,record.geometry);
+console.log('Funnel open passage, signed wall, transformed contact, rendered surface and scene persistence agree');

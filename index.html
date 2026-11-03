@@ -2546,6 +2546,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="box">Cube</button>
         <button type="button" role="menuitem" data-scene-add="plane">Plane</button>
         <button type="button" role="menuitem" data-scene-add="sphere">Sphere</button>
+        <button type="button" role="menuitem" data-scene-add="bowl">Bowl</button>
+        <button type="button" role="menuitem" data-scene-add="funnel">Funnel</button>
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
         <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
@@ -11943,7 +11945,7 @@ async function initScene() {
       const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
       const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
       const result=[
-        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['funnel','Funnel',['water routing','spout']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.ash-source','Add','Ash source',()=>addAuthoredAshSource(),{aliases:['emitter','fallout']}),
@@ -26303,7 +26305,7 @@ function ensureObjectCollisionTarget(id) {
 }
 function setObjectWaterCollision(id,enabled){
   assertSceneConstructionAvailable();if(typeof enabled!=='boolean')throw Error('Water collision must be Boolean');
-  const entry=workingScene.objects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl','box'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres, bowls and boxes');
+  const entry=workingScene.objects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl','box','funnel'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres, bowls, boxes and funnels');
   const record=serializeSceneObject(entry);record.waterCollision=enabled;
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
@@ -26343,7 +26345,7 @@ function syncSceneDataInspector() {
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...workingScene.groups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
-    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl','box'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
+    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl','box','funnel'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
     for(const input of primitive.querySelectorAll('[data-geometry-param]')){const key=input.dataset.geometryParam;input.closest('label').hidden=!(key in GEOMETRY_DEFAULTS[entry.geometry.kind]);if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[key]??'';}
     for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
   }
@@ -26514,7 +26516,7 @@ function installSceneConstruction() {
     authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(workingScene.activeObjectId),label:`Edit ${label}`,onError:error=>setInfo(error.message)}));
     if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   }
-  for(const key of ['width','height','depth','radius','thickness'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
+  for(const key of ['width','height','depth','radius','bottomRadius','topRadius','thickness'])field(panel.querySelector('#mesh-shape-fields'),key,({bottomRadius:'Outlet radius',topRadius:'Inlet radius'}[key]??key[0].toUpperCase()+key.slice(1)),'number',.01,true);
   field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
   field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
   field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
