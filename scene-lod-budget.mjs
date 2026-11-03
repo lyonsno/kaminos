@@ -511,6 +511,218 @@ export function allocateShadowCasterLods(candidates = [], {
   };
 }
 
+export function voxelSolidError(tier, {
+  worldBox,
+  worldDiag,
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  geomStretch = 1,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+} = {}) {
+  if (!tier || tier === 'hero' || tier.isHero) return 0;
+  const pitch = Number.isFinite(Number(voxelSize)) && Number(voxelSize) > 0
+    ? Number(voxelSize)
+    : (2 * Math.max(Number(domainScale) || 1, 1e-6)) / Math.max(Number(grid) || 64, 2);
+  const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
+  const stretch = Math.max(1, Number(geomStretch) || 1);
+  const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight, creviceAllowance});
+  return (diag * geomRel * stretch) / pitch;
+}
+
+export function selectColliderTier(levels = [], {
+  heroFaces = Infinity,
+  worldBox,
+  worldDiag,
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  maxVoxelError = 0.85,
+  requireClosed = true,
+  geomStretch = 1,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+  activeTier = null,
+  hysteresis = 0.15,
+} = {}) {
+  const sorted = [...(levels ?? [])]
+    .filter(l =>
+      Number.isFinite(l?.faces) &&
+      l.faces > 0 &&
+      (!Number.isFinite(heroFaces) || l.faces < heroFaces) &&
+      (!requireClosed || l.closed !== false)
+    )
+    .sort((a, b) => b.faces - a.faces);
+  const rungs = [
+    {id: 'hero', sha: 'hero', isHero: true, faces: heroFaces, voxelError: 0, level: null},
+    ...sorted.map(l => {
+      const id = l.sha ?? l.sha256;
+      return {
+        id,
+        sha: id,
+        isHero: false,
+        faces: l.faces,
+        voxelError: voxelSolidError(l, {worldBox, worldDiag, voxelSize, grid, domainScale, geomStretch, stat, tailWeight, creviceAllowance}),
+        level: l,
+      };
+    }),
+  ];
+  for (let i = 1; i < rungs.length; i++) {
+    if (rungs[i].voxelError < rungs[i - 1].voxelError) {
+      rungs[i].voxelError = rungs[i - 1].voxelError;
+    }
+  }
+  const prevIdx = activeTier != null ? rungs.findIndex(r => r.id === activeTier) : -1;
+  const coarsenLimit = maxVoxelError * (1 - hysteresis);
+  const refineLimit = maxVoxelError * (1 + hysteresis);
+  let chosenIndex = 0;
+  if (prevIdx < 0) {
+    for (let i = rungs.length - 1; i >= 0; i--) {
+      if (rungs[i].voxelError <= maxVoxelError) {
+        chosenIndex = i;
+        break;
+      }
+    }
+  } else {
+    let coarsened = -1;
+    for (let i = rungs.length - 1; i > prevIdx; i--) {
+      if (rungs[i].voxelError <= coarsenLimit) {
+        coarsened = i;
+        break;
+      }
+    }
+    if (coarsened >= 0) {
+      chosenIndex = coarsened;
+    } else if (rungs[prevIdx].voxelError > refineLimit) {
+      chosenIndex = 0;
+      for (let i = prevIdx - 1; i >= 0; i--) {
+        if (rungs[i].voxelError <= maxVoxelError) {
+          chosenIndex = i;
+          break;
+        }
+      }
+    } else {
+      chosenIndex = prevIdx;
+    }
+  }
+  return {selected: rungs[chosenIndex], chosenIndex, rungs};
+}
+
+export function allocateColliderLods(candidates = [], {
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  maxVoxelError = 0.85,
+  colliderFaceBudget = Infinity,
+  requireClosed = true,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+  hysteresis = 0.15,
+} = {}) {
+  const pitch = Number.isFinite(Number(voxelSize)) && Number(voxelSize) > 0
+    ? Number(voxelSize)
+    : (2 * Math.max(Number(domainScale) || 1, 1e-6)) / Math.max(Number(grid) || 64, 2);
+  const items = candidates.map((c, order) => {
+    const boxes = c.instanceBoxes?.length ? c.instanceBoxes : (c.worldBox ? [c.worldBox] : [{min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]}]);
+    let maxDiag = 0;
+    for (const b of boxes) maxDiag = Math.max(maxDiag, boxDiagonal(b));
+    const diag = c.worldDiag ?? (maxDiag || 1);
+    const instanceCount = Math.max(1, c.instanceCount ?? (boxes.length || 1));
+    const {rungs, chosenIndex} = selectColliderTier(c.levels ?? [], {
+      heroFaces: c.heroFaces,
+      worldBox: boxes[0],
+      worldDiag: diag,
+      voxelSize: pitch,
+      grid,
+      domainScale,
+      maxVoxelError,
+      requireClosed,
+      geomStretch: c.geomStretch ?? 1,
+      stat,
+      tailWeight,
+      creviceAllowance,
+      activeTier: c.voxelTier ?? c.activeTier ?? null,
+      hysteresis,
+    });
+    const effectiveIdx = c.pinned ? 0 : chosenIndex;
+    return {
+      id: c.id ?? String(order),
+      order,
+      pinned: Boolean(c.pinned),
+      instanceCount,
+      heroFaces: c.heroFaces ?? 0,
+      activeTier: c.activeTier ?? null,
+      voxelTier: rungs[effectiveIdx].id,
+      rungs,
+      chosenIndex: effectiveIdx,
+      demotedByBudget: false,
+    };
+  });
+
+  let totalFaces = 0;
+  let heroFacesTotal = 0;
+  for (const item of items) {
+    totalFaces += item.instanceCount * item.rungs[item.chosenIndex].faces;
+    heroFacesTotal += item.instanceCount * item.heroFaces;
+  }
+
+  while (Number.isFinite(colliderFaceBudget) && totalFaces > colliderFaceBudget) {
+    let bestItem = null;
+    let bestCost = Infinity;
+    let bestDeltaFaces = -1;
+    for (const item of items) {
+      if (item.pinned || item.chosenIndex >= item.rungs.length - 1) continue;
+      const cur = item.rungs[item.chosenIndex];
+      const next = item.rungs[item.chosenIndex + 1];
+      const deltaFaces = item.instanceCount * (cur.faces - next.faces);
+      if (deltaFaces <= 0) continue;
+      const deltaError = Math.max(0, next.voxelError - cur.voxelError);
+      const stickiness = cur.id === item.activeTier ? 1 + hysteresis : 1;
+      const cost = (deltaError / deltaFaces) * stickiness;
+      if (cost < bestCost - 1e-12 || (Math.abs(cost - bestCost) <= 1e-12 && deltaFaces > bestDeltaFaces)) {
+        bestCost = cost;
+        bestDeltaFaces = deltaFaces;
+        bestItem = item;
+      }
+    }
+    if (!bestItem) break;
+    bestItem.chosenIndex++;
+    bestItem.demotedByBudget = true;
+    totalFaces -= bestDeltaFaces;
+  }
+
+  const allocations = {};
+  for (const item of items) {
+    const rung = item.rungs[item.chosenIndex];
+    allocations[item.id] = {
+      id: item.id,
+      tier: rung.id,
+      voxelTier: item.voxelTier,
+      faces: rung.faces,
+      totalFaces: item.instanceCount * rung.faces,
+      instanceCount: item.instanceCount,
+      voxelError: rung.voxelError,
+      pinned: item.pinned,
+      demotedByBudget: item.demotedByBudget,
+    };
+  }
+  return {
+    allocations,
+    totalFaces,
+    heroFacesTotal,
+    colliderFaceBudget,
+    maxVoxelError,
+    voxelSize: pitch,
+    grid,
+    domainScale,
+    withinBudget: totalFaces <= colliderFaceBudget,
+  };
+}
+
 function cloneBorrowedRung(THREE, node) {
   const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
   copy.position.copy(node.position);
@@ -1278,6 +1490,13 @@ export function createSceneBeautyLodController({
       }
     },
     state: () => lastState,
+    getResidentRung(root, sha) {
+      return entries.get(root)?.rungs.get(sha) ?? null;
+    },
+    listResidentRungs(root) {
+      const entry = entries.get(root);
+      return entry ? [...entry.rungs.values()] : [];
+    },
     applyWarp: (root, warpFn, options) => applyRootVertexWarpToRung(THREE, root, warpFn, options),
     whenIdle: async () => {
       while (pendingLoads.size) await Promise.all([...pendingLoads]);

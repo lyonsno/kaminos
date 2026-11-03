@@ -9,16 +9,21 @@ export function createAshCollisionRecords(root,readObjects){
   root.updateWorldMatrix(true,false);if(Math.abs(root.matrixWorld.determinant())<1e-12)throw Error('Ash field transform must be invertible');inverse.copy(root.matrixWorld).invert();const result=[];
   for(const entry of readObjects()){
    if(entry.type===ASH_OBJECT_TYPE||!['glb','pbr','procedural-mesh','burner-bed','brazier-room'].includes(entry.type))continue;
-   entry.object.updateWorldMatrix(true,true);let index=0;
-   entry.object.traverse(mesh=>{
-    const part=index++;if(!mesh.isMesh)return;
-    for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
-    if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
-    let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
-    proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
-    proxy.matrix.multiplyMatrices(inverse,mesh.matrixWorld);proxy.updateMatrixWorld(true);
-    result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy});
-   });
+   const restoreBeauty=entry.object.userData?.kaminosBeautyLodRestore?.();
+   try{
+    entry.object.updateWorldMatrix(true,true);let index=0;
+    entry.object.traverse(mesh=>{
+     const part=index++;if(!mesh.isMesh)return;
+     for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
+     if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
+     let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
+     proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
+     proxy.matrix.multiplyMatrices(inverse,mesh.matrixWorld);proxy.updateMatrixWorld(true);
+     result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy});
+    });
+   }finally{
+    restoreBeauty?.();
+   }
   }return result;
  };
 }

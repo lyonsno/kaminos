@@ -134,3 +134,34 @@ test('deletion during async regrid releases both old and candidate fields',async
  await object.initialize();const pending=object.regrid(.02);object.dispose();resolve(create());
  await assert.rejects(pending,/disposed/i);assert.deepEqual(patches.map(p=>p.disposed),[1,1]);
 });
+
+test('createAshCollisionRecords restores beauty LODs and excludes kaminosBeautyLodProxy meshes',()=>{
+ const root=new Group();
+ const obstacle=new Group();
+ const heroMesh=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());
+ const beautyProxy=new Group();
+ beautyProxy.userData.kaminosBeautyLodProxy=true;
+ const proxyMesh=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ beautyProxy.add(proxyMesh);
+ obstacle.add(heroMesh);
+ obstacle.add(beautyProxy);
+
+ heroMesh.visible=false;
+ beautyProxy.visible=true;
+ obstacle.userData.kaminosBeautyLodRestore=()=>{
+  heroMesh.visible=true;
+  beautyProxy.visible=false;
+  return ()=>{
+   heroMesh.visible=false;
+   beautyProxy.visible=true;
+  };
+ };
+
+ const list=createAshCollisionRecords(root,()=>[{id:'kiln',type:'glb',object:obstacle}]);
+ const records=list();
+ assert.equal(records.length,1,'only the restored hero mesh enters ash collision records');
+ assert.equal(records[0].object.geometry,heroMesh.geometry,'ash collision record uses hero geometry, not beauty proxy');
+ assert.equal(heroMesh.visible,false,'beauty LOD visibility state is restored after createAshCollisionRecords');
+ assert.equal(beautyProxy.visible,true,'beauty proxy visibility is restored after createAshCollisionRecords');
+});
+

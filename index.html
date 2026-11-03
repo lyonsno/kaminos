@@ -3174,11 +3174,25 @@ function writeKilnCollisionState({enabled}) {
   hash.set('volume_collision',enabled?'kiln':'off');url.hash=hash.toString();
   history.replaceState(history.state,'',url);
   if(activeSceneComposition)activeSceneComposition.route.volume_collision=enabled?'kiln':'off';
+  if(enabled&&typeof sceneColliderCollection!=='undefined'&&typeof currentColliderLodOptions==='function'&&typeof workingScene!=='undefined')void sceneColliderCollection.prepare?.(workingScene.objects,currentColliderLodOptions());
   syncKilnCollisionControl();window._kaminosDirty?.();
 }
 
+function currentColliderLodOptions() {
+  const dims=volumePrototype?.debugState?.()?.simGridDimensions;
+  const domGrid=Number(document.getElementById('volume-grid')?.value);
+  const grid=(Array.isArray(dims)&&Number.isFinite(dims[0])&&dims[0]>0)?dims[0]:(Number.isFinite(domGrid)&&domGrid>0?domGrid:64);
+  const pose=typeof acceptedFlameDomainPose==='function'?(flameDomainDraft||acceptedFlameDomainPose()):null;
+  const domain=pose&&typeof domainTransformForPose==='function'?domainTransformForPose(pose):null;
+  const domainScale=Math.max(1e-6,Number(domain?.scale??flameDomainScale)||1);
+  return {grid,domainScale};
+}
 let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
-const sceneColliderCollection=createSceneColliderCollection(THREE);
+const sceneColliderCollection=createSceneColliderCollection(THREE,{
+  giProxies:()=>typeof sceneGiProxies!=='undefined'?sceneGiProxies:null,
+  beautyLods:()=>typeof sceneBeautyLods!=='undefined'?sceneBeautyLods:null,
+  onRungReady:()=>window._kaminosDirty?.(),
+});
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
@@ -3223,10 +3237,12 @@ function installKilnCollisionControl(host) {
   const edits=scenePlacementTools.edits;
   edits.register('@kiln-collision',{read:()=>({enabled:isAuthoredKilnCollisionRoute()}),write:writeKilnCollisionState,
     check:value=>{if(typeof value.enabled!=='boolean')throw Error('Kiln collision requires a boolean');return {enabled:value.enabled};}});
-  window.kaminosSceneCollision={read:()=>({enabled:isAuthoredKilnCollisionRoute(),runtime:volumePrototype?.debugState?.().sceneCollision??null}),
+  window.kaminosSceneCollision={read:()=>({enabled:isAuthoredKilnCollisionRoute(),runtime:volumePrototype?.debugState?.().sceneCollision??null,lodBudget:sceneColliderCollection.state()?.lodBudget??null}),
     set:enabled=>edits.apply('@kiln-collision',{enabled},'Set scene collisions'),
     showVoxels:enabled=>{collisionVoxelVisible=!!enabled;document.getElementById('kiln-collision-voxels').checked=collisionVoxelVisible;syncCollisionVoxelView();window._kaminosDirty?.();},
-    readMask:()=>volumePrototype?.readSceneCollisionMask?.()??null};
+    readMask:()=>volumePrototype?.readSceneCollisionMask?.()??null,
+    prepare:()=>sceneColliderCollection.prepare(workingScene.objects,currentColliderLodOptions()),
+    whenIdle:()=>sceneColliderCollection.whenIdle()};
   document.getElementById('kiln-collision-enabled').addEventListener('change',event=>{
     try {window.kaminosSceneCollision.set(event.target.checked);}catch(error){syncKilnCollisionControl();setInfo(error.message);}
   });
@@ -3389,7 +3405,7 @@ import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, screenPixelError, selectFootprintTier } from './scene-lod-budget.mjs';
+import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
@@ -4161,12 +4177,16 @@ window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
   setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; window._kaminosDirty?.(); return res; },
   state: () => sceneBeautyLods?.state() ?? null,
+  colliderState: () => sceneColliderCollection.state(),
   update: () => sceneBeautyLods?.update(camera, currentBeautyFrameOptions()) ?? null,
-  whenIdle: () => sceneBeautyLods?.whenIdle() ?? Promise.resolve(),
+  whenIdle: () => Promise.all([sceneBeautyLods?.whenIdle() ?? Promise.resolve(), sceneColliderCollection.whenIdle()]),
   allocateBeauty: allocateSceneBeautyLods,
   allocateShadow: allocateShadowCasterLods,
+  allocateColliders: allocateColliderLods,
   screenPixelError,
   selectFootprintTier,
+  voxelSolidError,
+  selectColliderTier,
 };
 window.kaminosGiProxies = {
   handleFor: root => sceneGiProxies.get(root),
@@ -19941,6 +19961,7 @@ async function mountSceneRadianceRoute(params) {
         const s=domain.scale??1,t=domain.translation??[0,0,0];
         await window.__kaminosSceneRadiance.prepareShadowCasters({flameBox:{min:[-s+t[0],-s+t[1],-s+t[2]],max:[s+t[0],topY*s+t[1],s+t[2]]}});
         if(typeof sceneBeautyLods!=='undefined'&&sceneBeautyLods)await sceneBeautyLods.prepareFrame?.(camera,currentBeautyFrameOptions());
+        if(isAuthoredKilnCollisionRoute())await sceneColliderCollection.prepare(workingScene.objects,currentColliderLodOptions());
       }
       if(distributed)sceneRadianceEditStop=bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
       if(distributed&&!hybrid){
@@ -20475,7 +20496,7 @@ async function initKaminosVolumeRoute() {
     // volume solver when the scene route requests volume_collision=kiln.
     getSceneCollision: () => {
       if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
-      return sceneColliderCollection.update(workingScene.objects);
+      return sceneColliderCollection.update(workingScene.objects, currentColliderLodOptions());
     },
   });
   volumePrototype.setSharedAshAtmosphere(sceneAshAtmosphereSettings);
@@ -25995,6 +26016,7 @@ function writeObjectCollision(id,value) {
   if(!entry)throw Error('Collision object is absent');
   entry.collision=checkedObjectCollision(entry,value);
   if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.collision=structuredClone(entry.collision);
+  if(entry.collision?.enabled&&typeof sceneColliderCollection!=='undefined'&&typeof currentColliderLodOptions==='function')void sceneColliderCollection.prepare?.(workingScene.objects,currentColliderLodOptions());
   syncSceneDataInspector();window._kaminosDirty?.();
 }
 function ensureObjectCollisionTarget(id) {
@@ -27256,6 +27278,9 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   }
   if (typeof sceneBeautyLods !== 'undefined' && sceneBeautyLods) {
     await sceneBeautyLods.prepareFrame(camera, currentBeautyFrameOptions());
+  }
+  if (isAuthoredKilnCollisionRoute()) {
+    await sceneColliderCollection.prepare(workingScene.objects, currentColliderLodOptions());
   }
   const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition);
   if(firePresent)setActiveTab(activeSceneComposition?'assets':'volume',{reveal:false});
