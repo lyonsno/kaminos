@@ -57,13 +57,14 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     }finally{pendingClears--;}
   }
   function suspendPreview(){return previewTransition(()=>{
+    if(scene.isSuspended)return;
     const snapshot=scene.suspendMembership();
     for(const entry of snapshot.objects)roots.mount(entry,false);
     context.previewDetached?.();
   });}
   function resumePreview(saved,{beforeRestore=()=>{}}={}){return previewTransition(async isCurrent=>{
     if(beforeRestore()===false)return false;
-    const snapshot=scene.resumeMembership();
+    const snapshot=scene.isSuspended?scene.resumeMembership():{selection:scene.selection};
     for(const entry of scene.objects){roots.mount(entry,true);roots.resumed?.(entry);}
     context.restorePreview?.(saved);
     if(snapshot.selection.ids.length)selection.set(snapshot.selection.ids,snapshot.selection.activeId);

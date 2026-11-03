@@ -23691,21 +23691,21 @@ async function greenroomViewMesh(url, fileName, display) {
   glbFileName = fileName;
   const metadata = greenroomMeshMetadata(display, fileName, url);
   const authored = greenroomPreviewState?.authored || captureAuthoredSceneStateForPreview();
-  if (greenroomPreviewState) {
-    removeGreenroomPreviewObject();
-  } else {
-    if(!await detachAuthoredSceneForPreview(authored))return;
-  }
   const previewGeneration = nextGreenroomPreviewGeneration();
-  greenroomPreviewState = {
+  // Retain the authored snapshot before retirement changes runtime presence.
+  // A newer View shares it, and Back can cancel even while entry is draining.
+  const state = greenroomPreviewState = {
     authored,
     preview: { url, fileName, display, metadata },
-    previewGeneration: previewGeneration,
-    previewObject: null,
+    previewGeneration,
+    previewObject: greenroomPreviewState?.previewObject ?? null,
   };
   updateGreenroomPreviewControls();
   setInfo(`Greenroom preview: ${display?.title || fileName}`);
   try {
+    if(!await detachAuthoredSceneForPreview(authored)||greenroomPreviewState!==state)return;
+    removeGreenroomPreviewObject();
+    state.previewObject=null;
     const previewObject = await showGLB(url, {
       clear: false,
       register: false,

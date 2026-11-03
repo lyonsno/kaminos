@@ -194,3 +194,34 @@ test('an older Back cannot adopt the generation of a later replacing GLB import'
  assert.ok(await replacing,'newer import must not be silently discarded');
  assert.deepEqual(state.workingScene.objects.map(row=>row.id),['replacement']);assert.equal(state.greenroomPreviewState,null);
 });
+
+ test('overlapping View preserves the original authored presence',async()=>{
+ const state=context();await state.flameFeature.restore({present:true,composition:false});
+ let release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>true,setActive:async value=>{if(!value){started();await gate;}}};
+ const first=state.greenroomViewMesh('/first.glb','first.glb',{});await retiring;
+ const second=state.greenroomViewMesh('/second.glb','second.glb',{});release();
+ await Promise.all([first,second]);
+ assert.equal(state.greenroomPreviewState.authored.flamePresent,true,'second View must retain original authored presence');
+ assert.equal(await state.restoreAuthoredSceneFromPreview(),true);assert.equal(state.flameFeature.present,true);
+ });
+test('Back during preview retirement restores the original scene without waiting for asset loading',async()=>{
+ const state=context();await state.flameFeature.restore({present:true,composition:false});
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const viewing=state.greenroomViewMesh('/pending.glb','pending.glb',{});await retiring;
+ const back=state.restoreAuthoredSceneFromPreview();release();await viewing;
+ assert.equal(await back,true);assert.equal(state.greenroomPreviewState,null);assert.equal(state.flameFeature.present,true);
+ assert.deepEqual(state.workingScene.objects.map(r=>r.id),state.originalRecords.map(r=>r.id));
+});
+test('switching preview retires admitted runtime work before removing its object',async()=>{
+ const state=context();await state.greenroomViewMesh('/first.glb','first.glb',{});
+ const original=state.greenroomPreviewState.previewObject;
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const switching=state.greenroomViewMesh('/second.glb','second.glb',{});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(original.parent,state.scene,'keep the old preview drawable while retirement is pending');
+ release();await switching;assert.equal(active,false);assert.equal(original.parent,null);
+ assert.equal(state.greenroomPreviewState.preview.url,'/second.glb');
+});
