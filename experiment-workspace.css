@@ -103,3 +103,10 @@ body.experiment-workspace #authored-mix-panel-content { display:block; }
 .owner-experiment-content { margin-top:12px; }
 #experiment-scene-slot .scene-object-tools { display:none; }
 #experiment-scene-slot .panel { border:0;padding:0; }
+/* The native outliner is moved here while an owner inspector is selected. */
+#experiment-scene-slot .scene-object-row,#experiment-scene-slot .scene-group-row { min-height:30px; padding:3px 6px; border-radius:3px; background:transparent; }
+#experiment-scene-slot .scene-object-row > span:first-child,#experiment-scene-slot .scene-group-row > span:first-child { display:flex; align-items:center; gap:4px; min-width:0; }
+#experiment-scene-slot .scene-object-meta,#experiment-scene-slot .scene-object-chip { display:none; }
+#experiment-scene-slot .scene-name-input { min-width:0; width:100%; font-size:12px; font-weight:500; }
+#experiment-scene-slot .scene-object-actions { gap:4px; }
+#experiment-scene-slot .scene-object-row.active { background:#353027; border-color:#9a7847; }
