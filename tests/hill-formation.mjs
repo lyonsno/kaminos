@@ -78,3 +78,34 @@ test('incremental formation exposes partial snapshots and resumes identically to
  while(!resumed.done)resumed.step();const finalResumed=resumed.result(),full=formTerrain(c);
  assert.deepEqual(finalResumed.state,full.state);assert.deepEqual(finalResumed.metrics,full.metrics);
 });
+test('multi-tile stitched formation partitions into 20-40 seam-locked tiles with continuous cross-tile drainage',async()=>{
+ const mod=await import(source),def=formationConfig({});
+ assert.ok(def.tilesX*def.tilesZ>=20&&def.tilesX*def.tilesZ<=40,'default landscape must span 20-40 stitched tiles');
+ assert.equal(typeof mod.partitionTiles,'function','formation must export tile partitioning');
+ assert.equal(typeof mod.buildTiledIndices,'function','formation must export tile-ordered index construction');
+ const c=formationConfig({resolution:25,tilesX:4,tilesZ:5,iterations:15}),tiles=mod.partitionTiles(c),indices=mod.buildTiledIndices(c);
+ assert.equal(tiles.length,20);assert.equal(indices.length,24*24*6);
+ let totalIndices=0;
+ for(const t of tiles){
+  totalIndices+=t.indexCount;
+  if(t.tx+1<c.tilesX){const right=tiles.find(o=>o.tx===t.tx+1&&o.tz===t.tz);assert.equal(t.x1,right.x0,'adjacent X tiles must share seam vertices');}
+  if(t.tz+1<c.tilesZ){const down=tiles.find(o=>o.tx===t.tx&&o.tz===t.tz+1);assert.equal(t.z1,down.z0,'adjacent Z tiles must share seam vertices');}
+ }
+ assert.equal(totalIndices,indices.length);
+ const f=formTerrain(c),d=drainage(f.state,c);
+ let crossSeam=0;
+ for(const t of tiles)if(t.tz+1<c.tilesZ)for(let x=t.x0;x<=t.x1;x++){const i=t.z1*c.resolution+x,r=d.receiver[i];if(r>=0&&Math.floor(r/c.resolution)>t.z1)crossSeam++;}
+ assert.ok(crossSeam>0,'drainage must route water and sediment continuously across internal tile seams');
+});
+test('strike-rotated stratigraphy and macro-authoring metadata expose bounded ranges, tooltips and presets',async()=>{
+ const mod=await import(source),c=formationConfig({resolution:17,iterations:10,tilt:.8,hardness:6});
+ assert.notEqual(rockResistance(.6,1.1,.4,{...c,strike:0}),rockResistance(.6,1.1,.4,{...c,strike:45}),'strike angle must rotate 3D bedding orientation');
+ assert.notDeepEqual(seedGeology({...c,valleys:2}),seedGeology({...c,valleys:5}),'valley count must reshape the underlying macro-topography');
+ assert.ok(Array.isArray(mod.FORMATION_FIELDS)&&mod.FORMATION_FIELDS.length>=12,'authoring field metadata must be exported');
+ for(const field of mod.FORMATION_FIELDS){
+  assert.ok(typeof field.key==='string'&&typeof field.title==='string'&&typeof field.tooltip==='string'&&field.tooltip.length>20,'each field needs a descriptive tooltip');
+  assert.ok(Number.isFinite(field.min)&&Number.isFinite(field.max)&&field.max>field.min&&Number.isFinite(field.step)&&field.step>0,'each field needs a sane [min, max] range and step');
+  assert.equal(field.default,formationConfig({})[field.key],'field default must match formationConfig default');
+ }
+ assert.ok(Array.isArray(mod.FORMATION_PRESETS)&&mod.FORMATION_PRESETS.some(p=>p.id==='cuesta-hogbacks'&&p.patch.hardness>=10),'presets must include cuesta hogbacks');
+});

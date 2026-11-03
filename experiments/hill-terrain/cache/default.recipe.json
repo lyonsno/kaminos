@@ -1,1 +1,25 @@
-{"seed": 47, "resolution": 129, "width": 8, "length": 9, "iterations": 260, "relief": 3.8, "tilt": 0.28, "fold": 0.18, "bedThickness": 0.32, "hardness": 4, "incision": 0.065, "weathering": 0.0008, "transport": 0.12, "creep": 0.018, "repose": 34, "channelArea": 0.18, "bankFailure": 1, "bankRepose": 52, "apron": 0.25}
+{
+  "seed": 47,
+  "tilesX": 6,
+  "tilesZ": 5,
+  "resolution": 193,
+  "width": 8,
+  "length": 9,
+  "iterations": 260,
+  "relief": 3.8,
+  "valleys": 4,
+  "apron": 0.25,
+  "tilt": 0.35,
+  "strike": 16,
+  "fold": 0.22,
+  "bedThickness": 0.26,
+  "hardness": 4.5,
+  "incision": 0.065,
+  "channelArea": 0.18,
+  "weathering": 0.0008,
+  "transport": 0.12,
+  "creep": 0.018,
+  "repose": 34,
+  "bankFailure": 1,
+  "bankRepose": 52
+}
