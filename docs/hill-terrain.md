@@ -1,12 +1,14 @@
 # Hill living terrain
 
+For the geological formation and cached initial landscape, use [`hill-geology`](hill-geology.md). This older analytical ridge experiment remains a comparison.
+
 Open `?workspace=workbench&experiment=hill-terrain`. The experiment adds a terrain object to the shared scene. Change its seed or choose a branching basin or low saddle, let the loose ground settle, then run uplift. Changes persist until regeneration. All simulation, preparation, interpolation, vertex positions, normals and material colors stay on the host WebGPU device. A missing WebGPU backend is an error.
 
 The starting recipe is a small seeded graph of connected ridges. GPU initialization turns that graph into firm substrate and loose material fields. Preparation moves loose material down slopes without uplift. Live evolution uses the same fields and conservative four-neighbor transport, driven by slope above the chosen resting angle and limited by available material. Prescribed uplift changes the substrate; it is an authored drive, not a tectonic model. This is a height/material representation: one surface per horizontal sample, without caves, overhangs, detached bodies or granular inertia. Generated preparation does not write player or creature history.
 
 ## Cost and clock
 
-Default size is 129 × 129 samples and 32,768 triangles. The current simulator owns 1,864,048 bytes of storage arrays, plus 393,216 bytes of indices. These counts exclude renderer resources, shadows, uniforms and driver overhead. Two local compute passes evolve each 0.05-second step. Two presentation passes interpolate state and derive geometry/material at the host frame cadence while playing. Paused, unchanged terrain does not re-run those passes. Initialization has two field writes and the separately requested preparation steps (60 by default).
+Default size is 129 × 129 samples and 32,768 triangles. The current simulator owns 2,130,304 bytes of storage arrays, plus 393,216 bytes of indices. These counts exclude renderer resources, shadows, uniforms and driver overhead. Two local compute passes evolve each 0.05-second step. Two presentation passes interpolate state and derive geometry/material at the host frame cadence while playing. Paused, unchanged terrain does not re-run those passes. Initialization has two field writes and the separately requested preparation steps (60 by default).
 
 The host frame callback consumes all elapsed fixed steps and retains fractional time. It does not discard elapsed time or cap catch-up steps. This is a correctness policy, not an earned real-time guarantee. The 60 Hz game target, roughly 2 ms terrain GPU target, 3 ms p95 whole-Hill ceiling and sub-0.5 ms CPU target remain measurement goals. The complete claim must include rendering, hand/water/support consumers and representative game work. Terrain-only observations cannot close it. Preparation has a separate load-time budget.
 

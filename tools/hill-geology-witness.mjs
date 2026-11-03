@@ -1,0 +1,35 @@
+// Explicit offline validation; no production state is read back by this route.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+import {decodeFormation,formationConfig,formTerrain} from '../experiments/hill-terrain/formation.mjs';
+import {validateFormedRead,compareTerrainState} from '../experiments/hill-terrain/witness.mjs';
+const args=Object.fromEntries(process.argv.slice(2).reduce((pairs,v,i,a)=>i%2?pairs:[...pairs,[v.replace(/^--/,''),a[i+1]]],[]));
+if(!args.out)throw Error('--out required');const out=path.resolve(args.out),root=path.resolve(args.root??'.');await fs.mkdir(out,{recursive:true});
+const report={phase:'input',status:'running',requested:args,root,errors:[],offlineReadback:true,performanceClaim:false};let browser,page;
+const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
+try{
+ for(const key of ['url','browser','playwright'])if(!args[key])throw Error('--'+key+' required');
+ if(/\/Applications\/Google Chrome\.app\//.test(args.browser))throw Error('Independent browser required');
+ report.source={head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),status:execFileSync('git',['status','--short'],{cwd:root,encoding:'utf8'}),files:{}};
+ for(const file of ['experiments/hill-geology.experiment.mjs','experiments/hill-terrain/gpu.mjs','experiments/hill-terrain/formation.mjs','experiments/hill-terrain/formation-worker.mjs','experiments/hill-terrain/formation-cache.mjs','experiments/hill-terrain/cache/default.hill']){
+  const bytes=await fs.readFile(path.join(root,file)),response=await fetch(new URL('/'+file,args.url));assert.ok(response.ok);assert.ok(bytes.equals(Buffer.from(await response.arrayBuffer())),'Wrong served source: '+file);report.source.files[file]=createHash('sha256').update(bytes).digest('hex');
+ }
+ const bytes=await fs.readFile(path.join(root,'experiments/hill-terrain/cache/default.hill')),cache=decodeFormation(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),formationConfig({}));
+ report.phase='browser';await save();const {chromium}=await import(path.resolve(args.playwright));browser=await chromium.launch({executablePath:args.browser,headless:true,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});page=await browser.newPage({viewport:{width:1440,height:1000}});page.on('pageerror',e=>report.errors.push(e.message));
+ const read=()=>page.evaluate(()=>window.kaminosHillGeology.read());
+ const settled=async expected=>{await page.waitForFunction(()=>window.kaminosHillGeology?.read().gpu.initialized&&!window.kaminosHillGeology?.read().pending||window.kaminosHillGeology?.read().error);return validateFormedRead(await read(),expected);};
+ const snapshot=async name=>{const s=await page.evaluate(async()=>{const r=await window.kaminosHillGeology.snapshot();return{identity:r.identity,values:Array.from(r.values)};});const data=Float32Array.from(s.values);await fs.writeFile(path.join(out,name+'.f32'),Buffer.from(data.buffer));await fs.writeFile(path.join(out,name+'.json'),JSON.stringify(s.identity,null,2));return data;};
+ const capture=async name=>{await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'.png')});};
+ report.phase='mount';await page.goto(args.url);report.initial=await settled(cache.config);report.parity=compareTerrainState(await snapshot('initial'),cache.state);const presentation=await page.evaluate(async()=>{const s=await window.kaminosHillGeology.snapshot({presentation:true});return{display:Array.from(s.display),positions:Array.from(s.positions)};});
+ report.displayParity=compareTerrainState(presentation.display,cache.state);const expectedPositions=new Float32Array(cache.state.length),n=cache.config.resolution;for(let i=0;i<n*n;i++){expectedPositions[i*4]=(i%n/(n-1)-.5)*cache.config.width;expectedPositions[i*4+1]=cache.state[i*4]+cache.state[i*4+1];expectedPositions[i*4+2]=(Math.floor(i/n)/(n-1)-.5)*cache.config.length;expectedPositions[i*4+3]=1;}let error=0;for(let i=0;i<expectedPositions.length;i++)error=Math.max(error,Math.abs(presentation.positions[i]-expectedPositions[i]));assert.ok(error<2e-5,'Rendered positions must match formed heights');report.positionError=error;await fs.writeFile(path.join(out,'positions.f32'),Buffer.from(Float32Array.from(presentation.positions).buffer));await capture('formed');
+ report.phase='idle';const initial=await snapshot('idle-before');await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const idle=await snapshot('idle-after');assert.deepEqual(idle,initial,'Idle terrain must not undulate');
+ report.phase='cache-reload';await page.reload();report.reload=await settled(cache.config);assert.equal(report.reload.formation.cache,'browser');assert.deepEqual(await snapshot('reloaded'),initial);
+ report.phase='native-controls';const age=page.getByRole('spinbutton',{name:'Formation age · steps',exact:true});await age.click();await age.fill('0');await age.dispatchEvent('input');await page.waitForFunction(()=>window.kaminosHillGeology?.read().formation?.config.iterations===0&&!window.kaminosHillGeology.read().pending);report.seed=await settled({...cache.config,iterations:0});await capture('inherited-upland');
+ report.phase='worker';const c=formationConfig({seed:79,resolution:33,iterations:30});await page.evaluate(c=>window.kaminosWorkbenchExperiments.open('hill-geology',c),c);report.worker=await settled(c);assert.equal(report.worker.formation.cache,'generated');report.workerParity=compareTerrainState(await snapshot('worker'),formTerrain(c).state);
+ await page.getByRole('button',{name:'Run settling',exact:true}).click();await page.waitForFunction(()=>window.kaminosHillGeology.read().gpu.steps>1);await page.getByRole('button',{name:'Pause settling',exact:true}).click();assert.equal((await read()).playing,false);
+ report.phase='lifetime';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.equal(await page.evaluate(()=>Boolean(window.kaminosHillGeology)),false);assert.equal(report.errors.length,0,report.errors.join('\n'));report.phase='complete';report.status='passed';
+}catch(e){report.status='failed';report.failure={phase:report.phase,message:e.message,stack:e.stack};process.exitCode=1;if(page)try{report.last=await page.evaluate(()=>window.kaminosHillGeology?.read());await page.screenshot({path:path.join(out,'failure.png')});}catch{};}
+finally{try{await browser?.close();report.closed=true;}catch(e){report.closed=false;report.closeError=e.message;report.status='failed';process.exitCode=1;}await save();console.log(JSON.stringify({status:report.status,phase:report.phase,failure:report.failure?.message,report:path.join(out,'report.json')}));}
