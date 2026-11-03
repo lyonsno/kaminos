@@ -42,3 +42,10 @@ test('GPU-owned ray gesture delivers synchronous rays and releases without a CPU
  assert.equal(send('pointerdown').defaultPrevented,true,'Resident input must capture synchronously without querying CPU rest geometry');assert.equal(controls.enabled,false);send('pointermove',280);send('pointerup',280);
  assert.deepEqual(seen.map(x=>x.phase),['start','move','move','end']);assert.deepEqual(seen[0].ray.origin,[0,0,5]);assert.ok(seen[1].ray.direction[0]>0);assert.equal(seen[0].ray.maxDistance,Infinity);assert.equal(controls.enabled,true);assert.equal(canvas.captured.size,0);stop();
 });
+test('resident mode leaves clicks and touch camera input with the editor',()=>{
+ const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},seen=[];camera.position.z=5;camera.lookAt(0,0,0);
+ const stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[],rayDrag:true,callback:e=>{seen.push(e);return true;}});
+ const send=(type,extra={})=>{const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:250,clientY:250,button:0,pointerId:1,pointerType:'mouse',...extra});canvas.dispatchEvent(e);return e;};
+ send('pointerdown');send('pointerup');assert.equal(send('click').defaultPrevented,false,'A click without a pull must reach native scene selection');
+ const before=seen.length;assert.equal(send('pointerdown',{pointerType:'touch'}).defaultPrevented,false);assert.equal(seen.length,before,'Touch camera input must remain native');stop();
+});
