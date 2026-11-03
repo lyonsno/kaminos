@@ -100,3 +100,10 @@ test('a failed catalog refresh clears selection as well as entries and cannot ad
  const a={kind:'mesh',source:'/api/read?root=generated-meshes&path=a.glb',name:'a.glb'};let broken=false,adds=0;
  const c=createAuthoringAssets({request:async()=>{if(broken)throw Error('Invalid asset visibility hold list');return{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[a]};},addMesh:async()=>adds++});await c.browse();c.select(a);broken=true;await c.browse();assert.equal(c.read().selected,null);await assert.rejects(c.add(),/Choose/);assert.equal(adds,0);
 });
+test('loading collection choices for a direct experiment link does not fetch an unrelated catalogue',async()=>{
+ const requests=[],c=createAuthoringAssets({request:async url=>{requests.push(url);return url==='/api/roots'?{greenroom:{exists:true},'generated-meshes':{exists:true}}:{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[]};}});
+ assert.equal(await c.refresh({browse:false}),true);
+ assert.deepEqual(requests,['/api/roots']);
+ assert.ok(c.read().roots.some(r=>r.id==='agent-work'));
+ assert.ok(c.read().roots.some(r=>r.id==='image-experiments'));
+});
