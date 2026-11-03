@@ -1,6 +1,7 @@
 // Polygon edits over render arrays {positions, normals?, uvs?, indices, faceMaterial?}.
 // Each edit returns new arrays; topology comes from the welded kernel, attributes
 // stay per render vertex, and newly created faces say which material they use.
+import {createSectionWinding} from './section-winding-field.mjs';
 import {ShapeUtils,Vector2} from './lib/three.core.js';
 import {buildPolyMesh,NO_EDGE} from './poly-mesh-core.mjs';
 
@@ -405,11 +406,9 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
   for(const s of segments)for(const q of s)for(let k=0;k<2;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}
   const span=Math.max(hi[0]-lo[0],hi[1]-lo[1])||1,cells=Math.max(48,Math.min(1024,Math.floor(Math.sqrt(budget/segments.length)))),h=span/cells;
   const nx=Math.ceil((hi[0]-lo[0])/h)+4,ny=Math.ceil((hi[1]-lo[1])/h)+4,ox=lo[0]-2*h,oy=lo[1]-2*h;
-  const w=new Float32Array((nx+1)*(ny+1));
+  const w=new Float32Array((nx+1)*(ny+1)),winding=createSectionWinding(segments);
   for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){
-    const x=ox+i*h,y=oy+j*h;let sum=0;
-    for(const [a,b] of segments){const ax=a[0]-x,ay=a[1]-y,bx=b[0]-x,by=b[1]-y;sum+=Math.atan2(ax*by-ay*bx,ax*bx+ay*by);}
-    w[j*(nx+1)+i]=absoluteWinding?Math.abs(sum/(2*Math.PI)):sum/(2*Math.PI);
+    const value=winding(ox+i*h,oy+j*h);w[j*(nx+1)+i]=absoluteWinding?Math.abs(value):value;
   }
   // Marching squares at w = 1/2 over grid nodes, linking edge crossings into closed outlines.
   const at=(i,j)=>w[j*(nx+1)+i],iso=.5,cross=new Map(),links=new Map();
