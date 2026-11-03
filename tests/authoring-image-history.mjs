@@ -4,6 +4,13 @@ import assert from 'node:assert/strict';
 let history={};try{history=await import('../authoring-image-history.mjs');}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;}
 const storage=()=>{const data=new Map();return{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};};
 const image=(source,provenance)=>({kind:'image',source,name:source,...(provenance?{provenance}:{})});
+test('a recipe rerun compares with its parent independently of image conditioning',()=>{
+ const c=history.createImageIterationHistory({storage:storage()});
+ c.record(image('/original.png',{prompt:'glove'}));
+ c.record(image('/rerun.png',{prompt:'knitted glove',iteration:{parent:{source:'/original.png',name:'Glove'}},reference:{source:'/skeleton.png'}}));
+ assert.equal(c.comparison()?.source,'/original.png','recipe parent takes precedence over the conditioning reference');
+ assert.equal(c.read().viewed.provenance.reference.source,'/skeleton.png');
+});
 test('history retains every result, lineage and prompt provenance across reload without changing the pinned reference',()=>{
  assert.equal(typeof history.createImageIterationHistory,'function','Generate needs persistent iteration history independent of the current asset selection');
  const store=storage(),c=history.createImageIterationHistory({storage:store});

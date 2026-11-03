@@ -3444,6 +3444,7 @@ import {defaultKilnRecipe} from './inference-kiln-default.mjs';
 import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
+import {createImageRecipeIteration,installImageRecipeStatus} from './authoring-image-recipe.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
@@ -26841,6 +26842,10 @@ sceneInitialization.then(async () => {
     const imageRoute = kaminosImageAssetRouteFromSearch(params);
     if (imageRoute) {
       await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
+      if(params.get('image_action')==='iterate'){
+        try{await window.kaminosAssets.openImageRecipe({kind:'image',root:imageRoute.requestedRoot,path:imageRoute.requestedPath,source:imageRoute.effectiveUrl,name:params.get('image_name')||imageRoute.fileName});}
+        catch(error){setInfo('Image recipe: '+error.message);}
+      }
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
@@ -26928,6 +26933,7 @@ sceneInitialization.then(async () => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  let recipeIteration=null,recipeStatus=null;
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
   // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
@@ -27220,7 +27226,7 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();recipeStatus?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
@@ -27228,7 +27234,7 @@ function setupAuthoringAssets(){
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
     weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
-    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});if(provenance.iteration?.parent)authoringGenerateLayout.compare(true);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
     blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
@@ -27262,7 +27268,7 @@ function setupAuthoringAssets(){
     }});
   addEventListener('pagehide',()=>{authoringPromptExpansion?.dispose().catch(()=>{});const body=promptPageAdmission?{action:'withdraw-queued',runId:promptPageAdmission}:promptPageLease?{action:'release',leaseId:promptPageLease,reason:'Generate page closed'}:null;if(body)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify(body)],{type:'application/json'}));});
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
-  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),promptExpansion:authoringPromptExpansion,promptProvenance:()=>authoringPromptUI?.provenance(),meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),promptExpansion:authoringPromptExpansion,promptProvenance:()=>authoringPromptUI?.provenance(),decorateRequest:r=>recipeIteration?recipeIteration.decorate(r):r,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   authoringPromptUI=installAuthoringPromptExpansion({document,controller:authoringPromptExpansion,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),imageController:authoringImageGenerator,changed:()=>redraw()});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(workingScene.objects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
@@ -27299,13 +27305,16 @@ function setupAuthoringAssets(){
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
     return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
-  authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy(),
-    onEdit:()=>{authoringPromptUI.reset();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
-    onRecall:entry=>{const p=entry.provenance;if(!p)return;const input=authoringImageHistory.read().entries.find(e=>e.source===p.reference?.source);if(input)authoringImageHistory.useReference(input.source);else if(p.reference?.source){authoringImageHistory.record({kind:'image',source:p.reference.source,name:p.reference.name||'Original reference'});authoringImageHistory.useReference(p.reference.source);authoringImageHistory.view(entry.source);authoringAssets.select(entry);}
-      const model=/FLUX\.3/.test(p.model)?'flux3':'flux2';document.getElementById('asset-image-model').value=model;document.getElementById('asset-image-model').dispatchEvent(new Event('change'));document.getElementById('asset-use-reference').checked=!!p.reference;document.getElementById('asset-seed').value=String(p.seed);authoringPromptUI.recall(p);document.getElementById('asset-prompt').value=p.prompt;document.getElementById('asset-prompt').dispatchEvent(new Event('input'));redraw();}});
+  recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
+  recipeStatus=installImageRecipeStatus({document,iteration:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
+    onEdit:()=>{recipeIteration.clear();authoringPromptUI.reset();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
+    onRecall:entry=>recipeIteration.recall(entry)});
   const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read().selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
-  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:()=>authoringImageUI.run(),imageRequest:()=>authoringImageUI.readRequest(),
+    openImageRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);},
+    promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
 }
 
 </script>

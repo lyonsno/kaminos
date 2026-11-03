@@ -171,6 +171,17 @@ async function encodeCanvasPng(rgba,width,height){
 
 const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Error',message:typeof value?.message==='string'?value.message:String(value)});
 
+// Compare recorded authority fields against the package actually loaded. Additional
+// package metadata remains compatible; a missing or different recorded value does not.
+function assertRecipeModel(expected,pipeline){
+ if(!expected)return;
+ const actual={source:pipeline.ditManifest?.source,sampling:pipeline.sampling,lora:pipeline.ditManifest?.lora};
+ const fields={source:['repo','revision','subfolder'],sampling:['steps','shift'],lora:['sha256','strength']};
+ for(const [kind,keys]of Object.entries(fields))for(const key of keys){
+  if(expected[kind]?.[key]!==undefined&&expected[kind][key]!==actual[kind]?.[key])throw Error(`Recorded recipe ${kind}.${key} differs from the loaded model package. Select the original package before replaying this recipe.`);
+ }
+}
+
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
@@ -261,11 +272,14 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,expectedModel=null,textLength='fit16'}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       const spec=imageModel(model);
+      if(!Number.isSafeInteger(seed)||seed<0)throw Error('Seed must be a nonnegative safe integer');
+      if(!['fit','fit16'].includes(textLength))throw Error('Unsupported prompt length setting');
+      iteration=iteration?structuredClone(iteration):null;expectedModel=expectedModel?structuredClone(expectedModel):null;
       const routeId=reference?`${model}-klein.image-and-text.authoring-shared-device.v0`:spec.routeId;
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
       if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
@@ -293,6 +307,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
           if(abort.signal.aborted)throw abort.signal.reason;
         }
         ({session}=loaded);const {core,foreground,pipeline,base,app}=loaded;
+        assertRecipeModel(expectedModel,pipeline);
         // The kiln of the scene loaded now; a reloaded scene has a new prototype and handoff.
         const current=context();handoff=current.handoff;const host=current.host;
         if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
@@ -306,7 +321,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         frameRun=app?await app.beginRun(runId,{routeId}):await foreground.beginRun(runId);
         route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
-        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',reference,
+        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength,reference,
           shouldDecode:()=>decodeRequested,
           onPhase:value=>{if(!abort.signal.aborted)set(value==='reference'?{stage:'Reading reference image',canDecode:false,percent:null,progress:'Reading the reference image…'}:value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
           onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
@@ -326,6 +341,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
         if(reference)provenance.reference=structuredClone(reference.provenance);
+        if(iteration)provenance.iteration=iteration;
+        provenance.textLength=model==='flux3'?'model':textLength;
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
@@ -355,7 +372,7 @@ export function imageGenerationTimeLabel(timing,status){
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
-export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read().selected}){
+export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read().selected,decorateRequest=r=>r}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
@@ -365,6 +382,8 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
   const byId=id=>document.getElementById(id),seedInput=byId('asset-seed');
+  const seedLabel=document.createElement('label');seedLabel.innerHTML='<input type="checkbox" id="asset-seed-auto" checked> New seed after each run';
+  byId('asset-reseed').insertAdjacentElement('afterend',seedLabel);
   const reseed=()=>{seedInput.value=String(Math.floor(Math.random()*1e9));};reseed();
   const meshBusy=meshBusyOption||(()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status));
   let timer=null,timingStatus='idle';
@@ -400,14 +419,26 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   byId('asset-text-decode').onclick=()=>controller.decodeNow();
   byId('asset-text-stop').onclick=()=>controller.stop();
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
-  const run=()=>{
-    const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
+  const readRequest=()=>{
+    const seed=Number(seedInput.value);
     const useReference=byId('asset-use-reference').checked;
     const selected=reference();
-    if(useReference&&selected?.kind!=='image'){byId('asset-text-status').textContent='Choose a source image in Browse or Open file first.';return;}
-    controller.run({promptExpansion:promptProvenance(),reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    return {promptExpansion:promptProvenance(),reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value};
   };
-  byId('asset-text-run').onclick=run;
-  byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});
-  return {render};
+  const run=async()=>{
+    try{
+      if(byId('asset-use-reference').checked&&reference()?.kind!=='image')throw Error('Choose a source image in Browse or Open file first.');
+      const request=decorateRequest(readRequest()),autoSeed=byId('asset-seed-auto').checked;
+      const entry=await controller.run(request);if(entry&&autoSeed)reseed();return entry;
+    }catch(error){byId('asset-text-status').textContent=error.message;throw error;}
+  };
+  byId('asset-text-run').onclick=()=>run().catch(()=>{});
+  byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run().catch(()=>{});}});
+  const applyRecipe=r=>{
+    byId('asset-image-model').value=r.model;byId('asset-image-model').dispatchEvent(new document.defaultView.Event('change'));
+    for(const [id,value]of [['asset-prompt',r.prompt],['asset-seed',r.seed],['asset-image-size',r.size],['asset-image-aspect',r.aspect],['asset-image-level',r.level]])byId(id).value=String(value);
+    byId('asset-use-reference').checked=!!r.reference;byId('asset-seed-auto').checked=false;
+    byId('asset-prompt').dispatchEvent(new document.defaultView.Event('input'));render();
+  };
+  return {render,readRequest,run,applyRecipe};
 }
