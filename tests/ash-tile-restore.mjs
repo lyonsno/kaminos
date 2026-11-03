@@ -47,5 +47,8 @@ test('tiled restore rejects moved or missing colliders by default, while allowCo
   assert.throws(()=>patch.restore(movedState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'moved pose still rejected even with allowCollisionUpgrade');
   const addedState={...state,collisionIdentity:[...legacySavedCollision,{key:'other:0',geometry:'box:24:36:16',matrix:current[0].matrix}]};
   assert.throws(()=>patch.restore(addedState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'added/removed collider object ID still rejected');
+  const secondPose=[...current[0].matrix];secondPose[12]+=1.5;
+  const missingPlacementState={...state,collisionIdentity:[...legacySavedCollision,{key:'burner:2',geometry:'old-part-2:24:36:16',matrix:secondPose}]};
+  assert.throws(()=>patch.restore(missingPlacementState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'missing saved placement pose for same collider ID is rejected');
  }finally{patch.dispose();m.geometry.dispose();m.material.dispose();}
 });

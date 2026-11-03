@@ -334,4 +334,117 @@ test('annular burner procedural meshes collapse 29 beauty sub-meshes into a sing
  burner.dispose();
 });
 
+import {installAshSourceInspector} from '../ash/source-controls.mjs';
+import {installAshInspector} from '../ash/scene-controls.mjs';
+import {checkedAshSource} from '../ash/source-object.mjs';
+import {checkedAshSettings} from '../ash/scene-record.mjs';
+test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',()=>{
+ class FakeControl extends EventTarget {
+  constructor(tag='input',props={}){
+   super();this.tagName=tag.toUpperCase();this.style={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
+   this.value='';this.checked=false;this.min='';this.max='';this.step='any';this.children=[];Object.assign(this,props);
+  }
+  get valueAsNumber(){return this.value.trim()===''?NaN:Number(this.value);}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  querySelector(){return new FakeControl('span');}
+  fire(type){this.dispatchEvent(new Event(type,{bubbles:true,cancelable:true}));}
+ }
+ const sourceControls=[
+  new FakeControl('input',{type:'checkbox',dataset:{key:'enabled'},checked:true}),
+  new FakeControl('input',{type:'number',min:'0',step:'any',dataset:{key:'rate'},value:'0.008'}),
+  new FakeControl('input',{type:'number',min:'0',step:'any',dataset:{key:'spread'},value:'0.24'}),
+ ];
+ const statusNode=new FakeControl('p'),fieldSelect=new FakeControl('select'),selectBtn=new FakeControl('button');
+ const sourcePanel={
+  hidden:true,innerHTML:'',
+  querySelector:sel=>sel==='[data-status]'?statusNode:sel==='[data-field]'?fieldSelect:selectBtn,
+  querySelectorAll:sel=>sel==='[data-key]'?sourceControls:[],
+ };
+ const doc=Object.assign(new FakeControl('document'),{activeElement:null,defaultView:new FakeControl('window'),createElement:tag=>tag==='section'?sourcePanel:new FakeControl(tag)});
+ for(const c of sourceControls)c.ownerDocument=doc;
+ let sourceState={fieldId:'ash-1',enabled:true,rate:0.008,spread:0.24},lastError=null;
+ const sourceInspector=installAshSourceInspector({
+  document:doc,anchor:{after(){}},selected:()=>'src-1',
+  read:()=>({settings:sourceState,fields:[{id:'ash-1',label:'Ash'}],fieldExists:true,status:'Emitting · Ash'}),
+  set:(_id,patch)=>{sourceState=checkedAshSource({...sourceState,...patch});},
+  selectField(){},edits:{subscribe(){}},target:()=>'@ash-source:src-1',ownHistory(){},error:msg=>{lastError=msg;},
+ });
+ sourceInspector.sync();
+ const rateInput=sourceControls[1];
+ doc.activeElement=rateInput;
+ for(const partial of ['','.']){
+  rateInput.value=partial;rateInput.fire('input');
+ }
+ assert.equal(lastError,null,'clearing or typing a leading decimal on the way to 0.00001 must not emit Invalid falling ash source');
+ assert.equal(sourceState.rate,0.008,'partial typing must not mutate committed rate to 0 or NaN');
+ // Simulate a rejected negative value followed by valid 0.00001
+ rateInput.value='-1';rateInput.fire('input');
+ assert.match(String(lastError),/Invalid falling ash source/);
+ rateInput.value='0.00001';rateInput.fire('input');
+ assert.equal(sourceState.rate,0.00001,'fine 0.00001 rate is accepted');
+ assert.equal(lastError,'','valid input clears prior error toast');
+
+ // Verify installAshInspector sets min=0 on non-negative fields and ignores empty mid-typing input
+ const ashInputs=new Map();
+ const cellSizeInput=new FakeControl('input',{type:'number',value:'0.04'});
+ const layerInput=new FakeControl('input',{type:'number',value:'0.04'});
+ const volumeInput=new FakeControl('input',{type:'number',value:'0.02'});
+ const statusEl=new FakeControl('p'),sizeEl=new FakeControl('p'),regridBtn=new FakeControl('button'),coverBtn=new FakeControl('button'),burstBtn=new FakeControl('button'),ashFields=new FakeControl('div'),legacyFields=new FakeControl('div');
+ const pausedInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'paused'}});
+ const falloutInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'fallout'}});
+ const softInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'softNormals'}});
+ const emitInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'emitting'}});
+ for(const c of [pausedInput,falloutInput,softInput,emitInput])ashInputs.set(c.dataset.ashKey,c);
+ const fieldPanel={
+  hidden:true,innerHTML:'',
+  querySelector:sel=>{
+   if(sel==='[data-ash-cell]')return cellSizeInput;
+   if(sel==='[data-ash-regrid]')return regridBtn;
+   if(sel==='[data-ash-cover]')return coverBtn;
+   if(sel==='[data-ash-burst]')return burstBtn;
+   if(sel==='[data-ash-layer]')return layerInput;
+   if(sel==='[data-ash-volume]')return volumeInput;
+   if(sel==='[data-ash-status]')return statusEl;
+   if(sel==='[data-ash-size]')return sizeEl;
+   if(sel==='[data-ash-fields]')return ashFields;
+   if(sel==='[data-legacy-fields]')return legacyFields;
+   return new FakeControl('div');
+  },
+  querySelectorAll:sel=>{
+   if(sel==='[data-ash-key]')return [...ashInputs.values()];
+   if(sel==='[data-ash-layer],[data-ash-volume]')return [layerInput,volumeInput];
+   return [];
+  },
+ };
+ const doc2=Object.assign(new FakeControl('document'),{
+  activeElement:null,defaultView:new FakeControl('window'),
+  createElement:tag=>{
+   if(tag==='section')return fieldPanel;
+   const c=new FakeControl(tag);c.ownerDocument=doc2;
+   if(tag==='input'){
+    const ds={};
+    Object.defineProperty(c,'dataset',{get:()=>ds});
+    Object.defineProperty(ds,'ashKey',{set(v){this._k=v;ashInputs.set(v,c);},get(){return this._k;}});
+   }
+   return c;
+  },
+ });
+ for(const c of [cellSizeInput,layerInput,volumeInput,pausedInput,falloutInput,softInput,emitInput])c.ownerDocument=doc2;
+ let ashSettings=checkedAshSettings(record().ash),fieldError=null;
+ installAshInspector({
+  document:doc2,anchor:{after(){}},selected:()=>'ash-1',edits:{subscribe(){}},target:()=>'@ash-settings:ash-1',ownHistory(){},
+  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:0,volume:0,allocatedBytes:0}}),
+  edit:(_id,patch)=>{ashSettings=checkedAshSettings({...ashSettings,...patch,checkpoint:null});},
+  regrid:async()=>{},cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
+ });
+ assert.equal(ashInputs.get('rate').min,'0','field fallout rate input must clamp scrubs at min=0');
+ assert.equal(ashInputs.get('spread').min,'0','field source spread input must clamp scrubs at min=0');
+ doc2.activeElement=ashInputs.get('rate');
+ ashInputs.get('rate').value='';ashInputs.get('rate').fire('input');
+ assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
+ assert.equal(fieldError,null);
+});
+
+
 
