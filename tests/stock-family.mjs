@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import {createStockWarp, deformStock, validateRecipe, DEFAULT_RECIPE} from '../experiments/stock-family/model.mjs';
 import {Texture,MeshStandardMaterial} from '../lib/three.core.js';
 import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from '../experiments/stock-family/lifecycle.mjs';
+import * as stock from '../experiments/stock-family/model.mjs';
+
+assert.equal(typeof stock.fitStockSource,'function','Source fitting must be independent of authored variants');
+const fitted=stock.fitStockSource(new Float32Array([2,0,-1,6,2,1]),new Float32Array([0,1,0,0,1,0]),'x');
+assert.deepEqual([...fitted.positions],[.25,-.25,-.5,-.25,.25,.5]);
+assert.deepEqual(fitted.profile,{min:-.5,max:.5,xMin:-.25,xMax:.25,locks:[]});
+assert.deepEqual([...fitted.normals].map(v=>v+0),[0,1,0,0,1,0]);
+assert.throws(()=>stock.fitStockSource(new Float32Array([0,0,0,0,1,0]),new Float32Array(6),'z'),/extent/);
+assert.throws(()=>stock.fitStockSource(new Float32Array([0,0,0,1,1,1]),new Float32Array(6),'guess'),/axis/);
+const replacement={url:'/api/read?root=generated-meshes&path=new.glb',sha256:'a'.repeat(64),label:'Another interpretation',fit:{axis:'x'},profile:fitted.profile};
+const replaced=stock.replaceStockSource(DEFAULT_RECIPE,replacement);
+assert.deepEqual(replaced.variants,DEFAULT_RECIPE.variants);
+assert.notEqual(replaced.variants,DEFAULT_RECIPE.variants);
+assert.equal(replaced.sources.length,2);
+assert.deepEqual(stock.replaceStockSource(replaced,DEFAULT_RECIPE.source).variants,replaced.variants);
+assert.equal(stock.replaceStockSource(replaced,DEFAULT_RECIPE.source).sources.length,2);
+assert.throws(()=>stock.replaceStockSource(DEFAULT_RECIPE,{...replacement,profile:{...fitted.profile,locks:[[0,.6]]}}),/bands/);
 
 const profile={min:-.5,max:.5,xMin:-.17,xMax:.17,locks:[[-.5,-.45],[-.43,-.23],[.22,.39],[.45,.5]]};
 const near=(a,b,e=1e-7)=>assert.ok(Math.abs(a-b)<e,`${a} != ${b}`);
