@@ -2,6 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import * as THREE from 'three';
+import PMREMGenerator from 'three/src/renderers/common/extras/PMREMGenerator.js';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX || new URL('../index.html',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function loadEnvironment('),source.indexOf('\nfunction applyEnvMap('));
@@ -23,4 +25,16 @@ test('ordinary scene restore holds full-detail work until restoration settles an
  vm.runInNewContext(source.slice(start,end),c);const restored=c.loadSceneFile({},{});
  assert.equal(held,1);finish(true);assert.equal(await restored,true);assert.equal(held,1);
  frames.shift()();assert.equal(held,0);
+});
+
+test('pending environment supports the renderer minimum PMREM mip resolution',()=>{
+ const start=source.indexOf('function createPendingEnvironment('),end=source.indexOf('\nfunction createProceduralEnv(',start);
+ const sizing={_setSize:PMREMGenerator.prototype._setSize};
+ const c={THREE,pmremGenerator:{fromEquirectangular(texture){
+  PMREMGenerator.prototype._setSizeFromTexture.call(sizing,texture);return {texture:{}};
+ }}};
+ vm.runInNewContext(source.slice(start,end),c);c.createPendingEnvironment();
+ // The installed PMREMGenerator has LOD_MIN=4 (16px faces); smaller inputs
+ // produce an undersized atlas, even though its texture object exists.
+ assert.ok(sizing._cubeSize>=16,'placeholder must populate the PMREM minimum 16px cube faces');
 });

@@ -256,6 +256,8 @@ canvas { display: block; }
 
 #env-loading { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
+#authoring-viewport-tools #env-loading { position: static; max-width: 100%; padding: 3px 6px; font-size: 10px; }
+
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
 .force-contribution-row { align-items: flex-start; }
@@ -10569,6 +10571,8 @@ const environmentLoader = createEnvironmentLoader({
   changed(state) {
     const label = HDR_ENVS[state.name]?.label || 'Environment';
     const el = document.getElementById('env-loading');
+    const toolbar = document.getElementById('authoring-viewport-tools');
+    if (toolbar && el.parentElement !== toolbar) toolbar.append(el);
     el.style.display = state.quality === 'full' ? 'none' : 'block';
     el.textContent = state.pending
       ? `${label} · ${state.quality === 'preview' ? 'preview lighting · full detail loading…' : 'lighting loading…'}`
@@ -12289,8 +12293,11 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
 }
 
 function createPendingEnvironment() {
-  // A tiny valid PMREM for consumers that render before even the preview arrives.
-  const texture = new THREE.DataTexture(new Float32Array([.18,.18,.18,1,.18,.18,.18,1]), 2, 1, THREE.RGBAFormat, THREE.FloatType);
+  // PMREM needs at least 16px cube faces: a 64x32 equirectangular source.
+  // Generate neutral radiance locally so even the preview download can wait.
+  const pixels = new Float32Array(64 * 32 * 4);
+  for (let i = 0; i < pixels.length; i += 4) pixels.set([.18, .18, .18, 1], i);
+  const texture = new THREE.DataTexture(pixels, 64, 32, THREE.RGBAFormat, THREE.FloatType);
   texture.mapping = THREE.EquirectangularReflectionMapping;
   texture.needsUpdate = true;
   try { return pmremGenerator.fromEquirectangular(texture).texture; }
