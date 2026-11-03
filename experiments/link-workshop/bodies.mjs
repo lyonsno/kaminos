@@ -85,5 +85,7 @@ export function createBodyView(root){
   }catch(e){for(const s of staged)release(s.object);throw e;}
   for(const {b,object}of staged){object.position.copy(b.object.position);object.quaternion.copy(b.object.quaternion);release(b.object);b.object=object;root.add(object);replacements.add(b.id);}root.updateMatrixWorld(true);return manifest();
  }
- return {update,manifest,exportBodies,importBodies,replacementState(){return exportBodies(replacements);},dispose(){for(const b of bodies.values())release(b.object);bodies.clear();}};
+ function bodyMeshes(id=null,names=null){const out=[];for(const b of bodies.values())if(!id||b.id===id)b.object.traverse(o=>{if(o.isMesh&&(!names||names.includes(o.name)))out.push(o);});return out;}
+ function bodySelection(mesh){for(const b of bodies.values()){let o=mesh;while(o){if(o===b.object){const part=mesh.userData.copyPart;return part?{id:b.id,names:bodyMeshes(b.id).filter(m=>m.userData.copyPart===part).map(m=>m.name)}:{id:b.id};}o=o.parent;}}throw Error('Choose an assembly body');}
+ return {update,manifest,exportBodies,importBodies,bodyMeshes,bodySelection,replacementState(){return exportBodies(replacements);},dispose(){for(const b of bodies.values())release(b.object);bodies.clear();}};
 }

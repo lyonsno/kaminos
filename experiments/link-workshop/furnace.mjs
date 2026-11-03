@@ -1,9 +1,11 @@
 import * as T from '../../lib/three.core.js';
 import {constructBodies} from './bodies.mjs';
+import {mirrorBodyGeometry} from './copy-geometry.mjs';
+import {frames} from './model.mjs';
 
 // A provisional, scripted carrier for conditioned appearance generation.
 // Motion stays in the ordinary workshop recipe; every surface belongs to a body.
-export function furnaceAssembly(){
+export function furnaceAssembly({mirrored=false}={}){
  const recipe={schema:'kaminos.links.v1',nodes:[
   {parent:null,point:[0,3.6]},
   {parent:0,length:.85,angles:[-Math.PI/2,-Math.PI/9]},
@@ -39,7 +41,7 @@ export function furnaceAssembly(){
  }
  // Link local X points from hinge to piston pin. Door shares that rigid frame.
  const door=defs.find(b=>b.id==='link:1').object;
- door.children.forEach(o=>{if(o.material){o.material.dispose();o.material=bronze;}});
+ door.children.forEach(o=>{o.name='Side operating lever';o.userData.copyPart='operating-lever';if(o.material){o.material.dispose();o.material=bronze;}});
  box(door,[2.78,.16,2.36],[1.39,.16,-1.52],iron,'Door shell');
  box(door,[2.48,.06,2.10],[1.40,.05,-1.52],lining,'Door refractory face');
  for(const z of [-2.56,-.48])box(door,[2.6,.07,.09],[1.40,.275,z],bronze,'Door stiffener');
@@ -49,8 +51,10 @@ export function furnaceAssembly(){
  for(const z of [-2.84,.36])axle(shaft,.12,.06,[0,0,z],bronze,'Axle cap');
  const mount=replace('anchor:2');box(mount,[.52,.34,.62],[0,0,.12],iron,'Cylinder mounting lug');
  for(const d of defs){d.object.name=names[d.id]??d.id;d.object.position.set(0,0,0);d.object.quaternion.identity();d.object.updateMatrixWorld(true);}
- const geometry={schema:'kaminos.assembly-geometry.v1',bodies:defs.map(d=>({id:d.id,geometryKey:d.geometryKey,object:d.object.toJSON()}))};
+ let geometry={schema:'kaminos.assembly-geometry.v1',bodies:defs.map(d=>({id:d.id,geometryKey:d.geometryKey,object:d.object.toJSON()}))};
  // Release temporary geometry after serializing; materials can be shared.
  const gs=new Set(),ms=new Set();for(const d of defs)d.object.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)ms.add(o.material);});for(const g of gs)g.dispose();for(const m of ms)m.dispose();
- return {recipe,geometry};
+ const mirrorSelection=[{id:'link:1',names:['Side operating lever']},...['anchor:2','pin:1','pin:2','piston:0:barrel','piston:0:rod'].map(id=>({id}))];
+ if(mirrored)geometry=mirrorBodyGeometry(geometry,{planeZ:-1.3,selections:mirrorSelection,positions:Object.fromEntries(defs.map(d=>[d.id,d.pose(frames(recipe,0)).position[2]]))});
+ return {recipe,geometry,mirrorSelection};
 }
