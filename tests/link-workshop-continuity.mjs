@@ -53,3 +53,32 @@ console.log('Attachment-relative history, scaled rigid frames, and reconstructed
  await experiment.create({host,inputs:{}});assert.equal(added,0,'Restoring the workshop must not add an empty mechanism');assert.equal(selected,'saved-1');
  await experiment.create({host,inputs:{recipe:recipe()}});assert.equal(added,1,'Explicit recipe still creates a new mechanism');
 }
+
+// Returned body geometry survives branch deletion, remaps surviving links, and restores through controller-independent history.
+{
+ const scene=new T.Scene(),entries=[];let adapter;const edits=createSceneEdits({read(){throw Error('Missing ordinary object');},write(){throw Error('Missing ordinary object');}});
+ const host={scene:{objects:()=>entries,async open(){return {async attach(root){return {id:'mechanism',root};},redraw(){},readView(){return {};},onFrame(){return ()=>{};},async dispose(){}};}},controls:{document:{defaultView:{kaminosSceneEdits:edits}},components:{register(id,a){adapter=a;return {changed(fn){fn?.();},dispose(){}};}}}};
+ let root=new T.Group();root.userData.linkMechanism={schema:'kaminos.links.v1',period:3,nodes:[],pistons:[]};scene.add(root);entries.push({id:'mechanism',object:root});
+ let runtime=await createMechanismController({host,inputs:{root}});
+ runtime.operations.append({parent:null,point:[0,0]});runtime.operations.append({parent:0,point:[2,0]});runtime.operations.append({parent:0,point:[0,2]});
+ const packet=runtime.operations.exportBodies();
+ packet.bodies=packet.bodies.filter(b=>b.id==='link:1'||b.id==='link:2');
+ packet.bodies.find(b=>b.id==='link:1').object.materials[0].color=0xff2244;
+ packet.bodies.find(b=>b.id==='link:2').object.materials[0].color=0x22cc88;
+ await runtime.operations.importBodies(packet);
+ assert.equal(runtime.read().bodies.replacements,2);
+ runtime.operations.select({joint:1});adapter.remove();
+ assert.equal(runtime.read().recipe.nodes.length,2);
+ assert.equal(runtime.read().bodies.replacements,1,'Surviving branch retains its returned appearance after sibling branch deletion');
+ assert.equal(runtime.operations.exportBodies().bodies.find(b=>b.id==='link:1').object.materials[0].color,0x22cc88);
+ const savedRecipe=structuredClone(root.userData.linkMechanism),savedGeometry=structuredClone(root.userData.linkGeometry);
+ entries.length=0;root.removeFromParent();await runtime.dispose();
+ root=new T.Group();root.userData.linkMechanism=savedRecipe;root.userData.linkGeometry=savedGeometry;scene.add(root);entries.push({id:'mechanism',object:root});
+ edits.undo();assert.equal(root.userData.linkMechanism.nodes.length,3);assert.equal(root.userData.linkGeometry?.bodies?.length,2,'Undo before controller recreation restores both returned body appearances');
+ runtime=await createMechanismController({host,inputs:{root}});
+ assert.equal(runtime.read().bodies.replacements,2);
+ assert.equal(runtime.operations.exportBodies().bodies.find(b=>b.id==='link:1').object.materials[0].color,0xff2244);
+ assert.equal(runtime.operations.exportBodies().bodies.find(b=>b.id==='link:2').object.materials[0].color,0x22cc88);
+ edits.redo();assert.equal(runtime.read().bodies.replacements,1);
+ edits.clear();await runtime.dispose();
+}

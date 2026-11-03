@@ -21,6 +21,7 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
  function target(){if(!active())return null;const value=current().adapter.target();return value?{...value,ownerId:current().id}:null;}
  return {
   active,target,exit,back,
+  context(){return active()?{ownerId:stack[0].id}:null;},
   scope(){return active()?current().adapter.scope?.()??null:null;},
   ownsTransforms(){return active()&&!current().adapter.scope;},
   resolve(id){const value=target();return value?.id===id?value:null;},
@@ -30,6 +31,8 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
    cancel();stack=[{id,adapter}];try{adapter.enter();refresh();return true;}catch(error){exit();throw error;}
   },
   pick(event,context){if(!active())return false;current().adapter.pick?.(event,context);return true;},
+  hover(event,context){return active()?(current().adapter.hover?.(event,context),true):false;},
+  cancel(){return active()?!!current().adapter.cancel?.():false;},
   selectAll(action){if(active())current().adapter.selectAll?.(action);},
   remove(){if(!active()||!current().adapter.remove)return false;cancel();try{current().adapter.remove();return true;}finally{refresh();}},
   register(id,adapter){

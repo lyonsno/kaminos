@@ -60,6 +60,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
       if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():ownerComponents?.toggle(selectedId())||enter());return;
     }
     if(ownerComponents?.active()&&!ownerComponents.scope?.()){
+      if(event.key==='Escape'&&attempt(()=>ownerComponents.cancel?.())){steal(event);return;}
       if(event.code==='KeyA'&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey){steal(event);attempt(()=>ownerComponents.selectAll(event.altKey?'deselect':'select'));return;}
       if(['Delete','Backspace'].includes(event.key)){
         if(event.ctrlKey||event.metaKey||event.altKey)return;
@@ -86,6 +87,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   },true);
 
   document.addEventListener('pointermove',event=>{
+    if(ownerComponents?.active()&&!ownerComponents.scope?.()){attempt(()=>ownerComponents.hover?.(!blocked()&&insideCanvas(event)&&!overlayHit(event)&&!event.buttons&&!gizmo?.dragging&&!gizmo?.axis?event:null,{camera,canvas}));return;}
     if(!edit.active())return;
     if(insideCanvas(event))hover={x:event.clientX,y:event.clientY};
     if(cutLine?.start){drawCut(event.clientX,event.clientY);return;}

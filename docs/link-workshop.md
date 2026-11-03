@@ -48,7 +48,19 @@ user choices, with one incoming rigid link per non-anchor joint and explicit
 parent identities; no model inference is needed for a new arrangement.
 
 
-## Mounts and compound construction
+## Constructed bodies and appearance return
+
+The workshop derives rigid bodies from the recipe: bored link plates, anchor blocks, axle pins, hollow barrels, and sliding rods. Incident links use distinct depth layers around their shared joint axis; unrelated joints reuse layers. Pins span the layers they connect. Link plate bores and axle radii are derived together, including short links. Piston barrel and rod lengths are fixed during playback from an adaptive distance enclosure over the authored cycle.
+
+**Export body geometry** writes `mechanism.bodies.json`: the recipe plus identified body-local Three object geometry. **Replace body geometry** accepts that package or a subset of its bodies (`exportBodies` and `importBodies(packet)`). Returned body geometry persists with the ordinary `kaminos:link-mechanism` scene record and participates in native Undo/Redo across construction edits and branch or piston deletion (remapping surviving body IDs). **Mirror shapes** reflects selected body parts across a selectable mirror plane parallel to the joint plane.
+
+## Reserved motion space
+
+**Reserve motion space** constructs a separate selectable snapshot object from the current analytical assembly over the entire authored interpolation (`motionSpace` and `exportMotionSpace`). Its violet surface encloses per-mesh outer boxes continuously as a housing-design guide.
+
+## Mounts, connections, and hinged seating
+
+**Connect…** in the viewport header picks two surfaces or joints directly and shows their oriented contact-plane guides immediately. With two picks active, choose **Fasten together**, **Hinge together**, or **Add piston** to preview before committing. **Hinge together** seats the moving object on the receiving contact plane and pivots around the contact normal between **Pose A** and **Pose B** (enabling `Build | Pose A | Pose B` and `Play` even on mechanisms without planar links). Select any connection anchor in the viewport (even through occluding geometry when overlays are visible) and press **Tab** to enter Seating edit: **G** slides on the contact plane, **R** turns around the contact normal (setting the Pose A or Pose B hinge angle when hinged, or the base seating twist in Build), and clicking another anchor switches directly to it.
 
 Place mount in the viewport adds a construction-frame mount on a link or an object-local mount on an ordinary mesh surface. Select the mechanism and enter component editing with Tab first. Mounts have visible rings and axes; G/R and the native transform inspector edit their position/orientation. Add mount in the inspector places a mount at the chosen object's origin or selected joint. A mechanism in that chooser means its assembly root; select that mechanism itself to author mounts on its moving links.
 

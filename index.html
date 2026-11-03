@@ -13155,7 +13155,7 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:()=>selectedPlacementEntry()??(sceneComponents?.active()?selectedSceneObjectEntry():null),onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:()=>sceneComponents?.context()??selectedPlacementEntry()??(sceneComponents?.active()?selectedSceneObjectEntry():null),onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;

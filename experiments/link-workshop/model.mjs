@@ -22,7 +22,9 @@ export function checkedMechanism(m){
  const ids=new Set();for(const a of m.attachments??[]){
   if(typeof a.objectId!=='string'||!a.objectId||ids.has(a.objectId)||(a.targetMount?(!mounts.has(a.targetMount)||mounts.get(a.sourceMount)?.owner.objectId!==a.objectId):(!Number.isInteger(a.joint)||!m.nodes[a.joint])))throw Error('Attachment requires a unique object and existing joint');
   for(const key of ['position','rotation','scale'])if(!Array.isArray(a.offset?.[key])||a.offset[key].length!==3||!a.offset[key].every(Number.isFinite))throw Error('Attachment requires a finite frame');
-  if(a.offset.scale.some(x=>x===0))throw Error('Attachment scale must be nonzero');ids.add(a.objectId);
+  if(a.offset.scale.some(x=>x===0))throw Error('Attachment scale must be nonzero');
+  if(a.hinge!==undefined&&(!a.targetMount||!point(a.hinge)))throw Error('Hinged attachment requires two mounts and finite Pose A/B angles');
+  ids.add(a.objectId);
  }
  return copy(m);
 }

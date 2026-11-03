@@ -35,5 +35,20 @@ for(const angle of [-.4,-.2,.15,.3,.45]){
  const stepActual=matrixFrame(seatingFrame(root,model,'payload',0,entries)),expectedStepQ=new T.Quaternion().setFromAxisAngle(normal,angle).multiply(dragStartQ);
  assert.ok(Math.abs(new T.Quaternion().setFromEuler(new T.Euler(...stepActual.rotation)).dot(expectedStepQ))>1-1e-8,`multi-step R drag must track angle ${angle} monotonically without live-scene feedback`);
 }
-const persisted=JSON.parse(JSON.stringify(model)),before=payload.matrixWorld.clone();follower.dispose();const next=createAttachmentFollower(root,()=>entries);next.update(persisted,0);assert.ok(before.elements.every((v,i)=>Math.abs(v-payload.matrixWorld.elements[i])<1e-8));next.dispose();
-console.log('Seating follows rotated/scaled receiver planes, turns about the contact normal, preserves payload scale and downstream attachments, and reconstructs from saved recipe');
+// Hinged attachments swing around the receiving mount normal between Pose A (t=0) and Pose B (t=1).
+model.attachments[0].hinge=[0,0];
+const hingeBase={recipe:structuredClone(model),...matrixFrame(seatingFrame(root,model,'payload',1,entries))};
+const hingePoseB=transformPose(hingeBase,{operation:'rotate',amount:Math.PI/3,viewAxis:grazingAxis.toArray()});
+model=adjustSeating(root,hingeBase.recipe,'payload',1,entries,{...hingeBase,...hingePoseB,mode:'B'});
+assert.ok(Math.abs(model.attachments[0].hinge[0])<1e-8,'editing Pose B leaves Pose A hinge angle unchanged');
+assert.ok(Math.abs(model.attachments[0].hinge[1]-Math.PI/3)<1e-8,'editing Pose B records the hinge swing angle');
+follower.reset();follower.update(model,0);
+const qAtA=payload.quaternion.clone();
+follower.reset();follower.update(model,.5);
+const qAtMid=payload.quaternion.clone(),expectedMid=new T.Quaternion().setFromAxisAngle(normal,Math.PI/6).multiply(qAtA);
+assert.ok(Math.abs(qAtMid.dot(expectedMid))>1-1e-7,'halfway cycle interpolates half the hinge swing around the contact normal');
+follower.reset();follower.update(model,1);
+const qAtB=payload.quaternion.clone(),expectedB=new T.Quaternion().setFromAxisAngle(normal,Math.PI/3).multiply(qAtA);
+assert.ok(Math.abs(qAtB.dot(expectedB))>1-1e-7,'Pose B reaches the full authored hinge angle');
+const persisted=JSON.parse(JSON.stringify(model)),before=payload.matrixWorld.clone();follower.dispose();const next=createAttachmentFollower(root,()=>entries);next.update(persisted,1);assert.ok(before.elements.every((v,i)=>Math.abs(v-payload.matrixWorld.elements[i])<1e-8));next.dispose();
+console.log('Seating follows rotated/scaled receiver planes, turns about the contact normal, interpolates hinged attachments across Pose A/B, preserves payload scale and downstream attachments, and reconstructs from saved recipe');

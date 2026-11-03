@@ -11,10 +11,22 @@ export function mountOwnerMatrix(root,model,mount,t,entries){
 }
 export function mountMatrix(root,model,id,t,entries){const m=model.mounts?.find(m=>m.id===id);if(!m)throw Error('Unknown mount');const full=mountOwnerMatrix(root,model,m,t,entries).multiply(frameMatrix(m)),p=new T.Vector3().setFromMatrixPosition(full);let q;
  if(m.owner.joint!==undefined)q=new T.Quaternion().setFromRotationMatrix(jointMatrix(root,model,m.owner.joint,t));else q=entries.find(e=>e.id===m.owner.objectId).object.getWorldQuaternion(new T.Quaternion()).normalize();q.multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));}
-export function attachmentBase(root,model,a,t,entries,scaleOverride){
+export const hingeAngle=(a,t=0)=>Array.isArray(a?.hinge)?a.hinge[0]+(a.hinge[1]-a.hinge[0])*t:0;
+function mountAttachmentBase(target,source,a,t,scale,unhinged=false){
+ const targetQ=new T.Quaternion().setFromRotationMatrix(target),sourceQ=new T.Quaternion().setFromEuler(new T.Euler(...source.rotation));
+ const q=targetQ.clone().multiply(sourceQ.clone().invert()),p=new T.Vector3().setFromMatrixPosition(target).sub(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));
+ const base=new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));
+ const angle=unhinged?0:hingeAngle(a,t);if(!angle)return base;
+ const w0=base.clone().multiply(frameMatrix(a.offset)),p0=new T.Vector3(),q0=new T.Quaternion();w0.decompose(p0,q0,new T.Vector3());
+ const seat=p0.add(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q0));
+ const normal=new T.Vector3(0,0,1).applyQuaternion(targetQ),spin=new T.Matrix4().makeRotationAxis(normal,angle);
+ return new T.Matrix4().makeTranslation(seat.x,seat.y,seat.z).multiply(spin).multiply(new T.Matrix4().makeTranslation(-seat.x,-seat.y,-seat.z)).multiply(base);
+}
+export function attachmentBase(root,model,a,t,entries,scaleOverride,{unhinged=false}={}){
  if(!a.targetMount)return jointMatrix(root,model,a.joint,t);
  const target=mountMatrix(root,model,a.targetMount,t,entries),source=model.mounts.find(m=>m.id===a.sourceMount),object=entries.find(e=>e.id===a.objectId)?.object;if(!source||!object)throw Error('Missing fastening source');
- object.updateWorldMatrix(true,false);const scale=scaleOverride??object.getWorldScale(new T.Vector3()),q=new T.Quaternion().setFromRotationMatrix(target).multiply(new T.Quaternion().setFromEuler(new T.Euler(...source.rotation)).invert()),p=new T.Vector3().setFromMatrixPosition(target).sub(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));
+ object.updateWorldMatrix(true,false);const scale=scaleOverride??object.getWorldScale(new T.Vector3());
+ return mountAttachmentBase(target,source,a,t,scale,unhinged);
 }
 // Edges express who must be positioned first. This handles mount owners as well
 // as mechanism roots; cycles require a solver and cannot be fastened kinematically.
@@ -32,7 +44,7 @@ export const checkConnections=(root,model,entries)=>connectionOrder(entries,root
 export function previewMountMatrix(root,model,id,t,entries){
  const resolving=new Set(),cache=new Map();
  function ownerWorld(objectId){if(cache.has(objectId))return cache.get(objectId);if(resolving.has(objectId))throw Error('Mount preview cycle');resolving.add(objectId);const entry=entries.find(e=>e.id===objectId);if(!entry)throw Error('Missing preview object');entry.object.updateWorldMatrix(true,false);const a=model.attachments?.find(a=>a.objectId===objectId);let world=entry.object.matrixWorld.clone();
-  if(a){if(a.targetMount){const target=resolve(a.targetMount),source=model.mounts.find(m=>m.id===a.sourceMount),scale=new T.Vector3(...a.offset.scale),q=new T.Quaternion().setFromRotationMatrix(target).multiply(new T.Quaternion().setFromEuler(new T.Euler(...source.rotation)).invert()),p=new T.Vector3().setFromMatrixPosition(target).sub(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));world=new T.Matrix4().compose(p,q,new T.Vector3(1,1,1)).multiply(frameMatrix(a.offset));}else world=jointMatrix(root,model,a.joint,t).multiply(frameMatrix(a.offset));}
+  if(a){if(a.targetMount){const target=resolve(a.targetMount),source=model.mounts.find(m=>m.id===a.sourceMount),scale=new T.Vector3(...a.offset.scale);world=mountAttachmentBase(target,source,a,t,scale).multiply(frameMatrix(a.offset));}else world=jointMatrix(root,model,a.joint,t).multiply(frameMatrix(a.offset));}
   resolving.delete(objectId);cache.set(objectId,world);return world;
  }
  function resolve(mid){const m=model.mounts.find(m=>m.id===mid);if(!m)throw Error('Unknown preview mount');const owner=m.owner.joint!==undefined?jointMatrix(root,model,m.owner.joint,t):ownerWorld(m.owner.objectId),p=new T.Vector3(...m.position).applyMatrix4(owner),q=new T.Quaternion(),scale=new T.Vector3();owner.decompose(new T.Vector3(),q,scale);q.normalize().multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));}

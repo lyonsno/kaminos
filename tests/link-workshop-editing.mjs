@@ -54,3 +54,46 @@ console.log('Native workshop history through empty state and numeric preview/com
  assert.doesNotThrow(()=>adapter().remove(),'Delete on an empty construction is harmless');
  await runtime.dispose();
 }
+{
+ const {runtime,op,edits,target}=await setup(),packet=op.exportBodies();packet.bodies=packet.bodies.filter(b=>b.id==='link:1');packet.bodies[0].object.materials[0].color=0xff00ff;await op.importBodies(packet);
+ const color=()=>op.exportBodies().bodies.find(b=>b.id==='link:1').object.materials[0].color;
+ const h=target();edits.begin(h.id);const change=h.read();change.scale[0]=4;edits.preview(change);edits.cancel();assert.equal(color(),0xff00ff,'Cancel restores returned appearance');assert.equal(runtime.read().recipe.nodes[1].length,2);
+ op.move({joint:1,point:[3,0],mode:'build'});assert.equal(runtime.read().bodies.replacements,0);edits.undo();assert.equal(color(),0xff00ff,'Undo construction restores appearance');edits.redo();assert.equal(runtime.read().recipe.nodes[1].length,3);assert.equal(runtime.read().bodies.replacements,0);
+ await runtime.dispose();
+}
+{
+ const {createWorkbenchSceneHost}=await import('../workbench-scene-host.mjs');
+ const {openExperiment}=await import('../workbench-experiments.mjs');
+ const scene=new T.Scene(),rows=new Map(),edits=createSceneEdits({read(){throw Error('Missing target');},write(){throw Error('Missing target');}});let serial=0;
+ const sceneHost=createWorkbenchSceneHost({scene,camera:new T.PerspectiveCamera(),controls:{target:new T.Vector3(),update(){}},loadAsset(){throw Error('Unused');},registerObject(root,metadata){const row={id:'object'+(++serial),root,...metadata};rows.set(handleId(row),row);return row;},findObject:root=>[...rows.values()].find(r=>r.root===root),removeObject:handle=>{handle.root.removeFromParent();rows.delete(handle.id);},redraw(){},onFrame(){return ()=>{};}});
+ function handleId(row){return row.id;}
+ const host={scene:{...sceneHost,refreshPresentation(){}},controls:{document:{defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}},components:{register(){return {changed(fn){fn?.();},dispose(){}};}}}};
+ const rt=await openExperiment(workshop,{host,record(){},inputs:{recipe:{schema:'kaminos.links.v1',nodes:[{parent:null,point:[0,0]},{parent:0,length:1,angles:[0,.5]}],pistons:[],period:3}}});
+ const pending=rt.invoke('motionSpace');const outcome=pending.catch(e=>e);await rt.dispose();await outcome;
+ assert.equal(rows.size,0,'Closing must release in-flight motion-space registrations');assert.equal(scene.children.length,0,'No orphan guide roots after closure');
+}
+{
+ const {createSceneComponentEdit}=await import('../scene-component-edit.mjs');
+ const {createSceneOwnerControls}=await import('../scene-owner-controls.mjs');
+ class Element{constructor(){this.children=[];this.style={};this.className='';this.hidden=false;}append(...nodes){for(const n of nodes){if(typeof n==='string')continue;n.remove?.();this.children.push(n);n.parent=this;}}remove(){if(this.parent)this.parent.children.splice(this.parent.children.indexOf(this),1);this.parent=null;}setAttribute(k,v){this[k]=v;}}
+ const scene=new T.Group(),edits=createSceneEdits({read(){throw Error('Missing target');},write(){throw Error('Missing target');}});
+ let selected=null,asset,owners;
+ const components=createSceneComponentEdit({selected:()=>selected,cancel:()=>edits.cancel(),refresh:()=>owners?.update()});
+ const win={kaminosSceneEdits:edits,kaminosSelection:{set(ids){selected=ids[0];owners?.update();}}};
+ const document={defaultView:win,createElement:()=>new Element(),getElementById(){return null;},addEventListener(){},removeEventListener(){}},viewport=new Element(),inspector=new Element();
+ owners=createSceneOwnerControls({document,viewport,inspector,selected:()=>components.context?.()??(components.active()?components.target():selected===asset?.id?{id:selected,object:asset.root}:null)});
+ const session={async attach(root){scene.add(root);asset={id:'workshop',root};return asset;},redraw(){},readView(){return {};},setView(){},onFrame(){return ()=>{};},async dispose(){scene.clear();}};
+ const runtime=await workshop.create({host:{scene:{async open(){return session;}},controls:{document,components,mountObject:owners.mount,installNumberDrag:()=>({dispose(){}})}}});
+ runtime.mount({root:new Element(),document,invoke:async(op,args)=>runtime.operations[op](args)});
+ const findNotice=el=>el?.['aria-label']==='Construction mode'?el:el?.children?.map(findNotice).find(Boolean);
+ const notice=()=>findNotice(viewport.children[0]);
+ const visible=()=>{assert.equal(inspector.children[0].hidden,false,'Empty editor retains owner properties');assert.equal(viewport.children[0].hidden,false,'Empty editor retains instruction container');assert.equal(notice().hidden,false);};
+ runtime.operations.tool({value:'draw'});visible();assert.match(notice().textContent,/place a fixed anchor/);assert.equal(components.target(),null,'Owner context must not create a fake transform target');
+ components.cancel();visible();assert.match(notice().textContent,/SELECT/);
+ runtime.operations.tool({value:'draw'});visible();
+ const camera=new T.PerspectiveCamera(38,1,.01,100);camera.position.set(0,0,10);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ components.pick({clientX:50,clientY:50,shiftKey:false},{camera,canvas:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})}});
+ visible();assert.equal(runtime.read().recipe.nodes.length,1);assert.equal(components.target().type,'link-joint');
+ selected='elsewhere';owners.update();assert.equal(inspector.children[0].hidden,true,'Changing owner hides old controls');assert.equal(components.active(),false);
+ await runtime.dispose();
+}

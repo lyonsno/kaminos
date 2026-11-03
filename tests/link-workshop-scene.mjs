@@ -28,4 +28,17 @@ let restored;
 await createSceneRecordOperations({loaders:{constructed:o=>{restored=o;return o;}}}).load(captured);
 assert.deepEqual(restored.userData.linkMechanism,recipe);
 assert.equal(removeBranch(recipe,1).attachments.length,0,'Removing a branch releases its payload binding');
-console.log('Attachment placement, native offset editing, moving assembly and reconstruction passed');
+// Returned body geometry persists on ordinary scene records and remaps across branch deletion.
+const {exportBodyGeometry,remapBodyGeometry}=await import('../experiments/link-workshop/bodies.mjs');
+const branched=appendJoint(appendJoint(appendJoint(emptyMechanism(),null,[0,0]),0,[2,0]),0,[0,2]);
+const packet=exportBodyGeometry(branched);
+const link2=packet.bodies.find(b=>b.id==='link:2');link2.object.materials[0].color=0x22cc88;
+root.userData.linkMechanism=branched;
+root.userData.linkGeometry={schema:'kaminos.assembly-geometry.v1',key:packet.key,bodies:[link2]};
+const capturedWithBodies=createSceneRecordOperations({readers:{transform:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),materials:()=>null}}).serialize({id:'mechanism',type:'pbr',source:'kaminos:link-mechanism',object:root});
+assert.equal(capturedWithBodies.geometry?.bodies?.[0]?.id,'link:2','Scene record serializes returned body geometry');
+await createSceneRecordOperations({loaders:{constructed:o=>{restored=o;return o;}}}).load(capturedWithBodies);
+assert.equal(restored.userData.linkGeometry?.bodies?.[0]?.id,'link:2','Scene record restores returned body geometry onto root.userData.linkGeometry');
+const afterBranch=removeBranch(branched,1),remapped=remapBodyGeometry(branched,afterBranch,restored.userData.linkGeometry,{removedNode:1});
+assert.deepEqual(remapped.bodies.map(b=>b.id),['link:1'],'Surviving branch body IDs remap when an earlier branch is deleted');
+console.log('Attachment placement, native offset editing, moving assembly, body-geometry scene records, and branch-deletion remapping passed');

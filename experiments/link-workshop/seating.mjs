@@ -1,5 +1,5 @@
 import * as T from '../../lib/three.core.js';
-import {previewMountMatrix,attachmentBase,matrixFrame} from './mounts.mjs';
+import {previewMountMatrix,attachmentBase,matrixFrame,hingeAngle} from './mounts.mjs';
 
 export function seatingFrame(root,model,objectId,t,entries){
  const binding=model.attachments?.find(a=>a.objectId===objectId&&a.targetMount);
@@ -23,9 +23,11 @@ export function adjustSeating(root,model,objectId,t,entries,requested){
  const dir=Math.abs(axial)>1e-3*mag?Math.sign(axial):Math.sign(turn.z||turn.y||turn.x||1);
  const angle=Math.hypot(mag,turn.w)<1e-12?0:2*dir*Math.atan2(mag,turn.w);
  const q=new T.Quaternion().setFromAxisAngle(normal,angle).multiply(oldQ);
- const m=next.mounts.find(m=>m.id===a.sourceMount),objectQ=q.multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)).invert());
+ if(Array.isArray(a.hinge)&&(requested.mode==='A'||requested.mode==='B'))a.hinge[requested.mode==='B'?1:0]+=angle;
+ const unhingedQ=new T.Quaternion().setFromAxisAngle(normal,-hingeAngle(a,t)).multiply(q);
+ const m=next.mounts.find(m=>m.id===a.sourceMount),objectQ=unhingedQ.multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)).invert());
  const scale=new T.Vector3(...a.offset.scale),position=oldP.add(delta).sub(new T.Vector3(...m.position).multiply(scale).applyQuaternion(objectQ));
  const world=new T.Matrix4().compose(position,objectQ,scale);
- a.offset=matrixFrame(attachmentBase(root,next,a,t,entries,scale).invert().multiply(world));
+ a.offset=matrixFrame(attachmentBase(root,next,a,t,entries,scale,{unhinged:true}).invert().multiply(world));
  return next;
 }

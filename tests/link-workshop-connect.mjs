@@ -79,6 +79,32 @@ try {
   c.operations.restore({schema:'kaminos.links.v1',period:3,nodes:[],pistons:[]});
   assert.equal(transport.hidden,true,'playback transport hides when mechanism has no moving links');
   assert.equal(top.children[0].hidden,true,'Build / Pose A / Pose B modes hide when mechanism has no moving links');
+  // Hinge together enables Pose A / Pose B and Play even when nodes is empty, and swings around the contact normal.
+  const baseBlock=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());scene.add(baseBlock);entries.push({id:'base',object:baseBlock,type:'procedural-mesh',label:'Base'});
+  c.operations.tool({value:'connect'});
+  c.operations.connectEnd({objectId:'cube',position:[-.5,0,0],rotation:[0,0,0]});
+  c.operations.connectEnd({objectId:'base',position:[.5,0,0],rotation:[0,0,0]});
+  c.operations.previewConnection({kind:'hinge'});assert.equal(c.read().connectionDraft.kind,'hinge');
+  c.operations.commitConnection();
+  assert.deepEqual(c.read().recipe.attachments[0].hinge,[0,0],'Hinge together creates a hinged attachment');
+  assert.equal(transport.hidden,false,'Hinged attachment enables playback transport without planar links');
+  assert.equal(top.children[0].hidden,false,'Hinged attachment enables Build / Pose A / Pose B without planar links');
+  c.operations.mode({value:'B'});
+  c.operations.selectConnection({objectId:'cube'});components.toggle('mechanism');
+  assert.equal(c.read().editingConnection,'cube');
+  const hSeat=components.target(),hBase=hSeat.read();
+  edits.begin(hSeat.id,'Hinge Pose B');edits.preview({position:hBase.position,rotation:[0,0,Math.PI/2]});edits.commit();
+  assert.ok(Math.abs(c.read().recipe.attachments[0].hinge[1]-Math.PI/2)<1e-6,'Pose B seating rotation records the hinge swing');
+  c.operations.seek({cycle:.25});assert.ok(Math.abs(cube.rotation.z-Math.PI/4)<1e-6,'Mid-cycle seek interpolates the hinged mesh rotation');
+  // Clicking another connection anchor while already inside Tab seating switches directly to that connection.
+  const capBlock=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());capBlock.position.set(0,3,0);scene.add(capBlock);entries.push({id:'cap',object:capBlock,type:'procedural-mesh',label:'Cap'});
+  c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cap',position:[0,-.5,0],rotation:[0,0,0]});c.operations.connectEnd({objectId:'base',position:[0,3,0],rotation:[0,0,0]});c.operations.previewConnection({kind:'fasten'});c.operations.commitConnection();
+  c.operations.selectConnection({objectId:'cube'});components.toggle('mechanism');assert.equal(c.read().editingConnection,'cube');
+  scene.updateMatrixWorld(true);
+  components.pick({clientX:50,clientY:20},{camera,canvas});
+  assert.equal(c.read().editingConnection,'cap','Picking another connection anchor inside Seating edit switches directly to it');
+  capBlock.geometry.dispose();capBlock.material.dispose();
+  baseBlock.geometry.dispose();baseBlock.material.dispose();
  }
- console.log('Connect enters native editing; endpoints, alternatives, cancellation, atomic history and stale preview rejection passed');
+ console.log('Connect enters native editing; endpoints, alternatives, hinged connections, cancellation, atomic history and stale preview rejection passed');
 }finally{edits.clear();await c.dispose();cube.geometry.dispose();cube.material.dispose();}
