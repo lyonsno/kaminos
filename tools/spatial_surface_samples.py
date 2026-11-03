@@ -55,14 +55,22 @@ def spatial_samples(rows, count, area):
     else:
         ids = representatives
 
-    # Fit each cell's retained geometry in the selected point's tangent plane.
-    delta = pos-mean[inverse]
-    covariance = np.empty((groups, 3, 3))
+    # Assign each candidate to its nearest selected representative in the same cell,
+    # regularize with the intrinsic area per candidate, and enclose assigned candidates at 3-sigma.
+    owner = inverse.copy()
+    if remaining:
+        for j in range(groups, count):
+            g = inverse[ids[j]]
+            members = np.flatnonzero(inverse == g)
+            d_new = np.sum((pos[members] - pos[ids[j]])**2, axis=1)
+            d_cur = np.sum((pos[members] - pos[ids[owner[members]]])**2, axis=1)
+            owner[members[d_new < d_cur]] = j
+    owner_pop = np.bincount(owner, minlength=count)
+    disp = pos - pos[ids[owner]]
+    local = np.empty((count, 3, 3))
     for i in range(3):
         for j in range(3):
-            covariance[:, i, j] = np.bincount(inverse, weights=delta[:, i]*delta[:, j])/population
-    shift = mean[inverse[ids]]-pos[ids]
-    local = covariance[inverse[ids]] + shift[:, :, None]*shift[:, None, :]
+            local[:, i, j] = np.bincount(owner, weights=disp[:, i]*disp[:, j], minlength=count) / owner_pop
     n = normal[ids]
     axis = np.tile([0., 0., 1.], (count, 1)); axis[np.abs(n[:, 2]) > .9] = [1, 0, 0]
     u = np.cross(n, axis); u /= np.linalg.norm(u, axis=1)[:, None]
@@ -73,9 +81,14 @@ def spatial_samples(rows, count, area):
     axes = frame @ eigenvector
     reflected = np.sum(np.cross(axes[:, :, 0], axes[:, :, 1])*n, axis=1) < 0
     axes[reflected, :, 1] *= -1  # Ellipse unchanged; quad winding follows the source normal.
-    # sqrt(6*variance) covers a uniformly occupied cell's tangent-plane corners.
-    sigma = np.sqrt(np.maximum(eigenvalue, (width*.04)**2)*6)/3
-    sigma[population[inverse[ids]] == 1] = width*.7/3
+    patch_var = area / (4. * len(rows))
+    sigma = np.sqrt((np.maximum(eigenvalue, 0.) + patch_var)*6)/3
+    pad = np.sqrt(patch_var * 1.5)
+    cu = (np.abs(np.sum(disp * axes[owner, :, 0], axis=1)) + pad) / sigma[owner, 0]
+    cv = (np.abs(np.sum(disp * axes[owner, :, 1], axis=1)) + pad) / sigma[owner, 1]
+    extent = np.full(count, 3.)
+    np.maximum.at(extent, owner, np.hypot(cu, cv))
+    sigma *= (extent * (1. + 1e-6) / 3.)[:, None]
     footprints = np.empty((count, 8), '<f4')
     footprints[:, :3] = axes[:, :, 0]; footprints[:, 4:7] = axes[:, :, 1]
     footprints[:, 3] = sigma[:, 0]; footprints[:, 7] = sigma[:, 1]
@@ -83,4 +96,4 @@ def spatial_samples(rows, count, area):
             'cellWidth': width, 'occupiedCells': groups, 'extraSamples': remaining,
             'normalBins': 6, 'searchIterations': 18,
             'selection': 'nearest existing candidate to cell centroid; separated extras',
-            'support': 'tangent covariance of candidate cell; 3-sigma corner coverage'}
+            'support': 'tangent covariance regularized by candidate patch area; 3-sigma candidate enclosure'}
