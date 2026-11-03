@@ -38,3 +38,14 @@ test('resize retires the old atlas after submission and inactive state cannot cl
  assert.equal(old.dead,false);await Promise.resolve();f.finish();await Promise.resolve();assert.equal(old.dead,true);
  f.field.encode({},null,[]);assert.equal(f.field.read().effective,'inactive');f.field.destroy();
 });
+
+test('camera indexing consumes exact material dimensions instead of deriving strides from transformed bounds',async()=>{
+ const {WORLD_RENDER_WGSL}=await import('../volume-world-render.mjs');
+ assert.match(WORLD_RENDER_WGSL,/let dims=worldRender\.atlas\.yzw/);
+ assert.doesNotMatch(WORLD_RENDER_WGSL,/let dims=\(worldRender\.hiEnabled/);
+ const f=fixture();f.encode();assert.deepEqual(f.field.read().materialDims,[8,4,4]);
+ // A valid translated mapping can cross ceil's integer boundary in f32.
+ const r=Math.fround,derived=r(r(r(-3.862)-r(-4.662))/r(.1));
+ assert.ok(derived>8);assert.equal(Math.ceil(derived/4),3);assert.equal(Math.ceil(8/4),2);
+ f.field.destroy();
+});

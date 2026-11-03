@@ -17,7 +17,7 @@ fn worldAtlasTexel(index:u32)->vec4<f32>{
 }
 fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let q=(p-worldRender.loPitch.xyz)/worldRender.loPitch.w;
- let dims=(worldRender.hiEnabled.xyz-worldRender.loPitch.xyz)/worldRender.loPitch.w;
+ let dims=worldRender.atlas.yzw;
  if(any(q<vec3<f32>(0))||any(q>=dims)){return EmissiveMaterial(vec3<f32>(0),0,0);}
  let root=vec3<u32>(floor(q/4.0));let roots=vec3<u32>(ceil(dims/4.0));
  var slot=root.x+roots.x*(root.y+roots.y*root.z);
@@ -30,7 +30,7 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
   if(i<4u){slot=u32(children[i])-1u;}else{slot=u32(worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u])-1u;}
   n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
  }
- let cell=(q-n.xyz)/n.w+.5;let base=vec3<u32>(floor(cell));let f=fract(cell);var value=vec4<f32>(0);
+ let cell=clamp((q-n.xyz)/n.w+.5,vec3<f32>(0),vec3<f32>(5));let base=min(vec3<u32>(floor(cell)),vec3<u32>(4));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let c=base+vec3<u32>(x,y,z);let w=select(1.0-f,f,vec3<bool>(x==1u,y==1u,z==1u));
   value+=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+3u+c.x+6u*(c.y+6u*c.z))*w.x*w.y*w.z;
@@ -121,7 +121,7 @@ export function createWorldRenderField(device,module,uniformBuffer) {
    const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,hierarchy?1:0]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
    const pass=encoder.beginComputePass({label:'World optical brick preparation'});pass.setPipeline(pipeline);for(const [i,g] of [group0,empty1,empty2,group3].entries())pass.setBindGroup(i,g);
    const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));pass.end();last=key;builds++;
-   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
+   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
    return changed;
   },
   read(){return {...receipt};},

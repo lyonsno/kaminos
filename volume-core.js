@@ -21153,13 +21153,7 @@ export function createKaminosVolumePrototype({
     const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
     state.worldRenderField=worldRenderField.read();
     if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
-    if(state.worldSmoke?.raymarch){
-      const mode=state.opticalStepping?.effective??'unverified';
-      state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
-        policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
-        reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
-    }
-    device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,0,0,0]));
+
     if(worldRenderChanged)rebuildFluidBindGroups();
     if (displayReconstruction?.encode(encoder,currentFluid,
       [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],options.displayTimestampWrites)) {
@@ -21199,6 +21193,13 @@ export function createKaminosVolumePrototype({
       quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
       quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
       guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
+    if(state.worldSmoke?.raymarch){
+      const mode=optical.mode;
+      state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
+        policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
+        reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
+    }
+    device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
     if(optical.value>=4){
       if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field'||options.bindGroup||sceneTransportConsumer){
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
