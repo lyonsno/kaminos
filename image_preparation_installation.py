@@ -31,13 +31,14 @@ print(json.dumps({'python':sys.executable,'packages':packages}))
 class ImagePreparationInstallation:
     def __init__(self, environ=None, config_path=None, default_python=None):
         self.environ = dict(os.environ if environ is None else environ)
-        self.path = Path(config_path).expanduser().resolve() if config_path is not None else installation_path(self.environ)
+        self.path = Path(config_path) if config_path is not None else _catalog._installation_location(self.environ)
         self.error = None
         try:
+            self.path = self.path.expanduser().resolve()
             entry = read_installations(self.path).get('imagePreparation', {})
             if not isinstance(entry, dict):
                 raise ValueError('imagePreparation must contain python and model paths')
-        except (OSError,ValueError,UnicodeError) as error:
+        except (OSError,ValueError,UnicodeError,RuntimeError) as error:
             entry = {}; self.error = str(error)
         self.choices = {}
         defaults = {'python': default_python or sys.executable,

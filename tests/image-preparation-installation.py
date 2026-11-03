@@ -67,3 +67,15 @@ with tempfile.TemporaryDirectory() as directory:
     config.write_text('{broken')
     assert ImagePreparationInstallation(environ={},config_path=config).availability()['status']=='unavailable'
 print('Resolution, explicit override, capability degradation, caching and registration preservation passed')
+
+with tempfile.TemporaryDirectory() as directory:
+    root=Path(directory).resolve();config=root/'models.json';config.symlink_to(config.name)
+    for env,path in [({'KAMINOS_MODEL_INSTALLATIONS':str(config)},None),({},config)]:
+        selected=ImagePreparationInstallation(environ=env,config_path=path)
+        report=selected.availability()
+        assert report['status']=='unavailable' and str(config) in report['installationFile']
+        assert report['python']['error'],'unresolvable catalog must be diagnosed, not treated as absent'
+        explicit={**env,'KAMINOS_IMAGE_PREPARATION_PYTHON':sys.executable,'KAMINOS_BACKGROUND_MODEL_PATH':str(root/'u2net.onnx')}
+        selected=ImagePreparationInstallation(environ=explicit,config_path=path)
+        assert selected.command()==(sys.executable,str(root/'u2net.onnx')),'explicit choices remain independent of registry failure'
+print('Unresolvable preparation registry is isolated from server startup and explicit choices')
