@@ -1,6 +1,7 @@
 import {validateRecipe} from './model.mjs';
 const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
 const canonical=sha=>`/api/read?root=generated-meshes&path=${sha}.glb`;
+export const familyAssetSource=id=>`/api/read?root=generated-meshes&path=${id}.stock-family.json`;
 export function validateFamilyAsset(value){
  if(value?.schema!=='kaminos.stock-family-asset.v1'||typeof value.id!=='string'||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id)||!/^[a-f0-9]{64}$/.test(value.revision)||typeof value.name!=='string'||!value.name.trim())throw Error('Invalid saved stock family');
  return {...structuredClone(value),recipe:validateRecipe(value.recipe)};
@@ -27,7 +28,8 @@ export async function saveFamilyAsset({recipe,name,id,revision},{request=fetch}=
 }
 export async function openStockFamilyAsset(entry,win){
  if(entry?.kind!=='stock-family'||entry.visibility?.status==='withheld')throw Error('Choose an available stock family');
+ if(!win.kaminosWorkbenchExperiments?.open)throw Error('Stock family workbench is still initializing');
  const asset=await readFamilyAsset(entry.source);
- await win.kaminosWorkbenchExperiments.open('stock-family',{asset});
+ await win.kaminosWorkbenchExperiments.open('stock-family',{assetSource:entry.source});
  win.kaminosAssets.close();win.kaminosWorkspace.setMode('workbench');return asset.id;
 }
