@@ -45,3 +45,16 @@ test('owner entry is idempotent and requires the native selected owner',()=>{
  selected='b';assert.throws(()=>seat.enter(),/Select/);assert.equal(edit.active(),false);assert.equal(exits,1);
  selected='a';seat.enter();seat.dispose();assert.throws(()=>seat.enter(),/disposed/);assert.equal(edit.active(),false);
 });
+
+test('Tab enters a selected child context, returns to its parent, and selection loss unwinds both',()=>{
+ let selected='assembly',childSelected=true;const events=[];
+ const edit=createSceneComponentEdit({selected:()=>selected,cancel:()=>events.push('cancel'),refresh(){}});
+ const child={label:'Seating',target:()=>({id:'@seating'}),enter:()=>events.push('child enter'),exit:()=>events.push('child exit')};
+ edit.register('assembly',{target:()=>null,child:()=>childSelected?child:null,enter:()=>events.push('parent enter'),exit:()=>events.push('parent exit')});
+ edit.toggle('assembly');edit.toggle('assembly');
+ assert.equal(edit.active(),true,'entering the selected connection must retain its parent editing context');
+ assert.equal(edit.target().id,'@seating');assert.equal(edit.target().ownerId,'assembly');
+ edit.toggle('assembly');assert.equal(edit.active(),true);assert.equal(edit.target(),null);assert.equal(events.at(-1),'child exit');
+ edit.toggle('assembly');selected='elsewhere';assert.equal(edit.active(),false);assert.deepEqual(events.slice(-2),['child exit','parent exit']);
+ selected='assembly';childSelected=false;edit.toggle('assembly');edit.toggle('assembly');assert.equal(edit.active(),false);
+});
