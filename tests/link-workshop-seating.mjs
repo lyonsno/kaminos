@@ -4,6 +4,7 @@ import * as T from '../lib/three.core.js';
 import {adjustSeating,seatingFrame} from '../experiments/link-workshop/seating.mjs';
 import {mountMatrix,matrixFrame,identityFrame} from '../experiments/link-workshop/mounts.mjs';
 import {createAttachmentFollower} from '../experiments/link-workshop/attachments.mjs';
+import {transformPose} from '../scene-edit-session.mjs';
 const scene=new T.Scene(),root=new T.Group(),receiver=new T.Object3D(),payload=new T.Object3D(),child=new T.Object3D();scene.add(root,receiver,payload,child);
 receiver.position.set(3,4,5);receiver.rotation.set(.7,-.4,.6);receiver.scale.set(2,3,1);
 payload.scale.set(1.3,.7,2);
@@ -25,5 +26,14 @@ model=adjustSeating(root,model,'payload',0,entries,{position:baseSeat.position,r
 follower.reset();follower.update(model,0);
 const grazingActual=matrixFrame(seatingFrame(root,model,'payload',0,entries));
 assert.ok(Math.abs(new T.Quaternion().setFromEuler(new T.Euler(...grazingActual.rotation)).dot(expectedGrazingQ))>1-1e-8,'grazing view-axis R must twist around the contact normal by the full requested angle');
+// Multi-step interactive R previews keep base.recipe fixed while follower updates live object matrices each frame.
+const dragBase={recipe:structuredClone(model),...matrixFrame(seatingFrame(root,model,'payload',0,entries))},dragStartQ=new T.Quaternion().setFromEuler(new T.Euler(...dragBase.rotation));
+for(const angle of [-.4,-.2,.15,.3,.45]){
+ const stepPose=transformPose(dragBase,{operation:'rotate',amount:angle,viewAxis:grazingAxis.toArray()});
+ model=adjustSeating(root,dragBase.recipe,'payload',0,entries,{...dragBase,...stepPose});
+ follower.reset();follower.update(model,0);
+ const stepActual=matrixFrame(seatingFrame(root,model,'payload',0,entries)),expectedStepQ=new T.Quaternion().setFromAxisAngle(normal,angle).multiply(dragStartQ);
+ assert.ok(Math.abs(new T.Quaternion().setFromEuler(new T.Euler(...stepActual.rotation)).dot(expectedStepQ))>1-1e-8,`multi-step R drag must track angle ${angle} monotonically without live-scene feedback`);
+}
 const persisted=JSON.parse(JSON.stringify(model)),before=payload.matrixWorld.clone();follower.dispose();const next=createAttachmentFollower(root,()=>entries);next.update(persisted,0);assert.ok(before.elements.every((v,i)=>Math.abs(v-payload.matrixWorld.elements[i])<1e-8));next.dispose();
 console.log('Seating follows rotated/scaled receiver planes, turns about the contact normal, preserves payload scale and downstream attachments, and reconstructs from saved recipe');
