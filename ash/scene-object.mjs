@@ -90,10 +90,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   return layout;
  }
  checkedLayout(settings);
- const boxGeometry=new BoxGeometry(settings.width,settings.height,settings.depth),edges=new EdgesGeometry(boxGeometry);boxGeometry.dispose();
- const guide=new LineSegments(edges,new LineBasicMaterial({color:0xa4aba4,transparent:true,opacity:.4}));guide.position.y=settings.height/2;guide.userData.kaminosEditorHelper=true;root.add(guide);
+ const buildGuide=s=>{const b=new BoxGeometry(s.width,s.height,s.depth),e=new EdgesGeometry(b);b.dispose();return e;};
+ const guide=new LineSegments(buildGuide(settings),new LineBasicMaterial({color:0xa4aba4,transparent:true,opacity:.4}));guide.position.y=settings.height/2;guide.userData.kaminosEditorHelper=true;root.add(guide);
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
- const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
+ const sync=()=>{guide.position.y=settings.height/2;emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
  const collisionRecords=createAshCollisionRecords(root,readObjects,{getCellSize:()=>settings.cellSize,resolveCollisionRung:(obj,opts)=>lodController?.resolveCollisionRung?.(obj,opts)??null});
  const prepareCollision=cellSize=>lodController?.prepareCollision?.(readObjects().filter(e=>e.type!==ASH_OBJECT_TYPE&&ASH_COLLIDER_TYPES.includes(e.type)).map(e=>e?.object).filter(Boolean),{cellSize});
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
@@ -119,10 +119,12 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
    for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Use Reset at cell width to rebuild the lattice; dimensions belong to creation');
    patch.setSliding?.({variation:next.slideVariation,scale:next.slideScale,release:next.slideRelease});settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
   },
-  regrid(cellSize){return locked(async()=>{
-   const next=checkedAshSettings({...settings,cellSize,initialDepth:0,checkpoint:null}),prevSettings=settings;let candidate;
+  regrid(cellSizeOrPatch){return locked(async()=>{
+   const patchInput=cellSizeOrPatch&&typeof cellSizeOrPatch==='object'?cellSizeOrPatch:{cellSize:cellSizeOrPatch};
+   const next=checkedAshSettings({...settings,...patchInput,initialDepth:0,checkpoint:null}),prevSettings=settings;let candidate;
    try{candidate=await build(next);await prepareCollision(next.cellSize);if(disposed)throw Error('Ash object disposed during regrid');settings=next;candidate.syncScene();}
    catch(error){settings=prevSettings;candidate?.dispose();throw error;}
+   if(next.width!==prevSettings.width||next.depth!==prevSettings.depth||next.height!==prevSettings.height){guide.geometry.dispose();guide.geometry=buildGuide(next);}
    const previous=patch;patch=candidate;pendingRestore=null;initialized=true;lastTick=null;failure=null;
    root.add(patch.root);sync();previous.root.removeFromParent();previous.dispose();return api.read();
   });},

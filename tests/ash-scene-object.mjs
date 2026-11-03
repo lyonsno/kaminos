@@ -473,7 +473,7 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
  assert.equal(fieldError,null);
 
- // Verify live tick sync() does not overwrite staged cellSize edit between mousedown (blur) and click on Reset at cell width
+ // Verify live tick sync() does not overwrite staged cellSize or dimensions between mousedown (blur) and click on Reset
  inspector.sync();
  assert.equal(cellSizeInput.value,'0.016');
  doc2.activeElement=cellSizeInput;
@@ -483,7 +483,26 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  inspector.sync();
  assert.equal(cellSizeInput.value,'0.02','live status sync must not clobber staged cell width back to 0.016 before regrid click completes');
  await regridBtn.onclick();
- assert.equal(regriddedTo,0.02,'Reset at cell width must apply the staged 0.02 cell width');
+ assert.equal(regriddedTo?.cellSize??regriddedTo,0.02,'Reset at cell width must apply the staged 0.02 cell width');
+
+ // Verify createAshSceneObject.regrid supports resizing width, depth, and height after creation and updates guide geometry
+ const resizeObj=await createAshSceneObject({
+  record:record(),renderer:{backend:{device:{limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9}}}},
+  readObjects:()=>[],createPatch:async opts=>({
+   root:new Group(),layout:{cellSize:opts.cellSize,bounds:opts.bounds,dims:[10,10,10],count:1000,tiles:{count:1,cellsPerTile:4096}},
+   syncScene(){},setSliding(){},setSoftNormals(){},step(){},deposit:async()=>{},burst(){},
+   read:()=>({steps:0,volume:0,retainedVolume:0,allocatedBytes:1024,layout:{cellSize:opts.cellSize,bounds:opts.bounds,dims:[10,10,10],count:1000,tiles:{count:1,cellsPerTile:4096}}}),
+   dispose(){},
+  }),
+ });
+ await resizeObj.initialize();
+ const resizedState=await resizeObj.regrid({width:6.4,depth:4.8,height:2.4,cellSize:0.04});
+ assert.equal(resizedState.settings.width,6.4,'regrid updates field width after creation');
+ assert.equal(resizedState.settings.depth,4.8,'regrid updates field depth after creation');
+ assert.equal(resizedState.settings.height,2.4,'regrid updates field height after creation');
+ const guideChild=resizeObj.root.children.find(c=>c.isLineSegments);
+ assert.equal(guideChild.position.y,1.2,'guide wireframe height center updates to height/2');
+ resizeObj.dispose();
 });
 
 

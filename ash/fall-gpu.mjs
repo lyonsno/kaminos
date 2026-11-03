@@ -137,7 +137,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  // Two vec4 values per parcel: position/remaining mass, then velocity.
  const {storage,instanceIndex,positionGeometry,vec3}=THREE.TSL;
  const particleId=tiled?storage(visibleAttr,'uint',capacity).toReadOnly().element(instanceIndex):instanceIndex;
- const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2));
+ const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2)).toVar('ash_parcel_pos');
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
  material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select(layout.cellSize*.36,0)).add(positions.xyz);

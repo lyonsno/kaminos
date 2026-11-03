@@ -7,6 +7,7 @@ import {patchLayout} from '../ash/gpu-plan.mjs';
 test('tileShader culls all bottom faces, subsurface top faces, and sloped run merges, and unifies corner height and perimeter cover',async()=>{
  const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
  assert.match(code,/flat_top\(c\)/,'run-merging on top faces must require a flat 3x3 interior neighborhood so sloped edges never tear horizontal T-junction slits');
+ assert.match(code,/abs\(dq-d0\)>0\.025/,'flat_top merges coplanar fractional top blankets within 0.025 fill tolerance');
  assert.match(code,/if\(any\(c>=p\.dims\.xyz\)\|\|face==2u\)\{return vec2<f32>\(-1\);\}/,'all downward bottom faces must be culled including on elevated colliders');
  assert.match(code,/if\(face==3u\)\{/,'top faces must only emit at the true top of each column stack, never on subsurface layers with a < 1.0 under upper ash');
  assert.match(code,/if\(!capAbove\)\{return vec2<f32>\(-1\);\}/,'uncapped cells must omit redundant vertical side quads');

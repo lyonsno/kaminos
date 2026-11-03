@@ -85,10 +85,11 @@ fn penetration(c:vec3<u32>)->f32{
  let slot=atomicAdd(&jobs[${t.count*2+8}u+1],1u);atomicStore(&jobs[${t.count}u+slot],tile);atomicAdd(&jobs[${t.count*2+4}u+0],G);
 }
 fn flat_top(c:vec3<u32>)->bool{
- if(c.x==0u||c.z==0u||c.x+1u>=p.dims.x||c.z+1u>=p.dims.z){return false;}
+ if(c.x<8u||c.z<8u||c.x+8u>=p.dims.x||c.z+8u>=p.dims.z){return false;}
+ let d0=density[index(c)];if(d0<${ASH_SURFACE_MIN_FILL.toFixed(8)}){return false;}
  for(var dz=-1;dz<=1;dz++){for(var dx=-1;dx<=1;dx++){
-  let q=vec3<u32>(u32(i32(c.x)+dx),c.y,u32(i32(c.z)+dz));let qi=index(q);
-  if(solid[qi]!=0u||density[qi]<1.0){return false;}
+  let q=vec3<u32>(u32(i32(c.x)+dx),c.y,u32(i32(c.z)+dz));let qi=index(q);let dq=density[qi];
+  if(solid[qi]!=0u||dq<${ASH_SURFACE_MIN_FILL.toFixed(8)}||abs(dq-d0)>0.025){return false;}
   if(c.y+1u<p.dims.y){let up=index(q+vec3<u32>(0u,1u,0u));if(solid[up]!=0u||density[up]>=${ASH_SURFACE_MIN_FILL.toFixed(8)}){return false;}}
  }}
  return true;
@@ -117,10 +118,17 @@ fn surface_band(c:vec3<u32>,face:u32)->vec2<f32>{
  if(density[index(c)]<${ASH_SURFACE_MIN_FILL.toFixed(8)}||solid[index(c)]!=0u){return;}
  for(var face=0u;face<6u;face++){
   let band=surface_band(c,face);if(band.x<0.0){continue;}var length=1u;
-  if(p.mode.w!=0u&&band.y>=1.0&&(face!=3u||flat_top(c))){
+  if(p.mode.w!=0u){
    let tangent=select(0u,2u,face<2u);var q=c;
-   if(c[tangent]%B>0u){q[tangent]-=1u;if(all(surface_band(q,face)==band)&&(face!=3u||flat_top(q))){continue;}}
-   q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||any(surface_band(q,face)!=band)||(face==3u&&!flat_top(q))){break;}length++;}
+   if(face==3u){
+    if(flat_top(c)){
+     if(c[tangent]%B>0u){q[tangent]-=1u;if(flat_top(q)){continue;}}
+     q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||!flat_top(q)){break;}length++;}
+    }
+   }else if(band.y>=1.0){
+    if(c[tangent]%B>0u){q[tangent]-=1u;if(all(surface_band(q,face)==band)){continue;}}
+    q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||any(surface_band(q,face)!=band)){break;}length++;}
+   }
   }
   let slot=atomicAdd(&headers[tile*8u+3u],1u);faces[tile*V*6u+slot]=local*6u+face+(length-1u)*V*6u;
  }
@@ -144,34 +152,42 @@ const vertex=THREE.TSL.wgslFn(`fn ash_face_vertex(a:vec2<u32>,uv:vec2<f32>,b:u32
  var capAbove=false;
  if(c.y+1u<dims.y){let up=c.x+dims.x*((c.y+1u)+dims.y*c.z);capAbove=(*solid)[up]!=0u||(*density)[up]>=0.02;}
  let gx=i32(c.x)+i32(round(p.x));let gz=i32(c.z)+i32(round(p.z));
- var topY=amount;var cover=1.0;
+ var topY=amount;var packed=8421631.0;
  if(!capAbove){
   let cs=ash_corner_state(i32(c.y),gx,gz,amount,dims,density,solid);
-  topY=cs.x;cover=cs.y;
+  topY=cs.x;packed=cs.y;
  }
  if(face==2u){p.y=0.0;}else if(face==3u){p.y=topY;}else{p.y=mix(0.0,topY,uv.y);}
- return vec4<f32>(origin+(vec3<f32>(c)+p)*size,cover);
+ return vec4<f32>(origin+(vec3<f32>(c)+p)*size,packed);
 }fn ash_corner_state(cy:i32,gx:i32,gz:i32,base:f32,dims:vec3<u32>,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->vec2<f32>{
- var sum=0.0;var weight=0.0;var occ=0.0;
- for(var dz=-1;dz<=0;dz++){for(var dx=-1;dx<=0;dx++){
-  let s=ash_col_sample(gx+dx,cy,gz+dz,dims,density,solid);
-  if(s>-8.0){
-   sum+=s;weight+=1.0;
-   occ+=1.0;
-  }else if(s>-9.5){
-   occ+=1.0;
-  }else{
-   weight+=0.35;
-  }
- }}
+ let s00=ash_col_sample(gx-1,cy,gz-1,dims,density,solid);let s10=ash_col_sample(gx,cy,gz-1,dims,density,solid);
+ let s01=ash_col_sample(gx-1,cy,gz,dims,density,solid);let s11=ash_col_sample(gx,cy,gz,dims,density,solid);
+ let h00=select(0.0,s00,s00>-8.0);let h10=select(0.0,s10,s10>-8.0);
+ let h01=select(0.0,s01,s01>-8.0);let h11=select(0.0,s11,s11>-8.0);
+ let sum=h00+h10+h01+h11;
+ let weight=select(select(0.35,0.0,s00>-9.5),1.0,s00>-8.0)+select(select(0.35,0.0,s10>-9.5),1.0,s10>-8.0)+select(select(0.35,0.0,s01>-9.5),1.0,s01>-8.0)+select(select(0.35,0.0,s11>-9.5),1.0,s11>-8.0);
+ let occ=select(0.0,1.0,s00>-9.5)+select(0.0,1.0,s10>-9.5)+select(0.0,1.0,s01>-9.5)+select(0.0,1.0,s11>-9.5);
  let topY=select(base,clamp(sum/weight,-3.0,3.5),weight>0.0);
  let patchCover=clamp(0.24+0.22*occ,0.0,1.0);
  let boxDist=min(min(f32(gx),f32(dims.x)-f32(gx)),min(f32(gz),f32(dims.z)-f32(gz)));
  let fadeSpan=clamp(f32(min(dims.x,dims.z))*0.04,1.5,8.0);
  let boxCover=clamp(0.22+0.78*(boxDist/fadeSpan),0.0,1.0);
- return vec2<f32>(topY,min(patchCover,boxCover));
+ let cover=min(patchCover,boxCover);
+ let dx=clamp(0.5*((h00+h01)-(h10+h11)),-3.0,3.0);let dz=clamp(0.5*((h00+h10)-(h01+h11)),-3.0,3.0);
+ let ic=u32(round(cover*255.0));let idx=u32(round((dx+3.0)*42.5));let idz=u32(round((dz+3.0)*42.5));
+ return vec2<f32>(topY,f32(ic+256u*(idx+256u*idz)));
 }fn ash_col_sample(cx:i32,cy:i32,cz:i32,dims:vec3<u32>,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->f32{
  if(cx<0||cz<0||cx>=i32(dims.x)||cz>=i32(dims.z)){return -10.0;}
+ let cyClamped=u32(clamp(cy,0,i32(dims.y)-1));
+ let idxCy=u32(cx)+dims.x*(cyClamped+dims.y*u32(cz));
+ if(cy>=0&&cy<i32(dims.y)&&(*solid)[idxCy]==0u){
+  let dCy=(*density)[idxCy];
+  if(dCy>=0.02){
+   if(cy+1>=i32(dims.y)){return dCy;}
+   let idxUp=idxCy+dims.x;
+   if((*solid)[idxUp]==0u&&(*density)[idxUp]<0.02){return dCy;}
+  }
+ }
  let yMin=max(0,cy-3);
  let yMax=min(i32(dims.y)-1,cy+3);
  for(var y=yMax;y>=yMin;y--){
@@ -181,36 +197,20 @@ const vertex=THREE.TSL.wgslFn(`fn ash_face_vertex(a:vec2<u32>,uv:vec2<f32>,b:u32
    if(d>=0.02){return f32(y-cy)+d;}
   }
  }
- let idx0=u32(cx)+dims.x*(u32(clamp(cy,0,i32(dims.y)-1))+dims.y*u32(cz));
- if((*solid)[idx0]!=0u){return -9.0;}
+ if((*solid)[idxCy]!=0u){return -9.0;}
  return -10.0;
 }`);
 const faceNormal=THREE.TSL.wgslFn(`fn ash_face_normal(f:u32)->vec3<f32>{var n=vec3<f32>(0);n[f/2u]=select(-1.0,1.0,f%2u==1u);return n;}`);
+const surfaceCover=THREE.TSL.wgslFn(`fn ash_surface_cover(packed:f32)->f32{return f32(u32(round(packed))&255u)/255.0;}`);
 const surfaceNormal=THREE.TSL.wgslFn(`
-fn ash_surface_normal(a:vec2<u32>,p:vec3<f32>,face:vec3<f32>,b:u32,td:vec3<u32>,origin:vec3<f32>,size:f32,dims:vec3<u32>,d:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,soft:f32)->vec3<f32>{
+fn ash_surface_normal(packed:f32,face:vec3<f32>,soft:f32)->vec3<f32>{
  if(face.y<-0.5){return face;}
- let code=a.y%(b*b*b*6u);let local=code/6u;let tileY=(a.x/td.x)%td.y;
- let cy=i32(tileY*b+(local/b)%b);
- let rel=(p-origin)/size;
- let gx=i32(round(rel.x));let gz=i32(round(rel.z));
- let h00=ash_col_height(gx-1,cy,gz-1,dims,d,solid);let h10=ash_col_height(gx,cy,gz-1,dims,d,solid);
- let h01=ash_col_height(gx-1,cy,gz,dims,d,solid);let h11=ash_col_height(gx,cy,gz,dims,d,solid);
- let dx=0.5*((h00+h01)-(h10+h11));let dz=0.5*((h00+h10)-(h01+h11));
+ let pk=u32(round(packed));
+ let dx=(f32((pk>>8u)&255u)-127.5)/42.5;
+ let dz=(f32((pk>>16u)&255u)-127.5)/42.5;
  let hn=normalize(vec3<f32>(dx,1.0,dz));
  let blend=select(0.75,0.95,soft>0.0);
  return normalize(mix(face,hn,blend));
-}fn ash_col_height(cx:i32,cy:i32,cz:i32,dims:vec3<u32>,d:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->f32{
- if(cx<0||cz<0||cx>=i32(dims.x)||cz>=i32(dims.z)){return 0.0;}
- let yMin=max(0,cy-3);
- let yMax=min(i32(dims.y)-1,cy+3);
- for(var y=yMax;y>=yMin;y--){
-  let idx=u32(cx)+dims.x*(u32(y)+dims.y*u32(cz));
-  if((*solid)[idx]==0u){
-   let d0=(*d)[idx];
-   if(d0>=0.02){return f32(y-cy)+d0;}
-  }
- }
- return 0.0;
 }
 `);
 const surfaceOpacity=THREE.TSL.wgslFn(`
@@ -275,10 +275,11 @@ export async function createGpuTiledAsh({renderer,cellSize,bounds,solid,tileSize
  const posCover=vertex({a:addr,uv:positionGeometry.xy.add(.5),b:tileWidth,td:tileDims,dims:dimsNode,origin:originNode,size:cellScale,density:d,solid:s}).toVar('ash_pos_cover');
  material.positionNode=posCover.xyz;
  const softness=THREE.TSL.uniform(0);
- material.normalNode=transformNormalToView(THREE.TSL.varying(surfaceNormal({a:addr,p:posCover.xyz,face:faceNormal({f:addr.y.mod(uint(6))}),b:tileWidth,td:tileDims,origin:originNode,size:cellScale,dims:dimsNode,d,solid:s,soft:softness})));
- const coverNode=THREE.TSL.varying(posCover.w,'ash_cover');
- const worldPosNode=THREE.TSL.varying(posCover.xyz,'ash_world_pos');
- material.opacityNode=surfaceOpacity({p:worldPosNode,cover:coverNode,origin:originNode,size:cellScale});
+ const vNormal=surfaceNormal({packed:posCover.w,face:faceNormal({f:addr.y.mod(uint(6))}),soft:softness}).toVarying('ash_v_normal');
+ material.normalNode=transformNormalToView(vNormal);
+ const vCover=surfaceCover({packed:posCover.w}).toVarying('ash_v_cover');
+ const vWorldPos=posCover.xyz.toVarying('ash_v_world_pos');
+ material.opacityNode=surfaceOpacity({p:vWorldPos,cover:vCover,origin:originNode,size:cellScale});
  mesh=new THREE.Mesh(geometry,material);mesh.name='Tiled retained ash';mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;mesh.add(fall.root);
  const params=(contact,previous,moved)=>{for(let phase=0;phase<6;phase++){const bytes=new ArrayBuffer(96),u=new Uint32Array(bytes),f=new Float32Array(bytes);u.set([...p.dims,p.count]);f.set([...p.origin,cellSize],4);f.set(contact??[0,0,0,0],8);f.set(previous??contact??[0,0,0,0],12);u.set([[1,0,2][Math.floor(phase/2)],phase%2,moved?1:0,surfaceMode==='runs'?1:0],16);f.set([sliding.variation,sliding.scale,sliding.release,0],20);device.queue.writeBuffer(uniforms[phase],0,bytes);}};
  const dispatch=(e,name,n,{phase=0,indirect=null}={})=>{const pass=e.beginComputePass({label:'ash '+name});pass.setPipeline(pipes[name]);pass.setBindGroup(0,groups[phase]);if(indirect)pass.dispatchWorkgroupsIndirect(indirect.buffer,indirect.offset);else pass.dispatchWorkgroups(n);pass.end();};

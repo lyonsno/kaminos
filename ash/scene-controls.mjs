@@ -27,15 +27,35 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
  }
  for(const input of panel.querySelectorAll('[data-ash-layer],[data-ash-volume]'))installRelativeNumberDrag({input,grip:input,step:.001});
  const cellInput=panel.querySelector('[data-ash-cell]');
+ const dimInputs={cellSize:cellInput};
+ for(const [key,label]of [['width','Width'],['depth','Depth'],['height','Height']]){
+  const row=document.createElement('label');row.className='slider-row';row.textContent=label;
+  const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.className='transform-input';input.dataset.ashDim=key;
+  row.append(input);cellInput.parentElement?.before?.(row);
+  installRelativeNumberDrag({input,grip:input,step:.1});
+  dimInputs[key]=input;
+ }
  installRelativeNumberDrag({input:cellInput,grip:cellInput,step:.001});
- let syncedCellId=null,syncedCellSize=null;
- const runRegrid=()=>act(async()=>{const nextCell=cellInput.valueAsNumber;syncedCellSize=null;await regrid(selected(),nextCell);});
+ let syncedCellId=null,syncedDims={};
+ const runRegrid=()=>act(async()=>{
+  const id=selected(),s=read(id).settings,nextCell=cellInput.valueAsNumber;
+  const nextWidth=Number.isFinite(dimInputs.width.valueAsNumber)?dimInputs.width.valueAsNumber:s.width;
+  const nextDepth=Number.isFinite(dimInputs.depth.valueAsNumber)?dimInputs.depth.valueAsNumber:s.depth;
+  const nextHeight=Number.isFinite(dimInputs.height.valueAsNumber)?dimInputs.height.valueAsNumber:s.height;
+  const dimsChanged=nextWidth!==s.width||nextDepth!==s.depth||nextHeight!==s.height;
+  syncedDims={};
+  await regrid(id,dimsChanged?{width:nextWidth,depth:nextDepth,height:nextHeight,cellSize:nextCell}:nextCell);
+ });
  panel.querySelector('[data-ash-regrid]').onclick=runRegrid;
- cellInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();runRegrid();}});
+ for(const input of Object.values(dimInputs))input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();runRegrid();}});
  panel.querySelector('[data-ash-cover]').onclick=()=>act(()=>cover(selected(),Number(panel.querySelector('[data-ash-layer]').value)));
  panel.querySelector('[data-ash-burst]').onclick=()=>act(()=>burst(selected(),Number(panel.querySelector('[data-ash-volume]').value)));
  function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;
-  const cell=panel.querySelector('[data-ash-cell]');if(document.activeElement!==cell&&(id!==syncedCellId||s.cellSize!==syncedCellSize)){cell.value=String(s.cellSize);syncedCellId=id;syncedCellSize=s.cellSize;}panel.querySelector('[data-ash-regrid]').disabled=state.busy;
+  for(const [key,input]of Object.entries(dimInputs)){
+   if(document.activeElement!==input&&(id!==syncedCellId||s[key]!==syncedDims[key])){input.value=String(s[key]);syncedDims[key]=s[key];}
+  }
+  syncedCellId=id;
+  panel.querySelector('[data-ash-regrid]').disabled=state.busy;
   panel.querySelector('[data-ash-status]').textContent=state.failure?`Ash stopped: ${state.failure}`:`${s.paused?'Paused':'Running'} · ${state.runtime.steps} steps · ${state.runtime.volume.toFixed(3)} introduced volume`;
   panel.querySelector('[data-ash-size]').textContent=`${s.width} × ${s.depth} × ${s.height} local field · ${s.cellSize} cell width · ${(state.runtime.allocatedBytes/1048576).toFixed(1)} MiB allocated`;
   for(const input of panel.querySelectorAll('[data-ash-key]')){const key=input.dataset.ashKey,value=key.startsWith('source')?s.sourcePosition[['sourceX','sourceY','sourceZ'].indexOf(key)]:(s[key]??((key==='slideVariation'||key==='slideRelease')?0:key==='slideScale'?.24:undefined));if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input)input.value=String(value);}
