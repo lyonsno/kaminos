@@ -16224,15 +16224,15 @@ export function createKaminosVolumePrototype({
   }
 
   function updateUniforms(now) {
-    controlsSnapshot={...controlsSnapshot,simulationDomainScale:productTransform.scale};
-    const calibration=resolveWorldCalibration(controlsSnapshot,{grid:gridSize,scale:productTransform.scale});
-    state.worldCalibration=calibration;
-    uniforms.set([calibration.cellGain,calibration.lengthGain,calibration.materialCells,calibration.velocityCells,...productTransform.translate,productTransform.scale],WORLD_CALIBRATION_UNIFORM_OFFSET);
     resize();
     if (!sceneSourceFrameConsumer && !sceneTransportConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     prepareFollowingDomain(lookFreeze);
+    controlsSnapshot={...controlsSnapshot,simulationDomainScale:productTransform.scale};
+    const calibration=resolveWorldCalibration(controlsSnapshot,{grid:gridSize,scale:productTransform.scale});
+    state.worldCalibration=calibration;
+    uniforms.set([calibration.cellGain,calibration.lengthGain,calibration.materialCells,calibration.velocityCells,...productTransform.translate,productTransform.scale],WORLD_CALIBRATION_UNIFORM_OFFSET);
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
     } else {

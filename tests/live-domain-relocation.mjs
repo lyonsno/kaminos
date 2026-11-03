@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createFireProxySync} from '../fire-proxy-sync.mjs';
 import {createProxySnapshotRegistry} from '../proxy-snapshot.mjs';
+import {resolveWorldCalibration} from '../volume-world-calibration.mjs';
 
 const source = fs.readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const method = source.match(/    relocateOrdinaryDomain\([\s\S]*?\n    },/)[0].replace(/,$/, '');
@@ -48,6 +49,7 @@ assert.equal(sources, 1, 'source coordinates must follow the preview transform')
 // without stranding the map guard or replacing a still-mapped buffer.
 let finishMap, unmaps = 0;
 const residual = {
+  resolveWorldCalibration,
   pressureResidualCopyPending: true, pressureResidualMapPending: false,
   pressureResidualMapGeneration: 0, pressureResidualMapStartedFrame: 0,
   pressureResidualReadbackBuffer: {mapAsync: () => new Promise(r => {finishMap = r;}), unmap() {unmaps++;}},

@@ -23,8 +23,9 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.WAVELET_TURBULENCE_UNIFORM_OFFSET, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS, 'wavelet turbulence follows the joined boundary');
   assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n  display_reconstruction: vec4<f32>,\n  display_interpolation: vec4<f32>,\n\}/);
+  assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
+  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n  display_reconstruction: vec4<f32>,\n  display_interpolation: vec4<f32>,\n  world_calibration: vec4<f32>,\n  calibration_pose: vec4<f32>,\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -66,7 +67,7 @@ test('walls: the in-kernel sponges, top fades and floor clamp are off in joined 
   for (const name of ['smokeTopFade', 'heatTopFade', 'fireTopFade']) {
     assert.match(shader, new RegExp(`let ${name} = select\\(${name}Standalone, 1\\.0, joinedBoundary\\(\\)\\);`), `${name} off in joined mode`);
   }
-  assert.ok(shader.includes('vel.y = mix(max(vel.y, -0.015), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));'));
+  assert.ok(shader.includes('vel.y = mix(max(vel.y, -0.015 * calibrationCellGain()), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));'));
   const face = shader.slice(shader.indexOf('fn csFaceForces('), shader.indexOf('\n}\n', shader.indexOf('fn csFaceForces(')));
   assert.match(face, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
   assert.match(face, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);

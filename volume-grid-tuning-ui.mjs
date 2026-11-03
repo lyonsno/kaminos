@@ -15,7 +15,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const close=element('button','btn','Close · Esc');close.type='button';close.id='grid-tuning-close';toolbar.append(applyButton,reset,close);panel.append(toolbar);
  const status=element('p','grid-editor-status');status.id='grid-tuning-status';status.setAttribute('role','status');panel.append(status);
  const intro=element('p','flame-scope','Material holds detail; velocity carries motion; pressure corrects flow. Cell counts grow cubically. Apply dimension changes together; iterations update live.');panel.append(intro);
- let syncCalibration=()=>{},calibrationDrag=null;
+ let syncCalibration=()=>{},calibrationDrag=null,calibrationHistory=null;
  if(calibration){
   const area=element('div','grid-editor-calibration'),toggle=element('select','transform-input'),width=element('input','transform-input'),capture=element('button','btn','Use current tuning as reference'),description=element('p','flame-scope');
   toggle.id='grid-calibration-mode';toggle.setAttribute('aria-label','Simulation calibration');
@@ -26,10 +26,11 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   const row=element('label','grid-editor-shape');row.append(element('span',null,'Simulation world scale'),toggle,width,capture);area.append(row,description);panel.append(area);
   const act=fn=>{try{fn();syncCalibration();}catch(e){status.textContent=e.message;}};
   toggle.addEventListener('change',()=>act(()=>toggle.value==='world'&&read().calibrationMode!=='world'?calibration.capture():calibration.set({calibrationMode:toggle.value})));
-  width.addEventListener('input',()=>{if(width.value!==''&&Number(width.value)>0&&Number.isFinite(Number(width.value)))act(()=>calibration.set({simulationWorldScale:Number(width.value)}));});
+  width.addEventListener('input',()=>{if(width.value!==''&&Number(width.value)>0&&Number.isFinite(Number(width.value)))act(()=>calibration.set({simulationWorldScale:Number(width.value)},{preview:true}));});
   capture.onclick=()=>act(()=>calibration.capture());
-  syncCalibration=()=>{const c=read();if(document.activeElement!==toggle)toggle.value=c.calibrationMode??'legacy';if(document.activeElement!==width)width.value=String(c.simulationWorldScale??2);width.disabled=c.calibrationMode!=='world';description.textContent=c.calibrationMode==='world'?`World calibration · reference material ${c.calibrationMaterialCells}, velocity ${c.calibrationVelocityCells}. Coverage and grid detail do not redefine this scale. Coarser grids still lose resolved motion and mixing detail.`:'Legacy tuning follows cell size. Use current tuning as reference to try independent world scale without changing its starting coefficients.';};
+  syncCalibration=()=>{const c=read();if(document.activeElement!==toggle)toggle.value=c.calibrationMode??'legacy';if(document.activeElement!==width)width.value=String(c.simulationWorldScale??2);width.disabled=c.calibrationMode!=='world';description.textContent=c.calibrationMode==='world'?`World calibration · reference material ${c.calibrationMaterialCells}, velocity ${c.calibrationVelocityCells}. Coverage and grid detail do not redefine this scale. Coarser grids still lose motion and mixing detail; an inlet thinner than a velocity cell can also transfer less momentum.`:'Legacy tuning follows cell size. Use current tuning as reference to try independent world scale without changing its starting coefficients.';};
   calibrationDrag=installNumberDrag({input:width,grip:width,step:.01});
+  calibrationHistory=bindLiveField?.(width,'Tune simulation world scale');
   width.title=WORLD_CALIBRATION_FIELDS[1].description+' Drag to adjust; click to type.';
  }
  const fields=new Map(),summaries=new Map();let baseline=null,draft=null,dirty=false,applying=false,selected='Fine',layer='material',lastPreview='',physicalReach=0;
@@ -76,7 +77,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  for(const name of ['Fine','Intermediate','World']){const out=element('p','flame-grid-summary');summaries.set(name,out);details.append(out);}panel.append(details);
  panel.append(element('p','flame-scope','Dimension changes restart affected fields. Iterations update immediately and keep the field. Escape closes this editor and retains the draft. Zero velocity/pressure follows its parent.'));
  (document.body||root).append(panel);
- const bindings=[];for(const [key,input] of fields){if(input.tagName==='INPUT'){bindings.push(installNumberDrag({input,grip:input,step:Number(input.step)||.01}));if(key.endsWith('Iterations')&&bindLiveField)bindings.push(bindLiveField(input));}}bindings.push(installNumberDrag({input:reach,grip:reach,step:.01}));
+ const bindings=calibrationHistory?[calibrationHistory]:[];for(const [key,input] of fields){if(input.tagName==='INPUT'){bindings.push(installNumberDrag({input,grip:input,step:Number(input.step)||.01}));if(key.endsWith('Iterations')&&bindLiveField)bindings.push(bindLiveField(input));}}bindings.push(installNumberDrag({input:reach,grip:reach,step:.01}));
  function draw(plan){
   const key=JSON.stringify([plan?.rows.map(r=>[r.name,r.materialDims,r.flowDims,r.pressureDims,r.min,r.max]),selected,layer]);if(key===lastPreview)return;lastPreview=key;
   const ctx=canvas.getContext?.('2d');if(!ctx)return;ctx.clearRect(0,0,720,240);ctx.fillStyle='#11191e';ctx.fillRect(0,0,720,240);if(!plan)return;

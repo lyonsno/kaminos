@@ -27,6 +27,7 @@ test('physical diffusivity stays fixed as coverage changes and time conversion r
  }
 });
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {captureWorldCalibration,resolveWorldCalibration} from '../volume-world-calibration.mjs';
 test('capture preserves the baseline and its reference survives subsequent detail edits',()=>{
  const saved=captureWorldCalibration({resolution:48,fineVelocity:24},1.7);
@@ -46,6 +47,15 @@ test('normal scene and basin settings retain all calibration references',()=>{
   assert.ok(schema.controls.some(c=>c.key===id),`schema missing ${id}`);
   assert.ok(html.includes(`id="${id}"`),`DOM missing ${id}`);
  }
+});
+test('same-step following pose owns world calibration uniforms',()=>{
+ const code=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+ const at=code.indexOf('  function updateUniforms(now) {'),end=code.indexOf('    viewProj.multiplyMatrices(',at);
+ const context={controlsSnapshot:reference,gridSize:48,productTransform:{scale:1,translate:[0,0,0]},state:{},uniforms:new Float32Array(8),WORLD_CALIBRATION_UNIFORM_OFFSET:0,resolveWorldCalibration,
+  resize(){},sceneSourceFrameConsumer:true,camera:{updateMatrixWorld(){}},normalizeLookFreeze:()=>false,lookFreezeCanPin:()=>false};
+ context.prepareFollowingDomain=()=>{context.productTransform.translate=[.25,.5,-.125];};
+ vm.runInNewContext(code.slice(at,end)+'}\nupdateUniforms(0)',context);
+ assert.deepEqual([...context.uniforms.slice(4,7)],context.productTransform.translate,'reset coordinates must use the domain pose the same step renders');
 });
 
 import {createFineVelocityGrid,fineGridPlan} from '../volume-fine-grid.mjs';
@@ -77,7 +87,10 @@ test('initial wavelet coordinates use the authored wavelength on independent vel
 import {checkCalibrationState} from '../tools/world-calibration-check.mjs';
 test('native check rejects fallback, stale references and missing state',()=>{
  const expected={width:2,materialCells:32,velocityCells:16,dims:[48,48,48],velocityDims:[24,24,24]};
- const s={backend:'webgpu:apple gpu',active:true,error:null,step:20,calibration:{enabled:true,width:2,materialCells:32,velocityCells:16,cellGain:1.5},dims:expected.dims,velocityDims:expected.velocityDims,pose:{scale:1}};
- assert.equal(checkCalibrationState(s,expected),true);
- for(const patch of [{backend:'fallback'},{step:0},{calibration:null},{calibration:{...s.calibration,materialCells:48}},{dims:[32,32,32]},{error:'GPU failure'}])assert.throws(()=>checkCalibrationState({...s,...patch},expected));
+ const baseline={step:10,worldSteps:10,adaptive:{steps:10}};
+ const s={backend:'webgpu:apple gpu',active:true,error:null,step:20,worldSteps:20,adaptive:{steps:20},calibration:{enabled:true,width:2,materialCells:32,velocityCells:16,cellGain:1.5},dims:expected.dims,velocityDims:expected.velocityDims,pose:{scale:1}};
+ assert.equal(checkCalibrationState(s,expected,baseline),true);
+ for(const patch of [{backend:'fallback'},{step:0},{calibration:null},{calibration:{...s.calibration,materialCells:48}},{dims:[32,32,32]},{error:'GPU failure'}])assert.throws(()=>checkCalibrationState({...s,...patch},expected,baseline));
+ for(const patch of [{step:10},{worldSteps:10},{adaptive:{steps:10}},{worldSteps:undefined},{adaptive:undefined}])assert.throws(()=>checkCalibrationState({...s,...patch},expected,baseline),/advance/);
+ assert.throws(()=>checkCalibrationState(s,expected),/baseline/);
 });

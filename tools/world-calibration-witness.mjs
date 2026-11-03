@@ -57,7 +57,7 @@ try{
 
  const state=()=>page.evaluate(()=>{
    const d=window.__kaminosVolumePrototype.debugState();return {backend:d.backend,active:d.active,error:d.error,step:d.simStepCount,calibration:d.worldCalibration,
-    dims:d.simGridDimensions,velocityDims:d.fineGrid?.velocityDims,pose:window.kaminosFlameDomain.read(),controls:d.controls,source:d.immersedSource,reactant:d.reactantCombustion,world:d.worldSmoke?.identity,render:d.worldRender,adaptive:window.__kaminosVolumePrototype.adaptiveMaterialState()?.effective};
+    dims:d.simGridDimensions,velocityDims:d.fineGrid?.velocityDims,pose:window.kaminosFlameDomain.read(),controls:d.controls,source:d.immersedSource,reactant:d.reactantCombustion,world:d.worldSmoke?.identity,worldSteps:d.worldSmoke?.steps,render:d.worldRender,adaptive:window.__kaminosVolumePrototype.adaptiveMaterialState()?.effective};
  });
  const waitSteps=async n=>{const s=await state();await page.waitForFunction(({step,n})=>{const d=window.__kaminosVolumePrototype.debugState();if(d.error)throw Error(d.error);return d.simStepCount>=step+n;},{step:s.step,n});assert.deepEqual(report.errors,[]);};
  const patch=async controls=>page.evaluate(controls=>{const s=window.kaminosFlameAuthoring.read();for(const [id,value] of Object.entries(controls)){const d=s.domControls[id];if(!d)throw Error('Missing control '+id);d.value=value;if('rawValue' in d)d.rawValue=String(value);}window.kaminosFlameAuthoring.apply(s,'Calibration witness');},controls);
@@ -66,7 +66,9 @@ try{
  report.phase='capture-reference';await save();
  await page.keyboard.press('Alt+KeyG');await page.locator('#grid-calibration-capture').click();await waitSteps(3);
  let expected={width:2*report.baseline.pose.scale,materialCells:32,velocityCells:16,dims:[32,32,32],velocityDims:[16,16,16]};
- const capture=async name=>{const s=await state();checkCalibrationState(s,expected);report.arms.push({name,...s});await save();await page.screenshot({path:path.join(out,name+'.png')});return s;};
+ // Dimensions and scene loads can replace field owners and reset their counters.
+ // Settle that transition, then compare two snapshots within this exact arm.
+ const capture=async name=>{await waitSteps(2);const before=await state();await waitSteps(3);const s=await state();checkCalibrationState(s,expected,before);report.arms.push({name,progressBefore:{step:before.step,worldSteps:before.worldSteps,adaptive:{steps:before.adaptive?.steps}},...s});await save();await page.screenshot({path:path.join(out,name+'.png')});return s;};
  await capture('reference-controls');
  report.phase='independent-detail';await save();
  for(const [key,value] of Object.entries({resolution:48,fineVelocity:24,finePressure:12})){const field=page.locator('#grid-draft-'+key);await field.click();await field.fill(String(value));}

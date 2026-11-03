@@ -21952,10 +21952,10 @@ function createFlameQuickFields() {
       read:()=>readVolumeControls(),
       calibration:{
         capture:()=>{const patch=captureWorldCalibration(readVolumeControls(),flameDomainScale);const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Capture simulation world scale');},
-        set:patch=>{const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS)if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
+        set:(patch,{preview=false}={})=>{const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS)if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}if(preview)window.kaminosFlameAuthoring.preview(next);else window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
       },
       validate:c=>volumePrototype.validateGridControls(c),
-      bindLiveField:input=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label:'Tune pressure iterations',onError:error=>showFlameEditRefused(error)}),
+      bindLiveField:(input,label='Tune pressure iterations')=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label,onError:error=>showFlameEditRefused(error)}),
       live:(key,value)=>{
         const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
         const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
