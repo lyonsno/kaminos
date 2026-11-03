@@ -2904,7 +2904,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     "three": "./lib/three.webgpu.js",
     "three/webgpu": "./lib/three.webgpu.js",
     "three/tsl": "./lib/three.tsl.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    "three/addons/": "./node_modules/three/examples/jsm/"
   }
 }
 </script>
@@ -3377,8 +3377,6 @@ class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager)
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
 configureSurfelRendering({ viewportHeight: () => { try { return renderer?.domElement?.height || 0; } catch { return 0; } } });
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
 import {checkedBurnable,checkedBurnAppearance} from './scene-burning-settings.mjs';
@@ -3386,8 +3384,6 @@ import {resolveBurnableTarget} from './burnable-target.mjs';
 import {createSceneBurning} from './scene-burning.mjs';
 import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
@@ -13067,6 +13063,11 @@ window.kaminosMountInvestigationEntry=async(options={})=>{
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
+  // Acquire optional codecs before clearing the existing scene or allocating URLs.
+  const [{ OBJLoader }, { MTLLoader }] = await Promise.all([
+    import('three/addons/loaders/OBJLoader.js'),
+    mtlFile ? import('three/addons/loaders/MTLLoader.js') : Promise.resolve({}),
+  ]);
   const cleared = shouldClearSceneForImport(options);
   if (cleared&&!await clearScene()) return null;
   const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
@@ -23242,6 +23243,7 @@ window.exportGLB = async function({ name = null } = {}) {
   root.name = stem;
   for (const entry of entries) root.add(exportCloneInWorld(entry.object));
   try {
+    const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
     const glb = await new GLTFExporter().parseAsync(root, { binary: true });
     const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
     const link = document.createElement('a');
