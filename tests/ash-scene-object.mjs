@@ -89,6 +89,24 @@ test('world-space source follows transforms and refuses out-of-field coverage wi
  const inside=sourceInField({object},field);assert.deepEqual(inside.position,[0,.5,0]);assert.equal(inside.spread,.1);assert.equal(inside.rate,.02);
  object.position.x=10;const outside=sourceInField({object},field);assert.equal(outside.inside,false);assert.equal(outside.rate,0);assert.equal(outside.position[0],4);
 });
+test('sourceInField admits scaled source rings that overhang a rectangular field while rejecting disjoint or below-floor sources',()=>{
+ const root=new Group();root.position.set(2.309182668730249,-1.95,-0.2367197010769714);root.scale.setScalar(5.046666666666667);
+ const object=new Group();object.position.set(1.897474636895314,18.338303706449858,4.069049708211216);object.scale.setScalar(52.51621652130349);
+ object.userData.kaminosSceneObject={ashSource:{fieldId:'ash-shrine',enabled:true,rate:0.003829296875,spread:0.24}};
+ const field={root,read:()=>({settings:{width:7.04,depth:3.84,height:1.6}})};
+ const shrine=sourceInField({object},field);
+ assert.ok(shrine.spread>1.92,'shrine source spread in field coordinates exceeds half-depth 1.92');
+ assert.equal(shrine.inside,true,'source centered over field whose ring overhangs depth must remain connected');
+ assert.equal(shrine.rate,0.003829296875,'connected overhanging source must emit at its authored rate');
+ object.position.set(100,18.338,100);
+ const disjoint=sourceInField({object},field);
+ assert.equal(disjoint.inside,false,'source disk completely outside field bounds must be rejected');
+ assert.equal(disjoint.rate,0);
+ object.position.set(2.309,-5.0,-0.237);
+ const below=sourceInField({object},field);
+ assert.equal(below.inside,false,'source below field floor must be rejected');
+ assert.equal(below.rate,0);
+});
 
 import {sourceSettings} from '../ash/fall-plan.mjs';
 test('field fallout remains valid on one-cell and two-cell authored extents',async()=>{

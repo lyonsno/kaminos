@@ -25676,7 +25676,11 @@ function installAuthoredAsh(){
  ashSourceInspector=installAshSourceInspector({document,anchor:document.getElementById('selected-ash-properties'),selected:()=>selectedSceneObjectEntry()?.type===ASH_SOURCE_TYPE?workingScene.activeObjectId:null,read:sourceRead,set:sourceSet,selectField:id=>setActiveSceneObject(sourceRead(id).settings.fieldId),edits:scenePlacementTools.edits,target:sourceTarget,ownHistory:session=>authoringControlSessions.push(session),error:setInfo});
  workbenchSceneFrames.onFrame(({timestampMs})=>{
   for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;
-   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id})){window._kaminosDirty?.();}
+   const isSelected=workingScene.activeObjectId===entry.id;
+   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:isSelected})){
+    if(isSelected&&!scenePlacementTools.edits.state().active)ashInspector?.sync();
+    window._kaminosDirty?.();
+   }
   }
  });
 }
