@@ -9,6 +9,7 @@ import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
 import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
 import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
+import {checkedAssembly,assemblySelection} from '../../scene-assembly.mjs';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
 import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
 import {createSceneDocumentSession} from '../../scene-document-session.mjs';
@@ -70,6 +71,9 @@ export function sceneContext(context, options) {
   context.sceneAO ??= createSceneAOState();
   context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
+  context.checkedAssembly??=checkedAssembly;context.assemblySelection??=assemblySelection;context.assemblyEditing??=null;
+  context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
+  context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.();
   context.sceneLightingPreparation ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {

@@ -41,5 +41,7 @@ export function addSeamRailWaterSupport(host,railId) {
     if(group)api.attach(id,group.id);
   }
   if(!group)group={id:api.group([railId,...created],'Slot burner')};
+  const assembled=api.read(),members=assembled.groups.find(row=>row.id===group.id).objectIds;
+  api.setAssembly(group.id,{kind:'burner',roles:Object.fromEntries(members.map(id=>[id,created.includes(id)?'collision':assembled.objects.find(row=>row.id===id)?.type==='flame-emitter'?'outlet':'body']))});
   return {railId,groupId:group.id,supportIds:created,approximation:'Ten separate boxes; bevels, fasteners and feed fitting omitted'};
 }

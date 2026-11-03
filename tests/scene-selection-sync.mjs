@@ -59,7 +59,7 @@ test('Edit Mode owns viewport down, release and click without changing object or
 
 function selectionTargetContext(){
  const c={structuredClone,checkedSelection,changeSelection,sceneSelectionHistory:null,transformPreferences:{orientation:'world'},sceneObjects:[{id:'mesh',object:{}},{id:'source',object:{}}],sceneGroups:[],sceneSelection:{ids:['mesh'],activeId:'mesh'},activeSceneObjectId:'mesh',activeSceneGroupId:null,activeSceneFieldId:null,currentMesh:{},activeSceneComposition:{},localLiquidSetup:{},burnerGraphWriting:false,transformControls:null,
-  editing:true,exits:0,splatCorrectionMode:null,scenePlacementTools:{selectionChanged(){}},updateSelectionFeedback(){},renderSceneObjectList(){},updateTransformInspector(){},refreshFlameDomainPreview(){},flameDomainEditObject:()=>({}),authoringWorkspace:{setContext(){}},setInfo(){},document:{getElementById:()=>({classList:{remove(){}}})},
+  editing:true,exits:0,splatCorrectionMode:null,scenePlacementTools:{selectionChanged(){}},updateSelectionFeedback(){},renderSceneObjectList(){},updateTransformInspector(){},refreshFlameDomainPreview(){},flameDomainEditObject:()=>({}),waterDomainEditObject:()=>({}),authoringWorkspace:{setContext(){}},setInfo(){},document:{getElementById:()=>({classList:{remove(){}}})},
   selectedSceneObjectEntry:()=>c.sceneObjects.find(o=>o.id===c.activeSceneObjectId),sceneSelectionMembers:()=>c.sceneSelection.ids.filter(id=>!id.endsWith('-field')),window:{_kaminosDirty(){}}
  };
  c.window.kaminosPolyEdit={active:()=>c.editing,read:()=>({objectId:'mesh'}),exit(){c.editing=false;c.exits++;}};
