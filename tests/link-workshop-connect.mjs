@@ -6,8 +6,8 @@ import {createMechanismController} from '../experiments/link-workshop.experiment
 import {createSceneComponentEdit} from '../scene-component-edit.mjs';
 const scene=new T.Scene(),root=new T.Group(),cube=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());scene.add(root,cube);cube.position.set(5,3,0);
 root.userData.linkMechanism={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,1]}],pistons:[]};
-const entries=[{id:'mechanism',object:root,type:'pbr',label:'Mechanism'},{id:'cube',object:cube,type:'procedural-mesh',label:'Cube'}];let selected='mechanism',adapter;
-const edits=createSceneEdits({read(){throw Error('unexpected ordinary edit');},write(){}}),components=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){}});
+const entries=[{id:'mechanism',object:root,type:'pbr',label:'Mechanism'},{id:'cube',object:cube,type:'procedural-mesh',label:'Cube'}];let selected='mechanism',adapter,refreshed=0;
+const edits=createSceneEdits({read(){throw Error('unexpected ordinary edit');},write(){}}),components=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){refreshed++;}});
 const host={scene:{objects:()=>entries,select(id){selected=id;},async open(){return {async attach(){return {id:'mechanism',root};},redraw(){},readView(){return {};},async dispose(){}};}},controls:{components:{register:(id,value)=>{adapter=value;return components.register(id,value);}},document:{defaultView:{kaminosSceneEdits:edits}}}};
 const c=await createMechanismController({host,inputs:{root}}),original=JSON.stringify(c.read().recipe),position=cube.position.toArray();
 try {
@@ -90,19 +90,32 @@ try {
   assert.equal(transport.hidden,false,'Hinged attachment enables playback transport without planar links');
   assert.equal(top.children[0].hidden,false,'Hinged attachment enables Build / Pose A / Pose B without planar links');
   c.operations.mode({value:'B'});
-  c.operations.selectConnection({objectId:'cube'});components.toggle('mechanism');
+  c.operations.selectConnection({objectId:'cube'});
+  assert.equal(components.target()?.type,'connection-seating','selecting a hinged connection in Pose A/B exposes connection-seating target directly');
+  components.toggle('mechanism');
   assert.equal(c.read().editingConnection,'cube');
+  assert.equal(top.children[0].hidden,false,'Build / Pose A / Pose B switcher stays visible inside Tab seating edit');
+  assert.equal(transport.hidden,false,'Playback transport stays visible inside Tab seating edit');
+  c.operations.mode({value:'A'});assert.equal(c.read().editingConnection,'cube','Switching pose mode inside Tab seating edit stays in seating edit');
+  c.operations.mode({value:'B'});assert.equal(c.read().editingConnection,'cube');
   const hSeat=components.target(),hBase=hSeat.read();
   edits.begin(hSeat.id,'Hinge Pose B');edits.preview({position:hBase.position,rotation:[0,0,Math.PI/2]});edits.commit();
   assert.ok(Math.abs(c.read().recipe.attachments[0].hinge[1]-Math.PI/2)<1e-6,'Pose B seating rotation records the hinge swing');
   c.operations.seek({cycle:.25});assert.ok(Math.abs(cube.rotation.z-Math.PI/4)<1e-6,'Mid-cycle seek interpolates the hinged mesh rotation');
-  // Clicking another connection anchor while already inside Tab seating switches directly to that connection.
+  // Clicking another connection anchor (including a separated mount marker) while already inside Tab seating switches directly and refreshes components.
   const capBlock=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());capBlock.position.set(0,3,0);scene.add(capBlock);entries.push({id:'cap',object:capBlock,type:'procedural-mesh',label:'Cap'});
   c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cap',position:[0,-.5,0],rotation:[0,0,0]});c.operations.connectEnd({objectId:'base',position:[0,3,0],rotation:[0,0,0]});c.operations.previewConnection({kind:'fasten'});c.operations.commitConnection();
+  // Slide cap's source mount laterally so the fastening collar is hidden and only the mount marker at x=2, y=3 is hit.
+  c.operations.selectConnection({objectId:'cap'});components.toggle('mechanism');
+  const capSeat=components.target(),capBase=capSeat.read();
+  edits.begin(capSeat.id,'Slide cap');edits.preview({position:[2,3,capBase.position[2]],rotation:capBase.rotation});edits.commit();
+  components.toggle('mechanism');
   c.operations.selectConnection({objectId:'cube'});components.toggle('mechanism');assert.equal(c.read().editingConnection,'cube');
   scene.updateMatrixWorld(true);
-  components.pick({clientX:50,clientY:20},{camera,canvas});
-  assert.equal(c.read().editingConnection,'cap','Picking another connection anchor inside Seating edit switches directly to it');
+  const beforeRefreshed=refreshed;
+  components.pick({clientX:70,clientY:20},{camera,canvas});
+  assert.equal(c.read().editingConnection,'cap','Picking a separated connection mount marker inside Seating edit switches directly to it');
+  assert.ok(refreshed>beforeRefreshed,'Switching connection inside Seating edit notifies sceneComponents.refresh()');
   capBlock.geometry.dispose();capBlock.material.dispose();
   baseBlock.geometry.dispose();baseBlock.material.dispose();
  }

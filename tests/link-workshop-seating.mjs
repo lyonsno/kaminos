@@ -50,5 +50,13 @@ assert.ok(Math.abs(qAtMid.dot(expectedMid))>1-1e-7,'halfway cycle interpolates h
 follower.reset();follower.update(model,1);
 const qAtB=payload.quaternion.clone(),expectedB=new T.Quaternion().setFromAxisAngle(normal,Math.PI/3).multiply(qAtA);
 assert.ok(Math.abs(qAtB.dot(expectedB))>1-1e-7,'Pose B reaches the full authored hinge angle');
+// Editing Pose A or Pose B while t is mid-cycle (t=0.5 after pause/seek) evaluates at the pose endpoint and never leaks twist into a.offset.
+const midBase={recipe:structuredClone(model),...matrixFrame(seatingFrame(root,model,'payload',0,entries))};
+const midPoseA=transformPose(midBase,{operation:'rotate',amount:-Math.PI/6,viewAxis:grazingAxis.toArray()});
+model=adjustSeating(root,midBase.recipe,'payload',.5,entries,{...midBase,...midPoseA,mode:'A'});
+assert.ok(Math.abs(model.attachments[0].hinge[0]+Math.PI/6)<1e-8,'mid-cycle Pose A edit records exact Pose A hinge angle');
+assert.ok(Math.abs(model.attachments[0].hinge[1]-Math.PI/3)<1e-8,'mid-cycle Pose A edit preserves Pose B hinge angle');
+follower.reset();follower.update(model,1);
+assert.ok(Math.abs(payload.quaternion.dot(qAtB))>1-1e-7,'mid-cycle Pose A edit must not corrupt base a.offset or shift Pose B');
 const persisted=JSON.parse(JSON.stringify(model)),before=payload.matrixWorld.clone();follower.dispose();const next=createAttachmentFollower(root,()=>entries);next.update(persisted,1);assert.ok(before.elements.every((v,i)=>Math.abs(v-payload.matrixWorld.elements[i])<1e-8));next.dispose();
 console.log('Seating follows rotated/scaled receiver planes, turns about the contact normal, interpolates hinged attachments across Pose A/B, preserves payload scale and downstream attachments, and reconstructs from saved recipe');
