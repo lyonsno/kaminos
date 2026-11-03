@@ -1,3 +1,4 @@
+import {checkedAssembly} from './scene-assembly.mjs';
 import {canonicalAuthoredWaterFlowRecords} from './authored-mls-water.mjs';
 import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
@@ -31,6 +32,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
+    ...(record.assembly?{assembly:checkedAssembly(record.assembly,objectIds)}:{}),
     type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
     source: record.source ?? null,

@@ -51,6 +51,8 @@ domain-state or recording service, and state the continuation actually supported
 Choose flexibility that serves the next useful interaction; a generic framework
 is a separate investment.
 
+## Authored water source controls
+
 Continuous water emitters keep their chosen `volumeRate` and an independent
 `emissionEnabled` switch in the authored object. The native Emission checkbox
 and agent `kaminosWaterSources.edit(id, {emissionEnabled: false})` use the same

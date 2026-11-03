@@ -36,6 +36,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import {followingDomainShift} from './moving-volume.mjs';
 import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
+import {atmosphereSettings} from './ash/atmosphere-plan.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDisplayReconstruction, displayPreparationTiming } from './volume-display-reconstruction.mjs';
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
@@ -2183,7 +2184,8 @@ export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 8;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
 export const OPEN_WORLD_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
 export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = OPEN_WORLD_UNIFORM_OFFSET + 4;
-export const VOLUME_UNIFORM_FLOATS = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const SHARED_ASH_UNIFORM_OFFSET = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
+export const VOLUME_UNIFORM_FLOATS = SHARED_ASH_UNIFORM_OFFSET + 4;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -2263,13 +2265,25 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
 // pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
 // The flag rides the last borrowed reactant lane (d.w). `authored` is the
 // existing model, bit for bit.
-export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3']);
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3', 'shred-only']);
 export const COMPACT_CARRIER_RATIOS = Object.freeze({
   ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
   emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
 });
 export function appearanceModelUniformValue(model) {
   return model === 'compact-3' ? 1 : 0;
+}
+export function resolveAppearanceModel(requested = 'authored', {reactant = false, physics = false} = {}) {
+  const known = APPEARANCE_MODELS.includes(requested);
+  const reason = !known ? 'unknown-appearance-model'
+    : requested !== 'authored' && !reactant ? `${requested}-requires-the-reactant-law`
+    : requested === 'shred-only' && !physics ? 'shred-only-requires-physics-appearance' : null;
+  const effective = reason ? 'authored' : requested;
+  return {requested, effective, reason,
+    storedCarriers: effective === 'shred-only' ? ['interfaceShred']
+      : effective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null,
+    transportedSlots: effective === 'shred-only' ? [0, 1, 3] : effective === 'compact-3' ? [0, 1, 2] : [0, 1, 2, 3],
+    storedSlots: effective === 'compact-3' ? 3 : 4};
 }
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
@@ -3717,6 +3731,7 @@ override OPTICAL_TRACE_CAPTURE: bool = false;
 override SEPARATED_PRESSURE: bool = false;
 override MATERIAL_ONLY: bool = false;
 override VELOCITY_ONLY: bool = false;
+override SHRED_ONLY: bool = false;
 override VELOCITY_UNIT_SCALE: f32 = 1.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -3842,6 +3857,7 @@ struct Uniforms {
   open_world_boundary: vec4<f32>,
   display_reconstruction: vec4<f32>,
   display_interpolation: vec4<f32>,
+  shared_ash: vec4<f32>, // display fog color RGB, extinction per local ray unit
 };
 
 struct ExternalEmitter {
@@ -5982,7 +5998,21 @@ fn flameTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmo
   );
 }
 
+fn shredPhysicalInterface(c: vec3<i32>) -> f32 {
+  let material = readSlot(c, 1u);
+  let freshBurn = textureLoad(reactantSrc, vec3<i32>(clampCell(c)), 0).y;
+  let reaction = 1.0 - exp(-max(freshBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+  return material.x * 0.72 - material.y * 0.44 + reaction * 0.38;
+}
+
 fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
+  if (SHRED_ONLY) {
+    return 0.5 * vec3<f32>(
+      shredPhysicalInterface(c + vec3<i32>(1, 0, 0)) - shredPhysicalInterface(c - vec3<i32>(1, 0, 0)),
+      shredPhysicalInterface(c + vec3<i32>(0, 1, 0)) - shredPhysicalInterface(c - vec3<i32>(0, 1, 0)),
+      shredPhysicalInterface(c + vec3<i32>(0, 0, 1)) - shredPhysicalInterface(c - vec3<i32>(0, 0, 1))
+    );
+  }
   let sx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).x;
   let sx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u).x;
   let hx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).y;
@@ -6826,6 +6856,12 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  if (SHRED_ONLY) {
+    if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
+    fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
+    fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0);
+    return;
+  }
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
     fluidPredict[base] = sampleFluidSlotInflowWith(backCell, 0u, true);
@@ -6946,7 +6982,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var material = vec4<f32>(0.0);
   var fireLayer = vec4<f32>(0.0);
   var microLayer = vec4<f32>(0.0);
-  if (macCormack) {
+  if (SHRED_ONLY) {
+    let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
+    if (!MATERIAL_ONLY) {
+      if (macCormack) { advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u); }
+      else { advected = sampleFluidSlotInflow(backCell, 0u); }
+    }
+    if (macCormackScalars) {
+      material = vec4<f32>(macCormackSlot(cellI, idx, backCell, forwardCell, 1u).xyz, 0.0);
+      microLayer = vec4<f32>(0.0, macCormackSlot(cellI, idx, backCell, forwardCell, 3u).y, 0.0, 0.0);
+    } else {
+      material = vec4<f32>(sampleFluidSlotMasked(backCell, 1u).xyz, 0.0);
+      if (!macCormack && !commonGasTransport) {
+        let localMaterial = readSlot(cellI, 1u);
+        material = vec4<f32>(thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection).xyz, 0.0);
+      }
+      microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);
+    }
+  } else if (macCormack) {
     let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
     if (!MATERIAL_ONLY) { advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u); }
     if (macCormackScalars) {
@@ -6971,7 +7024,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
     }
   }
-  var combustionFrontTopology = sampleFrontFieldTransport(backCell) * stepRate(0.936);
+  var combustionFrontTopology = 0.0;
+  if (!SHRED_ONLY) { combustionFrontTopology = sampleFrontFieldTransport(backCell) * stepRate(0.936); }
 
   // Reactant law (volume-reactant-combustion.mjs): the oxidizer rides the
   // fuel's characteristic and scheme, then one named exchange (an eddy
@@ -7073,6 +7127,66 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     oxidizer=mix(oxidizer,0.0,entry);smoke=mix(smoke,0.0,entry);
   }
   let residentDivergence=residentRate/transportBacktraceScale(dynamicsSpeed());
+  var reactantFreshBurnRate = 0.0;
+  if (SHRED_ONLY) {
+    // One activity memory. No auxiliary-flame/source-envelope network is
+    // evaluated in this pipeline specialization. Chemistry stays the same.
+    let priorBurn = textureLoad(reactantSrc, cellI, 0).y;
+    let reaction = 1.0 - exp(-max(priorBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+    var interfaceEnergy = 0.0;
+    if (shredOperatorGain > 0.0) { interfaceEnergy = length(materialInterfaceGradient(cellI)); }
+    if (!MATERIAL_ONLY) {
+      let confinementMode = u.reserved_source_extension_0.y;
+      if (confinementMode < 0.5) {
+        vel += vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52);
+      } else if (confinementMode < 1.5) {
+        vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z);
+      }
+      if (waveletOn() && !VELOCITY_ONLY) { vel += waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
+      if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
+        vel += interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, reaction, interfaceShred) * VELOCITY_UNIT_SCALE;
+      }
+      let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
+      let externalVelocity = applyExternalEmitterInjection(externalEmitterInfluence(p)).velocity.xyz * (0.18 + speed * 0.036);
+      let buoyancy = thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale;
+      let wind = windDirection * windStrength * windHeightRamp * clamp(smoke * 0.54 + heat * 0.30, 0.0, 1.6) * (0.020 + speed * 0.004);
+      let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(length(p.xz), 0.08);
+      let artisticSwirl = swirl * heat * (0.018 + 0.010 * curl) * step(0.5, u.artistic_motion_controls.x);
+      centredForce = heatExpansion + externalVelocity + buoyancy + wind + artisticSwirl;
+      vel += centredForce;
+      if (u.artistic_motion_controls.y > 0.5) {
+        let delta = clamp((prev.xz - advected.xz) * clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24), vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE), vec2<f32>(0.006 * VELOCITY_UNIT_SCALE));
+        vel += vec3<f32>(delta.x, 0.0, delta.y);
+      }
+      let increment = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE - 1.0)) * timeStep;
+      vel = velTransported + increment;
+      if (faceForcesOn()) {
+        let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE;
+        forceDeltaStore(cellI, centredIncrement);
+        vel -= centredIncrement;
+      }
+      if (immersedWeight > 0.0) { vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation)); }
+    }
+    if (VELOCITY_ONLY) {
+      let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
+      let wall = max(max(abs(p.x), mix(-p.y, -1.0, floorExempt)), abs(p.z));
+      let fade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
+      vel *= stepRate(mix(0.55, 1.0, fade));
+      vel.y = mix(max(vel.y, -0.015 * VELOCITY_UNIT_SCALE), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
+      fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
+      fluidDst[base + 1u] = vec4<f32>(fluidSrc[base + 1u].xyz, 0.0);
+      fluidDst[base + 2u] = vec4<f32>(0.0);
+      fluidDst[base + 3u] = vec4<f32>(0.0, microLayer.y, 0.0, 0.0);
+      return;
+    }
+    let burn = reactantBurn(fuel, oxidizer, heat, timeStep);
+    fuel = burn.x; oxidizer = burn.y; heat = burn.z;
+    reactantFreshBurnRate = burn.w / max(timeStep, 1e-6);
+    smoke = smoke + u.reactant_combustion_b.z * reactantFreshBurnRate * timeStep;
+    let freshReaction = 1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6));
+    interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + freshReaction * 0.32 + immersedTarget * 0.30) * 1.72);
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
+  } else {
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
   let sourceRadial = length(sourceCenter.xz);
@@ -7354,7 +7468,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     heat = burn.z;
     reactantBurned = burn.w;
   }
-  let reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
+  reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
   let smokeFromHeat = select(heatToSmokeConversion(heat, fuel, p.y), u.reactant_combustion_b.z * reactantFreshBurnRate, reactantOn);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let flameDirectSmokeBirthGain = (0.18);
@@ -7622,7 +7736,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * stepRate(flameFireSurvival);
   fireLick = fireLick * stepRate(flameFireSurvival);
   emberFleck = emberFleck * stepRate(flameFireSurvival);
-
+  }
 
   // Keep the original lower and side walls, but move the upper fade to the
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
@@ -7662,6 +7776,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: the side and floor sponge regions are ambient air, so the
   // oxidizer relaxes toward ambient at the fuel's sponge rate there.
   oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
+  // Retired activity sponge.
+  if (!SHRED_ONLY) {
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
   flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
@@ -7669,9 +7785,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   combustionFrontTopology = combustionFrontTopology * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   microSmoke = microSmoke * stepRate(mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade));
-  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
   emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
+  }
+  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
   // skipped and a wetted cell only decays.
@@ -7722,6 +7839,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
   heat = heat * stepRate(1.0 - localQuenchSuppression * 0.025);
   fuel = fuel * stepRate(1.0 - localQuenchSuppression * 0.030);
+  // Retired activity quenching.
+  if (!SHRED_ONLY) {
   flame = flame * stepRate(1.0 - localQuenchSuppression * 0.025);
   ember = ember * stepRate(1.0 - localQuenchSuppression * 0.025);
   flameDetail = flameDetail * stepRate(1.0 - localQuenchSuppression * 0.035);
@@ -7729,6 +7848,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = combustionFrontTopology * stepRate(1.0 - localQuenchSuppression * 0.028);
   fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
   emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
+  }
   // Physics appearance: soot burns out where it is hot and meets oxygen
   // (volume-physics-appearance.mjs); exactly 1 at rate 0.
   if (reactantOn) {
@@ -7746,7 +7866,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let compact = compactAppearanceOn();
   // compact-3 stores flame, interface shred and combustion front only; the rest
   // is rebuilt at the slot samplers (expandCompactCarriers).
-  if (compact) {
+  if (SHRED_ONLY) {
+    fluidDst[base + 2u] = vec4<f32>(0.0);
+    fluidDst[base + 3u] = vec4<f32>(0.0, clamp(interfaceShred, 0.0, 1.8), 0.0, 0.0);
+  } else if (compact) {
     fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(interfaceShred, 0.0, 1.8), 0.0, clamp(combustionFront, 0.0, 1.8));
   } else {
     fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
@@ -9253,11 +9376,31 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   return result;
 }
 
+// Fog already applied to the scene behind the volume must not be added
+// twice. At the volume front, attenuate its premultiplied color and replace
+// only the fog obscured by its alpha. One analytic interval, no extra march.
+// This treats the bounded volume at its front face, an intentional thin-layer
+// approximation; optical/residual source captures stay unchanged.
+fn sharedAshColor(in: VSOut, color:vec4<f32>) -> vec4<f32> {
+  if(u.shared_ash.w<=0.0||color.a<=0.0){return color;}
+  let ndc=vec2<f32>(in.uv.x*2.0-1.0,in.uv.y*2.0-1.0);
+  let nearRaw=u.invViewProj*vec4<f32>(ndc,-1.0,1.0);
+  let farRaw=u.invViewProj*vec4<f32>(ndc,1.0,1.0);
+  let ro=viewRayOrigin(ndc);let rd=normalize(farRaw.xyz/farRaw.w-nearRaw.xyz/nearRaw.w);
+  let halfY=f32(GRID_Y)/f32(GRID);
+  let hit=boxHit(ro-vec3<f32>(0.0,halfY-1.0,0.0),rd,vec3<f32>(1.0,halfY,1.0));
+  let T=exp(-u.shared_ash.w*max(0.0,hit.x));
+  // The ordinary canvas has already undergone its selected display transform.
+  // Match the scene's AgX camera for the haze contribution on this display path.
+  let fogColor=u.shared_ash.rgb;
+  return vec4<f32>(T*color.rgb+color.a*(1.0-T)*fogColor,color.a);
+}
+
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
   seatGridShape();
   let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true, 0.0);
-  return result.color;
+  return select(result.color,sharedAshColor(in,result.color),TRANSPARENT_CANVAS > 0.5);
 }
 
 @fragment
@@ -9271,7 +9414,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false, 0.0);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
-  return vec4<f32>(premultipliedRadiance, alpha);
+  return sharedAshColor(in,vec4<f32>(premultipliedRadiance, alpha));
 }
 
 @fragment
@@ -10998,6 +11141,7 @@ export function createKaminosVolumePrototype({
   const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
+  let sharedAsh = {density:0,color:[0,0,0],displayColor:[0,0,0]};
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
   let volumePresentationModeRequestedRaw = 'beauty';
@@ -11687,9 +11831,9 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  const simulationVariants = new Map();
   let separatedPressure = null;
   let fineVelocity = null;
-  let materialOnlyPipeline = null, materialOnlyPredictPipeline = null;
   let separatedPressureProjectPipeline = null;
   let faceForcesPipeline = null;
   let waveletLowPassPipeline = null;
@@ -12787,7 +12931,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState(preserveWorld = false) {
-    fineVelocity?.destroy(); fineVelocity=null; materialOnlyPipeline=null; materialOnlyPredictPipeline=null;
+    fineVelocity?.destroy(); fineVelocity=null; simulationVariants.clear();
     if(!preserveWorld){
       retireIntermediateFlow();
       worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;worldReferenceDims=null;
@@ -16694,10 +16838,6 @@ export function createKaminosVolumePrototype({
     // compact-3 is fitted on, and only meaningful under, the reactant law: under
     // the authored law the dropped carriers feed the reaction itself, so
     // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
-    const appearanceRequested = String(controlsSnapshot.appearanceModel ?? 'authored');
-    const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig.effective.admitted ? 'compact-3' : 'authored';
-    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
-    state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null, storedSlots: appearanceEffective === 'compact-3' ? 3 : 4, layout: fluidLayoutInForce };
     state.reactantCombustion = reactantCombustionConfig;
     state.residentGasSource={registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted&&reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
@@ -16711,6 +16851,7 @@ export function createKaminosVolumePrototype({
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     uniforms.set(waveletOctaveUniformValues(waveletTurbulence), WAVELET_TURBULENCE_UNIFORM_OFFSET + 4);
+    uniforms.set([...sharedAsh.displayColor,sharedAsh.density*productTransform.scale],SHARED_ASH_UNIFORM_OFFSET);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)!==gridSize))) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -16792,6 +16933,11 @@ export function createKaminosVolumePrototype({
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
     state.physicsAppearance = physicsAppearance;
+    state.appearanceModel = {...resolveAppearanceModel(String(controlsSnapshot.appearanceModel ?? 'authored'), {
+      reactant: reactantCombustionConfig.effective.admitted === true,
+      physics: physicsAppearance.effective.render,
+    }), layout: fluidLayoutInForce};
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(state.appearanceModel.effective);
     const displayRequest = resolveDisplayReconstruction(controlsSnapshot);
     const displaySupported = emissiveRaymarchAdmission().eligible && debugRaymarchShaderSpecialization !== 'force-full' && physicsAppearance.effective.render
       && !sceneTransportConsumer && !state.joinedRendering?.enabled && productFrameOwner === 'prototype';
@@ -17148,8 +17294,9 @@ export function createKaminosVolumePrototype({
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simPassesPerFrame = 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
-    const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
-    const mainFluidKernelStrategy = fireLickBreakupEnabled
+    const shredOnly = state.appearanceModel?.effective === 'shred-only';
+    const fireLickBreakupEnabled = !shredOnly && fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
+    const mainFluidKernelStrategy = shredOnly ? 'reactant-one-field-shred-specialized-v0' : fireLickBreakupEnabled
       ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
       : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
     const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 1 : 0;
@@ -17425,7 +17572,7 @@ export function createKaminosVolumePrototype({
   // flip the sim pass would do. The relayout reads the stored form directly,
   // so it does not depend on which model the uniforms name for the read seam.
   function ensureAppearanceLayout(encoder) {
-    const wanted = state.appearanceModel?.effective ?? 'authored';
+    const wanted = state.appearanceModel?.effective === 'compact-3' ? 'compact-3' : 'authored';
     if (wanted === fluidLayoutInForce) return false;
     if (!appearanceRelayoutPipeline || !transportPredictBindGroup) {
       throw new Error('appearance relayout pipeline unavailable');
@@ -17445,6 +17592,24 @@ export function createKaminosVolumePrototype({
     state.appearanceRelayouts = (state.appearanceRelayouts || 0) + 1;
     if (state.appearanceModel) state.appearanceModel.layout = fluidLayoutInForce;
     return true;
+  }
+
+  function simulationPipeline(entryPoint, constants = {}) {
+    const specialized = {...constants, SHRED_ONLY: state.appearanceModel?.effective === 'shred-only'};
+    const role = constants.VELOCITY_ONLY ? 'velocity' : constants.MATERIAL_ONLY ? 'material' : 'combined';
+    state.simulationPipelines ??= {};
+    state.simulationPipelines[`${entryPoint}:${role}`] = {entryPoint, constants: specialized};
+    if (!specialized.SHRED_ONLY && Object.keys(constants).length === 0) {
+      return entryPoint === 'cs' ? computePipeline : transportPredictPipeline;
+    }
+    const key = JSON.stringify([entryPoint, specialized]);
+    if (!simulationVariants.has(key)) {
+      simulationVariants.set(key, device.createComputePipeline({
+        label: `kaminos simulation ${key}`, layout: transportPipelineLayout,
+        compute: {module: shader, entryPoint, constants: specialized},
+      }));
+    }
+    return simulationVariants.get(key);
   }
 
   function encodeSim(encoder, options = {}) {
@@ -17485,7 +17650,7 @@ export function createKaminosVolumePrototype({
         throw new Error('transport predictor pipeline unavailable');
       }
       const predictor = encoder.beginComputePass({ label: 'kaminos transport predictor pass' });
-      predictor.setPipeline(velocityOwner?materialOnlyPredictPipeline:transportPredictPipeline);
+      predictor.setPipeline(simulationPipeline('csTransportPredict', velocityOwner ? {MATERIAL_ONLY:true} : {}));
       predictor.setBindGroup(0, materialGroup);
       predictor.setBindGroup(3, transportPredictBindGroup);
       const predictorWorkgroups = Math.ceil(gridSize / 4);
@@ -17511,7 +17676,7 @@ export function createKaminosVolumePrototype({
         ? {querySet:options.timestampWrites.querySet,endOfPassWriteIndex:options.timestampWrites.endOfPassWriteIndex}
         : options.timestampWrites } : {}),
     });
-    pass.setPipeline(velocityOwner ? materialOnlyPipeline : computePipeline);
+    pass.setPipeline(simulationPipeline('cs', velocityOwner ? {MATERIAL_ONLY:true} : {}));
     pass.setBindGroup(0, materialGroup);
     pass.setBindGroup(3, transportPredictBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
@@ -17580,14 +17745,12 @@ export function createKaminosVolumePrototype({
     if(!fineVelocity||fineVelocity.key!==key){
       fineVelocity?.destroy();fineVelocity=createFineVelocityGrid(device,plan,uniforms.byteLength);fineVelocity.key=key;
       const constants={VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/plan.materialPerVelocity};
-      fineVelocity.pipelines=Object.fromEntries(['cs','csFaceForces','csTransportPredict','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
+      fineVelocity.pipelines=Object.fromEntries(['csFaceForces','csWaveletLowPass','csWaveletLowPass2'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'independent fine '+entryPoint,layout:transportPipelineLayout,compute:{module:shader,entryPoint,constants}})]));
       fineVelocity.predictGroup=device.createBindGroup({layout:transportPredictBindGroupLayout,entries:[{binding:1,resource:{buffer:fineVelocity.predictor}},{binding:2,resource:emptyGasSourceTexture.createView()}]});
     }
     const turbulent=!!state.waveletTurbulence?.effective?.admitted;
     if(turbulent&&!fineVelocity.waveletActive)fineVelocity.resetWavelet();
     fineVelocity.waveletActive=turbulent;
-    if(!materialOnlyPipeline)materialOnlyPipeline=device.createComputePipeline({label:'fine material transport and reaction',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'cs',constants:{MATERIAL_ONLY:true}}});
-    if(!materialOnlyPredictPipeline)materialOnlyPredictPipeline=device.createComputePipeline({label:'fine material turbulence predictor',layout:transportPipelineLayout,compute:{module:shader,entryPoint:'csTransportPredict',constants:{MATERIAL_ONLY:true}}});
     const u=uniforms.slice();u[GRID_SHAPE_UNIFORM_OFFSET]=plan.velocityDims[0];u[GRID_SHAPE_UNIFORM_OFFSET+1]=plan.velocityDims[1];
     // D / h² belongs to the lattice evaluating the scalar force inputs.
     // Keep the raw coefficient so the existing dt-dependent stability cap
@@ -17600,10 +17763,10 @@ export function createKaminosVolumePrototype({
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){
-    owner.prepare(fineTransferInputs());owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
+    owner.prepare(fineTransferInputs(),{shredOnly:state.appearanceModel?.effective==='shred-only'});owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
     const i=owner.current;
     const group=createFluidRenderBindGroup({label:'independent fine velocity',uniformsBuffer:owner.uniform,fluidRead:owner.fluid[i],fluidWrite:owner.fluid[1-i],frontRead:owner.front[0],frontWrite:owner.front[1],quenchRead:owner.quench[0],quenchWrite:owner.quench[1],reactantRead:owner.reactant[0],reactantWrite:owner.reactant[1],waveletRead:owner.wavelet[i],waveletWrite:owner.wavelet[1-i],solidView:owner.solid.createView(),expansionTexture:owner.burn,lowerFaceTexture:owner.lower,forceTexture:owner.force,captureRows:nonRidgeOpticalCaptureRowBuffer});
-    const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};
+    const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(entry==='cs'||entry==='csTransportPredict'?simulationPipeline(entry,{VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/owner.plan.materialPerVelocity}):owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};
     if(transport.effective.predictorPass)run('csTransportPredict');
     if(state.waveletTurbulence?.effective?.admitted){run('csWaveletLowPass');run('csWaveletLowPass2');}
     run('cs');run('csFaceForces');owner.flip();
@@ -28323,7 +28486,7 @@ export function createKaminosVolumePrototype({
     },
     async holdPresentationForStill(renderControls = {}) {
       if (!state.active || !device) throw new Error('Flame renderer is inactive');
-      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed || sceneTransportConsumer) throw new Error('Still output requires the ordinary flame canvas route');
+      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed) throw new Error('Still output requires ordinary flame presentation');
       if (sceneLightingRebuildPending || selectiveHeadLiveExactPause || stillPresentationHeld) throw new Error('Finish the pending flame presentation change');
       const pausedBefore = selectiveHeadLiveCapturePaused, controlsBefore = controlsSnapshot;
       // Stop new admissions; an already-admitted service still owns its frame.
@@ -28352,9 +28515,12 @@ export function createKaminosVolumePrototype({
         const now = performance.now();
         return {release, async draw() {
           if (released) throw new Error('Still presentation was released');
-          const frame = await sampleFrame({advanceSim:false,now,includeRgba:true});
+          // sampleFrame invokes the same synchronous host consumer while the
+          // solver remains held. Its private flame raster is not the composed image.
+          const composed = !!sceneTransportConsumer;
+          const frame = await sampleFrame({advanceSim:false,now,includeRgba:!composed});
           if (!frame.ok) throw new Error(frame.reason || 'Flame output failed');
-          return {image:frame.image,receipt:{width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
+          return {image:composed?undefined:frame.image,receipt:{presentation:composed?'host-composed':'volume-raster',width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
         }};
       } catch (error) { release(); throw error; }
     },
@@ -29061,6 +29227,8 @@ export function createKaminosVolumePrototype({
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
+    sharedAshAtmosphere(){return structuredClone(sharedAsh);},
+    setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},
     setSceneMediumSource(source) {
       if (source !== null && (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)
         || !Number.isFinite(source.stepLength) || source.stepLength <= 0)) throw new Error('finite local source position and positive stepLength required');

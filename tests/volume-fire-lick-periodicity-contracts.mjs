@@ -151,7 +151,7 @@ function assertFireLickPeriodicityBoundary(source) {
   );
   assert.match(
     source,
-    /const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;/,
+    /const fireLickBreakupEnabled = !shredOnly && fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;/,
     'the JavaScript cost predicate uses the same authoritative Fire Lick threshold',
   );
 }

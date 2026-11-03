@@ -13,5 +13,5 @@ assert.doesNotMatch(material,/waveletDetailWeighted\([ab]\.xyz\s*\*/,'Material e
 const predictor=source.slice(source.indexOf('fn csTransportPredict('),source.indexOf('fn cs(',source.indexOf('fn csTransportPredict(')));
 assert.match(predictor,/materialTransportVelocity\(cell, centreVelocity\)/);
 assert.match(source,/if \(waveletOn\(\) && !VELOCITY_ONLY\).*waveletCorrection/,'Independent coarse flow must not also inject the transferred band');
-assert.match(source,/materialOnlyPredictPipeline/);
+assert.match(source,/simulationPipeline\('csTransportPredict', velocityOwner \? \{MATERIAL_ONLY:true\} : \{\}\)/, 'separate material prediction uses the material-only specialization');
 console.log('material turbulence: transport placement and unchanged spectrum and physical amplitude pass');

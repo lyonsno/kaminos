@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.environment-previews.v1",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "method": "128x64 solid-angle-weighted linear radiance box average, RGBE encoding",
+  "assets": [
+    {
+      "fullFile": "studio_small_09_1k.hdr",
+      "fullSha256": "e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45",
+      "fullBytes": 1615248,
+      "previewFile": "studio_small_09_128.hdr",
+      "previewSha256": "0c323860f48b7d4f73dbc408126547b5fa963c849a4c7823f8c8422af24849ee",
+      "previewBytes": 32816,
+      "width": 128,
+      "height": 64,
+      "sourcePageUrl": "https://polyhaven.com/a/studio_small_09",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
+    },
+    {
+      "fullFile": "kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+      "fullSha256": "fd94c84997b8a3c353b62c2125a9b44e19509956986a126e472684432a02d798",
+      "fullBytes": 1435119,
+      "previewFile": "kloofendal_48d_partly_cloudy_puresky_128.hdr",
+      "previewSha256": "db581fa5b7ca09954e54596a0f9174d1bdaa5af5e02ade18c645dee3ed56f3e7",
+      "previewBytes": 32816,
+      "width": 128,
+      "height": 64,
+      "sourcePageUrl": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr"
+    },
+    {
+      "fullFile": "empty_warehouse_01_1k.hdr",
+      "fullSha256": "9b3d611cadc32c3a0c7e084ce5611c0650293881c4a041e7fa13748fe0dc6451",
+      "fullBytes": 1672140,
+      "previewFile": "empty_warehouse_01_128.hdr",
+      "previewSha256": "63f8c7af0f1573ff1c8a58ffc7742595e3515f5c77b03c6ff31ae3835cbebe07",
+      "previewBytes": 32816,
+      "width": 128,
+      "height": 64,
+      "sourcePageUrl": "https://polyhaven.com/a/empty_warehouse_01",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/empty_warehouse_01_1k.hdr"
+    },
+    {
+      "fullFile": "royal_esplanade_1k.hdr",
+      "fullSha256": "fec2166383a45eca3700f9abd020bc0ba490741c7ae22f91b5c2fa420a98e4d1",
+      "fullBytes": 1676014,
+      "previewFile": "royal_esplanade_128.hdr",
+      "previewSha256": "ffb595326919dd90f6fba86003687e15dba1c98855090b02c1711779c8d4cdfc",
+      "previewBytes": 32816,
+      "width": 128,
+      "height": 64,
+      "sourcePageUrl": "https://polyhaven.com/a/royal_esplanade",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/royal_esplanade_1k.hdr"
+    },
+    {
+      "fullFile": "moonlit_golf_1k.hdr",
+      "fullSha256": "cff71a58efa0c06e06b54046ee877c933d74e7292be1d71511aca1a36749d60c",
+      "fullBytes": 1725527,
+      "previewFile": "moonlit_golf_128.hdr",
+      "previewSha256": "4ad3d2ea38e4e40cae194923dbdacdfafd0b5b80fc09eddf743319bf8d951134",
+      "previewBytes": 32816,
+      "width": 128,
+      "height": 64,
+      "sourcePageUrl": "https://polyhaven.com/a/moonlit_golf",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonlit_golf_1k.hdr"
+    }
+  ]
+}

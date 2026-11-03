@@ -246,6 +246,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSurfaceEnabled(value){if(typeof value!=='boolean')throw Error('surface lighting enabled must be boolean');if(disposed)throw Error('hybrid lighting disposed');if(surfaceEnabled===value)return;surfaceEnabled=value;surfaceOn.value=value;casterScene.setEnabled(value);valid=false;onStatus({...status});},
     async setShadowCasterLevel(value){await casterScene.setLevel(value);onStatus({...status});},
     setShadowBudget(patch){return casterScene.setShadowBudget(patch);},
+    prepareShadowCasters({flameBox=null}={}){return casterScene.prepareCapture({flameBox});},
     setShadowComparison(value){
       const next=validateShadowComparison({...comparison,...value});
       if(disposed)throw Error('hybrid lighting disposed');

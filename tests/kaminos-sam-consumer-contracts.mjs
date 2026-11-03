@@ -101,19 +101,20 @@ staleFrame.result = { sceneFrameCount: 7, sceneFrameCountBefore: 7, sceneFrameCo
 assert.throws(() => consumer.validateSamApplicationFrame(staleFrame), /draw|count/,
   'an already-positive cumulative count without a new draw cannot close the unload gate');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const frameStart = html.indexOf('    runForegroundFrame(run) {');
-const frameEnd = html.indexOf('    async presentGlb(', frameStart);
-const renderStart = html.indexOf('  function renderSceneFrame() {');
-const renderEnd = html.indexOf('\n  }\n', renderStart) + 6;
-assert.ok(frameStart >= 0 && frameEnd > frameStart && renderStart >= 0 && renderEnd > renderStart);
-const skippedHost = vm.runInNewContext(`${html.slice(renderStart, renderEnd)}\n({${html.slice(frameStart, frameEnd).trim().replace(/,$/, '')}})`, {
-  sceneLightingPreparation: null, foregroundServiceActive: true, insideForegroundFrame: false, sceneRenderedForVolume: false, sceneFrameCount: 7,
-  authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,exclusiveInspectionRender: false, manualInspectionRender: false, renderer: {},
-
-  document: { getElementById: () => ({ value: 'custom' }) }, THREE: { ACESFilmicToneMapping: 1, AgXToneMapping: 2 },
-  window: { __kaminosSceneRadiance: { canRender: () => false } },
-  syncViewportRendererSize() {}, camera: { updateMatrixWorld() {} }, fireLightFieldPass: null,
+const {createSceneFrameComposition}=await import('../scene-frame-composition.mjs');
+const frameStart=html.indexOf('  const frameComposition=createSceneFrameComposition(');
+const frameEnd=html.indexOf('  let sceneFrameCount',frameStart);
+const hostStart=html.indexOf('  compositionHost = {'),hostEnd=html.indexOf('    async presentGlb(',hostStart);
+assert.ok(frameStart>=0&&frameEnd>frameStart&&hostStart>0&&hostEnd>hostStart);
+const skippedHost = vm.runInNewContext(`${html.slice(frameStart,frameEnd)}
+${html.slice(hostStart,hostEnd)}};compositionHost`, {
+  createSceneFrameComposition,sceneLightingPreparation:null,sceneFrameCount:7,
+  authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,exclusiveInspectionRender:false,manualInspectionRender:false,
+  renderer:{backend:{device:{}}},drawSceneFrame(){throw Error('held radiance must not draw');},
+  window:{__kaminosSceneRadiance:{canRender:()=>false}},
+  syncViewportRendererSize(){},camera:{updateMatrixWorld(){}},fireLightFieldPass:null,
 });
+skippedHost.setForegroundServiceActive(true);
 const skippedReceipt = { ...appEvidence.runtime.applicationForegroundEvidence.lastRun.receipts[0],
   result: skippedHost.runForegroundFrame(() => ({ status: 'submitted' })) };
 assert.equal(skippedReceipt.result.sceneFrameCountBefore, 7);

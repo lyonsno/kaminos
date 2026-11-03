@@ -1482,4 +1482,148 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   assert.ok(kilnPxDefaultTail > kilnPxZeroTail, 'N1: tailWeight forwards through screenPixelError');
 });
 
+test('prepareCapture settles demoted shadow caster tiers before frame 1 and borrowFrame scopes beauty LOD visibility', async () => {
+  const makeIndexedTriGeometry = faces => {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0, 0.5, 0.5]), 3));
+    const idx = new Uint16Array(faces * 3);
+    for (let i = 0; i < faces; i++) {
+      idx[i * 3] = 0;
+      idx[i * 3 + 1] = 1;
+      idx[i * 3 + 2] = 2;
+    }
+    geom.setIndex(new THREE.BufferAttribute(idx, 1));
+    return geom;
+  };
+  const scene = new THREE.Scene();
+  const makeLevels = prefix => [
+    {sha256: sha(`${prefix}-5k`), faces: 5000, closed: true, error: {diagonal: 2, relative: {p95: 0.002, max: 0.008}}},
+    {sha256: sha(`${prefix}-1k`), faces: 1000, closed: true, error: {diagonal: 2, relative: {p95: 0.006, max: 0.025}}},
+    {sha256: sha(`${prefix}-500`), faces: 500, closed: true, error: {diagonal: 2, relative: {p95: 0.012, max: 0.045}}},
+  ];
+  const levelsByHero = new Map([
+    [sha('prep-hero-a'), makeLevels('prep-a')],
+    [sha('prep-hero-b'), makeLevels('prep-b')],
+  ]);
+  const facesByTierSha = new Map();
+  for (const levels of levelsByHero.values()) {
+    for (const l of levels) facesByTierSha.set(l.sha256, l.faces);
+  }
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async url => {
+      await new Promise(r => setTimeout(r, 5));
+      const u = new URL(url, 'http://kaminos.local');
+      const source = u.searchParams.get('source');
+      const reqFaces = Number(u.searchParams.get('faces') ?? 5000);
+      const levels = (levelsByHero.get(source) ?? []).map(l => ({
+        ...l,
+        source: `/api/read?root=generated-meshes&path=${l.sha256}.glb`,
+      }));
+      const choice = levels.find(l => l.faces <= reqFaces) ?? levels.at(-1) ?? null;
+      return {schema: 'kaminos.lod-set.v0', source, levels, choice, withinBudget: true};
+    },
+    fetchBytes: async url => {
+      const m = /([a-f0-9]{64})\.glb/.exec(url);
+      return new TextEncoder().encode(m ? m[1] : 'none').buffer;
+    },
+    digest: async bytes => new TextDecoder().decode(bytes),
+    parseGlb: async bytes => {
+      const tierSha = new TextDecoder().decode(bytes);
+      const faces = facesByTierSha.get(tierSha) ?? 500;
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(makeIndexedTriGeometry(faces), new THREE.MeshStandardMaterial());
+      m.castShadow = true;
+      g.add(m);
+      return g;
+    },
+  });
+
+  const makeObj = (id, heroKey, x) => {
+    const heroSha = sha(heroKey);
+    const root = new THREE.Group();
+    root.position.set(x, 0, 0);
+    root.userData.kaminosSceneObject = {
+      id,
+      source: `/api/read?root=generated-meshes&path=${heroSha}.glb`,
+    };
+    const heroMesh = new THREE.Mesh(makeIndexedTriGeometry(20000), new THREE.MeshStandardMaterial());
+    heroMesh.castShadow = true;
+    root.add(heroMesh);
+    scene.add(root);
+    return {root, heroMesh};
+  };
+  const objA = makeObj('prep-a', 'prep-hero-a', 1.2);
+  const objB = makeObj('prep-b', 'prep-hero-b', 4.5);
+  scene.updateMatrixWorld(true);
+
+  // Start initial 5k attaches without awaiting them yet; prepareCapture must wait for giProxies.whenIdle() + demotions
+  giProxies.attach(objA.root, {faces: 5000});
+  giProxies.attach(objB.root, {faces: 5000});
+
+  const casters = createFireShadowCasters({
+    scene,
+    giProxies,
+    shadowFaceBudget: 5500,
+    flameBox: {min: [-0.5, 0, -0.5], max: [0.5, 1, 0.5]},
+  });
+  assert.equal(typeof casters.prepareCapture, 'function', 'casters exposes prepareCapture');
+  await casters.prepareCapture({flameBox: {min: [-0.5, 0, -0.5], max: [0.5, 1, 0.5]}});
+
+  let firstCaptureTris = 0;
+  casters.withCapture(() => {
+    scene.traverseVisible(m => {
+      if (m.isMesh && m.castShadow) {
+        firstCaptureTris += (m.geometry.index?.count ?? m.geometry.attributes.position.count) / 3;
+      }
+    });
+  });
+  assert.equal(
+    firstCaptureTris,
+    5500,
+    `first withCapture after prepareCapture must already use demoted 5,000 + 500 = 5,500 tris (not 10,000 un-demoted tris), got ${firstCaptureTris}`,
+  );
+
+  // Also verify beauty controller borrowFrame mounts budgeted beauty LOD rungs and returns an idempotent restore
+  const controller = createSceneBeautyLodController({
+    THREE,
+    scene,
+    giProxies,
+    fetchBytes: async url => {
+      const m = /([a-f0-9]{64})\.glb/.exec(url);
+      return new TextEncoder().encode(m ? m[1] : 'none').buffer;
+    },
+    digest: async bytes => new TextDecoder().decode(bytes),
+    parseGlb: async bytes => {
+      const tierSha = new TextDecoder().decode(bytes);
+      const faces = facesByTierSha.get(tierSha) ?? 500;
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(makeIndexedTriGeometry(faces), new THREE.MeshStandardMaterial()));
+      return g;
+    },
+    faceBudget: 6000,
+    maxPixelError: 1.5,
+  });
+  const cam = makeCamera({z: 8, fov: 50});
+  assert.equal(typeof controller.prepareFrame, 'function', 'controller exposes prepareFrame');
+  const preparedState = await controller.prepareFrame(cam, {viewportHeight: 1080});
+  assert.ok(
+    preparedState.objects.every(o => o.displayedTier === o.targetTier),
+    'prepareFrame settles async rung loads and promotes displayedTier to targetTier in one call',
+  );
+  assert.equal(objA.heroMesh.visible, true, 'hero mesh restored after prepareFrame');
+
+  assert.equal(typeof controller.borrowFrame, 'function', 'controller exposes borrowFrame');
+  const restoreBeauty = controller.borrowFrame(cam, {viewportHeight: 1080});
+  assert.equal(objA.heroMesh.visible, false, 'hero mesh hidden while beauty LOD frame is borrowed');
+  restoreBeauty();
+  assert.equal(objA.heroMesh.visible, true, 'hero mesh restored after borrowFrame release');
+  restoreBeauty();
+  assert.equal(objA.heroMesh.visible, true, 'borrowFrame release is idempotent');
+
+  controller.dispose();
+  casters.dispose();
+});
+
+
 

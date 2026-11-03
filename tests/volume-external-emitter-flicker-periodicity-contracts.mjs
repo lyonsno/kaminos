@@ -84,11 +84,11 @@ function assertExternalEmitterFlickerRetired(source) {
     /^fn applyExternalEmitterInjection\(influence: ExternalEmitterInfluence\) -> ExternalEmitterInfluence \{\s*return influence;\s*\}$/,
     'the external-emitter injection wrapper must preserve the influence without hidden post-attenuation',
   );
-  assert.equal(
-    wgslCallCount(source, 'externalEmitterInfluence'),
-    1,
-    'the main fluid kernel must own exactly one generic external-emitter influence evaluation',
-  );
+  const shred = balancedWgslBlock(source, 'if (SHRED_ONLY) {\n    // One activity memory.');
+  assert.equal(wgslCallCount(shred, 'externalEmitterInfluence'), 1,
+    'Shred only owns exactly one external-emitter momentum evaluation');
+  assert.equal(wgslCallCount(source.replace(shred, ''), 'externalEmitterInfluence'), 1,
+    'the mutually exclusive legacy path owns exactly one external-emitter influence evaluation');
   assert.match(
     source,
     /applyExternalEmitterInjection\(externalEmitterInfluence\(p\)\)/,

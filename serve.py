@@ -2499,6 +2499,10 @@ _model_spec = importlib.util.spec_from_file_location('kaminos_model_installation
 _model_installations = importlib.util.module_from_spec(_model_spec)
 _model_spec.loader.exec_module(_model_installations)
 MODEL_INSTALLATIONS = _model_installations.ModelInstallations()
+_preparation_spec = importlib.util.spec_from_file_location('kaminos_image_preparation_installation', ROOT / 'image_preparation_installation.py')
+_preparation_module = importlib.util.module_from_spec(_preparation_spec)
+_preparation_spec.loader.exec_module(_preparation_module)
+IMAGE_PREPARATION_INSTALLATION = _preparation_module.ImagePreparationInstallation()
 MOUNTED_PACKAGES = {'/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
 
 BROWSE_ROOTS = {
@@ -2592,6 +2596,7 @@ def runtime_config():
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
         **MODEL_INSTALLATIONS.browser_config(),
+        "imagePreparation": IMAGE_PREPARATION_INSTALLATION.availability(),
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
@@ -3871,8 +3876,7 @@ def prepare_authoring_image(content, *, source, name, expected_sha256):
     if hashlib.sha256(content).hexdigest()!=expected_sha256:
         raise ValueError('Original image digest does not match the requested input')
     original=ingest_image_asset(name,content)
-    executable=os.environ.get('KAMINOS_IMAGE_PREPARATION_PYTHON',sys.executable)
-    model=Path(os.environ.get('KAMINOS_BACKGROUND_MODEL_PATH','~/.u2net/u2net.onnx')).expanduser().resolve()
+    executable,model=IMAGE_PREPARATION_INSTALLATION.command()
     completed=subprocess.run([executable,str(ROOT/'authoring_image_preparation.py'),'--store',str(KAMINOS_IMAGE_PREPARATION_DIR),'--model',str(model)],input=content,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     try: value=json.loads(completed.stdout)
     except (ValueError,UnicodeDecodeError) as error:
@@ -5670,10 +5674,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
-        # Every response is uncacheable: a module kept heuristically fresh by
-        # the browser across a plain reload has already broken the operator
-        # route once (scene-placement-tools.mjs without addHistoryScope).
-        self.send_header("Cache-Control", "no-store")
+        # Code/API freshness is mandatory. Bundled HDR bytes may be retained,
+        # but revalidate on every use so a newer asset at the same URL wins.
+        # SimpleHTTPRequestHandler supplies Last-Modified and conditional 304s.
+        path = urlparse(self.path).path
+        bundled_hdr = path.startswith("/assets/hdr/") and path.endswith(".hdr")
+        self.send_header("Cache-Control", "public, no-cache" if bundled_hdr else "no-store")
         super().end_headers()
 
     def log_message(self, format, *args):

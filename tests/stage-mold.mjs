@@ -52,7 +52,7 @@ test('mixed primitive/mold texture keeps header indices separate from every comp
  const a=sceneLiquidCollider(record),b=sceneLiquidCollider({...record,id:'second'}),packed=packSceneLiquidTexture([sphere,a,b]);
  assert.equal(packed.height,3+2*9);assert.equal(packed.width,9);
  const pixel=(x,y,c=0)=>packed.data[(y*packed.width+x)*4+c];
- assert.equal(pixel(0,0),0);assert.equal(pixel(0,1),3);assert.equal(pixel(0,2),3);
+ assert.equal(pixel(0,0),0);assert.equal(pixel(0,1),4);assert.equal(pixel(0,2),4);
  const offsets=[pixel(3,1,3),pixel(3,2,3)];assert.deepEqual(offsets,[3,12]);
  const field=stageMoldField(stageMold);
  for(const offset of offsets)for(let z=0;z<9;z++)for(let x=0;x<9;x++)assert.equal(pixel(x,z+offset),field.data[z*9+x]);

@@ -14,3 +14,15 @@ test('Tab uses an owner component target, changes cancel gestures before switchi
  selected='reference';assert.equal(edit.active(),false);assert.equal(exited,1);assert.equal(edit.resolve('@joints'),null);
  selected='skeleton';edit.toggle('skeleton');seat.dispose();assert.equal(edit.active(),false);assert.equal(exited,2);
 });
+test('an assembly scope keeps native member selection and exits to its owner with Tab',()=>{
+ let selected='@group:burner',inside=false;
+ const edit=createSceneComponentEdit({selected:()=>selected,cancel(){},refresh(){}});
+ edit.register('@group:burner',{target:()=>null,scope:()=>({id:'burner',objectIds:['body','outlet']}),
+  isCurrent:()=>inside&&['body','outlet',null].includes(selected),
+  enter(){inside=true;selected='body';},exit(){inside=false;selected='@group:burner';}});
+ assert.equal(edit.toggle(selected),true);
+ assert.equal(edit.active(),true,'selection of a member must not leave assembly Edit Mode');
+ assert.equal(edit.scope().id,'burner');assert.equal(edit.ownsTransforms(),false,'member transforms use ordinary scene history');
+ selected='outlet';assert.equal(edit.active(),true);edit.toggle(selected);
+ assert.equal(edit.active(),false);assert.equal(selected,'@group:burner');
+});

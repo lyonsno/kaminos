@@ -98,6 +98,7 @@ export function computeAssetArrivalFraming({
   return {
     target,
     position: target.map((value, axis) => value + back[axis] * distance),
+    up: [...up],
     distance,
     near: Math.max(0.001, (distance - maxZ) / 10),
     far: (distance - minZ) + radius * 2,
@@ -155,4 +156,163 @@ export function arrivalObstacleBoxes({ objects = [], domain = null }) {
   const boxes = objects.filter(o => o.box && !['camera', 'light'].includes(o.type) && o.visible !== false).map(o => o.box);
   if (domain?.active && domain.box) boxes.push(domain.box);
   return boxes;
+}
+
+// Inspect material samples ({ color: [r, g, b], roughness, metalness, weight })
+// from an arrived asset to classify its surface response for optional arrival tuning.
+export function inspectArrivalMaterialProfile(samples = []) {
+  let totalWeight = 0, lumSum = 0, roughSum = 0, metalSum = 0, sampleCount = 0;
+  for (const sample of Array.isArray(samples) ? samples : []) {
+    if (!sample || typeof sample !== 'object') continue;
+    const w = Number.isFinite(sample.weight) && sample.weight > 0 ? sample.weight : 1;
+    const c = Array.isArray(sample.color) && sample.color.length >= 3 ? sample.color : [0.5, 0.5, 0.5];
+    const r = Number.isFinite(c[0]) ? Math.max(0, Math.min(1, c[0])) : 0.5;
+    const g = Number.isFinite(c[1]) ? Math.max(0, Math.min(1, c[1])) : 0.5;
+    const b = Number.isFinite(c[2]) ? Math.max(0, Math.min(1, c[2])) : 0.5;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const rough = Number.isFinite(sample.roughness) ? Math.max(0, Math.min(1, sample.roughness)) : 0.55;
+    const metal = Number.isFinite(sample.metalness) ? Math.max(0, Math.min(1, sample.metalness)) : 0.0;
+    lumSum += lum * w;
+    roughSum += rough * w;
+    metalSum += metal * w;
+    totalWeight += w;
+    sampleCount += 1;
+  }
+  if (!totalWeight) {
+    return { kind: 'balanced', meanLuminance: 0.35, meanRoughness: 0.55, meanMetalness: 0.05, sampleCount: 0 };
+  }
+  const round3 = v => Math.round(v * 1000) / 1000;
+  const meanLuminance = lumSum / totalWeight;
+  const meanRoughness = roughSum / totalWeight;
+  const meanMetalness = metalSum / totalWeight;
+  let kind = 'balanced';
+  if (meanMetalness >= 0.45 && meanLuminance < 0.25) kind = 'dark-metallic';
+  else if (meanMetalness >= 0.45 || (meanRoughness <= 0.32 && meanLuminance >= 0.22)) kind = 'specular-metallic';
+  else if (meanLuminance >= 0.58 && meanRoughness >= 0.6 && meanMetalness < 0.25) kind = 'bright-matte';
+  return {
+    kind,
+    meanLuminance: round3(meanLuminance),
+    meanRoughness: round3(meanRoughness),
+    meanMetalness: round3(meanMetalness),
+    sampleCount,
+  };
+}
+
+function eulerXYZFromMinusZToDirection([dx, dy, dz]) {
+  const len = Math.hypot(dx, dy, dz) || 1;
+  const x = dx / len, y = dy / len, z = dz / len;
+  const dot = -z;
+  let qx, qy, qz, qw;
+  if (dot < -0.999999) {
+    qx = 0; qy = 1; qz = 0; qw = 0;
+  } else {
+    qx = y; qy = -x; qz = 0; qw = 1 + dot;
+    const qlen = Math.hypot(qx, qy, qz, qw) || 1;
+    qx /= qlen; qy /= qlen; qz /= qlen; qw /= qlen;
+  }
+  const m11 = 1 - 2 * (qy * qy + qz * qz);
+  const m12 = 2 * (qx * qy - qz * qw);
+  const m13 = 2 * (qx * qz + qy * qw);
+  const m22 = 1 - 2 * (qx * qx + qz * qz);
+  const m23 = 2 * (qy * qz - qx * qw);
+  const m32 = 2 * (qy * qz + qx * qw);
+  const m33 = 1 - 2 * (qx * qx + qy * qy);
+  const ry = Math.asin(Math.max(-1, Math.min(1, m13)));
+  const rx = Math.abs(m13) < 0.9999999 ? Math.atan2(-m23, m33) : Math.atan2(m32, m22);
+  const rz = Math.abs(m13) < 0.9999999 ? Math.atan2(-m12, m11) : 0;
+  return [rx, ry, rz];
+}
+
+// Plan a two-light studio rig (warm three-quarter Key + cool grazing Rim)
+// scaled and aimed at the arriving asset's bounds, with optional material-aware
+// tuning adjustments for dark-metallic, specular-metallic, bright-matte, or balanced surfaces.
+export function planArrivalStudioLights({
+  bounds = null,
+  groundY = -0.85,
+  materialProfile = null,
+  materialTuning = false,
+} = {}) {
+  const min = Array.isArray(bounds?.min) && bounds.min.length === 3 ? bounds.min : [-0.58, groundY, -0.58];
+  const max = Array.isArray(bounds?.max) && bounds.max.length === 3 ? bounds.max : [0.58, groundY + 1.15, 0.58];
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || ASSET_ARRIVAL_TARGET_DIAGONAL;
+  const scaleFactor = Math.max(0.5, Math.min(4.0, diagonal / ASSET_ARRIVAL_TARGET_DIAGONAL));
+  const target = [
+    (min[0] + max[0]) / 2,
+    min[1] + 0.46 * (max[1] - min[1]),
+    (min[2] + max[2]) / 2,
+  ];
+  const profileKind = materialProfile?.kind || 'balanced';
+  const tuningTable = {
+    'dark-metallic': { keyMultiplier: 1.18, rimMultiplier: 1.45, exposureScale: 1.12, envIntensityScale: 1.15, envRotationOffset: 0.35 },
+    'specular-metallic': { keyMultiplier: 1.05, rimMultiplier: 1.28, exposureScale: 1.04, envIntensityScale: 1.1, envRotationOffset: 0.25 },
+    'bright-matte': { keyMultiplier: 0.78, rimMultiplier: 0.92, exposureScale: 0.92, envIntensityScale: 0.88, envRotationOffset: -0.2 },
+    'balanced': { keyMultiplier: 1.04, rimMultiplier: 1.12, exposureScale: 1.02, envIntensityScale: 1.0, envRotationOffset: 0.12 },
+  };
+  const activeTuning = materialTuning
+    ? (tuningTable[profileKind] || tuningTable.balanced)
+    : { keyMultiplier: 1, rimMultiplier: 1, exposureScale: 1, envIntensityScale: 1, envRotationOffset: 0 };
+
+  const buildSpotRecord = ({ id, label, role, azimuthDeg, elevationDeg, distance, color, intensity, angle, penumbra }) => {
+    const az = azimuthDeg * Math.PI / 180;
+    const el = elevationDeg * Math.PI / 180;
+    const offset = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+    const position = target.map((t, i) => Math.round((t + offset[i] * distance) * 1000) / 1000);
+    const rotation = eulerXYZFromMinusZToDirection(offset.map(v => -v));
+    return {
+      id,
+      type: 'light',
+      source: 'kaminos:scene-spot-light',
+      label,
+      fileName: 'Spot light',
+      transform: { position, rotation, scale: [1, 1, 1] },
+      light: {
+        kind: 'spot',
+        role,
+        enabled: true,
+        color,
+        intensity: Math.round(intensity * 100) / 100,
+        angle,
+        penumbra,
+        aimDistance: Math.round(distance * 1000) / 1000,
+      },
+    };
+  };
+
+  const distanceScale = scaleFactor * scaleFactor;
+  const keyRecord = buildSpotRecord({
+    id: '@studio-key-light',
+    label: 'Studio key light',
+    role: 'key',
+    azimuthDeg: -34,
+    elevationDeg: 42,
+    distance: 4.2 * scaleFactor,
+    color: '#fff1e0',
+    intensity: 95 * distanceScale * activeTuning.keyMultiplier,
+    angle: 62,
+    penumbra: 0.9,
+  });
+  const rimRecord = buildSpotRecord({
+    id: '@studio-rim-light',
+    label: 'Studio rim light',
+    role: 'rim',
+    azimuthDeg: 148,
+    elevationDeg: 28,
+    distance: 4.4 * scaleFactor,
+    color: '#cfe2ff',
+    intensity: 58 * distanceScale * activeTuning.rimMultiplier,
+    angle: 66,
+    penumbra: 0.92,
+  });
+
+  return {
+    target,
+    profileKind,
+    materialTuning: Boolean(materialTuning),
+    environmentDelta: {
+      exposureScale: activeTuning.exposureScale,
+      envIntensityScale: activeTuning.envIntensityScale,
+      envRotationOffset: activeTuning.envRotationOffset,
+    },
+    lights: [keyRecord, rimRecord],
+  };
 }
